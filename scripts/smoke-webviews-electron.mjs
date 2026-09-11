@@ -163,7 +163,7 @@ function conversationEvents({ approval = false } = {}) {
     at: NOW,
   });
   log.emit(RUN, NOW + 500, {
-    type: 'updateRunDescription',
+    type: 'run.description',
     description: 'Check citation coverage and suggest BibTeX entries.',
   });
   log.entry(RUN, NOW, {

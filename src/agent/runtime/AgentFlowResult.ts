@@ -4,71 +4,51 @@ import {
   AttachedMemoryMissSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import type { RunId, RunOutcome } from '@shared/schemas';
+import type { AgentCategory, RunId, RunOutcome } from '@shared/schemas';
 import {
-  CompileFailureSummarySchema,
-  RunIdSchema,
-  OutputFileSummarySchema,
+  emptyRunEndOutput,
   RetryErrorInfoSchema,
-  RunOutcomeSchema,
+  RunEndSchema,
+  RunIdSchema,
   RUN_PHASE,
+  ToolUseRunEndOutputSchema,
+  WorkflowRunEndOutputSchema,
 } from '@shared/schemas';
 
-const AgentFlowMetaSchema = z.object({
+/**
+ * A flow's report to the lifecycle: the `run.end` payload while it is still
+ * an in-memory hand-off, plus the run it belongs to and the attached-memory
+ * misses the delivery reports. `error` is the flow's own provider/runtime
+ * error, not yet classified; `runFlowWithLifecycle` classifies it into the
+ * `run.end` row's error. Domain verdicts such as rejected workflow output end
+ * FAILED without one, their diagnostics staying in the output.
+ */
+const AgentFlowResultSchema = RunEndSchema.omit({ error: true }).extend({
   runId: RunIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
-  /**
-   * Total model cost (USD) of the run, including its own subagents.
-   * Parents use this to roll a completed subagent's spend into their own
-   * usage totals without branching on the subagent flow.
-   */
-  totalCostUsd: z.number().nonnegative().optional(),
-  /**
-   * Structured provider/runtime error behind a FAILED outcome, when one exists.
-   * `runFlowWithLifecycle` classifies and publishes this error. Domain verdicts
-   * such as rejected workflow output can also end FAILED without manufacturing
-   * provider error metadata; their diagnostics remain in category fields.
-   * Absent on every non-failed outcome.
-   */
   error: RetryErrorInfoSchema.optional(),
 });
 
-export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
-  category: z.literal('workflow'),
-  outcome: RunOutcomeSchema,
-  outputs: z.array(OutputFileSummarySchema),
-  compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
+export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
+
+export const WorkflowFlowResultSchema = AgentFlowResultSchema.extend({
+  output: WorkflowRunEndOutputSchema,
 });
 
 export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
 
-export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
-  category: z.literal('toolUse'),
-  outcome: RunOutcomeSchema,
-  response: z.string().optional(),
-  /** Workspace-relative paths of files edited by tool calls during this session. */
-  files: z.array(z.string()).optional(),
-  /** Value captured by the `submit_output` terminal tool, if the run used one. */
-  structured: z.unknown().optional(),
+export const ToolUseFlowResultSchema = AgentFlowResultSchema.extend({
+  output: ToolUseRunEndOutputSchema,
 });
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;
 
-const AgentFlowResultSchema = z.discriminatedUnion('category', [
-  WorkflowFlowResultSchema,
-  ToolUseFlowResultSchema,
-]);
-
-export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
-
 // A suspension is not a terminal fact, so it can never carry a failure: a flow
 // that recorded an error ends the run instead of parking it.
-const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.omit({
+const WaitingToolUseFlowResultSchema = ToolUseFlowResultSchema.omit({
   error: true,
 }).extend({
-  category: z.literal('toolUse'),
   outcome: z.literal(RUN_PHASE.WAITING),
-  ...ToolUseFlowResultSchema.pick({ response: true, files: true }).shape,
 });
 
 export type WaitingToolUseFlowResult = z.infer<
@@ -81,45 +61,20 @@ export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
 export function isWaitingFlowResult(
   result: AgentRuntimeFlowResult,
 ): result is WaitingToolUseFlowResult {
-  return result.category === 'toolUse' && result.outcome === RUN_PHASE.WAITING;
+  return result.outcome === RUN_PHASE.WAITING;
 }
 
-/** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
-export type AgentFlowCategory = AgentFlowResult['category'];
-
-/**
- * Optional `AgentFlowResult` fields shared by both result categories. Included
- * only when meaningful so an empty miss list or a zero cost never lands in the
- * result — the single owner of that inclusion rule for every builder.
- */
-export function buildOptionalFlowResultFields(
-  memoryMisses: AgentFlowResult['memoryMisses'],
-  totalCostUsd: number | undefined,
-): { memoryMisses?: AgentFlowResult['memoryMisses']; totalCostUsd?: number } {
-  return {
-    ...(memoryMisses?.length ? { memoryMisses } : {}),
-    ...(totalCostUsd != null && totalCostUsd > 0 ? { totalCostUsd } : {}),
-  };
-}
-
+/** The report of a run that ended before its flow produced an output. */
 export function buildTerminalFlowResult(
-  category: AgentFlowCategory,
+  category: AgentCategory,
   outcome: RunOutcome,
   runId: RunId,
   memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {
-  const meta = {
-    runId,
-    ...buildOptionalFlowResultFields(memoryMisses, undefined),
-  };
-  if (category === 'toolUse') {
-    return { category, outcome, ...meta };
-  }
   return {
-    category,
     outcome,
-    ...meta,
-    outputs: [],
-    compileFailures: [],
+    output: emptyRunEndOutput(category),
+    runId,
+    ...(memoryMisses?.length ? { memoryMisses } : {}),
   };
 }

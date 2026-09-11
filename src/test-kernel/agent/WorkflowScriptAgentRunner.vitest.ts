@@ -9,8 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
-import type { AgentFinalResult } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -124,33 +123,41 @@ const defaultAgent = {
   category: 'workflow',
   path: '/agents/correct.yml',
 } as AgentEntry;
-const result: AgentFinalResult = {
-  category: 'workflow',
+// No usage recorded, so this run's terminal cost is zero.
+const result: RunEnd = {
   outcome: 'completed',
-  outputs: [
-    {
-      round: 0,
-      relativePath: 'r0/draft.tex',
-      absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
-      location: 'runStorage',
-      originalPath: '/workspace/draft.tex',
-      added: 1,
-      removed: 0,
-    },
-  ],
-  compileFailures: [],
-  diffs: [],
-  cost: 0,
+  output: {
+    category: 'workflow',
+    outputs: [
+      {
+        round: 0,
+        relativePath: 'r0/draft.tex',
+        absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
+        location: 'runStorage',
+        originalPath: '/workspace/draft.tex',
+        added: 1,
+        removed: 0,
+      },
+    ],
+    compileFailures: [],
+    diffs: [],
+  },
 };
+
+/** Run totals carrying the spend an assertion reads. */
+function spent(totalCost: number): RunEnd['usage'] {
+  return RunUsageTotalsSchema.parse({ totalCost });
+}
 // A completed tool-use result carrying a structured value, as a schema call
 // resolves once the agent submits output.
-const structuredResult: AgentFinalResult = {
-  category: 'toolUse',
+const structuredResult: RunEnd = {
   outcome: 'completed',
-  response: '',
-  files: [],
-  cost: 0,
-  structured: { title: 'Lemma 1' },
+  output: {
+    category: 'toolUse',
+    response: '',
+    files: [],
+    structured: { title: 'Lemma 1' },
+  },
 };
 
 function parentContext(): LaunchRunContext {
@@ -226,7 +233,7 @@ function reported<Field extends keyof AttemptFacts>(
 
 // Stable in-band run that runs the child's prepare step and records the
 // options it produced, as the real executor does.
-function inBandRunReturning(finalResult: AgentFinalResult) {
+function inBandRunReturning(finalResult: RunEnd) {
   return async (options: InBandRunOptions) => {
     options.onActiveRunId?.(options.runId);
     mocks.preparedOptions.push(await options.prepare());
@@ -443,7 +450,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(reported(report, 'childRunId')).toEqual([
       expect.stringMatching(/^[a-f0-9]{24}$/),
     ]);
-    expect(reported(report, 'costUsd')).toEqual([result.cost]);
+    expect(reported(report, 'costUsd')).toEqual([0]);
   });
 
   it('treats missing workspace files as run-fatal configuration', async () => {
@@ -697,7 +704,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(onCost).toHaveBeenCalledWith(call, 0.25);
     // Progressive onCost stamps the live snapshot attempt (not only success),
     // and the terminal result cost is stamped after it (same value here).
-    expect(reported(report, 'costUsd')).toEqual([0.25, result.cost]);
+    expect(reported(report, 'costUsd')).toEqual([0.25, 0]);
   });
 
   it('stamps terminal cost on failed outcomes before throwing', async () => {
@@ -711,7 +718,7 @@ describe('createWorkflowScriptAgentRunner', () => {
           result: {
             ...result,
             outcome: 'failed',
-            cost: 0.42,
+            usage: spent(0.42),
           },
         };
       },
@@ -729,7 +736,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     const report = reportSpy();
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       runId: 'bbbbbb222222',
-      result: { ...result, cost: 0.25 },
+      result: { ...result, usage: spent(0.25) },
     });
     const runner = defaultRunner({ onCost });
 
@@ -778,11 +785,8 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       runId: 'bbbbbb222222',
       result: {
-        category: 'toolUse',
         outcome: 'cancelled',
-        response: '',
-        files: [],
-        cost: 0,
+        output: { category: 'toolUse', response: '', files: [] },
       },
     });
     const runner = defaultRunner();
@@ -795,7 +799,7 @@ describe('createWorkflowScriptAgentRunner', () => {
   it('rejects a completed workflow child that produced no output files', async () => {
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       runId: 'bbbbbb222222',
-      result: { ...result, outputs: [] },
+      result: { ...result, output: { ...result.output, outputs: [] } },
     });
     const runner = defaultRunner();
 

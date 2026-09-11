@@ -83,6 +83,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   AgentConfigFieldsSchema,
+  emptyRunEndOutput,
   LocalRuntimeStateSchema,
   RUN_PHASE,
   RunIdSchema,
@@ -499,7 +500,7 @@ describe('session events and view', () => {
           { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
           { ...runStart, aggregateId: qualifyAggregateId('run', NEWER) },
           {
-            type: 'updateRunDescription',
+            type: 'run.description',
             aggregateId: qualifyAggregateId('run', NEWER),
             description: 'the newer run',
           },
@@ -641,32 +642,36 @@ describe('Sessions owner', () => {
               commit: 4,
             }),
           ]);
-          const result = {
-            type: 'result',
+          const runEnd = {
+            type: 'run.end',
             outcome: 'completed',
-            runId: RUN,
-            agentName: 'chat',
-            category: AgentCategory.ToolUse,
+            output: emptyRunEndOutput(AgentCategory.ToolUse),
           } as const;
-          session.publishRunEvent(RUN, result);
-          session.publishRunEvent(OLDER, { ...result, runId: OLDER });
+          session.publish([
+            { ...runEnd, aggregateId: qualifyAggregateId('run', RUN) },
+          ]);
+          session.publish([
+            { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
+          ]);
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce()),
           );
           expect(onResult.mock.calls[0][0]).toMatchObject({
-            type: 'result',
+            type: 'run.end',
             runId: OLDER,
             outcome: 'completed',
-            agentName: 'chat',
             seq: 3,
             commit: 5,
           });
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
+          // `run.end` carries the terminal phase, so the live run's end is a
+          // second status notification; the replay below must add none.
+          const statusCalls = handleStatus.mock.calls.length;
           for (const event of committed)
             yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
-          expect(handleStatus).toHaveBeenCalledOnce();
+          expect(handleStatus).toHaveBeenCalledTimes(statusCalls);
           expect(onResult).toHaveBeenCalledOnce();
         } finally {
           detachResult();
@@ -704,7 +709,7 @@ describe('Sessions owner', () => {
             commit: 1,
           });
           yield* session.receiveCommittedEvent({
-            type: 'updateRunDescription',
+            type: 'run.description',
             aggregateId,
             description: 'a run in another process',
             ownerId: OTHER,
@@ -713,11 +718,10 @@ describe('Sessions owner', () => {
             commit: 2,
           });
           yield* session.receiveCommittedEvent({
-            type: 'result',
+            type: 'run.end',
             aggregateId,
             outcome: 'completed',
-            agentName: 'chat',
-            category: AgentCategory.ToolUse,
+            output: emptyRunEndOutput(AgentCategory.ToolUse),
             ownerId: OTHER,
             at: 0,
             seq: 3,

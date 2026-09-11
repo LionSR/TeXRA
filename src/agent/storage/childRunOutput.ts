@@ -43,7 +43,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
     if (
       resultMeta?.producer !== 'subagent' ||
-      resultMeta.result.category !== 'workflow' ||
+      resultMeta.result.output.category !== 'workflow' ||
       resultMeta.result.outcome !== 'completed'
     ) {
       return yield* Effect.fail(
@@ -53,7 +53,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const declared = resultMeta.result.outputs.some(
+    const declared = resultMeta.result.output.outputs.some(
       (output) =>
         output.location === 'runStorage' &&
         output.relativePath.replaceAll('\\', '/') === reference.relativePath,

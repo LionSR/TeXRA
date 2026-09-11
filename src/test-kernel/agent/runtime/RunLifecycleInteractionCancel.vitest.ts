@@ -63,7 +63,11 @@ function toolUseRun<Outcome extends RunOutcome | typeof RUN_PHASE.WAITING>(
   runId: RunId,
   outcome: Outcome,
 ) {
-  return { category: 'toolUse' as const, outcome, runId };
+  return {
+    outcome,
+    runId,
+    output: { category: 'toolUse' as const, response: '', files: [] },
+  };
 }
 
 async function expectRunEndedRejection(

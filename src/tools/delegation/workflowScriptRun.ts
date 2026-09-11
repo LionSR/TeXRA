@@ -10,7 +10,6 @@ import type {
   WorkflowScriptEvent,
   WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
-import { AgentFinalResultSchema } from '@shared/schemas';
 import {
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
@@ -19,6 +18,7 @@ import {
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_RUN_LIFECYCLE,
+  RunEndSchema,
   type RunOutcome,
   type WorkflowCallProgress,
   type WorkflowCallTerminalProgress,
@@ -84,14 +84,15 @@ interface PhaseHandleState {
 }
 
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
-  const result = AgentFinalResultSchema.safeParse(entry.result);
+  const result = RunEndSchema.safeParse(entry.result);
   if (!result.success) {
     throw new Error(
-      `Workflow journal entry ${entry.index} is not an agent final result.`,
+      `Workflow journal entry ${entry.index} is not a run result.`,
       { cause: result.error },
     );
   }
-  return result.data.cost;
+  // No usage recorded is no spend.
+  return result.data.usage?.totalCost ?? 0;
 }
 
 /**

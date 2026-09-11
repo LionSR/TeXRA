@@ -7,7 +7,6 @@
 
 import { Effect } from 'effect';
 
-import type { ResultEvent } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
@@ -115,7 +114,6 @@ interface RunRegistryInit {
    *  own durable fact, a severed parent edge (`run.detach`). */
   readonly publish: (events: readonly SessionEventDraft[]) => void;
   readonly approvals: SessionApprovals;
-  readonly publishResult: (event: ResultEvent, runId: RunId) => void;
   /**
    * The session's one exit choreography (`SessionHandle.releaseRunLease`),
    * required so no construction path can silently release a lease without
@@ -148,14 +146,6 @@ export class RunRegistry {
     (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void
   >();
   private readonly approvals: SessionApprovals;
-  /**
-   * Publishes a synthesized terminal `result` event to the owning session's
-   * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
-   * does for a live run's own trace, injected here because
-   * `terminateWaitingHandle` produces its `result` event *after* the
-   * suspended run's own trace has already been disposed (see there).
-   */
-  private readonly publishResult: (event: ResultEvent, runId: RunId) => void;
   private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   private readonly listeners = new Map<
     string,
@@ -172,10 +162,8 @@ export class RunRegistry {
     this.publish = options.publish;
     this.runStatus = options.runStatus;
     this.approvals = options.approvals;
-    this.publishResult = options.publishResult;
     this.releaseRootRunLease = options.releaseRootRunLease;
     this.waitingTermination = new WaitingTermination({
-      publishResult: this.publishResult,
       releaseRootRunLease: this.releaseRootRunLease,
       finalizeRun: options.finalizeRun,
       lanes: this.lanes,

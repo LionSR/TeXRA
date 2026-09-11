@@ -2,7 +2,13 @@ import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle, runAgent } from '@agent/runtime';
-import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunOutcome,
+  RUN_PHASE,
+  type ToolUseRunEndOutputSchema,
+} from '@shared/schemas';
+import type { z } from 'zod';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -21,10 +27,9 @@ interface CliRunResultMetadata {
 // CLI-only metadata fields to every member.
 export type CliRunResult = ExecuteAgentResult & CliRunResultMetadata;
 
-export type CliToolUseRunResult = Extract<
-  CliRunResult,
-  { category: 'toolUse' }
->;
+export type CliToolUseRunResult = CliRunResult & {
+  readonly output: z.infer<typeof ToolUseRunEndOutputSchema>;
+};
 
 /**
  * The 0.40 wire's result payload: the run's result with its id under the key
@@ -43,7 +48,7 @@ export function cliRunResultPayload<R extends { readonly runId: string }>(
  *  otherwise a terse status/run-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
-    result.response?.trim() ||
+    result.output.response.trim() ||
     `${runOutcomeToCliRunStatus(result.outcome)}\nExecution: ${result.runId}`
   );
 }

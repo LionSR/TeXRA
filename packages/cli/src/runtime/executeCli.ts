@@ -21,7 +21,12 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunEndOutput,
+  type RunId,
+  AgentCategory,
+} from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateRunId, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -77,7 +82,9 @@ interface CliExecuteOptions {
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
   C extends AgentCategory
-    ? Extract<ExecuteAgentResult, { category: C }>
+    ? ExecuteAgentResult & {
+        readonly output: Extract<RunEndOutput, { category: C }>;
+      }
     : ExecuteAgentResult;
 
 export interface CliConfigExecuteOptions<
@@ -147,11 +154,11 @@ export function executeCliConfig<
 
     if (
       expectedCategory !== undefined &&
-      result.category !== expectedCategory
+      result.output.category !== expectedCategory
     ) {
       // Unreachable: `enforceCategory` above makes the launch throw before the
-      // run whenever the resolved agent setting disagrees, and `result.category`
-      // is stamped from that same resolved setting. Kept as an invariant so the
+      // run whenever the resolved agent setting disagrees, and the output's
+      // category is stamped from that same resolved setting. Kept as an invariant so the
       // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
       throw new Error(
         categoryMismatchMessage ??

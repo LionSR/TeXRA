@@ -45,7 +45,6 @@ export function testRunRegistry(): RunRegistry {
     publish: () => {},
     runStatus,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-    publishResult: () => {},
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),

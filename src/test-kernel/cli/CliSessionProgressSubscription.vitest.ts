@@ -259,7 +259,7 @@ const PROGRESS_PROJECTION_CASES = {
   },
   updateStreamDescription: {
     source: draft({
-      type: 'updateRunDescription',
+      type: 'run.description',
       aggregateId: qualifyAggregateId('run', runId),
       description: 'Checking the compactness lemma',
     }),
@@ -423,7 +423,7 @@ describe('attachCliSessionProgressProjection', () => {
         isRemote: false,
       },
       {
-        type: 'updateRunDescription',
+        type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description: 'Recorded before the resume',
       },
@@ -578,7 +578,7 @@ describe('attachCliSessionProgressProjection', () => {
     const { writeRecord, publish, detach } = projectionOver(session);
     await publish(
       draft({
-        type: 'updateRunDescription',
+        type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description: 'Proofread the introduction',
       }),
@@ -594,7 +594,7 @@ describe('attachCliSessionProgressProjection', () => {
     await session.settlePublications();
     await publish(
       draft({
-        type: 'updateRunDescription',
+        type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description: 'after detach',
       }),

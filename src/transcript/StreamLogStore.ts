@@ -45,6 +45,7 @@ function applyEvent(
 ): void {
   if (event.type === 'transcript.entry') log.record(event.entry);
   else if (event.type === 'status') fold.status(event.phase);
+  else if (event.type === 'run.end') fold.status(event.outcome);
   else if (isTranscriptEvent(event))
     fold.record(event, {
       at: event.at,

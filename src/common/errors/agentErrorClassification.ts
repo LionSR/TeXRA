@@ -3,15 +3,35 @@ import {
   RUN_OUTCOME,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
+  type RetryErrorInfo,
+  type RunEnd,
   type RunOutcome,
-  type ResultEvent,
 } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
 import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
 import { isContextWindowError, isUserAbort } from './sdkError/errorPatterns';
 
-export type AgentErrorKind = NonNullable<ResultEvent['error']>['kind'];
+export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
+
+/**
+ * The classified terminal error for a flow's own unclassified report: the
+ * persisted classification decides the kind, everything else carries over.
+ * Exhaustion kinds have no error kind of their own; their actionable route
+ * stays on `classification`.
+ */
+export function runEndErrorOf(
+  error: RetryErrorInfo,
+): NonNullable<RunEnd['error']> {
+  const kind = error.classification?.kind;
+  return {
+    kind:
+      kind === 'missing-api-key' || kind === 'context-window'
+        ? kind
+        : 'unexpected',
+    ...error,
+  };
+}
 
 /**
  * Canonical outcome of a run terminated by a thrown error, per error kind.

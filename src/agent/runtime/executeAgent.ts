@@ -29,6 +29,7 @@ import {
 } from '@shared/schemas';
 import {
   AgentCategory,
+  JsonValueSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
@@ -50,7 +51,6 @@ import {
   type RunFlowLifecycleOptions,
 } from './AgentRunLifecycle';
 import {
-  buildOptionalFlowResultFields,
   isWaitingFlowResult,
   type AgentRuntimeFlowResult,
   type WaitingToolUseFlowResult,
@@ -187,19 +187,23 @@ async function launchToolUseRun(
     },
   );
   return {
-    category: 'toolUse',
     outcome: result.outcome,
-    response: result.response,
-    files: result.files,
+    output: {
+      category: 'toolUse',
+      response: result.response ?? '',
+      files: result.files ?? [],
+      // The terminal tool validated the value against the run's own schema;
+      // the row's type is the JSON it must already be.
+      ...(result.structured !== undefined
+        ? { structured: JsonValueSchema.parse(result.structured) }
+        : {}),
+    },
     runId,
-    ...(result.structured !== undefined
-      ? { structured: result.structured }
-      : {}),
+    ...(result.usage ? { usage: result.usage } : {}),
     ...(result.error ? { error: result.error } : {}),
-    ...buildOptionalFlowResultFields(
-      ctx.attachedMemoryMisses,
-      result.totalCostUsd,
-    ),
+    ...(ctx.attachedMemoryMisses?.length
+      ? { memoryMisses: ctx.attachedMemoryMisses }
+      : {}),
   };
 }
 
@@ -238,16 +242,21 @@ async function runReflectionAgent(
     setting,
   });
   return {
-    category: 'workflow',
     outcome: result.outcome,
-    outputs: roundOutputsToOutputSummaries(result.roundOutputs),
-    compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
+    output: {
+      category: 'workflow',
+      outputs: roundOutputsToOutputSummaries(result.roundOutputs),
+      compileFailures: roundOutputsToCompileFailureSummaries(
+        result.roundOutputs,
+      ),
+      diffs: [],
+    },
     runId,
+    ...(result.usage ? { usage: result.usage } : {}),
     ...(result.error ? { error: result.error } : {}),
-    ...buildOptionalFlowResultFields(
-      ctx.attachedMemoryMisses,
-      result.totalCostUsd,
-    ),
+    ...(ctx.attachedMemoryMisses?.length
+      ? { memoryMisses: ctx.attachedMemoryMisses }
+      : {}),
   };
 }
 

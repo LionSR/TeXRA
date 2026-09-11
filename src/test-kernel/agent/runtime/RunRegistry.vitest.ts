@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
-import type { AgentTrace, ResultEvent } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type {
   RunHandle,
@@ -35,7 +35,6 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { spiedTrace } from '@test/support/spiedTrace';
 import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -86,6 +85,13 @@ vi.mock('@agent/trace', async (importOriginal) => {
 
 setupPlatform({ workspacePath: '/workspace' });
 
+/** What a tool-use run that produced no output ends with on its `run.end`. */
+const EMPTY_TOOL_USE_OUTPUT = {
+  category: 'toolUse',
+  response: '',
+  files: [],
+} as const;
+
 type HandleOverrides = {
   agentName?: string;
   category?: AgentCategory;
@@ -112,7 +118,6 @@ function createHandle(
 function createRegistry(
   options: {
     approvals?: ReturnType<typeof createSessionApprovals>;
-    publishResult?: (event: ResultEvent, runId: RunId) => void;
     releaseRootRunLease?: (runId: RunId) => Effect.Effect<void, Error>;
   } = {},
 ): {
@@ -135,7 +140,6 @@ function createRegistry(
     runStatus,
     publish: (drafts) => events.published.push(...drafts),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-    publishResult: () => {},
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(defaultSession(), input),
     ...options,
@@ -437,55 +441,40 @@ describe('runRegistry', () => {
     }
   });
 
-  it('publishes the cancelled terminal result when killing a suspended WAITING handle', async () => {
-    // terminateWaitingHandle settles handle.result and the run's own
-    // (already-disposed, per runFlowWithLifecycle's finally) trace, and must
-    // also tell the owning session about the terminal event — otherwise
-    // session-result subscribers (session.onResult et al.) silently miss a
-    // user-initiated stop of a suspended native subagent even though
-    // handle.result itself resolved. `publishResult` is the callback
-    // SessionHandle injects (see SessionHandle.publishRunEvent) so this path
-    // reaches those subscribers directly, since the turn's own trace
-    // subscriptions are already torn down by the time a kill runs.
-    const publishResult = vi.fn();
-    const { runStatus, registry } = createRegistry({ publishResult });
+  it('writes the cancelled `run.end` row when killing a suspended WAITING handle', async () => {
+    // terminateWaitingHandle bypasses runFlowWithLifecycle (the flow never
+    // resumes), so it writes the terminal row itself — otherwise session
+    // subscribers silently miss a user-initiated stop of a suspended native
+    // subagent even though handle.result itself resolved. The turn's own
+    // trace is already torn down by the time a kill runs, so the row, not an
+    // emit, is what reaches them.
+    storageMocks.finalizeRun.mockClear();
+    const { runStatus, registry } = createRegistry();
     const parentRunId = generateRunId();
     const runId = generateRunId();
-    const trace = spiedTrace({ emit: vi.fn() }, { strict: true });
 
     try {
       const handle = trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: parentRunId,
-        overrides: { trace },
       });
 
       expect(killRegistry(registry, runId)).toBe(true);
-      await Effect.runPromise(handle.result);
 
-      expect(publishResult).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          type: 'result',
-          outcome: RUN_OUTCOME.CANCELLED,
-          runId,
-        }),
-        runId,
-      );
-      // The (already-disposed-in-production) trace still gets a best-effort
-      // emit — harmless when there are no subscribers left, but exercised
-      // here to confirm the call site didn't drop it. (A second, unrelated
-      // `trace.emit` call comes from the runStatus transition below.)
-      expect(trace.emit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'result',
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
       await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
         runId,
       });
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+        defaultSession(),
+        {
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: EMPTY_TOOL_USE_OUTPUT,
+          flowRecord: 'preserve',
+        },
+      );
     } finally {
       registry.dispose();
     }
@@ -493,8 +482,12 @@ describe('runRegistry', () => {
 
   it('publishes a waiting cancellation after its transcript cleanup settles', async () => {
     const order: string[] = [];
-    const publishResult = vi.fn(() => order.push('publish'));
-    const { runStatus, registry } = createRegistry({ publishResult });
+    storageMocks.finalizeRun.mockClear();
+    storageMocks.finalizeRun.mockImplementationOnce(() => {
+      order.push('finalize');
+      return Effect.succeed({ ok: true, outcomePersisted: true });
+    });
+    const { runStatus, registry } = createRegistry();
     const runId = generateRunId();
     let finishCleanup = (): void => undefined;
     const cleanupGate = new Promise<void>((resolve) => {
@@ -513,16 +506,16 @@ describe('runRegistry', () => {
 
       expect(killRegistry(registry, runId)).toBe(true);
       await Promise.resolve();
-      expect(publishResult).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(registry.getHandle(runId)).toBe(handle);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
 
       finishCleanup();
       await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
       });
-      expect(order).toEqual(['cleanup', 'publish']);
+      expect(order).toEqual(['cleanup', 'finalize']);
       expect(registry.getHandle(runId)).toBeUndefined();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
     } finally {
@@ -532,8 +525,7 @@ describe('runRegistry', () => {
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
     storageMocks.finalizeRun.mockClear();
-    const publishResult = vi.fn();
-    const { runStatus, registry } = createRegistry({ publishResult });
+    const { runStatus, registry } = createRegistry();
     const parentRunId = generateRunId();
     const runId = generateRunId();
     let finishCleanup = (): void => undefined;
@@ -560,12 +552,11 @@ describe('runRegistry', () => {
       expect(successorInterrupt).toHaveBeenCalledOnce();
       finishCleanup();
       await expect(Effect.runPromise(previous.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
       });
 
       expect(registry.getHandle(runId)).toBe(successor);
-      expect(publishResult).not.toHaveBeenCalled();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
     } finally {
@@ -573,13 +564,11 @@ describe('runRegistry', () => {
     }
   });
 
-  it('settles waiting termination when detached publication throws', async () => {
-    const publishFailure = new Error('terminal subscriber failed');
-    const { runStatus, registry } = createRegistry({
-      publishResult: () => {
-        throw publishFailure;
-      },
+  it('settles waiting termination when the terminal row write throws', async () => {
+    storageMocks.finalizeRun.mockImplementationOnce(() => {
+      throw new Error('terminal row write failed');
     });
+    const { runStatus, registry } = createRegistry();
     const runId = generateRunId();
 
     try {
@@ -590,7 +579,7 @@ describe('runRegistry', () => {
 
       expect(killRegistry(registry, runId)).toBe(true);
       await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
       });
       expect(registry.getHandle(runId)).toBeUndefined();
@@ -623,7 +612,7 @@ describe('runRegistry', () => {
       expect(killRegistry(registry, runId)).toBe(true);
 
       await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
         runId,
       });
@@ -668,6 +657,7 @@ describe('runRegistry', () => {
           {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
+            output: EMPTY_TOOL_USE_OUTPUT,
             // A stopped WAITING run keeps its checkpoint: this is precisely the
             // run a user resumes (#11315).
             flowRecord: 'preserve',
@@ -710,6 +700,7 @@ describe('runRegistry', () => {
           {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
+            output: EMPTY_TOOL_USE_OUTPUT,
             // A stopped WAITING run keeps its checkpoint: this is precisely the
             // run a user resumes (#11315).
             flowRecord: 'preserve',
@@ -812,7 +803,7 @@ describe('runRegistry', () => {
           runs: registry,
           runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
-          persistence: { kind: 'finalize', flowRecord: 'delete' },
+          flowRecord: 'delete',
         }),
       );
       await vi.waitFor(() => expect(releasePersist).toBeDefined());
@@ -827,11 +818,11 @@ describe('runRegistry', () => {
       });
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
         defaultSession(),
-        {
+        expect.objectContaining({
           runId,
           outcome: RUN_OUTCOME.COMPLETED,
           flowRecord: 'delete',
-        },
+        }),
       );
       expect(registry.getHandle(runId)).toBeUndefined();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
@@ -861,11 +852,12 @@ describe('runRegistry', () => {
           agentName: 'test-subagent',
           wallTimeMs: 1,
           result: {
-            category: 'toolUse',
             outcome: RUN_OUTCOME.COMPLETED,
-            response: 'interim response',
-            files: [],
-            cost: 0,
+            output: {
+              category: 'toolUse',
+              response: 'interim response',
+              files: [],
+            },
           },
         }),
       );
@@ -895,7 +887,7 @@ describe('runRegistry', () => {
         ).resolves.toMatchObject({
           result: {
             outcome: RUN_OUTCOME.CANCELLED,
-            response: 'interim response',
+            output: { response: 'interim response' },
           },
         });
       });
@@ -937,13 +929,8 @@ describe('runRegistry', () => {
       expect(queuedChildInterrupt).toHaveBeenCalledOnce();
       expect(runStatus.get(rootRunId)).toBe(RUN_PHASE.CANCELLED);
       expect(runStatus.get(childRunId)).toBe(RUN_PHASE.CANCELLED);
-      expect(eventsOfType(recorded.events, 'status')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            phase: RUN_PHASE.CANCELLED,
-          }),
-        ]),
-      );
+      // The terminal phase rides `run.end`, so no status row carries it.
+      expect(eventsOfType(recorded.events, 'status')).toEqual([]);
     } finally {
       registry.dispose();
     }
@@ -1137,9 +1124,8 @@ describe('runRegistry', () => {
       stopRegistry(registry, runId);
 
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-      expect(eventsOfType(recorded.events, 'status').at(-1)).toMatchObject({
-        phase: RUN_PHASE.CANCELLED,
-      });
+      // The terminal phase rides `run.end`, so no status row carries it.
+      expect(eventsOfType(recorded.events, 'status')).toEqual([]);
     } finally {
       registry.dispose();
     }
@@ -1541,7 +1527,7 @@ describe('runRegistry', () => {
     registry.dispose();
     const recorded = recordSessionEvents(events);
 
-    runStatus.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
+    runStatus.transition(runId, RUN_PHASE.RUNNING, 'lifecycle');
 
     // Only the status machine's own fact remains; the registry contributes
     // no roster emission once its subscription is gone.

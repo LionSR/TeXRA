@@ -729,7 +729,7 @@ function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
 
 function seedDescription(runId: RunId, description: string): void {
   publish({
-    type: 'updateRunDescription',
+    type: 'run.description',
     aggregateId: qualifyAggregateId('run', runId),
     description,
   });

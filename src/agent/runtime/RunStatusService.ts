@@ -9,6 +9,7 @@ import {
   canTransitionRunPhase,
   isActivePhase,
   isInFlightPhase,
+  isTerminalOutcomePhase,
   RUN_TRANSITION_CAUSE,
   type RunTransitionCause,
 } from '@shared/runs/runStatus';
@@ -63,7 +64,8 @@ export class RunStatusMachine {
 
   /**
    * @param publishStatus Where this machine publishes canonical `status`
-   *   facts after launch. Creation batches the initial status with run.start.
+   *   facts after launch: every non-terminal transition (the terminal phase
+   *   is the `run.end` row's). Creation batches the initial status with run.start.
    *   Every consumer, including the transcript recorder (via its `handleStatus`
    *   port), reads it. The session constructs the machine with its own
    *   publisher, so a transition reaches every consumer no matter which
@@ -140,12 +142,17 @@ export class RunStatusMachine {
         ...(runStartedAt !== undefined ? { runStartedAt } : {}),
       },
     });
-    this.publishTransition(runId, to, {
-      ...options,
-      cause,
-      ...(from ? { previousPhase: from } : {}),
-      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-    });
+    // A terminal phase is the `run.end` row's fact (one run model, section
+    // 3.3), written once by the storage finalizer; the machine records it for
+    // its in-process readers and publishes no second copy.
+    if (!isTerminalOutcomePhase(to)) {
+      this.publishTransition(runId, to, {
+        ...options,
+        cause,
+        ...(from ? { previousPhase: from } : {}),
+        ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+      });
+    }
     // A phase that replaces a hold also drops that hold's detail, and the
     // status fact above carries no detail of its own.
     if (overwritesHold) this.publishHoldChanged(runId);

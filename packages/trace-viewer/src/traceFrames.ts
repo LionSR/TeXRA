@@ -11,6 +11,7 @@ import {
   RunIdSchema,
   AgentCategory,
   AgentConfigFieldsSchema,
+  emptyRunEndOutput,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
@@ -149,7 +150,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   }
   if (trace.meta.description) {
     bodies.push({
-      type: 'updateRunDescription',
+      type: 'run.description',
       aggregateId: qualifyAggregateId('run', trace.runId),
       description: trace.meta.description,
     });
@@ -203,24 +204,12 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   }
   const outcome = traceOutcome(trace);
   if (outcome !== null && isTerminalOutcomePhase(outcome)) {
-    bodies.push(
-      {
-        type: 'status',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        phase: outcome,
-        previousPhase: null,
-        cause: 'trace',
-        substate: null,
-        runStartedAt: trace.entries[0]?.timestamp ?? null,
-      },
-      {
-        type: 'result',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome,
-        category,
-        agentName: runIdentityDisplayName(identity),
-      },
-    );
+    bodies.push({
+      type: 'run.end',
+      aggregateId: qualifyAggregateId('run', runId),
+      outcome,
+      output: emptyRunEndOutput(category),
+    });
   }
   return bodies;
 }

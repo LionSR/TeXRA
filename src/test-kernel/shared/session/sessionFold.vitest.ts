@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  emptyRunEndOutput,
   MESSAGE_TYPES,
   isTranscriptEvent,
   STREAM_LOG_ENTRY_TYPES,
@@ -356,10 +357,9 @@ describe('sessionFold', () => {
       stopped,
       tail(
         scenario.log.emit(CHILD, 1851, {
-          type: 'result',
-          agentName: 'custom:search',
+          type: 'run.end',
           outcome: 'cancelled',
-          category: AgentCategory.ToolUse,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         }),
       ),
     );
@@ -544,15 +544,14 @@ describe('sessionFold', () => {
       'Hello world',
     );
     expect(rows[1].kind === 'assistant' && rows[1].text.full).toBe('Late');
-    // A terminal status ends every live row: a later chunk reaches none.
+    // The run's end closes every live row: a later chunk reaches none.
     const done = fold(
       settled,
       tail(
         log.emit(CHILD, 1502, {
-          type: 'status',
-          phase: RUN_PHASE.COMPLETED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
+          type: 'run.end',
+          outcome: 'completed',
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         }),
       ),
     );
@@ -688,7 +687,7 @@ describe('sessionFold', () => {
       tail({
         ...stamp,
         aggregateId: qualifyAggregateId('run', ghost),
-        type: 'updateRunDescription',
+        type: 'run.description',
         description: 'boo',
       }),
       tail({

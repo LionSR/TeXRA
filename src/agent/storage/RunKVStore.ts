@@ -184,8 +184,8 @@ export function runMetaFromEvents(
     rows.some((row) => row.aggregateId === id && row.type === 'run.removed')
   )
     return null;
-  const status = rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'status',
+  const end = rows.findLast(
+    (row) => row.aggregateId === id && row.type === 'run.end',
   );
   const description = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'run.description',
@@ -204,13 +204,7 @@ export function runMetaFromEvents(
     userFollowUpSupport: start.userFollowUpSupport,
     parentRunId:
       detached || start.parent === null ? undefined : start.parent.id,
-    outcome:
-      status?.type === 'status' &&
-      (status.phase === RUN_OUTCOME.COMPLETED ||
-        status.phase === RUN_OUTCOME.CANCELLED ||
-        status.phase === RUN_OUTCOME.FAILED)
-        ? status.phase
-        : undefined,
+    outcome: end?.type === 'run.end' ? end.outcome : undefined,
     description:
       description?.type === 'run.description'
         ? description.description

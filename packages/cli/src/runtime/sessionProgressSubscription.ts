@@ -120,7 +120,6 @@ function projectCliSessionEvent(
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
-    case 'result':
     case 'context.state':
     case 'log':
     case 'stage.end':
@@ -135,6 +134,16 @@ function projectCliSessionEvent(
     case 'domain':
     case 'transcript.entry':
       return undefined;
+    case 'run.end':
+      // The 0.40 wire's terminal status line, from the one terminal row.
+      return {
+        event: 'updateStreamStatus',
+        payload: {
+          streamId: runId,
+          status: event.outcome,
+          cause: 'lifecycle',
+        },
+      };
     case 'status':
       return {
         event: 'updateStreamStatus',
@@ -220,7 +229,7 @@ function projectCliSessionEvent(
       return undefined;
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: { streamId: runId } };
-    case 'updateRunDescription':
+    case 'run.description':
       return {
         event: 'updateStreamDescription',
         payload: { streamId: runId, description: event.description },

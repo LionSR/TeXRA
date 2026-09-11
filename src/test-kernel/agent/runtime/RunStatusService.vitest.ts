@@ -63,7 +63,7 @@ describe('RunStatusMachine', () => {
     );
     const runId = 'run-status-listener-test' as RunId;
 
-    second.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
+    second.transition(runId, RUN_PHASE.RUNNING, 'lifecycle');
 
     expect(firstPublished.events).toEqual([]);
     expect(secondPublished.events).toHaveLength(1);
@@ -140,13 +140,6 @@ describe('RunStatusMachine', () => {
         cause: 'resume',
         runStartedAt: expect.any(Number),
       },
-      {
-        runId,
-        type: 'status',
-        phase: RUN_PHASE.CANCELLED,
-        previousPhase: RUN_PHASE.RUNNING,
-        cause,
-      },
     ]);
   });
 
@@ -171,13 +164,6 @@ describe('RunStatusMachine', () => {
         phase: RUN_PHASE.RUNNING,
         cause: 'lifecycle',
         runStartedAt: expect.any(Number),
-      },
-      {
-        runId,
-        type: 'status',
-        phase: RUN_PHASE.FAILED,
-        previousPhase: RUN_PHASE.RUNNING,
-        cause: 'lifecycle',
       },
     ]);
   });

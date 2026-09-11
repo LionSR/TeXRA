@@ -77,11 +77,12 @@ describe('canonical run records', () => {
           agentName: 'worker',
           wallTimeMs: 1,
           result: {
-            category: 'toolUse',
             outcome: 'completed',
-            response: 'answer',
-            files: [],
-            cost: 0,
+            output: {
+              category: 'toolUse',
+              response: 'answer',
+              files: [],
+            },
           },
         });
         yield* session.commit([

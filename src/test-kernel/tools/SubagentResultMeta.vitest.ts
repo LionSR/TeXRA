@@ -1,25 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
 import { ResultMetaSchema } from '@agent/storage/resultMeta';
-import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { RunId } from '@shared/schemas';
+import type { RunEnd, RunId } from '@shared/schemas';
 import {
   buildSubagentFailureResultMeta,
   buildSubagentResultMeta,
 } from '@tools/delegation/subagentResults';
 
 const baseResult: AgentFlowResult = {
-  category: 'toolUse',
   outcome: 'completed',
   runId: 'abcdefabcdef' as RunId,
+  output: { category: 'toolUse', response: '', files: [] },
 };
 
 describe('subagent result metadata', () => {
   it('failure manifest overwrites interim success and never claims success', () => {
     const interim: AgentFlowResult = {
       ...baseResult,
-      response: 'looked fine before the crash',
+      output: {
+        category: 'toolUse',
+        response: 'looked fine before the crash',
+        files: [],
+      },
     };
     const meta = buildSubagentFailureResultMeta(
       'reviewer',

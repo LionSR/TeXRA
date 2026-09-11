@@ -28,5 +28,5 @@ export function selectAutoOpenFinalOutput(
   }
   if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;
 
-  return finalWorkflowOutput(result.outputs);
+  return finalWorkflowOutput(result.output.outputs);
 }

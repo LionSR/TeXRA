@@ -33,22 +33,23 @@ function completedWorkflowResult(absolutePath: string): ResultMeta {
     agentName: 'draft',
     wallTimeMs: 10,
     result: {
-      category: 'workflow',
       outcome: 'completed',
-      outputs: [
-        {
-          round: 1,
-          relativePath,
-          absolutePath,
-          location: 'runStorage',
-          originalPath: null,
-          added: null,
-          removed: null,
-        },
-      ],
-      compileFailures: [],
-      diffs: [],
-      cost: 0,
+      output: {
+        category: 'workflow',
+        outputs: [
+          {
+            round: 1,
+            relativePath,
+            absolutePath,
+            location: 'runStorage',
+            originalPath: null,
+            added: null,
+            removed: null,
+          },
+        ],
+        compileFailures: [],
+        diffs: [],
+      },
     },
   };
 }

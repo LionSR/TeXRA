@@ -28,6 +28,7 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import { aggregateId } from '@shared/schemas';
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type {
   RetryErrorInfo,
   RunId,
@@ -111,11 +112,11 @@ interface RunToolUseFlowResult {
   /** Workspace-relative paths of files edited by tool calls during this session. */
   files?: string[];
   /**
-   * Total model cost (USD) accumulated by this run, including any subagents
-   * it delegated to (rolled up at the delegation boundary). Used by parent
-   * runs.
+   * Usage totals accumulated by this run, including any subagents it
+   * delegated to (rolled up at the delegation boundary). Parents read
+   * `usage.totalCost`.
    */
-  totalCostUsd?: number;
+  usage?: RunUsageTotals;
   /**
    * Value the model submitted through the synthetic `submit_output` terminal
    * tool, already validated by that tool's Zod schema. Present only when the
@@ -389,7 +390,7 @@ export async function runToolUseFlow(
 
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
   let files: string[] | undefined;
-  let totalCostUsd: number | undefined;
+  let usage: RunUsageTotals | undefined;
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
@@ -557,8 +558,7 @@ export async function runToolUseFlow(
       if (resumedFollowUps.length > 0) liveAttachment.attach();
     } while (resumedFollowUps.length > 0);
 
-    totalCostUsd =
-      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
+    usage = shared.stateSlices?.runStateSnapshot.usageAccumulator.totals;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
     files = extractedTouchedFiles.length ? extractedTouchedFiles : undefined;
 
@@ -724,7 +724,7 @@ export async function runToolUseFlow(
     outcome,
     response,
     files,
-    totalCostUsd,
+    usage,
     structured: shared.structured,
     ...(carriedError ? { error: carriedError } : {}),
   };

@@ -3,11 +3,13 @@ import { z } from 'zod';
 
 import { byString, normalizeFilePath } from '@utils/core';
 
+import type { AgentCategory } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { JsonValueSchema } from './jsonValue';
 import { CompileFailureSummarySchema, OutputFileSummarySchema } from './output';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
+import { RunUsageTotalsSchema } from './usage';
 
 export const NonAgentRunRecordSchema = z.strictObject({
   name: z.string().min(1),
@@ -29,32 +31,68 @@ const ResultDiffSummarySchema = z.strictObject({
 });
 export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
 
-const CostSchema = z.number().nonnegative().prefault(0);
-const WorkflowAgentFinalResultSchema = z.strictObject({
+/** Terminal errors keep the classified kind beside the provider detail. */
+const RunEndErrorSchema = z
+  .discriminatedUnion('kind', [
+    RetryErrorInfoSchema.pick({
+      message: true,
+      userRetryable: true,
+      streamDiagnostics: true,
+      partialText: true,
+    })
+      .partial()
+      .extend({ kind: z.enum(['abort', 'disk-full']) }),
+    RetryErrorInfoSchema.partial().extend({
+      kind: z.enum(['context-window', 'missing-api-key', 'unexpected']),
+    }),
+  ])
+  .readonly();
+
+/**
+ * What a run produced, by category (one run model, section 3.4). The one
+ * declaration every result type derives from: the `run.end` row carries it,
+ * the flow hands it to the lifecycle, and a producer record embeds it.
+ */
+export const WorkflowRunEndOutputSchema = z.strictObject({
   category: z.literal('workflow'),
-  outcome: RunOutcomeSchema,
   outputs: z.array(OutputFileSummarySchema).prefault(() => []),
   compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
+  /** Written by the delivery that computes them, after the run ended. */
   diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
-  cost: CostSchema,
   diffsUnavailable: z.string().optional(),
   structured: JsonValueSchema.optional(),
-  error: RetryErrorInfoSchema.optional(),
 });
-const ToolUseAgentFinalResultSchema = z.strictObject({
+export const ToolUseRunEndOutputSchema = z.strictObject({
   category: z.literal('toolUse'),
-  outcome: RunOutcomeSchema,
   response: z.string().prefault(''),
+  /** Workspace-relative paths of files edited by tool calls during the run. */
   files: z.array(z.string()).prefault(() => []),
-  cost: CostSchema,
+  /** Value captured by the `submit_output` terminal tool, if the run used one. */
   structured: JsonValueSchema.optional(),
-  error: RetryErrorInfoSchema.optional(),
 });
-export const AgentFinalResultSchema = z.discriminatedUnion('category', [
-  WorkflowAgentFinalResultSchema,
-  ToolUseAgentFinalResultSchema,
+const RunEndOutputSchema = z.discriminatedUnion('category', [
+  WorkflowRunEndOutputSchema,
+  ToolUseRunEndOutputSchema,
 ]);
-export type AgentFinalResult = z.infer<typeof AgentFinalResultSchema>;
+export type RunEndOutput = z.infer<typeof RunEndOutputSchema>;
+
+/** The output of a run that ended before its flow produced one. */
+export function emptyRunEndOutput(category: AgentCategory): RunEndOutput {
+  return RunEndOutputSchema.parse({ category });
+}
+
+/**
+ * The terminal fact, written once as the `run.end` row. `error` is present
+ * only on a failed outcome; `usage` once a round recorded usage, including on
+ * failures. Cost is `usage.totalCost` and nothing else.
+ */
+export const RunEndSchema = z.object({
+  outcome: RunOutcomeSchema,
+  error: RunEndErrorSchema.optional(),
+  usage: RunUsageTotalsSchema.optional(),
+  output: RunEndOutputSchema,
+});
+export type RunEnd = z.infer<typeof RunEndSchema>;
 
 export const ResultMetaSchema = z.discriminatedUnion('producer', [
   z.strictObject({
@@ -67,7 +105,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   }),
   z.strictObject({
     producer: z.literal('cliWorkflow'),
-    result: WorkflowAgentFinalResultSchema,
+    result: RunEndSchema.extend({ output: WorkflowRunEndOutputSchema }),
     copiedOutput: z.string().optional(),
     copiedOutputs: z.array(z.string()).optional(),
   }),
@@ -75,7 +113,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
     producer: z.literal('subagent'),
     agentName: z.string(),
     wallTimeMs: z.number().nonnegative(),
-    result: AgentFinalResultSchema,
+    result: RunEndSchema,
     turnToken: z.string().optional(),
   }),
 ]);

@@ -29,11 +29,11 @@ import {
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
+  type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -103,7 +103,7 @@ type InBandSubagentDeliveryOptions = InBandSubagentRunBaseOptions;
 
 interface InBandSubagentRunResult {
   readonly runId: RunId;
-  readonly result: AgentFinalResult;
+  readonly result: RunEnd;
 }
 
 interface InBandSubagentDeliveryResult extends InBandSubagentRunResult {

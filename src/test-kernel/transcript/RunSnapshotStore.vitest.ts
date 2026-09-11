@@ -147,7 +147,7 @@ describe('RunSnapshotStore event fold', () => {
           start,
           usage,
           {
-            type: 'updateRunDescription',
+            type: 'run.description',
             aggregateId: start.aggregateId,
             description: 'A conserved quantity',
           },

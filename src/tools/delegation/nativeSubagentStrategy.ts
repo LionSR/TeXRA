@@ -175,15 +175,7 @@ function toDeliveryResult(
   runId: RunId,
 ): AgentFlowResult {
   if (!isWaitingFlowResult(turn)) return turn;
-  return {
-    category: 'toolUse',
-    outcome: RUN_OUTCOME.COMPLETED,
-    response: turn.response,
-    files: turn.files,
-    runId,
-    memoryMisses: turn.memoryMisses,
-    totalCostUsd: turn.totalCostUsd,
-  };
+  return { ...turn, outcome: RUN_OUTCOME.COMPLETED, runId };
 }
 
 /** Bind every distinct caller/turn cancellation source to one live run handle. */
@@ -243,7 +235,7 @@ export function createNativeSubagentStrategy(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = toDeliveryResult(result, params.runId);
-          ports.recordCost(result.totalCostUsd);
+          ports.recordCost(result.usage?.totalCost);
         }),
       ),
       Effect.ensuring(Effect.sync(() => detachAbort())),
@@ -320,7 +312,7 @@ export function createNativeSubagentStrategy(
           // accounting keep what the run actually spent.
           if (params.runMode === 'single-cycle' && isWaitingFlowResult(turn)) {
             lastResult = toDeliveryResult(turn, params.runId);
-            ports.recordCost(turn.totalCostUsd);
+            ports.recordCost(turn.usage?.totalCost);
             return yield* Effect.fail(
               new Error(
                 `Single-cycle subagent ${params.runId} unexpectedly suspended.`,

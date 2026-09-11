@@ -9,9 +9,8 @@ import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
@@ -189,15 +188,13 @@ export function createWorkflowScriptAgentRunner(
       totalCostUsd: number | undefined,
     ) => void;
   },
-): (
-  invocation: WorkflowAgentInvocation,
-) => Effect.Effect<AgentFinalResult, Error> {
+): (invocation: WorkflowAgentInvocation) => Effect.Effect<RunEnd, Error> {
   const { runScope } = parent;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
       invocation: WorkflowAgentInvocation,
-    ): Effect.fn.Return<AgentFinalResult, Error> {
+    ): Effect.fn.Return<RunEnd, Error> {
       const logicalRunId = deriveRunId({
         checkpointId,
         key: invocation.key,
@@ -289,14 +286,18 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt; the interrupted snapshot may
       // already hold the same cost on a closed prior attempt.
       if (!recovered) {
-        invocation.report({ costUsd: result.cost });
+        // No usage recorded is no spend.
+        invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,
         );
       }
-      if (result.category === 'workflow' && result.outputs.length === 0) {
+      if (
+        result.output.category === 'workflow' &&
+        result.output.outputs.length === 0
+      ) {
         throw new Error(
           'Workflow subagent completed without producing any output files.',
         );

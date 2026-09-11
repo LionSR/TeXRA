@@ -293,7 +293,7 @@ export interface WorkflowAttemptFacts {
 /**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
  * production host wires this to the in-band subagent run path so the
- * engine receives the typed AgentFinalResult envelope, never the XML
+ * engine receives the typed `RunEnd` envelope, never the XML
  * follow-up delivery string.
  */
 export type WorkflowAgentRunner = (

@@ -2,9 +2,8 @@
  * Termination cascade for suspended runs.
  *
  * Tears down an `RunHandle` parked at WAITING with no live
- * interrupt context: publishes the terminal `result`, settles
- * `handle.result`, persists the terminal status, and releases the run
- * lease, all on behalf of `RunRegistry.terminate`.
+ * interrupt context: writes the `run.end` row, settles `handle.result`, and
+ * releases the run lease, all on behalf of `RunRegistry.terminate`.
  */
 
 import { Cause, Effect, Exit } from 'effect';
@@ -16,7 +15,7 @@ import {
   type FinalizeRunResult,
   retainFlowRecordUnlessCompleted,
 } from '@agent/storage/runLifecycle';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle } from './RunHandle';
 import type { RunLanes } from './runLanes';
@@ -29,7 +28,6 @@ const logger = createChannelTrace('runRegistry');
  * and the session's lease-release boundary.
  */
 export interface WaitingTerminationContext {
-  readonly publishResult: (event: ResultEvent, runId: RunId) => void;
   readonly releaseRootRunLease: (runId: RunId) => Effect.Effect<void, Error>;
   readonly finalizeRun: (
     input: FinalizeRunInput,
@@ -64,32 +62,21 @@ export class WaitingTermination {
    * still tears the stalled resume down.
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
-   * flow never resumes to produce one), so it publishes the terminal
-   * `result`, settles `handle.result`, and persists the terminal status
-   * itself — otherwise trace/session subscribers would miss the stop, a
-   * consumer awaiting `handle.result` (F-2) would hang forever, and the
-   * run's history would keep a non-terminal status. Unlike
-   * `finalizeRunTerminal`, no usage totals ride the event: the flow is
-   * suspended, so there is no live usage monitor to read.
-   *
-   * `handle.trace` belongs to the turn that suspended this handle at WAITING,
-   * and `runFlowWithLifecycle`'s own `finally` already disposed it (channel +
-   * transcript + session bridge) the moment that turn returned — emitting on
-   * it is a harmless best effort, not the real fix. `publishResult` (wired
-   * from `SessionHandle.publishRunEvent`) reaches this session's
-   * `onResult`/event-bus subscribers directly instead, so a user-initiated
-   * stop of a suspended native subagent still surfaces a terminal event even
-   * though the turn's own trace is already gone.
+   * flow never resumes to produce one), so it writes the `run.end` row through
+   * `finalizeRun` and settles `handle.result` itself — otherwise session
+   * subscribers would miss the stop, a consumer awaiting `handle.result` (F-2)
+   * would hang forever, and the run's history would keep a non-terminal
+   * status. Unlike `finalizeRunTerminal`, no usage totals ride the row: the
+   * flow is suspended, so there is no live usage monitor to read.
    */
   terminateWaitingHandle(handle: RunHandle): Effect.Effect<void> | undefined {
     const teardown = handle.beginSuspendedTermination();
     if (!teardown) return undefined;
     const cancelledResult: ResultEvent = {
-      type: 'result',
+      type: 'run.end',
       outcome: RUN_OUTCOME.CANCELLED,
       runId: handle.runId,
-      agentName: handle.agentName,
-      category: handle.category,
+      output: emptyRunEndOutput(handle.category),
     };
     return this.context.lanes.holdLive(
       handle.runId,
@@ -183,20 +170,15 @@ export class WaitingTermination {
       return;
     }
 
-    // Cleanup closes the suspended run's transcript group. Publish the
-    // terminal state only after that owned artifact is settled so every host
-    // observes one coherent cancellation boundary, and in one fixed order:
-    // publish, settle the envelope, drop the handle, cancel the stream.
-    handle.trace?.emit(cancelledResult);
-    this.context.publishResult(cancelledResult, handle.runId);
-    handle.settleResult(cancelledResult);
-    this.context.untrackHandle(handle);
-    this.context.cancelRunStatus(handle.runId);
-
+    // Cleanup closes the suspended run's transcript group. Write the terminal
+    // row only after that owned artifact is settled so every host observes
+    // one coherent cancellation boundary, and in one fixed order: write the
+    // row, settle the envelope, drop the handle, cancel the stream.
     const finalize = Effect.gen({ self: this }, function* () {
       const finalization = yield* this.context.finalizeRun({
         runId: handle.runId,
         outcome: RUN_OUTCOME.CANCELLED,
+        output: cancelledResult.output,
         // A stopped WAITING run is exactly what a user resumes. Deleting its
         // checkpoint here was the #11304 invariant's first violation (#11315).
         flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
@@ -210,6 +192,9 @@ export class WaitingTermination {
           },
         });
       }
+      handle.settleResult(cancelledResult);
+      this.context.untrackHandle(handle);
+      this.context.cancelRunStatus(handle.runId);
     });
     return yield* finalize.pipe(
       Effect.ensuring(

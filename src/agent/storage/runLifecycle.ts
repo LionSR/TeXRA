@@ -26,10 +26,14 @@ import {
   aggregateTarget,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
+  emptyRunEndOutput,
   type AggregateId,
+  type RunEnd,
+  type RunEndOutput,
   type RunId,
   type RunIdentity,
   type RunOutcome,
+  type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -67,11 +71,10 @@ export interface RegisterRunOptions {
   /** Runtime behavior declared by the launch source, not UI visibility. */
   readonly userFollowUpSupport?: UserFollowUpSupport;
   /**
-   * Display description persisted on `RunMeta.description` — the one
-   * description authority (#9590 A4). Child-stream launchers pass the
-   * delegated task label here so it is durable at birth; the later
-   * `updateRunDescription` session event is display-only and no longer
-   * writes a sidecar copy (#9590 Stage 6).
+   * The run's `run.description` row, written in the registration batch so it
+   * is durable at birth (#9590 A4): child launchers pass the delegated task
+   * label; a root run gets its AI-generated summary from
+   * `generateSessionDescription` later, as a second row of the same type.
    */
   readonly description?: string;
 }
@@ -169,18 +172,11 @@ export const registerRun = Effect.fn('registerRun')(function* (
           cause: 'lifecycle',
         });
       if (options.description !== undefined)
-        events.push(
-          {
-            type: 'run.description',
-            aggregateId: target,
-            description: options.description,
-          },
-          {
-            type: 'updateRunDescription',
-            aggregateId: target,
-            description: options.description,
-          },
-        );
+        events.push({
+          type: 'run.description',
+          aggregateId: target,
+          description: options.description,
+        });
       yield* session
         .commitRegistration(events)
         .pipe(
@@ -301,6 +297,16 @@ export interface FinalizeRunInput {
    * the same locked cycle, so "already settled" cannot go stale between them.
    */
   readonly keepExistingOutcome?: boolean;
+  /** The classified error behind a FAILED outcome, when the run has one. */
+  readonly error?: RunEnd['error'];
+  /** Usage totals at the end of the run, once a round recorded usage. */
+  readonly usage?: RunEnd['usage'];
+  /**
+   * What the run produced. Absent for a backstop that ends a run whose flow
+   * produced nothing (host exit, a stop of a parked run, a failed launch):
+   * the row then carries the empty output of the run's category.
+   */
+  readonly output?: RunEndOutput;
   /**
    * Where a persistence failure is reported, wrapped in one worded Error.
    * `finalizeRun` never throws; a caller with its own logging reads the
@@ -327,8 +333,10 @@ export type FinalizeRunResult =
     };
 
 /**
- * The one terminal-persistence tail: persist the run's terminal outcome,
- * then apply the requested flow-record policy. Never throws — every
+ * The one terminal-persistence tail, and the one writer of the `run.end` row
+ * (one run model, section 3.3): persist the run's terminal fact, then apply
+ * the requested flow-record policy. Read and write share one locked cycle, so
+ * a run already ended with this outcome writes nothing. Never throws — every
  * persistence failure comes back as an `ok: false` result (and through
  * `report`, when given).
  */
@@ -341,23 +349,29 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     session.updateRecordFacts(runId, (rows) => {
       const meta = runMetaFromEvents(rows, runId);
       if (!meta) throw new Error(`Run metadata not found for ${runId}`);
+      const start = rows.find(
+        (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+          row.type === 'run.start' &&
+          row.aggregateId === aggregateId('run', runId),
+      );
+      if (!start) throw new Error(`Run start not found for ${runId}`);
       const persisted =
         keepExistingOutcome === true && meta.outcome !== undefined
           ? meta.outcome
           : outcome;
+      if (meta.outcome === persisted) return { events: [], value: persisted };
       return {
-        events:
-          meta.outcome === persisted
-            ? []
-            : [
-                ...session.statusClosureFacts(runId, persisted),
-                {
-                  type: 'status' as const,
-                  aggregateId: aggregateId('run', runId),
-                  phase: persisted,
-                  cause: 'lifecycle',
-                },
-              ],
+        events: [
+          ...session.statusClosureFacts(runId, persisted),
+          {
+            type: 'run.end' as const,
+            aggregateId: aggregateId('run', runId),
+            outcome: persisted,
+            ...(input.error !== undefined ? { error: input.error } : {}),
+            ...(input.usage !== undefined ? { usage: input.usage } : {}),
+            output: input.output ?? emptyRunEndOutput(start.category),
+          },
+        ],
         value: persisted,
       };
     }),

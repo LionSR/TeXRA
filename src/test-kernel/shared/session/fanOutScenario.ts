@@ -9,6 +9,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   AgentConfigFieldsSchema,
+  emptyRunEndOutput,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
@@ -378,10 +379,9 @@ export function buildScenario({ proposal = false } = {}) {
     filesByRound: { 1: [] },
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'custom:lint',
-    category: AgentCategory.ToolUse,
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'status',
@@ -492,10 +492,9 @@ export function buildScenario({ proposal = false } = {}) {
     requestId: 'req-1',
   });
   log.emit(CHILD, T.childDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'custom:search',
-    category: AgentCategory.ToolUse,
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
   log.emit(CHILD, T.childDone, {
     type: 'status',
@@ -521,10 +520,9 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   );
   log.emit(ROOT, T.rootDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'review',
-    category: AgentCategory.Workflow,
+    output: emptyRunEndOutput(AgentCategory.Workflow),
   });
   log.emit(ROOT, T.rootDone, {
     type: 'status',
@@ -1064,10 +1062,9 @@ function boardView({
       if (entry.status === 'failed' || entry.status === 'completed') {
         const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
-          type: 'result',
+          type: 'run.end',
           outcome: done ? 'completed' : 'failed',
-          agentName: `custom:${entry.id}`,
-          category: AgentCategory.ToolUse,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         });
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'status',
@@ -1094,10 +1091,9 @@ function boardView({
           });
         }
         log.emit(kid.id, closedAt - 1, {
-          type: 'result',
+          type: 'run.end',
           outcome: 'completed',
-          agentName: `custom:${entry.id}`,
-          category: AgentCategory.ToolUse,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         });
         log.emit(kid.id, closedAt - 1, {
           type: 'status',
@@ -1126,10 +1122,9 @@ function boardView({
       data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
     });
     log.emit(ROOT, closedAt + 2, {
-      type: 'result',
+      type: 'run.end',
       outcome,
-      agentName: 'review',
-      category: AgentCategory.Workflow,
+      output: emptyRunEndOutput(AgentCategory.Workflow),
     });
     log.emit(ROOT, closedAt + 2, {
       type: 'status',

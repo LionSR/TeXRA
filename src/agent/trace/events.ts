@@ -8,16 +8,17 @@
  * `src/shared/schemas/sessionEvent.ts` (the trace arms come from
  * `traceEvent.ts` and are spliced in there). Every arm below is that
  * declaration minus the aggregate qualification: the aggregate is the run,
- * and `runEventDraft` adds it back at publication. The two arms the session
- * plane does not carry as-is are the transient `stream.chunk` (never a
- * session row; text travels through the session graph) and the terminal
- * `result`, which names its run explicitly.
+ * and `runEventDraft` adds it back at publication. The one arm the session
+ * plane does not carry is the transient `stream.chunk` (never a session row;
+ * text travels through the session graph). The terminal `run.end` row is
+ * not a trace arm: the storage finalizer writes it once, and the in-memory
+ * `ResultEvent` below is that row named by its run.
  *
  * Host-specific events that don't belong in the core union (TeXRA's
  * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
  * escape hatch with a host-chosen `key`.
  */
-import type { ResultEvent, RunId, SessionEventDraft } from '@shared/schemas';
+import type { RunId, SessionEventDraft } from '@shared/schemas';
 
 /** One session arm as the trace carries it; distributive over `T`. */
 type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
@@ -54,6 +55,14 @@ export type UsageReport = Pick<TraceArm<'usage'>, 'runId' | 'usage'>;
 export type StatusEvent = TraceArm<'status'> & { readonly runId: RunId };
 
 /**
+ * The terminal fact as the runtime hands it to in-process consumers
+ * (`RunHandle.result`, `SessionHandle.onResult`): the `run.end` row named by
+ * its run. Not an {@link AgentEvent} arm: the row is written once by the
+ * storage finalizer (`finalizeRun`), never emitted on a trace.
+ */
+export type ResultEvent = TraceArm<'run.end'> & { readonly runId: RunId };
+
+/**
  * Chunk appended to an open stream. Transient: `runEventDraft` returns null
  * for it and the session graph carries the text instead, so it has no
  * session arm to derive from.
@@ -83,9 +92,6 @@ interface StreamChunkEvent {
  */
 export type ResponseFinalizedEvent = TraceArm<'response.finalized'>;
 
-/** Canonical terminal-result shape, shared with the durable boundary. */
-export type { ResultEvent } from '@shared/schemas';
-
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
   | TraceArm<
@@ -112,5 +118,4 @@ export type AgentEvent =
     >
   /** Mutable persisted run config changed after run.start, e.g. model switch. */
   | (TraceArm<'run.config'> & { readonly runId: RunId })
-  | StreamChunkEvent
-  | ResultEvent;
+  | StreamChunkEvent;

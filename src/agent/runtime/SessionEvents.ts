@@ -129,7 +129,7 @@ export function runEventDraft(
 ): SessionEventDraft | null {
   if (event.type === 'stream.chunk') return null;
   const aggregateId = qualifyAggregateId('run', runId);
-  if (event.type === 'run.config' || event.type === 'result') {
+  if (event.type === 'run.config') {
     // The aggregate is the run: the row carries no second copy of its id.
     const { runId: _runId, ...body } = event;
     return { ...body, aggregateId };

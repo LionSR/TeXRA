@@ -181,20 +181,25 @@ function runOutputSummary(absolutePath: string, originalPath: string) {
 function workflowRun(
   runId: string,
   overrides: Partial<
-    Pick<WorkflowRunPayload, 'outcome' | 'outputs' | 'compileFailures'>
+    Pick<WorkflowRunPayload, 'outcome'> &
+      Pick<WorkflowRunPayload['output'], 'outputs' | 'compileFailures'>
   > = {},
 ): WorkflowExecuteResult {
+  const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
   return {
     ok: true,
     runId,
     outcomePersisted: true,
     result: {
-      category: AgentCategory.Workflow,
+      outcome,
+      output: {
+        category: AgentCategory.Workflow,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        ...output,
+      },
       runId: runId as RunId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      outputs: [],
-      compileFailures: [],
-      ...overrides,
     },
   };
 }
@@ -268,12 +273,13 @@ function expectedResultMeta(options: {
     producer: 'cliWorkflow',
     ...copies,
     result: {
-      category: 'workflow',
       outcome,
-      outputs,
-      compileFailures,
-      diffs: [],
-      cost: 0,
+      output: {
+        category: 'workflow',
+        outputs,
+        compileFailures,
+        diffs: [],
+      },
     },
   };
 }
@@ -476,10 +482,8 @@ describe('CLI workflow run command', () => {
       // order `resolveWorkflowOutput` builds it, with the run id moved to the
       // frozen 0.40 wire key by `cliRunResultPayload`.
       expect(Object.keys(emission?.json ?? {})).toEqual([
-        'category',
         'outcome',
-        'outputs',
-        'compileFailures',
+        'output',
         'workingDirectory',
         'runDirectory',
         'copiedOutput',
@@ -824,7 +828,7 @@ describe('CLI workflow run command', () => {
         const emission = mocks.emitCliResult.mock.calls[0]?.[1];
         expect(emission?.json).toMatchObject({
           outcome: RUN_OUTCOME.FAILED,
-          outputs: [outputSummary],
+          output: { outputs: [outputSummary] },
           runDirectory: '/tmp/runs/exec-failed-output',
         });
         expect(emission?.json).not.toHaveProperty('copiedOutput');

@@ -18,6 +18,7 @@ import {
   PersistedFlowStateError,
   readPersistedFlowRecord,
 } from '@agent/node/persistedFlow';
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   type AgentFileLocation,
@@ -88,7 +89,7 @@ async function resolveWorkflowSettingTools(
 export interface RunReflectionFlowResult {
   roundOutputs: RoundOutput[];
   outcome: RunOutcome;
-  totalCostUsd?: number;
+  usage?: RunUsageTotals;
   /**
    * Structured provider/runtime error behind a FAILED outcome, when present.
    * A rejected compile is an outcome-only domain failure whose diagnostics are
@@ -314,13 +315,12 @@ export async function runReflectionFlow(
   const outcome = await pf.run(shared);
   shared = await pf.getShared();
 
-  const totalCostUsd =
-    shared?.runStateSnapshot.usageAccumulator.totals.totalCost ?? 0;
+  const usage = shared?.runStateSnapshot.usageAccumulator.totals;
 
   return {
     roundOutputs: shared?.roundOutputs ?? [],
     outcome,
-    ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
+    ...(usage ? { usage } : {}),
     ...(shared?.lastError ? { error: shared.lastError } : {}),
   };
 }

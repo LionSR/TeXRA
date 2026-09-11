@@ -12,8 +12,12 @@ import {
 } from '@agent/storage/runLease';
 import type { RunKVStore } from '@agent/storage/RunKVStore';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult } from '@shared/schemas';
-import { RunIdSchema, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  RunIdSchema,
+  RUN_OUTCOME,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -115,7 +119,7 @@ interface StableSubagentCallIdentity {
 
 interface StableSubagentResult {
   readonly runId: RunId;
-  readonly result: AgentFinalResult;
+  readonly result: RunEnd;
 }
 
 const log = createLog('stableSubagentAttempt');

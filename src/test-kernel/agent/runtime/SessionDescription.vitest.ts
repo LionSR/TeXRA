@@ -116,7 +116,7 @@ describe('session description helpers', () => {
     await session.settlePublications();
     expect(await recorded.read()).toMatchObject([
       {
-        type: 'updateRunDescription',
+        type: 'run.description',
         aggregateId: qualifyAggregateId('run', 'a0b0c1' as RunId),
         description: 'Correcting derivation signs',
       },

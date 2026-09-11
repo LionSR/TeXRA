@@ -1475,12 +1475,15 @@ function applyOwnArm(
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
       return stream.parentId === null ? stream : { ...stream, parentId: null };
-    case 'updateRunDescription':
+    case 'run.description':
       return { ...stream, description: event.description };
-    case 'result':
-      // The lifecycle's last word; the phase is the `status` fact's (PRD 6,
-      // item 3). The caller records that the run ended.
-      return stream;
+    case 'run.end':
+      // The terminal fact: the phase is its outcome (one run model, section
+      // 3.3). The caller records that the run ended.
+      return withSettledTranscript(
+        { ...stream, status: event.outcome, substate: null },
+        event.at,
+      );
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
@@ -1618,7 +1621,10 @@ function foldDurable(
     return foldTranscriptRow(view, event, deferred);
   }
   const traceChanged =
-    read !== 'listing' && (isTranscriptEvent(event) || event.type === 'status')
+    read !== 'listing' &&
+    (isTranscriptEvent(event) ||
+      event.type === 'status' ||
+      event.type === 'run.end')
       ? foldTraceEvent(view, event, deferred)
       : false;
   if (listingTypeOf(event) === null) return traceChanged;
@@ -1649,15 +1655,19 @@ function foldDurable(
 
   applySessionSlices(view, runId, event);
   const own = applyOwnArm(before, event);
-  if (event.type === 'result') sessionIndexesOf(view).ended.add(runId);
-  if (event.type === 'status') {
-    const { ended } = sessionIndexesOf(view);
-    // A fresh run can end again; a terminal phase ends every live row (5.2,
-    // "In-flight text": a run can end with a row unfinalized).
-    if (own.status === RUN_PHASE.RUNNING && before.status !== own.status) {
-      ended.delete(runId);
-    }
-    if (isTerminalOutcomePhase(own.status)) clearInflight(view, own);
+  if (event.type === 'run.end') {
+    // The run ended; a terminal phase ends every live row (5.2, "In-flight
+    // text": a run can end with a row unfinalized).
+    sessionIndexesOf(view).ended.add(runId);
+    clearInflight(view, own);
+  }
+  // A fresh run can end again.
+  if (
+    event.type === 'status' &&
+    own.status === RUN_PHASE.RUNNING &&
+    before.status !== own.status
+  ) {
+    sessionIndexesOf(view).ended.delete(runId);
   }
   let next: RunView = {
     ...own,
@@ -1711,6 +1721,7 @@ function foldTraceEvent(
   if (!stream) return false;
   const indexes = indexesOf(stream.transcript);
   if (event.type === 'status') indexes.trace.status(event.phase);
+  else if (event.type === 'run.end') indexes.trace.status(event.outcome);
   else if (isTranscriptEvent(event))
     indexes.trace.record(event, {
       at: event.at,

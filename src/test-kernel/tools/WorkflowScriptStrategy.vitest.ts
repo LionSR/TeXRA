@@ -13,8 +13,12 @@ import type {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
-import type { AgentFinalResult } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import {
+  RunUsageTotalsSchema,
+  type OutputFileSummary,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
@@ -31,23 +35,24 @@ const script = `export const meta = {
   description: 'tests the workflow script strategy',
 }
 return await agent('saved call')`;
-const finalResult: AgentFinalResult = {
-  category: 'workflow',
+const paperOutput: OutputFileSummary = {
+  round: 0,
+  relativePath: 'paper.tex',
+  absolutePath: '/workspace/paper.tex',
+  location: 'workspace',
+  originalPath: '/workspace/paper.tex',
+  added: 12,
+  removed: 8,
+};
+const finalResult: RunEnd = {
   outcome: 'completed',
-  outputs: [
-    {
-      round: 0,
-      relativePath: 'paper.tex',
-      absolutePath: '/workspace/paper.tex',
-      location: 'workspace',
-      originalPath: '/workspace/paper.tex',
-      added: 12,
-      removed: 8,
-    },
-  ],
-  compileFailures: [],
-  diffs: [],
-  cost: 0.42,
+  usage: RunUsageTotalsSchema.parse({ totalCost: 0.42 }),
+  output: {
+    category: 'workflow',
+    outputs: [paperOutput],
+    compileFailures: [],
+    diffs: [],
+  },
 };
 
 function checkpointIdFor(name: string): string {
@@ -63,7 +68,7 @@ function billingRunAgent(hooks: {
   onCost: (i: WorkflowAgentInvocation, c: number | undefined) => void;
 }): WorkflowAgentRunner {
   return async (invocation) => {
-    hooks.onCost(invocation, finalResult.cost);
+    hooks.onCost(invocation, finalResult.usage?.totalCost);
     return finalResult;
   };
 }
@@ -311,9 +316,14 @@ throw new Error('script failed after replay')`;
 }
 await agent('stale file')
 return await agent('malformed stale')`;
-    const staleResult: AgentFinalResult = {
+    const staleResult: RunEnd = {
       ...finalResult,
-      outputs: [{ ...finalResult.outputs[0], relativePath: 'stale.tex' }],
+      output: {
+        category: 'workflow',
+        outputs: [{ ...paperOutput, relativePath: 'stale.tex' }],
+        compileFailures: [],
+        diffs: [],
+      },
     };
     await runPersistedWorkflowScript({
       store: getRunStore(runId),
@@ -324,10 +334,15 @@ return await agent('malformed stale')`;
     });
     clearStoreCache();
 
-    const currentResult: AgentFinalResult = {
+    const currentResult: RunEnd = {
       ...finalResult,
-      cost: 0.25,
-      outputs: [{ ...finalResult.outputs[0], relativePath: 'current.tex' }],
+      usage: RunUsageTotalsSchema.parse({ totalCost: 0.25 }),
+      output: {
+        category: 'workflow',
+        outputs: [{ ...paperOutput, relativePath: 'current.tex' }],
+        compileFailures: [],
+        diffs: [],
+      },
     };
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
@@ -340,7 +355,7 @@ return await agent('malformed stale')`;
 await agent('current file')
 throw new Error('current revision failed')`,
         createRunAgent: (hooks) => async (invocation) => {
-          hooks.onCost(invocation, currentResult.cost);
+          hooks.onCost(invocation, currentResult.usage?.totalCost);
           return currentResult;
         },
       }),
@@ -402,7 +417,7 @@ return await agent('saved call')`;
 
     await expect(
       Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('Workflow journal entry 0 is not an agent final result');
+    ).rejects.toThrow('Workflow journal entry 0 is not a run result.');
     expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
   });
 });
@@ -551,7 +566,10 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
 
     const turn = await launch;
     // The second attempt settles with the real result, and the call ran twice.
-    expect(turn.result).toMatchObject({ category: 'workflow', cost: 0.42 });
+    expect(turn.result).toMatchObject({
+      output: { category: 'workflow' },
+      usage: { totalCost: 0.42 },
+    });
     expect(fake.attempts()).toBe(2);
     expect(completedTaskCosts).toHaveLength(1);
     expect(completedTaskCosts[0]).toBeCloseTo(0.6);
