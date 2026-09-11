@@ -48,7 +48,8 @@ const RunMetaCoreSchema = z.object({
   timestamp: z.string(),
   /** The launching run, from `run.start.parent`; absent for a root or a detached child. */
   parentRunId: RunIdSchema.optional(),
-  /** Canonical terminal outcome — the ONE persisted terminal fact. */
+  /** Canonical terminal outcome, derived from the `run.end` row; dies with
+   *  the meta fold in S4. */
   outcome: RunOutcomeSchema.optional(),
   /** What kind of run this run is. Registration declares it at birth. */
   identity: RunIdentitySchema,

@@ -26,7 +26,7 @@ export async function tryResumeFromResumeData(
     (event) => event.runId === runId,
   );
   // Per-attempt monotone cancellation latch: once an observed transcript
-  // absence invalidates the attempt, re-creating the same stream id cannot
+  // absence invalidates the attempt, re-creating the same run id cannot
   // make it admissible again.
   let cancellationRequested = false;
   const isCancellationRequested = (): boolean => {
@@ -51,13 +51,13 @@ export async function tryResumeFromResumeData(
             }),
         },
         (failure) => {
-          logger.warn(`Stream ${runId} was not resumed: ${failure}`);
+          logger.warn(`Run ${runId} was not resumed: ${failure}`);
         },
       ),
     );
   } catch (error) {
     if (isCancellationRequested()) return false;
-    logger.error(`Failed to resume stream: ${runId}`, { data: error });
+    logger.error(`Failed to resume run: ${runId}`, { data: error });
     await terminalResult.reportUnhandled(() =>
       vscode.window.showWarningMessage(
         `Resume failed: ${toErrorMessage(error)}`,

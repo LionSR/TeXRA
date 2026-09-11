@@ -290,11 +290,12 @@ export interface FinalizeRunInput {
   readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
   /**
-   * Keep an outcome already on disk instead of replacing it. For a backstop
-   * finalizer that does not own the run's result — the host-exit drain, which
-   * can race the run's own driver across the same per-run meta lock —
-   * the driver's outcome is the authoritative one. Read and write happen in
-   * the same locked cycle, so "already settled" cannot go stale between them.
+   * Keep the outcome this lifecycle already wrote instead of replacing it.
+   * For a backstop finalizer that does not own the run's result — the
+   * host-exit drain, which can race the run's own driver across the same
+   * per-run meta lock — the driver's outcome is the authoritative one. Read
+   * and write happen in the same locked cycle, so "already settled" cannot go
+   * stale between them.
    */
   readonly keepExistingOutcome?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
@@ -336,8 +337,9 @@ export type FinalizeRunResult =
  * The one terminal-persistence tail, and the one writer of the `run.end` row
  * (one run model, section 3.3): persist the run's terminal fact, then apply
  * the requested flow-record policy. Read and write share one locked cycle, so
- * a run already ended with this outcome writes nothing. Never throws — every
- * persistence failure comes back as an `ok: false` result (and through
+ * a run whose *current* lifecycle already ended with this outcome writes
+ * nothing; a resumed run ends again. Never throws — every persistence
+ * failure comes back as an `ok: false` result (and through
  * `report`, when given).
  */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
@@ -347,25 +349,36 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const { runId, outcome, flowRecord, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) => {
+      const target = aggregateId('run', runId);
       const meta = runMetaFromEvents(rows, runId);
       if (!meta) throw new Error(`Run metadata not found for ${runId}`);
       const start = rows.find(
         (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-          row.type === 'run.start' &&
-          row.aggregateId === aggregateId('run', runId),
+          row.type === 'run.start' && row.aggregateId === target,
       );
       if (!start) throw new Error(`Run start not found for ${runId}`);
+      // "Already ended" is a fact about the run's current lifecycle, not about
+      // the aggregate: a resume publishes a RUNNING `status` row after the
+      // previous `run.end`, and that run has to end again even when it ends
+      // the same way. Reading the whole aggregate's last outcome instead would
+      // leave a resumed-then-failed run with no terminal row at all, so the
+      // fold, history and every `durableOutcome` reader would keep it RUNNING.
+      const lifecycle = rows.findLast(
+        (row): row is Extract<SessionEvent, { type: 'run.end' | 'status' }> =>
+          row.aggregateId === target &&
+          (row.type === 'run.end' || row.type === 'status'),
+      );
+      const ended =
+        lifecycle?.type === 'run.end' ? lifecycle.outcome : undefined;
       const persisted =
-        keepExistingOutcome === true && meta.outcome !== undefined
-          ? meta.outcome
-          : outcome;
-      if (meta.outcome === persisted) return { events: [], value: persisted };
+        keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+      if (ended === persisted) return { events: [], value: persisted };
       return {
         events: [
           ...session.statusClosureFacts(runId, persisted),
           {
             type: 'run.end' as const,
-            aggregateId: aggregateId('run', runId),
+            aggregateId: target,
             outcome: persisted,
             ...(input.error !== undefined ? { error: input.error } : {}),
             ...(input.usage !== undefined ? { usage: input.usage } : {}),

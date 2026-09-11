@@ -224,6 +224,11 @@ interface FinalizeChildRunArgs {
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
  * run phase) and the autoClose residency release. Child runs never traverse
  * the run lifecycle, so this is their only settle point.
+ *
+ * No `output` is passed, by rule rather than by omission: a child loop's
+ * product is the per-turn delivery routed to its parent (and the result
+ * manifest a strategy persists beside it), not a flow output. Its `run.end`
+ * row therefore carries the category's empty output.
  */
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,

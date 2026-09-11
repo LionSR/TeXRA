@@ -207,7 +207,7 @@ export function staticScrollbackTarget({
 }): StaticScrollbackTarget {
   if (scopedTranscript) {
     return {
-      ownerKey: activeRunId ? `stream:${activeRunId}` : 'scoped:none',
+      ownerKey: activeRunId ? `run:${activeRunId}` : 'scoped:none',
       runId: activeRunId,
     };
   }

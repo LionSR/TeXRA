@@ -86,7 +86,7 @@ export function emptyRunEndOutput(category: AgentCategory): RunEndOutput {
  * only on a failed outcome; `usage` once a round recorded usage, including on
  * failures. Cost is `usage.totalCost` and nothing else.
  */
-export const RunEndSchema = z.object({
+export const RunEndSchema = z.strictObject({
   outcome: RunOutcomeSchema,
   error: RunEndErrorSchema.optional(),
   usage: RunUsageTotalsSchema.optional(),

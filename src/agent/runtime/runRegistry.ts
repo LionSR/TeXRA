@@ -5,13 +5,16 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
+import { createChannelTrace } from '@agent/trace';
+import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import {
   aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
   RUN_PHASE,
   RUN_SUBSTATE,
   type ActiveChildInfo,
@@ -37,6 +40,8 @@ import {
   WaitingTermination,
   type WaitingTerminationContext,
 } from './waitingTermination';
+
+const logger = createChannelTrace('runRegistry');
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
@@ -147,6 +152,7 @@ export class RunRegistry {
   >();
   private readonly approvals: SessionApprovals;
   private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
+  private readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
   private readonly listeners = new Map<
     string,
     Set<(handle: RunHandle | undefined) => void>
@@ -163,9 +169,10 @@ export class RunRegistry {
     this.runStatus = options.runStatus;
     this.approvals = options.approvals;
     this.releaseRootRunLease = options.releaseRootRunLease;
+    this.finalizeRun = options.finalizeRun;
     this.waitingTermination = new WaitingTermination({
       releaseRootRunLease: this.releaseRootRunLease,
-      finalizeRun: options.finalizeRun,
+      finalizeRun: this.finalizeRun,
       lanes: this.lanes,
       getHandle: (runId) => this.handles.get(runId),
       untrackIfCurrent: (handle) => this.untrackIfCurrent(handle),
@@ -664,11 +671,17 @@ export class RunRegistry {
           settlements,
         )
       : false;
-    // `terminate()` already publishes CANCELLED for a stream it owned; an
-    // ownerless (or already-untracked) stream still needs the write. The
-    // stream-status machine rejects the transition out of a terminal phase,
-    // so a finished stream keeps its outcome.
-    if (!stopped) this.cancelRunStatus(runId);
+    // `terminate()` already finalizes a run it owned; an ownerless (or
+    // already-untracked) run still needs both writes here: the in-memory
+    // phase, which local readers consult for stop precedence, and the
+    // `run.end` row, which is the run's terminal fact. The status machine
+    // records a terminal phase in memory only, so without the finalize below
+    // the fold, history and every other host would keep the stopped run in
+    // flight.
+    if (!stopped) {
+      this.cancelRunStatus(runId);
+      settlements.push(this.finalizeOwnerlessStop(runId));
+    }
     return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
@@ -807,12 +820,49 @@ export class RunRegistry {
   }
 
   /**
-   * Mark a stream CANCELLED from a user stop. The status machine publishes the
+   * Mark a run CANCELLED from a user stop. The status machine publishes the
    * canonical session fact itself — the single status rail every consumer,
    * including the transcript recorder, subscribes to — so no caller routes it.
+   * A terminal phase stays in memory: the `run.end` row is the durable fact,
+   * so a caller that owns no other finalizer pairs this with
+   * {@link finalizeOwnerlessStop}.
    */
   private cancelRunStatus(runId: RunId): void {
     this.runStatus.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
+  }
+
+  /**
+   * Write the terminal fact for a stop that reached no live handle, through
+   * the run's one writer. `keepExistingOutcome` leaves a run that already
+   * ended with its own verdict, which is what the status machine's refusal to
+   * leave a terminal phase used to express. The checkpoint is preserved: a
+   * cancelled run is exactly the one a user resumes.
+   */
+  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const finalization = yield* Effect.exit(
+        this.finalizeRun({
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
+          keepExistingOutcome: true,
+        }),
+      );
+      if (Exit.isFailure(finalization)) {
+        logger.warn('Failed to finalize a stop with no live run handle', {
+          data: { runId, error: Cause.squash(finalization.cause) },
+        });
+        return;
+      }
+      if (!finalization.value.ok)
+        logger.warn('Failed to finalize a stop with no live run handle', {
+          data: {
+            runId,
+            outcomePersisted: finalization.value.outcomePersisted,
+            error: finalization.value.error,
+          },
+        });
+    });
   }
 
   private notifyWaiters(runId: RunId): void {

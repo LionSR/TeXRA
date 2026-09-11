@@ -2,11 +2,10 @@ import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
- * Durable run facts ride the run trace as explicit `AgentEvent` arms.
- * Host/public-output compatibility adapters may still project these facts
- * outward, but producers no longer encode them through the `domain` escape
- * hatch. The fact is about the trace's own run, which the aggregate names,
- * so the payload carries no run id.
+ * Durable run facts ride the run trace as explicit `AgentEvent` arms:
+ * producers no longer encode them through the `domain` escape hatch. The
+ * fact is about the trace's own run, which the aggregate names, so the
+ * payload carries no run id.
  */
 type RunFact = Extract<
   AgentEvent,

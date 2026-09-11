@@ -51,8 +51,10 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
@@ -63,6 +65,7 @@ import {
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
+  type RunOutcome,
   type RunPhase,
   type RunId,
   type UserQuestionPermission,
@@ -715,7 +718,8 @@ function seedRun(
   }
 }
 
-/** Place a run in a phase: the status fact every renderer folds. */
+/** Place a run in an in-flight phase: the status fact every renderer folds.
+ *  A terminal state is `seedRunEnd`: production writes no terminal `status`. */
 function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
   seedRun(runId);
   publish({
@@ -724,6 +728,21 @@ function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
     phase,
     cause: 'harness',
     ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+}
+
+/** End a run the way a real session does: the terminal `run.end` fact the
+ *  fold turns into the terminal phase and the durable outcome. */
+function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
+  const run = runViewOf(currentView(), runId);
+  if (!run) {
+    throw new Error(`tui-harness: cannot end unknown run ${runId}`);
+  }
+  publish({
+    type: 'run.end',
+    aggregateId: qualifyAggregateId('run', runId),
+    outcome,
+    output: emptyRunEndOutput(run.category),
   });
 }
 
@@ -1680,7 +1699,7 @@ function markHarnessInterrupted(): void {
   for (const runId of descendantsOf(HARNESS_RUN_ID)) {
     const run = runViewOf(currentView(), runId);
     if (run && isInFlightPhase(run.status)) {
-      seedPhase(runId, RUN_PHASE.CANCELLED);
+      seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
     }
   }
 }
@@ -1695,7 +1714,7 @@ function markHarnessRunInterrupted(runId: RunId): void {
     `Harness focused interrupt requested for ${runId}.`,
     runId,
   );
-  seedPhase(runId, RUN_PHASE.CANCELLED);
+  seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
 }
 
 function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
@@ -1769,7 +1788,7 @@ function markHarnessRunStopped(runId: RunId): void {
     'Harness kill requested for this sub-workflow.',
     child.id,
   );
-  seedPhase(child.id, RUN_PHASE.CANCELLED);
+  seedRunEnd(child.id, RUN_OUTCOME.CANCELLED);
 }
 
 function handleHarnessSubmit(line: string): void {

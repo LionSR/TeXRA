@@ -97,7 +97,7 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
-  recordCost(totalCostUsd: number | undefined): void;
+  recordCost(totalCost: number | undefined): void;
 }
 
 /**
@@ -307,9 +307,7 @@ export interface ChildRunLoopParams<TTurn> {
    * agent-CLI callers (no cost concept today); native delegation passes its
    * captured `recordSubagentCost` closure.
    */
-  readonly recordCost?: (
-    totalCostUsd: number | undefined,
-  ) => void | Promise<void>;
+  readonly recordCost?: (totalCost: number | undefined) => void | Promise<void>;
   /**
    * Gate every turn through the session's shared child-run budget
    * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
@@ -920,9 +918,9 @@ export function startChildRunLoop<TTurn>(
           runSession,
         );
       },
-      recordCost: (totalCostUsd) => {
-        if (totalCostUsd !== undefined) {
-          bestCostUsd = Math.max(bestCostUsd ?? 0, totalCostUsd);
+      recordCost: (totalCost) => {
+        if (totalCost !== undefined) {
+          bestCostUsd = Math.max(bestCostUsd ?? 0, totalCost);
         }
       },
     };

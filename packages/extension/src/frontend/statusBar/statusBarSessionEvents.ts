@@ -26,9 +26,14 @@ export function subscribeStatusBarSessionEvents({
   const fiber = effectRuntime().runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
-        if (event.type === 'status') onStatusChanged();
+        // A run's terminal phase rides `run.end`, not a `status` row (one run
+        // model, section 3.3), so both rows are status changes here exactly as
+        // the session treats them for its own status readers.
+        if (event.type === 'status' || event.type === 'run.end') {
+          onStatusChanged();
+        }
         // The runtime publishes the in-flight status before usage for a
-        // round; usage for a stream not in flight cannot change the projected
+        // round; usage for a run not in flight cannot change the projected
         // total, so stale async events skip the refresh.
         if (event.type === 'usage') {
           const target = aggregateTarget(event.aggregateId);

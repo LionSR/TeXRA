@@ -256,6 +256,7 @@ describe('sessionFold', () => {
               e.aggregateId === qualifyAggregateId('run', ROOT) &&
               (e.type === 'transcript.entry' ||
                 e.type === 'status' ||
+                e.type === 'run.end' ||
                 isTranscriptEvent(e)),
           )
           .map((e) => e.seq),
@@ -337,24 +338,13 @@ describe('sessionFold', () => {
       interrupted: 0,
     });
 
-    // The durable outcome: for a run this process owns, the lifecycle's
-    // `result` settles it, never the terminal phase alone (a user stop
-    // publishes CANCELLED while the flow still writes its closing rows).
-    const stopped = fold(
-      pending,
-      tail(
-        scenario.log.emit(CHILD, 1850, {
-          type: 'status',
-          phase: RUN_PHASE.CANCELLED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'user',
-        }),
-      ),
-    );
-    expect(runView(stopped, CHILD).status).toBe(RUN_PHASE.CANCELLED);
-    expect(runView(stopped, CHILD).durableOutcome).toBeNull();
+    // The durable outcome: for a run this process owns, the `run.end` row
+    // settles it. A user stop publishes no terminal status row of its own, so
+    // until `run.end` folds the run is still in flight.
+    expect(runView(pending, CHILD).status).toBe(RUN_PHASE.RUNNING);
+    expect(runView(pending, CHILD).durableOutcome).toBeNull();
     const ended = fold(
-      stopped,
+      pending,
       tail(
         scenario.log.emit(CHILD, 1851, {
           type: 'run.end',
@@ -363,6 +353,8 @@ describe('sessionFold', () => {
         }),
       ),
     );
+    expect(runView(ended, CHILD).status).toBe(RUN_PHASE.CANCELLED);
+    expect(runView(ended, CHILD).runStartedAt).toBeNull();
     expect(runView(ended, CHILD).durableOutcome).toBe('cancelled');
     // For a run this process does not own, the terminal phase is the story.
     expect(runView(foldAll(scenario.events), CHILD).durableOutcome).toBe(

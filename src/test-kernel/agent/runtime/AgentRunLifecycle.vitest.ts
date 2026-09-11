@@ -651,10 +651,18 @@ describe('runFlowWithLifecycle', () => {
       // The terminal phase is `run.end`'s, so a run that never ran publishes
       // no status row at all.
       expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
-        expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
-      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: {
+          kind: 'abort',
+          message: 'Request aborted',
+          userRetryable: false,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
+        flowRecord: 'preserve',
+      });
     } finally {
       clearRunStatusForTest(runStatus, runId);
     }
@@ -932,14 +940,18 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
-        expect.objectContaining({
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
-        }),
-      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: {
+          kind: 'abort',
+          message: 'Request aborted',
+          userRetryable: false,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
+        flowRecord: 'preserve',
+      });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
     } finally {
@@ -960,14 +972,18 @@ describe('runFlowWithLifecycle', () => {
         ),
       ).rejects.toThrow('model exploded');
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
-        expect.objectContaining({
-          runId,
-          outcome: RUN_OUTCOME.FAILED,
-          flowRecord: 'preserve',
-        }),
-      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.FAILED,
+        error: {
+          kind: 'unexpected',
+          message: 'Error executing agent test-agent: model exploded',
+          userRetryable: true,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
+        flowRecord: 'preserve',
+      });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
     } finally {

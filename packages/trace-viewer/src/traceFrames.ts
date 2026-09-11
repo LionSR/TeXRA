@@ -204,19 +204,33 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   }
   const outcome = traceOutcome(trace);
   if (outcome !== null && isTerminalOutcomePhase(outcome)) {
-    bodies.push({
-      type: 'run.end',
-      aggregateId: qualifyAggregateId('run', runId),
-      outcome,
-      output: emptyRunEndOutput(category),
-    });
+    bodies.push(
+      // `run.end` carries the outcome but no run window; the non-terminal
+      // status row is what gives the folded view its `runStartedAt`, so an
+      // exported trace still renders an elapsed time.
+      {
+        type: 'status',
+        aggregateId: qualifyAggregateId('run', runId),
+        phase: RUN_PHASE.RUNNING,
+        previousPhase: null,
+        cause: 'trace',
+        substate: null,
+        runStartedAt: trace.entries[0]?.timestamp ?? null,
+      },
+      {
+        type: 'run.end',
+        aggregateId: qualifyAggregateId('run', runId),
+        outcome,
+        output: emptyRunEndOutput(category),
+      },
+    );
   }
   return bodies;
 }
 
 /**
  * The events of one trace: listing rows, then the transcript rows, one
- * aggregate (the stream), seq in publish order, commit equal to seq. The
+ * aggregate (the run), seq in publish order, commit equal to seq. The
  * viewer stamps `ownerId: null` (contract C3) because an archived export has
  * no owning process, which folds every unfinished run as interrupted and every
  * finished one as durably final.

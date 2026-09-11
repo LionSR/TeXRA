@@ -383,12 +383,6 @@ export function buildScenario({ proposal = false } = {}) {
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-  });
   // The tool's result lands the way the recorder's `update` lands it: the
   // patch merged over the stored entry, so the row keeps its id, seqNo, and
   // timestamp under a later commit.
@@ -496,12 +490,6 @@ export function buildScenario({ proposal = false } = {}) {
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  log.emit(CHILD, T.childDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-  });
   rootEntries.push(
     log.entry(ROOT, T.childDone + 1, {
       id: 'call-1',
@@ -523,12 +511,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.end',
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.Workflow),
-  });
-  log.emit(ROOT, T.rootDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
   });
 
   const events = log.events.map(tail);
@@ -1060,17 +1042,10 @@ function boardView({
       // outcome too: the row's status and the child run's phase are one
       // fact, so the tree never reads "Running" under a finished call.
       if (entry.status === 'failed' || entry.status === 'completed') {
-        const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'run.end',
-          outcome: done ? 'completed' : 'failed',
+          outcome: entry.status === 'completed' ? 'completed' : 'failed',
           output: emptyRunEndOutput(AgentCategory.ToolUse),
-        });
-        log.emit(kid.id, kid.startedAt + min(2), {
-          type: 'status',
-          phase: done ? RUN_PHASE.COMPLETED : RUN_PHASE.FAILED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
         });
       }
     }
@@ -1094,12 +1069,6 @@ function boardView({
           type: 'run.end',
           outcome: 'completed',
           output: emptyRunEndOutput(AgentCategory.ToolUse),
-        });
-        log.emit(kid.id, closedAt - 1, {
-          type: 'status',
-          phase: RUN_PHASE.COMPLETED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
         });
         card(
           {
@@ -1125,12 +1094,6 @@ function boardView({
       type: 'run.end',
       outcome,
       output: emptyRunEndOutput(AgentCategory.Workflow),
-    });
-    log.emit(ROOT, closedAt + 2, {
-      type: 'status',
-      phase: failed ? RUN_PHASE.FAILED : RUN_PHASE.COMPLETED,
-      previousPhase: RUN_PHASE.RUNNING,
-      cause: 'lifecycle',
     });
   }
   const ids = [ROOT, ...calls.flatMap((c) => c.child?.id ?? [])];

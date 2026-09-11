@@ -24,12 +24,12 @@ export type RunStatusDisplayKey =
  * durable event set and the hosts' per-status tables stay what they are and
  * only the label and tone change.
  */
-const STREAM_DISPLAY_INTERRUPTED = 'interrupted';
-type RunStatusCopyKey = RunStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
+const RUN_DISPLAY_INTERRUPTED = 'interrupted';
+type RunStatusCopyKey = RunStatusDisplayKey | typeof RUN_DISPLAY_INTERRUPTED;
 
 /**
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
- * idle sentinel every host defaults an unstarted stream to).
+ * idle sentinel every host defaults an unstarted run to).
  */
 function runStatusDisplayKey(
   status: RunLifecycleStatus,
@@ -56,7 +56,7 @@ function runStatusDisplayKey(
  * word as is. `packages/cli/scripts/validate-run.mjs` pins the completed and
  * stopped words from here against the real headless run.
  */
-const STREAM_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
+const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   [RUN_SUBSTATE.STARTING]: 'Initializing',
   [RUN_PHASE.RUNNING]: 'Running',
   [RUN_PHASE.FAILED]: 'Error',
@@ -66,7 +66,7 @@ const STREAM_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   [RUN_PHASE.WAITING]: 'Idle',
   [RUN_SUBSTATE.RESUMING]: 'Resuming',
   [RUN_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
-  [STREAM_DISPLAY_INTERRUPTED]: 'Interrupted',
+  [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
 };
 
 /**
@@ -94,7 +94,7 @@ const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   [RUN_PHASE.WAITING]: RUN_STATUS_TONE.NEUTRAL,
   [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
   [RUN_LIFECYCLE_UNAVAILABLE]: RUN_STATUS_TONE.WARNING,
-  [STREAM_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
+  [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
 };
 
 /**
@@ -110,10 +110,10 @@ export function runStatusCopy(
   } = {},
 ): { readonly statusLabel: string; readonly tone: RunStatusTone } {
   const key = options.interrupted
-    ? STREAM_DISPLAY_INTERRUPTED
+    ? RUN_DISPLAY_INTERRUPTED
     : runStatusDisplayKey(status, options.substate);
   return {
-    statusLabel: STREAM_STATUS_LABELS[key],
+    statusLabel: RUN_STATUS_LABELS[key],
     tone: RUN_STATUS_TONES[key],
   };
 }
@@ -160,7 +160,7 @@ export function formatRunStatusLabel(
   options: FormatRunStatusLabelOptions = {},
 ): string | undefined {
   if (status === undefined) return options.missingLabel;
-  return STREAM_STATUS_LABELS[runStatusDisplayKey(status, options.substate)];
+  return RUN_STATUS_LABELS[runStatusDisplayKey(status, options.substate)];
 }
 
 /**
@@ -213,7 +213,7 @@ export function formatPhaseStageLabel(
   });
 }
 
-/** Label for the one stage slot a stream fills: a workflow-script run advances
+/** Label for the one stage slot a run fills: a workflow-script run advances
  *  through named phases, a tool-use run through numbered rounds, never both,
  *  so every surface that shows the slot dispatches on the same discriminant. */
 export function formatStageLabel(
@@ -226,8 +226,8 @@ export function formatStageLabel(
 
 /**
  * One section per `group` arm, and the order the sections are painted in.
- * Both surfaces that group a stream list — the webview tab strip and the
- * TUI's stream tree — read this table rather than spelling the four labels
+ * Both surfaces that group a run list — the webview tab strip and the
+ * TUI's run tree — read this table rather than spelling the four labels
  * again, so a renamed section cannot say one thing in the dock and another
  * in the terminal.
  *

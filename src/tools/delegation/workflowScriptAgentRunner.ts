@@ -286,7 +286,9 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt; the interrupted snapshot may
       // already hold the same cost on a closed prior attempt.
       if (!recovered) {
-        // No usage recorded is no spend.
+        // `RunEnd.usage` is present once a round recorded usage and absent
+        // otherwise (see `RunEndSchema`), so it stays optional and absence is
+        // the recorded fact "no spend" rather than an unknown defaulted here.
         invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
