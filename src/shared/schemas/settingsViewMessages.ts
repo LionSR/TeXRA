@@ -184,31 +184,32 @@ const SetTabMessageSchema = z.object({
 // ============================================================
 
 /**
- * The wire command each catalog-derived snapshot travels under. Wire literals
- * are frozen and predate the snapshot names, so the two are related here — one
- * line per *snapshot*, never per setting.
+ * The snapshots whose whole payload is a plain list of catalog rows. They all
+ * travel under the one `UPDATE_SETTINGS_SNAPSHOT` command, discriminated by
+ * `snapshot`.
  *
- * A snapshot absent from this map is one whose payload is not a plain list of
+ * A snapshot absent from this list is one whose payload is not a plain list of
  * catalog rows (`profile`, `models`); those arms still declare their own shape
  * below or in their own module.
  */
-export const SETTINGS_SNAPSHOT_COMMANDS = {
-  approval: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-  'git-author': SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-  skills: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS,
-  telemetry: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
-  'multi-agent': SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-  latex: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-  memory: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-} as const satisfies Partial<Record<SettingsViewSnapshot, string>>;
+const DERIVED_SETTINGS_SNAPSHOTS = [
+  'approval',
+  'git-author',
+  'skills',
+  'telemetry',
+  'multi-agent',
+  'latex',
+  'memory',
+] as const satisfies readonly SettingsViewSnapshot[];
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
-export type DerivedSettingsSnapshot = keyof typeof SETTINGS_SNAPSHOT_COMMANDS;
+export type DerivedSettingsSnapshot =
+  (typeof DERIVED_SETTINGS_SNAPSHOTS)[number];
 
 /**
- * Outbound snapshot arm: the frozen wire command plus one `values` object
- * carrying every catalog row tagged for that snapshot, keyed by its canonical
- * `texra.*` key and validated by the row's own schema.
+ * One snapshot's member of the outbound snapshot arm: its name plus one
+ * `values` object carrying every catalog row tagged for that snapshot, keyed
+ * by its canonical `texra.*` key and validated by the row's own schema.
  *
  * This is the `pickProjection` idiom (`progressView/projectionShape.ts`)
  * applied to settings: an arm reads the one declared shape instead of
@@ -219,7 +220,8 @@ export type DerivedSettingsSnapshot = keyof typeof SETTINGS_SNAPSHOT_COMMANDS;
  */
 function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
   return z.object({
-    command: z.literal(SETTINGS_SNAPSHOT_COMMANDS[snapshot]),
+    command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT),
+    snapshot: z.literal(snapshot),
     values: z.strictObject(
       Object.fromEntries(
         settingsViewSnapshotEntries(snapshot).map((entry) => [
@@ -230,6 +232,15 @@ function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
     ),
   });
 }
+
+const [firstDerivedSnapshot, ...otherDerivedSnapshots] =
+  DERIVED_SETTINGS_SNAPSHOTS;
+
+/** Outbound: backend → frontend catalog-derived snapshot, keyed by `snapshot`. */
+const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
+  snapshotMessage(firstDerivedSnapshot),
+  ...otherDerivedSnapshots.map(snapshotMessage),
+]);
 
 /** A catalog-derived snapshot payload, keyed by canonical `texra.*` key. */
 export type SettingsSnapshotValues = Readonly<Record<string, unknown>>;
@@ -362,19 +373,6 @@ export type UpdateCustomAgentDirMessage = z.infer<
 >;
 
 // ============================================================
-// Multi-agent coordination data schema
-// ============================================================
-
-/**
- * Outbound: backend → frontend reliability + orchestration settings. The wire
- * literal stays `updateSuperYoloEnabled` by the literal-freeze convention
- * (wire literals never chase renames), so only the schema carries the
- * payload's real name.
- */
-const UpdateReliabilityAndOrchestrationMessageSchema =
-  snapshotMessage('multi-agent');
-
-// ============================================================
 // Agent team data schema
 // ============================================================
 
@@ -470,41 +468,12 @@ const UpdateToolDashboardMessageSchema = z.object({
   items: z.array(ToolDashboardItemSchema),
 });
 
-// ============================================================
-// Approval settings data schema
-// ============================================================
-
-/**
- * Outbound: backend → frontend snapshot of workspace run permissions
- * and safety.
- *
- * The command string predates the Codex, Claude, and tool-path controls it now
- * carries. Keep that stable wire discriminator while naming the schema by its
- * actual broader role.
- */
-const UpdateApprovalAndSafetySettingsMessageSchema =
-  snapshotMessage('approval');
-
 /** Outbound: discovered skill inventory for the consolidated Skills tab. */
 const UpdateSkillsListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
   skills: z.array(SkillDisplayItemSchema),
   issues: z.array(SkillDisplayIssueSchema),
 });
-
-/** Outbound: backend → frontend telemetry preference. */
-const UpdateTelemetrySettingsMessageSchema = snapshotMessage('telemetry');
-
-/** Outbound: backend → frontend git author settings */
-const UpdateGitAuthorSettingsMessageSchema = snapshotMessage('git-author');
-
-/**
- * Outbound: backend → frontend memory settings.
- *
- * The command string predates the snapshot and still names the single row the
- * snapshot carries.
- */
-const UpdateMemoryEnabledMessageSchema = snapshotMessage('memory');
 
 /** Outbound: backend → frontend GitHub token status. */
 const UpdateGitHubTokenStatusMessageSchema = z.object({
@@ -753,9 +722,6 @@ export const LatexConfigValuesSchema = z.object({
 } satisfies Record<keyof typeof LATEX_CONFIG_FIELD_TO_KEY, z.ZodTypeAny>);
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
-/** Outbound: backend → frontend current LaTeX/compile/diff config values. */
-const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');
-
 /** Outbound: backend → frontend inline criticism toggle state */
 const UpdateInlineCriticismEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
@@ -785,26 +751,20 @@ const SetUnsupportedCommandsMessageSchema = z.object({
 const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   SetTabMessageSchema,
   UpdateMemoryMessageSchema,
-  UpdateMemoryEnabledMessageSchema,
   UpdateMemoryPreviewMessageSchema,
   UpdateModelSelectionMessageSchema,
   UpdateAgentSelectionMessageSchema,
   UpdateCustomAgentDirMessageSchema,
-  UpdateReliabilityAndOrchestrationMessageSchema,
   UpdateAgentModePresetsMessageSchema,
-  UpdateApprovalAndSafetySettingsMessageSchema,
-  snapshotMessage('skills'),
+  UpdateSettingsSnapshotMessageSchema,
   UpdateSkillsListMessageSchema,
-  UpdateTelemetrySettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
-  UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateChatGptAuthStatusMessageSchema,
   UpdateGrokAuthStatusMessageSchema,
   UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
-  UpdateLatexConfigValuesMessageSchema,
   UpdateInlineCriticismEnabledMessageSchema,
   UpdateGoalListMessageSchema,
   UpdateProfileMessageSchema,

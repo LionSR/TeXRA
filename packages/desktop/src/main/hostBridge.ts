@@ -47,8 +47,8 @@ export function installDesktopHostBridge(
   window.once('closed', dispose);
   return {
     postToRenderer: (message) => {
-      // Dev/test-only shape check (no-op in prod, see `isDevAssertionMode`
-      // in `assertKnownOutboundMessage`). Desktop multiplexes the session
+      // Dev/test-only shape check (no-op in prod, see
+      // `assertKnownOutboundMessage`). Desktop multiplexes the session
       // protocol's three down messages (frames, responses, surface
       // actions; PRD 8), which the session bridge builds as typed
       // `DownMessage`s, and the desktop-only `desktop:*` commands

@@ -8,12 +8,11 @@
  * already exists and SettingsApp already used it before this migration.
  * Handlers are organized into domain-specific slices under ./slices/, one per
  * section of `SettingsApp`'s state (see `settingsState.ts`) — except
- * miscSettingsSlice.ts, which bundles the single-command/single-toggle
- * handlers that don't own a state section of their own (telemetry, goals,
- * agent teams, tool dashboard, multi-agent coordination).
- * modelSelectionSlice.ts and approvalSettingsSlice.ts are also single-command
- * but stay standalone: each owns a named, independently-surfaced state
- * section (model selection, approval/safety) rather than a one-off toggle.
+ * miscSettingsSlice.ts, which bundles the handlers that don't own a state
+ * section of their own (catalog-derived settings snapshots, goals, agent
+ * teams, tool dashboard).
+ * modelSelectionSlice.ts is also single-command but stays standalone: it owns
+ * a named, independently-surfaced state section rather than a one-off toggle.
  * Each slice owns only its own commands and is typed `satisfies Partial<...>`;
  * the composed registry below is the checkpoint where TypeScript enforces
  * exhaustiveness (every SettingsView outbound command needs a real handler or
@@ -22,15 +21,13 @@
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import { agentSelectionHandlers } from './slices/agentSelectionSlice';
-import { approvalSettingsHandlers } from './slices/approvalSettingsSlice';
 import { gitHandlers } from './slices/gitSlice';
 import { latexHandlers } from './slices/latexSlice';
 import { memoryHandlers } from './slices/memorySlice';
 import {
   agentTeamsHandlers,
   goalHandlers,
-  multiAgentHandlers,
-  telemetrySettingsHandlers,
+  settingsSnapshotHandlers,
   toolDashboardHandlers,
 } from './slices/miscSettingsSlice';
 import { modelSelectionHandlers } from './slices/modelSelectionSlice';
@@ -47,10 +44,8 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...modelSelectionHandlers,
   ...agentSelectionHandlers,
   ...skillsHandlers,
-  ...telemetrySettingsHandlers,
+  ...settingsSnapshotHandlers,
   ...agentTeamsHandlers,
-  ...multiAgentHandlers,
-  ...approvalSettingsHandlers,
   ...toolDashboardHandlers,
   ...gitHandlers,
   ...subscriptionUsageHandlers,

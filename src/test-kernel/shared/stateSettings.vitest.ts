@@ -24,7 +24,6 @@ import {
   modelsTabSettings,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
-  SETTINGS_SNAPSHOT_COMMANDS,
   dispatchSettingsViewOutbound,
   stateSettingByKey,
   REASONING_LEVEL_OPTIONS,
@@ -522,8 +521,17 @@ describe('catalog-derived settings snapshots', () => {
   it("puts exactly the snapshot's catalog rows on the wire", () => {
     const { stores } = makeFakeSettingsStores();
 
+    const derivedSnapshots = {
+      approval: true,
+      'git-author': true,
+      skills: true,
+      telemetry: true,
+      'multi-agent': true,
+      latex: true,
+      memory: true,
+    } satisfies Record<DerivedSettingsSnapshot, true>;
     for (const snapshot of Object.keys(
-      SETTINGS_SNAPSHOT_COMMANDS,
+      derivedSnapshots,
     ) as DerivedSettingsSnapshot[]) {
       const message = buildSettingsSnapshotMessage(snapshot, stores, 'vscode');
       assert.ok(
@@ -574,7 +582,7 @@ describe('catalog-derived settings snapshots', () => {
     try {
       const message = buildSettingsSnapshotMessage('latex', stores, 'desktop');
 
-      assert.equal(message.command, SETTINGS_SNAPSHOT_COMMANDS.latex);
+      assert.equal(message.snapshot, 'latex');
       assert.equal(
         message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
         false,

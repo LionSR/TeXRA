@@ -1,4 +1,3 @@
-import { isDevAssertionMode } from './devAssertionMode';
 import type { z } from 'zod';
 
 type CommandMessage = { command: string };
@@ -206,7 +205,8 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 // webview/desktop IPC boundary that already has an outbound Zod schema but
 // never runs the payload through it before posting.
 //
-// Both functions below are no-ops outside `isDevAssertionMode()` — zero
+// Both functions below are no-ops outside `isDevAssertionMode()` (true under
+// `npm test` or with `TEXRA_DEV_ASSERTIONS=1` set) — zero
 // `safeParse` cost in production. Some of these boundaries (desktop's single
 // `postToRenderer` channel carries the session frames and their text
 // chunks) are hot enough that even a cheap parse per message is
@@ -217,6 +217,20 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 // mismatch — schema and producer have drifted — rather than logging, since
 // these are the same runs where `npm test` / CI would otherwise treat drift
 // as silently passing.
+
+// Reaches the ambient `process` off `globalThis` rather than importing
+// `node:process`: this module is in the import closure of the webview
+// frontends' and the desktop renderer's bundles, and a Node-builtin import
+// would put `node:process` on those browser module graphs. It also keeps
+// the module compiling without Node types and returns `false` in a browser.
+function isDevAssertionMode(): boolean {
+  const env = (
+    globalThis as {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env;
+  return env?.NODE_ENV === 'test' || env?.TEXRA_DEV_ASSERTIONS === '1';
+}
 
 /**
  * Asserts (dev/test only) that `message` conforms to the outbound schema

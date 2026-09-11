@@ -8,8 +8,8 @@
  * catalog row and are applied by `readSetting`, so a snapshot builder has
  * nothing left of its own to say.
  */
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  SETTINGS_SNAPSHOT_COMMANDS,
   settingsViewSnapshotEntries,
   type DerivedSettingsSnapshot,
   type SettingHost,
@@ -22,7 +22,8 @@ import {
 
 /** A catalog-derived snapshot message, ready to post to the settings webview. */
 export interface SettingsSnapshotMessage {
-  readonly command: (typeof SETTINGS_SNAPSHOT_COMMANDS)[DerivedSettingsSnapshot];
+  readonly command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT;
+  readonly snapshot: DerivedSettingsSnapshot;
   readonly values: SettingsSnapshotValues;
 }
 
@@ -33,7 +34,8 @@ export function buildSettingsSnapshotMessage(
   host: SettingHost,
 ): SettingsSnapshotMessage {
   return {
-    command: SETTINGS_SNAPSHOT_COMMANDS[snapshot],
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+    snapshot,
     values: Object.fromEntries(
       settingsViewSnapshotEntries(snapshot).map((entry) => [
         entry.key,

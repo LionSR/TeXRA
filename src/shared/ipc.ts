@@ -20,7 +20,6 @@ export const MEMORY_VIEW_COMMANDS = {
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
-  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
   PIN_MEMORY: 'pinMemory',
   UNPIN_MEMORY: 'unpinMemory',
 } as const;
@@ -124,24 +123,18 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY,
   UPDATE_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-  UPDATE_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
   UPDATE_PROFILE: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
-  UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
-  // Stable outbound name for the broader run-permissions-and-safety
-  // snapshot (bash approval, coding-agent controls, and tool path protection).
-  UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
-  UPDATE_SKILLS_SETTINGS: 'updateSkillsSettings',
+  // Every catalog-derived snapshot in `settingsViewMessages.ts`'s
+  // derived-snapshot list, keyed by its `snapshot` field.
+  UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',
   UPDATE_SKILLS_LIST: 'updateSkillsList',
-  UPDATE_TELEMETRY_SETTINGS: 'updateTelemetrySettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
-  UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_SUBSCRIPTION_USAGE: 'updateSubscriptionUsage',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
-  UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
   UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
   UPDATE_GOAL_LIST: 'updateGoalList',
   /**

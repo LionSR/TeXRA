@@ -1,21 +1,17 @@
 /**
  * LaTeX settings handlers: UPDATE_LATEX_SETTINGS_STATUS,
- * UPDATE_LATEX_CONFIG_VALUES, UPDATE_INLINE_CRITICISM_ENABLED.
+ * UPDATE_INLINE_CRITICISM_ENABLED. The LaTeX config values arrive through
+ * UPDATE_SETTINGS_SNAPSHOT (miscSettingsSlice.ts).
  *
  * Feeds `<latex-tab>` (a stateless props-in/events-out leaf component — it
  * needs no changes for this migration).
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  LatexConfigValuesSchema,
-  type SettingsViewOutboundHandlerRegistry,
-} from '@shared/schemas';
-import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
+import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
   inlineCriticismEnabled,
-  latexConfigValues,
   latexSettingsLoaded,
   latexSettingsStatus,
 } from '../settingsState';
@@ -24,19 +20,6 @@ export const latexHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
     latexSettingsStatus.set(data.settings);
     latexSettingsLoaded.set(true);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES]: (data) => {
-    latexConfigValues.set(
-      LatexConfigValuesSchema.parse(
-        Object.fromEntries(
-          Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
-            field,
-            data.values[key],
-          ]),
-        ),
-      ),
-    );
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
