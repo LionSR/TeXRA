@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 import type { ProviderErrorPartial, RunId } from '@shared/schemas';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -21,7 +20,7 @@ function createRetryPermission(
   overrides: Partial<RetryRequestPanel['permission']['data']> = {},
 ): RetryRequestPanel['permission'] {
   return {
-    kind: PERMISSION_KIND.RETRY,
+    kind: 'retry',
     data: {
       requestId: 'retry-1',
       runId: 'run-1' as RunId,

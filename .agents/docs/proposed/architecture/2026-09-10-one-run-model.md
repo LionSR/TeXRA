@@ -283,7 +283,7 @@ to make once.
 ### 3.7 Waiting on a human
 
 There are seven kinds of thing a run asks a person, and one list of them,
-`PERMISSION_KIND` ([uiConstants.ts:1-9](../../../../src/shared/utils/uiConstants.ts)).
+`PermissionPayload['kind']` ([data.ts](../../../../src/shared/schemas/progressView/data.ts)).
 Around that one list sit four decision vocabularies, each dropping a kind
 the next one has; an in-memory `pending` set in `SessionHostInteractions`
 ([HostInteractions.ts:471](../../../../src/agent/runtime/HostInteractions.ts))

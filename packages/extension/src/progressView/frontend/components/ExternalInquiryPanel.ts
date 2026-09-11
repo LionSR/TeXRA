@@ -40,7 +40,6 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -53,7 +52,7 @@ import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 
 type ExternalInquiryPermissionState = Extract<
   PermissionPayload,
-  { kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY }
+  { kind: 'externalInquiry' }
 >;
 
 // ── Draft persistence ──

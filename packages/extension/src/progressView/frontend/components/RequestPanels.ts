@@ -43,9 +43,6 @@ import type { PermissionPayload, RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
-// Local imports - shared utilities
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -78,49 +75,49 @@ interface SectionConfig {
 /** Sections in render order — one row per permission kind. */
 const SECTIONS: readonly SectionConfig[] = [
   {
-    kind: PERMISSION_KIND.TOOL_EDIT,
+    kind: 'toolEdit',
     tag: literal`tool-edit-request-panel`,
     cssClass: 'approval-requests',
     icon: 'code-compare',
     title: 'Tool edit approval',
   },
   {
-    kind: PERMISSION_KIND.BASH,
+    kind: 'bash',
     tag: literal`bash-request-panel`,
     cssClass: 'bash-approval-requests',
     icon: 'terminal',
     title: 'Command approval',
   },
   {
-    kind: PERMISSION_KIND.RETRY,
+    kind: 'retry',
     tag: literal`retry-request-panel`,
     cssClass: 'retry-requests',
     icon: 'rotate-right',
     title: 'Retry request',
   },
   {
-    kind: PERMISSION_KIND.PROPOSAL,
+    kind: 'proposal',
     tag: literal`proposal-request-panel`,
     cssClass: 'workflow-proposals',
     icon: 'rocket',
     title: 'Agent proposal',
   },
   {
-    kind: PERMISSION_KIND.PLAN_APPROVAL,
+    kind: 'planApproval',
     tag: literal`plan-approval-request-panel`,
     cssClass: 'plan-approval-requests',
     icon: 'list-check',
     title: 'Plan approval',
   },
   {
-    kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
+    kind: 'externalInquiry',
     tag: literal`external-inquiry-panel`,
     cssClass: 'external-inquiry-requests',
     icon: 'globe',
     title: 'External inquiry',
   },
   {
-    kind: PERMISSION_KIND.USER_QUESTION,
+    kind: 'userQuestion',
     tag: literal`user-question-panel`,
     cssClass: 'user-question-requests',
     icon: 'circle-question',
@@ -139,7 +136,7 @@ function externalInquiryKeys(
 ): string[] {
   return permissions
     .filter(
-      (permission) => permission.kind === PERMISSION_KIND.EXTERNAL_INQUIRY,
+      (permission) => permission.kind === 'externalInquiry',
     )
     .map(getPermissionKey);
 }
@@ -269,7 +266,7 @@ export class RequestPanels extends LitElement {
     return html`
       ${SECTIONS.map((section) => {
         const permissions = this.permissionsFor(section.kind);
-        return section.kind === PERMISSION_KIND.EXTERNAL_INQUIRY
+        return section.kind === 'externalInquiry'
           ? this.renderExternalInquirySection(section, permissions)
           : this.renderSection(section, permissions);
       })}
@@ -312,7 +309,7 @@ export class RequestPanels extends LitElement {
     // proposes; the kind heading is for the sections whose cards need it.
     const headless = permissions.every(
       (permission) =>
-        permission.kind === PERMISSION_KIND.PROPOSAL &&
+        permission.kind === 'proposal' &&
         'workflowScript' in permission.data &&
         permission.data.workflowScript !== undefined,
     );
@@ -457,7 +454,7 @@ export class RequestPanels extends LitElement {
   }
 
   private get externalInquiries(): PermissionPayload[] {
-    return this.permissionsFor(PERMISSION_KIND.EXTERNAL_INQUIRY);
+    return this.permissionsFor('externalInquiry');
   }
 
   private get externalInquiryIndex(): number {
@@ -471,7 +468,7 @@ export class RequestPanels extends LitElement {
   /** True when the newest permission is one of several pending inquiries. */
   private get externalInquiryCarouselActive(): boolean {
     return (
-      this.permissions.at(-1)?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+      this.permissions.at(-1)?.kind === 'externalInquiry' &&
       this.externalInquiries.length > 1
     );
   }

@@ -9,7 +9,6 @@
  * side-effect imports.
  */
 import type { PermissionPayload } from '@shared/schemas';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 /**
  * Every permission kind's wire schema carries `requestId`; retry is the one
@@ -17,7 +16,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
  * retry per stream, a new request replaces the old one).
  */
 function permissionId(permission: PermissionPayload): string {
-  return permission.kind === PERMISSION_KIND.RETRY
+  return permission.kind === 'retry'
     ? permission.data.runId
     : permission.data.requestId;
 }

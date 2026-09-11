@@ -45,7 +45,6 @@ import {
 } from '@shared/wa/selectTemplates';
 
 // Local imports - shared utilities
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
@@ -61,7 +60,7 @@ import { getComposedPathElement } from '../utils';
 function proposalRequestIdOf(
   p: PermissionPayload | null | undefined,
 ): string | undefined {
-  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.requestId : undefined;
+  return p?.kind === 'proposal' ? p.data.requestId : undefined;
 }
 
 @customElement('proposal-request-panel')
