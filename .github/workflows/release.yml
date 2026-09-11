@@ -27,18 +27,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
       - name: Verify release tag matches extension package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -49,19 +37,19 @@ jobs:
             exit 1
           fi
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       - name: Type check
         run: pnpm run typecheck
 
       # Fail the release before building/publishing if the code-generated
       # `contributes.*` subtrees in package.json have drifted from the settings
-      # and command catalogs. `check:vsix-contents` (below) only asserts these
-      # subtrees are present and non-empty before trimming them from its
-      # manifest snapshot; it does not compare their contents. Without this
-      # gate a release cut from a commit whose catalog drift bypassed PR CI
-      # could publish a stale VS Code manifest.
+      # and command catalogs. `check:vsix-contents` (below) only compares the
+      # packaged manifest against packages/extension/package.json, so it
+      # cannot see drift from the catalogs. Without this gate a release cut
+      # from a commit whose catalog drift bypassed PR CI could publish a stale
+      # VS Code manifest.
       - name: Check package contributes catalog
         run: pnpm run check:package-contributes
 
@@ -119,19 +107,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-          registry-url: 'https://registry.npmjs.org'
-
       - name: Verify release tag matches CLI package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -142,11 +117,13 @@ jobs:
             exit 1
           fi
 
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Use an npm CLI recent enough for trusted publishing
         run: npm install -g npm@^11.5.1
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
