@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const state = new Map<string, unknown>();
@@ -27,11 +28,14 @@ describe('CLI enabled models catalog', () => {
   });
 
   it('resolves a CLI spelling and reports the resulting list', async () => {
-    state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT']);
+    state.set(GlobalStateKey.MODEL_SELECTION, {
+      enabledExtras: [],
+      disabledDefaults: ['grok45'],
+    });
     const result = await setCliModelEnabled('grok-4.5', true);
     expect(result.model).toBe('grok45');
     expect(result.enabled).toBe(true);
-    expect(result.list).toEqual(['deepseekproT', 'grok45']);
+    expect(result.list).toEqual(DEFAULT_MODELS);
   });
 
   it('rejects an id no CLI model answers to', async () => {
@@ -41,9 +45,12 @@ describe('CLI enabled models catalog', () => {
   });
 
   it('lists catalog rows with enabled flags', () => {
-    state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT', 'grok45']);
+    state.set(GlobalStateKey.MODEL_SELECTION, {
+      enabledExtras: [],
+      disabledDefaults: ['grok45'],
+    });
     const catalog = listCliEnabledModelCatalog();
-    expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(true);
+    expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(false);
     expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
       true,
     );

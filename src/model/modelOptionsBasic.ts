@@ -2,15 +2,13 @@ import { hint, type ModelConfig } from 'llm-zoo';
 
 import type { ModelOptionData } from '@shared/schemas';
 import {
+  DEFAULT_AGENT_MODEL,
   EXPENSIVE_MODEL_HINT,
   FAST_FIRST_RESPONSE_HINT,
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import {
-  getRuntimeModelConfig,
-  staticModelConfigEntries,
-} from './runtimeModelRegistry';
+import { getRuntimeModelConfig } from './runtimeModelRegistry';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
@@ -24,19 +22,15 @@ export function isRetiredModel(model: string): boolean {
 }
 
 /**
- * Curated pick of models that should be present in every user's model list --
- * a *preference*, not the source of truth for whether each pick is still
- * servable. `llm-zoo`'s `ModelConfig` has no "featured"/"default" capability
- * flag to derive this set from directly, so -- the same way
- * `setupModelDefaults.ts` curates one setup-probe model per provider -- this
- * table is hand-maintained. {@link DEFAULT_MODELS} drops picks that the live
- * registry has retired or deprecated, while {@link MODEL_LIST_VERSION}
- * includes this membership and each preferred pick's lifecycle status.
+ * Curated models every user starts with enabled; the persisted selection is a
+ * delta over this list. `llm-zoo` has no "featured" flag to derive it from, so
+ * it is literal data — `ModelOptionsBasic.vitest.ts` fails an llm-zoo bump that
+ * retires or deprecates an entry, and the entry is replaced here.
  */
-export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
-  // First entry is the picker / new-chat default (`DEFAULT_AGENT_MODEL`).
-  // Do not lead with Gemini — GPT is the quality default.
-  'gpt56',
+export const DEFAULT_MODELS: readonly string[] = [
+  // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
+  // quality default.
+  DEFAULT_AGENT_MODEL,
   'gpt56-',
   'gpt56--',
   'sonnet5T',
@@ -56,103 +50,6 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'grok45',
   'musespark13',
 ];
-
-/**
- * Resolve a preferred model list against the live registry, dropping any pick
- * the registry marks retired or deprecated -- matching the stricter filter
- * `reconcileEnabledModels` (`modelListRefresh.ts`) already applies before
- * granting a default to an *existing* user, so a first-time user (or any
- * direct `DEFAULT_MODELS` consumer, e.g. `SettingsModelSelectionController`)
- * can't be handed a stale default an existing user would never receive.
- * Exported (separately from {@link DEFAULT_MODELS}) so tests can exercise the
- * resolution mechanism itself against known-retired/deprecated registry
- * entries, without depending on {@link PREFERRED_DEFAULT_MODELS} happening to
- * contain one today.
- */
-export function resolveDefaultModels(preferred: readonly string[]): string[] {
-  return preferred.filter(
-    (model) => !isRetiredModel(model) && !isDeprecatedModel(model),
-  );
-}
-
-/**
- * Models that should be present in every user's model list, resolved against
- * the live registry: a preferred pick the registry now marks retired or
- * deprecated is dropped rather than dangling in the default list with no way
- * back out.
- */
-export const DEFAULT_MODELS: readonly string[] = resolveDefaultModels(
-  PREFERRED_DEFAULT_MODELS,
-);
-
-/**
- * Baseline added to the {@link MODEL_LIST_VERSION} hash so it can never
- * collide with the hand-bumped integers (1-21) this file used before it
- * switched to a registry-derived trigger -- `reconcileEnabledModels`'s
- * one-time migration gates read a user's previously *persisted* version
- * number, which for every existing install is still one of those small
- * integers, so the new value must land clear of that range.
- */
-const MODEL_LIST_HASH_BASE = 1000;
-
-/**
- * Deterministic 32-bit FNV-1a hash of `input`, as a non-negative integer.
- * Operates on UTF-16 code units (`charCodeAt`), not raw bytes -- byte-
- * equivalent to canonical FNV-1a for the ASCII-only inputs this module hashes
- * (model ids), but not a general byte-level implementation.
- */
-function fnv1aHash(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
-/**
- * Live registry status of a model. Distinguishes "deprecated" (still
- * servable, discouraged) from "retired" (hard unavailable) so {@link
- * computeModelListVersion} can detect a transition between them even though
- * {@link resolveDefaultModels} filters both out of the resolved set the same
- * way.
- */
-type ModelStatus = 'active' | 'deprecated' | 'retired';
-type ModelLifecycleConfig = Pick<ModelConfig, 'deprecated' | 'retired'>;
-type ModelLifecycleEntry = readonly [string, ModelLifecycleConfig];
-
-function modelStatus(config: ModelLifecycleConfig): ModelStatus {
-  if (config.retired) return 'retired';
-  if (config.deprecated) return 'deprecated';
-  return 'active';
-}
-
-/**
- * Compute the reconciliation trigger from preferred membership and status.
- * Non-preferred catalogue changes do not affect the default-addition pass;
- * retired entries are swept independently on every startup.
- */
-export function computeModelListVersion(
-  preferred: readonly string[],
-  catalogue: readonly ModelLifecycleEntry[] = staticModelConfigEntries(),
-): number {
-  const catalogueByModel = new Map(catalogue);
-  const entries = preferred
-    .toSorted()
-    .map(
-      (model) => `${model}:${modelStatus(catalogueByModel.get(model) ?? {})}`,
-    );
-  return MODEL_LIST_HASH_BASE + fnv1aHash(entries.join(','));
-}
-
-/**
- * Reconciliation trigger for the persisted enabled-models list
- * (`modelListRefresh.ts`). Preferred-set and preferred-lifecycle changes alter
- * this value automatically; catalogue retirements are swept separately.
- */
-export const MODEL_LIST_VERSION: number = computeModelListVersion(
-  PREFERRED_DEFAULT_MODELS,
-);
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;

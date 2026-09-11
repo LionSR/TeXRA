@@ -69,7 +69,6 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
-import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform } from '@platform/platform';
@@ -634,22 +633,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
         log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
       }
     })(),
-    effectRuntime()
-      .runPromise(refreshModelListAndLog(context.globalState))
-      .then(({ currentVersion, previousVersion, skipped, messages }) => {
-        if (!skipped) {
-          if (previousVersion !== currentVersion) {
-            log.info(
-              `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
-            );
-          }
-          log.info('Model list refresh completed successfully');
-        }
-        for (const message of messages) log.info(message);
-      })
-      .catch((err) => {
-        log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
-      }),
   ]);
 
   registerSupabaseAuth(context, secrets);

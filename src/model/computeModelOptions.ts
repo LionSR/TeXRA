@@ -1,4 +1,5 @@
-import { ModelProvider, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { z } from 'zod';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -50,7 +51,6 @@ import {
 import {
   isOpenRouterRoutingUnsupported,
   resolveDirectModelApiKeyProvider,
-  resolveModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
@@ -62,9 +62,7 @@ import {
   discoveredCopilotRoutes,
   getRuntimeModelConfig,
   copilotRouteForModel,
-  staticModelConfigEntries,
 } from './runtimeModelRegistry';
-type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
 /**
  * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
@@ -241,29 +239,6 @@ function withAvailabilityFields(
   };
 }
 
-/** Check whether a model is available through a personal provider or OpenRouter key. */
-async function getPersonalAccessKindForModel(
-  config: ModelConfig,
-  ctx: ModelAvailabilityContext,
-): Promise<PersonalModelAccessKind | null> {
-  const provider = resolveDirectModelApiKeyProvider(config);
-  if (!provider) return null;
-
-  if (await ctx.hasUsableApiKey(provider)) {
-    return 'provider-key';
-  }
-
-  // At the picker boundary, absent and unreadable provider keys both degrade to
-  // unavailable while still allowing an OpenRouter route below.
-  const openRouterFallbackProvider = resolveModelApiKeyProvider(config, true);
-  return config.openrouterFullName &&
-    ctx.hasOpenRouter &&
-    (config.provider !== ModelProvider.GLM ||
-      openRouterFallbackProvider === 'openRouter')
-    ? 'openrouter-key'
-    : null;
-}
-
 interface ModelAvailabilityContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
@@ -360,8 +335,13 @@ async function resolveModelAvailability(
     };
   }
 
-  const personalAccess = await getPersonalAccessKindForModel(config, ctx);
-  if (personalAccess) return availabilityStatus(personalAccess);
+  // Dispatch sends every remaining request to the direct provider, so only its
+  // key makes the model ready. The live-route branch above is the only source
+  // of 'openrouter-key'.
+  const provider = resolveDirectModelApiKeyProvider(config);
+  if (provider && (await ctx.hasUsableApiKey(provider))) {
+    return availabilityStatus('provider-key');
+  }
 
   return availabilityStatus('missing-key');
 }
@@ -411,35 +391,78 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
 }
 
 /**
+ * The user's picker choices as a delta over {@link DEFAULT_MODELS}, so a change
+ * to the curated defaults reaches every user while a default they turned off
+ * stays off and a model they turned on stays on.
+ */
+const ModelSelectionSchema = z.object({
+  enabledExtras: z.array(z.string()).readonly(),
+  disabledDefaults: z.array(z.string()).readonly(),
+});
+type ModelSelection = z.infer<typeof ModelSelectionSchema>;
+
+const EMPTY_MODEL_SELECTION: ModelSelection = {
+  enabledExtras: [],
+  disabledDefaults: [],
+};
+
+/**
+ * An unreadable stored selection is reported and read as the empty delta —
+ * the defaults — without being rewritten: the next picker toggle re-encodes a
+ * valid delta from the list shown.
+ */
+function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
+  const stored = state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
+  if (stored === undefined) return EMPTY_MODEL_SELECTION;
+  const parsed = ModelSelectionSchema.safeParse(stored);
+  if (parsed.success) return parsed.data;
+  warnModelAvailability(
+    `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
+    z.prettifyError(parsed.error),
+  );
+  return EMPTY_MODEL_SELECTION;
+}
+
+/**
+ * Retired models drop out here, so no startup pass sweeps persisted state.
+ * An explicitly enabled default is also kept in `enabledExtras`, so it stays
+ * on if the curated defaults later drop it; the set de-duplicates it.
+ */
+function enabledModelsOf(selection: ModelSelection): readonly string[] {
+  const disabled = new Set(selection.disabledDefaults);
+  return [
+    ...new Set([
+      ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
+      ...selection.enabledExtras,
+    ]),
+  ].filter((model) => !isRetiredModel(model));
+}
+
+/**
+ * When every enabled extra has retired and every default is off, the picker
+ * would be empty with no way back out from the UI; it shows the defaults.
+ */
+function enabledOrDefaults(selection: ModelSelection): readonly string[] {
+  const enabled = enabledModelsOf(selection);
+  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
+}
+
+/**
  * The models the pickers show — the single reader of
- * `GlobalStateKey.ENABLED_MODELS` for every host.
- *
- * Normalizes an empty or `null` persisted list to {@link DEFAULT_MODELS}:
- * `.get`'s fallback only fires on `undefined`, so a stored `[]` would
- * otherwise survive all the way to an empty picker with no way back out from
- * the UI, and a stored `null` would throw on `.length`.
+ * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
 export function getEnabledModels(
   state: Pick<StateStore, 'get'> = platform().globalState,
 ): readonly string[] {
-  const enabled = state.get<readonly string[]>(
-    GlobalStateKey.ENABLED_MODELS,
-    DEFAULT_MODELS,
-  );
-  return enabled != null && enabled.length > 0 ? enabled : DEFAULT_MODELS;
+  return enabledOrDefaults(readModelSelection(state));
 }
 
 /**
- * Enable or disable one model. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
- * startup reconciliation in `modelListRefresh.ts`.
+ * Enable or disable one model — the only writer of
+ * `GlobalStateKey.MODEL_SELECTION`.
  *
- * Two invariants, previously enforced only on the CLI path:
- *  - at least one model stays enabled — an empty list leaves the user with an
- *    empty picker and (for non-Codex users) no way to re-enable anything;
- *  - a retired model can be removed but never enabled — removal has to stay
- *    possible so a model retired while enabled is not stuck in the list.
- *
- * Throws on either violation; callers surface the message.
+ * Two invariants: at least one model stays enabled, and a retired model is
+ * never enabled. Throws on either violation; callers surface the message.
  */
 export async function setModelEnabled(input: {
   readonly model: string;
@@ -451,19 +474,32 @@ export async function setModelEnabled(input: {
     throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
   }
 
-  const current = getEnabledModels(state);
-  let next: readonly string[];
-  if (input.enabled) {
-    next = current.includes(input.model) ? current : [...current, input.model];
-  } else {
-    next = current.filter((model) => model !== input.model);
-    if (next.length === 0) {
-      throw new Error(
-        'At least one model must stay enabled. Enable another model before disabling this one.',
-      );
-    }
+  // Edit the list the picker shows — including the all-defaults fallback — and
+  // re-encode the delta from it, so a write never acts on a hidden state. An
+  // explicit enable is recorded in `enabledExtras` even for a default, so it
+  // survives the model later leaving the curated defaults.
+  const selection = readModelSelection(state);
+  const current = enabledOrDefaults(selection);
+  const others = current.filter((model) => model !== input.model);
+  const toggled = input.enabled ? [...others, input.model] : others;
+  const next: ModelSelection = {
+    enabledExtras: [
+      ...new Set([
+        ...selection.enabledExtras.filter((model) => toggled.includes(model)),
+        ...(input.enabled ? [input.model] : []),
+      ]),
+    ],
+    disabledDefaults: DEFAULT_MODELS.filter(
+      (model) => !toggled.includes(model),
+    ),
+  };
+  const nextEnabled = enabledModelsOf(next);
+  if (nextEnabled.length === 0) {
+    throw new Error(
+      'At least one model must stay enabled. Enable another model before disabling this one.',
+    );
   }
-  await state.update(GlobalStateKey.ENABLED_MODELS, [...next]);
+  await state.update(GlobalStateKey.MODEL_SELECTION, next);
 
   // If the helper model was just removed, pin the built-in default. Do not
   // fall back to the first remaining picker model — that is a premium default,
@@ -478,7 +514,7 @@ export async function setModelEnabled(input: {
     await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
   }
 
-  return next;
+  return nextEnabled;
 }
 
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
@@ -610,7 +646,7 @@ function visibleModelsForAccess(
   const models = new Set(configuredModels);
   if (!context.codexSignedIn) return [...models];
 
-  for (const [model, config] of staticModelConfigEntries()) {
+  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
       !config.retired &&
       !config.deprecated &&

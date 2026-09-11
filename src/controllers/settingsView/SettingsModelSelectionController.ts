@@ -1,4 +1,9 @@
-import { ModelProvider, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  type ModelConfig,
+  type ReasoningEffort,
+} from 'llm-zoo';
 
 import {
   reasoningEffortOverrides,
@@ -8,7 +13,6 @@ import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredCopilotRoutes,
-  staticModelConfigEntries,
   type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
@@ -99,7 +103,7 @@ export class SettingsModelSelectionController {
     routes: ReadonlyMap<string, CopilotModelRoute>,
     preferredModels: ReadonlySet<string>,
   ): CopilotRouteInfo[] {
-    const configs = new Map(staticModelConfigEntries());
+    const configs = new Map(Object.entries(MODEL_CONFIGS));
     const names = new Set([...routes.keys(), ...preferredModels]);
     return [...names].map((name) => ({
       name,
@@ -160,7 +164,7 @@ export class SettingsModelSelectionController {
     // uses. Passing an explicit list keeps the picker's view authoritative and
     // avoids re-deriving availability at render time. Copilot routes are not
     // candidates: they are transports for the canonical base models (#9635).
-    const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
+    const configs = new Map<string, ModelConfig>(Object.entries(MODEL_CONFIGS));
     const candidates = [...configs.values()]
       .filter((config) => config.provider !== ModelProvider.COPILOT)
       // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose

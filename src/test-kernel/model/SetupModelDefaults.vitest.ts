@@ -6,35 +6,47 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 /**
- * #7081: setup-probe models were 10 hardcoded per-provider literals — when
- * one retires (as `grok4` has, live in the registry today), the setup
- * assistant probes a dead model and a valid key's verification fails.
- * `SETUP_MODEL_BY_PROVIDER` validates every pick against the live registry
- * and swaps to a still-active model when needed; these tests guard that no
- * provider's resolved model is ever retired or OpenRouter-only, regardless
- * of what happens to the curated preference table over time.
+ * The setup pins are literal data. An llm-zoo bump that retires or deprecates
+ * a pin fails here, and the pin is replaced by hand — the setup assistant
+ * never probes a dead model and never swaps one silently at runtime.
  */
 describe('SETUP_MODEL_BY_PROVIDER', () => {
-  it('never resolves a provider to a retired or OpenRouter-only model', () => {
+  setupPlatform();
+
+  it('pins every provider to a live, non-deprecated, directly reachable model', () => {
     for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      const config = getRuntimeModelConfig(model) ?? MODEL_CONFIGS[model];
-      assert.ok(config, `${provider} resolved to unknown model "${model}"`);
+      const config = MODEL_CONFIGS[model];
+      assert.ok(config, `${provider} pins unknown model "${model}"`);
       assert.equal(
         config.retired ?? false,
         false,
-        `${provider} resolved to retired model "${model}"`,
+        `${provider}: "${model}" is retired`,
+      );
+      assert.equal(
+        config.deprecated ?? false,
+        false,
+        `${provider}: "${model}" is deprecated`,
       );
       assert.equal(
         config.openRouterOnly ?? false,
         false,
-        `${provider} resolved to an OpenRouter-only model "${model}"`,
+        `${provider}: "${model}" is OpenRouter-only`,
       );
     }
+    // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which accepts only
+    // Codex-eligible model ids.
+    assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
+    assert.ok(
+      resolveCodexSubscriptionProfile({
+        model: MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
+        useOpenRouter: false,
+      }),
+    );
   });
 
   it('covers every non-OpenRouter direct-key API provider', () => {
@@ -45,26 +57,5 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
         `missing setup model for provider "${provider}"`,
       );
     }
-  });
-
-  it('falls back off a retired preferred pick to a live model for the same provider (xai/grok4)', () => {
-    // grok4 is retired in the live registry as of this fix — the concrete
-    // failure mode #7081 reported, exercised against real data rather than
-    // a mock.
-    assert.equal(MODEL_CONFIGS.grok4?.retired, true);
-    const resolved = SETUP_MODEL_BY_PROVIDER.xai;
-    assert.ok(resolved, 'xai has a known preference, so this always resolves');
-    assert.notEqual(resolved, 'grok4');
-    assert.equal(MODEL_CONFIGS[resolved]?.retired ?? false, false);
-    assert.equal(MODEL_CONFIGS[resolved]?.provider, 'xai');
-  });
-
-  it('keeps CHATGPT_SETUP_MODEL Codex-eligible', () => {
-    assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
-    const config = MODEL_CONFIGS[CHATGPT_SETUP_MODEL];
-    assert.ok(config);
-    // Mirrors isUsableSetupModel's production check exactly, so this can't
-    // pass on a model id the real setup path would reject.
-    assert.ok(isCodexSubscriptionEligible(config));
   });
 });

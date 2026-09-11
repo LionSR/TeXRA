@@ -13,8 +13,9 @@ import {
   resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
-import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type ModelOptionData,
@@ -25,6 +26,14 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
+
+/** A persisted selection with exactly `models` enabled. */
+function onlyEnabled(models: readonly string[]) {
+  return {
+    enabledExtras: models,
+    disabledDefaults: DEFAULT_MODELS.filter((model) => !models.includes(model)),
+  };
+}
 
 /**
  * Reinstall the fake platform mid-test with the access state the case needs,
@@ -41,7 +50,9 @@ async function installAccessPlatform(
   await installPlatform({
     config: options.config,
     globalState: {
-      [GlobalStateKey.ENABLED_MODELS]: options.enabledModels ?? ['gpt55'],
+      [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(
+        options.enabledModels ?? ['gpt55'],
+      ),
       ...(options.useOpenRouter === undefined
         ? {}
         : { [GlobalStateKey.USE_OPENROUTER]: options.useOpenRouter }),
@@ -82,7 +93,7 @@ describe('model catalogue direct-route key ownership', () => {
 
 describe('computeModelOptionsData availability', () => {
   setupPlatform({
-    globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+    globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']) },
     secrets: OPENAI_KEY_SECRETS,
   });
 
@@ -163,7 +174,9 @@ describe('computeModelOptionsData availability', () => {
     vi.spyOn(secrets, 'get').mockRejectedValue(readError);
     await installPlatform(
       {
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+        globalState: {
+          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+        },
       },
       { secrets },
     );
@@ -290,6 +303,19 @@ describe('computeModelOptionsData availability', () => {
     expect(reason).toBe('Model "gpt55" requires an OpenRouter API key.');
   });
 
+  it('does not offer an OpenRouter key while the OpenRouter toggle is off', async () => {
+    // Dispatch with the toggle off asks the direct provider for its key, so an
+    // OpenRouter key alone must not mark the row ready.
+    await installAccessPlatform({
+      secrets: { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
+      useOpenRouter: false,
+    });
+
+    const [model] = await computeModelOptionsData(['gemini31p']);
+
+    expect(model.availability).toBe('missing-key');
+  });
+
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
     await installAccessPlatform({
       config: PREFER_CODEX_CONFIG,
@@ -324,7 +350,10 @@ describe('computeModelOptionsData availability', () => {
         ([, config]) =>
           !config.retired &&
           !config.deprecated &&
-          isCodexSubscriptionEligible(config),
+          resolveCodexSubscriptionProfile({
+            model: config,
+            useOpenRouter: false,
+          }) !== null,
       )
       .map(([model]) => model);
 
@@ -365,7 +394,7 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
   ): Promise<ModelOptionData> {
     await installPlatform({
       globalState: {
-        [GlobalStateKey.ENABLED_MODELS]: ['kimi3'],
+        [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['kimi3']),
         ...globalState,
       },
       secrets,

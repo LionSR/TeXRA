@@ -257,12 +257,12 @@ describe('Copilot route preference on a canonical base model', () => {
 
   it('reports an undiscovered preferred route as unavailable', async () => {
     await installCopilotRoute({
-      'texra.copilotRouteModels': ['gpt55'],
+      'texra.copilotRouteModels': ['gpt56'],
     });
 
     expect(() =>
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false),
-    ).toThrowError(/does not currently offer "gpt55"/);
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.gpt56, false),
+    ).toThrowError(/does not currently offer "gpt56"/);
   });
 
   it('applies the discovered context ceiling and zero-cost subscription overrides', async () => {

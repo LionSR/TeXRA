@@ -4,13 +4,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - model
 import {
-  computeModelListVersion,
   DEFAULT_MODELS,
   isDeprecatedModel,
   isRetiredModel,
-  MODEL_LIST_VERSION,
-  PREFERRED_DEFAULT_MODELS,
-  resolveDefaultModels,
 } from '@model/modelOptionsBasic';
 import {
   DEFAULT_AGENT_MODEL,
@@ -43,84 +39,14 @@ describe('default model list', () => {
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
   });
-});
 
-/**
- * #7191: DEFAULT_MODELS was a hand-maintained literal array and
- * MODEL_LIST_VERSION a hand-bumped integer -- a model retiring underneath the
- * literal list left it dangling with no automatic removal, and a maintainer
- * had to remember to bump the version whenever the resolved defaults changed.
- * `resolveDefaultModels` and `computeModelListVersion` make both derive from
- * the live registry instead. These tests exercise the mechanism directly
- * against real registry data (grok4, retired live in the registry today, same
- * as SetupModelDefaults.vitest.ts's #7081 regression) rather than only
- * asserting today's already-passing DEFAULT_MODELS snapshot.
- */
-describe('resolveDefaultModels', () => {
-  it('drops a preferred pick the live registry marks retired', () => {
-    expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
-    const resolved = resolveDefaultModels(['opus5T', 'grok4']);
-    expect(resolved).toEqual(['opus5T']);
-  });
-
-  it('drops a preferred pick the live registry marks deprecated', () => {
-    expect(MODEL_CONFIGS.gpt54?.deprecated).toBe(true);
-    const resolved = resolveDefaultModels(['opus5T', 'gpt54']);
-    expect(resolved).toEqual(['opus5T']);
-  });
-
-  it('keeps every preferred pick when none are retired or deprecated', () => {
-    const preferred = ['opus5T', 'gemini31p'];
-    expect(resolveDefaultModels(preferred)).toEqual(preferred);
-  });
-});
-
-describe('computeModelListVersion', () => {
-  it('changes when the resolved default set changes', () => {
-    const before = computeModelListVersion(['opus5T', 'gemini31p']);
-    const afterAdd = computeModelListVersion(['opus5T', 'gemini31p', 'gpt55']);
-    const afterRemove = computeModelListVersion(['opus5T']);
-
-    expect(afterAdd).not.toBe(before);
-    expect(afterRemove).not.toBe(before);
-  });
-
-  it('is order-independent (only set membership drives reconciliation)', () => {
-    expect(computeModelListVersion(['opus5T', 'gemini31p'])).toBe(
-      computeModelListVersion(['gemini31p', 'opus5T']),
-    );
-  });
-
-  it('does not change when a non-preferred catalogue model retires', () => {
-    const activeCatalogue = [
-      ['preferred', {}],
-      ['optional', {}],
-    ] as const;
-    const retiredCatalogue = [
-      ['preferred', {}],
-      ['optional', { retired: true }],
-    ] as const;
-
-    expect(computeModelListVersion(['preferred'], activeCatalogue)).toBe(
-      computeModelListVersion(['preferred'], retiredCatalogue),
-    );
-  });
-
-  it('distinguishes deprecated and retired preferred models', () => {
+  // The list is literal data: an llm-zoo bump that retires or deprecates an
+  // entry fails here and the entry is replaced by hand.
+  it('only contains live, non-deprecated models', () => {
     expect(
-      computeModelListVersion(
-        ['preferred'],
-        [['preferred', { deprecated: true }]],
+      DEFAULT_MODELS.filter(
+        (model) => isRetiredModel(model) || isDeprecatedModel(model),
       ),
-    ).not.toBe(
-      computeModelListVersion(
-        ['preferred'],
-        [['preferred', { retired: true }]],
-      ),
-    );
-  });
-
-  it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
-    expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
+    ).toEqual([]);
   });
 });

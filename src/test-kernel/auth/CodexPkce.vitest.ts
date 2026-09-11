@@ -14,7 +14,8 @@ import {
   generateOAuthState,
   generatePkcePair,
 } from '@auth/oauth/pkce';
-import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
@@ -47,6 +48,9 @@ describe('codex PKCE', () => {
 });
 
 describe('codex model eligibility', () => {
+  // The profile reads the Codex context-window setting once a model is eligible.
+  setupPlatform();
+
   // Serving status is registry data: llm-zoo's `codexSubscription` flag,
   // sourced from the Codex CLI's embedded model manifest cross-checked
   // against https://developers.openai.com/codex/models. The registry-derived
@@ -134,6 +138,11 @@ describe('codex model eligibility', () => {
       },
     ],
   )('$name', ({ overrides, eligible }) => {
-    expect(isCodexSubscriptionEligible(openAIModel(overrides))).toBe(eligible);
+    expect(
+      resolveCodexSubscriptionProfile({
+        model: openAIModel(overrides),
+        useOpenRouter: false,
+      }) !== null,
+    ).toBe(eligible);
   });
 });

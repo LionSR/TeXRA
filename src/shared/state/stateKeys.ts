@@ -65,7 +65,6 @@ export enum GlobalStateKey {
    * `DISABLED_TOOLS` value to recognize a fresh CLI profile.
    */
   CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION = 'texra.cli.bundledAgents.lastKnownVersion',
-  MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
 
   // Child-work policy. Global rather than per-workspace: these describe how the
@@ -77,7 +76,8 @@ export enum GlobalStateKey {
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
 
   // Model selection settings
-  ENABLED_MODELS = 'enabledModels',
+  /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
+  MODEL_SELECTION = 'texra.modelSelection',
   HELPER_MODEL = 'polishModel',
   REASONING_LEVELS = 'texra.reasoningLevels',
   PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',

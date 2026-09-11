@@ -37,6 +37,7 @@ import {
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -444,10 +445,12 @@ if (
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
-  await platform().globalState.update(
-    GlobalStateKey.ENABLED_MODELS,
-    HARNESS_VISIBLE_MODELS,
-  );
+  await platform().globalState.update(GlobalStateKey.MODEL_SELECTION, {
+    enabledExtras: HARNESS_VISIBLE_MODELS,
+    disabledDefaults: DEFAULT_MODELS.filter(
+      (model) => !HARNESS_VISIBLE_MODELS.includes(model),
+    ),
+  });
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
 

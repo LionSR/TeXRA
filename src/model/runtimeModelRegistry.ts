@@ -195,14 +195,6 @@ export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
   return MODEL_CONFIGS[model];
 }
 
-/** All static model entries owned by TeXRA and llm-zoo. */
-export function staticModelConfigEntries(): readonly (readonly [
-  string,
-  ModelConfig,
-])[] {
-  return Object.entries(MODEL_CONFIGS);
-}
-
 /**
  * Resolve a persisted model id to its static config after ensuring native
  * discovery has run in this host, so a Copilot route preference decided from

@@ -5,7 +5,8 @@ import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
 } from '@controllers/settingsView/SettingsModelSelectionController';
-import { buildBaseModelOption } from '@model/modelOptionsBasic';
+import { getEnabledModels } from '@model/computeModelOptions';
+import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -127,7 +128,10 @@ describe('SettingsModelSelectionController', () => {
 
   it('pins a disabled helper to the built-in default', async () => {
     const globalState = new FakeStateStore({
-      [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
+      [GlobalStateKey.MODEL_SELECTION]: {
+        enabledExtras: ['gpt55'],
+        disabledDefaults: [],
+      },
       [GlobalStateKey.HELPER_MODEL]: 'gpt55',
     });
     const controller = createController({ globalState });
@@ -136,36 +140,83 @@ describe('SettingsModelSelectionController', () => {
 
     await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
-    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'sonnet46T',
-    ]);
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      enabledExtras: [],
+      disabledDefaults: [],
+    });
     expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
       DEFAULT_HELPER_MODEL,
     );
   });
 
   it('refuses to disable the last remaining model', async () => {
+    const onlyGpt55 = {
+      enabledExtras: ['gpt55'],
+      disabledDefaults: DEFAULT_MODELS,
+    };
     const globalState = new FakeStateStore({
-      [GlobalStateKey.ENABLED_MODELS]: ['gpt55'],
+      [GlobalStateKey.MODEL_SELECTION]: onlyGpt55,
     });
     const controller = createController({ globalState });
 
     await expect(
       controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
     ).rejects.toThrow(/at least one model/i);
-    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual(['gpt55']);
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(onlyGpt55);
   });
 
-  it('falls back to default models when the persisted enabled list is empty', async () => {
-    const controller = createController({
-      globalState: new FakeStateStore({ [GlobalStateKey.ENABLED_MODELS]: [] }),
+  it('falls back to default models when every enabled model has retired', async () => {
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.MODEL_SELECTION]: {
+        enabledExtras: ['grok4'],
+        disabledDefaults: DEFAULT_MODELS,
+      },
     });
+    const controller = createController({ globalState });
 
     const { models } = await controller.buildSelectionData();
     const enabled = models.filter((model) => model.enabled);
 
-    // An empty persisted list must not blank out the helper-model dropdown.
+    // A retired-only selection must not blank out the helper-model dropdown.
     expect(enabled.length).toBeGreaterThan(0);
+
+    // A toggle edits the fallback the picker shows, not the hidden delta.
+    const [first] = DEFAULT_MODELS;
+    await controller.setModelEnabled({ modelName: first, enabled: false });
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      enabledExtras: [],
+      disabledDefaults: [first],
+    });
+
+    // Turned back on, it stays on even after the curated defaults drop it.
+    await controller.setModelEnabled({ modelName: first, enabled: true });
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      enabledExtras: [first],
+      disabledDefaults: [],
+    });
+    const defaults = DEFAULT_MODELS as string[];
+    defaults.splice(defaults.indexOf(first), 1);
+    try {
+      expect(getEnabledModels(globalState)).toContain(first);
+    } finally {
+      defaults.unshift(first);
+    }
+  });
+
+  it('shows the defaults when the stored selection is malformed', async () => {
+    const enabledNames = async (controller: SettingsModelSelectionController) =>
+      (await controller.buildSelectionData()).models
+        .filter((model) => model.enabled)
+        .map((model) => model.name);
+    const malformed = createController({
+      globalState: new FakeStateStore({
+        [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
+      }),
+    });
+
+    expect(await enabledNames(malformed)).toEqual(
+      await enabledNames(createController()),
+    );
   });
 
   it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {

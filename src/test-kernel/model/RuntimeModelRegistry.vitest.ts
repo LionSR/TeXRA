@@ -7,6 +7,7 @@ import {
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   copilotRouteForModel,
   discoveredCopilotRoutes,
@@ -290,7 +291,14 @@ describe('Copilot route in model pickers', () => {
   it('never appends route rows to the visible model list', async () => {
     const port = languageModelPort([GEMINI_PRO, GPT_56]);
     await installPlatform(
-      { globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] } },
+      {
+        globalState: {
+          [GlobalStateKey.MODEL_SELECTION]: {
+            enabledExtras: ['gpt55'],
+            disabledDefaults: DEFAULT_MODELS,
+          },
+        },
+      },
       { languageModel: port },
     );
 
@@ -307,7 +315,12 @@ describe('Copilot route in model pickers', () => {
       {
         globalState: {
           [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
-          [GlobalStateKey.ENABLED_MODELS]: ['gemini31p'],
+          [GlobalStateKey.MODEL_SELECTION]: {
+            enabledExtras: [],
+            disabledDefaults: DEFAULT_MODELS.filter(
+              (model) => model !== 'gemini31p',
+            ),
+          },
         },
       },
       { languageModel: port },

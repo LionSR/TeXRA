@@ -156,9 +156,9 @@ export class ModelSelectionList extends LitElement {
 
   private renderAvailabilityIcon(
     model: ModelSelectionItem,
-    isLastEnabledActiveModel: boolean,
+    isLastEnabledModel: boolean,
   ): TemplateResult | typeof nothing {
-    if (isLastEnabledActiveModel) {
+    if (isLastEnabledModel) {
       const title = 'At least one active model must stay enabled';
       return waIcon('triangle-exclamation', {
         className: 'model-row-icon model-row-icon--warning',
@@ -184,22 +184,16 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
-    // Retired rows remain removable and do not satisfy the usable-model floor.
-    const isLastEnabledActiveModel =
+    // The backend never reports a retired model as enabled.
+    const isLastEnabledModel =
       model.enabled &&
-      model.availability !== 'retired' &&
-      this.models.filter(
-        (candidate) =>
-          candidate.enabled && candidate.availability !== 'retired',
-      ).length === 1;
+      this.models.filter((candidate) => candidate.enabled).length === 1;
 
     return html`
       <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
-          ?disabled=${
-            (model.disabled && !model.enabled) || isLastEnabledActiveModel
-          }
+          ?disabled=${(model.disabled && !model.enabled) || isLastEnabledModel}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
@@ -217,7 +211,7 @@ export class ModelSelectionList extends LitElement {
                 >`
               : nothing
           }
-          ${this.renderAvailabilityIcon(model, isLastEnabledActiveModel)}
+          ${this.renderAvailabilityIcon(model, isLastEnabledModel)}
           ${
             isExpensiveModel(model.provider, model.name)
               ? waIcon('triangle-exclamation', {

@@ -251,8 +251,7 @@ export const DEFAULT_HELPER_MODEL = 'deepseek41';
  * truth shared by the agent config schema (`@agent/core/definition/AgentConfig`),
  * the main-view persisted state, and the progress-view proposal reconstruction —
  * so a change here propagates to all three instead of drifting per call site.
- * Keep this aligned with the first default-list entry — the picker leads
- * with that model, and it must not be a Gemini id.
+ * `DEFAULT_MODELS` leads with this model, so it must not be a Gemini id.
  */
 export const DEFAULT_AGENT_MODEL = 'gpt56';
 

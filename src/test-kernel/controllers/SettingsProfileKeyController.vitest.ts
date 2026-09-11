@@ -3,10 +3,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-
-import { createFakeUIHosts } from '../support/FakeHosts';
-import { FakeSecrets } from '../support/FakePlatform';
-import { installPlatform } from '../support/setupPlatform';
+import { createFakeUIHosts } from '@test/support/FakeHosts';
+import { FakeSecrets } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 async function createController(options?: {
   inputResponses?: readonly (string | undefined)[];

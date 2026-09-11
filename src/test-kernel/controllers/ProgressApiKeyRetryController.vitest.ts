@@ -420,7 +420,7 @@ describe('ProgressApiKeyRetryController', () => {
           () => import('@test/support/FakePlatform'),
         );
         const store = new FakeStateStore({
-          'texra.copilotRouteModels': ['sonnet46'],
+          'texra.copilotRouteModels': ['sonnet5'],
         });
         const persistedWrites: string[] = [];
         const originalUpdate = store.update.bind(store);
@@ -433,19 +433,19 @@ describe('ProgressApiKeyRetryController', () => {
         );
         const harness = createHarness();
 
-        expect(prefersCopilotRoute('sonnet46')).toBe(true);
+        expect(prefersCopilotRoute('sonnet5')).toBe(true);
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
             stream: 'stream-a' as RunId,
             requestId: 'retry-a',
-            model: 'sonnet46',
+            model: 'sonnet5',
             exhaustionReason: 'copilot-subscription',
           },
           (copilotRouteOverride) => {
             expect(copilotRouteOverride).toBe('direct');
             // A concurrent launch still sees the user's standing preference; only
             // the replacement request receives the direct-route override.
-            expect(prefersCopilotRoute('sonnet46')).toBe(true);
+            expect(prefersCopilotRoute('sonnet5')).toBe(true);
             return Effect.succeed(true);
           },
         );
@@ -454,7 +454,7 @@ describe('ProgressApiKeyRetryController', () => {
         // The suppression is launch-scoped and process-local: the persisted
         // preference is never written, so a crash mid-launch cannot drop it.
         expect(persistedWrites).toEqual([]);
-        expect(prefersCopilotRoute('sonnet46')).toBe(true);
+        expect(prefersCopilotRoute('sonnet5')).toBe(true);
       }),
   );
 

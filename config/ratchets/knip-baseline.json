@@ -1202,24 +1202,6 @@
       "name": "PROVIDER_KEY_REDACTION_RULES"
     },
     {
-      "file": "src/model/modelOptionsBasic.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "PREFERRED_DEFAULT_MODELS"
-    },
-    {
-      "file": "src/model/modelOptionsBasic.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "computeModelListVersion"
-    },
-    {
-      "file": "src/model/modelOptionsBasic.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveDefaultModels"
-    },
-    {
       "file": "src/platform/defaults/workspaceStorage.ts",
       "category": "production-dead",
       "kind": "exports",
