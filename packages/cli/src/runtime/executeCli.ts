@@ -576,13 +576,13 @@ export function executeCliRequest(
       } else if (!(err instanceof AgentError)) {
         primaryRunFailure = { error: err };
       } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
-        // A failure before lifecycle startup has no `result` event. Preserve the
-        // ordinary toast path when it ran, and provide the missing direct fallback
+        // A failure before registration (agent or model resolution) has no
+        // `result` event; one after registration is presented by the result
+        // toast, which sets `failurePresented`. Provide the direct fallback
         // while the presentation host is still attached. A launch failure that
-        // already presented itself through a targeted notification is marked by
-        // the delivery-confirmed throw site (model-not-recognized, and now also
-        // agent-not-found because `showAgentConfigBanner` renders a visible CLI
-        // error) -- this CLI-local `failurePresented` flag only tracks
+        // already presented itself through a targeted notification
+        // (model-not-recognized, agent-not-found) is marked claimed at its
+        // throw site -- this CLI-local `failurePresented` flag only tracks
         // `requestShowError`, so it would otherwise re-surface that failure a
         // second time here.
         terminalResult.reportUnhandled(() =>

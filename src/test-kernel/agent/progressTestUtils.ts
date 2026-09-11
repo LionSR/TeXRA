@@ -214,12 +214,7 @@ export function reflectionFlowShared(
   };
 }
 
-interface RecordingHostOptions {
-  /** What the fake host's `emit` reports as its presentation delivery. */
-  readonly emitDelivery?: boolean;
-}
-
-export function createRecordingHost(options: RecordingHostOptions = {}): {
+export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
   decisions: RecordingHostDecisions;
@@ -311,7 +306,6 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
   const interactions: HostInteractions = {
     emit: (event, payload) => {
       events.push({ event, payload });
-      return options.emitDelivery ?? false;
     },
     setApprovalBypassState: (update) =>
       events.push({ event: 'setApprovalBypassState', payload: update }),

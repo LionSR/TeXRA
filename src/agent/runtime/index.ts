@@ -88,12 +88,7 @@ export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
 
 // runtimePresentationEvents
-export {
-  dispatchPresentationEvent,
-  toPresentationDelivery,
-} from './runtimePresentationEvents';
 export type {
-  PresentationDelivery,
   PresentationEventHandlers,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,

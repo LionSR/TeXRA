@@ -1,6 +1,5 @@
 // Local imports - runtime
 import {
-  dispatchPresentationEvent,
   type HostApprovalBypassStateUpdate,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
@@ -65,8 +64,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   /**
    * The one runtime-presentation handler map, both modes. Every event returns
-   * `true` when it rendered a user-visible record so the session can report
-   * delivery. `showAgentConfigBanner` is rendered as a visible, actionable
+   * `true` when it rendered a user-visible record. `showAgentConfigBanner` is
+   * rendered as a visible, actionable
    * "agent not found" error so CLI launch failures surface once through the
    * targeted path. Reproduced per-key rather than as a catch-all, so a future
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
@@ -140,7 +139,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       payload: RuntimePresentationEventPayloads[K],
     ): boolean {
       if (closed) return false;
-      return dispatchPresentationEvent(handlers, event, payload) === true;
+      return handlers[event](payload) === true;
     },
     async close() {
       closed = true;

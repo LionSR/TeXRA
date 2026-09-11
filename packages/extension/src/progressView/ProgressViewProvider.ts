@@ -240,9 +240,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     this.disposables.push({ dispose: () => hostRequests.dispose() });
 
-    // Attached for the window's life: the runtime parks a request until a
-    // host is attached, so the presentation must be there before the first
-    // run of this window asks anything.
+    // Attached for the window's life, before the first run of this window
+    // asks anything. Requests this host does not present (bash, plan,
+    // proposal, retry, question) stay parked in the runtime until the
+    // view's approval row decides them.
     const detachHostInteractions = session.interactions.use({
       ...createAgentPresentationHost(this),
       readDiagnostics: getLinterMessages,

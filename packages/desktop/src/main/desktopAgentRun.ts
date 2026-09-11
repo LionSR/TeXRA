@@ -13,9 +13,6 @@ import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  dispatchPresentationEvent,
-  toPresentationDelivery,
-  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -87,24 +84,25 @@ export function createDesktopAgentRun(
   let disposed = false;
 
   /**
-   * Settle a host dialog promise and report whether it was presented. The
-   * desktop dialog await rejects when its window is torn down beneath it;
-   * voiding the promise would leave that rejection unhandled, and reporting
-   * nothing would read as not-delivered even when the dialog did render.
+   * Settle a host dialog promise, logging a rejection. The desktop dialog
+   * await rejects when its window is torn down beneath it; voiding the
+   * promise would leave that rejection unhandled.
    */
   async function settleHostDialog(
     dialog: Promise<unknown> | void,
     logMessage: string,
-  ): Promise<boolean> {
+  ): Promise<void> {
     const presented = await effectRuntime().runPromiseExit(
       Effect.tryPromise({
         try: async () => dialog,
         catch: (error) => error,
       }),
     );
-    if (Exit.isSuccess(presented)) return true;
-    logger.warn(logMessage, { data: toLogData(Cause.squash(presented.cause)) });
-    return false;
+    if (Exit.isFailure(presented)) {
+      logger.warn(logMessage, {
+        data: toLogData(Cause.squash(presented.cause)),
+      });
+    }
   }
 
   const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
@@ -124,10 +122,8 @@ export function createDesktopAgentRun(
           host.showInstructionDialog(instruction.message, instruction.actions),
           'Failed to present the instruction dialog',
         ),
-      showAgentConfigBanner: ({ agentName, category }) => {
-        options.showAgentConfigBanner({ agentName, category });
-        return true;
-      },
+      showAgentConfigBanner: ({ agentName, category }) =>
+        options.showAgentConfigBanner({ agentName, category }),
       requestOpenFile: (data: RequestOpenFilePayload) =>
         // Desktop has no editor integration to preview through, so the
         // resolved path goes to the preview-with-fallback host directly.
@@ -140,11 +136,9 @@ export function createDesktopAgentRun(
   function handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): PresentationDelivery {
-    if (disposed) return false;
-    return toPresentationDelivery(
-      dispatchPresentationEvent(presentationEventHandlers, event, payload),
-    );
+  ): unknown {
+    if (disposed) return undefined;
+    return presentationEventHandlers[event](payload);
   }
 
   // The tool-edit preview: staged copies of the original and proposed
@@ -165,9 +159,10 @@ export function createDesktopAgentRun(
       Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
     ),
   );
-  // Attached for the window's life: the runtime parks a request until a
-  // host is attached, so the presentation must be there before the first
-  // run of this window asks anything.
+  // Attached for the window's life, before the first run of this window
+  // asks anything. Requests this host does not present (bash, plan,
+  // proposal, retry, question) stay parked in the runtime until a surface's
+  // approval row decides them.
   const detachHostInteractions = session.interactions.use({
     emit: handlePresentationEvent,
     requestToolEditApproval: (request) =>

@@ -8,50 +8,11 @@ import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 
 const log = createLog('TextEnhancement');
 
-// ── Types ────────────────────────────────────────────────────
-
-export interface FileContext {
-  agent?: string;
-  inputFiles?: string[];
-  contextFiles?: string[];
-  mediaFiles?: string[];
-  outputFiles?: string[];
-}
-
-// ── File context ─────────────────────────────────────────────
-
-function formatFileContext(ctx: FileContext): string {
-  const lines: string[] = ['Current context:'];
-  if (ctx.agent) lines.push(`Agent: ${ctx.agent}`);
-
-  const fileEntries: string[] = [];
-
-  const arrays: [string, string[] | undefined][] = [
-    ['Input Files', ctx.inputFiles],
-    ['Context Files', ctx.contextFiles],
-    ['Media Files', ctx.mediaFiles],
-    ['Output Files', ctx.outputFiles],
-  ];
-  for (const [label, files] of arrays) {
-    if (files?.length) fileEntries.push(`${label}: ${files.join(', ')}`);
-  }
-
-  if (fileEntries.length > 0) {
-    lines.push('', 'Files in the task:', ...fileEntries);
-  }
-
-  return lines.join('\n') + '\n';
-}
-
-// ── Polishing ────────────────────────────────────────────────
-
 export async function polishTextWithAI(
   text: string,
-  fileContext?: FileContext,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
-    const fileContextString = fileContext ? formatFileContext(fileContext) : '';
-    const prompt = await renderPolishPrompt(fileContextString, text);
+    const prompt = await renderPolishPrompt(text);
 
     const helperResult = await createHelperModelKit();
     if (!helperResult.kit) {
