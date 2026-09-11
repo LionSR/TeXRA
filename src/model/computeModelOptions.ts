@@ -1,4 +1,5 @@
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { z } from 'zod';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -394,16 +395,32 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
  * to the curated defaults reaches every user while a default they turned off
  * stays off and a model they turned on stays on.
  */
-interface ModelSelection {
-  readonly enabledExtras: readonly string[];
-  readonly disabledDefaults: readonly string[];
-}
+const ModelSelectionSchema = z.object({
+  enabledExtras: z.array(z.string()).readonly(),
+  disabledDefaults: z.array(z.string()).readonly(),
+});
+type ModelSelection = z.infer<typeof ModelSelectionSchema>;
 
+const EMPTY_MODEL_SELECTION: ModelSelection = {
+  enabledExtras: [],
+  disabledDefaults: [],
+};
+
+/**
+ * An unreadable stored selection is reported and read as the empty delta —
+ * the defaults — without being rewritten: the next picker toggle re-encodes a
+ * valid delta from the list shown.
+ */
 function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
-  return state.get<ModelSelection>(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: [],
-    disabledDefaults: [],
-  });
+  const stored = state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
+  if (stored === undefined) return EMPTY_MODEL_SELECTION;
+  const parsed = ModelSelectionSchema.safeParse(stored);
+  if (parsed.success) return parsed.data;
+  warnModelAvailability(
+    `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
+    z.prettifyError(parsed.error),
+  );
+  return EMPTY_MODEL_SELECTION;
 }
 
 /** Retired models drop out here, so no startup pass sweeps persisted state. */

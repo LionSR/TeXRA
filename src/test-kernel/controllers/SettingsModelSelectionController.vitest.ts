@@ -188,6 +188,22 @@ describe('SettingsModelSelectionController', () => {
     });
   });
 
+  it('shows the defaults when the stored selection is malformed', async () => {
+    const enabledNames = async (controller: SettingsModelSelectionController) =>
+      (await controller.buildSelectionData()).models
+        .filter((model) => model.enabled)
+        .map((model) => model.name);
+    const malformed = createController({
+      globalState: new FakeStateStore({
+        [GlobalStateKey.MODEL_SELECTION]: { enabledExtras: null },
+      }),
+    });
+
+    expect(await enabledNames(malformed)).toEqual(
+      await enabledNames(createController()),
+    );
+  });
+
   it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {
     const controller = createController({
       getPreferredCopilotRouteModels: () => ['sonnet46'],
