@@ -3,11 +3,11 @@
  * as Markdown or LaTeX documents.
  *
  * Architecture (pandoc-style):
- *   raw messages → normalizeMessages() → ExportNode[] → FormatSpec → string
+ *   ExportNode[] → FormatSpec → string
  *
  * Each output format is a FormatSpec: a header template, a footer string,
- * and a node-renderer table. Adding a new block type means adding one case
- * to assistantBlockToNode() and one entry per renderer table.
+ * and a node-renderer table. Adding a new node kind means adding one entry
+ * per renderer table.
  *
  * This module is host-neutral — all platform wiring lives in the caller. The
  * LaTeX document preamble is a host-supplied string (the `.tex` template lives

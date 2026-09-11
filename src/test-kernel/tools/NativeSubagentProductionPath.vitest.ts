@@ -427,19 +427,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       readCompletedRunConversation(runId, session),
     );
     expect(archivedChild.conversation).toEqual([
-      expect.objectContaining({ role: 'user' }),
+      expect.objectContaining({ kind: 'user-message' }),
+      { kind: 'assistant-text', text: 'Result A.' },
       {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'Result A.' }],
+        kind: 'user-message',
+        parts: [
+          { type: 'text', text: expect.stringContaining('second assertion') },
+        ],
       },
-      expect.objectContaining({
-        role: 'user',
-        content: expect.stringContaining('second assertion'),
-      }),
-      {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'Result B.' }],
-      },
+      { kind: 'assistant-text', text: 'Result B.' },
     ]);
 
     const archivedParent = await Effect.runPromise(
@@ -450,14 +446,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(parentText.match(/Result B\./g)).toHaveLength(1);
     expect(archivedParent.conversation).toEqual(
       expect.arrayContaining([
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Parent received result A.' }],
-        },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Parent received result B.' }],
-        },
+        { kind: 'assistant-text', text: 'Parent received result A.' },
+        { kind: 'assistant-text', text: 'Parent received result B.' },
       ]),
     );
     expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
@@ -514,15 +504,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     // Turn 2 added the user instruction but no new assistant row.
     expect(archivedChild.conversation).toEqual([
-      expect.objectContaining({ role: 'user' }),
+      expect.objectContaining({ kind: 'user-message' }),
+      { kind: 'assistant-text', text: 'Result A.' },
       {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'Result A.' }],
+        kind: 'user-message',
+        parts: [
+          { type: 'text', text: expect.stringContaining('second assertion') },
+        ],
       },
-      expect.objectContaining({
-        role: 'user',
-        content: expect.stringContaining('second assertion'),
-      }),
     ]);
 
     const archivedParent = await Effect.runPromise(

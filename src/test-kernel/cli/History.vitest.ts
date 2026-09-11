@@ -156,21 +156,14 @@ async function useTempWorkspace(prefix = 'texra-history-'): Promise<string> {
   return workspace;
 }
 
-// Assistant turn carrying tool_use blocks. `args` is passed through verbatim
-// so callers can cover both JSON-string and object argument encodings.
+// Tool-call nodes. `args` is passed through verbatim so callers can cover
+// both JSON-string and object argument encodings.
 function mockToolCallConversation(
   ...calls: ReadonlyArray<{ name: string; args: unknown }>
 ): void {
-  mocks.readConversation.mockResolvedValue([
-    {
-      role: 'assistant',
-      content: calls.map(({ name, args }) => ({
-        type: 'tool_use',
-        name,
-        input: args,
-      })),
-    },
-  ]);
+  mocks.readConversation.mockResolvedValue(
+    calls.map(({ name, args }) => ({ kind: 'tool-call', name, input: args })),
+  );
 }
 
 // No persisted config, meta, conversation, or flow state: the run id
@@ -460,10 +453,7 @@ describe('CLI history runtime', () => {
   it('treats full-only conversation data as a found run', async () => {
     mockNothingPersisted();
     mocks.readConversation.mockResolvedValue([
-      {
-        role: 'assistant',
-        content: [{ type: 'tool_use', name: 'bash', input: {} }],
-      },
+      { kind: 'tool-call', name: 'bash', input: {} },
     ]);
 
     const details = await readCliHistoryDetails('deadbe' as RunId, {
@@ -591,17 +581,14 @@ describe('CLI history runtime', () => {
 
   it('shows a bounded final assistant preview when no report is stored', async () => {
     mocks.readConversation.mockResolvedValue([
-      { role: 'user', content: 'Review the proof.' },
-      { role: 'assistant', content: '' },
       {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'problem.tex contents' }],
+        kind: 'user-message',
+        parts: [{ type: 'text', text: 'Review the proof.' }],
       },
-      { role: 'assistant', content: 'Final proof analysis.' },
-      {
-        role: 'assistant',
-        content: [{ type: 'tool_use', name: 'read_file', input: {} }],
-      },
+      { kind: 'assistant-text', text: '' },
+      { kind: 'tool-result', text: 'problem.tex contents' },
+      { kind: 'assistant-text', text: 'Final proof analysis.' },
+      { kind: 'tool-call', name: 'read_file', input: {} },
     ]);
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId);
@@ -630,20 +617,14 @@ describe('CLI history runtime', () => {
     expect(text).not.toContain('[tool_use: read_file]');
   });
 
-  it('omits provider thinking blocks from history previews', async () => {
+  it('omits provider thinking from history previews', async () => {
     mocks.readConversation.mockResolvedValue([
-      { role: 'user', content: 'Polish the lemma.' },
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'thinking',
-            thinking: 'hidden chain of thought',
-            signature: 'secret-signature',
-          },
-          { type: 'text', text: 'Final polished lemma.' },
-        ],
+        kind: 'user-message',
+        parts: [{ type: 'text', text: 'Polish the lemma.' }],
       },
+      { kind: 'thinking', text: 'hidden chain of thought' },
+      { kind: 'assistant-text', text: 'Final polished lemma.' },
     ]);
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId, {
@@ -653,7 +634,7 @@ describe('CLI history runtime', () => {
 
     expect(details?.conversationPreview?.messages).toEqual([
       {
-        index: 2,
+        index: 3,
         role: 'assistant',
         content: 'Final polished lemma.',
         truncated: false,
@@ -669,28 +650,24 @@ describe('CLI history runtime', () => {
       {
         index: 2,
         role: 'assistant',
+        content: '[provider reasoning hidden]',
+        truncated: false,
+      },
+      {
+        index: 3,
+        role: 'assistant',
         content: 'Final polished lemma.',
         truncated: false,
       },
     ]);
-    expect(text).toContain('[assistant #2]\nFinal polished lemma.');
+    expect(text).toContain('[assistant #3]\nFinal polished lemma.');
     expect(text).not.toContain('hidden chain of thought');
-    expect(text).not.toContain('secret-signature');
   });
 
   it('keeps a placeholder for thinking-only assistant turns', async () => {
     mocks.readConversation.mockResolvedValue([
-      { role: 'assistant', content: 'Earlier visible answer.' },
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'redacted_thinking',
-            thinking: 'hidden newer reasoning',
-            signature: 'new-secret-signature',
-          },
-        ],
-      },
+      { kind: 'assistant-text', text: 'Earlier visible answer.' },
+      { kind: 'thinking', text: 'hidden newer reasoning' },
     ]);
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId, {
@@ -722,27 +699,20 @@ describe('CLI history runtime', () => {
     ]);
     expect(text).toContain('[assistant #2]\n[provider reasoning hidden]');
     expect(text).not.toContain('hidden newer reasoning');
-    expect(text).not.toContain('new-secret-signature');
   });
 
   it('can show the full stored conversation for post-run inspection', async () => {
     const longToolOutput = `${'tool-output-line\n'.repeat(320)}done`;
     mocks.readConversation.mockResolvedValue([
-      { role: 'user', content: 'Review the proof.' },
-      { role: 'assistant', content: '' },
       {
-        role: 'assistant',
-        content: [{ type: 'tool_use', name: 'read_file', input: {} }],
+        kind: 'user-message',
+        parts: [{ type: 'text', text: 'Review the proof.' }],
       },
-      {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'problem.tex contents' }],
-      },
-      {
-        role: 'user',
-        content: [{ type: 'tool_result', content: longToolOutput }],
-      },
-      { role: 'assistant', content: 'Final proof analysis.' },
+      { kind: 'assistant-text', text: '' },
+      { kind: 'tool-call', name: 'read_file', input: {} },
+      { kind: 'tool-result', text: 'problem.tex contents' },
+      { kind: 'tool-result', text: longToolOutput },
+      { kind: 'assistant-text', text: 'Final proof analysis.' },
     ]);
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId, {
@@ -820,7 +790,7 @@ describe('CLI history runtime', () => {
   it('uses the stored report instead of duplicating conversation preview text', async () => {
     mocks.readReport.mockResolvedValue('Structured report.');
     mocks.readConversation.mockResolvedValue([
-      { role: 'assistant', content: 'Final proof analysis.' },
+      { kind: 'assistant-text', text: 'Final proof analysis.' },
     ]);
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId);
@@ -914,8 +884,11 @@ describe('CLI history runtime', () => {
   describe('history export (--export / --assets-dir)', () => {
     it('builds export input from the stored config, conversation, and meta', async () => {
       mocks.readConversation.mockResolvedValue([
-        { role: 'user', content: 'Polish the lemma.' },
-        { role: 'assistant', content: 'Done.' },
+        {
+          kind: 'user-message',
+          parts: [{ type: 'text', text: 'Polish the lemma.' }],
+        },
+        { kind: 'assistant-text', text: 'Done.' },
       ]);
       mocks.readMeta.mockResolvedValue({
         timestamp: '2026-05-18T08:00:00.000Z',
@@ -938,9 +911,12 @@ describe('CLI history runtime', () => {
             contextFiles: [],
             outputFiles: ['chapters/intro.tex'],
           },
-          messages: [
-            { role: 'user', content: 'Polish the lemma.' },
-            { role: 'assistant', content: 'Done.' },
+          nodes: [
+            {
+              kind: 'user-message',
+              parts: [{ type: 'text', text: 'Polish the lemma.' }],
+            },
+            { kind: 'assistant-text', text: 'Done.' },
           ],
         },
       });
@@ -967,7 +943,7 @@ describe('CLI history runtime', () => {
     it('reports "incomplete" (not "not_found") when conversation exists but config does not', async () => {
       mocks.readConfig.mockResolvedValue(null);
       mocks.readConversation.mockResolvedValue([
-        { role: 'user', content: 'hi' },
+        { kind: 'assistant-text', text: 'hi' },
       ]);
 
       await expect(

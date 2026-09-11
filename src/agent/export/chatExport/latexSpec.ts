@@ -86,8 +86,10 @@ const TEX_NODES: NodeRenderers = {
   'assistant-text': ({ text }) =>
     `\\begin{assistantmessage}\n${escapeLatex(text)}\n\\end{assistantmessage}\n`,
 
+  thinking: () => '',
+
   'tool-call': ({ name, input }) =>
-    `\\begin{toolcallbox}{${escapeLatex(name)}}\n${latexListing(input)}\n\\end{toolcallbox}\n`,
+    `\\begin{toolcallbox}{${escapeLatex(name)}}\n${latexListing(JSON.stringify(input, null, 2))}\n\\end{toolcallbox}\n`,
 
   'tool-result': ({ text }) =>
     `\\begin{toolresultbox}\n${latexListing(text)}\n\\end{toolresultbox}\n`,

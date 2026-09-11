@@ -18,4 +18,4 @@
 
 export { loadChatExportInput } from './loadChatExportInput';
 export { formatChatAsMarkdown } from './chatExportFormatter';
-export type { ChatExportInput } from './schemas';
+export type { ChatExportInput, ExportNode } from './schemas';

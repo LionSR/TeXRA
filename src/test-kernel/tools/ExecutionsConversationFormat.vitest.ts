@@ -2,158 +2,76 @@ import { describe, expect, it } from 'vitest';
 
 import { formatConversation } from '@tools/executions/conversationFormat';
 
-/** Formats a single assistant message whose content is the given blocks. */
-function formatAssistantBlocks(blocks: unknown[]): string {
-  return formatConversation([{ role: 'assistant', content: blocks }]);
-}
-
 describe('formatConversation', () => {
   it('preserves ASCII truncation for conversation output', () => {
     const output = formatConversation([
-      { role: 'assistant', content: 'x'.repeat(501) },
+      { kind: 'assistant-text', text: 'x'.repeat(501) },
     ]);
 
     expect(output).toContain(`${'x'.repeat(497)}...`);
     expect(output).not.toContain('…');
   });
 
-  it('formats typed content blocks (text, tool_use, tool_result)', () => {
-    const output = formatAssistantBlocks([
-      { type: 'text', text: 'hello' },
-      { type: 'tool_use', name: 'read', input: { path: 'a.tex' } },
-      { type: 'tool_result', content: 'done' },
+  it('formats text, tool calls, and tool results', () => {
+    const output = formatConversation([
+      { kind: 'assistant-text', text: 'hello' },
+      { kind: 'tool-call', name: 'read', input: { path: 'a.tex' } },
+      { kind: 'tool-result', text: 'done' },
     ]);
 
     expect(output).toContain('hello');
     expect(output).toContain('[tool_use: read({"path":"a.tex"})]');
-    expect(output).toContain('[tool_result: done]');
+    expect(output).toContain(
+      '<message index="3" role="user">\n[tool_result: done]',
+    );
   });
 
-  it('formats media blocks as readable attachment markers', () => {
+  it('formats attachment parts as readable markers', () => {
     const output = formatConversation([
       {
-        role: 'user',
-        content: [
-          { type: 'image' },
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf' },
-          },
+        kind: 'user-message',
+        parts: [
+          { type: 'attachment', attachmentType: 'image' },
+          { type: 'attachment', attachmentType: 'document' },
         ],
       },
     ]);
 
     expect(output).toContain('[image attachment]');
     expect(output).toContain('[document attachment]');
-    expect(output).not.toContain('base64');
   });
 
-  it('renders known blocks with missing fields and JSON-stringifies unknown shapes', () => {
-    const output = formatAssistantBlocks([
-      { type: 'text' }, // known shape, missing text → empty, not JSON fallback
-      { type: 'mystery', foo: 1 }, // unknown shape → JSON fallback
-      'raw string block', // bare string passthrough
-    ]);
-
-    expect(output).toContain('raw string block');
-    expect(output).toContain('{"type":"mystery","foo":1}');
-    // A text block with no text contributes an empty line, never its JSON form.
-    expect(output).not.toContain('{"type":"text"}');
-  });
-
-  it('formats server_tool_use blocks as a tool_use marker (not a JSON dump)', () => {
-    const output = formatAssistantBlocks([
+  it('formats a web search as a tool_use marker and a compact result list', () => {
+    const output = formatConversation([
+      { kind: 'web-search', query: 'texra latex' },
       {
-        type: 'server_tool_use',
-        id: 'srvtoolu_1',
-        name: 'web_search',
-        input: { query: 'texra latex' },
-      },
-    ]);
-
-    expect(output).toContain('[tool_use: web_search({"query":"texra latex"})]');
-    expect(output).not.toContain('"type":"server_tool_use"');
-  });
-
-  it('formats web_search_tool_result blocks as a compact result list', () => {
-    const output = formatAssistantBlocks([
-      {
-        type: 'web_search_tool_result',
-        tool_use_id: 'srvtoolu_1',
-        content: [
-          {
-            type: 'web_search_result',
-            title: 'TeXRA',
-            url: 'https://texra.ai',
-            encrypted_content: 'abc',
-          },
-          {
-            type: 'web_search_result',
-            title: 'TeXRA docs',
-            url: 'https://texra.ai/docs',
-            encrypted_content: 'def',
-          },
+        kind: 'web-search-results',
+        results: [
+          { title: 'TeXRA', url: 'https://texra.ai' },
+          { title: 'TeXRA docs', url: 'https://texra.ai/docs' },
         ],
       },
     ]);
 
+    expect(output).toContain('[tool_use: web_search({"query":"texra latex"})]');
     expect(output).toContain(
       '[tool_result: TeXRA (https://texra.ai), TeXRA docs (https://texra.ai/docs)]',
     );
-    expect(output).not.toContain('encrypted_content');
-    expect(output).not.toContain('"type":"web_search_tool_result"');
   });
 
-  it('formats web_fetch_tool_result blocks as a title/url marker', () => {
-    const output = formatAssistantBlocks([
+  it('summarizes a web fetch as a title/url marker without the page text', () => {
+    const output = formatConversation([
       {
-        type: 'web_fetch_tool_result',
-        tool_use_id: 'srvtoolu_2',
-        content: {
-          type: 'web_fetch_result',
-          url: 'https://texra.ai',
-          content: { type: 'document', title: 'TeXRA home' },
-        },
+        kind: 'web-fetch',
+        url: 'https://texra.ai',
+        title: 'TeXRA home',
+        content: 'fetched page text',
       },
+      { kind: 'web-fetch', url: 'https://texra.ai/raw' },
     ]);
 
     expect(output).toContain('[tool_result: TeXRA home (https://texra.ai)]');
-    expect(output).not.toContain('"type":"web_fetch_tool_result"');
-  });
-
-  it('summarizes a content-only web-fetch result without dumping page text', () => {
-    const output = formatAssistantBlocks([
-      {
-        type: 'web_fetch_tool_result',
-        content: {
-          type: 'web_fetch_result',
-          content: {
-            type: 'document',
-            source: { type: 'text', data: 'fetched page text' },
-          },
-        },
-      },
-    ]);
-
-    expect(output).toContain('[tool_result: web_fetch_result]');
+    expect(output).toContain('[tool_result: https://texra.ai/raw]');
     expect(output).not.toContain('fetched page text');
-  });
-
-  it('does not throw on an undefined content block', () => {
-    expect(() =>
-      formatConversation([{ role: 'user', content: [undefined] }]),
-    ).not.toThrow();
-  });
-
-  it('defaults a missing, empty, or non-string role to "unknown"', () => {
-    const output = formatConversation([
-      { content: 'hi' }, // missing role
-      { role: '' }, // empty role
-      { role: 7 }, // non-string role
-    ]);
-
-    expect(output.match(/role="unknown"/g)).toHaveLength(3);
-    expect(output).not.toContain('role=""');
-    expect(output).not.toContain('role="7"');
   });
 });

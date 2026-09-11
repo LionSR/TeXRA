@@ -365,19 +365,14 @@ describe('completedRunArchive facade', () => {
           description: result.meta?.description,
           agent: result.config?.agent,
           instruction: result.exportInput?.config.instruction,
-          messages: result.exportInput?.messages,
+          nodes: result.exportInput?.nodes,
         })),
       ).toEqual(
         papers.map(({ label }) => ({
           description: label,
           agent: label,
           instruction: label,
-          messages: [
-            {
-              role: 'assistant',
-              content: [{ type: 'text', text: `Proof for ${label}.` }],
-            },
-          ],
+          nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
         })),
       );
     } finally {
@@ -402,80 +397,37 @@ describe('completedRunArchive facade', () => {
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
     expect(conversationResult.conversation).toEqual([
       {
-        role: 'user',
-        content: [{ type: 'text', text: 'Fix the lemma.' }, { type: 'image' }],
-      },
-      {
-        role: 'assistant',
-        content: [
-          { type: 'thinking', thinking: 'Consider the boundary terms.' },
+        kind: 'user-message',
+        parts: [
+          { type: 'text', text: 'Fix the lemma.' },
+          { type: 'attachment', attachmentType: 'image' },
         ],
       },
+      { kind: 'thinking', text: 'Consider the boundary terms.' },
+      { kind: 'web-search', query: 'sobolev constant' },
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'server_tool_use',
-            name: 'web_search',
-            input: { query: 'sobolev constant' },
-          },
-          {
-            type: 'web_search_tool_result',
-            content: [
-              {
-                type: 'web_search_result',
-                url: 'https://example.org/a',
-                title: 'Sobolev notes',
-              },
-            ],
-          },
-        ],
+        kind: 'web-search-results',
+        results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
       },
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'web_fetch_tool_result',
-            content: {
-              type: 'web_fetch_result',
-              url: 'https://example.org/a',
-              retrieved_at: null,
-              content: {
-                type: 'document',
-                title: 'Sobolev notes',
-                source: {
-                  type: 'text',
-                  data: 'The Sobolev constant satisfies...',
-                },
-              },
-            },
-          },
-        ],
+        kind: 'web-fetch',
+        url: 'https://example.org/a',
+        title: 'Sobolev notes',
+        content: 'The Sobolev constant satisfies...',
       },
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'tool_use',
-            name: 'write_file',
-            input: { path: 'notes/lemma.tex' },
-          },
-        ],
+        kind: 'tool-call',
+        name: 'write_file',
+        input: { path: 'notes/lemma.tex' },
       },
-      {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'File written.' }],
-      },
-      {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'Done - the lemma is fixed.' }],
-      },
+      { kind: 'tool-result', text: 'File written.' },
+      { kind: 'assistant-text', text: 'Done - the lemma is fixed.' },
     ]);
 
     // Chat export assembles from the same facade read — no conversation.json.
     const exportResult = await loadChatExportInput(runId);
     expect(exportResult.exportInput).not.toBeNull();
-    expect(exportResult.exportInput?.messages).toEqual(
+    expect(exportResult.exportInput?.nodes).toEqual(
       conversationResult.conversation,
     );
 
@@ -625,16 +577,16 @@ describe('completedRunArchive facade', () => {
         expect(archived).toEqual({
           source: 'streamLog',
           conversation: [
-            { role: 'user', content: 'Prove the first lemma.' },
             {
-              role: 'assistant',
-              content: [{ type: 'text', text: 'First proof.' }],
+              kind: 'user-message',
+              parts: [{ type: 'text', text: 'Prove the first lemma.' }],
             },
-            { role: 'user', content: 'Now prove the second lemma.' },
+            { kind: 'assistant-text', text: 'First proof.' },
             {
-              role: 'assistant',
-              content: [{ type: 'text', text: 'Second proof.' }],
+              kind: 'user-message',
+              parts: [{ type: 'text', text: 'Now prove the second lemma.' }],
             },
+            { kind: 'assistant-text', text: 'Second proof.' },
           ],
         });
 
@@ -762,33 +714,17 @@ describe('completedRunArchive facade', () => {
     const result = await readCompletedRunConversation(runId);
     expect(result.conversation).toEqual([
       {
-        role: 'assistant',
-        content: [
-          {
-            type: 'tool_use',
-            name: 'write_file',
-            input: { path: 'proof.tex' },
-          },
-        ],
+        kind: 'tool-call',
+        name: 'write_file',
+        input: { path: 'proof.tex' },
       },
+      { kind: 'tool-result', text: 'File written.' },
       {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'File written.' }],
+        kind: 'tool-call',
+        name: 'read_file',
+        input: { path: 'missing.tex' },
       },
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'tool_use',
-            name: 'read_file',
-            input: { path: 'missing.tex' },
-          },
-        ],
-      },
-      {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'File not found.' }],
-      },
+      { kind: 'tool-result', text: 'File not found.' },
     ]);
   });
 

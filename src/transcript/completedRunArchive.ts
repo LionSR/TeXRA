@@ -1,5 +1,6 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect } from 'effect';
+import type { ExportNode } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
@@ -34,9 +35,9 @@ export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
 type CompletedRunConversationSource = 'streamLog' | 'none';
 
 export interface CompletedRunConversationReadResult {
-  /** Provider-agnostic `{role, content}` messages, or `null` when the
-   *  transcript sidecar holds no conversation data. */
-  readonly conversation: unknown[] | null;
+  /** Typed conversation nodes, or `null` when the transcript holds no
+   *  conversation data. */
+  readonly conversation: ExportNode[] | null;
   readonly source: CompletedRunConversationSource;
 }
 
@@ -51,11 +52,7 @@ export function hasCompletedRunConversationEvidence(
  * Deliberate non-goal (#7508): image blocks inside a tool result are not
  * reconstructed here. `ToolUseLog.output` carries either historical display
  * text or the attachment-stripped `ToolResult` fields; attachment bytes never
- * reach the transcript row. Unlike the web-fetch page-content case, there's
- * no existing size-capped/marker-only slot for this in the export pipeline
- * (`ExportNode`'s `tool-result` kind is `{text}` only), and reconstructing one
- * would mean threading attachment bytes through `tool.end` just to summarize
- * them — out of scope here.
+ * reach the transcript row, and the `tool-result` node is `{text}` only.
  */
 function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
@@ -72,163 +69,88 @@ function toolResultText(tool: ToolUseLog): string | undefined {
 }
 
 /**
- * `userMessage` rows may carry an attachment-kind/count payload (#7508) —
- * media that was sent to the model but only ever lived in the provider
- * message. When present, render `content` as Anthropic-shaped blocks (no
- * bytes) — one `{ type: kind }` marker per attachment — so
- * `normalizeConversationForExport` renders them as `[image attachment]` or
- * `[document attachment]`; otherwise keep the plain-string
- * `content` shape every other conversation consumer already expects.
+ * `userMessage` rows may carry an attachment-kind list (#7508): media that
+ * was sent to the model but only ever lived in the provider message. Each
+ * kind becomes an attachment part (no bytes) after the text.
  */
-function userMessageEntryToMessages(
+function userMessageNodes(
   entry: StreamLogEntryOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
-): unknown[] {
+): ExportNode[] {
   if (!entry.text) return [];
-  const attachments = entry.data?.attachments ?? [];
-  const role = 'user';
-  if (attachments.length === 0) {
-    return [{ role, content: entry.text }];
-  }
   return [
     {
-      role,
-      content: [
+      kind: 'user-message',
+      parts: [
         { type: 'text', text: entry.text },
-        ...attachments.map((kind) => ({ type: kind })),
+        ...(entry.data?.attachments ?? []).map((attachmentType) => ({
+          type: 'attachment' as const,
+          attachmentType,
+        })),
       ],
     },
   ];
 }
 
-function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
-  if (!entry.text?.trim()) return [];
-  return [
-    {
-      role: 'assistant',
-      content: [{ type: 'text', text: entry.text }],
-    },
-  ];
-}
-
-function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
-  if (!entry.text?.trim()) return [];
-  return [
-    {
-      role: 'assistant',
-      content: [{ type: 'thinking', thinking: entry.text }],
-    },
-  ];
-}
-
-function toolUseEntryToMessages(
+function toolUseNodes(
   entry: StreamLogEntryOf<typeof MESSAGE_TYPES.TOOL_USE>,
-): unknown[] {
+): ExportNode[] {
   const tool = entry.data;
-  const messages: unknown[] = [
+  const nodes: ExportNode[] = [
     {
-      role: 'assistant',
-      content: [
-        {
-          type: 'tool_use',
-          name: tool.toolName ?? 'unknown',
-          input: tool.input ?? {},
-        },
-      ],
+      kind: 'tool-call',
+      name: tool.toolName ?? 'unknown',
+      input: tool.input ?? {},
     },
   ];
-  const resultText = toolResultText(tool);
-  if (resultText !== undefined) {
-    messages.push({
-      role: 'user',
-      content: [{ type: 'tool_result', content: resultText }],
-    });
-  }
-  return messages;
+  const text = toolResultText(tool);
+  if (text !== undefined) nodes.push({ kind: 'tool-result', text });
+  return nodes;
 }
 
-/** Anthropic-shaped `server_tool_use` + `web_search_tool_result` blocks. */
-function webSearchEntryToMessages(
+function webSearchNodes(
   entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
-): unknown[] {
-  const data = entry.data;
-  const blocks: unknown[] = [];
-  if (data.query) {
-    blocks.push({
-      type: 'server_tool_use',
-      name: 'web_search',
-      input: { query: data.query },
-    });
-  }
-  const results = (data.results ?? [])
-    .filter((result) => result.url)
-    .map((result) => ({
-      type: 'web_search_result',
-      url: result.url,
-      title: result.title ?? result.url,
-    }));
-  if (results.length > 0) {
-    blocks.push({ type: 'web_search_tool_result', content: results });
-  }
-  return blocks.length > 0 ? [{ role: 'assistant', content: blocks }] : [];
-}
-
-function webFetchEntryToMessages(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_FETCH>,
-): unknown[] {
-  const data = entry.data;
-  if (!data.url) return [];
-  // Emit the same nested `web_fetch_result` shape a live Anthropic response
-  // carries, so every conversation consumer reads exactly one shape (#7508).
-  // Failed fetches omit title/source rather than reconstructing the error
-  // block, which keeps marker rendering identical to the live error path.
+): ExportNode[] {
+  const { query, results = [] } = entry.data;
+  const hits = results.flatMap(({ title, url }) =>
+    url ? [{ title: title ?? url, url }] : [],
+  );
   return [
-    {
-      role: 'assistant',
-      content: [
-        {
-          type: 'web_fetch_tool_result',
-          content: {
-            type: 'web_fetch_result',
-            url: data.url,
-            retrieved_at: null,
-            content: {
-              type: 'document',
-              ...(data.title !== undefined && { title: data.title }),
-              ...(data.content !== undefined && {
-                source: { type: 'text', data: data.content },
-              }),
-            },
-          },
-        },
-      ],
-    },
+    ...(query ? [{ kind: 'web-search' as const, query }] : []),
+    ...(hits.length > 0
+      ? [{ kind: 'web-search-results' as const, results: hits }]
+      : []),
   ];
 }
 
 /**
- * Map one transcript row to conversation messages. Exhaustive over the
- * {@link MessageType} union — the transcript is the single completed-run
+ * Map one transcript row to conversation nodes. Exhaustive over the
+ * {@link MessageType} union: the transcript is the single completed-run
  * record, so every entry kind must carry an explicit map-or-skip decision
  * here; adding a new `MessageType` without deciding fails to compile
  * (`assertNever`), instead of silently dropping conversation content.
  */
-function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
+function conversationNodesForEntry(entry: StreamLogEntry): ExportNode[] {
   const { messageType } = entry;
   if (messageType === undefined) return [];
   switch (messageType) {
     // ── Conversation content ────────────────────────────────────────────
     case MESSAGE_TYPES.USER_MESSAGE:
-      return userMessageEntryToMessages(entry);
+      return userMessageNodes(entry);
     case MESSAGE_TYPES.MODEL_RESPONSE:
-      return modelResponseEntryToMessages(entry);
+      return entry.text?.trim()
+        ? [{ kind: 'assistant-text', text: entry.text }]
+        : [];
     case MESSAGE_TYPES.THINKING:
-      return thinkingEntryToMessages(entry);
+      return entry.text?.trim() ? [{ kind: 'thinking', text: entry.text }] : [];
     case MESSAGE_TYPES.TOOL_USE:
-      return toolUseEntryToMessages(entry);
+      return toolUseNodes(entry);
     case MESSAGE_TYPES.WEB_SEARCH:
-      return webSearchEntryToMessages(entry);
-    case MESSAGE_TYPES.WEB_FETCH:
-      return webFetchEntryToMessages(entry);
+      return webSearchNodes(entry);
+    case MESSAGE_TYPES.WEB_FETCH: {
+      // Failed fetches carry no title/content; the node keeps only the url.
+      const { url, title, content } = entry.data;
+      return url ? [{ kind: 'web-fetch', url, title, content }] : [];
+    }
     // ── Deliberately skipped: not conversation content ──────────────────
     // scratchpad is a derived view carved from the modelResponse raw text
     // (already mapped above); the rest are run diagnostics/status rows, not
@@ -257,33 +179,21 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
 }
 
 /**
- * Reconstruct a provider-agnostic conversation from persisted transcript
- * rows. Uses the Anthropic-style content-block vocabulary (`text`,
- * `thinking`, `tool_use`/`tool_result`, `server_tool_use`,
- * `web_search_tool_result`, `web_fetch_tool_result`) that every existing
- * conversation consumer (`@agent/storage/conversationFormat`, the
- * chat-export normalizer, the CLI workspace-file extractor) already
- * recognizes, so downstream rendering code needs no new shape.
+ * Read a completed run's conversation from the canonical transcript fold as
+ * the typed nodes every conversation view (chat export, the ExecutionsTool
+ * endpoint, the CLI history views) renders.
  */
-function streamLogEntriesToConversation(
-  entries: readonly StreamLogEntry[],
-): unknown[] {
-  return entries.flatMap((entry) =>
-    entry.type === STREAM_LOG_ENTRY_TYPES.LOG
-      ? conversationMessagesForEntry(entry)
-      : [],
-  );
-}
-
-/** Read completed-run display messages from the canonical transcript fold. */
 export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const conversation = streamLogEntriesToConversation(
-    yield* session.transcripts.readEntries(runId),
+  const conversation = (yield* session.transcripts.readEntries(runId)).flatMap(
+    (entry) =>
+      entry.type === STREAM_LOG_ENTRY_TYPES.LOG
+        ? conversationNodesForEntry(entry)
+        : [],
   );
   return conversation.length > 0
     ? { conversation, source: 'streamLog' }

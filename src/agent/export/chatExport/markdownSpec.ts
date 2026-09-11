@@ -105,8 +105,10 @@ const MD_NODES: NodeRenderers = {
 
   'assistant-text': ({ text }) => `### Assistant\n\n${text}\n`,
 
+  thinking: () => '',
+
   'tool-call': ({ name, input }) =>
-    `#### Tool: \`${name}\`\n\n${fencedBlock(input, 'json')}\n`,
+    `#### Tool: \`${name}\`\n\n${fencedBlock(JSON.stringify(input, null, 2), 'json')}\n`,
 
   'tool-result': ({ text }) => `#### Tool Result\n\n${fencedBlock(text)}\n`,
 
