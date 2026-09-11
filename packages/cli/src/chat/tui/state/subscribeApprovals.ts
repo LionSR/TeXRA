@@ -3,9 +3,10 @@
 //
 // The runtime publishes `approval.requested` before it dispatches a request
 // here, and the fold lists it in `view.approvals` until `approval.resolved`;
-// the modal reads that list (`approvalQueue.ts`). A hook therefore parks:
-// its promise stays pending while the surface answers through a
-// `decision.*` runtime request, which settles the runtime's pending set.
+// the modal reads that list (`approvalQueue.ts`). A hook therefore returns
+// nothing (or has no method at all) and the runtime parks the request while
+// the surface answers through a `decision.*` runtime request, which settles
+// the runtime's pending set.
 // Three kinds still settle through their hook, because the runtime has no
 // request arm for them yet or their answer is host work: a tool edit (no
 // `decision.toolEdit` arm), a retry (its credential switch and
@@ -22,13 +23,10 @@ import PQueue from 'p-queue';
 import {
   currentSession,
   matchesCancelSelector,
-  type BashSettlement,
-  type HostBashApprovalRequest,
   type HostInteractionCancelSelector,
   type HostInteractions,
   type HostRetryInteractionOptions,
   type HostRetryRequest,
-  type HostUserQuestionRequest,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -69,13 +67,7 @@ import {
   isCodingPlanQuotaRoute,
   type QuotaFallbackRouteId,
 } from '@shared/quotaFallbackRoutes';
-import {
-  type AgentProposalPermission,
-  type ExternalInquiryPermission,
-  type PermissionPayload,
-  type PlanApprovalPermission,
-  type RunId,
-} from '@shared/schemas';
+import { type ExternalInquiryPermission } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { onAbort } from '@utils/core';
@@ -130,24 +122,6 @@ function maybeAutoSwitchRetry(
   return { accepted: true, disableQuotaRoute: route.id };
 }
 
-/** A request the surface answers through a `decision.*` runtime request:
- *  the hook's promise stays pending; the runtime's own settlement resolves
- *  the caller. A runless request has no fact for the fold to list, so
- *  nothing could answer it; it is declined rather than parked forever. */
-function park<T>(
-  kind: PermissionPayload['kind'],
-  runId: RunId | string | null | undefined,
-): Promise<T> | undefined {
-  if (!runId) {
-    logWarning(
-      'cli.tui',
-      `A ${kind} request named no stream; the TUI cannot present it.`,
-    );
-    return undefined;
-  }
-  return new Promise<T>(() => {});
-}
-
 /**
  * Create the typed approval pipeline for the active TUI session.
  */
@@ -185,20 +159,11 @@ export function createTuiHostInteractions(
         reservation.release();
       }
     },
-    requestBashApproval(request: HostBashApprovalRequest) {
-      return park<BashSettlement>('bash', request.runId);
+    requestPlanApproval() {
+      return settleByPolicy<PlanApprovalResult>(context);
     },
-    requestPlanApproval(request: PlanApprovalPermission) {
-      return (
-        settleByPolicy<PlanApprovalResult>(context) ??
-        park('planApproval', request.runId)
-      );
-    },
-    requestAgentProposal(request: AgentProposalPermission) {
-      return (
-        settleByPolicy<ProposalResult>(context) ??
-        park('proposal', request.runId)
-      );
+    requestAgentProposal() {
+      return settleByPolicy<ProposalResult>(context);
     },
     requestRetry(request, options) {
       return requestRetryInteraction(
@@ -208,15 +173,13 @@ export function createTuiHostInteractions(
         options,
       );
     },
-    askUserQuestion(request: HostUserQuestionRequest) {
+    askUserQuestion() {
       const denial = settleHumanInputDenial(context);
-      if (denial != null) {
-        return Promise.resolve<UserQuestionSettlement>({
-          action: 'reject',
-          reason: denial.reason,
-        });
-      }
-      return park<UserQuestionSettlement>('userQuestion', request.runId);
+      if (denial == null) return undefined;
+      return Promise.resolve<UserQuestionSettlement>({
+        action: 'reject',
+        reason: denial.reason,
+      });
     },
     async openExternalInquiry(request) {
       handleExternalInquiry(request, context, interactionOwner);

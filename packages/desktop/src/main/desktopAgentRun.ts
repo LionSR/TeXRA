@@ -159,9 +159,10 @@ export function createDesktopAgentRun(
       Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
     ),
   );
-  // Attached for the window's life: the runtime parks a request until a
-  // host is attached, so the presentation must be there before the first
-  // run of this window asks anything.
+  // Attached for the window's life, before the first run of this window
+  // asks anything. Requests this host does not present (bash, plan,
+  // proposal, retry, question) stay parked in the runtime until a surface's
+  // approval row decides them.
   const detachHostInteractions = session.interactions.use({
     emit: handlePresentationEvent,
     requestToolEditApproval: (request) =>

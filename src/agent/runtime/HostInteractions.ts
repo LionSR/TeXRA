@@ -340,7 +340,9 @@ export function matchesCancelSelector(
  *
  * Runtime code asks the session for an interaction. The session owns the
  * request until it settles or is explicitly cancelled, while concrete host
- * adapters own presentation, request-id resolution, and local disposal.
+ * adapters own presentation, request-id resolution, and local disposal. A
+ * request method that is absent or returns `undefined` leaves a
+ * run-scoped request parked for a surface's decision on its approval row.
  */
 export interface HostInteractions {
   /**
@@ -898,6 +900,21 @@ export class SessionHostInteractions implements HostInteractions {
       return;
     }
     if (!result) {
+      // The host does not present this request. A run-scoped one stays
+      // pending for a surface's decision on its `approval.requested` row
+      // (`settleRequest`/`settleRetry`), a cancel, or disposal. A runless
+      // one has no row any surface could answer, so it is declined.
+      if (pending.fact) {
+        logger.info(
+          `The interaction host does not present ${pending.kind} requests: ` +
+            `parked on run ${pending.fact.runId} for a decision on its approval row.`,
+        );
+        return;
+      }
+      logger.warn(
+        `A ${pending.kind} request named no run and the interaction host ` +
+          'does not present it: declined.',
+      );
       this.deletePending(pending);
       pending.settle(pending.cancellationResult());
       return;
@@ -919,8 +936,9 @@ export class SessionHostInteractions implements HostInteractions {
       logger.warn(
         `No interaction host is attached: parked the ${pending.kind} request ` +
           `(run ${pending.runId ?? 'none'}) until one attaches. A ` +
-          'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
-          'blocking requests never settle.',
+          'headless embedder must attach a host that answers requests, or ' +
+          'settle or cancel them through the session, or blocking requests ' +
+          'never settle.',
       );
     } catch {
       // A diagnostic sink must not reject or remove the request it describes.

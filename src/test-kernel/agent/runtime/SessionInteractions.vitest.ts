@@ -486,13 +486,22 @@ describe('session.interactions request bookkeeping', () => {
     }
   });
 
-  it('settles against the documented minimal `{ cancel }` host', async () => {
+  it('parks a run-scoped request against a `{ cancel }` host until settleRequest', async () => {
+    // Regression: a host without a request method (the extension and desktop
+    // for bash, plan, proposal, retry, question) used to auto-reject it
+    // before any surface could answer its approval row.
     const session = createTestSession();
     session.interactions.use({ cancel: vi.fn() });
     try {
-      await expect(
-        requestPlan(session, 'approval:minimal-host'),
-      ).resolves.toEqual({ action: 'reject' });
+      const pending = requestPlan(session, 'approval:minimal-host');
+      expect(
+        session.interactions.settleRequest(
+          'planApproval',
+          'approval:minimal-host',
+          { action: 'approve' },
+        ),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
     }
