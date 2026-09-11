@@ -175,18 +175,6 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
-const CLI_ENTRYPOINT_NAMES: ReadonlySet<string> = new Set([
-  'texra',
-  'texra-local',
-  'texra.js',
-  'texra.mjs',
-  'texra.ts',
-]);
-
-export function isTexraCliEntrypointPath(entrypointPath: string): boolean {
-  return CLI_ENTRYPOINT_NAMES.has(path.basename(entrypointPath).toLowerCase());
-}
-
 export function resolveCliCommandName(entrypointPath: string): string {
   return path.basename(entrypointPath).toLowerCase() === 'texra-local'
     ? 'texra-local'

@@ -39,7 +39,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { installCliProcessRuntime } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
-import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import {
   flushNdjsonStdout,
   flushTextStderr,
@@ -326,10 +325,6 @@ export async function initCliPlatform(
           (await cliResumeHandler?.(runId, recovery)) ?? false,
       },
       agentDirectories,
-      toolAvailability: {
-        isTexraCliEntrypoint: () =>
-          isTexraCliEntrypointPath(readCliEntrypointPath()),
-      },
     });
     initPlatform(services);
     // One process, one paper: the process roots are the `--cwd` workspace.

@@ -218,12 +218,10 @@ export class AIAgentsTab extends LitElement {
       available: 0,
       'not-found': 0,
       unknown: 0,
-      'coming-soon': 0,
     };
     for (const item of items) {
       counts[item.status] += 1;
     }
-    const pending = counts.unknown + counts['coming-soon'];
 
     return html`
       <ul class="ai-agents-status" aria-label="Integration status">
@@ -241,10 +239,10 @@ export class AIAgentsTab extends LitElement {
             : nothing
         }
         ${
-          pending > 0
+          counts.unknown > 0
             ? html`
                 <li class="ai-agents-status-stat ai-agents-status-neutral">
-                  ${waIcon('clock')} Pending: ${pending}
+                  ${waIcon('clock')} Pending: ${counts.unknown}
                 </li>
               `
             : nothing

@@ -143,14 +143,6 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
 
   // Document conversion tools
   pandoc: withDocs(featureTool('pandoc', PANDOC_INSTRUCTIONS), { docs: false }),
-
-  // TeXRA's own CLI entrypoints
-  texra: withDocs('TeXRA CLI is not installed or not on PATH.', {
-    docs: false,
-  }),
-  'texra-local': withDocs('TeXRA local CLI is not installed or not on PATH.', {
-    docs: false,
-  }),
 };
 
 /** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */

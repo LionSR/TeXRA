@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import {
   buildCliContext,
   CliUsageError,
-  isTexraCliEntrypointPath,
   readCliBugsUrl,
   readCliEnv,
   readCliVersion,
@@ -68,18 +67,6 @@ async function workspaceWithConfig(config: string): Promise<string> {
 }
 
 describe('CLI entrypoint detection', () => {
-  it('recognizes published and local TeXRA launchers', () => {
-    expect(isTexraCliEntrypointPath('/usr/local/bin/texra')).toBe(true);
-    expect(isTexraCliEntrypointPath('/tmp/bin/texra-local')).toBe(true);
-    expect(
-      isTexraCliEntrypointPath('/repo/packages/cli/dist/bin/texra.js'),
-    ).toBe(true);
-    expect(
-      isTexraCliEntrypointPath('/repo/packages/cli/src/bin/texra.ts'),
-    ).toBe(true);
-    expect(isTexraCliEntrypointPath('/usr/local/bin/vitest')).toBe(false);
-  });
-
   it('uses the local launcher name in user-facing command hints', () => {
     expect(resolveCliCommandName('/usr/local/bin/texra')).toBe('texra');
     expect(resolveCliCommandName('/tmp/bin/texra-local')).toBe('texra-local');

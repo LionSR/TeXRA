@@ -406,7 +406,6 @@ const ToolDependencyStatusSchema = z.enum([
   'available',
   'not-found',
   'unknown',
-  'coming-soon',
 ]);
 export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
 
