@@ -96,17 +96,6 @@ export const InquiryDraftSchema = z.object({
 });
 export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
 
-export const InquiryTranscriptTurnSchema = z.object({
-  turnIndex: z.int().positive(),
-  timestamp: z.string().min(1),
-  question: z.string(),
-  context: z.string().nullish(),
-  answer: z.string().nullish(),
-  answeredAt: z.string().nullish(),
-  sessionLinks: InquirySessionLinksSchema.nullish(),
-});
-export type InquiryTranscriptTurn = z.infer<typeof InquiryTranscriptTurnSchema>;
-
 /** Full global inquiry records, independent of project display lifetimes. */
 const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
@@ -134,7 +123,7 @@ const AnsweredInquiryTurnSchema = z.object({
 });
 export type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
 
-const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
+export const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
   OpenInquiryTurnSchema,
   AnsweredInquiryTurnSchema,
 ]);

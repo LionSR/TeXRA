@@ -26,10 +26,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import type {
+  AnsweredInquiryTurn,
   ExternalInquiryPermission,
   InquiryDraft,
+  InquiryThreadRecord,
   PermissionPayload,
-  InquiryTranscriptTurn,
 } from '@shared/schemas';
 import {
   commonViewStyles,
@@ -234,9 +235,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private renderTranscript(
-    transcript: InquiryTranscriptTurn[],
+    transcript: InquiryThreadRecord['turns'],
   ): TemplateResult | typeof nothing {
-    const answeredTurns = transcript.filter((turn) => turn.answer);
+    const answeredTurns = transcript.filter(
+      (turn): turn is AnsweredInquiryTurn => turn.kind === 'answered',
+    );
     if (answeredTurns.length === 0) return nothing;
 
     return html`
@@ -262,7 +265,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     `;
   }
 
-  private renderTranscriptTurn(turn: InquiryTranscriptTurn): TemplateResult {
+  private renderTranscriptTurn(turn: AnsweredInquiryTurn): TemplateResult {
     return html`
       <section class="external-inquiry-request__transcript-turn">
         <div class="external-inquiry-request__transcript-turn-header">

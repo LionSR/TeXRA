@@ -135,9 +135,7 @@ function externalInquiryKeys(
   permissions: readonly PermissionPayload[],
 ): string[] {
   return permissions
-    .filter(
-      (permission) => permission.kind === 'externalInquiry',
-    )
+    .filter((permission) => permission.kind === 'externalInquiry')
     .map(getPermissionKey);
 }
 
