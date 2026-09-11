@@ -60,10 +60,9 @@ describe('bundled prompt loader', () => {
   it('renders the polish prompt from the packaged resource bundle', async () => {
     initializeBundledPrompts(RESOURCES_PATH);
 
-    const prompt = await renderPolishPrompt('<paper & notes>', 'Fix teh typo.');
+    const prompt = await renderPolishPrompt('Fix teh typo.');
 
     expect(prompt).toContain('Correct any spelling errors');
-    expect(prompt).toContain('<paper & notes>');
     expect(prompt).toContain('Fix teh typo.');
   });
 
@@ -71,7 +70,7 @@ describe('bundled prompt loader', () => {
     const root = await makeBrokenResources();
     initializeBundledPrompts(root);
 
-    await expect(renderPolishPrompt('', 'text')).rejects.toThrow(
+    await expect(renderPolishPrompt('text')).rejects.toThrow(
       `Failed to parse polish prompt YAML at ${join(root, 'templates', 'instructionPolish.yaml')}`,
     );
   });
