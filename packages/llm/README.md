@@ -191,8 +191,8 @@ Broader input fails explicitly; Kimi retains its existing wider coverage. Zero i
 a valid measurement, while missing or malformed counts fail. None of these
 receipts is total usage, a bill or a generation allowance. There is no automatic
 preflight, retry or budget adjustment. Application admission still owns context
-limits, output reduction and count-failure policy, and must supply the stable Kimi
-cache identity. Configured production helpers have not switched.
+limits, output reduction and count-failure policy. Configured production helpers
+have not switched.
 
 Streaming Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
 Kimi's and xAI's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;
