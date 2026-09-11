@@ -10,9 +10,6 @@
 import * as vscode from 'vscode';
 
 import {
-  dispatchPresentationEvent,
-  toPresentationDelivery,
-  type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -76,7 +73,7 @@ const INSTRUCTION_ACTION_VIEW: Record<
 
 async function handleRequestShowInstruction(
   payload: RequestShowInstructionPayload,
-): Promise<boolean> {
+): Promise<void> {
   const actions = (payload.actions ?? []).map((token) => {
     const view = INSTRUCTION_ACTION_VIEW[token];
     return {
@@ -87,10 +84,9 @@ async function handleRequestShowInstruction(
   });
 
   try {
-    // Report delivery once VS Code has accepted the dialog, not once the user
-    // dismisses it: `validateModelExists` awaits this emit, and keeping launch
-    // cleanup tied to modal dismissal would leave the reserved stream STARTING
-    // for as long as the notification is open.
+    // Settle once VS Code has accepted the dialog, not once the user
+    // dismisses it. The "never remind again" path returns without rendering:
+    // the user opted out of this notice.
     await showInstructionWithSuppress(
       payload.key,
       payload.message,
@@ -98,47 +94,38 @@ async function handleRequestShowInstruction(
       payload.showSuppress,
       { deferDismissal: true },
     );
-    // The "never remind again" suppression path also reports delivered:
-    // `showInstructionWithSuppress` returns without rendering when the user
-    // previously opted out of this key, and firing the caller's generic
-    // fallback then would resurface the same notice through a toast the user
-    // cannot suppress. The launch error itself still surfaces through the
-    // failed run.
-    return true;
   } catch (err) {
     log.warn(
       `Failed to show instruction "${payload.key}": ${toErrorMessage(err)}`,
     );
-    return false;
+    // The instruction may be a launch failure's only surface, so fall back
+    // to the error toast rather than dropping it.
+    handleRequestShowError({ message: payload.message });
   }
 }
 
 function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
   progressViewProvider: ProgressViewProvider,
-): boolean {
+): void {
   progressViewProvider.showAgentConfigBanner(
     payload.agentName,
     payload.category,
   );
-  return true;
 }
 
-function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
+function handleRequestShowError({ message }: RequestShowErrorPayload): void {
   try {
-    // Delivery is the toast handoff: `showErrorMessage` resolves only on
-    // dismissal, which no caller should wait on, so report once VS Code has
-    // accepted the request. The returned Thenable is still observed so a
-    // post-handoff rejection (e.g. while the extension host is tearing down)
-    // is logged instead of becoming an unhandled rejection.
+    // `showErrorMessage` resolves only on dismissal, which no caller should
+    // wait on. The returned Thenable is still observed so a post-handoff
+    // rejection (e.g. while the extension host is tearing down) is logged
+    // instead of becoming an unhandled rejection.
     const toast = vscode.window.showErrorMessage(message);
     void Promise.resolve(toast).catch((err: unknown) => {
       log.warn(`Error toast failed after handoff: ${toErrorMessage(err)}`);
     });
-    return true;
   } catch (err) {
     log.warn(`Failed to show the error toast: ${toErrorMessage(err)}`);
-    return false;
   }
 }
 
@@ -231,10 +218,8 @@ export function createAgentPresentationHost(
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
-    ): PresentationDelivery {
-      return toPresentationDelivery(
-        dispatchPresentationEvent(handlers, event, payload),
-      );
+    ): unknown {
+      return handlers[event](payload);
     },
   };
 }

@@ -162,28 +162,18 @@ export function withLaunchRunContext<T>(
 }
 
 /**
- * Present an error through the host and throw it, tracking whether the host
- * actually rendered it so the caller can avoid a duplicate fallback toast.
+ * Present a launch error through its targeted host notice (replayed if no
+ * host is attached yet) and throw it claimed: the notice is its one surface,
+ * so the launch catch adds no generic toast.
  */
-async function presentLaunchError<K extends RuntimePresentationEvent>(
+function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,
   err: AgentError,
   event: K,
   payload: RuntimePresentationEventPayloads[K],
-): Promise<never> {
-  const delivered = await interactions.emit(event, payload, {
-    replayWhenAttached: true,
-    onReplayScheduled: () => attachErrorPresentationClaimed(err),
-    onReplayNotDelivered: (host) => {
-      host.emit?.('requestShowError', { message: toErrorMessage(err) });
-    },
-  });
-  // Claim presentation only when a live host confirmed it rendered the
-  // targeted notice, or when the notice was retained for replay (the replay
-  // owns the eventual fallback). A live-host emit that throws synchronously
-  // is normalized to `false` by `SessionHostInteractions.emit`, leaving the
-  // marker unset so the launch catch emits the generic fallback.
-  if (delivered) attachErrorPresentationClaimed(err);
+): never {
+  interactions.emit(event, payload, { replayWhenAttached: true });
+  attachErrorPresentationClaimed(err);
   throw err;
 }
 
@@ -201,7 +191,7 @@ async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  throw await presentLaunchError(
+  return presentLaunchError(
     interactions,
     new AgentError(`Could not find agent: ${agentIdentifier}`),
     'showAgentConfigBanner',
@@ -216,7 +206,7 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  throw await presentLaunchError(
+  return presentLaunchError(
     interactions,
     new AgentError(`Model ${modelName} is not registered`),
     'requestShowInstruction',

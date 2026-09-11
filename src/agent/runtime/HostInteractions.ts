@@ -344,15 +344,14 @@ export function matchesCancelSelector(
  */
 export interface HostInteractions {
   /**
-   * Present a runtime event through the active host attachment. A host that
-   * renders the event returns `true` (or a `Promise<true>` once rendered);
-   * a host that ignores it or cannot deliver it returns `false`, so callers
-   * can keep a fallback surface instead of assuming fire-and-forget delivery.
+   * Present a runtime event through the active host attachment. Presentation
+   * is fire-and-forget: a host that cannot render an event logs the cause. A
+   * host may return a promise that settles once the event is on screen.
    */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): boolean | Promise<boolean>;
+  ): unknown;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -512,57 +511,23 @@ export class SessionHostInteractions implements HostInteractions {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
-  ): boolean | Promise<boolean> {
+  ): unknown {
     const active = this.activeAttachment;
     if (active) {
       try {
-        return active.interactions.emit?.(event, payload) ?? false;
+        return active.interactions.emit?.(event, payload);
       } catch (error) {
         logger.warn('Live presentation emit failed', { data: error });
-        return false;
+        return undefined;
       }
     }
+    // The replay loop warn-logs a replay that throws or rejects.
     if (options.replayWhenAttached && !this.disposed) {
-      // A retained replay is not delivery: nothing has been rendered yet, so
-      // the caller must not treat this as confirmed presentation. The replay
-      // closure reports the eventual delivery result back through the
-      // option callbacks once a live host actually renders (or declines) it.
-      this.queuePresentationReplay((interactions) => {
-        if (!options.onReplayNotDelivered) {
-          return interactions.emit?.(event, payload);
-        }
-        // A synchronous throw from the host's emit (a desktop renderer post
-        // during teardown, a development assertion) escapes the promise
-        // chain below and would otherwise be caught only by the replay
-        // loop's warn-log, leaving the caller's presentation-pending marker
-        // stuck and the failure surfaced zero times. Route it through the
-        // same not-delivered fallback as a returned `false` or a rejection.
-        let delivered: boolean | Promise<boolean> | undefined;
-        try {
-          delivered = interactions.emit?.(event, payload);
-        } catch (error) {
-          logger.warn('Replayed presentation notice failed', {
-            data: error,
-          });
-          options.onReplayNotDelivered?.(interactions);
-          return undefined;
-        }
-        return Promise.resolve(delivered).then(
-          (value) => {
-            if (value !== true) options.onReplayNotDelivered?.(interactions);
-          },
-          (error: unknown) => {
-            logger.warn('Replayed presentation notice failed', {
-              data: error,
-            });
-            options.onReplayNotDelivered?.(interactions);
-          },
-        );
-      });
-      options.onReplayScheduled?.();
-      return false;
+      this.queuePresentationReplay((interactions) =>
+        interactions.emit?.(event, payload),
+      );
     }
-    return false;
+    return undefined;
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
