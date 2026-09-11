@@ -53,7 +53,7 @@ export type StatusEvent = TraceArm<'status'> & { readonly runId: RunId };
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
- * (`RunHandle.result`, `SessionHandle.onResult`): the `run.end` row named by
+ * (`SessionHandle.onResult`): the `run.end` row named by
  * its run. Not an {@link AgentEvent} arm: the row is written once by the
  * storage finalizer (`finalizeRun`), never emitted on a trace.
  */

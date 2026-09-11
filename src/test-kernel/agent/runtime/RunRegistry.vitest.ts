@@ -397,14 +397,15 @@ describe('runRegistry', () => {
       // No handle interrupt target: mirrors a suspended subagent whose live
       // tool-use session has already been disposed. The run phase follows
       // the same suspension, as it does in production.
-      const handle = trackSuspendedWaitingHandle(registry, runStatus, {
+      trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: parentRunId,
         cleanup,
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
-      await Effect.runPromise(handle.result);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -418,27 +419,23 @@ describe('runRegistry', () => {
     // terminateWaitingHandle bypasses runFlowWithLifecycle (the flow never
     // resumes), so it writes the terminal row itself — otherwise session
     // subscribers silently miss a user-initiated stop of a suspended native
-    // subagent even though handle.result itself resolved. The turn's own
-    // trace is already torn down by the time a kill runs, so the row, not an
-    // emit, is what reaches them.
+    // subagent. The turn's own trace is already torn down by the time a kill
+    // runs, so the row, not an emit, is what reaches them.
     storageMocks.finalizeRun.mockClear();
     const { runStatus, registry } = createRegistry();
     const parentRunId = generateRunId();
     const runId = generateRunId();
 
     try {
-      const handle = trackSuspendedWaitingHandle(registry, runStatus, {
+      trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: parentRunId,
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
 
-      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-        runId,
-      });
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
         defaultSession(),
         {
@@ -477,17 +474,16 @@ describe('runRegistry', () => {
         },
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      const settled = Effect.runPromise(stop.settlement);
       await Promise.resolve();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(registry.getHandle(runId)).toBe(handle);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
 
       finishCleanup();
-      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-      });
+      await settled;
       expect(order).toEqual(['cleanup', 'finalize']);
       expect(registry.getHandle(runId)).toBeUndefined();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -507,13 +503,15 @@ describe('runRegistry', () => {
     });
 
     try {
-      const previous = trackSuspendedWaitingHandle(registry, runStatus, {
+      trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: parentRunId,
         cleanup: () => cleanupGate,
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      const settled = Effect.runPromise(stop.settlement);
 
       const successorInterrupt = vi.fn();
       const successor = trackInterruptibleHandle(
@@ -524,10 +522,7 @@ describe('runRegistry', () => {
 
       expect(successorInterrupt).toHaveBeenCalledOnce();
       finishCleanup();
-      await expect(Effect.runPromise(previous.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-      });
+      await settled;
 
       expect(registry.getHandle(runId)).toBe(successor);
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
@@ -545,16 +540,14 @@ describe('runRegistry', () => {
     const runId = generateRunId();
 
     try {
-      const handle = trackSuspendedWaitingHandle(registry, runStatus, {
+      trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: generateRunId(),
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
-      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-      });
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
       expect(registry.getHandle(runId)).toBeUndefined();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
     } finally {
@@ -577,18 +570,15 @@ describe('runRegistry', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      const handle = trackSuspendedWaitingHandle(registry, runStatus, {
+      trackSuspendedWaitingHandle(registry, runStatus, {
         runId,
         parent: parentRunId,
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
 
-      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-        runId,
-      });
       expect(registry.getHandle(runId)).toBeUndefined();
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
       await vi.waitFor(() => {
@@ -789,9 +779,6 @@ describe('runRegistry', () => {
       releasePersist?.();
       await finalized;
       expect(teardown).not.toHaveBeenCalled();
-      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
         session,
         expect.objectContaining({
@@ -844,8 +831,9 @@ describe('runRegistry', () => {
         substate: RUN_SUBSTATE.RESUMING,
       });
 
-      expect(killRegistry(registry, runId)).toBe(true);
-      await Effect.runPromise(handle.result);
+      const stop = registry.kill(runId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(registry.getHandle(runId)).toBeUndefined();

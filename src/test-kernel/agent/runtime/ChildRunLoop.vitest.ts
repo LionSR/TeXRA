@@ -861,11 +861,6 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLoopEnd(runId);
 
-    // Settled: handle.result resolves instead of hanging forever.
-    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-      outcome: 'cancelled',
-      runId,
-    });
     // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
     // would correctly report "not found" instead of finding a ghost handle.
     expect(session.runs.getHandle(runId)).toBeUndefined();
@@ -1019,18 +1014,21 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLiveOwner(runId);
 
-    const handle = trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
+    trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
 
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
     await waitForLoopEnd(runId);
-    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-      outcome: 'failed',
-      runId,
-      error: expect.objectContaining({
-        message: expect.stringContaining('reported a failed turn'),
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        runId,
+        outcome: RUN_OUTCOME.FAILED,
+        error: expect.objectContaining({
+          message: expect.stringContaining('reported a failed turn'),
+        }),
       }),
-    });
+    );
     expect(session.runs.getHandle(runId)).toBeUndefined();
   });
 
@@ -1046,7 +1044,6 @@ describe('childRunLoop E2E fixtures', () => {
       }),
     );
     trackedRunIds.add(runId);
-    const handle = session.runs.getHandle(runId);
     const { strategy, rejectTurn } = createFakeStrategy();
     // Fires between the turn failure landing FAILED on the stream phase and
     // the loop's finalize, so the loop reports an interrupted run for a stream
@@ -1071,16 +1068,15 @@ describe('childRunLoop E2E fixtures', () => {
     await Promise.all(stopSettlements);
     expect(interruptAfterFailure).toHaveBeenCalledOnce();
     expect(session.status.get(runId)).toBe(RUN_PHASE.FAILED);
-    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      outcome: 'failed',
-      runId,
-      error: expect.objectContaining({
-        message: expect.stringContaining('turn blew up'),
-      }),
-    });
     expect(mocks.finalizeRun).toHaveBeenCalledWith(
       session,
-      expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
+      expect.objectContaining({
+        runId,
+        outcome: RUN_OUTCOME.FAILED,
+        error: expect.objectContaining({
+          message: expect.stringContaining('turn blew up'),
+        }),
+      }),
     );
   });
 
