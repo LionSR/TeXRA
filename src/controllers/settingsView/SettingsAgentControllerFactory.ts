@@ -1,6 +1,6 @@
 /**
  * Constructs the settings-view agent controllers (catalog / directory /
- * roster / remote-prompt viewer) from the host-supplied state ports.
+ * roster) from the host-supplied state ports.
  *
  * Both desktop and extension build these controllers with the same shape;
  * this factory removes ~75 lines of duplication on each side.
@@ -13,14 +13,11 @@ import {
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index';
-import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import {
   agentKey,
   parseAgentModePresets,
@@ -44,7 +41,6 @@ export interface SettingsAgentControllers {
   readonly catalog: SettingsAgentCatalogController;
   readonly directory: SettingsAgentDirectoryController;
   readonly roster: AgentRosterController;
-  readonly remotePromptController: SettingsRemoteAgentPromptController;
 }
 
 export function createSettingsAgentControllers(
@@ -106,10 +102,6 @@ export function createSettingsAgentControllers(
       getAgent: (source, name) => getAgent(agentKey(source, name)) ?? null,
     },
   });
-  const remotePromptController = new SettingsRemoteAgentPromptController({
-    getAccessToken: () => SupabaseClient.getAccessToken(),
-    fetchPromptConfig: fetchRemoteAgentConfigYaml,
-  });
 
-  return { catalog, directory, roster, remotePromptController };
+  return { catalog, directory, roster };
 }

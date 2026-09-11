@@ -68,12 +68,6 @@ import {
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
-/** Target for the desktop-host "set provider key" modal. */
-interface ProviderKeyModalTarget {
-  provider: string;
-  displayName: string;
-}
-
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
 // declared.
@@ -167,9 +161,6 @@ export const sessionProblem = trackedSignal<'expired' | 'unavailable' | null>(
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 export const globalStreamingDefault = trackedSignal(
   () => DEFAULT_GLOBAL_STREAMING,
-);
-export const providerKeyModal = trackedSignal<ProviderKeyModalTarget | null>(
-  () => null,
 );
 
 // ---------------------------------------------------------------------------

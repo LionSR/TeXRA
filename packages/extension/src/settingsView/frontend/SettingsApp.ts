@@ -48,7 +48,6 @@ import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './tabs/ShortcutsTab';
-import './components/profile/ProviderKeyModal';
 
 // Local imports - module-scope settings state + composed message handlers
 import { settingsViewHandlers } from './messageDispatcher';
@@ -101,7 +100,6 @@ import {
   orchestratorAgents,
   preferShortModelNames,
   prSubscriptions,
-  providerKeyModal,
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
@@ -185,54 +183,14 @@ export class SettingsApp extends SettingsAppBase {
     });
   }
 
-  // Provider-key entry flow. Lives here (not in a leaf component) because it
-  // branches on `isDesktopHost` — a `BaseWebviewApp` capability — to choose
-  // between the in-webview modal (desktop) and the host prompt (VS Code).
   private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    const { provider } = event.detail;
-    const status = providerKeyStatuses
-      .get()
-      .find((entry) => entry.provider === provider);
-    if (!this.isDesktopHost) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, { provider });
-      return;
-    }
-
-    providerKeyModal.set({
-      provider,
-      displayName: status?.displayName ?? provider,
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
+      provider: event.detail.provider,
     });
   }
 
-  private handleProviderKeySubmit(
-    event: CustomEvent<{ provider: string; apiKey: string }>,
-  ): void {
-    providerKeyModal.set(null);
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
-  }
-
-  private readonly handleProviderKeyCancel = (): void => {
-    providerKeyModal.set(null);
-  };
-
   private handleManageProviderKeys(): void {
     selectedPanel.set(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
-  }
-
-  private renderProviderKeyModal(): TemplateResult | typeof nothing {
-    const modal = providerKeyModal.get();
-    if (modal == null) {
-      return nothing;
-    }
-
-    return html`
-      <provider-key-modal
-        .provider=${modal.provider}
-        .displayName=${modal.displayName}
-        @provider-key-submit=${this.handleProviderKeySubmit}
-        @provider-key-cancel=${this.handleProviderKeyCancel}
-      ></provider-key-modal>
-    `;
   }
 
   private renderDesktopUnavailablePanel(
@@ -541,7 +499,6 @@ export class SettingsApp extends SettingsAppBase {
           }
           ${this.renderActivePanel(activePanel, desktopHost, goalSupported)}
         </section>
-        ${this.renderProviderKeyModal()}
       </div>
     `;
   }

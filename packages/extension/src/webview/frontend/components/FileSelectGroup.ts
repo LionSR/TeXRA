@@ -9,6 +9,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens } from '@shared/styles';
 import {
+  AgentCategory,
   ToolConfigFieldsSchema,
   type CheckboxValues,
   type DocumentFileType,
@@ -24,7 +25,6 @@ import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
-import { SESSION_TYPES } from '../constants';
 import { fileSelectStyles } from '../fileSelectStyles';
 
 @customElement('file-select-group')
@@ -68,7 +68,7 @@ export class FileSelectGroup extends LitElement {
     ToolConfigFieldsSchema.parse({});
 
   /** The launch mode: a tool-use session takes no input files. */
-  @property() sessionType: SessionType = SESSION_TYPES.WORKFLOW;
+  @property() sessionType: SessionType = AgentCategory.Workflow;
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -155,7 +155,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get isFileInputDisabled(): boolean {
-    return this.sessionType === SESSION_TYPES.TOOL_USE;
+    return this.sessionType === AgentCategory.ToolUse;
   }
 
   /**

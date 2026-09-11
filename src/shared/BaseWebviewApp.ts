@@ -21,21 +21,9 @@ abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
     this.handleMessage(event.data as TMessage);
   };
 
-  /**
-   * True when this webview is mounted by the Electron desktop renderer.
-   *
-   * Why two checks: under normal operation `window.texraDesktop` is wired by
-   * the preload bridge and is sufficient on its own. The `data-desktop-view`
-   * attribute is the fallback for tests and Storybook-style harnesses that
-   * mount these components without the preload bridge — they can opt into
-   * the desktop layout by setting the attribute on the host element. The VS
-   * Code extension host sets neither.
-   */
+  /** True when the Electron desktop renderer mounted this webview. */
   protected get isDesktopHost(): boolean {
-    return (
-      this.hasAttribute('data-desktop-view') ||
-      Object.hasOwn(window, 'texraDesktop')
-    );
+    return this.hasAttribute('data-desktop-view');
   }
 
   /**

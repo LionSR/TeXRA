@@ -18,6 +18,7 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { MessageHost } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
@@ -141,7 +142,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
   private readonly resourcesPath: string;
   private readonly agentActions;
-  private readonly remotePromptController;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {
@@ -175,7 +175,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.roster = controllers.roster;
-    this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
@@ -400,9 +399,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
     try {
-      const result = await this.remotePromptController.getPromptConfig(
-        data.agentName,
-      );
+      const result = await getRemoteAgentPromptConfig(data.agentName);
       if (!result.ok) {
         await this.notifications.showErrorMessage(result.message);
         return;
