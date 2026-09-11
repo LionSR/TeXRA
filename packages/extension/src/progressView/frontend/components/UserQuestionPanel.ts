@@ -254,9 +254,14 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         ?.focus();
       return;
     }
+    // Submission itself still collapses onto `UserQuestionAnswersSchema`'s
+    // question-text keys (the AskUserQuestion wire vocabulary has no other
+    // id): two identically-worded questions answered independently above
+    // will silently collapse into one entry here. Pre-existing limitation,
+    // not introduced by the position-indexed state above.
     const answers: UserQuestionAnswers = {};
 
-    data.questions.forEach((question, index) => {
+    for (const [index, question] of data.questions.entries()) {
       const custom = this.freeText[index]?.trim();
       const selected = this.selections[index] ?? [];
       if (question.multiSelect) {
@@ -264,19 +269,19 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         // question it adds to the checked options instead of replacing them.
         const merged = custom ? [...selected, custom] : selected;
         const answer = [...new Set(merged)];
-        if (answer.length === 0) return;
+        if (answer.length === 0) continue;
         answers[question.question] = answer;
-        return;
+        continue;
       }
       // Single-select holds one answer, so free text stays an override — it is
       // the escape hatch for "none of these options fit".
       if (custom) {
         answers[question.question] = custom;
-        return;
+        continue;
       }
-      if (selected.length === 0) return;
+      if (selected.length === 0) continue;
       answers[question.question] = selected[0];
-    });
+    }
 
     this.emitAction({ action: 'submit', answers });
   }
