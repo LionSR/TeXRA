@@ -28,13 +28,11 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { formatDuration } from '@utils/core';
-import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
   type RunHandle,
   type RunStatusInfo,
   type LiveToolUseFlowContext,
 } from './RunHandle';
-import { RunInteractionOwnership } from './runInteractionOwnership';
 import { RunLanes } from './runLanes';
 import {
   WaitingTermination,
@@ -135,12 +133,6 @@ interface RunRegistryInit {
  * session's event hub, approvals, and lease-release boundary.
  */
 export class RunRegistry {
-  /**
-   * Which host-interaction generation owns each live run. Session-wide so
-   * generations of one host hand ownership over without inheriting each
-   * other's runs; the CLI chat controller is its only writer.
-   */
-  readonly interactionOwnership = new RunInteractionOwnership(this);
   private readonly handles = new Map<RunId, RunHandle>();
   private disposed = false;
   /** Set by {@link closeAdmissions}: the session is closing. */
@@ -157,9 +149,6 @@ export class RunRegistry {
     string,
     Set<(handle: RunHandle | undefined) => void>
   >();
-  private readonly registrationListeners: ListenerSet<
-    (runId: RunId, handle: RunHandle | undefined) => void
-  > = createListenerSet();
   private readonly childActivations = new Map<RunId, ChildRunActivation>();
   private readonly lanes = new RunLanes();
   private readonly waitingTermination: WaitingTermination;
@@ -220,17 +209,9 @@ export class RunRegistry {
     this.lanes.disposeAll(disposal);
     const runIds = [...this.handles.keys()];
     this.handles.clear();
-    for (const runId of runIds) {
-      this.notifyRegistrationListeners(runId, undefined);
-      this.notifyWaiters(runId);
-    }
-    for (const activation of this.childActivations.values()) {
-      this.interactionOwnership.observeChildActivation(activation, false);
-    }
+    for (const runId of runIds) this.notifyWaiters(runId);
     this.childActivations.clear();
     this.listeners.clear();
-    this.registrationListeners.clear();
-    this.interactionOwnership.dispose();
   }
 
   /**
@@ -290,7 +271,6 @@ export class RunRegistry {
     // The parent edge is already durable on the child's `run.start`; the
     // roster is the only thing a tracked child moves here.
     if (handle.parent !== null) this.emitChildActivity(handle.parent);
-    this.notifyRegistrationListeners(handle.runId, handle);
     this.notifyWaiters(handle.runId);
   }
 
@@ -372,7 +352,6 @@ export class RunRegistry {
 
   private untrackHandle(handle: RunHandle): void {
     this.handles.delete(handle.runId);
-    this.notifyRegistrationListeners(handle.runId, undefined);
     this.notifyWaiters(handle.runId);
     if (handle.parent !== null) this.emitChildActivity(handle.parent);
   }
@@ -724,13 +703,6 @@ export class RunRegistry {
     };
   }
 
-  /** Observe handle registrations, replacements, and removals across all ids. */
-  addRegistrationListener(
-    cb: (runId: RunId, handle: RunHandle | undefined) => void,
-  ): () => void {
-    return this.registrationListeners.add(cb);
-  }
-
   /**
    * Retain a native child loop's lineage until the returned disposer runs,
    * which the loop does only after its final delivery to the parent.
@@ -741,7 +713,6 @@ export class RunRegistry {
       return () => {};
     }
     this.childActivations.set(activation.runId, activation);
-    this.interactionOwnership.observeChildActivation(activation, true);
     return () => this.releaseChildActivation(activation.runId, activation);
   }
 
@@ -874,22 +845,12 @@ export class RunRegistry {
     for (const cb of [...listeners]) cb(handle);
   }
 
-  private notifyRegistrationListeners(
-    runId: RunId,
-    handle: RunHandle | undefined,
-  ): void {
-    for (const listener of [...this.registrationListeners]) {
-      listener(runId, handle);
-    }
-  }
-
   private releaseChildActivation(
     runId: RunId,
     expected: ChildRunActivation,
   ): void {
     if (this.childActivations.get(runId) !== expected) return;
     this.childActivations.delete(runId);
-    this.interactionOwnership.observeChildActivation(expected, false);
     // The loop's last record is gone: a waiter on its settlement wakes.
     this.notifyWaiters(runId);
   }

@@ -61,6 +61,7 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { platform } from '@platform/platform';
+import type { RunId } from '@shared/schemas';
 import {
   isCodingPlanQuotaRoute,
   type QuotaFallbackRouteId,
@@ -155,11 +156,11 @@ export function createTuiHostInteractions(
         reservation.release();
       }
     },
-    requestPlanApproval() {
-      return settleByPolicy<PlanApprovalResult>(context);
+    requestPlanApproval(request) {
+      return settleByPolicy<PlanApprovalResult>(context, request.runId);
     },
-    requestAgentProposal() {
-      return settleByPolicy<ProposalResult>(context);
+    requestAgentProposal(request) {
+      return settleByPolicy<ProposalResult>(context, request.runId);
     },
     requestRetry(request, options) {
       return requestRetryInteraction(
@@ -169,8 +170,8 @@ export function createTuiHostInteractions(
         options,
       );
     },
-    askUserQuestion() {
-      const denial = settleHumanInputDenial(context);
+    askUserQuestion(request) {
+      const denial = settleHumanInputDenial(context, request.runId);
       if (denial == null) return undefined;
       return Promise.resolve<UserQuestionSettlement>({
         action: 'reject',
@@ -209,8 +210,9 @@ export function createTuiHostInteractions(
 /** The CLI policy's answer for a gated plan or proposal, or undefined to ask. */
 function settleByPolicy<T extends PlanApprovalResult | ProposalResult>(
   context: CliContext,
+  runId: RunId | '',
 ): Promise<T> | undefined {
-  const policy = settleExecutable(context);
+  const policy = settleExecutable(context, runId);
   if (!policy) return undefined;
   if (policy.accepted) return Promise.resolve({ action: 'approve' } as T);
   return Promise.resolve(

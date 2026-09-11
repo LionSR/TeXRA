@@ -303,33 +303,6 @@ describe('runRegistry', () => {
     expect(observedCompletion).toBe(true);
   });
 
-  it('observes handle replacements and removal in order', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const first = createHandle(runId, null, {
-      agentName: 'first',
-      category: AgentCategory.Workflow,
-    });
-    const second = createHandle(runId, null, {
-      agentName: 'second',
-      category: AgentCategory.Workflow,
-    });
-    const registrations: unknown[] = [];
-    const detachRegistrations = registry.addRegistrationListener(
-      (changedId, handle) => {
-        if (changedId === runId) registrations.push(handle);
-      },
-    );
-    registry.track(first);
-
-    registry.track(second);
-    registry.untrack(runId);
-
-    expect(registrations).toEqual([first, second, undefined]);
-    detachRegistrations();
-    registry.dispose();
-  });
-
   it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
     // A background `bash` run is registered as an RunHandle (see
     // createChildRun in tools/bash.ts) with its OS-process kill reachable

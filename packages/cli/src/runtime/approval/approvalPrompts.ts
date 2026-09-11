@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { getExhaustionReason } from '@shared/schemas';
-import type { RetryPermission, ApprovalDecision } from '@shared/schemas';
+import type { RetryPermission, ApprovalDecision, RunId } from '@shared/schemas';
 import {
   quotaFallbackRouteForExhaustion,
   type QuotaFallbackRoute,
@@ -37,14 +37,18 @@ export interface CliApprovalContent {
  * from it at once. Keyed weakly by the context, whose lifetime bounds it.
  */
 const cliPromptLanes = new WeakMap<CliContext, PerKeyLane>();
-const warnedApprovalContexts = new WeakSet<CliContext>();
+/** Runs already warned per context; `undefined` stands for a runless caller
+ *  (no run id, or a payload's runless `''`). */
+const warnedApprovalRuns = new WeakMap<CliContext, Set<RunId | undefined>>();
 
 function onCliPromptLane(context: CliContext) {
   return withPerKeyLane(cliPromptLanes, context);
 }
 
 /**
- * Tell the operator, once per run, that the policy closed a gate. The model
+ * Tell the operator, once per run, that the policy closed a gate. Keyed by
+ * `runId` within one context, so concurrent runs sharing the chat TUI's
+ * session context each warn once; a runless caller warns once per context. The model
  * already receives the denial as tool feedback and routes around it, so this
  * is diagnostics only — a denied gate never changes the process exit code.
  *
@@ -52,11 +56,16 @@ function onCliPromptLane(context: CliContext) {
  * frozen CliContext.approvalPolicy can be stale. Operator-facing warnings go
  * to stderr (not `@logger/logUtils`).
  */
-export function warnApprovalDenied(context: CliContext, gate?: string): void {
-  if (warnedApprovalContexts.has(context)) {
-    return;
-  }
-  warnedApprovalContexts.add(context);
+export function warnApprovalDenied(
+  context: CliContext,
+  gate?: string,
+  runId?: RunId | '',
+): void {
+  let warned = warnedApprovalRuns.get(context);
+  if (!warned) warnedApprovalRuns.set(context, (warned = new Set()));
+  const key = runId || undefined;
+  if (warned.has(key)) return;
+  warned.add(key);
   const policy = defaultSession().approvalPolicy;
   writeTextStderr(
     `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${policy}".`,

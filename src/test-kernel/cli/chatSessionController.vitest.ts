@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => ({
   defaultSession: vi.fn(),
   getActiveRunIds: vi.fn(),
   getRunHandle: vi.fn(),
-  addRunRegistrationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
@@ -140,7 +139,6 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { RunInteractionOwnership } from '@agent/runtime/runInteractionOwnership';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
@@ -292,7 +290,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
   const runs = {
     getActiveIds: mocks.getActiveRunIds,
     getHandle: mocks.getRunHandle,
-    addRegistrationListener: mocks.addRunRegistrationListener,
   };
   mocks.defaultSession.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -314,14 +311,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       }),
     },
     approvals: { registerRunParent: vi.fn() },
-    runs: {
-      ...runs,
-      // The stubbed registry still answers the surfaces the real ownership
-      // index reads, so the controller runs against real ownership.
-      interactionOwnership: new RunInteractionOwnership(
-        runs as unknown as RunRegistry,
-      ),
-    },
+    runs,
     transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     // The parent edge the resume path reads cold, off the same seeded view
     // the TUI renders.
@@ -370,17 +360,6 @@ function installOwnerSession(): {
  */
 function holdRun(runId: RunId): void {
   seedView(viewWith([makeRunView({ id: runId })]));
-}
-
-function trackLiveRun(
-  runs: RunRegistry,
-  runId: RunId,
-  parent: RunId | null,
-  agent: string,
-): void {
-  runs.trackAgentRun(testRunHandle({ runId, parent, agent }), {
-    status: RUN_PHASE.RUNNING,
-  });
 }
 
 /** `resumeRun`'s started result: the run ran and the batch reached it. */
@@ -546,7 +525,6 @@ describe('createChatSessionController', () => {
       emit: vi.fn(),
     });
     mocks.getActiveRunIds.mockReturnValue([]);
-    mocks.addRunRegistrationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.request.mockImplementation(() =>
@@ -640,46 +618,6 @@ describe('createChatSessionController', () => {
     });
   });
 
-  it('releases every live interaction owner when one release fails', () => {
-    const firstFailure = new Error('first ownership release failed');
-    const firstRelease = vi.fn(() => {
-      throw firstFailure;
-    });
-    const secondRelease = vi.fn();
-    const scopes = [firstRelease, secondRelease].map((release) => ({
-      claim: vi.fn(),
-      finish: vi.fn(),
-      release,
-    }));
-    const runtimeSession = mocks.defaultSession();
-    const open = vi
-      .fn()
-      .mockReturnValueOnce(scopes[0])
-      .mockReturnValueOnce(scopes[1]);
-    const disposables = new DisposableStore();
-    const ctrl = createChatSessionController(
-      makeInit({
-        disposables,
-        runtimeSession: {
-          ...runtimeSession,
-          runs: {
-            ...runtimeSession.runs,
-            interactionOwnership: { open },
-          },
-        } as SessionHandle,
-      }),
-    );
-    const never = pDefer<never>();
-    mocks.executeAgent.mockReturnValue(never.promise);
-
-    ctrl.startRootRun(makeRunRequest('First run.'));
-    ctrl.startRootRun(makeRunRequest('Second run.'));
-
-    expect(() => disposables.dispose()).toThrow(firstFailure);
-    expect(firstRelease).toHaveBeenCalledOnce();
-    expect(secondRelease).toHaveBeenCalledOnce();
-  });
-
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
     const childRun = 'c00001' as RunId;
     const { runs, interactions } = installOwnerSession();
@@ -770,175 +708,20 @@ describe('createChatSessionController', () => {
     adapterDecision.resolve({ action: 'approve' });
     await expect(approval).resolves.toEqual({ action: 'approve' });
 
+    // The host lives for the chat session, not for the runs it served.
     runs.untrack(childRun);
-    await vi.waitFor(() => {
-      expect(disposeAdapter).toHaveBeenCalledOnce();
-      expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
-    });
-    expect(detachResultToast).toHaveBeenCalledOnce();
+    expect(disposeAdapter).not.toHaveBeenCalled();
 
     disposables.dispose();
     expect(disposeAdapter).toHaveBeenCalledOnce();
+    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
     runs.dispose();
   });
 
-  it('releases a later root host while an earlier detached child remains active', async () => {
-    const { runs } = installOwnerSession();
-    const hostA = { emit: vi.fn(), close: vi.fn() };
-    const hostB = { emit: vi.fn(), close: vi.fn() };
-    const disposeAdapterA = vi.fn();
-    const disposeAdapterB = vi.fn();
-    const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
-    const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
-    const childARun = 'ca0001' as RunId;
-    let rootARunId: RunId | undefined;
-    let rootBRunId: RunId | undefined;
-
-    mocks.createCliRuntimeHost
-      .mockReturnValueOnce(hostA)
-      .mockReturnValueOnce(hostB);
-    mocks.createTuiHostInteractions
-      .mockReturnValueOnce({
-        cancel: vi.fn(),
-        dispose: disposeAdapterA,
-      })
-      .mockReturnValueOnce({
-        cancel: vi.fn(),
-        dispose: disposeAdapterB,
-      });
-    mocks.executeAgent
-      .mockImplementationOnce(
-        async (
-          _config: unknown,
-          runId: RunId,
-          options: ExecuteAgentMockOptions,
-        ) => {
-          rootARunId = runId;
-          trackLiveRun(runs, runId, null, 'a0000a');
-          trackLiveRun(runs, childARun, runId, 'ca0001');
-          options.onRunResolved?.(runId);
-          return runA.promise;
-        },
-      )
-      .mockImplementationOnce(
-        async (
-          _config: unknown,
-          runId: RunId,
-          options: ExecuteAgentMockOptions,
-        ) => {
-          rootBRunId = runId;
-          trackLiveRun(runs, runId, null, 'b0000b');
-          options.onRunResolved?.(runId);
-          return runB.promise;
-        },
-      );
-
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    const config = makeRunRequest('Check interaction ownership.');
-
-    ctrl.startRootRun(config);
-    await vi.waitFor(() => expect(rootARunId).toBeDefined());
-    runs.untrack(rootARunId!);
-    runA.resolve({
-      category: 'toolUse',
-      runId: rootARunId!,
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-    await session.runPromise;
-    expect(hostA.close).not.toHaveBeenCalled();
-
-    ctrl.startRootRun(config);
-    await vi.waitFor(() => expect(rootBRunId).toBeDefined());
-    runs.untrack(rootBRunId!);
-    runB.resolve({
-      category: 'toolUse',
-      runId: rootBRunId!,
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-    await session.runPromise;
-
-    expect(hostB.close).toHaveBeenCalledOnce();
-    expect(disposeAdapterB).toHaveBeenCalledOnce();
-    expect(hostA.close).not.toHaveBeenCalled();
-    expect(disposeAdapterA).not.toHaveBeenCalled();
-
-    runs.untrack(childARun);
-    await vi.waitFor(() => {
-      expect(hostA.close).toHaveBeenCalledOnce();
-      expect(disposeAdapterA).toHaveBeenCalledOnce();
-    });
-    runs.dispose();
-  });
-
-  it('retains a root host while a child is activating', async () => {
-    const { runs } = installOwnerSession();
-    const presentationHost = { emit: vi.fn(), close: vi.fn() };
-    const disposeAdapter = vi.fn();
-    let rootRun: RunId | undefined;
-    const childRun = 'ac0001' as RunId;
-    let releaseChildActivation = (): void => undefined;
-
-    mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
-    mocks.createTuiHostInteractions.mockReturnValue({
-      cancel: vi.fn(),
-      dispose: disposeAdapter,
-    });
-    mocks.executeAgent.mockImplementationOnce(
-      async (
-        _config: unknown,
-        runId: RunId,
-        options: ExecuteAgentMockOptions,
-      ) => {
-        rootRun = runId;
-        trackLiveRun(runs, runId, null, 'root');
-        options.onRunResolved?.(runId);
-        releaseChildActivation = runs.reserveChildActivation({
-          runId: childRun,
-          parentRunId: runId,
-          interrupt: vi.fn(),
-          detach: vi.fn(),
-          isDetached: () => false,
-        });
-        runs.untrack(runId);
-        return {
-          category: 'toolUse',
-          runId,
-          outcome: RUN_OUTCOME.COMPLETED,
-        };
-      },
-    );
-
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.startRootRun(makeRunRequest('Start a child and finish immediately.'));
-    await session.runPromise;
-
-    expect(presentationHost.close).not.toHaveBeenCalled();
-    expect(disposeAdapter).not.toHaveBeenCalled();
-
-    trackLiveRun(runs, childRun, rootRun!, 'child');
-    expect(presentationHost.close).not.toHaveBeenCalled();
-
-    // The activation outlives the child's turn handles; the host is held
-    // until the loop's own disposer runs.
-    runs.untrack(childRun);
-    expect(presentationHost.close).not.toHaveBeenCalled();
-    releaseChildActivation();
-    await vi.waitFor(() => {
-      expect(presentationHost.close).toHaveBeenCalledOnce();
-      expect(disposeAdapter).toHaveBeenCalledOnce();
-    });
-    runs.dispose();
-  });
-
-  it('does not overlap terminal-result presenters across surviving host generations', async () => {
-    const hostA = { emit: vi.fn(), close: vi.fn() };
-    const hostB = { emit: vi.fn(), close: vi.fn() };
+  it('does not overlap terminal-result presenters across root launches', async () => {
+    const hostA = { emit: vi.fn() };
+    const hostB = { emit: vi.fn() };
     const resultPresenters = new Set<(message: string) => void>();
-    mocks.createCliRuntimeHost
-      .mockReturnValueOnce(hostA)
-      .mockReturnValueOnce(hostB);
     mocks.attachTerminalResultToast.mockImplementation(() => {
       const host =
         mocks.attachTerminalResultToast.mock.calls.length === 1 ? hostA : hostB;
@@ -972,7 +755,6 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(resultPresenters).toHaveLength(0);
-    expect(hostA.close).toHaveBeenCalledOnce();
 
     ctrl.startRootRun(config);
     await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledTimes(2));
@@ -993,8 +775,6 @@ describe('createChatSessionController', () => {
     expect(hostB.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message: 'Failure B',
     });
-    expect(hostA.close).toHaveBeenCalledOnce();
-    expect(hostB.close).toHaveBeenCalledOnce();
     expect(resultPresenters).toHaveLength(0);
   });
 
@@ -1010,43 +790,6 @@ describe('createChatSessionController', () => {
       'launch defect',
     );
     expect(session.runCompleted).toBe(true);
-    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
-  });
-
-  it('cannot miss the final survivor untracking at host-listener registration', async () => {
-    const presentationHost = {
-      emit: vi.fn(),
-      close: mocks.presentationHostClose,
-    } as unknown as CliRuntimeHost;
-    const detachRegistrationListener = vi.fn();
-    let childActive = true;
-    mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
-    mocks.getActiveRunIds.mockImplementation(() =>
-      childActive ? ['child-exec'] : [],
-    );
-    mocks.getRunHandle.mockImplementation(() =>
-      childActive ? { presentationHost } : undefined,
-    );
-    mocks.addRunRegistrationListener.mockImplementation(
-      (listener: () => void) => {
-        // Adversarial boundary: the final survivor disappears while the
-        // listener is being installed, before the initial liveness check.
-        childActive = false;
-        listener();
-        return detachRegistrationListener;
-      },
-    );
-
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.startRootRun(makeRunRequest('Check listener registration.'));
-    await session.runPromise;
-
-    expect(session.runCompleted).toBe(true);
-    expect(mocks.addRunRegistrationListener).toHaveBeenCalledOnce();
-    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
-    expect(mocks.detachHostInteractions).toHaveBeenCalledOnce();
-    expect(detachRegistrationListener).toHaveBeenCalledOnce();
   });
 
   it('reserves the root-run slot before tryResumeRun awaits persisted state', async () => {
