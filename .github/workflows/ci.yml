@@ -151,26 +151,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
       - name: Setup Deno
         uses: denoland/setup-deno@v2.0.5
         with:
           deno-version: '2.8.3'
           cache: true
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       - name: Validate CLI React Compiler
         run: pnpm --filter @texra-ai/cli smoke:react-compiler
@@ -231,29 +219,21 @@ jobs:
     # of the docs/code split. A guidance-only PR (code=false) skips `checks`,
     # and that is exactly the PR most likely to introduce a stale path; a
     # code-only PR can break the prose by renaming what it cites. Both
-    # scripts run with plain Node (no build step), but the browser-safe utils
-    # guard imports the repo's `typescript` devDependency, so this job
-    # installs dependencies.
+    # scripts import only Node built-ins, so this job installs nothing.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
+      # setup-node@v5 caches the package manager named by package.json's
+      # `packageManager` (pnpm) by default and fails when pnpm is absent;
+      # this job installs nothing, so opt out.
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+          package-manager-cache: false
 
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
@@ -267,9 +247,6 @@ jobs:
       # harmless.
       - name: Check docs root boundary is classified
         run: node docs/scripts/check-root-docs.mjs
-
-      - name: Check browser-safe utils counts resolve
-        run: node scripts/check-browser-safe-utils.mjs
 
   test:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
@@ -302,20 +279,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
       # shards exist because a single runner can't go wider than that.
@@ -333,20 +298,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       - name: Validate CLI TUI smoke frames
         run: |
@@ -408,20 +361,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       - name: Build webview smoke assets
         run: pnpm run vite:webviews
@@ -450,20 +391,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
         with:
           node-version: '22.16.0'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Validate CLI real-runtime run path
         run: |
@@ -494,20 +425,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install formatting dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+          ignore-scripts: 'true'
 
       - name: Check formatting
         run: pnpm run format:check

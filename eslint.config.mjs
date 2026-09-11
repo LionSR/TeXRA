@@ -1,7 +1,5 @@
-// eslint.config.js
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import stylistic from '@stylistic/eslint-plugin';
 import importPlugin from 'eslint-plugin-import-x';
 import globals from 'globals';
 import unicorn from 'eslint-plugin-unicorn';
@@ -13,22 +11,23 @@ import { loadAliasEntries } from './scripts/aliasUtils.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Every package tsconfig extends the root, so the root `paths` map is the
+// only alias map. Longest target first, so a nested alias wins over its parent.
+const ALIAS_ENTRIES = loadAliasEntries(__dirname).toSorted(
+  (left, right) => right.absolutePath.length - left.absolutePath.length,
+);
+
 const INTERNAL_ALIAS_NAMES = [
   ...new Set(
-    loadAliasEntries(__dirname)
-      .map(({ alias }) => alias)
-      .filter((alias) => alias.startsWith('@')),
+    ALIAS_ENTRIES.map(({ alias }) => alias).filter((alias) =>
+      alias.startsWith('@'),
+    ),
   ),
 ].toSorted();
 
 const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
   {
     pattern: alias,
-    group: 'internal',
-    position: 'after',
-  },
-  {
-    pattern: `${alias}/*`,
     group: 'internal',
     position: 'after',
   },
@@ -52,12 +51,58 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'src/test-kernel/support/setupPlatform.ts'),
 ]);
 
-const extensionPackageDir = path.join(__dirname, 'packages', 'extension');
-
-const ALIAS_CONFIGS = [
-  aliasConfigForRoot(extensionPackageDir),
-  aliasConfigForRoot(__dirname),
+// The `@utils/*` modules the webview frontends may import at runtime. Each is
+// held to the browser (no Node built-ins) and may import only the others, so
+// the set stays closed under its own imports.
+const BROWSER_SAFE_UTILS = [
+  '@utils/core',
+  '@utils/core/keyedMutex',
+  '@utils/errors/errorMessage',
+  '@utils/files/pastedImageName',
+  '@utils/text/stringUtils',
 ];
+const BROWSER_SAFE_UTILS_MESSAGE = `Browser-reachable code may import at runtime only the browser-safe utils (${BROWSER_SAFE_UTILS.join(', ')}); adding one means holding it to the browser too.`;
+// A regex rather than a gitignore group: `@utils/**` would exclude the
+// intermediate `@utils/text/` directory, and negation cannot re-include a
+// file under an excluded directory.
+const BROWSER_SAFE_UTILS_REGEX = `^@utils/(?!(?:${BROWSER_SAFE_UTILS.map((mod) => mod.slice('@utils/'.length)).join('|')})$)`;
+
+// The CLI reads process input only through its runtime context and writes to
+// the terminal only at its I/O boundary files.
+const CLI_PROCESS_INPUT_RESTRICTIONS = ['argv', 'env', 'cwd'].map(
+  (property) => ({
+    object: 'process',
+    property,
+    message: `Read process.${property} through packages/cli/src/runtime/cliContext.ts.`,
+  }),
+);
+const CLI_PROCESS_OUTPUT_RESTRICTIONS = [
+  ...['log', 'error', 'warn'].map((property) => ({
+    object: 'console',
+    property,
+  })),
+  ...['exitCode', 'stdout', 'stderr'].map((property) => ({
+    object: 'process',
+    property,
+  })),
+].map((restriction) => ({
+  ...restriction,
+  message: `${restriction.object}.${restriction.property} stays at the CLI I/O boundary; write through packages/cli/src/runtime/logSinks.ts.`,
+}));
+const CLI_PROCESS_INPUT_BOUNDARY = ['packages/cli/src/runtime/cliContext.ts'];
+const CLI_PROCESS_OUTPUT_BOUNDARY = [
+  'packages/cli/src/bin/texra.ts',
+  'packages/cli/src/runtime/logSinks.ts',
+  // Ink mounts onto the real process streams in these launchers; the rest of
+  // the TUI goes through logSinks.
+  'packages/cli/src/orchestration/runOrchestrationTui.tsx',
+  'packages/cli/src/init/runInitWizard.tsx',
+  'packages/cli/src/onboarding/runOnboarding.tsx',
+  'packages/cli/src/commands/loginProviderPicker.tsx',
+  'packages/cli/src/config/runConfigTui.tsx',
+];
+// The chat TUI also hands Ink the real `process.stdin`, so it is both.
+const CLI_PROCESS_IO_BOUNDARY = ['packages/cli/src/chat/tui/runChatTui.tsx'];
 
 const VSCODE_FREE_ZONE_DIRS = [
   'src/agent',
@@ -138,32 +183,6 @@ function isUnderDir(filename, dir) {
   );
 }
 
-function aliasConfigForRoot(rootDir) {
-  return {
-    rootDir,
-    entries: aliasEntriesFromTsconfigPaths(rootDir),
-  };
-}
-
-function aliasEntriesFromTsconfigPaths(rootDir) {
-  const byAliasAndPath = new Map();
-
-  for (const { alias, absolutePath, requiresSubpath } of loadAliasEntries(
-    rootDir,
-  )) {
-    const key = `${alias}\0${absolutePath}\0${requiresSubpath}`;
-    byAliasAndPath.set(key, {
-      alias,
-      requiresSubpath,
-      absolutePath: path.normalize(absolutePath),
-    });
-  }
-
-  return [...byAliasAndPath.values()].sort(
-    (left, right) => right.absolutePath.length - left.absolutePath.length,
-  );
-}
-
 function toPosixPath(importPath) {
   return importPath.split(path.sep).join('/');
 }
@@ -180,13 +199,6 @@ function isSameOrUnderPath(childPath, parentPath) {
   );
 }
 
-function aliasEntriesForFile(filename) {
-  return (
-    ALIAS_CONFIGS.find(({ rootDir }) => isSameOrUnderPath(filename, rootDir))
-      ?.entries ?? []
-  );
-}
-
 function aliasedImportFor(filename, importPath) {
   if (
     typeof importPath !== 'string' ||
@@ -199,7 +211,7 @@ function aliasedImportFor(filename, importPath) {
   const targetPath = path.normalize(
     path.resolve(path.dirname(filename), importPath),
   );
-  const matchingAlias = aliasEntriesForFile(filename).find((aliasEntry) => {
+  const matchingAlias = ALIAS_ENTRIES.find((aliasEntry) => {
     if (!isSameOrUnderPath(targetPath, aliasEntry.absolutePath)) return false;
 
     const relativePath = path.relative(aliasEntry.absolutePath, targetPath);
@@ -557,7 +569,6 @@ export default tseslint.config(
       },
     },
     plugins: {
-      '@stylistic': stylistic,
       import: importPlugin,
       local: localRules,
       unicorn,
@@ -566,33 +577,26 @@ export default tseslint.config(
       'local/no-platform-init-outside-composition-root': 'error',
 
       // --- Unicorn modernization rules (ES2023+) ---
-      'unicorn/prefer-string-replace-all': 'warn',
-      'unicorn/prefer-at': 'warn',
-      'unicorn/prefer-array-flat-map': 'warn',
-      'unicorn/prefer-includes': 'warn',
-      'unicorn/prefer-array-find': 'warn',
-      'unicorn/no-array-push-push': 'warn',
-      'unicorn/prefer-spread': 'warn',
-      'unicorn/prefer-ternary': 'off', // Often less readable
-      'unicorn/no-null': 'off', // null is valid in this codebase
-      'unicorn/prevent-abbreviations': 'off', // Too strict
+      'unicorn/prefer-string-replace-all': 'error',
+      'unicorn/prefer-at': 'error',
+      'unicorn/prefer-array-flat-map': 'error',
+      'unicorn/prefer-includes': 'error',
+      'unicorn/prefer-array-find': 'error',
+      'unicorn/no-array-push-push': 'error',
+      'unicorn/prefer-spread': 'error',
 
       // #9698: a `default` must not stand in for members of a union we own.
       'local/exhaustive-switch-over-owned-union': 'error',
 
-      // --- Migrated rules from .eslintrc.json ---
       '@typescript-eslint/naming-convention': [
-        'warn',
+        'error',
         {
           selector: 'import',
           format: ['camelCase', 'PascalCase'],
         },
       ],
-      '@stylistic/semi': 'warn',
-      semi: 'off',
-      curly: 'off',
-      eqeqeq: ['warn', 'always', { null: 'ignore' }],
-      'no-throw-literal': 'warn',
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      'no-throw-literal': 'error',
       'local/prefer-alias-for-deep-relative-imports': 'error',
       'no-nested-ternary': 'error',
       'import/order': [
@@ -605,55 +609,27 @@ export default tseslint.config(
             ['parent', 'sibling', 'index', 'object'],
             'type',
           ],
-          pathGroups: [
-            ...INTERNAL_ALIAS_PATH_GROUPS,
-            {
-              pattern: '@/**',
-              group: 'internal',
-              position: 'after',
-            },
-            {
-              pattern: '~/**',
-              group: 'internal',
-              position: 'after',
-            },
-          ],
+          pathGroups: INTERNAL_ALIAS_PATH_GROUPS,
           distinctGroup: false,
           pathGroupsExcludedImportTypes: ['builtin'],
           'newlines-between': 'ignore',
         },
       ],
 
-      // --- Adjustments for ESLint v9/v10 ---
-
-      // Temporarily disable strict any checks - REVISIT LATER
       '@typescript-eslint/no-explicit-any': 'off',
-
-      // Disable rules causing many errors after upgrade - REVISIT LATER
-      'no-case-declarations': 'off',
-      'no-useless-catch': 'off',
       'no-useless-escape': 'off',
-      // ESLint 10 recommended additions; keep this dependency PR policy-neutral.
       'no-useless-assignment': 'off',
       'preserve-caught-error': 'off',
-      '@typescript-eslint/prefer-as-const': 'off',
-
-      // Allow @ts-ignore with description, but prefer @ts-expect-error
-      '@typescript-eslint/ban-ts-comment': [
-        'warn',
-        {
-          'ts-expect-error': 'allow-with-description',
-          'ts-ignore': 'allow-with-description', // Allow ts-ignore for now
-          'ts-nocheck': true,
-          'ts-check': false,
-          minimumDescriptionLength: 3,
-        },
-      ],
-
-      // Keep useful rules, adjust if needed
       '@typescript-eslint/no-unused-vars': 'off',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
+
+      // No temporary adapters (owner ruling 2026-09-06, Effect 4 migration
+      // execution rule 3): the marker that would date one fails outright.
+      'no-warning-comments': [
+        'error',
+        { terms: ['@adapter-until'], location: 'anywhere' },
+      ],
     },
   },
 
@@ -798,8 +774,119 @@ export default tseslint.config(
               message:
                 'Extension browser frontends must import runtime values from browser-safe shared modules.',
             },
+            {
+              regex: BROWSER_SAFE_UTILS_REGEX,
+              allowTypeImports: true,
+              message: BROWSER_SAFE_UTILS_MESSAGE,
+            },
           ],
         },
+      ],
+    },
+  },
+
+  // The browser-safe utils: no Node built-ins, and runtime imports of other
+  // repo modules only from the set itself, by alias, so the allowlist sees
+  // every edge and the frontends' reachable closure stays these five files.
+  {
+    files: BROWSER_SAFE_UTILS.map(
+      (mod) => `${mod.replace('@utils', 'src/utils')}{.ts,/index.ts}`,
+    ),
+    rules: {
+      'import/no-nodejs-modules': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: [
+            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            {
+              group: INTERNAL_ALIAS_NAMES.filter(
+                (alias) => alias !== '@utils',
+              ).flatMap((alias) => [alias, `${alias}/**`]),
+              allowTypeImports: true,
+              message: BROWSER_SAFE_UTILS_MESSAGE,
+            },
+            {
+              regex: BROWSER_SAFE_UTILS_REGEX,
+              allowTypeImports: true,
+              message: BROWSER_SAFE_UTILS_MESSAGE,
+            },
+            {
+              regex: '^\\.',
+              message:
+                'Browser-safe utils import each other by @utils alias, so the allowlist sees every edge.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The CLI is neither a VS Code nor an Electron host, and it touches process
+  // I/O only at its boundary files. Flat config replaces a rule's options
+  // per matching block, so each boundary block restates what stays banned.
+  {
+    files: ['packages/cli/src/**/*.{ts,tsx,mts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['vscode', 'electron'].map((name) => ({
+            name,
+            message: 'The CLI host must not import VS Code or Electron.',
+          })),
+          patterns: [
+            {
+              group: ['vscode/**', 'electron/**'],
+              message: 'The CLI host must not import VS Code or Electron.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        ...CLI_PROCESS_INPUT_RESTRICTIONS,
+        ...CLI_PROCESS_OUTPUT_RESTRICTIONS,
+      ],
+    },
+  },
+  {
+    files: CLI_PROCESS_INPUT_BOUNDARY,
+    rules: {
+      // The context also reads `process.stdout.isTTY` / `process.stderr.isTTY`
+      // to classify the terminal, so the stream objects stay open to it.
+      'no-restricted-properties': [
+        'error',
+        ...CLI_PROCESS_OUTPUT_RESTRICTIONS.filter(
+          ({ object, property }) =>
+            object !== 'process' || property === 'exitCode',
+        ),
+      ],
+    },
+  },
+  {
+    files: CLI_PROCESS_OUTPUT_BOUNDARY,
+    rules: {
+      'no-restricted-properties': ['error', ...CLI_PROCESS_INPUT_RESTRICTIONS],
+    },
+  },
+  {
+    files: CLI_PROCESS_IO_BOUNDARY,
+    rules: { 'no-restricted-properties': 'off' },
+  },
+  // The fetch silencer swaps `console.error` for a filter around one call and
+  // restores it; it intercepts a library's logging rather than writing output.
+  {
+    files: ['packages/cli/src/commands/_helpers/fetchSilencer.ts'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        ...CLI_PROCESS_INPUT_RESTRICTIONS,
+        ...CLI_PROCESS_OUTPUT_RESTRICTIONS.filter(
+          ({ object, property }) =>
+            object !== 'console' || property !== 'error',
+        ),
       ],
     },
   },

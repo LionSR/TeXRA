@@ -1,0 +1,29 @@
+name: Setup workspace
+description: Install pnpm and Node, restore the pnpm store cache, and install the workspace from the lockfile.
+
+inputs:
+  node-version:
+    description: Node.js version to install.
+    default: '22'
+  ignore-scripts:
+    description: Pass --ignore-scripts to pnpm install ('true' or 'false').
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v6
+      with:
+        run_install: false
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}

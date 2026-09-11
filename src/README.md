@@ -48,8 +48,8 @@ capability the port does not expose, add a typed port rather than an import.
 
 **Does it run in a webview?** The webview frontends bundle for the browser, so
 anything they import must avoid Node built-ins. Only a small, fixed set of
-`utils` modules is reachable from them — AGENTS.md carries the current count and
-list, and `scripts/check-browser-safe-utils.mjs` enforces it there. Adding an import to
+`utils` modules is reachable from them — the `BROWSER_SAFE_UTILS` allowlist in
+`eslint.config.mjs`, which ESLint enforces. Adding an import to
 any of them, or to their transitive dependencies, can break a webview build in a
 way `tsc` will not catch.
 

@@ -28,8 +28,8 @@ export {
   formatDuration,
   formatWallTimeSeconds,
   serializeError,
-} from '../text/stringUtils';
-export { KeyedMutex } from './keyedMutex';
+} from '@utils/text/stringUtils';
+export { KeyedMutex } from '@utils/core/keyedMutex';
 
 // ---------------------------------------------------------------------------
 // typeGuards
