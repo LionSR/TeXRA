@@ -375,11 +375,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     ...(controls.effort === null
       ? {}
       : { output_config: { effort: controls.effort } }),
-    ...(controls.inferenceGeo === null
-      ? {}
-      : { inference_geo: controls.inferenceGeo }),
-    service_tier:
-      controls.serviceTier === 'standard-only' ? 'standard_only' : 'auto',
     stop_sequences: [...controls.stopSequences],
     thinking: wireThinking,
     ...(controls.cache === 'disabled'
@@ -460,13 +455,11 @@ export function anthropicMessagesModel(
       input.mode === 'background' ||
       input.continuation !== undefined ||
       input.store !== undefined ||
-      input.promptCacheKey !== undefined ||
       input.reasoning !== undefined ||
       input.effort === 'none' ||
       input.effort === 'minimal' ||
       input.thinkingLevel !== undefined ||
-      input.serviceTier === 'fast' ||
-      input.serviceTier === null ||
+      input.serviceTier !== undefined ||
       (!config.supportsTemperature && input.temperature !== undefined)
     )
       return yield* new ModelError({
@@ -508,11 +501,6 @@ export function anthropicMessagesModel(
           input.effort === undefined ? config.defaults.effort : input.effort,
         cache: input.cache ?? config.defaults.cache,
         stopSequences: input.stopSequences ?? config.defaults.stopSequences,
-        serviceTier: input.serviceTier ?? config.defaults.serviceTier,
-        inferenceGeo:
-          input.inferenceGeo === undefined
-            ? config.defaults.inferenceGeo
-            : input.inferenceGeo,
       },
     });
     if (!prepared.success)

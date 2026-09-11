@@ -622,8 +622,6 @@ export function openrouterChatModel(
         authored.reasoning !== undefined ||
         authored.serviceTier !== undefined ||
         authored.cache !== undefined ||
-        authored.inferenceGeo !== undefined ||
-        authored.promptCacheKey !== undefined ||
         authored.parallelToolCalls !== undefined ||
         authored.thinking !== undefined
       )

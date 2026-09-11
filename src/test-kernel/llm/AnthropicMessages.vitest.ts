@@ -29,8 +29,6 @@ const CONFIG: AnthropicMessagesConfiguration = {
     effort: 'high',
     cache: '1h',
     stopSequences: [],
-    serviceTier: 'auto',
-    inferenceGeo: 'us',
   },
 };
 const REQUEST: TurnRequest = {
@@ -627,8 +625,6 @@ describe('canonical Anthropic Messages protocol', () => {
           thinking: { type: 'adaptive', display: 'summarized' },
           output_config: { effort: 'high' },
           cache_control: { type: 'ephemeral', ttl: '1h' },
-          service_tier: 'auto',
-          inference_geo: 'us',
           tool_choice: {
             type: 'tool',
             name: 'search',
@@ -660,8 +656,6 @@ describe('canonical Anthropic Messages protocol', () => {
             JSON.stringify({
               ...REQUEST,
               effort: null,
-              inferenceGeo: null,
-              serviceTier: 'standard-only',
               messages: [
                 ...REQUEST.messages,
                 {
@@ -706,8 +700,10 @@ describe('canonical Anthropic Messages protocol', () => {
         expect(sent.system).toEqual(first.system);
         expect(sent.cache_control).toEqual(first.cache_control);
         expect(sent).not.toHaveProperty('output_config');
-        expect(sent).not.toHaveProperty('inference_geo');
-        expect(sent.service_tier).toBe('standard_only');
+        for (const body of [first, sent]) {
+          expect(body).not.toHaveProperty('inference_geo');
+          expect(body).not.toHaveProperty('service_tier');
+        }
         expect(sent.messages.slice(1)).toEqual([
           {
             role: 'assistant',
@@ -889,7 +885,6 @@ describe('canonical Anthropic Messages protocol', () => {
     { serviceTier: 'fast' },
     { mode: 'background' },
     { store: true },
-    { promptCacheKey: 'run-cache-key' },
     { effort: 'none' },
     { effort: 'minimal' },
     {

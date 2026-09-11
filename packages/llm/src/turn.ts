@@ -693,7 +693,6 @@ const EffortSchema = ReasoningEffortSchema.unwrap()
   .exclude(['none', 'minimal'])
   .nullable();
 const CacheSchema = z.enum(['disabled', '5m', '1h']);
-const InferenceGeoSchema = z.enum(['global', 'us']).nullable();
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
@@ -709,16 +708,11 @@ export const TurnRequestSchema = z
     store: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
     reasoning: ResponsesReasoningSchema.optional(),
-    serviceTier: z
-      .enum(['fast', 'auto', 'standard-only'])
-      .nullable()
-      .optional(),
+    serviceTier: z.literal('fast').nullable().optional(),
     thinking: AuthoredThinkingSchema.optional(),
     effort: ReasoningEffortSchema.optional(),
     cache: CacheSchema.optional(),
-    promptCacheKey: z.string().min(1).optional(),
     stopSequences: z.array(z.string()).readonly().optional(),
-    inferenceGeo: InferenceGeoSchema.optional(),
     continuation: ContinuationSchema.optional(),
   })
   .readonly();
@@ -758,8 +752,6 @@ const AnthropicControlsSchema = z.strictObject({
   effort: EffortSchema,
   cache: CacheSchema,
   stopSequences: z.array(z.string()).readonly(),
-  serviceTier: z.enum(['auto', 'standard-only']),
-  inferenceGeo: InferenceGeoSchema,
 });
 const ChatReasoningControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
@@ -772,9 +764,6 @@ const ChatReasoningControlsSchema = z.strictObject({
 });
 const KimiControlsSchema = ChatReasoningControlsSchema.extend({
   preserveThinking: z.boolean(),
-  promptCacheKey: TurnRequestSchema.unwrap()
-    .shape.promptCacheKey.unwrap()
-    .nullable(),
 });
 const GlmControlsSchema = ChatReasoningControlsSchema.extend({
   temperature: z.number().min(0).max(1).nullable(),
@@ -904,7 +893,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     protocol: z.literal('kimi-chat'),
     supportsImageInput: z.boolean(),
     supportsInputTokenEstimation: z.boolean(),
-    requiresPromptCacheKey: z.boolean(),
     thinkingControl: z.enum(['toggle', 'always', 'effort']),
     supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
     supportsForcedToolChoice: z.boolean(),
@@ -917,7 +905,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: KimiControlsSchema.omit({
       toolChoice: true,
       temperature: true,
-      promptCacheKey: true,
     }).readonly(),
   }).readonly(),
   BindingSchema.extend({

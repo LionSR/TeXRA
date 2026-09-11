@@ -1188,7 +1188,6 @@ describe('canonical Google Interactions protocol', () => {
     'parallel-control',
     'reasoning-control',
     'service-tier-control',
-    'prompt-cache-key',
     'anthropic-controls',
     'background-mode',
   ] as const)(
@@ -1219,15 +1218,11 @@ describe('canonical Google Interactions protocol', () => {
           effort: null,
           cache: 'disabled',
           stopSequences: [],
-          inferenceGeo: null,
         });
         expectedMessage = 'Google does not support';
       } else if (unsupported === 'background-mode') {
         next.mode = 'background';
         expectedMessage = 'Google background execution';
-      } else if (unsupported === 'prompt-cache-key') {
-        next.promptCacheKey = 'run-cache-key';
-        expectedMessage = 'Google does not support';
       } else if (unsupported === 'raw-audio') {
         expectedMessage = 'Raw Google audio';
         next.messages.push({

@@ -58,7 +58,6 @@ const REASONING_CONFIGS = [
     protocol: 'kimi-chat',
     supportsImageInput: true,
     supportsInputTokenEstimation: false,
-    requiresPromptCacheKey: false,
     thinkingControl: 'toggle',
     supportedEfforts: [],
     supportsForcedToolChoice: false,
@@ -640,7 +639,7 @@ describe('native OpenAI Chat protocol', () => {
     },
   );
 
-  it('estimates Kimi messages explicitly and preserves the caller cache key on generation', async () => {
+  it('estimates Kimi messages explicitly with the exact generation input', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -655,19 +654,12 @@ describe('native OpenAI Chat protocol', () => {
     const config = {
       ...REASONING_CONFIGS[1],
       supportsInputTokenEstimation: true,
-      requiresPromptCacheKey: true,
     };
     const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
     assert(model.estimateInputTokens !== undefined);
-    const missingKey = await Effect.runPromise(
-      Effect.flip(model.prepareTurn(REQUEST)),
-    );
-    expect(missingKey.kind).toBe('invalid-request');
-    const promptCacheKey = ' retained-session-key ';
     const prepared = await Effect.runPromise(
       model.prepareTurn({
         system: 'Estimate this system too.',
-        promptCacheKey,
         tools: TOOLS,
         messages: [
           {
@@ -738,36 +730,20 @@ describe('native OpenAI Chat protocol', () => {
     expect({ model: generation.model, messages: generation.messages }).toEqual(
       estimate,
     );
-    expect(generation).toMatchObject({
-      prompt_cache_key: promptCacheKey,
-      max_tokens: 100,
-    });
-    expect(rehydrated.controls).toMatchObject({
-      promptCacheKey,
-      maxOutputTokens: 100,
-    });
-    for (const rejected of [
-      {
-        ...rehydrated,
-        controls: { ...rehydrated.controls, promptCacheKey: null },
-      },
-      {
-        ...rehydrated,
-        deployment: { ...config.deployment, credentialScope: 'foreign' },
-      },
-    ]) {
-      await Effect.runPromise(Effect.flip(model.estimateInputTokens(rejected)));
-      await Effect.runPromise(Effect.flip(model.generateTurn(rejected)));
-    }
+    expect(generation).toMatchObject({ max_tokens: 100 });
+    expect(generation).not.toHaveProperty('prompt_cache_key');
+    const rejected = {
+      ...rehydrated,
+      deployment: { ...config.deployment, credentialScope: 'foreign' },
+    };
+    await Effect.runPromise(Effect.flip(model.estimateInputTokens(rejected)));
+    await Effect.runPromise(Effect.flip(model.generateTurn(rejected)));
     expect(fetch).toHaveBeenCalledTimes(2);
     const ordinary = openaiChatModel(REASONING_CONFIGS[1], {
       apiKey: 'synthetic',
       fetch,
     });
     expect(ordinary.estimateInputTokens).toBeUndefined();
-    const ordinaryTurn = await Effect.runPromise(ordinary.prepareTurn(REQUEST));
-    assert(ordinaryTurn.protocol === 'kimi-chat');
-    expect(ordinaryTurn.controls.promptCacheKey).toBeNull();
   });
 
   it.each([
@@ -2481,9 +2457,7 @@ describe('native OpenAI Chat protocol', () => {
     'none effort',
     'minimal effort',
     'cache control',
-    'prompt cache key',
     'stop control',
-    'inference geography',
     'Responses message evidence',
     'Responses call evidence',
   ] as const)('rejects unsupported %s before transport', async (scenario) => {
@@ -2555,12 +2529,8 @@ describe('native OpenAI Chat protocol', () => {
       request = { ...REQUEST, effort: 'minimal' };
     if (scenario === 'cache control')
       request = { ...REQUEST, cache: 'disabled' };
-    if (scenario === 'prompt cache key')
-      request = { ...REQUEST, promptCacheKey: 'session' };
     if (scenario === 'stop control')
       request = { ...REQUEST, stopSequences: [] };
-    if (scenario === 'inference geography')
-      request = { ...REQUEST, inferenceGeo: null };
     if (scenario === 'Responses message evidence')
       request = {
         messages: [

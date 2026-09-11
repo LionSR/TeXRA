@@ -675,18 +675,6 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
     parameters.thinking = { type: thinking.mode };
   } else if (turn.protocol === 'kimi-chat' && config.protocol === 'kimi-chat') {
     if (
-      config.requiresPromptCacheKey &&
-      turn.controls.promptCacheKey === null
-    ) {
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message:
-          'The selected Kimi route requires a caller-supplied prompt cache key.',
-      });
-    }
-    if (turn.controls.promptCacheKey !== null)
-      parameters.prompt_cache_key = turn.controls.promptCacheKey;
-    if (
       turn.controls.temperature !==
         config.temperatureByThinking[thinking.mode] ||
       (config.thinkingControl !== 'toggle' &&
@@ -822,10 +810,7 @@ export function openaiChatModel(
         parsed.data.cache !== undefined ||
         (parsed.data.stopSequences !== undefined &&
           config.protocol !== 'dashscope-chat' &&
-          config.protocol !== 'minimax-chat') ||
-        parsed.data.inferenceGeo !== undefined ||
-        (parsed.data.promptCacheKey !== undefined &&
-          config.protocol !== 'kimi-chat')
+          config.protocol !== 'minimax-chat')
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -978,9 +963,6 @@ export function openaiChatModel(
           temperature,
           maxOutputTokens,
           toolChoice,
-          ...(config.protocol === 'kimi-chat'
-            ? { promptCacheKey: parsed.data.promptCacheKey ?? null }
-            : {}),
         };
       }
       const prepared = ResolvedTurnSchema.safeParse({ ...common, controls });

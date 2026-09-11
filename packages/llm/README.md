@@ -101,7 +101,7 @@ accept inline JPEG/PNG/GIF/WebP/BMP/HEIC/HEIF user images; selected GLM routes a
 JPEG/PNG. MIME spelling and base64 bytes are retained exactly, including empty
 encodings, with ordered text labels. Image detail, tool-result images, audio,
 video and documents remain unsupported in these Chat branches. Hosted execution,
-background, storage, cache-lifetime, stopping and geography controls are also
+background, storage, cache-lifetime and stopping controls are also
 unsupported.
 
 MiniMax uses the same Chat implementation and always streams SSE. Selected model, endpoint, reasoning-split choice and the existing
@@ -162,9 +162,7 @@ calls. Neither branch supports background work, hosted execution, uploads or
 tool-result media. Pricing and credential-route selection remain runtime-owned;
 no application caller has switched and neither old handler is deleted yet.
 
-Kimi preparation retains a caller-supplied `prompt_cache_key`; selected routes
-that require it reject missing keys. No session identity is invented. Application
-admission must not treat the old automatically assigned image detail as authored
+Application admission must not treat the old automatically assigned image detail as authored
 intent; those production consumers have not switched.
 
 Selected routes expose one optional `estimateInputTokens` operation when
@@ -367,7 +365,7 @@ text, inline JPEG/PNG/GIF/WebP images and PDF documents. Other image MIME types,
 image detail, audio, video and non-PDF documents fail explicitly. Prepared controls
 cover disabled/manual/adaptive thinking, independent nullable effort, selected
 temperature capability, output limit, parallel calls and supported named-tool choice,
-cache lifetime, stop sequences, service tier and geography. Thinking permits
+cache lifetime and stop sequences. Thinking permits
 temperature one or omission; manual thinking cannot force a named tool.
 Completion follows the semantic `message_stop` event, not connection closure.
 Hosted execution, beta APIs, compaction, uploads and `pause_turn` remain unsupported.

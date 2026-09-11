@@ -977,12 +977,9 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
     author.thinking !== undefined ||
     author.effort !== undefined ||
     author.cache !== undefined ||
-    author.inferenceGeo !== undefined ||
     author.stopSequences !== undefined ||
-    author.promptCacheKey !== undefined ||
     (author.continuation !== undefined &&
       author.continuation.origin.protocol !== 'openai-responses') ||
-    (author.serviceTier != null && author.serviceTier !== 'fast') ||
     (author.mode === 'background' &&
       (config.background !== 'supported' || transport.kind !== 'http')) ||
     (!config.supportsTemperature && author.temperature !== undefined) ||
