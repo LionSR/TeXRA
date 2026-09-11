@@ -14,7 +14,7 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
 import {
@@ -32,7 +32,6 @@ import {
   dedupeComments,
   type DedupedResource,
   type PollEventListener,
-  PollHookRejected,
   PollingSourceBase,
 } from './PollingSourceBase';
 import {
@@ -111,14 +110,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Effect.Effect<void, PollHookRejected> {
-    return this.pollIssue(state).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
-        ),
-      ),
-    );
+  ): Effect.Effect<void, unknown> {
+    return this.pollIssue(state);
   }
 
   private readonly pollIssue = Effect.fn('IssuePollingSource.pollIssue')(

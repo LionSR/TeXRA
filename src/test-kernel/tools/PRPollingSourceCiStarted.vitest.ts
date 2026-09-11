@@ -6,7 +6,6 @@ import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 // Local imports - tools
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
-import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 
 // Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
@@ -19,7 +18,7 @@ interface CiStartedSource {
   pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Effect.Effect<void, PollHookRejected>;
+  ): Effect.Effect<void, unknown>;
 }
 
 const SHA = 'abcdef1234567890';
