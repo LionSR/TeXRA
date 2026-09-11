@@ -104,8 +104,9 @@ paths:
 "@llm/*": ["./packages/llm/src/*"],
 ```
 
-`scripts/aliasUtils.mjs` derives the build and desktop alias maps from root
-paths, pinned by `src/test-kernel/scripts/AliasMapGeneration.vitest.ts`, so
+Every consumer package tsconfig extends the root and inherits its `paths`
+(`packages/llm`, the alias target, is a standalone program), and the
+bundlers read the root map through `scripts/aliasUtils.mjs`, so
 this one entry propagates. **Do not** add `@texra-ai/llm` as a root dependency:
 its `exports` map points at raw `.ts` (`"./turn": "./src/turn.ts"`), and there
 is no precedent in this repo for `src/` resolving `.ts` out of `node_modules`
@@ -1675,6 +1676,5 @@ line 194.
 Not verified, and carried forward from the original spec as claims rather than
 facts: the count of `flow_<id>.json` consumers outside the flow engine and
 their line numbers (§7 states the file list without line citations for that
-reason); the assertion that `scripts/aliasUtils.mjs` propagates a new root
-`paths` entry to every build; the "roughly forty files" estimate for the §1.4
-relocation. Each is PR 2's or the relocation commit's to confirm.
+reason); the assertion that a new root `paths` entry reaches every build; the
+"roughly forty files" estimate for the §1.4 relocation. Each is PR 2's or the relocation commit's to confirm.

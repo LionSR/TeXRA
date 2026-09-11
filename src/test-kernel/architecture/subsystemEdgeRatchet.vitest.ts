@@ -104,7 +104,7 @@ function resolveImportedSubsystem(
   }
 
   // Match the most specific (longest) alias so a carve-out like
-  // `@common/state` wins over the broader `@common` alias regardless of
+  // `@common/webview` wins over the broader `@common` alias regardless of
   // map insertion order.
   let bestMatch: { alias: string; subsystem: string } | null = null;
   for (const [alias, subsystem] of SUBSYSTEM_ALIASES) {
@@ -365,36 +365,31 @@ describe('LAY-1 subsystem edge ratchet', () => {
     expect(baseline.edges).toEqual(sortedEdges);
   });
 
-  it('does not bucket @common/state or @common/webview imports into the already-whitelisted common edge', () => {
-    // tsconfig.json carves these two aliases out to
-    // packages/extension/src/common/* (VS Code-coupled), not src/common/*.
-    // A src/-side import of either must not resolve to the generic `common`
+  it('does not bucket @common/webview imports into the already-whitelisted common edge', () => {
+    // tsconfig.json carves this alias out to
+    // packages/extension/src/common/webview (VS Code-coupled), not src/common/*.
+    // A src/-side import of it must not resolve to the generic `common`
     // subsystem, because `agent -> common` (etc.) is already whitelisted in
     // the baseline and would silently absorb the violating import.
     const file = join(SRC_ROOT, 'agent', 'example.ts');
-    const stateSubsystem = resolveImportedSubsystem(file, '@common/state');
     const webviewSubsystem = resolveImportedSubsystem(file, '@common/webview');
 
-    expect(stateSubsystem).not.toBe('common');
     expect(webviewSubsystem).not.toBe('common');
-    expect(resolveImportedSubsystem(file, '@common/state/foo')).toBe(
-      stateSubsystem,
-    );
     expect(resolveImportedSubsystem(file, '@common/webview/foo')).toBe(
       webviewSubsystem,
     );
     // The generic `@common` alias (src/common/*) is unaffected.
     expect(resolveImportedSubsystem(file, '@common/foo')).toBe('common');
 
-    // A hypothetical future `agent -> @common/state` import must surface as
+    // A hypothetical future `agent -> @common/webview` import must surface as
     // a genuine new-edge ratchet violation, not be silently absorbed.
     const violations = findRatchetViolations(
-      [{ from: 'agent', to: stateSubsystem ?? '', kind: 'value' }],
+      [{ from: 'agent', to: webviewSubsystem ?? '', kind: 'value' }],
       readBaseline().edges,
     );
     expect(violations).toEqual([
       {
-        edge: `agent->${stateSubsystem}`,
+        edge: `agent->${webviewSubsystem}`,
         reason: 'new-edge',
         currentKind: 'value',
       },

@@ -1,10 +1,4 @@
-# Build output
-dist/
-out/
-releases/
-
-# Dependencies
-node_modules/
+# Prettier also reads .gitignore (build output, node_modules, worktrees).
 pnpm-lock.yaml
 
 # CLI validation-only bundle and copied resources
@@ -19,15 +13,6 @@ packages/extension/resources/templates/
 
 # Claude Code agent scratch space (worktrees contain unstaged template files)
 .claude/
-
-# Local git worktrees (contain unstaged template files prettier cannot parse)
-.worktrees/
-
-# GitHub Actions workflows — the format-pr workflow's GITHUB_TOKEN lacks
-# `workflows: write` permission, so any auto-formatting of workflow YAML
-# triggers a "refusing to update workflow" push rejection. Skip them
-# entirely from format runs.
-.github/workflows/
 
 # Retired sources kept for restoration (see attic/README.md) - Deno-formatted
 attic/

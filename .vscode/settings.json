@@ -9,8 +9,7 @@
   },
   // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
   "typescript.tsc.autoDetect": "off",
-  // Use the workspace TypeScript (6.0.3) so the editor matches the build; the
-  // bundled VS Code TS server is older and rejects `ignoreDeprecations: "6.0"`.
+  // Use the workspace TypeScript so the editor matches the build.
   "typescript.tsdk": "node_modules/typescript/lib",
   // Prompt to use the workspace TS so the @effect/language-service plugin loads.
   "typescript.enablePromptUseWorkspaceTsdk": true

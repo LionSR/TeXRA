@@ -56,22 +56,10 @@
       "name": "buildChatDefaultAgentItems"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "createCliConfigFormProps"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "buildConfigListItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildEnumItems"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
@@ -83,31 +71,13 @@
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "formatSettingValue"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "isConfigResetInput"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "settingDisplayName"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "settingEditKind"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "settingStoreLabel"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
