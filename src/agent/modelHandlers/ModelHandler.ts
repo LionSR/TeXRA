@@ -50,7 +50,6 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { supportsReasoningLevel } from '@model/reasoningLevel';
 import {
   resolveDirectModelApiKeyProvider,
-  resolveModelSource,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
@@ -78,10 +77,7 @@ import { isObject } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
-import {
-  getProviderStreaming,
-  getGlobalStreaming,
-} from '@utils/config/providerConfig';
+import { getGlobalStreaming } from '@utils/config/providerConfig';
 import { getValidatedConfig } from '@utils/config/configUtils';
 
 // Local file imports
@@ -835,17 +831,9 @@ export abstract class ModelHandler<
     this.compactionRequested = false;
   }
 
-  /**
-   * Gets streaming configuration for the current model provider.
-   */
+  /** Whether requests stream: one global toggle covers every provider. */
   public getStreamingConfig(): boolean {
-    if (shouldUseOpenRouter(this.config))
-      return getProviderStreaming('openrouter');
-    if (this.config.provider === ModelProvider.OTHERS)
-      return getGlobalStreaming();
-    return getProviderStreaming(
-      resolveModelSource(this.config) ?? this.config.provider,
-    );
+    return getGlobalStreaming();
   }
 
   /**

@@ -8,10 +8,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
 import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
-import {
-  PROVIDER_STATE_ENTRIES,
-  type ProviderStateEntry,
-} from '@shared/constants/providers';
+import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -55,20 +52,6 @@ export class ProviderKeyList extends LitElement {
   private toggleExpanded(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
-  }
-
-  /**
-   * Catalog keys for a provider's streaming/endpoint writes. The lowercase
-   * fallback mirrors `providerConfig.entry()`: the API-key roster spells
-   * OpenRouter as `openRouter` while the state registry uses `openrouter`.
-   */
-  private providerStateKeys(provider: string): ProviderStateEntry | undefined {
-    return (
-      PROVIDER_STATE_ENTRIES.find((entry) => entry.id === provider) ??
-      PROVIDER_STATE_ENTRIES.find(
-        (entry) => entry.id === provider.toLowerCase(),
-      )
-    );
   }
 
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
@@ -115,22 +98,6 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderDetails(entry: ProviderKeyStatus): TemplateResult {
-    const streamingToggle = html`
-      <div class="provider-setting">
-        <wa-switch
-          ?checked=${entry.streaming}
-          @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            const key = this.providerStateKeys(entry.provider)?.streamingKey;
-            if (key) postStateSetting(key, checked);
-          }}
-        >
-          Streaming
-          <span class="visually-hidden">for ${entry.displayName}</span>
-        </wa-switch>
-      </div>
-    `;
-
     const endpointInput = entry.supportsCustomEndpoint
       ? html`
           <div class="provider-setting">
@@ -148,7 +115,9 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                const key = this.providerStateKeys(entry.provider)?.endpointKey;
+                const key = PROVIDER_STATE_ENTRIES.find(
+                  ({ id }) => id === entry.provider,
+                )?.endpointKey;
                 if (key) postStateSetting(key, value);
               }}
             ></wa-input>
@@ -158,7 +127,7 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="settings-disclosure-content provider-settings">
-        ${streamingToggle} ${endpointInput}
+        ${endpointInput}
         ${entry.providerSettings.map((s) => this.renderProviderSetting(s))}
       </div>
     `;

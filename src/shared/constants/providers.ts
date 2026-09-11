@@ -19,8 +19,6 @@ interface ProviderDef {
   readonly displayName: string;
   /** URL for obtaining API keys. undefined = no standalone key page. */
   readonly keyUrl?: string;
-  /** Global-state key for this provider's streaming toggle. */
-  readonly streamingKey?: GlobalStateKey;
   /** Global-state key for this provider's custom endpoint. */
   readonly endpointKey?: GlobalStateKey;
   /** Optional alternate-region metadata for endpoint/key-url derivation. */
@@ -38,7 +36,6 @@ interface ProviderRegionSetting {
 export interface ProviderStateEntry {
   readonly id: string;
   readonly displayName: string;
-  readonly streamingKey?: GlobalStateKey;
   readonly endpointKey?: GlobalStateKey;
   readonly region?: ProviderRegionSetting;
 }
@@ -64,42 +61,36 @@ const PROVIDER_REGISTRY = [
     id: ModelProvider.OPENAI,
     displayName: 'OpenAI',
     keyUrl: 'https://platform.openai.com/api-keys',
-    streamingKey: GlobalStateKey.STREAMING_OPENAI,
     endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
   },
   {
     id: ModelProvider.ANTHROPIC,
     displayName: 'Anthropic',
     keyUrl: 'https://console.anthropic.com/',
-    streamingKey: GlobalStateKey.STREAMING_ANTHROPIC,
     endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
   },
   {
     id: ModelProvider.GOOGLE,
     displayName: 'Google',
     keyUrl: 'https://aistudio.google.com/app/apikey',
-    streamingKey: GlobalStateKey.STREAMING_GOOGLE,
     endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
   },
   {
     id: ModelProvider.XAI,
     displayName: 'xAI',
     keyUrl: 'https://console.x.ai/',
-    streamingKey: GlobalStateKey.STREAMING_XAI,
     endpointKey: GlobalStateKey.ENDPOINT_XAI,
   },
   {
     id: ModelProvider.DEEPSEEK,
     displayName: 'DeepSeek',
     keyUrl: 'https://platform.deepseek.com/api_keys',
-    streamingKey: GlobalStateKey.STREAMING_DEEPSEEK,
     endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
   },
   {
     id: ModelProvider.MOONSHOT,
     displayName: 'Moonshot',
     keyUrl: 'https://platform.moonshot.cn/console',
-    streamingKey: GlobalStateKey.STREAMING_MOONSHOT,
     endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
     // China=true is the default since moonshot.cn is the primary platform;
     // when toggled off (international), keys come from platform.moonshot.ai.
@@ -114,7 +105,6 @@ const PROVIDER_REGISTRY = [
     id: ModelProvider.DASHSCOPE,
     displayName: 'Qwen',
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
-    streamingKey: GlobalStateKey.STREAMING_DASHSCOPE,
     endpointKey: GlobalStateKey.ENDPOINT_DASHSCOPE,
     region: {
       key: GlobalStateKey.DASHSCOPE_USE_CHINA,
@@ -127,7 +117,6 @@ const PROVIDER_REGISTRY = [
     id: ModelProvider.MINIMAX,
     displayName: 'MiniMax',
     keyUrl: 'https://platform.minimax.io/',
-    streamingKey: GlobalStateKey.STREAMING_MINIMAX,
     endpointKey: GlobalStateKey.ENDPOINT_MINIMAX,
     region: {
       key: GlobalStateKey.MINIMAX_USE_CHINA,
@@ -139,7 +128,6 @@ const PROVIDER_REGISTRY = [
     id: ModelProvider.GLM,
     displayName: 'GLM',
     keyUrl: 'https://open.bigmodel.cn/',
-    streamingKey: GlobalStateKey.STREAMING_GLM,
     endpointKey: GlobalStateKey.ENDPOINT_GLM,
     // China=true is the default since bigmodel.cn is the primary platform;
     // when toggled off (international), the key URL is z.ai.
@@ -153,7 +141,6 @@ const PROVIDER_REGISTRY = [
     id: ModelProvider.META,
     displayName: 'Meta',
     keyUrl: 'https://dev.meta.ai/',
-    streamingKey: GlobalStateKey.STREAMING_META,
     endpointKey: GlobalStateKey.ENDPOINT_META,
   },
 ] as const satisfies readonly ProviderDef[];
@@ -209,25 +196,13 @@ export const PROVIDER_URLS: Record<string, string> = {
   kimiCode: 'https://www.kimi.com/code/console',
 };
 
-export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [
-  ...PROVIDER_REGISTRY.map((provider) => ({
+export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] =
+  PROVIDER_REGISTRY.map((provider) => ({
     id: provider.id,
     displayName: provider.displayName,
-    streamingKey: provider.streamingKey,
     endpointKey: provider.endpointKey,
     region: 'region' in provider ? provider.region : undefined,
-  })),
-  {
-    id: 'openrouter',
-    displayName: 'OpenRouter',
-    streamingKey: GlobalStateKey.STREAMING_OPENROUTER,
-  },
-  {
-    id: 'kimiCode',
-    displayName: 'Kimi Code',
-    streamingKey: GlobalStateKey.STREAMING_KIMI_CODE,
-  },
-];
+  }));
 
 function hasEndpoint(
   entry: ProviderStateEntry,

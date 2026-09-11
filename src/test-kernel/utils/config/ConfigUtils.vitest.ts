@@ -12,7 +12,6 @@ import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
-  getProviderStreaming,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -137,20 +136,5 @@ describe('getProviderEndpoint', () => {
       globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
     });
     expect(getProviderEndpoint('openai')).toBe('');
-  });
-});
-
-describe('OpenRouter streaming', () => {
-  it('uses the same setting for API-key and model-dispatch spellings', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.STREAMING_OPENROUTER]: false },
-    });
-
-    expect(getProviderStreaming('openRouter')).toBe(false);
-    await platform().globalState.update(
-      GlobalStateKey.STREAMING_OPENROUTER,
-      true,
-    );
-    expect(getProviderStreaming('openrouter')).toBe(true);
   });
 });

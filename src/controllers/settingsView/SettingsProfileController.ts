@@ -17,7 +17,6 @@ import {
   getProviderDisplayName,
   getProviderEndpoint,
   getProviderKeyUrl,
-  getProviderStreaming,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 
@@ -108,7 +107,6 @@ export class SettingsProfileController {
       displayName: this.getProviderDisplayName(provider),
       status: secretStatuses[provider] ?? 'not-set',
       keyUrl: getProviderKeyUrl(provider) ?? '',
-      streaming: getProviderStreaming(provider),
       customEndpoint: getProviderEndpoint(provider),
       supportsCustomEndpoint: supportsCustomEndpoint(provider),
       providerSettings: this.getProviderSettings(provider),

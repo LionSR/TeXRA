@@ -254,7 +254,6 @@ function mockConfig(
       return originalGetConfig(key, defaultValue);
     },
   );
-  vi.spyOn(providerConfigModule, 'getProviderStreaming').mockReturnValue(false);
   vi.spyOn(providerConfigModule, 'getGlobalStreaming').mockReturnValue(false);
 }
 

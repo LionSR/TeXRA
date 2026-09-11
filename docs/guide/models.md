@@ -177,7 +177,7 @@ The Status column shows `Set` once the key is stored. To replace a key, set it a
 <p class="hero-caption">The Providers & Models tab's API configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
 
 ::: tip Per-provider settings
-Expand a provider's row (select the chevron) to toggle streaming or, for providers that support it, point requests at a custom endpoint.
+Expand a provider's row (select the chevron) to point requests at a custom endpoint, for providers that support it.
 :::
 
 You can also place a `.env` file in your workspace with variables such as `OPENAI_API_KEY`. TeXRA loads it automatically, so you don't need to enter keys each time.
@@ -207,15 +207,15 @@ To access additional models or alternative pricing:
 2. Add it with the `TeXRA: Set API Key` command
 3. In the Dashboard → Providers & Models tab → API configuration, expand the OpenRouter row and turn on **Use OpenRouter for all models**
 
-Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here and under [Streaming](#streaming):
+Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here:
 
 <ProviderConfigRow />
 
-<p class="hero-caption">Expand a provider's <strong>API configuration</strong> row to reveal its masked key field, the per-provider <strong>Streaming</strong> switch (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
+<p class="hero-caption">Expand a provider's <strong>API configuration</strong> row to reveal its masked key field (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
 
 ## Streaming
 
-Streaming has a global default plus per-provider overrides. Open the **Dashboard → Providers & Models** tab: the **Enable streaming** toggle at the top of **API configuration** sets the default for all providers, and each expanded provider row has its own **Streaming** switch (shown in the [expanded provider row under Using OpenRouter](#using-openrouter)). When streaming is on, long responses
+Streaming is one switch for every provider: the **Enable streaming** toggle at the top of **API configuration** in the **Dashboard → Providers & Models** tab. When streaming is on, long responses
 arrive incrementally instead of in one large reply.
 
 ## Next steps

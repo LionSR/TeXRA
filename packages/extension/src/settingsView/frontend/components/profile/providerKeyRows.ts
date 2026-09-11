@@ -18,7 +18,6 @@ const DEFAULT_PROVIDER_KEY_STATUSES: readonly ProviderKeyStatus[] =
         displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
         status: 'not-set' as const,
         keyUrl: PROVIDER_URLS[provider] ?? '',
-        streaming: true,
         customEndpoint: '',
         supportsCustomEndpoint: false,
         providerSettings: [],

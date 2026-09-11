@@ -50,7 +50,6 @@ import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/sett
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
-  PROVIDER_STATE_ENTRIES,
 } from '@shared/constants/providers';
 import {
   readSetting,
@@ -92,13 +91,6 @@ const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
 const PROVIDER_ENDPOINT_DEFAULTS = Object.fromEntries(
   PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey }) => [endpointKey, '']),
 );
-// Per-provider streaming defaults mirror the global streaming default (true):
-// `getProviderStreaming` falls back to the global toggle when a key is unset.
-const PROVIDER_STREAMING_DEFAULTS = Object.fromEntries(
-  PROVIDER_STATE_ENTRIES.flatMap(({ streamingKey }) =>
-    streamingKey ? [[streamingKey, true]] : [],
-  ),
-);
 
 /** Expected default-when-absent for each catalog key, from the real getters. */
 const EXPECTED_DEFAULTS: Record<string, unknown> = {
@@ -137,7 +129,6 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
-  ...PROVIDER_STREAMING_DEFAULTS,
   [GlobalStateKey.STREAMING_GLOBAL]: true,
   [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL,
   [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
