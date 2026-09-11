@@ -112,7 +112,7 @@ function webSearchNodes(
 ): ExportNode[] {
   const { query, results = [] } = entry.data;
   const hits = results.flatMap(({ title, url }) =>
-    url ? [{ title: title ?? url, url }] : [],
+    url ? [{ title: title || url, url }] : [],
   );
   return [
     ...(query ? [{ kind: 'web-search' as const, query }] : []),
