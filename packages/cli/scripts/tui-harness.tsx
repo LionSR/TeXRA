@@ -61,7 +61,6 @@ import {
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
-  type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
@@ -92,7 +91,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
@@ -194,7 +192,6 @@ const SHOW_REPEATED_BASH_APPROVAL =
 const SHOW_RETRY_APPROVAL = process.env.HARNESS_RETRY_APPROVAL === '1';
 const RETRY_APPROVAL_CHATGPT =
   process.env.HARNESS_RETRY_APPROVAL_CHATGPT === '1';
-const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
@@ -239,18 +236,6 @@ const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
   process.env.HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS === '1';
-const EXTERNAL_INQUIRY_QUESTION = [
-  'I need an independent verification of an enumeration of Pythagorean triples.',
-  '',
-  'Problem: Find all integer triples (a,b,c) with 0 <= a <= b <= c <= 60 and a^2 + b^2 = c^2, whose perimeter is at most 120.',
-  '',
-  'Please enumerate them independently and verify these results:',
-  '',
-  'Non-degenerate triples: (3,4,5), (5,12,13), (6,8,10), (7,24,25), (8,15,17), (9,12,15), (9,40,41), (10,24,26), (12,16,20), (12,35,37), (14,48,50), (15,20,25), (15,36,39), (16,30,34), (18,24,30), (20,21,29), (20,48,52), (21,28,35), (24,32,40), (24,45,51), (27,36,45), (30,40,50).',
-  '',
-  'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
-].join('\n');
-const EXTERNAL_INQUIRY_THREAD_ID = 'ei_123456abcdef' as InquiryThreadId;
 const USER_QUESTION_CONTEXT = [
   'The agent is asking for direction before continuing a math workflow.',
   'We need a choice that keeps the proof useful while avoiding a long detour.',
@@ -1199,22 +1184,6 @@ function requestHarnessApproval<T>(
   });
 }
 
-function appendHarnessExternalInquiryContinuation(
-  status: 'answered' | 'dropped',
-  answer?: string,
-): void {
-  appendHarnessTranscript(
-    'user',
-    buildContinuationText({
-      event: status,
-      threadId: EXTERNAL_INQUIRY_THREAD_ID,
-      question: EXTERNAL_INQUIRY_QUESTION,
-      ...(answer ? { answer } : {}),
-      stillOpen: [],
-    }),
-  );
-}
-
 function appendHarnessRetryResult(
   result: RetryResult,
   credentialSelection: 'configured' | 'personal' | undefined,
@@ -1604,42 +1573,6 @@ if (SHOW_RETRY_APPROVAL) {
         },
       }),
     (result) => appendHarnessRetryResult(result, credentialSelection),
-  );
-}
-if (SHOW_EXTERNAL_INQUIRY) {
-  // The tool opens the thread with the host, then publishes its listing
-  // fact; the continuation the agent would receive is mirrored here once
-  // the thread settles in the fold.
-  void session().interactions.openExternalInquiry({
-    requestId: 'harness-external-inquiry',
-    question: EXTERNAL_INQUIRY_QUESTION,
-    threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    allowBypass: false,
-    runId: HARNESS_RUN_ID,
-    sessionLinks: null,
-    transcript: null,
-  });
-  publish({
-    type: 'inquiryThreadUpdated',
-    aggregateId: qualifyAggregateId('inquiry', EXTERNAL_INQUIRY_THREAD_ID),
-    threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    parentRunId: HARNESS_RUN_ID,
-    status: 'open',
-    lastQuestionPreview: EXTERNAL_INQUIRY_QUESTION.slice(0, 80),
-    lastActivityIso: new Date().toISOString(),
-    turnCount: 1,
-  });
-  let reported = false;
-  HARNESS_DISPOSERS.push(
-    subscribeToSignalChanges([sessionView()], () => {
-      if (reported) return;
-      const thread = currentView().inquiries.find(
-        (entry) => entry.threadId === EXTERNAL_INQUIRY_THREAD_ID,
-      );
-      if (!thread || thread.status === 'open') return;
-      reported = true;
-      appendHarnessExternalInquiryContinuation(thread.status);
-    }),
   );
 }
 if (SHOW_USER_QUESTION) {

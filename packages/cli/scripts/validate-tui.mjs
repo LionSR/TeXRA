@@ -25,11 +25,9 @@
 // validation so it cannot look green without exercising any frames.
 
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   rmSync,
   unlinkSync,
@@ -49,7 +47,6 @@ const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
-const EM = String.fromCharCode(25); // Ctrl-Y
 const LF = String.fromCharCode(10); // Ctrl-J
 const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
@@ -80,13 +77,6 @@ const LONG_BASH_APPROVAL_COMMAND = [
   'print(solutions)',
   'EOF',
 ].join('\n');
-const LONG_EXTERNAL_INQUIRY_ANSWER =
-  'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
-const LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION = Array.from(
-  { length: 24 },
-  (_, index) =>
-    `Long verification note ${String(index + 1).padStart(2, '0')}: independent enumeration confirms the count and keeps the full answer recoverable by thread id.`,
-).join(' ');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
@@ -1989,122 +1979,6 @@ const SCENARIOS = [
     unexpect: ['Spawn review?'],
   },
   {
-    name: 'external-inquiry-long',
-    rows: 24,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'viewport',
-    expect: [
-      'Agent asks:',
-      'more rows',
-      'PgUp/PgDn scroll',
-      'Ctrl-Y copy',
-      'Enter submit',
-      'Ctrl-R reject',
-      'Esc skip',
-      '1 question',
-    ],
-    unexpect: [
-      '└─Degenerate triples',
-      '/model models',
-      'Esc panel',
-      'Esc sk…',
-      '1 approval',
-    ],
-  },
-  {
-    name: 'external-inquiry-long-80-cols',
-    rows: 24,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'viewport',
-    expect: [
-      'Agent asks:',
-      'more rows',
-      'PgUp/PgDn scroll',
-      'Ctrl-Y copy',
-      'Enter submit',
-      'Ctrl-R reject',
-      'Esc skip',
-      '1 question',
-    ],
-    unexpect: [
-      '└─Degenerate triples',
-      '/model models',
-      'Esc panel',
-      'Esc sk…',
-      '1 approval',
-    ],
-  },
-  {
-    name: 'external-inquiry-copy-question',
-    rows: 24,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [EM],
-    frame: 'viewport',
-    fakeClipboard: {
-      expectIncludes: [
-        'Problem: Find all integer triples',
-        'whose perimeter is at most 120',
-      ],
-    },
-    expect: ['Agent asks: copied to clipboard', 'Ctrl-Y copy', '1 question'],
-    unexpect: ['copy failed', '/model models', '1 approval'],
-  },
-  {
-    name: 'external-inquiry-submit-answer',
-    rows: 24,
-    cols: 120,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER, '\r'],
-    frame: 'viewport',
-    expect: [
-      '[inquiry] ei_123456abcdef answered.',
-      'A: Independent check agrees',
-      'Full thread: ei_123456abcdef',
-      'No other open inquiries on this stream.',
-      'Proceed using the new answer.',
-      '/status details',
-      '/model models',
-    ],
-    unexpect: [
-      'Agent asks:',
-      '1 question',
-      '1 approval',
-      "inquiry { command: 'read'",
-    ],
-  },
-  {
-    name: 'external-inquiry-submit-long-answer',
-    rows: 36,
-    cols: 120,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION, '\r'],
-    frame: 'viewport',
-    expect: [
-      '[inquiry] ei_123456abcdef answered.',
-      'A: Long verification note 01',
-      'full text',
-      'available in thread ei_123456abcdef',
-      'Full thread: ei_123456abcdef',
-      'No other open inquiries on this stream.',
-      'Proceed using the new answer.',
-    ],
-    unexpect: [
-      'Agent asks:',
-      '1 question',
-      '1 approval',
-      "inquiry { command: 'read'",
-    ],
-  },
-  {
     name: 'compact-user-question',
     rows: 12,
     cols: 80,
@@ -3460,40 +3334,6 @@ function collapseFrameText(frame) {
   return frame.replaceAll(/[│╭╮╰╯─]/g, ' ').replaceAll(/\s+/g, ' ');
 }
 
-const FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM = {
-  darwin: ['pbcopy'],
-  linux: ['wl-copy', 'xclip', 'xsel'],
-};
-
-function fakeClipboardCommandsForPlatform(platform = process.platform) {
-  return FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM[platform] ?? [];
-}
-
-function makeFakeClipboard(platform = process.platform) {
-  const commands = fakeClipboardCommandsForPlatform(platform);
-  if (commands.length === 0) return null;
-
-  const dir = mkdtempSync(path.join(tmpdir(), 'texra-tui-clipboard-'));
-  const binDir = path.join(dir, 'bin');
-  const textFile = path.join(dir, 'clipboard.txt');
-  mkdirSync(binDir, { recursive: true });
-  writeFileSync(textFile, '');
-
-  const script = [
-    '#!/usr/bin/env sh',
-    'set -eu',
-    'cat > "$TEXRA_FAKE_CLIPBOARD_FILE"',
-    '',
-  ].join('\n');
-  for (const command of commands) {
-    const commandPath = path.join(binDir, command);
-    writeFileSync(commandPath, script);
-    chmodSync(commandPath, 0o755);
-  }
-
-  return { binDir, dir, textFile };
-}
-
 function blankLinesBetween(frame, from, to) {
   const lines = frame.split('\n');
   const toIndex = lines.findLastIndex((line) => line.includes(to));
@@ -3770,33 +3610,6 @@ function createSkipResult(scenario, reason) {
   };
 }
 
-async function runScenario(scenario, index) {
-  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
-    return createSkipResult(
-      scenario,
-      `scenario is only supported on ${scenario.platforms.join(', ')}`,
-    );
-  }
-
-  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
-  if (scenario.fakeClipboard && !fakeClipboard) {
-    return createSkipResult(
-      scenario,
-      `fake clipboard is not supported on ${process.platform}`,
-    );
-  }
-  try {
-    return await runScenarioWithResources(scenario, fakeClipboard, index);
-  } finally {
-    cleanupFakeClipboard(fakeClipboard);
-  }
-}
-
-function cleanupFakeClipboard(fakeClipboard) {
-  if (!fakeClipboard) return;
-  rmSync(fakeClipboard.dir, { recursive: true, force: true });
-}
-
 function scenarioChildEnv(scenario, cols, rows) {
   const inheritedEnv = { ...process.env };
   // TUI scenarios should declare provider keys explicitly instead of inheriting
@@ -3817,7 +3630,6 @@ function gatherAssertionFailures({
   scenario,
   frame,
   rawOutput,
-  fakeClipboard,
   checkpointFailures,
   booted,
   exited,
@@ -3906,21 +3718,18 @@ function gatherAssertionFailures({
       );
     }
   }
-  if (fakeClipboard) {
-    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
-    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
-      if (!copiedText.includes(text)) {
-        failures.push(
-          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
-        );
-      }
-    }
-  }
 
   return failures;
 }
 
-async function runScenarioWithResources(scenario, fakeClipboard, index) {
+async function runScenario(scenario, index) {
+  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
+    return createSkipResult(
+      scenario,
+      `scenario is only supported on ${scenario.platforms.join(', ')}`,
+    );
+  }
+
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
@@ -3947,10 +3756,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     childEnv.FORCE_COLOR = '3';
     delete childEnv.NO_COLOR;
     childEnv.HARNESS_COLOR_ENABLED ??= '1';
-  }
-  if (fakeClipboard) {
-    childEnv.PATH = `${fakeClipboard.binDir}${path.delimiter}${childEnv.PATH ?? ''}`;
-    childEnv.TEXRA_FAKE_CLIPBOARD_FILE = fakeClipboard.textFile;
   }
   // The validator intentionally exercises an interactive TTY. Inherited CI
   // markers make Ink choose a non-interactive render mode and hide the live
@@ -4046,7 +3851,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     scenario,
     frame,
     rawOutput,
-    fakeClipboard,
     checkpointFailures,
     booted,
     exited,
