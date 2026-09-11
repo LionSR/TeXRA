@@ -9,11 +9,14 @@
  */
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { createLog } from '@logger/logUtils';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
+
+const log = createLog('helperModelPreference');
 
 /**
  * Swap `config`'s model for the configured helper model, or return it unchanged
@@ -35,11 +38,19 @@ export async function applyHelperModelPreference(
     config.agentCategory === AgentCategory.ToolUse &&
     !helperModelConfig?.capabilities.supportsFunctionCalling
   ) {
+    log.warn(
+      `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} does not support function calling.`,
+    );
     return config;
   }
 
   const unavailable = await getModelUnavailableReason(helperModel);
-  if (unavailable) return config;
+  if (unavailable) {
+    log.warn(
+      `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,
+    );
+    return config;
+  }
 
   return { ...config, model: helperModel };
 }
