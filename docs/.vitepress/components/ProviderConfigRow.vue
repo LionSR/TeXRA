@@ -1,8 +1,8 @@
 <script setup>
 // Frameless slice of one expanded "API Configuration" provider row from the
-// Models tab. Both the "Using OpenRouter" and "Streaming" sections narrate the
-// same interaction in prose — expand a provider row, then toggle streaming /
-// "Use OpenRouter for All Models" — but never show what expansion reveals.
+// Models tab. The "Using OpenRouter" section narrates this interaction in
+// prose — expand a provider row, then toggle "Use OpenRouter for All Models" —
+// but never shows what expansion reveals.
 // ApiKeysHero only renders these rows collapsed (chevron-right, no body); this
 // pulls a single row out, expanded (chevron-down), with the toggles + masked
 // key field it exposes. Reuses the .api-table provider-row vocab and the
@@ -10,7 +10,6 @@
 import { ref } from 'vue';
 import MockSwitch from './MockSwitch.vue';
 
-const streaming = ref(true);
 const openrouter = ref(false);
 </script>
 
@@ -43,7 +42,7 @@ const openrouter = ref(false);
       </div>
     </div>
 
-    <!-- Expanded body: masked key + the two per-provider toggles. -->
+    <!-- Expanded body: masked key + the per-provider toggle. -->
     <div class="pcr-body">
       <div class="pcr-field">
         <label class="pcr-flabel">API key</label>
@@ -51,14 +50,6 @@ const openrouter = ref(false);
           <wa-icon class="pcr-key-ic" library="texra" name="key"></wa-icon>
           <span class="pcr-key-mask">sk-••••••••••••••••••••••••</span>
         </div>
-      </div>
-
-      <div class="pcr-toggle">
-        <MockSwitch
-          v-model="streaming"
-          label="Enable streaming"
-          description="Long responses arrive incrementally"
-        />
       </div>
 
       <div class="pcr-toggle">

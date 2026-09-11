@@ -84,18 +84,6 @@ export enum GlobalStateKey {
 
   // Streaming settings
   STREAMING_GLOBAL = 'texra.streaming.global',
-  STREAMING_OPENAI = 'texra.streaming.openai',
-  STREAMING_ANTHROPIC = 'texra.streaming.anthropic',
-  STREAMING_OPENROUTER = 'texra.streaming.openrouter',
-  STREAMING_GOOGLE = 'texra.streaming.google',
-  STREAMING_XAI = 'texra.streaming.xai',
-  STREAMING_DEEPSEEK = 'texra.streaming.deepseek',
-  STREAMING_MOONSHOT = 'texra.streaming.moonshot',
-  STREAMING_KIMI_CODE = 'texra.streaming.kimiCode',
-  STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
-  STREAMING_MINIMAX = 'texra.streaming.minimax',
-  STREAMING_GLM = 'texra.streaming.glm',
-  STREAMING_META = 'texra.streaming.meta',
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',

@@ -275,7 +275,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 2. **Response timeout**:
    - For large documents, the model might time out
    - Try breaking the task into smaller chunks
-   - Enable streaming for the provider in the **Models** tab so long responses
+   - Turn on **Enable streaming** in the **Models** tab so long responses
      arrive incrementally instead of in a single large reply
 
 3. **Context length**:
@@ -370,7 +370,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Incomplete generation**:
    - Check whether the AI reached the token limit
-   - Enable streaming for the provider in the **Models** tab for more reliable
+   - Turn on **Enable streaming** in the **Models** tab for more reliable
      completion of long outputs
 
 2. **XML parsing issues**:

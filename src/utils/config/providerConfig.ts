@@ -1,23 +1,16 @@
 /**
- * Provider-specific streaming, endpoint, and region configuration.
+ * Provider streaming, endpoint, and region configuration.
  *
  * The shared provider registry owns provider state keys and region metadata.
  * This module only reads/writes those keys through the active platform state.
  *
- * Canonical read path: keys registered in the state-setting catalog
- * (`src/shared/schemas/stateSettings.ts`) are read via `readPlatformSetting()`,
- * which resolves the default from the entry's schema and snaps an
- * invalid/stale stored value back to that default. The streaming toggles are
- * the deliberate exception: they are catalogued
- * (`PROVIDER_STREAMING_SETTINGS`, and the settings view writes them through
- * `UPDATE_STATE_SETTING`), but their reads stay on the local `read()` helper
- * so an unset per-provider key falls back to the *live* global streaming
- * toggle — `readPlatformSetting()` would instead resolve the entry schema's
- * static `.prefault(true)`. A key that genuinely has no catalog entry should
- * be catalogued, not given a fourth read path.
+ * Canonical read path: every key read here is registered in the state-setting
+ * catalog (`src/shared/schemas/stateSettings.ts`) and read via
+ * `readPlatformSetting()`, which resolves the default from the entry's schema
+ * and snaps an invalid/stale stored value back to that default. A key that
+ * has no catalog entry should be catalogued, not given another read path.
  */
 
-import { platform } from '@platform/platform';
 import {
   PROVIDER_STATE_ENTRIES,
   PROVIDER_URLS,
@@ -30,21 +23,8 @@ const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
   PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
 );
 
-// The lowercase retry is load-bearing: the API-key spelling 'openRouter'
-// (EXTRA_API_KEY_PROVIDER_IDS, ModelHandler dispatch) and the registry id
-// 'openrouter' must resolve to the same entry until the carrier is retyped
-// (overdefensive-top10 #8's "lowercase once at registry load" is that PR).
-function entry(provider: string): ProviderStateEntry | undefined {
-  return PROVIDERS.get(provider) ?? PROVIDERS.get(provider.toLowerCase());
-}
-
-/** Deliberate raw read — see the module-level "Canonical read path" note. */
-function read<T>(key: GlobalStateKey, defaultValue: T): T {
-  return platform().globalState.get(key, defaultValue);
-}
-
 function regionSet(provider: string): boolean | undefined {
-  const region = entry(provider)?.region;
+  const region = PROVIDERS.get(provider)?.region;
   // Region keys are catalog-modeled, so the default comes from the entry's
   // schema (kept aligned with the registry's `region.default` by the
   // state-settings guardrail suite).
@@ -56,13 +36,7 @@ function regionSet(provider: string): boolean | undefined {
 // ---------------------------------------------------------------------------
 
 export function getGlobalStreaming(): boolean {
-  return read(GlobalStateKey.STREAMING_GLOBAL, true);
-}
-
-export function getProviderStreaming(provider: string): boolean {
-  const fallback = getGlobalStreaming();
-  const key = entry(provider)?.streamingKey;
-  return key ? read(key, fallback) : fallback;
+  return readPlatformSetting<boolean>(GlobalStateKey.STREAMING_GLOBAL);
 }
 
 // ---------------------------------------------------------------------------
@@ -70,13 +44,13 @@ export function getProviderStreaming(provider: string): boolean {
 // ---------------------------------------------------------------------------
 
 export function getProviderEndpoint(provider: string): string {
-  const key = entry(provider)?.endpointKey;
+  const key = PROVIDERS.get(provider)?.endpointKey;
   // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
   return key ? readPlatformSetting<string>(key) : '';
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
-  return entry(provider)?.endpointKey !== undefined;
+  return PROVIDERS.get(provider)?.endpointKey !== undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +61,7 @@ export function getProviderDisplayName(
   provider: string,
   defaultName: string,
 ): string {
-  const region = entry(provider)?.region;
+  const region = PROVIDERS.get(provider)?.region;
   if (!region?.displayName) return defaultName;
   return regionSet(provider) ? region.displayName : defaultName;
 }
@@ -97,7 +71,7 @@ export function getProviderKeyUrl(provider: string): string | undefined {
   // string even for an unknown provider; the guard is what makes it honest.
   const defaultUrl = PROVIDER_URLS[provider];
   if (!defaultUrl) return undefined;
-  const region = entry(provider)?.region;
+  const region = PROVIDERS.get(provider)?.region;
   if (!region) return defaultUrl;
   const isSet = regionSet(provider);
   if (isSet === true && region.keyUrlWhenSet) return region.keyUrlWhenSet;

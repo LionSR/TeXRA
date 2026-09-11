@@ -43,7 +43,6 @@ const ProviderKeyStatusSchema = z.object({
   displayName: z.string(),
   status: z.enum(['set', 'env', 'not-set']),
   keyUrl: z.string(),
-  streaming: z.boolean().prefault(true),
   customEndpoint: z.string().prefault(''),
   supportsCustomEndpoint: z.boolean().prefault(false),
   providerSettings: z.array(ProviderSettingSchema).prefault([]),

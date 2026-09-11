@@ -21,7 +21,6 @@
       "src/tools/externalToolDefs.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/config/platformSettings.ts": 1,
-      "src/utils/config/providerConfig.ts": 1,
       "src/utils/files/baseFS.ts": 13,
       "src/utils/files/storageFS.ts": 1,
       "src/utils/system/toolUtils.ts": 1

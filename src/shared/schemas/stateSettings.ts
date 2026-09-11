@@ -16,7 +16,6 @@ import {
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
-  PROVIDER_STATE_ENTRIES,
 } from '@shared/constants/providers';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -472,7 +471,7 @@ const CORE_SETTING_ROWS: Record<
     default: false,
     title: 'Google background responses',
     description:
-      'Run Google workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
+      'Run Google workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
@@ -480,7 +479,7 @@ const CORE_SETTING_ROWS: Record<
       provider: 'google',
       label: 'Background responses',
       description:
-        'Run workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
+        'Run workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     },
   }),
   'model.useBackgroundResponses': modelProviderToggle({
@@ -1000,29 +999,6 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Per-provider streaming toggles. Reads stay in `providerConfig`'s
- * `getProviderStreaming`, whose default-when-unset is the *global* streaming
- * toggle — the static `.prefault(true)` here matches that global default.
- */
-const PROVIDER_STREAMING_SETTINGS = PROVIDER_STATE_ENTRIES.flatMap(
-  ({ streamingKey, displayName }) =>
-    streamingKey
-      ? [
-          surfacedSetting({
-            key: streamingKey,
-            schema: z.boolean().prefault(true),
-            title: `${displayName} streaming`,
-            description: `Stream ${displayName} responses incrementally instead of waiting for the full completion.`,
-            category: 'model',
-            slots: sameSlot('globalState'),
-            honoredBy: everyHost(PROVIDER_CONFIG_READER),
-            surfaces: { settingsView: 'profile' },
-          }),
-        ]
-      : [],
-);
-
-/**
  * Region/routing toggles resolved by `ProxyConfigResolver`, each also a Models
  * tab control for its provider. The rows differ only in key, default, and
  * copy, so the shared fields are written once.
@@ -1452,7 +1428,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Provider endpoints & streaming ---------------------------------------
   ...PROVIDER_ENDPOINT_SETTINGS,
-  ...PROVIDER_STREAMING_SETTINGS,
   surfacedSetting({
     key: GlobalStateKey.STREAMING_GLOBAL,
     schema: z.boolean().prefault(true),
