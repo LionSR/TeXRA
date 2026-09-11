@@ -40,10 +40,10 @@ type.
 
 **There is no downstream consumer except us.** The SDK is built and fenced
 but not published; no external app imports this code. Internal interfaces
-CAN break — change the signature and fix the callers. Compat care is owed
-only to: persisted data/resume formats, wire contracts, user-workspace
-artifacts, and external export formats. Never build a compat shim for an
-internal-only surface.
+CAN break — change the signature and fix the callers. Under 1.0, compat care
+is owed only to wire contracts, user-workspace artifacts, and external export
+formats; earlier persisted data, config shapes, and resume formats get none.
+Never build a compat shim for an internal-only surface.
 
 ## Accounting: elements, not lines
 
@@ -75,23 +75,24 @@ internal-only surface.
 | Facade owning a real public surface | **KEEP** (#7500) |
 | Platform port / host bridge | **NEVER collapse** — the indirection IS the contract (#4203, #8456 adjudication) |
 | Vocabulary alias | **CANON per surface** (ruling doc first, #9816) or **ISOLATE per host** (#7622) — never unify one grammar across hosts (debunked, #8758 ledger) |
-| Legacy compat arm | **DELETE only at its retirement-ledger date** (#6981; 5 PRs closed in Aug 2026 for earliness) |
+| Legacy compat arm | **DELETE** (1.0 keeps no compat; external export/wire formats excepted) |
 
 **Never successfully collapsed — do not propose:** ApprovalRequestHandler
 settle table; terminal-renderer dual; wrapApiCall convergence (WASH); global
 progress-vocabulary unification; Google GenAI handler (freeze-over-delete,
-#7097). Check the do-not-do ledgers (issues #8758/#8974) before proposing
-anything big.
+#7097). Check the do-not-do ledger (issue #8758) before proposing anything
+big.
 
 ## Boundaries and migration (how the repo actually does it)
 
 - **Normalize once at the boundary; everything downstream uses the new
-  system.** Migrate legacy formats at the entry point with a
-  `.transform()`ing union; intermediate code never branches on format
-  version and never carries compat layers.
-- **Intermediate-era local data is disposable** (#9590 ruling): delete its
-  compat readers EARLY (loud degradation), don't age-gate. Keep only
-  external-export readers and security guards.
+  system.** External input is parsed into one canonical shape at the entry
+  point; intermediate code never branches on format version and never
+  carries compat layers.
+- **Earlier local data is disposable** (1.0 direction, #9590 ruling): delete
+  compat readers on sight (loud degradation), don't age-gate. Keep only
+  external-export readers, readers for currently supported wire protocols,
+  and security guards.
 - **Build-implies-delete in the same change.** Replacing a path without
   deleting it is how +2,727 (session-runtime) and +987 (native-subagent F6)
   of scaffolding accumulated. #7158's +850 was fine ONLY because #7474
@@ -101,9 +102,10 @@ anything big.
   Resolve once at the boundary and CARRY the value; don't re-resolve at N
   layers. One owner per fact beats any structure.
 - **Fallbacks**: delete the impossible ones, make the ambiguous ones LOUD
-  (warn + surface), never add a silent one. Prove compat before deleting a
-  fallback on a resume/persist path — the one reversal in repo history
-  (#8091) was a "dead" fallback that resume compat still needed.
+  (warn + surface), never add a silent one. Before deleting a fallback on a
+  resume/persist path, prove the current writer never produces the shape it
+  handles — the one reversal in repo history (#8091) was a "dead" fallback
+  that a live writer still hit.
 - **Silent degradation is a blocker**: no bare `catch {}`, no `??` over a
   failed read, no Zod `.catch(default)` on persisted/security/accounting/
   lifecycle data, no `default: return` dropping unknown events.
@@ -173,7 +175,7 @@ anything big.
 6. Declarative tables for if/else dispatch ladders — only when render
    order/effect timing/short-circuit semantics are provably unchanged.
 7. Test-fixture dedup at rule-of-three; one fake per platform port.
-8. Hand-rolled async serialization → `p-queue`.
+8. Hand-rolled async serialization → Effect concurrency / `withPerKeyLane`.
 
 ## Sweep lenses (run every assigned file through all of these)
 
@@ -233,14 +235,13 @@ the same POLICY implemented per host, the simplification is to hoist it:
 
 ## TeXRA-specific constraints (violations fail review even when "cleaner")
 
-- VS Code-free zones (`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`,
-  `src/controllers/`, `src/shared/`, `src/replacement/`, `src/eventBus/`,
-  `src/hosts/`, webview frontends) never gain `vscode` imports; host
-  capabilities arrive via typed `Platform` ports.
+- VS Code-free zones (`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`) never
+  gain `vscode` imports; host capabilities arrive via typed `Platform` ports.
 - Zod v4: tool-input optionals use `.nullish()` (check `== null` at use
   sites); `.prefault()`/`.default()`/`.catch()` are not interchangeable.
   Schemas are SSOT — derive types, never hand-write parallel ones.
-- Run-scoped facts extend `AgentEvent`; session-scoped extend `SessionFact`.
+- Run-scoped facts extend `AgentEvent`; session-authored facts extend the
+  `SessionEvent` schema and publish via `SessionHandle.publish`.
   No new `bus.emit` from a VS Code-free zone.
 - The flow engine is local (`src/agent/node/index.ts`); no upstream
   PocketFlow BatchNode/params concepts.

@@ -125,8 +125,7 @@ ANTHROPIC_API_KEY=…
 GOOGLE_API_KEY=…
 ```
 
-In the CLI, export the same variables in your shell and run with
-`--api-mode personal`.
+In the CLI, export the same variables in your shell.
 
 ## Requirements
 

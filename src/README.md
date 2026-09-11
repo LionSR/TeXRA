@@ -35,7 +35,7 @@ Use the alias, not a long relative chain.
 | `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                       |
 | `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                        |
 | `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                             |
-| `src/test-kernel/`  | The test suite. 875 tracked files, ~57% of `src/` by line count — it dominates a directory listing but ships in nothing                                                                                  |
+| `src/test-kernel/`  | The test suite. It dominates a directory listing but ships in nothing                                                                                                                                    |
 
 ## Two axes that decide where code goes
 
