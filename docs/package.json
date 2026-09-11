@@ -1,7 +1,6 @@
 {
   "name": "texra-docs",
   "version": "0.3.0",
-  "main": "index.js",
   "scripts": {
     "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
     "sync-changelog": "cp ../CHANGELOG.md changelog.md",
@@ -11,13 +10,6 @@
     "docs:build": "npm run check:content && npm run sync-content && vitepress build .",
     "docs:serve": "vitepress serve ."
   },
-  "keywords": [
-    "texra",
-    "documentation",
-    "academic-writing",
-    "vscode-extension",
-    "ai"
-  ],
   "author": "TeXRA Team",
   "license": "Apache-2.0",
   "description": "Documentation for TeXRA - an AI theorist for VS Code and the terminal",

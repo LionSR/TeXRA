@@ -137,24 +137,25 @@ Not part of the process bootstrap, and not in
 `packages/cli/src/runtime/initPlatform.ts` at all, but a session is still
 required.
 
-`runAgent` falls back to `defaultSession()` when the caller passes no session
-(`src/agent/runtime/runAgent.ts:93`), and `defaultSession()` throws
+`RunAgentOptions.session` is required (`src/agent/runtime/runAgent.ts:46`);
+`runAgent` has no default-session fallback. Host code that reads the process
+default through `defaultSession()` gets
 `'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.'`
-(`src/agent/runtime/SessionHandle.ts:921-927`).
+until one exists (`src/agent/runtime/SessionHandle.ts:921-927`).
 
 Two ways out:
 
 - `initializeDefaultSession({})` — the process-default session, which builds
-  its own transcript store over the session's event database
+  its own transcript store over the session's event database and returns the
+  handle to pass as `options.session`
   (`src/agent/runtime/SessionHandle.ts:889-896`, called once; a second call
   throws). This is what the CLI
   (`packages/cli/src/runtime/transcriptSession.ts:29`) and the extension
   (`packages/extension/src/extension.ts:529`) do, each also passing its
   `responseTextProcessing`.
 - Construct your own `SessionHandle` and pass it as `options.session`
-  (`RunAgentOptions` picks `session` through to `executeAgent`,
-  `src/agent/runtime/runAgent.ts:37`). Then `defaultSession()` is never
-  consulted.
+  (`runAgent` forwards it to `executeAgent`). Then the process default is
+  never initialized or consulted.
 
 ### Prerequisite B — `await loadAgents(...)`
 
@@ -240,7 +241,10 @@ const validated = validateExecutionRequest({
 if (!validated.valid) throw new Error(validated.message);
 
 try {
-  await runAgent(validated.request, { session });
+  await runAgent(validated.request, {
+    session,
+    approvalPromptsUnavailable: true,
+  });
 } finally {
   detachHostInteractions();
 }
@@ -453,7 +457,7 @@ says this is to avoid "parking the agent while no UI is attached".
   _if_ a host eventually attaches.
 - **Interrupting a retained run handle settles pending interactions.**
   `RunAgentOptions.onRun` exposes an `AgentRunHandle`
-  (`src/agent/runtime/runAgent.ts:29-42`;
+  (`src/agent/runtime/runAgent.ts:31-46`;
   `src/agent/runtime/RunHandle.ts`). Retain it and call
   `handle.interrupt()` to abort the run; both workflow and tool-use
   interruption call `runSession.interactions.cancel`
