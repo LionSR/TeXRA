@@ -255,6 +255,7 @@ describe('CLI multi-agent presets', () => {
           workflow: ['polish'],
           toolUse: ['review'],
         },
+        texraHostedAgents: [],
       },
     ];
     const customPresets = (raw: unknown) =>

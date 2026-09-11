@@ -63,6 +63,7 @@ describe('parseAgentModePresets', () => {
         workflow: ['polish'],
         toolUse: ['assistant'],
       },
+      texraHostedAgents: [],
     };
   }
 

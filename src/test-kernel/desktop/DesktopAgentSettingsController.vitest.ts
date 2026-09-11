@@ -363,6 +363,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       description: 'test',
       icon: 'bookmark',
       agents: { workflow: ['correct'], toolUse: ['review'] },
+      texraHostedAgents: [],
     });
   }
 
