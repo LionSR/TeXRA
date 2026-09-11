@@ -510,7 +510,8 @@
             "title": "The setup assistant takes it from here",
             "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
             "media": {
-              "markdown": "resources/walkthroughs/getting-started.md"
+              "image": "resources/walkthroughs/media/texra-progressboard.png",
+              "altText": "Screenshot of the Progress view"
             },
             "completionEvents": [
               "onCommand:texra.runSetupAssistant"
@@ -533,7 +534,8 @@
             "title": "Prefer to do it manually? Try the sample project",
             "description": "The steps from here mirror what the setup assistant does, for when you'd rather drive yourself.\n\nNot sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
             "media": {
-              "markdown": "resources/walkthroughs/getting-started.md"
+              "image": "resources/walkthroughs/media/file-selection.png",
+              "altText": "Screenshot of the file selection interface"
             },
             "completionEvents": [
               "onCommand:texra.createSampleProject"
@@ -1057,7 +1059,6 @@
   "scripts": {
     "clean:dist": "node ../../scripts/clean-extension-dist.mjs",
     "prepare:docs": "node ../../scripts/copy-extension-docs.mjs",
-    "prepare:skills": "node ../../scripts/copy-extension-skills.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
     "esbuild:ext": "node esbuild.config.mjs",
     "esbuild:ext:watch": "node esbuild.config.mjs --watch",
@@ -1065,9 +1066,9 @@
     "vite:webviews": "for v in progressView settingsView; do VITE_WEBVIEW=$v vite build; done",
     "vite:webviews:dev": "for v in progressView settingsView; do VITE_WEBVIEW=$v vite build --mode development; done",
     "vite:webviews:watch": "concurrently \"VITE_WEBVIEW=progressView vite build --watch --mode development\" \"VITE_WEBVIEW=settingsView vite build --watch --mode development\"",
-    "compile:fast": "corepack pnpm run prepare:skills && corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext\" \"corepack pnpm run vite:webviews:dev\"",
+    "compile:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext\" \"corepack pnpm run vite:webviews:dev\"",
     "watch:fast": "echo \"[texra-watch] starting\" && corepack pnpm run compile:fast && echo \"[texra-watch] initial build complete\" && concurrently \"corepack pnpm run esbuild:ext:watch\" \"corepack pnpm run vite:webviews:watch\"",
-    "package:fast": "corepack pnpm run prepare:skills && corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext:prod\" \"corepack pnpm run vite:webviews\"",
+    "package:fast": "corepack pnpm run clean:dist && concurrently \"corepack pnpm run prepare:trace-viewer-assets\" \"corepack pnpm run esbuild:ext:prod\" \"corepack pnpm run vite:webviews\"",
     "build:fast": "corepack pnpm run package:fast && corepack pnpm run prepare:docs && mkdir -p ../../releases && vsce package --no-dependencies --out ../../releases/texra-$npm_package_version.vsix"
   }
 }

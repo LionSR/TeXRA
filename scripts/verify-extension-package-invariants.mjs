@@ -22,11 +22,7 @@ const vscodeIgnorePath = path.join(packageDir, '.vscodeignore');
 // Paths produced by the build from canonical repo-root sources. They do not
 // need to exist in the extension source tree, but verify-vsix-contents.mjs
 // still checks that the built VSIX includes them with matching hashes.
-const BUILD_TIME_PACKAGED_PATHS = new Set([
-  'readme.md',
-  'changelog.md',
-  'resources/skills',
-]);
+const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
@@ -123,9 +119,9 @@ function verifyAssets(packageJson, failures) {
 }
 
 function verifyBundledSkills(packageJson, failures) {
-  const sourceDir = path.join(rootDir, 'skills');
+  const sourceDir = path.join(packageDir, 'resources', 'skills');
   const sourceExists = fs.existsSync(sourceDir);
-  assert(sourceExists, 'Canonical skills directory is missing.', failures);
+  assert(sourceExists, 'Bundled skills directory is missing.', failures);
   if (!sourceExists) return;
 
   const sourceFiles = collectRelativeFiles(sourceDir);
@@ -136,7 +132,7 @@ function verifyBundledSkills(packageJson, failures) {
   assert(
     JSON.stringify(chatSkills.map((skill) => skill.name).toSorted()) ===
       JSON.stringify(expectedNames.toSorted()),
-    'Extension chatSkills must register every canonical bundled skill.',
+    'Extension chatSkills must register every bundled skill.',
     failures,
   );
 

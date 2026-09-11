@@ -6,12 +6,11 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, '..');
 const source = path.resolve(packageDir, '../extension/resources');
-const repoRoot = path.resolve(packageDir, '../..');
 const targetInput = process.env.TEXRA_CLI_RESOURCES_OUTDIR?.trim();
 const target = targetInput
   ? path.resolve(packageDir, targetInput)
   : path.resolve(packageDir, 'dist/resources');
-const runtimeResourceEntries = ['agents', 'goal', 'shared', 'tool_use_agents'];
+const runtimeResourceEntries = ['agents', 'skills', 'tool_use_agents'];
 
 // Built (not checked-in) assets: only present once packages/trace-viewer's
 // own build has run (normally guaranteed by this package's own `build`
@@ -43,7 +42,4 @@ await Promise.all([
   ...optionalRuntimeResourceEntries.map((entry) =>
     copyEntry(entry, { optional: true }),
   ),
-  cp(path.join(repoRoot, 'skills'), path.join(target, 'skills'), {
-    recursive: true,
-  }),
 ]);

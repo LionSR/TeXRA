@@ -95,8 +95,6 @@ prompts:
 
     \criticize{[nonsensical] "X holds because of Y, which follows from X"; circular. Fix: identify the independent ground for Y, or remove.}{5}{5}
 
-    {{ LATEX_STYLE_RULES }}
-
   userPrefix: |
     The LaTeX draft is below. Read from the beginning, in order.
 

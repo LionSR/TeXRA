@@ -1,15 +1,12 @@
 // Node imports
-import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import * as yaml from 'yaml';
 
 // Local imports
 import {
-  getContinuationTemplate,
   initializeBundledPrompts,
   renderPolishPrompt,
 } from '@agent/runtime/bundledPrompts';
@@ -18,42 +15,24 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-interface GoalPromptsYaml {
-  continuation: { template: string };
-}
-
 // The shipped bundle every host resolves at startup. Loading through it (rather
 // than through a per-prompt path) is what pins each loader's relative path to
 // the real resource layout.
 const RESOURCES_PATH = resolve(REPO_ROOT, 'packages/extension/resources');
-const GOAL_YAML_PATH = join(RESOURCES_PATH, 'goal', 'goal.yaml');
-
-const goalYaml = yaml.parse(
-  readFileSync(GOAL_YAML_PATH, 'utf8'),
-) as GoalPromptsYaml;
 
 describe('bundled prompt loader', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
   const tempDirs = useTempDirs();
 
-  /** A resources root whose two prompt files are both unparseable YAML. */
+  /** A resources root whose polish prompt file is unparseable YAML. */
   async function makeBrokenResources(): Promise<string> {
     const root = await makeTempDir('texra-bundled-prompts-', tempDirs);
-    await Promise.all([
-      mkdir(join(root, 'templates'), { recursive: true }),
-      mkdir(join(root, 'goal'), { recursive: true }),
-    ]);
-    await Promise.all([
-      writeFile(
-        join(root, 'templates', 'instructionPolish.yaml'),
-        'prompts:\n  userRequest: "unterminated\n',
-      ),
-      writeFile(
-        join(root, 'goal', 'goal.yaml'),
-        'continuation:\n  template: "unterminated\n',
-      ),
-    ]);
+    await mkdir(join(root, 'templates'), { recursive: true });
+    await writeFile(
+      join(root, 'templates', 'instructionPolish.yaml'),
+      'prompts:\n  userRequest: "unterminated\n',
+    );
     return root;
   }
 
@@ -74,26 +53,4 @@ describe('bundled prompt loader', () => {
       `Failed to parse polish prompt YAML at ${join(root, 'templates', 'instructionPolish.yaml')}`,
     );
   });
-
-  it('loads the goal continuation template from the packaged resource bundle', async () => {
-    initializeBundledPrompts(RESOURCES_PATH);
-
-    await expect(getContinuationTemplate()).resolves.toBe(
-      goalYaml.continuation.template,
-    );
-  });
-
-  it('falls back to the inline template instead of throwing on malformed goal YAML', async () => {
-    const root = await makeBrokenResources();
-    initializeBundledPrompts(root);
-
-    await expect(getContinuationTemplate()).resolves.toContain(
-      'Autonomous objective active',
-    );
-  });
 });
-
-// The inline fallback in bundledPrompts.ts ships verbatim to hosts that
-// haven't wired the bundle (tests, partial wiring, file-read errors). Drift
-// between the two paths would silently disable the completion-audit
-// discipline. Both must render the same template.
