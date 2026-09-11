@@ -104,7 +104,8 @@ paths:
 "@llm/*": ["./packages/llm/src/*"],
 ```
 
-Every package tsconfig extends the root and inherits its `paths`, and the
+Every consumer package tsconfig extends the root and inherits its `paths`
+(`packages/llm`, the alias target, is a standalone program), and the
 bundlers read the root map through `scripts/aliasUtils.mjs`, so
 this one entry propagates. **Do not** add `@texra-ai/llm` as a root dependency:
 its `exports` map points at raw `.ts` (`"./turn": "./src/turn.ts"`), and there
