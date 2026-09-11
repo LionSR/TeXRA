@@ -27,8 +27,7 @@ storage and execution contracts; the 1.0 breaking changes apply to `main`.
   adapters for this transition. Remove obsolete compatibility code and its
   dedicated tests when replacing the corresponding storage path. This
   decision supersedes earlier proposals requiring preservation or import of
-  legacy application state, and the general three-month compatibility window
-  below does not apply to this transition. It does not authorize deleting
+  legacy application state. It does not authorize deleting
   existing user data: initialize new state separately and leave old state
   untouched. Research files remain ordinary files; JSON may still be used
   for deliberate configuration, interchange, and export formats.
@@ -240,10 +239,8 @@ the `texra` terminal client, and `packages/trace-viewer/` the standalone trace-v
 `packages/agent/` is the embeddable SDK surface (`@texra-ai/agent`) — it builds and bundles locally but is
 not published to npm, and there is no `@texra/core` workspace package (deleted by #7099). Hosts still reach
 shared core through the repo-root path aliases; that surface is frozen rather than open. `eslint.config.mjs`
-forbids production `src/**` and `packages/agent/src/**` from importing host layers, and four checked-in
-ratchets under `config/ratchets/` freeze the remaining edges: `host-agent-import-baseline.json` (a host may
-not add a NEW distinct `@agent/*` deep-import specifier, type-only included), plus the
-`shared-schemas-deep-import`, `host-agent-mock`, and `architecture-edges` baselines. Never widen a baseline;
+forbids production `src/**` and `packages/agent/src/**` from importing host layers, and the checked-in
+ratchets under `config/ratchets/` (listed in CLAUDE.md "Layout") freeze the remaining edges. Never widen a baseline;
 a decrease is always welcome. Kernel architecture tests under
 `src/test-kernel/architecture/` (for example
 `approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with
@@ -294,8 +291,6 @@ frozen deep-import lists, not another lint rule.
 - **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
   - `@common/errors` — classification and surfacing: `classifyAgentError`, the SDK-error inspection under `sdkError/`, `errorPredicates`, `errorFormatUtils`. Reach for this when the _kind_ of failure changes what happens next.
   - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. This is the most-imported leaf module in the repo (~203 sites) and is browser-safe, which `@common/errors` is not required to be.
-
-  An earlier version of this line named `@common/errors` as the only error path, which is why the distinction is spelled out here.
 
 - **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
@@ -365,7 +360,7 @@ This project uses Zod v4. Follow these idiomatic patterns:
 
 **Default values**
 
-- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented absent-input defaults, including legacy omissions
+- `.prefault(val)` - Substitutes for `undefined` BEFORE validation and transforms; use for documented absent-input defaults
 - `.default(val)` - Returns a valid output default for `undefined` without parsing that default
 - `.catch(val)` - Substitutes after a validation error; use only where malformed present data may be discarded by policy
 
@@ -400,7 +395,7 @@ const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
 ```typescript
 // Old verbose pattern
 const result = PanelStateSchema.safeParse(data);
-const legacyPanelState = result.success ? result.data : DEFAULT_PANEL_STATE;
+const verbosePanelState = result.success ? result.data : DEFAULT_PANEL_STATE;
 
 // Zod v4 native
 const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
@@ -452,58 +447,14 @@ Any parameter with an obvious default should be optional with that default appli
 
 **Compatibility and format retirement**
 
-TeXRA has a short compatibility window. Do not preserve an old internal format
-indefinitely merely because a parser or migration already exists.
-
-TeXRA is an early-stage product. Prefer one small, current design over preserving
-historical behavior that materially increases maintenance cost. Breaking an old
-internal format is acceptable when no current public contract or demonstrated
-user need justifies the additional system.
-
-- Compatibility code may be removed three months after the replacement ships.
-  Record the introduction date and intended retirement condition beside every
-  temporary reader, alias, migration, or compatibility writer.
-- The desktop application has not had a public release. Desktop state always
-  adopts the current format directly; do not add desktop migration machinery.
-- CLI and TUI workflow-agent rosters and workflow-script checkpoints use only
-  their current schemas. Do not infer current state from old agent arrays,
-  rewrite old agent identifiers, write compatibility mirrors, or translate old
-  workflow journal versions.
-- New native settings begin with the current defaults. Do not import retired VS
-  Code settings or accept parallel prefixed and unprefixed on-disk spellings.
-  API helpers may canonicalize a caller-supplied key, but persisted JSON has one
-  spelling.
-- When a compatibility path is retired, delete its schemas, transforms,
-  branches, comments, fixtures, and compatibility-specific tests together. Do
-  not add new tests whose only purpose is to preserve a retired format.
-- Exceptions require a current public protocol or an explicit retention rule
-  for released user data. State the protected surface and retirement condition
-  in the code; “backward compatibility” alone is not a justification.
-
-For a format still inside its supported window, normalize it once at the
-storage or wire boundary:
-
-- Use `z.union()` with `.transform()` to handle the supported formats.
-- Put the current format first in the union.
-- Transform older input into one canonical structure.
-- Handle compatibility at the entry point using `safeParse`, not scattered
-  fallbacks in consumers.
-- Downstream code must never branch on the old format version.
-
-```typescript
-// Canonical format (new)
-const NewFormatSchema = z.object({ revised: OutputFileInfoSchema, ... });
-
-// Legacy format transforms to canonical
-const LegacyFormatSchema = z.object({ baseLabel: z.string(), ... })
-  .transform((e): NewFormat => ({ /* map to canonical */ }));
-
-// Single entry point handles both
-const EntrySchema = z.union([NewFormatSchema, LegacyFormatSchema]);
-
-// Usage: always returns canonical format
-const result = EntrySchema.safeParse(raw);
-```
+TeXRA 1.0 keeps no compatibility with earlier persisted data, config shapes,
+agent YAML fields, or flags (see "TeXRA 1.0 direction"). Do not add legacy
+readers, aliases, migrations, dual-format unions, or compatibility writers, and
+there is no retirement window to wait out: delete existing ones on sight, with
+their schemas, transforms, fixtures, and compatibility-specific tests. The only
+exceptions are external export formats (for example `trace.json`) and wire
+protocols TeXRA still supports; normalize those once at their boundary, and
+reject any other unsupported state with a clear error.
 
 ### ES2023+ Patterns
 
@@ -573,7 +524,7 @@ code points, not UTF-16 units, which changes persisted hash output).
 Aim for code that looks like it was designed correctly from the start:
 
 - **Use built-in methods**: `Array.isArray()`, optional chaining, and standard library functions handle most cases cleanly.
-- **Normalize at the edge**: Convert legacy formats once at load time (Zod schemas work well), then use only the current format everywhere else.
+- **Normalize at the edge**: Convert external input once at the boundary (Zod schemas work well), then use only the canonical shape everywhere else.
 - **Extract only when repeated**: Create a helper when the same logic appears in multiple places—not before.
 
 ### Platform decoupling rules
@@ -644,7 +595,6 @@ travel through the flows are described in `docs/architecture/2026-06-20-pocketfl
 
 - Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
-- For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js) local to reduce extension size.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
 
 **Progress view**

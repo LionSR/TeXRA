@@ -8,7 +8,7 @@ For a diff under `packages/cli/`, also load the **texra-cli** skill: the TUI has
 
 The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
 
-- **`grep -nE "from ['\"]vscode['\"]"`** in `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`, `src/replacement/`, `src/eventBus/`, or any webview `frontend/`. Any hit is a finding.
+- **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
 - **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `src/utils/config/configUtils.ts` and `src/utils/config/platformSettings.ts` are host-neutral (VS Code-free) and are called directly from agnostic code too, not only VS Code-allowed code.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
@@ -19,7 +19,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 ## 2. Zod v4 schema correctness
 
-Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as the single source of truth" and "Backward compatibility with legacy formats"; summary in `CLAUDE.md` → "Schemas (Zod v4)"). Greps for the diff:
+Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as the single source of truth"; compat rules in "Compatibility and format retirement"; summary in `CLAUDE.md` → "Schemas (Zod v4)"). Greps for the diff:
 
 - **Tool input schemas using `.optional()`** instead of `.nullish()` (breaks DeepSeek/Kimi/etc. structured output). At use sites, check for `=== undefined` (should be `== null`).
 - **Verbose old-style types**: `.string().int()`, `.string().uuid()`, `.string().datetime()`, `.nativeEnum`, `.passthrough()` → `.int()`, `.uuid()`, `.iso.datetime()`, `.enum()`, `.looseObject()`.
@@ -33,7 +33,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **`return 'continue' | 'complete' | 'default' | 'waiting'`** → use `FlowTransition.CONTINUE`/`COMPLETE`/`DEFAULT`/`WAITING` from `@agent/core/flows/FlowTransitions`.
 - **Mutable services**: anything passed to `flow.setServices()` that gets reassigned mid-run belongs in the shared store, not services.
 - **Lifecycle leak**: agent init/finalize logic appearing inside flows or nodes. Agents own lifecycle; flows execute; nodes throw and let `agent.run()` catch.
-- **`prep` / `exec` / `post` boundaries**: state mutations belong in `post`, not `exec`. Retries via `maxRetries` / `retryDelay` getters, not ad-hoc loops.
+- **`prep` / `exec` / `post` boundaries**: state mutations belong in `post`, not `exec`. Retries are not a `BaseNode` feature; only `ModelInvocationNode` retries (AGENTS.md "PocketFlow architecture").
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
 - **Commands invoking flow factories directly** → must launch via `runAgent` (`src/agent/runtime/runAgent.ts`) so the run gets an `executionId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `executionId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
@@ -50,10 +50,10 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 `AGENTS.md` → "UI anti-patterns" already lists the anti-patterns. Greps for the diff:
 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
-- **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `LitSessionRenderer`, `UsageStatsManager`).
+- **Lit components mutating shared state** → dispatch typed request events (see AGENTS.md "Progress view").
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
 - **Webview providers/handlers not composing `BundledViewContentProvider` for HTML generation / not extending `BaseViewMessageHandler`** (`packages/extension/src/common/webview/`).
-- **String literals for webview commands** → constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`, `MAIN_VIEW_COMMANDS`, …).
+- **String literals for webview commands** → constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`, `MEMORY_VIEW_COMMANDS`, …).
 - **New shared module path referenced without updating `localResourceRoots`** → 401 at runtime.
 - **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `AGENTS.md` → "UI anti-patterns" (Duplicate UI controls).
 
@@ -88,10 +88,9 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **Webview disposes that don't unregister listeners / FS watchers** → leak.
 - **Long-running model handlers / tool calls without `signal.aborted` checks** between awaits.
 
-## 11. Common backward-compat traps
+## 11. Compatibility and exhaustiveness
 
-- **Settings migrating from `package.json` config to storage** → schema must be `z.union([NewSchema, LegacyConfigSchema.transform(...)])` so the legacy shape still loads during the migration window.
-- **Renamed fields in persisted state** (`TaskState`, run records, session storage) → use `.prefault()` and tolerate the old shape (canonical pattern in `c9f8b2b`).
+- **New legacy readers, aliases, migrations, or dual-format unions** → finding. 1.0 keeps no compat with earlier persisted data, config shapes, YAML fields, or flags; only external export formats and wire protocols normalize old input (`AGENTS.md` → "Compatibility and format retirement").
 - **Provider-handler `switch` over a discriminated union** → default branch should `assertNever` / `satisfies never` so adding a provider compile-fails.
 
 ## 12. Modern TypeScript (ES2023)
@@ -122,10 +121,10 @@ Standing rules from the 2026-07 tech-debt re-calibration, which found that a run
 
 Mirrors [`.agents/docs/implemented/process/2026-07-07-fewer-elements.md`](../../../../.agents/docs/implemented/process/2026-07-07-fewer-elements.md) §7 (R1, R5-R8). On conflict, #6951's single-ownership section wins. Correctness and security fixes are exempt from the doc's R3/R4 sequencing rules, never from these checks.
 
-- **No dual-system resting state (R1).** A code-to-code shim/projection/dual-write/alias merges only if its deletion PR is already open and referenced from its #6981 row, or the row carries a calendar date ≤7 days out. Persisted-data read shims (old stream logs, flow records, agent YAML, workspace state) are the exception: age-based #6981 row with a calendar date. Check: the row cites a PR number or a date. No row, or a row with an undated trigger, is a merge blocker. Applies to shims introduced after this section landed; pre-existing event-triggered rows (Stage 5/D1) are governed by their stage gates, and R3's sweep target dates the rest.
+- **No dual-system resting state (R1).** A code-to-code shim/projection/dual-write/alias merges only if the PR that deletes it is already open and cited in the PR body. Persisted-data read shims get no exception under 1.0 (§11).
 - **Churn-class ban (R5).** Reject reflow/reformat of files the PR does not functionally touch (check: files in the diff with only whitespace/formatting hunks). Reject styles/file splits without net element accounting. Single-caller extractions remain banned (§13); #7070 is the canonical violation.
 - **Net-element accounting (R6).** A `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` PR body must report constructs added vs deleted (files from diffstat; exported symbols via `^[+-]export` over the diff; class/interface/enum declarations likewise) alongside net LoC. Positive element delta without a stated, staged reason is a merge blocker.
-- **Test budget (R7).** New test file only when the product module has no existing suite (one suite per module, path-mirrored under `src/test-kernel/`; or one suite per named cross-module scenario, stated in the PR body); otherwise extend. Tests pinning #6981-ledgered scaffolding carry an in-file expiry comment naming the row, and their LoC counts double in the R6 net accounting. ≥4 structurally identical cases use `test.each`.
+- **Test budget (R7).** New test file only when the product module has no existing suite (one suite per module, path-mirrored under `src/test-kernel/`; or one suite per named cross-module scenario, stated in the PR body); otherwise extend. ≥4 structurally identical cases use `test.each`.
 - **Consumer-grep before emitter deletion (R8).** A PR deleting or re-routing an emit path states the grepped subscriber count for every affected key in its body. Missing count on a deletion PR is a merge blocker (#7398 precedent: a live `bus.on` consumer was severed for 3.5h on main).
 - **Template enforcement.** Reject any `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` PR whose body is missing the `## Net elements (R6)` or `## Consumer counts (R8)` sections from `.github/PULL_REQUEST_TEMPLATE.md` — letter-level compliance, not just spirit (#7736).
 
@@ -136,10 +135,10 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 **Taxonomy.** Every new catch/fallback/resolver must classify, stated in the PR or self-evident at the site. Legitimate: **L1** boundary guard (host command/entry handler, run-lifecycle/listener fan-out, process exit); **L2** cleanup (`finally`, dispose-on-error, saga compensation); **L3** documented best-effort side write (comment required, never run-critical); **L4** provider/IO boundary with a single classifier (`withSdkErrorTag`→`normalizeProviderError`, `classifyAgentError`, `invokeToolSafely`); **L5** decide-once precedence owner (`decideRunModel`, `resolveClientCredential`, `deriveResumability`). Masking (flag): **M1** catch-and-continue in core logic; **M2** silent swallow; **M3** Zod silent default on persisted/parsed data; **M4** fallback chain with no decided owner; **M5** re-derive resolver; **M6** defensive wrapper around code that cannot throw.
 
 - **`catch {}` / `.catch(() => {})` without a best-effort comment is a blocker.** Grep the diff for `catch {`, `catch (_`, `.catch(() =>`. The comment must say why failure is safe to ignore and why it cannot hide a programming error. Precedent: `runToolUseFlow.ts`'s bare `catch { logger.debug('Resume parse failed, starting fresh') }` silently converted a resume into an empty-history run.
-- **New Zod `.catch(default)` on persisted or user-authored data is a blocker** (loud-reads rule, #6966 bullet 5). Either warn-on-failure at the read (the #7210 pattern for ExecutionMeta/FlowRecord) or a #6981 ledger row. Precedents: `externalInquiryStorage.ts` `.nullable().catch(null)`; `ExecutionKVStore.ts` `.catch([])`.
+- **New Zod `.catch(default)` on persisted or user-authored data is a blocker** (loud-reads rule, #6966 bullet 5). Warn on failure at the read instead (the #7210 pattern for ExecutionMeta/FlowRecord).
 - **A defaulted read feeding a later whole-file write must prove round-trip.** If a catch or Zod default flows into a save of the same file, corrupt-parse becomes permanent data loss. Precedent: `packages/cli/src/runtime/cliSecrets.ts` (read failure returned `{}`, the next `set()` rewrote `secrets.json` with only the mutated key).
 - **A catch defaulting a persisted read must distinguish `isFileNotFoundError` from everything else.** ENOENT→default is fine; EACCES/corrupt-JSON→default is masking. Grep new catch blocks returning `{}`/`[]`/`null`/`''` for the missing FNF predicate.
-- **New `resolve*`/`derive*`/`infer*`/`fallback*` over an already-decided fact needs the #6951 "Single source of truth" justification** in the PR body; if the fact exists upstream or can be carried as data, carry it. Precedents: `modelHandlerCompatibilityInference.ts` (message-shape sniffing at 6 call sites); `executionStreamResolver.ts` `resolvePersistedStreamIdForExecution` (hot-path reverse scan); the dual `resolveWorkspaceSourceDir` (compileCheck.ts vs LatexDiffManager.ts, divergent heuristics).
+- **New `resolve*`/`derive*`/`infer*`/`fallback*` over an already-decided fact needs the #6951 "Single source of truth" justification** in the PR body; if the fact exists upstream or can be carried as data, carry it. Precedent: the dual `resolveWorkspaceSourceDir` (compileCheck.ts vs LatexDiffManager.ts, divergent heuristics).
 - **A `??`/`||`/try-else chain over >2 sources needs a named single owner** (one function/table owns the precedence; consumers take its output). Display defaults (`?? 'unknown'`) exempt.
 - **No downgrade below `warn` on a resume/persisted-state read failure.** `logger.debug` in a catch that changes run behavior (fresh start, dropped history, zeroed usage) is a blocker.
 - **Fire-and-forget writes get exactly one logging rejection owner.** A chain-keep-alive `.catch(() => {})` on a write queue is legal only paired with one shared observer that logs the rejection.
@@ -156,7 +155,7 @@ Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full 
 - **Local fakes need justification.** A local fake for a platform port that already has a shared fake in `src/test-kernel/support/` needs a one-line comment naming the capability gap.
 - **Registrations need a consumer.** Global registration (component, command, provider) needs an external surface that actually references it; internal-only usage imports locally.
 - **No new bare module-level mutable singletons in tested code.** Flag module-level `let`/mutable object state that tests would need to reset between runs; it needs an injectable, resettable handle instead.
-- **Async serialization uses `p-queue`.** A new `chain = chain.then(...)` promise-chain (or a `Map` of chained promises) for one-at-a-time execution is a finding; use `new PQueue({ concurrency: 1 })` — per-key ordering via a `Map` of queues — per the `streamApprovalQueue.ts` precedent. A diff that touches an existing hand-rolled chain should migrate it, not grow it.
+- **Async serialization goes through Effect.** A new `chain = chain.then(...)` promise-chain, a `Map` of chained promises, or new `p-queue` use for one-at-a-time execution is a finding; use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) per `AGENTS.md` → "Code quality rules".
 
 ## Final pass
 

@@ -154,9 +154,9 @@ scope.
 
 Schemas are the single source of truth: define the schema, derive types with
 `z.infer`, compose with `.extend()`/`.pick()`, prefer `z.discriminatedUnion()`
-over `z.custom<T>()`. Normalize legacy formats once at the entry point with a
-`z.union()` whose legacy member `.transform()`s into the canonical shape;
-downstream code never branches on format version.
+over `z.custom<T>()`. Normalize external input once at the boundary into the
+canonical shape; downstream code never branches on format version. There are
+no legacy-format readers: AGENTS.md "Compatibility and format retirement".
 
 Two traps worth memorizing:
 
@@ -262,7 +262,6 @@ Load these when the work lands in their territory:
   headless output parity, and CLI flag/help design.
 - **releasing** — cutting a release: changelog, tags, GitHub Releases, desktop
   installers.
-- **tech-debt-tournament** — one cycle of the recurring scoped tech-debt sweep.
 
 <!-- effect-solutions:start -->
 

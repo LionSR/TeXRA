@@ -2,9 +2,10 @@
 
 ## Supported versions
 
-TeXRA ships from a single release line across all three surfaces: the VS Code
-extension, the desktop app, and `@texra-ai/cli`. Only the latest released
-version gets security fixes. Please upgrade before reporting — see the
+TeXRA ships all three surfaces (the VS Code extension, the desktop app, and
+`@texra-ai/cli`) together. TeXRA 1.0 is developed on `main`; `release/0.40` is
+the maintenance line for existing 0.40 users. Only the latest release on a
+supported line gets security fixes. Please upgrade before reporting — see the
 [changelog](./CHANGELOG.md) for what is current.
 
 ## Reporting a vulnerability

@@ -18,7 +18,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 Treat these as intentional by default; removing an unused method *inside* one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
-- The five checked-in architectural ratchets under `config/ratchets/` (`host-agent-import-baseline.json`, `shared-schemas-deep-import-baseline.json`, `host-agent-mock-baseline.json`, `architecture-edges-baseline.json`, and `store-public-surface-baseline.json`). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to *shrink* one is a good candidate; proposing to delete the ratchet mechanism is not.
+- The checked-in architectural ratchets under `config/ratchets/` (listed in `CLAUDE.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to *shrink* one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/agent/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The trimmed PocketFlow engine (`src/agent/node/index.ts`). It deliberately lacks upstream `BatchNode`/`BatchFlow`, parallel variants, and the `params` channel — do not propose re-adding them, and do not propose replacing the engine without reading it first.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a *simplification* source (no migration machinery allowed), not a target.
@@ -30,12 +30,11 @@ A strong simplification removes, folds, or demotes something real and has clear 
 
 - An exported symbol, command, config key, event, manager method, or packaged resource has no production consumer. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) already knows about grandfathered ones — a *new* dead export, or proof that a baselined one can now leave the baseline, is the find.
 - Tests or docs are the only consumers, and the behavior they pin is not load-bearing. Per "Testing discipline", tests pinning retired behavior get deleted with the behavior, not rewritten around the new implementation.
-- Compatibility machinery past its window: readers, aliases, migrations, or dual-format unions whose replacement shipped more than three months ago. "Compatibility and format retirement" makes these deletable by policy — cite the introduction date comment beside the compat code.
+- Compatibility machinery for earlier internal formats: readers, aliases, migrations, or dual-format unions. Under 1.0, "Compatibility and format retirement" makes these deletable by policy, with no window; only external export formats and wire protocols are exempt.
 - Two representations mirror the same fact — e.g. a fact derivable upstream that is instead re-derived by a `resolve*`/`derive*`/`infer*` helper at multiple call sites (checklist §15 names the precedents).
 - Speculative product generality with no product owner: multi-workspace abstraction used by one workspace, configurable registries with one registration, staged-migration scaffolding whose tail never closed.
 - A wrapper, facade, or factory that only relocates complexity: single-caller extractions, trivial identity factories, two-layer factories called once, convenience barrels with no documented public surface.
-- Hand-rolled code reimplementing a Node builtin at the repo's engine floor (ES2022+, see "ES2023+ Patterns" in `AGENTS.md`) or an *existing* root dependency — `p-queue` for serialized async work is the canonical case (`chain = chain.then(...)` chains are banned going forward).
-- Desktop-only migration or compat code: desktop state always adopts the current format directly, so any desktop migration machinery is dead on arrival.
+- Hand-rolled code reimplementing a Node builtin at the repo's engine floor (ES2022+, see "ES2023+ Patterns" in `AGENTS.md`) or an *existing* root dependency — hand-rolled serialized async work that Effect concurrency or `withPerKeyLane` already covers is the canonical case (`chain = chain.then(...)` chains and new `p-queue` use are banned).
 - The simplified behavior may differ slightly, but the new behavior is still reasonable and easier to explain.
 
 Thin candidates are not enough: deleting one typo, a single `knip` run's raw output, reformatting, or "this looks complex" without call-site proof.
@@ -61,7 +60,7 @@ For complex asynchronous code, map each sentinel, readiness promise, cancellatio
 
 ## Hand-Rolled Code Versus A Dependency
 
-This repo's default runs the other way from most: "Pragmatic implementations" prefers native constructs and JSON over new libraries, and a new dependency is never added silently. So the swap question is usually: does a **Node builtin at the ES2022 engine floor** or a **dependency the repo already has** cover this? `p-queue` (already a root dependency) replacing hand-rolled promise chains is the standing example. Prefer `.toSorted()`, `.at()`, `Object.hasOwn()`, `node:timers/promises`, and friends over local helpers.
+This repo's default runs the other way from most: "Pragmatic implementations" prefers native constructs and JSON over new libraries, and a new dependency is never added silently. So the swap question is usually: does a **Node builtin at the ES2022 engine floor** or a **dependency the repo already has** cover this? Effect concurrency primitives replacing hand-rolled promise chains is the standing example. Prefer `.toSorted()`, `.at()`, `Object.hasOwn()`, `node:timers/promises`, and friends over local helpers.
 
 A genuinely *new* dependency can still be the right answer, but the proposal must name the exact surface the package covers, check maintenance/adoption/transitive footprint honestly, and weigh net deletion (implementation plus dedicated tests plus docs, minus remaining glue). For webview-reachable code, a dependency that pulls Node built-ins into the browser-safe set is disqualified outright. A wrapper that relocates the same complexity is not a win.
 
@@ -87,7 +86,7 @@ Reject or downgrade a candidate when:
 This repo has no inline-TODO convention and no notes tree; durable findings go to one of two places:
 
 - **A dated proposal** under `.agents/docs/proposed/simplification/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
-- **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of the tournament's children (e.g. #8746): title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open *and* closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
+- **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of #8746: title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open *and* closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
 
 Be concrete enough that an implementing PR can follow the trail. Avoid vague "simplify this package" write-ups. One proposal or issue per durable candidate; do not pad the count with thin finds.
 
