@@ -25,7 +25,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  */
 
 // Third-party imports
-import { Effect, type Deferred } from 'effect';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -428,8 +428,6 @@ function startClaudeAgentLoop(params: {
   resumeSessionId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-  /** Settled by the loop wrapper when the loop's completion settles. */
-  loopSettled: Deferred.Deferred<void>;
 }): Effect.Effect<void, Error> {
   const { childStream, parentStreamId, executionId, initialPrompt } = params;
   const { logger } = childStream;
@@ -452,7 +450,6 @@ function startClaudeAgentLoop(params: {
     stageLabel: 'Claude Code session',
     initialPrompt,
     store: claudeAgentSessionsFor,
-    loopSettled: params.loopSettled,
     releaseFallbackClaim: params.releaseFallbackClaim,
     runProviderTurn: async (prompt, _ports, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
@@ -644,8 +641,7 @@ const launchClaudeAgentSession = Effect.fn(
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',
-    store: claudeAgentSessionsFor,
-    startLoop: ({ childStream, executionId, loopSettled }) =>
+    startLoop: ({ childStream, executionId }) =>
       startClaudeAgentLoop({
         session,
         childStream,
@@ -662,7 +658,6 @@ const launchClaudeAgentSession = Effect.fn(
         resumeSessionId: input.session_id ?? undefined,
         forkSession: input.fork_session === true,
         releaseFallbackClaim,
-        loopSettled,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,

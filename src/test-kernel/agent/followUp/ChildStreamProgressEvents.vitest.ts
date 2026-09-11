@@ -33,7 +33,6 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from '@tools/agentCliShared';
-import { codexThreadsFor } from '@tools/agentCliSessionStores';
 import {
   createChildStream,
   type ChildStream,
@@ -519,7 +518,6 @@ describe('child stream progress events', () => {
               description: 'Cancelled admission',
               config,
               registerFailedMessage: 'registration failed',
-              store: codexThreadsFor,
               startLoop,
               summary: 'unreachable',
               launchedLine: 'unreachable',
@@ -586,7 +584,6 @@ describe('child stream progress events', () => {
                 description: 'Fail during synchronous loop setup',
                 config,
                 registerFailedMessage: 'registration failed',
-                store: codexThreadsFor,
                 startLoop: (context) => {
                   childStream = context.childStream;
                   childExecutionId = context.executionId;
