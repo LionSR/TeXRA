@@ -245,7 +245,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'google',
-      apiKey: undefined,
     });
 
     expect(await fixture.secrets.get('apiKey.google')).toBe('sk-google-secret');
@@ -280,7 +279,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'openai',
-      apiKey: undefined,
     });
     expect(await secrets.get(secretName)).toBe('replacement');
 
@@ -308,7 +306,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
         command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
         provider,
-        apiKey: undefined,
       });
 
       expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
