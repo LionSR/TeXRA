@@ -1,9 +1,5 @@
-import type { RunId } from '@shared/schemas';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigInput,
-} from '../definition/AgentConfig';
+import type { AgentConfigInput, RunId } from '@shared/schemas';
+import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 import type { z } from 'zod';
 
 export interface RunRequest {

@@ -1,12 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { getHelperModelName, type SessionHandle } from '@agent/runtime';
-import { createLatexRunDiscovery } from '@agent/storage';
 import {
+  getHelperModelName,
   validateRunRequest,
+  type SessionHandle,
   type ValidatedRunRequest,
-} from '@agent/core/state/runRequests';
+} from '@agent/runtime';
+import { createLatexRunDiscovery } from '@agent/storage';
 import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';

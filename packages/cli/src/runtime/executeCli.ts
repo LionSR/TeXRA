@@ -4,6 +4,7 @@ import {
   attachTerminalResultToast,
   runAgent,
   trackTerminalResultPresentation,
+  validateRunRequest,
   type AgentConfigPayload,
   type RunAgentOptions,
   type RunAgentRequest,
@@ -14,7 +15,6 @@ import {
   type ResumabilityDecision,
   finalizeRun,
 } from '@agent/storage';
-import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';

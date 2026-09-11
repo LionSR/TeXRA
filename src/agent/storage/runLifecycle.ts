@@ -57,19 +57,6 @@ function pinRunWorkingDirectory(record: RunRecord): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-export const getPersistedUserFollowUpSupport = (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.Effect<UserFollowUpSupport, Error> =>
-  getRunRecords(session, runId)
-    .readMeta()
-    .pipe(
-      Effect.map(
-        (meta) =>
-          meta?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      ),
-    );
-
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;

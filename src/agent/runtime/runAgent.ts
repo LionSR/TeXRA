@@ -177,7 +177,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
               launchSignal,
               session: runSession,
               resumed: prior !== null,
-              userFollowUpSupport,
               onRun: async (handle) => {
                 lifecycleStarted = true;
                 await callerOnRun?.(handle);

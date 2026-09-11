@@ -1,7 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
 import { Data, Effect } from 'effect';
-import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
@@ -15,6 +14,7 @@ import type {
 } from '@shared/schemas';
 import {
   AgentCategory,
+  DEFAULT_WORKFLOW_AGENT,
   agentKey,
   agentKeyOf,
   agentMatchesIdentifier,

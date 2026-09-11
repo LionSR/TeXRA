@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  getPersistedUserFollowUpSupport: vi.fn(),
   readRunMeta: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
@@ -53,15 +52,6 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
     }),
 }));
 
-vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
-  getPersistedUserFollowUpSupport: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.getPersistedUserFollowUpSupport(...args),
-      catch: ensureError,
-    }),
-}));
-
 // The resumed run reads its parent edge off the persisted `run.start`, so the
 // lineage fixture is the run's metadata read.
 vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
@@ -100,12 +90,7 @@ import {
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-  AgentCategory,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -187,9 +172,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.retrieveSessionResumeData.mockImplementation(
       async (runId, agentConfig) =>
         createToolUseResumeData({ runId, agentConfig }),
-    );
-    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
-      USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     );
     mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     mocks.releaseRunClaims.mockReturnValue(Effect.void);

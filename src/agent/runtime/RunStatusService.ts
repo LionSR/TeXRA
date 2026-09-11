@@ -263,10 +263,6 @@ export class RunStatusMachine {
     this.runs.delete(runId);
   }
 
-  clearAll(): void {
-    this.runs.clear();
-  }
-
   /** Combined per-run phase + substate for every known run. */
   getAllRunStates(): Map<RunId, RunPhaseState> {
     const values = new Map<RunId, RunPhaseState>();

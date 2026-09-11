@@ -132,3 +132,10 @@ export {
   type AgentConfig,
   type AgentConfigPayload,
 } from '../core/definition/AgentConfig';
+
+// core/state run-request validation at the host launch boundary.
+export {
+  validateRunRequest,
+  type RunRequest,
+  type ValidatedRunRequest,
+} from '../core/state/runRequests';
