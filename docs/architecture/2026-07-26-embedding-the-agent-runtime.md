@@ -210,7 +210,7 @@ import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
 import { runAgent } from '@agent/runtime/runAgent';
-import { validateExecutionRequest } from '@agent/core/state/executionRequests';
+import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
 
 const agentDirectories = createPlatformAgentDirectories({
@@ -252,7 +252,7 @@ try {
 }
 ```
 
-`validateExecutionRequest` (`src/agent/core/state/executionRequests.ts:24-45`)
+`validateRunRequest` (`src/agent/core/state/runRequests.ts`)
 is the result-style validation helper: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
@@ -457,7 +457,7 @@ the runtime already knows the parking behaviour exists.
 - **Interrupting a retained run handle settles pending interactions.**
   `RunAgentOptions.onRun` exposes an `AgentRunHandle`
   (`src/agent/runtime/runAgent.ts:29-42`;
-  `src/agent/runtime/ExecutionHandle.ts:328-342`). Retain it and call
+  `src/agent/runtime/RunHandle.ts`). Retain it and call
   `handle.interrupt()` to abort the run; both workflow and tool-use
   interruption call `runSession.interactions.cancel`
   (`src/agent/runtime/executeAgent.ts:215-221`;
@@ -521,7 +521,7 @@ The worked example is the CLI's own headless path: it derives the flag from
 policy and mode (`packages/cli/src/runtime/approval/settleApprovals.ts` —
 `cliApprovalPromptsUnavailable`)
 and passes it straight into the real `runAgent` call
-(`packages/cli/src/runtime/runExecution.ts`). As the "Escape hatches"
+(`packages/cli/src/runtime/executeCli.ts`). As the "Escape hatches"
 note above says, the flag does not touch `requestRetry` or `askUserQuestion`
 dispatch — it only narrows which tools can raise the approval kinds that were
 the reachable hang.
@@ -541,7 +541,7 @@ would instead settle every live approval the instant the real host detached —
 and desktop attaches and detaches per window, one `DesktopProgressBridge`
 per `BrowserWindow` calling `interactions.use` on the one process-owned
 session and disposing it on close
-(`packages/desktop/src/main/desktopAgentExecution.ts:388`;
+(`packages/desktop/src/main/desktopAgentRun.ts`;
 `packages/desktop/src/main/index.ts:583-621`). Closing one window would
 silently deny a pending tool-edit diff. A latch that auto-denies before any
 host has ever attached fares no better: the runtime cannot know whether a

@@ -86,9 +86,7 @@ export class AgentCliSessionRegistry {
    * checks read the live handle rather than a stored pointer, so a detached
    * or re-parented child answers with its current state.
    */
-  getHandle(
-    entry: AgentCliSessionEntry | undefined,
-  ): RunHandle | undefined {
+  getHandle(entry: AgentCliSessionEntry | undefined): RunHandle | undefined {
     return entry && this.runs.getHandle(entry.runId);
   }
 
@@ -129,9 +127,7 @@ export class AgentCliSessionRegistry {
     const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.runId)) return;
-      const handle = this.runs.getAgentHandleByStream(
-        entry.childStreamId,
-      );
+      const handle = this.runs.getHandle(entry.runId);
       if (!handle) return;
       interrupted.add(entry.runId);
       handle.interrupt();

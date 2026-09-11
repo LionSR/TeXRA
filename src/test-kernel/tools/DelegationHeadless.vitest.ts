@@ -640,9 +640,14 @@ describe('headless delegation', () => {
       const phase = (value as { phase?: string }).phase;
       if (phase) order.push(phase);
     });
-    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
-      order.push('drain');
-    });
+    const session = defaultSession();
+    const settle = session.flushArtifacts.bind(session);
+    const drain = vi
+      .spyOn(session, 'flushArtifacts')
+      .mockImplementation(async () => {
+        order.push('drain');
+        await settle();
+      });
     mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
       order.push('release');
     });
@@ -651,7 +656,7 @@ describe('headless delegation', () => {
     try {
       await runInBand(delegationOptions(), logicalRunId);
     } finally {
-      detachFlusher();
+      drain.mockRestore();
     }
 
     expect(order).toContain('launched');
@@ -1039,9 +1044,9 @@ describe('headless delegation', () => {
       return await write?.(key, value);
     });
     useStableStores(stableSequenceStore(logicalRunId), childStore);
-    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
-      throw cleanupFailure;
-    });
+    const cleanup = vi
+      .spyOn(defaultSession(), 'flushArtifacts')
+      .mockRejectedValue(cleanupFailure);
 
     try {
       await expect(
@@ -1051,7 +1056,7 @@ describe('headless delegation', () => {
         cause: cleanupFailure,
       });
     } finally {
-      detachFlusher();
+      cleanup.mockRestore();
     }
     mocks.inspectRunLease.mockResolvedValueOnce({
       status: 'held',
@@ -1081,9 +1086,9 @@ describe('headless delegation', () => {
       return await write?.(key, value);
     });
     useStableStores(stableSequenceStore(logicalRunId), childStore);
-    const detachFlusher = defaultSession().useArtifactFlusher(async () => {
-      throw cleanupFailure;
-    });
+    const cleanup = vi
+      .spyOn(defaultSession(), 'flushArtifacts')
+      .mockRejectedValue(cleanupFailure);
 
     try {
       await expect(
@@ -1093,7 +1098,7 @@ describe('headless delegation', () => {
         cause: cleanupFailure,
       });
     } finally {
-      detachFlusher();
+      cleanup.mockRestore();
     }
 
     // Perform the restart repair's observable lease transition before the

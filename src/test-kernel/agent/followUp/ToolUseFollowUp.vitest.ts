@@ -314,7 +314,7 @@ describe('submitFollowUp', () => {
           },
         ),
       ),
-    ).resolves.toEqual({ status: 'failed', reason: 'finished' });
+    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(tryResumeRun).not.toHaveBeenCalled();
   });
 
