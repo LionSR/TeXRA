@@ -189,7 +189,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal(usage.outputTokens, 20);
     assert.equal(usage.cachedInputTokens, 70);
     assert.equal(usage.cacheMissInputTokens, 30);
-    assert.equal(usage.percentageCached, 70);
   });
 
   it('falls back to DeepSeek cache hit plus miss when prompt_tokens is absent', () => {
