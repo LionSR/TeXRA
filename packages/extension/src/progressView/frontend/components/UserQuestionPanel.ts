@@ -129,8 +129,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
               ? repeat(
                   question.options,
                   (option) => option.label,
-                  (option) =>
-                    this.renderCheckboxOption(index, option, current),
+                  (option) => this.renderCheckboxOption(index, option, current),
                 )
               : html`
                   <wa-radio-group
