@@ -69,6 +69,7 @@ async function main() {
       syncFns: {},
       argsJson: undefined,
       filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
+      realmPrelude: '',
     },
     { filename: 'bundle-smoke.workflow.js', timeoutMs: 1_000 },
   );
