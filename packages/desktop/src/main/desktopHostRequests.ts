@@ -9,9 +9,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
-import type { SessionHandle } from '@agent/runtime';
+import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
-  agentErrorPresentation,
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
@@ -193,25 +192,14 @@ export function createDesktopHostRequests(
                   data: toLogData(error),
                 });
                 const primaryError = primaryAgentError(error);
-                const presentation = agentErrorPresentation({
-                  kind: classifyAgentError(primaryError),
-                  message: `Merge failed: ${toErrorMessage(primaryError)}`,
-                });
-                if (presentation?.type === 'instruction') {
-                  session.interactions.emit(
-                    'requestShowInstruction',
-                    presentation.payload,
-                    { replayWhenAttached: true },
-                  );
-                } else if (presentation?.type === 'error') {
-                  session.interactions.emit(
-                    'requestShowError',
-                    presentation.payload,
-                    {
-                      replayWhenAttached: true,
-                    },
-                  );
-                }
+                presentAgentFailure(
+                  session.interactions,
+                  {
+                    kind: classifyAgentError(primaryError),
+                    message: `Merge failed: ${toErrorMessage(primaryError)}`,
+                  },
+                  { replayWhenAttached: true },
+                );
               }),
             ),
           ),
@@ -763,29 +751,18 @@ export function createDesktopHostRequests(
       // Request-scoped operations do not present. Every rejection, including
       // a capability refusal, reaches this one dialog before the response.
       const primaryError = primaryAgentError(error);
-      const presentation = agentErrorPresentation({
-        kind: classifyAgentError(primaryError),
-        message:
-          primaryError instanceof Rejected ||
-          primaryError instanceof Unavailable
-            ? primaryError.reason
-            : toErrorMessage(primaryError),
-      });
-      if (presentation?.type === 'instruction') {
-        await session.interactions.emit(
-          'requestShowInstruction',
-          presentation.payload,
-          { replayWhenAttached: true },
-        );
-      } else if (presentation?.type === 'error') {
-        await session.interactions.emit(
-          'requestShowError',
-          presentation.payload,
-          {
-            replayWhenAttached: true,
-          },
-        );
-      }
+      await presentAgentFailure(
+        session.interactions,
+        {
+          kind: classifyAgentError(primaryError),
+          message:
+            primaryError instanceof Rejected ||
+            primaryError instanceof Unavailable
+              ? primaryError.reason
+              : toErrorMessage(primaryError),
+        },
+        { replayWhenAttached: true },
+      );
       throw error;
     },
     closePort: draftRequests.closePort,

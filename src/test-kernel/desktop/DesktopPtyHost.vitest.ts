@@ -49,6 +49,7 @@ function createHost(
   return createDesktopPtyHost({
     onData: vi.fn(),
     onExit: vi.fn(),
+    onError: vi.fn(),
     ...overrides,
   });
 }

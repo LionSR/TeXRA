@@ -75,6 +75,7 @@ export { classifyRun } from './runClassification';
 // terminalResultToast
 export {
   attachTerminalResultToast,
+  presentAgentFailure,
   trackTerminalResultPresentation,
 } from './terminalResultToast';
 

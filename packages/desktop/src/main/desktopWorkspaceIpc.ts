@@ -55,8 +55,8 @@ interface DesktopWorkspaceIpcOptions {
    * session; the window's own paper is what a re-list decision compares to.
    */
   getWorkspacePath(): string | undefined;
-  getEnvironmentSummary?(): Promise<DesktopEnvironmentSummary>;
-  onAsyncError?(error: unknown): void;
+  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
+  onAsyncError(error: unknown): void;
 }
 
 interface DesktopWorkspaceIpc extends DesktopMessageHandler {
@@ -176,7 +176,7 @@ export function createDesktopWorkspaceIpc(
   renderer: DesktopRenderer,
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
-  const reportError = (error: unknown) => options.onAsyncError?.(error);
+  const reportError = (error: unknown) => options.onAsyncError(error);
 
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
   // the editor's own write path, and the file tree caches its listing — so
@@ -413,10 +413,6 @@ export function createDesktopWorkspaceIpc(
               command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
               environment,
             });
-          if (!options.getEnvironmentSummary) {
-            postEnvironment(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY);
-            return true;
-          }
           void options
             .getEnvironmentSummary()
             .then(postEnvironment)

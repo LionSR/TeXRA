@@ -15,7 +15,7 @@ import {
 
 import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
-import { runInSession } from '@agent/runtime';
+import { presentAgentFailure, runInSession } from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgentsByCategory,
@@ -26,7 +26,6 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { hostPort } from '@common/hostPort';
 import {
-  agentErrorPresentation,
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
@@ -1243,10 +1242,6 @@ function createWindow(options: {
       // logic can't drift between them.
       hasCredential: () =>
         hasUsableSetupCredential(options.secrets, credentialLog.warn),
-      // The setup card launches its own request (`kickoffSetup` below), so
-      // the launcher's agent selection, which is the surface's (PRD 9),
-      // is not moved from here.
-      selectSetupAgent: async () => {},
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,
@@ -1294,31 +1289,23 @@ function createWindow(options: {
                 if (error instanceof Cancelled) return;
                 // Setup continues after its initiating request has completed.
                 const primaryError = primaryAgentError(error);
-                const presentation = agentErrorPresentation({
-                  kind: classifyAgentError(primaryError),
-                  message:
-                    primaryError instanceof Rejected
-                      ? primaryError.reason
-                      : toErrorMessage(primaryError),
-                });
-                if (
-                  presentation?.type === 'instruction' ||
-                  presentation?.type === 'error'
-                ) {
-                  yield* Effect.tryPromise({
-                    try: () =>
-                      Promise.resolve(
-                        setupSession.interactions.emit(
-                          presentation.type === 'instruction'
-                            ? 'requestShowInstruction'
-                            : 'requestShowError',
-                          presentation.payload,
-                          { replayWhenAttached: true },
-                        ),
+                yield* Effect.tryPromise({
+                  try: () =>
+                    Promise.resolve(
+                      presentAgentFailure(
+                        setupSession.interactions,
+                        {
+                          kind: classifyAgentError(primaryError),
+                          message:
+                            primaryError instanceof Rejected
+                              ? primaryError.reason
+                              : toErrorMessage(primaryError),
+                        },
+                        { replayWhenAttached: true },
                       ),
-                    catch: (emitError) => emitError,
-                  });
-                }
+                    ),
+                  catch: (emitError) => emitError,
+                });
                 return yield* Effect.fail(error);
               }),
             ),

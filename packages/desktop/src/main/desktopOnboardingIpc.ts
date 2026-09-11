@@ -14,11 +14,10 @@ import {
   DESKTOP_ONBOARDING_COMMANDS,
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../shared/desktopOnboardingMessages.js';
-import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
-  type DesktopMessageHandler,
-  type DesktopRenderer,
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+  DesktopRenderer,
 } from './desktopIpcTypes.js';
 
 const logger = createLog('DesktopOnboarding');
@@ -31,13 +30,11 @@ interface DesktopOnboardingIpcOptions {
    * provider API key). Async because the secrets read can involve disk I/O.
    */
   hasCredential: () => boolean | Promise<boolean>;
-  /** Put the setup agent in the launcher when entering State 1. */
-  selectSetupAgent: () => Promise<void>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Promise<void>;
-  onAsyncError?: (error: unknown) => void;
+  onAsyncError: (error: unknown) => void;
 }
 
 /**
@@ -56,7 +53,7 @@ export interface DesktopOnboardingIpc extends DesktopMessageHandler {
   skipOnboarding(): Promise<void>;
   /** The setup card's skip: marks the first run done and refreshes. */
   skipSetup(): Promise<void>;
-  /** The setup card's Run Setup: selects the setup agent and launches. */
+  /** The setup card's Run Setup: launches the setup conversation. */
   runSetup(): Promise<void>;
   signInWithChatGpt(): Promise<void>;
 }
@@ -66,7 +63,6 @@ export function createDesktopOnboardingIpc(
   options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
   const state = options.state;
-  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   let previousFunnelState: OnboardingFunnelState | undefined;
   let setupKickoffStarted = false;
   const funnelListeners = new Set<(state: OnboardingFunnelState) => void>();
@@ -117,12 +113,10 @@ export function createDesktopOnboardingIpc(
     if (transition.clearDeclined) {
       await setOnboardingDeclined(state, false);
     }
-    if (transition.selectSetupAgent) {
-      await options.selectSetupAgent();
-    }
-    // Entering State 1 only selects the setup agent and paints the setup card;
-    // it never auto-starts the setup conversation. The user launches setup
-    // explicitly via the card's "Run Setup" button (ONBOARDING_RUN_SETUP).
+    // Entering State 1 only paints the setup card (the launcher's agent
+    // selection is the surface's); it never auto-starts the setup
+    // conversation. The user launches setup explicitly via the card's
+    // "Run Setup" button (ONBOARDING_RUN_SETUP).
   }
 
   // Single guarded entry point for launching setup. The explicit "Run Setup"
@@ -171,7 +165,6 @@ export function createDesktopOnboardingIpc(
   }
 
   async function runSetup(): Promise<void> {
-    await options.selectSetupAgent();
     // Route through the shared guard so a double-click of "Run Setup" can't
     // launch a second concurrent run.
     startSetupKickoff();
@@ -190,7 +183,7 @@ export function createDesktopOnboardingIpc(
           postCurrentState();
           return true;
         case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
-          dismiss().catch(reportAsyncError);
+          dismiss().catch(options.onAsyncError);
           return true;
         default:
           return false;

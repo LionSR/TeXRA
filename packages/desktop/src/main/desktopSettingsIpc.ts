@@ -26,7 +26,11 @@ import {
   applyStateSettingUpdate,
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
-import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
+import {
+  unsupported,
+  unsupportedCommands,
+  UnsupportedCommandError,
+} from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
@@ -42,12 +46,11 @@ import {
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import { StorageFS } from '@utils/files/storageFS';
-import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
-  type DesktopMessageHandler,
-} from './desktopIpcTypes.js';
 import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+} from './desktopIpcTypes.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -127,11 +130,15 @@ export function createDesktopSettingsIpc(
   const { workspaceState, config } = options.session.roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
-  const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
+  const onError = (error: unknown): void => {
+    if (!(error instanceof UnsupportedCommandError)) {
+      options.ui.onError(error);
+      return;
+    }
     void Promise.resolve(options.ui.showInfoMessage(error.reason)).catch(
       options.ui.onError,
     );
-  });
+  };
   const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
     respond: options.postToRenderer,

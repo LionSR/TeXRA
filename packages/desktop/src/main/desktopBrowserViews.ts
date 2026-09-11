@@ -32,7 +32,7 @@ interface DesktopBrowserViewsOptions {
   onBlockedExternalUrl(error: unknown): void;
   /** Records a failure after the host has already surfaced the user-facing error. */
   onExternalOpenError(error: unknown): void;
-  onError?(error: unknown): void;
+  onError(error: unknown): void;
 }
 
 export interface DesktopBrowserViews {
@@ -71,7 +71,7 @@ export function createDesktopBrowserViews(
   const views = new Map<string, WebContentsView>();
   let attachedTabId: string | undefined;
 
-  const reportError = (error: unknown) => options.onError?.(error);
+  const reportError = (error: unknown) => options.onError(error);
 
   function openAllowedExternalUrl(url: string): void {
     if (!isHandOffableUrl(url)) {
