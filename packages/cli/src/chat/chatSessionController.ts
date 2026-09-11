@@ -63,7 +63,7 @@ import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { generateRunId, throwAggregated } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -220,8 +220,8 @@ export interface ChatSessionControllerInit {
   /** Runtime session that owns executions, storage, and interactions. */
   readonly runtimeSession: SessionHandle;
 
-  /** Mint a fresh {@link CliContext} for one run (see the identity-keyed
-   *  approval-denial dedupe in `warnApprovalDenied`). */
+  /** The chat session's {@link CliContext}, read once: the controller
+   *  attaches one interaction host for the session's lifetime. */
   readonly getSessionContext: () => CliContext;
 
   /** Disposable owner shared with the TUI session lifecycle. */
@@ -472,9 +472,22 @@ export function createChatSessionController(
     }
   };
 
+  // One interaction host for the chat session's lifetime, as the extension
+  // and desktop attach theirs. The session routes every request to its last
+  // attachment, so a detached child of an earlier turn keeps an answerable
+  // approval path after its root finalizes, with no per-turn generation.
+  const sessionContext = getSessionContext();
+  const presentationHost = createCliRuntimeHost(sessionContext);
+  disposables.add(() => void presentationHost.close());
+  disposables.add(
+    runtimeSession.interactions.use(
+      createTuiHostInteractions(presentationHost, sessionContext),
+    ),
+  );
+
   /** The CLI chat's tool-use run policy, shared by every resume path. */
   const toolUseResumeOptions = (
-    sessionContext: CliContext,
+    launchRunId: RunId,
     approvalsUnavailable: boolean,
   ): Pick<
     ResumeRunOptions,
@@ -487,7 +500,7 @@ export function createChatSessionController(
     session: runtimeSession,
     approvalPromptsUnavailable: approvalsUnavailable,
     onApprovalPolicyDenial: () =>
-      warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+      warnApprovalDenied(sessionContext, 'Tool or edit approval', launchRunId),
     runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
     executeWorkflow: async (_config, runId) => {
       throw new Error(
@@ -496,79 +509,27 @@ export function createChatSessionController(
     },
   });
 
-  // Every host generation still holding interaction ownership. A generation
-  // leaves on release, so session exit releases only the live ones instead of
-  // parking one dead closure per root turn in the session store for the
-  // process lifetime.
-  const liveOwnerships = new Set<{ readonly release: () => void }>();
-  disposables.add(() => {
-    // The raw catch stays: this is a synchronous dispose callback that cannot
-    // return an Effect (PRD R7's permitted synchronous callback), and a
-    // teardown path must not depend on the process runtime it may outlive.
-    const failures: unknown[] = [];
-    for (const ownership of liveOwnerships) {
-      try {
-        ownership.release();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    throwAggregated(failures, 'Multiple interaction owners failed to release');
-  });
-
-  // Build the runtime host shared by start and resume. Root completion marks
-  // the root row complete and detaches its terminal-result presenter
-  // immediately. Host interactions remain attached until every run that
-  // inherited this runtime host settles, so detached children retain a visible,
-  // answerable approval path without keeping the completed root turn pending.
-  // The runtime owns that "still inherited" fact (see
-  // `RunRegistry.interactionOwnership`); this host only claims its root
-  // run and reacts to the release.
-  const setupRunHost = (
-    sessionContext: CliContext,
-  ): {
+  // Per launch: attach the root's terminal-result presenter until it
+  // finalizes. The root terminal result is
+  // published before its run promise settles, and children (runs with a
+  // parent) never toast, so the listener has no work after the root finalizes
+  // and must not overlap a later root's listener.
+  const setupRunHost = (): {
     readonly approvalsUnavailable: boolean;
-    readonly ownRun: (runId: RunId) => void;
     readonly finalize: () => void;
   } => {
-    const presentationHost = createCliRuntimeHost(sessionContext);
-    const detachHostInteractions = runtimeSession.interactions.use(
-      createTuiHostInteractions(presentationHost, sessionContext),
-    );
     const detachResultToast = attachTerminalResultToast(
       runtimeSession,
       runtimeSession.interactions,
     );
-    let resultToastAttached = true;
-    const detachResultToastOnce = (): void => {
-      if (!resultToastAttached) return;
-      resultToastAttached = false;
-      detachResultToast();
-    };
-    const ownership = runtimeSession.runs.interactionOwnership.open(
-      (): void => {
-        liveOwnerships.delete(ownership);
-        detachResultToastOnce();
-        detachHostInteractions();
-        void presentationHost.close();
-      },
-    );
-    liveOwnerships.add(ownership);
-
     return {
       approvalsUnavailable: cliApprovalPromptsUnavailable(
         sessionContext,
         runtimeSession.approvalPolicy,
       ),
-      ownRun: (runId): void => ownership.claim(runId),
       finalize: (): void => {
-        // The root terminal result is published before its run promise
-        // settles. Children (runs with a parent) never produce a terminal
-        // toast, so this session-wide listener has no work after the
-        // root finalizes and must not overlap a later root's listener.
-        detachResultToastOnce();
+        detachResultToast();
         session.markRunCompleted();
-        ownership.finish();
       },
     };
   };
@@ -579,12 +540,9 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    const sessionContext = getSessionContext();
     adoptRunConfig(config);
-    const { approvalsUnavailable, ownRun, finalize } =
-      setupRunHost(sessionContext);
+    const { approvalsUnavailable, finalize } = setupRunHost();
     const runId = generateRunId();
-    ownRun(runId);
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds a `Deferred` the run chain completes and hands the slot
@@ -610,7 +568,11 @@ export function createChatSessionController(
                   enforceCategory: true,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
-                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+                    warnApprovalDenied(
+                      sessionContext,
+                      'Tool or edit approval',
+                      runId,
+                    ),
                   runtimeUnavailableTools:
                     getDefaultUnavailableToolNames('cli'),
                   onRunResolved: (resolvedRunId) => {
@@ -714,10 +676,7 @@ export function createChatSessionController(
         return;
       }
 
-      const sessionContext = getSessionContext();
-      const { approvalsUnavailable, ownRun, finalize } =
-        setupRunHost(sessionContext);
-      ownRun(id);
+      const { approvalsUnavailable, finalize } = setupRunHost();
 
       // Adopting the resumed stream is the mutation a refusal must not cost.
       // A history row is advertised from its checkpoint file alone (one
@@ -768,7 +727,7 @@ export function createChatSessionController(
           Effect.gen(function* () {
             recoveryHandedOff = true;
             const result = yield* resumeRun(id, {
-              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+              ...toolUseResumeOptions(id, approvalsUnavailable),
               recovery,
               extraFollowUps: supersededRecovery?.followUps,
               onResumeResolved: adoptResumedRun,
@@ -889,13 +848,11 @@ export function createChatSessionController(
           runId,
         )?.parentId;
 
-        const sessionContext = getSessionContext();
         adoptRunConfig(config, 'history');
 
-        const runHost = setupRunHost(sessionContext);
+        const runHost = setupRunHost();
         finalize = runHost.finalize;
-        const { approvalsUnavailable, ownRun } = runHost;
-        ownRun(runId);
+        const { approvalsUnavailable } = runHost;
         session.runId = runId;
         if (!parentRunId) {
           rootRunId.set(runId);
@@ -910,7 +867,7 @@ export function createChatSessionController(
         yield* hostPort(() => setCliHelperModel(config.model));
         recoveryHandedOff = true;
         const result = yield* resumeRun(runId, {
-          ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+          ...toolUseResumeOptions(runId, approvalsUnavailable),
           recovery,
           extraFollowUps: options.extraFollowUps,
           onFollowUpQueueReady: options.onFollowUpQueueReady,

@@ -15,6 +15,7 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => {
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
+import type { RunId } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 describe('warnApprovalDenied', () => {
@@ -34,6 +35,17 @@ describe('warnApprovalDenied', () => {
     expect(writeTextStderrMock).toHaveBeenCalledWith(
       '[warn] [cli-approval] Tool or edit approval denied under policy "never".',
     );
+
+    // The chat TUI shares one context across overlapping runs (a detached
+    // child outliving its root beside a new root): each run warns once, and
+    // neither run's warning suppresses the other's.
+    const [first, second] = ['a0000a', 'b0000b'] as RunId[];
+    warnApprovalDenied(context, 'Tool or edit approval', first);
+    warnApprovalDenied(context, 'Tool or edit approval', second);
+    warnApprovalDenied(context, 'Tool or edit approval', first);
+    warnApprovalDenied(context, 'Tool or edit approval', second);
+
+    expect(writeTextStderrMock).toHaveBeenCalledTimes(3);
   });
 
   it('falls back to a generic gate label when none is given', () => {

@@ -1,9 +1,13 @@
 # Interaction Ownership on the Execution Registry
 
-Status: implemented (D3/T5 of the runtime gold-standard program). This note
-records the accepted shape only; the retired
-`.agents/docs/rejected/architecture/2026-06-29-prd-runtime-gold-standard.md` must not be implemented
-from.
+Status: superseded by #12273. The index this note describes, and the
+registry's registration-listener channel, are deleted. The CLI chat controller
+(`packages/cli/src/chat/chatSessionController.ts`) now attaches one
+interaction host for the chat session's lifetime, as the extension and desktop
+do. That is enough because `SessionHostInteractions`
+(`src/agent/runtime/HostInteractions.ts`) routes every request to its last
+attachment. The desktop-window-title consumer named below was removed by
+#11883. The rest of this note is kept as the historical record.
 
 ## The fact being owned
 

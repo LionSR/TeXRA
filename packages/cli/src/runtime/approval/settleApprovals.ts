@@ -23,6 +23,7 @@ import {
   isCredentialExhausted,
   type ApprovalDecision,
   type RetryPermission,
+  type RunId,
 } from '@shared/schemas';
 
 import { type CliContext } from '../cliContext';
@@ -69,11 +70,12 @@ export function cliApprovalPromptsUnavailable(
 /** Settle a shared executable decision into a CLI approval result, or `undefined` to prompt. */
 export function settleExecutable(
   context: CliContext,
+  runId?: RunId | '',
 ): ApprovalDecision | undefined {
   const decision = executableDecision(context);
   if (decision === 'allow') return { accepted: true };
   if (decision === 'present') return undefined;
-  warnApprovalDenied(context, 'Approval policy');
+  warnApprovalDenied(context, 'Approval policy', runId);
   return {
     accepted: false,
     userMessage: texraApprovalDenialMessage(decision),
@@ -104,6 +106,7 @@ export function settleRetry(
       retryDecision.deny === 'credential'
         ? 'Credential-exhausted retry'
         : 'Approval policy',
+      payload.runId,
     );
   }
   return {
@@ -118,6 +121,7 @@ export function settleRetry(
  */
 export function settleHumanInputDenial(
   context: CliContext,
+  runId?: RunId | '',
 ): { readonly reason: string } | undefined {
   const decision = decideHumanInputRequest({
     policy: livePolicy(),
@@ -125,7 +129,7 @@ export function settleHumanInputDenial(
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    warnApprovalDenied(context, 'Human-input request');
+    warnApprovalDenied(context, 'Human-input request', runId);
   }
   return {
     reason: texraHumanInputDenialMessage(decision.deny),
