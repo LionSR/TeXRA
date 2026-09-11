@@ -143,8 +143,11 @@ export class RunStatusMachine {
       },
     });
     // A terminal phase is the `run.end` row's fact (one run model, section
-    // 3.3), written once by the storage finalizer; the machine records it for
-    // its in-process readers and publishes no second copy.
+    // 3.3), written once by `finalizeRun`. The machine records it for its
+    // in-process readers — `get`, `getRunState`, `isInFlight`,
+    // `getAllRunStates` — and publishes no second copy, so every `status` row
+    // this machine emits is non-terminal and no consumer may wait on one to
+    // close a run out: the terminal row to fold is `run.end`.
     if (!isTerminalOutcomePhase(to)) {
       this.publishTransition(runId, to, {
         ...options,
@@ -292,6 +295,7 @@ export class RunStatusMachine {
     this.setUnreadable(runId, this.holdState(runId) ?? null);
   }
 
+  /** Emit one non-terminal `status` fact; the terminal phase never gets one. */
   private publishTransition(
     runId: RunId,
     phase: RunPhase,

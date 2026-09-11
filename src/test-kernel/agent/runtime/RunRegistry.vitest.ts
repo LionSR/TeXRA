@@ -851,13 +851,10 @@ describe('runRegistry', () => {
           producer: 'subagent',
           agentName: 'test-subagent',
           wallTimeMs: 1,
-          result: {
-            outcome: RUN_OUTCOME.COMPLETED,
-            output: {
-              category: 'toolUse',
-              response: 'interim response',
-              files: [],
-            },
+          output: {
+            category: 'toolUse',
+            response: 'interim response',
+            files: [],
           },
         }),
       );
@@ -885,10 +882,7 @@ describe('runRegistry', () => {
         await expect(
           Effect.runPromise(store.readResultMeta()),
         ).resolves.toMatchObject({
-          result: {
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: { response: 'interim response' },
-          },
+          output: { response: 'interim response' },
         });
       });
     } finally {

@@ -335,10 +335,8 @@ describe('NativeSubagentStrategy', () => {
       params.runId,
       expect.any(String),
       expect.objectContaining({
-        result: expect.objectContaining({
-          usage: expect.objectContaining({ totalCost: 0.29 }),
-          outcome: 'failed',
-        }),
+        producer: 'subagent',
+        output: expect.objectContaining({ category: 'toolUse' }),
       }),
     );
   });
@@ -369,10 +367,7 @@ describe('NativeSubagentStrategy', () => {
       expect.any(String),
       expect.objectContaining({
         producer: 'subagent',
-        result: expect.objectContaining({
-          outcome: 'failed',
-          error: expect.objectContaining({ message: 'provider failed' }),
-        }),
+        output: expect.objectContaining({ category: 'toolUse' }),
       }),
     );
   });
@@ -574,10 +569,7 @@ describe('NativeSubagentStrategy', () => {
     ).resolves.toMatchObject({
       producer: 'subagent',
       agentName: 'review',
-      result: {
-        outcome: 'failed',
-        output: { category: 'toolUse', response: '', files: [] },
-      },
+      output: { category: 'toolUse', response: '', files: [] },
     });
   });
 
@@ -775,10 +767,7 @@ describe('NativeSubagentStrategy', () => {
     ).resolves.toMatchObject({
       producer: 'subagent',
       agentName: 'review',
-      result: {
-        outcome: 'failed',
-        output: { category: 'workflow' },
-      },
+      output: { category: 'workflow' },
     });
   });
 

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   readWorkspaceFiles: vi.fn(),
   readMeta: vi.fn(),
   readResultMeta: vi.fn(),
+  readRunEnd: vi.fn(),
   readReport: vi.fn(),
   exists: vi.fn(),
   listRuns: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('@agent/storage', async () => {
         Effect.tryPromise(() => mocks.readWorkspaceFiles()),
       readMeta: () => Effect.tryPromise(() => mocks.readMeta()),
       readResultMeta: () => Effect.tryPromise(() => mocks.readResultMeta()),
+      readRunEnd: () => Effect.tryPromise(() => mocks.readRunEnd()),
       readReport: () => Effect.tryPromise(() => mocks.readReport()),
     })),
     listRuns: mocks.listRuns,
@@ -235,6 +237,7 @@ describe('CLI history runtime', () => {
     mocks.readWorkspaceFiles.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
+    mocks.readRunEnd.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
     mocks.readCliResumedModel.mockResolvedValue(undefined);
@@ -547,29 +550,32 @@ describe('CLI history runtime', () => {
       logPath: 'compile/r1_paper.tex.log',
       logAbsolutePath: '/tmp/run/compile/r1_paper.tex.log',
     };
+    const workflowOutput = {
+      category: 'workflow',
+      outputs: [outputSummary],
+      compileFailures: [compileFailure],
+      diffs: [],
+    };
     mocks.readResultMeta.mockResolvedValue({
       producer: 'cliWorkflow',
       copiedOutput: '/tmp/annotated.tex',
-      result: {
-        category: 'workflow',
-        outcome: 'completed',
-        outputs: [outputSummary],
-        compileFailures: [compileFailure],
-        diffs: [],
-        cost: 0.7,
-      },
+      output: workflowOutput,
+    });
+    // How the run ended is the `run.end` row's; the producer record carries
+    // the output the delivery enriched.
+    mocks.readRunEnd.mockResolvedValue({
+      outcome: 'completed',
+      usage: { totalCost: 0.7 },
+      output: { category: 'workflow', outputs: [], compileFailures: [] },
     });
 
     const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.result).toEqual({
-      category: 'workflow',
       outcome: 'completed',
-      outputs: [outputSummary],
-      compileFailures: [compileFailure],
-      diffs: [],
-      cost: 0.7,
+      usage: { totalCost: 0.7 },
+      output: workflowOutput,
     });
     expect(text).not.toContain('"producer"');
     expect(text).not.toContain('"copiedOutput"');

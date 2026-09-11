@@ -43,6 +43,7 @@ export function createFakeRunRecords(
     readReport: () => Effect.succeed(null),
     readWorkspaceFiles: () => Effect.succeed([]),
     readResultMeta: () => Effect.succeed(null),
+    readRunEnd: () => Effect.succeed(null),
     writeRunRecord: () => Effect.void,
     writeReport: () => Effect.void,
     clearReport: () => Effect.void,

@@ -1,7 +1,7 @@
 /**
  * Formatting utilities for subagent results and progress updates.
  *
- * Format helpers convert a run's `RunEnd` and progress updates into
+ * Format helpers convert a run's terminal facts and progress updates into
  * structured XML strings for FollowUpQueue delivery to the orchestrator.
  *
  * Design: Typed objects internally, XML formatting only at the boundary
@@ -10,25 +10,18 @@
 
 import path from 'node:path';
 
-import type { ResultMeta } from '@agent/storage';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import {
-  classifyAgentError,
-  runEndErrorOf,
-} from '@common/errors/agentErrorClassification';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import {
-  emptyRunEndOutput,
-  RUN_OUTCOME,
   runStorageFilePath,
-  type AgentCategory,
   type OutputFileSummary,
   type ResultDiffSummary,
-  type RunEnd,
+  type ResultMeta,
   type RunEndOutput,
   type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -44,7 +37,7 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 
-type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 // ============================================================================
 // Formatting helpers
@@ -152,7 +145,7 @@ function formatDeliveryPreamble(options: {
  */
 export function formatSubagentDelivery(
   agentName: string,
-  result: RunEnd,
+  result: { readonly outcome: RunOutcome; readonly output: RunEndOutput },
   options: {
     runId: RunId;
     memoryMisses?: readonly AttachedMemoryMiss[];
@@ -278,66 +271,16 @@ export function formatFollowUpInstruction(instruction: string): string {
 /**
  * Build the structured result manifest for a finished subagent — the
  * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
- * Persisted to the run KV store so later stages (orchestrator or a
- * workflow script) can chain on outputs/diffs/outcome as data instead of
- * parsing prose.
+ * Persisted beside the run's `run.end` row so later stages (orchestrator or a
+ * workflow script) can chain on outputs and diffs as data instead of parsing
+ * prose; how the run ended is the terminal fact's to say, not this record's.
  */
 export function buildSubagentResultMeta(
   agentName: string,
-  result: RunEnd,
+  output: RunEndOutput,
   wallTimeMs: number,
 ): SubagentResultMeta {
-  return { producer: 'subagent', agentName, wallTimeMs, result };
-}
-
-/**
- * Build the failure manifest written when a subagent errors. Overwrites any
- * interim success manifest persisted by an earlier turn's delivery — without
- * this, a later failure would leave /executions/{id}/result claiming success
- * while the prose report describes the error, breaking the chaining contract.
- */
-export function buildSubagentFailureResultMeta(
-  agentName: string,
-  fallbackCategory: AgentCategory,
-  result: AgentFlowResult | undefined,
-  wallTimeMs: number,
-  options: {
-    /**
-     * The thrown error behind this failure, used when the flow result itself
-     * recorded no structured error — so the typed manifest always carries a
-     * failure message for its awaiting consumer.
-     */
-    readonly cause?: unknown;
-  } = {},
-): SubagentResultMeta {
-  // A nominally completed flow that reached the error path is a failure;
-  // genuine cancelled/failed outcomes pass through unchanged.
-  const outcome =
-    result === undefined || result.outcome === RUN_OUTCOME.COMPLETED
-      ? RUN_OUTCOME.FAILED
-      : result.outcome;
-  // Error facts travel only with the outcome they describe. A thrown child
-  // failure is not a user-retry offer.
-  const error = ((): RunEnd['error'] => {
-    if (outcome !== RUN_OUTCOME.FAILED) return undefined;
-    if (result?.error !== undefined) return runEndErrorOf(result.error);
-    if (options.cause === undefined) return undefined;
-    return {
-      kind: classifyAgentError(options.cause),
-      message: toErrorMessage(options.cause),
-      userRetryable: false,
-    };
-  })();
-  return buildSubagentResultMeta(
-    agentName,
-    {
-      outcome,
-      ...(error ? { error } : {}),
-      ...(result?.usage ? { usage: result.usage } : {}),
-      output: result?.output ?? emptyRunEndOutput(fallbackCategory),
-    },
-    wallTimeMs,
-  );
+  return { producer: 'subagent', agentName, wallTimeMs, output };
 }
 
 // ============================================================================
@@ -465,17 +408,11 @@ export async function computeAndWriteWorkflowDiffs(
 // Built terminal results
 // ============================================================================
 
-export interface BuiltSubagentResult {
-  readonly result: RunEnd;
-  readonly resultMeta: SubagentResultMeta;
-  readonly wallTimeMs: number;
-}
-
 /**
- * Build a subagent's typed terminal result and persistence record.
- * For workflow results, computes latexdiffs and writes them as files to the
- * run's run directory first — the delivery references diff file paths
- * so the orchestrator can read them on demand via /executions/{id}/files/.
+ * Build a subagent's persistence record. For workflow results, computes
+ * latexdiffs and writes them as files to the run's run directory first — the
+ * record and the delivery reference diff file paths so the orchestrator can
+ * read them on demand via /executions/{id}/files/.
  */
 export async function buildSubagentResult(
   runId: RunId,
@@ -484,7 +421,7 @@ export async function buildSubagentResult(
   options: {
     readonly startedAt: number;
   },
-): Promise<BuiltSubagentResult> {
+): Promise<SubagentResultMeta> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
   let diffsUnavailable: string | undefined;
   if (
@@ -522,17 +459,5 @@ export async function buildSubagentResult(
           ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
         }
       : result.output;
-  const finalResult: RunEnd = {
-    outcome: result.outcome,
-    ...(result.outcome === RUN_OUTCOME.FAILED && result.error !== undefined
-      ? { error: runEndErrorOf(result.error) }
-      : {}),
-    ...(result.usage ? { usage: result.usage } : {}),
-    output,
-  };
-  return {
-    result: finalResult,
-    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs),
-    wallTimeMs,
-  };
+  return buildSubagentResultMeta(agentName, output, wallTimeMs);
 }

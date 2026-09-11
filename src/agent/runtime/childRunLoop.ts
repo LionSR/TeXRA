@@ -12,7 +12,7 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import { finalizeRun, getRunStore, type ResultMeta } from '@agent/storage';
+import { finalizeRun, getRunStore } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { ChildTurnRef, ChildTurnState } from '@agent/storage/RunKVStore';
@@ -44,6 +44,7 @@ import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
+  type ResultMeta,
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,

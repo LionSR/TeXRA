@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   readChildren: vi.fn(),
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
+  readRunEnd: vi.fn(),
   readTurnState: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listRuns: vi.fn(),
@@ -83,6 +84,11 @@ vi.mock('@agent/storage/RunKVStore', async () => {
         readResultMeta: () =>
           Effect.tryPromise({
             try: () => mocks.readResultMeta(),
+            catch: ensureError,
+          }),
+        readRunEnd: () =>
+          Effect.tryPromise({
+            try: () => mocks.readRunEnd(),
             catch: ensureError,
           }),
         readWorkspaceFiles: () =>
@@ -158,6 +164,7 @@ describe('ExecutionsTool', () => {
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
+    mocks.readRunEnd.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
@@ -347,12 +354,10 @@ describe('ExecutionsTool', () => {
         producer: 'subagent' as const,
         agentName: 'reviewer',
         wallTimeMs: 20,
-        result: {
+        output: {
           category: 'toolUse' as const,
-          outcome: 'completed' as const,
           response: 'Checked the proof.',
           files: ['notes.md'],
-          cost: 0.2,
         },
       },
     },
@@ -361,26 +366,36 @@ describe('ExecutionsTool', () => {
       record: {
         producer: 'cliWorkflow' as const,
         copiedOutput: '/workspace/polished.tex',
-        result: {
+        output: {
           category: 'workflow' as const,
-          outcome: 'completed' as const,
           outputs: [],
           compileFailures: [],
           diffs: [],
-          cost: 0.4,
         },
       },
     },
   ])(
     'exposes only the final envelope for a $label result',
     async ({ record }) => {
+      // The terminal fact comes from the `run.end` row; the producer record
+      // contributes the delivery-enriched output and nothing else.
+      const runEnd = {
+        outcome: 'completed' as const,
+        usage: { totalCost: 0.2 },
+        output: { category: 'toolUse' as const, response: '', files: [] },
+      };
       mocks.readResultMeta.mockResolvedValue(record);
+      mocks.readRunEnd.mockResolvedValue(runEnd);
 
       const result = await new ExecutionsTool().call({
         path: '/executions/abc123/result',
       });
 
-      expect(JSON.parse(result.output ?? '')).toEqual(record.result);
+      expect(JSON.parse(result.output ?? '')).toEqual({
+        outcome: 'completed',
+        usage: { totalCost: 0.2 },
+        output: record.output,
+      });
       expect(result.output).not.toContain('producer');
       expect(result.output).not.toContain('agentName');
       expect(result.output).not.toContain('wallTimeMs');

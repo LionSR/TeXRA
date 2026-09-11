@@ -332,10 +332,10 @@ export function resolveSelected(
  * on take none; otherwise a run still going or waiting takes one, as does a
  * conversation that has not started (`ready` with nothing written yet).
  */
-export function acceptsFollowUp(stream: RunView): boolean {
-  if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
-  if (stream.group === 'running' || stream.group === 'waiting') return true;
-  return stream.status === 'ready' && stream.lastTimestamp === null;
+export function acceptsFollowUp(run: RunView): boolean {
+  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
+  if (run.group === 'running' || run.group === 'waiting') return true;
+  return run.status === 'ready' && run.lastTimestamp === null;
 }
 
 /**
@@ -347,8 +347,8 @@ export function acceptsFollowUp(stream: RunView): boolean {
  * draft sends nothing, and a pasted image the host has not stored yet is
  * not ready to name.
  */
-export function canSendFollowUp(stream: RunView, draft: Draft): boolean {
-  if (!acceptsFollowUp(stream)) return false;
+export function canSendFollowUp(run: RunView, draft: Draft): boolean {
+  if (!acceptsFollowUp(run)) return false;
   if (draft.images.some((image) => image.path === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
 }

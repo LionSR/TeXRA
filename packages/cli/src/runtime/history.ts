@@ -184,6 +184,7 @@ export async function readCliHistoryDetails(
     meta,
     config,
     resultMeta,
+    runEnd,
     report,
     conversationResult,
     persistedWorkspaceFilePaths,
@@ -198,13 +199,14 @@ export async function readCliHistoryDetails(
           store.readMeta(),
           store.readConfig(),
           store.readResultMeta(),
+          store.readRunEnd(),
           store.readReport(),
           readCompletedRunConversation(id, session),
           store.readWorkspaceFiles(),
           listRunGeneratedFiles(id, session),
           checkpointExists(id, session),
         ],
-        { concurrency: 8 },
+        { concurrency: 9 },
       );
       const currentModel = values[1]
         ? yield* readCliResumedModel(session, id, values[1])
@@ -220,7 +222,7 @@ export async function readCliHistoryDetails(
         (yield* isCliRunResumable(
           {
             id,
-            checkpointPresent: values[7],
+            checkpointPresent: values[8],
             agentCategory: values[1].agentCategory,
             outcome: values[0]?.outcome,
           },
@@ -264,7 +266,7 @@ export async function readCliHistoryDetails(
     status: resolveHistoryRunStatus({ resumable, outcome: meta?.outcome }),
     meta,
     config,
-    result: resultMeta ? unwrapResultMeta(resultMeta) : null,
+    result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
     report,
     conversationPreview,
     ...(options.includeFullConversation

@@ -76,13 +76,10 @@ describe('canonical run records', () => {
           producer: 'subagent',
           agentName: 'worker',
           wallTimeMs: 1,
-          result: {
-            outcome: 'completed',
-            output: {
-              category: 'toolUse',
-              response: 'answer',
-              files: [],
-            },
+          output: {
+            category: 'toolUse',
+            response: 'answer',
+            files: [],
           },
         });
         yield* session.commit([

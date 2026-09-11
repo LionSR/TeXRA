@@ -2,7 +2,11 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { RunId, RunStorageFileLocation } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunStorageFileLocation,
+} from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   inspectRunStorageEntry,
@@ -43,8 +47,8 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
     if (
       resultMeta?.producer !== 'subagent' ||
-      resultMeta.result.output.category !== 'workflow' ||
-      resultMeta.result.outcome !== 'completed'
+      resultMeta.output.category !== 'workflow' ||
+      meta?.outcome !== RUN_OUTCOME.COMPLETED
     ) {
       return yield* Effect.fail(
         new Error(
@@ -53,7 +57,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const declared = resultMeta.result.output.outputs.some(
+    const declared = resultMeta.output.outputs.some(
       (output) =>
         output.location === 'runStorage' &&
         output.relativePath.replaceAll('\\', '/') === reference.relativePath,

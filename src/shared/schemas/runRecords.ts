@@ -94,6 +94,13 @@ export const RunEndSchema = z.strictObject({
 });
 export type RunEnd = z.infer<typeof RunEndSchema>;
 
+/**
+ * What a producer recorded beside a run's terminal fact, written as the
+ * `run.result` row. It carries only what the `run.end` row does not: the
+ * producer's own context and the output as the delivery enriched it (workflow
+ * diffs are computed after the flow reported). Outcome, error and usage are
+ * the terminal fact's alone — never copied here (one run model, section 3.3).
+ */
 export const ResultMetaSchema = z.discriminatedUnion('producer', [
   z.strictObject({
     producer: z.literal('backgroundBash'),
@@ -105,7 +112,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   }),
   z.strictObject({
     producer: z.literal('cliWorkflow'),
-    result: RunEndSchema.extend({ output: WorkflowRunEndOutputSchema }),
+    output: WorkflowRunEndOutputSchema,
     copiedOutput: z.string().optional(),
     copiedOutputs: z.array(z.string()).optional(),
   }),
@@ -113,7 +120,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
     producer: z.literal('subagent'),
     agentName: z.string(),
     wallTimeMs: z.number().nonnegative(),
-    result: RunEndSchema,
+    output: RunEndOutputSchema,
     turnToken: z.string().optional(),
   }),
 ]);

@@ -231,8 +231,8 @@ export function transcriptAggregates(
   runId: RunId | null,
 ): Subscribe['aggregates'] {
   if (runId === null) return [];
-  const stream = view.runs.get(runId);
-  if (!stream) return [];
-  const id = qualifyAggregateId('run', stream.id);
+  const run = view.runs.get(runId);
+  if (!run) return [];
+  const id = qualifyAggregateId('run', run.id);
   return [{ id, fromSeq: view.folded.get(id) ?? 0 }];
 }

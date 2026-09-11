@@ -21,11 +21,7 @@ export {
   clearStoreCache,
   isReservedKvKeyName,
 } from './RunKVStore';
-export {
-  buildCliWorkflowResultMeta,
-  unwrapResultMeta,
-  type ResultMeta,
-} from './resultMeta';
+export { buildCliWorkflowResultMeta, unwrapResultMeta } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,

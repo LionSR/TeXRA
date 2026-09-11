@@ -124,7 +124,12 @@ interface FinalizeRunTerminalParams {
   readonly error?: ResultEvent['error'];
   /** Run usage totals riding the `run.end` row, when known. */
   readonly usage?: ResultEvent['usage'];
-  /** What the flow produced; absent when the run ended before it did. */
+  /**
+   * What the flow produced; absent when the run ended before it did. Also
+   * absent, by rule rather than omission, on the child-run path
+   * (`finalizeChildRun` in `src/tools/delegation/childRun.ts`): a child's
+   * product is its per-turn delivery to its parent, not a flow output.
+   */
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;

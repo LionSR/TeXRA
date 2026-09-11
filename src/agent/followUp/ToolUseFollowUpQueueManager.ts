@@ -15,7 +15,7 @@ type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 interface QueueEntry {
   readonly queue: FollowUpQueue;
   /**
-   * Delivery ids already admitted for this stream (#9531). In-memory,
+   * Delivery ids already admitted for this run (#9531). In-memory,
    * transport-level replay suppression only — NOT crash-safe exactly-once: a
    * restart (or LRU eviction past the cap) forgets admitted ids, so a replay
    * after that is admitted again. An outbox/idempotent parent inbox is
@@ -27,7 +27,7 @@ interface QueueEntry {
 }
 
 /**
- * Exclusive authority to consume one stream's follow-up queue.
+ * Exclusive authority to consume one run's follow-up queue.
  *
  * The manager issues at most one lease per entry. Claims and releases are
  * synchronous, and a lease is valid only while it is the entry's owner, so a
@@ -47,10 +47,10 @@ export interface FollowUpRecoveryLease
 
 /**
  * How one submission landed: a replayed delivery id, input a live flow
- * consumer will read this turn, input parked on the stream's queue (with the
+ * consumer will read this turn, input parked on the run's queue (with the
  * recovery lease when this submission claimed it), or a refusal — the
  * boundary has no entry to join and will not create one (disposed session,
- * terminalized stream, or a live-owner submission to a stream whose entry is
+ * terminalized run, or a live-owner submission to a run whose entry is
  * gone).
  */
 type FollowUpSubmission =
@@ -60,15 +60,15 @@ type FollowUpSubmission =
   | { readonly kind: 'refused' };
 
 /**
- * Session-owned continuation boundary indexed by stream ID.
+ * Session-owned continuation boundary indexed by run ID.
  *
  * An owned entry has a live or recovering consumer, an unowned entry is a
- * recoverable persisted cursor, and a terminal entry is gone. A stream
- * whose queue was ended by {@link terminalize} (its stream deleted, or its
+ * recoverable persisted cursor, and a terminal entry is gone. A run
+ * whose queue was ended by {@link terminalize} (its entry deleted, or its
  * parked run torn down) is marked so that a producer that is not an owner,
  * such as a child whose activation outlives its parent's teardown, cannot
  * recreate the queue and trigger a resume of a run that is gone; only an
- * explicit claim reopens the stream. Stream ids embed their run id, so
+ * explicit claim reopens the run. Run ids are minted once per run, so
  * the mark never collides with a later run. Tombstones are bounded; after
  * eviction, callers must revalidate persisted authority before recoverable
  * admission.
@@ -93,7 +93,7 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Observe input reaching a stream's live consumer (a follow-up delivered
+   * Observe input reaching a run's live consumer (a follow-up delivered
    * live, a compaction request queued for the next model call). An
    * occurrence, not state: it is what `executions wait` ends its wait on,
    * and it lives in this process only, never on the session's event plane.
@@ -192,11 +192,11 @@ export class ToolUseFollowUpQueue {
     }
 
     entry.queue.enqueue(followUp);
-    logger.debug(`Queued follow-up for stream ${runId}.`);
+    logger.debug(`Queued follow-up for run ${runId}.`);
     const owner = entry.owner;
     if (owner?.kind === 'flow') return { kind: 'delivered_live' };
     // Live notifications use the live_owner path to reach WAITING parents
-    // whose retained queue will be consumed when the stream resumes.
+    // whose retained queue will be consumed when the run resumes.
     if (owner !== undefined || admission === 'live_owner') {
       return { kind: 'queued' };
     }
@@ -236,13 +236,13 @@ export class ToolUseFollowUpQueue {
     if (next === 'recoverable') return true;
     entry.queue.dispose();
     this.entries.delete(lease.runId);
-    logger.debug(`Terminalized follow-up queue for stream ${lease.runId}.`);
+    logger.debug(`Terminalized follow-up queue for run ${lease.runId}.`);
     this.notifyReleaseObservers(lease.runId);
     return true;
   }
 
   /**
-   * End a stream's queue: any outstanding lease becomes stale immediately, and
+   * End a run's queue: any outstanding lease becomes stale immediately, and
    * no producer can recreate the queue until an explicit claim reopens it.
    */
   terminalize(runId: RunId): boolean {
@@ -287,7 +287,7 @@ export class ToolUseFollowUpQueue {
       try {
         observer(runId);
       } catch (err) {
-        logger.warn(`Release observer threw for stream ${runId}`, {
+        logger.warn(`Release observer threw for run ${runId}`, {
           data: err,
         });
       }
@@ -333,7 +333,7 @@ export class ToolUseFollowUpQueue {
     const entry = this.entryForLease(lease);
     if (!entry) {
       throw new Error(
-        `Follow-up consumer lease is stale for stream ${lease.runId}.`,
+        `Follow-up consumer lease is stale for run ${lease.runId}.`,
       );
     }
     return entry;

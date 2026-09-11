@@ -31,7 +31,7 @@ import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Drive the native operation at the test entry point. */
 function executeStableSubagentInBand(
@@ -85,6 +85,11 @@ vi.mock('@agent/storage', () => ({
     readResultMeta: () =>
       Effect.tryPromise({
         try: () => mocks.getRunStore(runId).readResultMeta(),
+        catch: ensureError,
+      }),
+    readRunEnd: () =>
+      Effect.tryPromise({
+        try: () => mocks.getRunStore(runId).readRunEnd(),
         catch: ensureError,
       }),
   }),
@@ -330,6 +335,10 @@ function memoryRunStore() {
   // The loop persists the manifest and the awaiting caller verifies it by
   // read-back, so the fixture must retain writes like the real store does.
   let resultMeta: unknown = null;
+  // Stand-in for the `run.end` row: production writes it inside
+  // `executeAgent`, which this suite replaces with a mock, so the engine
+  // wrapper records the turn's terminal fact here instead.
+  let runEnd: unknown = null;
   return {
     listKeys: vi.fn(async () => [...kv.keys()]),
     read: vi.fn(async (key: string) => kv.get(key)),
@@ -338,6 +347,10 @@ function memoryRunStore() {
     }),
     readMeta: vi.fn(async () => null),
     readResultMeta: vi.fn(async () => resultMeta),
+    readRunEnd: vi.fn(async () => runEnd),
+    recordRunEnd: (value: unknown) => {
+      runEnd = value;
+    },
     writeReport: mocks.writeReport,
     writeResultMeta: vi.fn(async (value: unknown) => {
       // Retain only writes that succeed, like the real store: a rejected
@@ -349,24 +362,64 @@ function memoryRunStore() {
   };
 }
 
+/**
+ * Write the `run.end` fact production's `executeAgent` commits through
+ * `runFlowWithLifecycle`: the flow's outcome, usage and output, plus the
+ * classified error it reported. A single-cycle WAITING turn is an invariant
+ * violation that the same lifecycle ends as FAILED.
+ */
+function recordTerminalFact(
+  runId: RunId,
+  turn: unknown,
+  reportedError: unknown,
+): void {
+  const store = mocks.getRunStore(runId) as {
+    recordRunEnd?: (value: unknown) => void;
+  };
+  const flow = turn as {
+    outcome?: string;
+    usage?: unknown;
+    output?: unknown;
+  } | null;
+  if (!store.recordRunEnd || !flow?.outcome) return;
+  const outcome = flow.outcome === RUN_PHASE.WAITING ? 'failed' : flow.outcome;
+  store.recordRunEnd({
+    outcome,
+    ...(outcome === 'failed' && reportedError !== undefined
+      ? {
+          error: {
+            kind: 'unexpected',
+            message: toErrorMessage(reportedError),
+          },
+        }
+      : {}),
+    ...(flow.usage ? { usage: flow.usage } : {}),
+    output: flow.output,
+  });
+}
+
 /** Child store with nothing persisted: what a fresh attempt starts from. */
 function emptyChildStore() {
   return memoryRunStore();
 }
 
-/** Child store holding a launched attempt marker and its result manifest. */
-function completedChildStore(logicalRunId: RunId, result: unknown) {
+/** Child store holding a launched attempt marker, its terminal row and manifest. */
+function completedChildStore(
+  logicalRunId: RunId,
+  runEnd: { outcome: string; output: unknown },
+) {
   return {
     listKeys: vi
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
     read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
-    readMeta: vi.fn(async () => null),
+    readMeta: vi.fn(async () => ({ outcome: runEnd.outcome })),
+    readRunEnd: vi.fn().mockResolvedValue(runEnd),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
       wallTimeMs: 100,
-      result,
+      output: runEnd.output,
     }),
   };
 }
@@ -408,9 +461,24 @@ describe('headless delegation', () => {
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     restoreAgentEngine = provideAgentEngine({
-      executeAgent: (...args) =>
+      executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
-          try: () => mocks.executeAgent(...args),
+          try: async () => {
+            let reportedError: unknown;
+            const turn = await mocks.executeAgent(definition, runId, {
+              ...options,
+              onRunError: (error: unknown, result: unknown) => {
+                reportedError = error;
+                return (
+                  options as {
+                    onRunError?: (e: unknown, r: unknown) => unknown;
+                  }
+                ).onRunError?.(error, result);
+              },
+            });
+            recordTerminalFact(runId, turn, reportedError);
+            return turn;
+          },
           catch: ensureError,
         }),
       resumeToolUseTurn: (...args) =>
@@ -598,7 +666,7 @@ describe('headless delegation', () => {
         // The loop stamps turn attribution on every manifest it persists —
         // scripted children included (this closed item 10's turnToken gap).
         turnToken: expect.any(String),
-        result: result.result,
+        output: result.result.output,
       }),
     );
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
@@ -722,11 +790,7 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        result: expect.objectContaining({
-          outcome: 'failed',
-          usage: expect.objectContaining({ totalCost: 0.61 }),
-          output: expect.objectContaining({ response: 'Partial review.' }),
-        }),
+        output: expect.objectContaining({ response: 'Partial review.' }),
       }),
     );
   });
@@ -761,12 +825,8 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        result: expect.objectContaining({
-          outcome: 'failed',
-          usage: expect.objectContaining({ totalCost: 0.73 }),
-          output: expect.objectContaining({
-            response: 'Waiting for clarification.',
-          }),
+        output: expect.objectContaining({
+          response: 'Waiting for clarification.',
         }),
       }),
     );
@@ -834,7 +894,7 @@ describe('headless delegation', () => {
       prepare,
     });
 
-    expect(recovered.result).toBe(persistedResult);
+    expect(recovered.result).toEqual(persistedResult);
     expect(recovered.runId).not.toBe(logicalRunId);
     expect(prepare).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
@@ -1103,33 +1163,6 @@ describe('headless delegation', () => {
     );
   });
 
-  it('preserves the child failure when its failure result cannot be constructed', async () => {
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      const failed = {
-        outcome: 'failed',
-        runId: CHILD_RUN_ID,
-        output: { category: 'toolUse', response: '', files: [42] },
-      } as never;
-      await options.onRunError?.(new Error('review model failed'), failed);
-      return failed;
-    });
-
-    const run = runInBand(delegationOptions());
-
-    // An unconstructable failure result degrades to the category-only
-    // manifest carrying the child's real error, so durability holds and the
-    // caller sees the child failure itself.
-    await expect(run).rejects.toThrow('review model failed');
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        result: expect.objectContaining({
-          outcome: 'failed',
-          error: expect.objectContaining({ message: 'review model failed' }),
-        }),
-      }),
-    );
-  });
-
   it('interrupts the live child when the in-band caller aborts', async () => {
     const controller = new AbortController();
     const onCost = vi.fn();
@@ -1169,7 +1202,7 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
       expect.objectContaining({
         producer: 'subagent',
-        result: expect.objectContaining({ outcome: 'cancelled' }),
+        output: expect.objectContaining({ response: '' }),
       }),
     );
   });
@@ -1196,7 +1229,7 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         producer: 'subagent',
-        result: expect.objectContaining({ outcome: 'completed' }),
+        output: expect.objectContaining({ response: 'The proof is correct.' }),
       }),
     );
   });
@@ -1295,12 +1328,7 @@ describe('headless delegation', () => {
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        result: expect.objectContaining({
-          outcome: 'failed',
-          usage: expect.objectContaining({ totalCost: 0.42 }),
-        }),
-      }),
+      expect.objectContaining({ producer: 'subagent', agentName: 'review' }),
     );
   });
 

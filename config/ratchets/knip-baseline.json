@@ -1349,12 +1349,6 @@
       "file": "src/tools/delegation/subagentResults.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "buildSubagentResultMeta"
-    },
-    {
-      "file": "src/tools/delegation/subagentResults.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "computeAndWriteWorkflowDiffs"
     },
     {

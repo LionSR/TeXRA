@@ -199,7 +199,7 @@ async function waitForPersistedResult(
       await expect(
         Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
       ).resolves.toMatchObject({
-        result: { output: { response: expectedText } },
+        output: { response: expectedText },
       });
     },
     { timeout: 20_000 },
@@ -486,7 +486,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         await expect(
           Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
         ).resolves.toMatchObject({
-          result: { output: { response: '' } },
+          output: { response: '' },
         });
         const report = await Effect.runPromise(
           getRunRecords(session, runId).readReport(),
@@ -709,7 +709,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
-      result: { output: { response: 'Result A.' } },
+      output: { response: 'Result A.' },
     });
 
     // Stop the child before turn 2 persists any result. The registry stop
@@ -731,11 +731,13 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
-      result: {
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: { response: 'Result A.' },
-      },
+      output: { response: 'Result A.' },
     });
+    // How the run ended is the `run.end` row's fact, not the manifest's: the
+    // stop cancelled the run while turn 1's output stands as its latest.
+    await expect(
+      Effect.runPromise(getRunRecords(session, runId).readMeta()),
+    ).resolves.toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
 
     // /report and /result distinguish the interrupted turn from the latest
     // completed one.

@@ -5,10 +5,14 @@ import {
   clearStoreCache,
   getRunRecords,
   resolveChildRunOutput,
-  type ResultMeta,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  type ResultMeta,
+  type RunEndOutput,
+  type RunId,
+} from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -27,30 +31,31 @@ beforeEach(() => {
   session = createProcessSession();
 });
 
+function workflowOutput(absolutePath: string): RunEndOutput {
+  return {
+    category: 'workflow',
+    outputs: [
+      {
+        round: 1,
+        relativePath,
+        absolutePath,
+        location: 'runStorage',
+        originalPath: null,
+        added: null,
+        removed: null,
+      },
+    ],
+    compileFailures: [],
+    diffs: [],
+  };
+}
+
 function completedWorkflowResult(absolutePath: string): ResultMeta {
   return {
     producer: 'subagent',
     agentName: 'draft',
     wallTimeMs: 10,
-    result: {
-      outcome: 'completed',
-      output: {
-        category: 'workflow',
-        outputs: [
-          {
-            round: 1,
-            relativePath,
-            absolutePath,
-            location: 'runStorage',
-            originalPath: null,
-            added: null,
-            removed: null,
-          },
-        ],
-        compileFailures: [],
-        diffs: [],
-      },
-    },
+    output: workflowOutput(absolutePath),
   };
 }
 
@@ -79,6 +84,17 @@ async function persistCompletedChild(
     getRunRecords(session, childRunId).writeResultMeta(
       completedWorkflowResult(absolutePath),
     ),
+  );
+  // How the child ended is the `run.end` row's fact, not the manifest's.
+  await Effect.runPromise(
+    session.commit([
+      {
+        type: 'run.end',
+        aggregateId: aggregateId('run', childRunId),
+        outcome: 'completed',
+        output: workflowOutput(absolutePath),
+      },
+    ]),
   );
   await StorageFS.ensureDir(`executions/${childRunId}/r1`);
   await StorageFS.write(`executions/${childRunId}/${relativePath}`, 'draft');

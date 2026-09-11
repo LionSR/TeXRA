@@ -42,6 +42,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunStore,
   getRunRecords,
+  runEndFromEvents,
   runMetaFromEvents,
   type ChildRecord,
 } from './RunKVStore';
@@ -305,7 +306,10 @@ export interface FinalizeRunInput {
   /**
    * What the run produced. Absent for a backstop that ends a run whose flow
    * produced nothing (host exit, a stop of a parked run, a failed launch):
-   * the row then carries the empty output of the run's category.
+   * the row then carries the empty output of the run's category. Also
+   * absent, by rule rather than omission, on the child-run path
+   * (`finalizeChildRun` in `src/tools/delegation/childRun.ts`): a child's
+   * product is its per-turn delivery to its parent, not a flow output.
    */
   readonly output?: RunEndOutput;
   /**
@@ -358,18 +362,11 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       );
       if (!start) throw new Error(`Run start not found for ${runId}`);
       // "Already ended" is a fact about the run's current lifecycle, not about
-      // the aggregate: a resume publishes a RUNNING `status` row after the
-      // previous `run.end`, and that run has to end again even when it ends
-      // the same way. Reading the whole aggregate's last outcome instead would
-      // leave a resumed-then-failed run with no terminal row at all, so the
-      // fold, history and every `durableOutcome` reader would keep it RUNNING.
-      const lifecycle = rows.findLast(
-        (row): row is Extract<SessionEvent, { type: 'run.end' | 'status' }> =>
-          row.aggregateId === target &&
-          (row.type === 'run.end' || row.type === 'status'),
-      );
-      const ended =
-        lifecycle?.type === 'run.end' ? lifecycle.outcome : undefined;
+      // the aggregate (`runEndFromEvents` states the rule, and every reader
+      // shares it): a resumed run has to end again even when it ends the same
+      // way, or the fold, history and every `durableOutcome` reader keep it
+      // RUNNING for want of a terminal row.
+      const ended = runEndFromEvents(rows, runId)?.outcome;
       const persisted =
         keepExistingOutcome === true && ended !== undefined ? ended : outcome;
       if (ended === persisted) return { events: [], value: persisted };

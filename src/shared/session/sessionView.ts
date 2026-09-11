@@ -270,11 +270,11 @@ export function descendantRuns(
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {
     const id = pending[cursor]!;
-    const stream = view.runs.get(id);
-    if (!stream || seen.has(id)) continue;
+    const run = view.runs.get(id);
+    if (!run || seen.has(id)) continue;
     seen.add(id);
     if (includeRoot || id !== rootRunId) out.push(id);
-    pending.push(...stream.childIds);
+    pending.push(...run.childIds);
   }
   return out;
 }

@@ -21,10 +21,12 @@ import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
+  ResultMetaSchema,
   RunMetaSchema,
-  RUN_OUTCOME,
   aggregateId,
   RUN_META_SCHEMA_VERSION,
+  type ResultMeta,
+  type RunEnd,
   type SessionEvent,
   type SessionEventDraft,
   type RunId,
@@ -32,7 +34,6 @@ import {
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { ResultMetaSchema, type ResultMeta } from './resultMeta';
 import { runWithRunLeaseWriteFence } from './runLease';
 
 // ============================================================================
@@ -169,6 +170,29 @@ class StorageFSKVStore extends KVStore implements RunKVStore {
   }
 }
 
+/**
+ * The run's terminal fact for the lifecycle it is in now, or null while this
+ * lifecycle has not ended. "Ended" is a fact about the current lifecycle, not
+ * about the aggregate: a resume publishes a RUNNING `status` row after the
+ * previous `run.end`, so a later `status` row means the run started again and
+ * the earlier terminal fact belongs to the lifecycle before it. Reading the
+ * aggregate's last `run.end` instead would leave a resumed run carrying the
+ * outcome of a lifecycle it has already left. Shared with `finalizeRun`, the
+ * row's one writer, so writer and readers scope it identically.
+ */
+export function runEndFromEvents(
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): Extract<SessionEvent, { type: 'run.end' }> | null {
+  const id = aggregateId('run', runId);
+  const lifecycle = rows.findLast(
+    (row): row is Extract<SessionEvent, { type: 'run.end' | 'status' }> =>
+      row.aggregateId === id &&
+      (row.type === 'run.end' || row.type === 'status'),
+  );
+  return lifecycle?.type === 'run.end' ? lifecycle : null;
+}
+
 /** Fold the named metadata records for one run from one database prefix. */
 export function runMetaFromEvents(
   rows: readonly SessionEvent[],
@@ -184,9 +208,6 @@ export function runMetaFromEvents(
     rows.some((row) => row.aggregateId === id && row.type === 'run.removed')
   )
     return null;
-  const end = rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'run.end',
-  );
   const description = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'run.description',
   );
@@ -204,7 +225,7 @@ export function runMetaFromEvents(
     userFollowUpSupport: start.userFollowUpSupport,
     parentRunId:
       detached || start.parent === null ? undefined : start.parent.id,
-    outcome: end?.type === 'run.end' ? end.outcome : undefined,
+    outcome: runEndFromEvents(rows, runId)?.outcome,
     description:
       description?.type === 'run.description'
         ? description.description
@@ -284,20 +305,20 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         const event = rows.findLast(
           (row) => row.aggregateId === id && row.type === 'run.result',
         );
-        if (event?.type !== 'run.result') return null;
-        const record = event.result;
-        const outcome = metaOf(rows)?.outcome;
-        if (
-          record.producer === 'backgroundBash' ||
-          outcome === undefined ||
-          outcome === RUN_OUTCOME.COMPLETED ||
-          record.result.outcome === outcome
-        )
-          return record;
-        return ResultMetaSchema.parse({
-          ...record,
-          result: { ...record.result, outcome },
-        });
+        return event?.type === 'run.result' ? event.result : null;
+      }),
+    /** The run's terminal fact: outcome, error, usage and the flow's output. */
+    readRunEnd: (): Effect.Effect<RunEnd | null, Error> =>
+      read((rows) => {
+        const end = runEndFromEvents(rows, runId);
+        if (!end) return null;
+        const { outcome, error, usage, output } = end;
+        return {
+          outcome,
+          ...(error !== undefined ? { error } : {}),
+          ...(usage !== undefined ? { usage } : {}),
+          output,
+        };
       }),
     writeRunRecord: (record: RunRecord) =>
       Effect.suspend(() =>
