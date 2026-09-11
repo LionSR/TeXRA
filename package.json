@@ -62,7 +62,6 @@
     "@effect/vitest": "4.0.0-rc.113",
     "@electron/asar": "^4.3.0",
     "@eslint/js": "^10.0.1",
-    "@stylistic/eslint-plugin": "^5.10.0",
     "@texra-ai/llm": "workspace:*",
     "@types/diff-match-patch": "^1.0.36",
     "@types/identifiers-arxiv": "^0.1.2",
