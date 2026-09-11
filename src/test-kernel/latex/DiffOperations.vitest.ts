@@ -106,7 +106,7 @@ describe('diffOperations diagnostics', () => {
           progress,
         });
 
-        // A bare source name matches no legacy/mid-era round layout, so the scan
+        // A bare source name matches no flat round-copy name, so the scan
         // reports the empty outcome instead of dispatching diff operations.
         expect(outcome).toEqual({ results: [] });
         expect(logs.has('DEBUG', CHANNEL, 'Input files: paper.tex')).toBe(true);
