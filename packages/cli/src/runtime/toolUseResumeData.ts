@@ -5,16 +5,15 @@ import {
   type AgentConfig,
 } from '@agent/runtime';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
-  type StreamTabId,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -27,14 +26,9 @@ const logger = createLog('CliToolUseResumeData');
  * `status` contract cannot report two different values for one run.
  */
 export interface CliRunResumabilityFacts {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   /** A checkpoint file exists on disk — one `stat`, never a parse. */
   readonly checkpointPresent: boolean;
-  /**
-   * The stream stamped on metadata at registration: the reproduction
-   * contract, without which there is no persisted stream to continue.
-   */
-  readonly streamId?: StreamTabId;
   readonly agentCategory?: AgentConfig['agentCategory'];
   readonly outcome?: RunOutcome;
 }
@@ -64,15 +58,13 @@ export interface CliRunResumabilityFacts {
  *
  * The cost of covering the missing outcome is one parse per outcome-less
  * workflow row that already passed both free gates: a workflow that crashed
- * between the marker write and its finalization. Legacy rows predating the
- * outcome field are outcome-less too but carry no stamped stream id, so they
- * are refused by the gate above without a read.
+ * between the marker write and its finalization.
  */
 export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
   facts: CliRunResumabilityFacts,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
-  if (!facts.checkpointPresent || !facts.streamId) return false;
+  if (!facts.checkpointPresent) return false;
   if (facts.agentCategory !== AgentCategory.Workflow) return true;
   if (
     facts.outcome === RUN_OUTCOME.CANCELLED ||
@@ -112,30 +104,20 @@ export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
  */
 export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
   session: SessionHandle,
-  id: ExecutionId,
+  id: RunId,
   config: AgentConfig,
 ): Effect.fn.Return<string | undefined> {
-  return yield* getExecutionRecords(session, id)
-    .readMeta()
-    .pipe(
-      Effect.flatMap((meta) =>
-        meta?.streamId
-          ? retrieveSessionResumeData(meta.streamId, id, config, session).pipe(
-              Effect.map((resume) =>
-                resume?.type === 'toolUse'
-                  ? resume.agentConfig.model
-                  : undefined,
-              ),
-            )
-          : Effect.succeed(undefined),
-      ),
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.debug(
-            `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
-          );
-          return undefined;
-        }),
-      ),
-    );
+  return yield* retrieveSessionResumeData(id, config, session).pipe(
+    Effect.map((resume) =>
+      resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
+    ),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logger.debug(
+          `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+        );
+        return undefined;
+      }),
+    ),
+  );
 });

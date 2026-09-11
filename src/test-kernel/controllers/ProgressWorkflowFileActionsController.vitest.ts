@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   ProgressWorkflowFileActionsController,
   type ProgressWorkflowFileActionsControllerDeps,
 } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import type { RunId } from '@shared/schemas';
+
+const RUN = 'ab12cd' as RunId;
 
 type LogEntry = { message: string; error: unknown };
 
@@ -100,14 +103,10 @@ describe('ProgressWorkflowFileActionsController', () => {
         throw failure;
       },
     });
-    const getRunMetadata = vi.fn(() => ({ executionId: 'run-1' }));
-    deps.state.getRunMetadata = getRunMetadata;
     const controller = new ProgressWorkflowFileActionsController(deps);
 
-    await controller.openTaskStorage('toolUse');
+    await controller.openTaskStorage(RUN);
 
-    expect(getRunMetadata).toHaveBeenCalledOnce();
-    expect(getRunMetadata).toHaveBeenCalledWith('toolUse');
     expect(deps.host.errors).toEqual([
       'Failed to open task storage folder: cannot reveal folder',
     ]);
@@ -136,12 +135,12 @@ describe('ProgressWorkflowFileActionsController', () => {
     await controller.compareOriginal(
       '/workspace/edited.tex',
       '/workspace/base.tex',
-      'workflow',
+      RUN,
     );
     await controller.acceptFile(
       '/workspace/edited.tex',
       '/workspace/base.tex',
-      'workflow',
+      RUN,
     );
 
     expect(followUps).toEqual([]);
@@ -149,7 +148,7 @@ describe('ProgressWorkflowFileActionsController', () => {
     await controller.acceptFile(
       '/workspace/edited.tex',
       '/workspace/base.tex',
-      'workflow',
+      RUN,
     );
 
     expect(followUps).toHaveLength(1);

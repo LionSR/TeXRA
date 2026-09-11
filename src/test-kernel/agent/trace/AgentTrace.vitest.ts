@@ -7,7 +7,7 @@ import {
   type StageStartEvent,
   TraceEmitter,
 } from '@agent/trace';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -150,7 +150,7 @@ describe('logFileCategory', () => {
   beforeEach(async () => {
     store = new StreamLog();
 
-    const runTrace = createTestRunTrace('TestFileListLogger', store);
+    const runTrace = createTestRunTrace('TestFileListLogger' as RunId, store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });

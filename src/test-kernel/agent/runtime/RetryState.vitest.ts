@@ -27,7 +27,7 @@ import type { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
@@ -42,17 +42,17 @@ import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
   AgentCategory,
   MESSAGE_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { StreamLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/support/streamStatusTestUtils';
+  clearRunStatusForTest,
+  seedRunStatusForTest,
+} from '@test/support/runStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
@@ -86,7 +86,7 @@ type TestRebind = (
 interface TestRetryServices {
   config: { model: string; agentCategory: AgentCategory };
   runScope: RunScope;
-  streamId: StreamTabId;
+  runId: RunId;
   interactions: SessionHostInteractions;
   logger: AgentTrace;
   setting: { temperature: number };
@@ -118,9 +118,16 @@ function testRetryModelCell(
   };
 }
 
+let retryRunCounter = 0;
+
+/** Run ids are hex, so each scenario takes the next id in sequence. */
+function retryRunId(): RunId {
+  return `ac${(retryRunCounter++).toString(16).padStart(4, '0')}` as RunId;
+}
+
 /** Every retry-node scenario's services; cases override what they drive. */
 function retryServices(
-  streamId: StreamTabId,
+  runId: RunId,
   {
     session,
     signal,
@@ -132,8 +139,8 @@ function retryServices(
 ): TestRetryServices {
   return {
     config: { model: 'openai:test', agentCategory: AgentCategory.Workflow },
-    runScope: testRunScope(streamId, { session, signal }),
-    streamId,
+    runScope: testRunScope(runId, { session, signal }),
+    runId,
     interactions: sessionWithInteractions(undefined).interactions,
     logger: noopTrace,
     setting: { temperature: 0 },
@@ -173,7 +180,7 @@ class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
 interface RetryNodeKit {
   node: ExposedRetryNode;
   session: SessionHandle;
-  streamStatus: StreamStatusMachine;
+  runStatus: RunStatusMachine;
   requestRetry: Mock<
     (
       request: HostRetryRequest,
@@ -183,7 +190,7 @@ interface RetryNodeKit {
 }
 
 function createRetryNode(
-  streamId: StreamTabId,
+  runId: RunId,
   rebind: TestRebind = async () => undefined,
   route?: ModelCredentialRoute,
   // The node reads its session from `services.runScope`, so a test driving a
@@ -195,27 +202,25 @@ function createRetryNode(
   const session =
     sessionOverride ??
     sessionWithInteractions({ requestRetry, cancel: () => {} });
-  const streamStatus = session.status;
+  const runStatus = session.status;
   const node = new ExposedRetryNode().setServices(
-    retryServices(streamId, {
+    retryServices(runId, {
       config: { model: 'sonnet46', agentCategory: AgentCategory.ToolUse },
       session,
       modelCell: testRetryModelCell(rebind, route, handlerConfig),
     }) as never,
   );
-  return { node, session, streamStatus, requestRetry };
+  return { node, session, runStatus, requestRetry };
 }
 
 async function withRetryRunContext<T>(
-  streamId: StreamTabId,
+  runId: RunId,
   session: SessionHandle,
   fn: () => T | Promise<T>,
 ): Promise<T> {
   const context = createRunContext({
     runScope: createRunScope({
-      streamId,
-      executionId: `${streamId}-execution` as ExecutionId,
-      agentName: 'retry-test',
+      runId,
       session,
       signal: new AbortController().signal,
     }),
@@ -254,7 +259,7 @@ async function captureModelRetry(
   model = 'openai:test',
   clientCredentialIdentity = 'credential-a',
 ): Promise<CapturedModelRetry> {
-  const streamId = 'model-retry-policy' as StreamTabId;
+  const runId = retryRunId();
   const session = createTestSession();
   const run = vi.spyOn(session.modelRetries, 'run');
   const client = {};
@@ -290,11 +295,11 @@ async function captureModelRetry(
     logger: noopTrace,
     setting: { temperature: 0 },
     config: { model: 'openai:test' },
-    runScope: testRunScope(streamId, { session }),
+    runScope: testRunScope(runId, { session }),
   } as never);
 
   try {
-    await withRetryRunContext(streamId, session, () =>
+    await withRetryRunContext(runId, session, () =>
       node.exec({ shouldStop: false, messages: [] }),
     );
     // The gate acquires narrowest-first: the model route, then the wire route.
@@ -446,11 +451,11 @@ describe('ModelInvocationNode retry', () => {
     await installPlatform({
       config: { 'texra.model.retry.maxAttempts': 0 },
     });
-    const streamId = 'retry-diagnostics' as StreamTabId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const transcript = new StreamLog();
 
-    const recorder = attachTestTranscriptFold(logger, streamId, transcript);
+    const recorder = attachTestTranscriptFold(logger, runId, transcript);
     const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
     const session = sessionWithInteractions({
       requestRetry,
@@ -472,7 +477,7 @@ describe('ModelInvocationNode retry', () => {
     }
 
     const node = new DiagnosticRetryNode().setServices(
-      retryServices(streamId, {
+      retryServices(runId, {
         session,
         logger,
         modelCell: testRetryModelCell(undefined, 'api-key'),
@@ -480,8 +485,8 @@ describe('ModelInvocationNode retry', () => {
     );
 
     try {
-      seedStreamStatusForTest(session.status, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(session.status, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
       await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
@@ -534,8 +539,7 @@ describe('ModelInvocationNode retry', () => {
       expect(diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            executionId: 'deadbeef',
-            streamId,
+            runId,
             automaticAttemptLimit: 1,
             credentialRoute: 'api-key',
           }),
@@ -569,7 +573,7 @@ describe('ModelInvocationNode retry', () => {
       ).toBe(true);
     } finally {
       recorder.unsubscribe();
-      clearStreamStatusForTest(session.status, streamId);
+      clearRunStatusForTest(session.status, runId);
     }
   });
 
@@ -577,7 +581,7 @@ describe('ModelInvocationNode retry', () => {
     await installPlatform({
       config: { 'texra.model.retry.maxAttempts': 0 },
     });
-    const streamId = 'retry-client-preparation' as StreamTabId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const events = collectRetryLifecycleEvents(logger);
     const getClient = vi
@@ -599,7 +603,7 @@ describe('ModelInvocationNode retry', () => {
     }
 
     const node = new ClientPreparationRetryNode().setServices(
-      retryServices(streamId, {
+      retryServices(runId, {
         session,
         logger,
         modelCell: {
@@ -610,8 +614,8 @@ describe('ModelInvocationNode retry', () => {
     );
 
     try {
-      seedStreamStatusForTest(session.status, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(session.status, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
       await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
@@ -637,12 +641,12 @@ describe('ModelInvocationNode retry', () => {
       ).toMatchObject({ decisionSource: 'automatic' });
       expect(getClient).toHaveBeenCalledTimes(2);
     } finally {
-      clearStreamStatusForTest(session.status, streamId);
+      clearRunStatusForTest(session.status, runId);
     }
   });
 
   it('records a resolved result rejected by the invocation boundary as failed', async () => {
-    const streamId = 'retry-invalid-result' as StreamTabId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const events = collectRetryLifecycleEvents(logger);
     const session = createTestSession();
@@ -654,7 +658,7 @@ describe('ModelInvocationNode retry', () => {
     }
 
     const node = new InvalidResultNode().setServices(
-      retryServices(streamId, {
+      retryServices(runId, {
         session,
         logger,
         modelCell: testRetryModelCell(undefined, 'api-key'),
@@ -677,7 +681,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
-    const { node } = createRetryNode('retry-user-abort' as StreamTabId);
+    const { node } = createRetryNode(retryRunId());
     const abort = new DOMException('Request aborted', 'AbortError');
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
@@ -685,7 +689,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not claim an unprompted retryable fallback was already logged', () => {
-    const { node } = createRetryNode('retry-unprompted' as StreamTabId);
+    const { node } = createRetryNode(retryRunId());
     const error = new OpenAIAPIError(
       503,
       { message: 'transient provider failure' },
@@ -735,7 +739,7 @@ describe('ModelInvocationNode retry', () => {
     vi.useFakeTimers();
     try {
       const node = new StatuslessServerErrorNode().setServices(
-        retryServices('retry-delay' as StreamTabId) as never,
+        retryServices(retryRunId()) as never,
       );
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
@@ -770,12 +774,12 @@ describe('ModelInvocationNode retry', () => {
 
     vi.useFakeTimers();
     try {
-      // The run owns one controller for the whole execution; interrupting it
+      // The run owns one controller for the whole run; interrupting it
       // mid-backoff must abandon the pending retry instead of waking up to
       // another attempt.
       const runController = new AbortController();
       const node = new InterruptibleBackoffNode().setServices(
-        retryServices('retry-interrupt' as StreamTabId, {
+        retryServices(retryRunId(), {
           signal: runController.signal,
         }) as never,
       );
@@ -800,8 +804,8 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not prompt for a manual retry after cancellation', async () => {
-    const streamId = 'retry-cancelled' as StreamTabId;
-    const { node, requestRetry } = createRetryNode(streamId);
+    const runId = retryRunId();
+    const { node, requestRetry } = createRetryNode(runId);
 
     await expect(
       node.retryPrompt(
@@ -820,7 +824,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not issue a model request when the run is interrupted after prep', async () => {
-    const streamId = 'model-interrupt-after-prep' as StreamTabId;
+    const runId = retryRunId();
     const session = createTestSession();
     const controller = new AbortController();
     const createResponse = vi.fn(async () => ({ response: 'too late' }));
@@ -838,7 +842,7 @@ describe('ModelInvocationNode retry', () => {
       logger: noopTrace,
       setting: { temperature: 0 },
       config: { model: 'openai:test' },
-      runScope: testRunScope(streamId, {
+      runScope: testRunScope(runId, {
         session,
         signal: controller.signal,
       }),
@@ -1110,25 +1114,24 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('updates the run session status during manual retry', async () => {
-    const streamId = 'retry-state-owner' as StreamTabId;
-    const { node, session, streamStatus, requestRetry } =
-      createRetryNode(streamId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      await withRetryRunContext(streamId, session, () =>
+      await withRetryRunContext(runId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
       expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
-          streamId,
+          runId,
           operation: 'Model request',
           model: 'sonnet46',
         }),
@@ -1137,14 +1140,14 @@ describe('ModelInvocationNode retry', () => {
         expect.objectContaining({ prepareRetry: expect.any(Function) }),
       );
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('marks a Kimi Code-routed failed handler on the retry request', async () => {
-    const streamId = 'retry-state-kimi-code-routed' as StreamTabId;
-    const { node, session, streamStatus, requestRetry } = createRetryNode(
-      streamId,
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(
+      runId,
       undefined,
       undefined,
       undefined,
@@ -1157,11 +1160,11 @@ describe('ModelInvocationNode retry', () => {
     requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      await withRetryRunContext(streamId, session, () =>
+      await withRetryRunContext(runId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
@@ -1170,14 +1173,14 @@ describe('ModelInvocationNode retry', () => {
         expect.anything(),
       );
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('marks a non-Kimi-Code kimi3 failed handler as not routed', async () => {
-    const streamId = 'retry-state-kimi3-open-platform' as StreamTabId;
-    const { node, session, streamStatus, requestRetry } = createRetryNode(
-      streamId,
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(
+      runId,
       undefined,
       undefined,
       undefined,
@@ -1186,11 +1189,11 @@ describe('ModelInvocationNode retry', () => {
     requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      await withRetryRunContext(streamId, session, () =>
+      await withRetryRunContext(runId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
@@ -1199,29 +1202,29 @@ describe('ModelInvocationNode retry', () => {
         expect.anything(),
       );
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('resolves manual retries through the session host interactions', async () => {
-    const streamId = 'retry-state-session-bridge' as StreamTabId;
+    const runId = retryRunId();
     const session = createTestSession();
     const recording = createRecordingHost();
     session.interactions.use(recording.interactions);
-    const { node } = createRetryNode(streamId, undefined, undefined, session);
-    const streamStatus = session.status;
+    const { node } = createRetryNode(runId, undefined, undefined, session);
+    const runStatus = session.status;
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      const prompt = withRetryRunContext(streamId, session, () =>
+      const prompt = withRetryRunContext(runId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
       expect(
-        recording.decisions.submitRetry(streamId, {
+        recording.decisions.submitRetry(runId, {
           action: 'retry',
           feedback: 'try again',
         }),
@@ -1231,39 +1234,37 @@ describe('ModelInvocationNode retry', () => {
         shouldRetry: true,
         userCancelled: false,
       });
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
     } finally {
       session.dispose();
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('stops the stream after manual retry cancellation', async () => {
-    const streamId = 'retry-state-cancel' as StreamTabId;
-    const { node, session, streamStatus, requestRetry } =
-      createRetryNode(streamId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({ action: 'cancel' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      await withRetryRunContext(streamId, session, () =>
+      await withRetryRunContext(runId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
-    const streamId = 'retry-state-deny' as StreamTabId;
-    const { node, session, streamStatus, requestRetry } =
-      createRetryNode(streamId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({
       action: 'deny',
@@ -1272,11 +1273,11 @@ describe('ModelInvocationNode retry', () => {
     const error = new Error('stream dropped before first token');
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
 
-      const shouldRetry = await withRetryRunContext(streamId, session, () =>
+      const shouldRetry = await withRetryRunContext(runId, session, () =>
         node.retryPrompt(undefined, error),
       );
 
@@ -1284,7 +1285,7 @@ describe('ModelInvocationNode retry', () => {
       // stream resumes to RUNNING to let the failure terminalize (a WAITING
       // stream can't be written to a terminal outcome directly).
       expect(shouldRetry).toBe(false);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
 
       // The fallback classifies this as `failed` (→ RUN_OUTCOME.FAILED),
       // surfacing the underlying error — rather than `cancelled`, which would
@@ -1294,7 +1295,7 @@ describe('ModelInvocationNode retry', () => {
         message: 'stream dropped before first token',
       });
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
@@ -1311,7 +1312,7 @@ describe('ModelInvocationNode retry', () => {
     }
 
     function kimiFallbackNode(
-      streamId: StreamTabId,
+      runId: RunId,
       model: string,
       handler: ModelHandlerKimi,
     ): {
@@ -1333,7 +1334,7 @@ describe('ModelInvocationNode retry', () => {
         cancel: () => {},
       });
       const node = new ExposedRetryNode().setServices(
-        retryServices(streamId, {
+        retryServices(runId, {
           config: { model, agentCategory: AgentCategory.ToolUse },
           session,
           modelCell,
@@ -1344,22 +1345,22 @@ describe('ModelInvocationNode retry', () => {
 
     it('swaps a coding-routed dual-backend handler onto its Moonshot config', async () => {
       await installPlatform();
-      const streamId = 'retry-kimi-fallback' as StreamTabId;
+      const runId = retryRunId();
       const retired = new ModelHandlerKimi(kimiCodeRoutedConfig());
       const retiredDispose = vi.spyOn(retired, 'dispose');
       const { node, modelCell, session } = kimiFallbackNode(
-        streamId,
+        runId,
         'kimi3',
         retired,
       );
 
       try {
-        seedStreamStatusForTest(session.status, streamId, {
-          phase: STREAM_PHASE.RUNNING,
+        seedRunStatusForTest(session.status, runId, {
+          phase: RUN_PHASE.RUNNING,
         });
 
         await expect(
-          withRetryRunContext(streamId, session, () =>
+          withRetryRunContext(runId, session, () =>
             node.retryPrompt(undefined, new Error('kimi code quota')),
           ),
         ).resolves.toBe(true);
@@ -1374,30 +1375,30 @@ describe('ModelInvocationNode retry', () => {
         expect(modelCell.modelId).toBe('kimi3');
         expect(retiredDispose).toHaveBeenCalledOnce();
       } finally {
-        clearStreamStatusForTest(session.status, streamId);
+        clearRunStatusForTest(session.status, runId);
       }
     });
 
     it('rebinds instead of swapping for a Kimi Code-exclusive model', async () => {
       await installPlatform();
-      const streamId = 'retry-kimi-exclusive' as StreamTabId;
+      const runId = retryRunId();
       const exclusive = new ModelHandlerKimi(
         MODEL_CONFIGS.kimiCoding as ResolvedModelConfig,
       );
       const { node, modelCell, session } = kimiFallbackNode(
-        streamId,
+        runId,
         'kimiCoding',
         exclusive,
       );
       const rebind = vi.spyOn(modelCell, 'rebind').mockResolvedValue(undefined);
 
       try {
-        seedStreamStatusForTest(session.status, streamId, {
-          phase: STREAM_PHASE.RUNNING,
+        seedRunStatusForTest(session.status, runId, {
+          phase: RUN_PHASE.RUNNING,
         });
 
         await expect(
-          withRetryRunContext(streamId, session, () =>
+          withRetryRunContext(runId, session, () =>
             node.retryPrompt(undefined, new Error('kimi code quota')),
           ),
         ).resolves.toBe(true);
@@ -1407,7 +1408,7 @@ describe('ModelInvocationNode retry', () => {
         expect(rebind).toHaveBeenCalledWith('personal', undefined);
         expect(modelCell.handler).toBe(exclusive);
       } finally {
-        clearStreamStatusForTest(session.status, streamId);
+        clearRunStatusForTest(session.status, runId);
       }
     });
   });

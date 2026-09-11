@@ -34,7 +34,7 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
  */
 const SEED_CALL_ALLOWLIST = new Set([
   'src/agent/runtime/SessionHandle.ts',
-  'packages/cli/src/runtime/runExecution.ts',
+  'packages/cli/src/runtime/executeCli.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/chat/tui/commands/handlers/approvalCommand.ts',

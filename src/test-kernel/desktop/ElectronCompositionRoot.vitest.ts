@@ -221,7 +221,7 @@ describe('desktop composition root and launch environment', () => {
       'projects.flushArtifacts()',
       'afterFlushArtifacts:',
       'removeExternalDiffPatchDirs()',
-      'afterExecutionSettlement:',
+      'afterRunSettlement:',
       'processResources.dispose()',
     ]);
   });

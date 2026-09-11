@@ -4,75 +4,60 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
  * Shared detached-child launch choreography for delegation launch sites.
  *
  * Every detached child run (delegate_agent/subagent, delegate_multi_agents)
- * starts with the same lifecycle: hold the owned-execution lease launch guard
+ * starts with the same lifecycle: hold the owned-run lease launch guard
  * from child-stream creation through child-run-loop handoff, and attach a
  * completion error trace so a late loop failure is diagnosed. Callers keep
- * their own execution-id derivation, approval wiring, and result shaping; this
+ * their own run-id derivation, approval wiring, and result shaping; this
  * module owns the guard-and-trace skeleton so its invariant (a throw inside
  * the guard releases the lease; a late loop failure is surfaced) lives in one
- * place, plus native-agent registration that mints the child's stream id.
+ * place, plus native-agent registration.
  */
 
 // Third-party imports
 
 // Local imports
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard,
+  runWithOwnedRunLeaseLaunchGuard,
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import type { ChildStream } from './childStream';
+import type { ChildRun } from './childRun';
 
 /**
- * Register a native agent child and take its owned-execution lease, minting
- * the one stream id the child is addressed by.
- *
- * That id must match the one `buildAgentLaunchContext` derives for this
- * executionId (AgentLaunchContext.ts's `getStreamTabId` call), or the loop
- * acquires the wrong follow-up queue/interrupt slot. That id derives
- * from the canonical config's `agent`, never from `agentName`, which callers
- * resolve differently (an approved override's display name vs. its registry
- * name) and which reaches only the durable child row. Minting it here is what
- * keeps the two in step: while each launch site derived its own, the
- * invariant could only be stated as a comment asking the copies to agree.
+ * Register a native agent child and take its owned-run lease. The identity
+ * derives from the canonical config's `agent`, never from `agentName`, which
+ * callers resolve differently (an approved override's display name vs. its
+ * registry name) and which reaches only the durable launch label.
  */
-export const registerChildExecution = Effect.fn('registerChildExecution')(
-  function* (
-    session: SessionHandle,
-    input: {
-      readonly executionId: ExecutionId;
-      /** Canonical config, already parsed by the launch site. */
-      readonly config: AgentConfig;
-      readonly agentName: string;
-      readonly userFollowUpSupport: UserFollowUpSupport;
-      readonly parentExecutionId?: ExecutionId;
-    },
-  ): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
-    const { executionId, config } = input;
-    const childStreamId = getStreamTabId(config.agent, { executionId });
-    yield* registerExecution(session, executionId, config, input.agentName, {
-      streamId: childStreamId,
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: input.userFollowUpSupport,
-      parentExecutionId: input.parentExecutionId,
-      background: true,
-    });
-    return { childStreamId };
+export const registerChildRun = Effect.fn('registerChildRun')(function* (
+  session: SessionHandle,
+  input: {
+    readonly runId: RunId;
+    /** Canonical config, already parsed by the launch site. */
+    readonly config: AgentConfig;
+    readonly agentName: string;
+    readonly userFollowUpSupport: UserFollowUpSupport;
+    readonly parentRunId?: RunId;
   },
-);
+): Effect.fn.Return<void, Error> {
+  const { runId, config } = input;
+  yield* registerRun(session, runId, config, input.agentName, {
+    identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport: input.userFollowUpSupport,
+    parentRunId: input.parentRunId,
+  });
+});
 
 /** The strategy wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {
@@ -88,30 +73,30 @@ interface DetachedChildRunLaunch<TTurn> {
 /**
  * Everything the choreography forwards to the child run loop verbatim: the
  * loop owns these field contracts, and the two members the guard supplies
- * itself (`strategy` from `buildLaunch`, `childStream` from
- * `createChildStream`) are the only ones a launch site does not pass through.
+ * itself (`strategy` from `buildLaunch`, `childRun` from
+ * `createChildRun`) are the only ones a launch site does not pass through.
  */
 type DetachedChildRunInputBase = Omit<
   ChildRunLoopParams<never>,
-  'strategy' | 'childStream'
+  'strategy' | 'childRun'
 >;
 
 export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
   (
     | {
         /** Create the stream inside the lease guard, before any stream-dependent setup. */
-        readonly createChildStream: () => Effect.Effect<ChildStream, Error>;
+        readonly createChildRun: () => Effect.Effect<ChildRun, Error>;
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
-          childStream: ChildStream,
+          childRun: ChildRun,
         ) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
       }
     | {
         /** Native strategies let `executeAgent` own handle creation for every turn. */
-        readonly createChildStream?: undefined;
+        readonly createChildRun?: undefined;
         /**
          * Build the strategy (and any attempt-scoped setup) inside the lease launch
-         * guard so a throw releases the owned-execution lease.
+         * guard so a throw releases the owned-run lease.
          */
         readonly buildLaunch: () => Effect.Effect<
           DetachedChildRunLaunch<TTurn>,
@@ -121,7 +106,7 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
   );
 
 /**
- * Run the shared detached-child launch choreography: hold the owned-execution
+ * Run the shared detached-child launch choreography: hold the owned-run
  * lease launch guard while creating any child stream and handing it to the run
  * loop, then attach the completion error trace. Returns the launched loop's
  * stream id and completion so in-band callers can await it.
@@ -130,37 +115,36 @@ export function startDetachedChildRunLoop<TTurn>(
   input: DetachedChildRunInput<TTurn>,
 ): Effect.Effect<
   {
-    childStreamId: StreamTabId;
+    childRunId: RunId;
     completion: Fiber.Fiber<void, Error>;
   },
   Error
 > {
-  return runWithOwnedExecutionLeaseLaunchGuard(
+  return runWithOwnedRunLeaseLaunchGuard(
     input.session,
-    input.executionId,
+    input.runId,
     Effect.gen(function* () {
-      let childStream: ChildStream | undefined;
+      let childRun: ChildRun | undefined;
       let autoCloseOnLaunchFailure = false;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           let launch: DetachedChildRunLaunch<TTurn>;
-          if (input.createChildStream) {
-            childStream = yield* input.createChildStream();
-            launch = yield* input.buildLaunch(childStream);
+          if (input.createChildRun) {
+            childRun = yield* input.createChildRun();
+            launch = yield* input.buildLaunch(childRun);
           } else {
             launch = yield* input.buildLaunch();
           }
-          autoCloseOnLaunchFailure =
-            launch.strategy.autoCloseChildStream === true;
+          autoCloseOnLaunchFailure = launch.strategy.autoCloseChildRun === true;
           const {
-            createChildStream: _createChildStream,
+            createChildRun: _createChildRun,
             buildLaunch: _buildLaunch,
             budgeted,
             ...loopParams
           } = input;
           const completion = yield* startChildRunLoop({
             ...loopParams,
-            ...(childStream !== undefined && { childStream }),
+            ...(childRun !== undefined && { childRun }),
             strategy: launch.strategy,
             // An awaited in-band child rides its idle parent's budget slot.
             budgeted: budgeted ?? true,
@@ -170,9 +154,9 @@ export function startDetachedChildRunLoop<TTurn>(
       );
       if (Exit.isFailure(setup)) {
         const error = Cause.squash(setup.cause);
-        if (childStream) {
+        if (childRun) {
           const finalized = yield* Effect.exit(
-            childStream.finalize({
+            childRun.finalize({
               outcome: RUN_OUTCOME.FAILED,
               error,
               persistence: { kind: 'finalize', flowRecord: 'delete' },
@@ -183,7 +167,7 @@ export function startDetachedChildRunLoop<TTurn>(
             return yield* Effect.fail(
               new AggregateError(
                 [error, Cause.squash(finalized.cause)],
-                `Detached child execution ${input.executionId} failed and its child stream could not be finalized`,
+                `Detached child run ${input.runId} failed and its child stream could not be finalized`,
               ),
             );
           }
@@ -201,10 +185,7 @@ export function startDetachedChildRunLoop<TTurn>(
           ),
         );
       }
-      return {
-        childStreamId: childStream?.childStreamId ?? input.childStreamId,
-        completion,
-      };
+      return { childRunId: input.runId, completion };
     }),
   ).pipe(Effect.uninterruptible);
 }

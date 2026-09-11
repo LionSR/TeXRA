@@ -4,20 +4,18 @@ import {
   AttachedMemoryMissSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import {
   CompileFailureSummarySchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   OutputFileSummarySchema,
   RetryErrorInfoSchema,
   RunOutcomeSchema,
-  STREAM_PHASE,
-  StreamTabIdSchema,
+  RUN_PHASE,
 } from '@shared/schemas';
 
 const AgentFlowMetaSchema = z.object({
-  executionId: ExecutionIdSchema,
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /**
    * Total model cost (USD) of the run, including its own subagents.
@@ -69,7 +67,7 @@ const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.omit({
   error: true,
 }).extend({
   category: z.literal('toolUse'),
-  outcome: z.literal(STREAM_PHASE.WAITING),
+  outcome: z.literal(RUN_PHASE.WAITING),
   ...ToolUseFlowResultSchema.pick({ response: true, files: true }).shape,
 });
 
@@ -83,9 +81,7 @@ export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
 export function isWaitingFlowResult(
   result: AgentRuntimeFlowResult,
 ): result is WaitingToolUseFlowResult {
-  return (
-    result.category === 'toolUse' && result.outcome === STREAM_PHASE.WAITING
-  );
+  return result.category === 'toolUse' && result.outcome === RUN_PHASE.WAITING;
 }
 
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
@@ -109,13 +105,11 @@ export function buildOptionalFlowResultFields(
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
   outcome: RunOutcome,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  runId: RunId,
   memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {
   const meta = {
-    executionId,
-    streamId,
+    runId,
     ...buildOptionalFlowResultFields(memoryMisses, undefined),
   };
   if (category === 'toolUse') {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import {
@@ -16,7 +16,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.ts';
+import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -99,7 +99,7 @@ describe('desktop preview host', () => {
     { kind: 'apiKeyBanner', action: 'guide' },
     { kind: 'compileInputPdf' },
     { kind: 'latexdiffs', action: 'compare' },
-    { kind: 'exportTranscript', streamId: 'missing:stream' as StreamTabId },
+    { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
   ] satisfies HostRequest[])(
     'presents $kind failure once through the request dispatcher',
@@ -140,13 +140,11 @@ describe('desktop preview host', () => {
       });
       const handler = createDesktopHostRequests({
         session,
-        host: createStubDesktopAgentExecutionHost({
+        host: createStubDesktopAgentRunHost({
           ...preview,
           showErrorMessage,
         }),
-        execution: {} as Parameters<
-          typeof createDesktopHostRequests
-        >[0]['execution'],
+        run: {} as Parameters<typeof createDesktopHostRequests>[0]['run'],
         files,
         snapshot: createHostSnapshotSource({
           project: {

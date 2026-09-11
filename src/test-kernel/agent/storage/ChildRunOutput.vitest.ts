@@ -1,19 +1,14 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, afterEach, describe, expect } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 
 import {
   clearStoreCache,
-  getExecutionRecords,
+  getRunRecords,
   resolveChildRunOutput,
   type ResultMeta,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  aggregateId,
-  type StreamTabId,
-  type ExecutionId,
-} from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -21,9 +16,9 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
-const parentExecutionId = 'aaaaaa111111' as ExecutionId;
-const childExecutionId = 'bbbbbb222222' as ExecutionId;
-const otherParentExecutionId = 'cccccc333333' as ExecutionId;
+const parentRunId = 'aaaaaa111111' as RunId;
+const childRunId = 'bbbbbb222222' as RunId;
+const otherParentRunId = 'cccccc333333' as RunId;
 const relativePath = 'r1/draft.tex';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
@@ -58,123 +53,93 @@ function completedWorkflowResult(absolutePath: string): ResultMeta {
   };
 }
 
-function persistCompletedChild(
-  parentId: ExecutionId = parentExecutionId,
-): Effect.Effect<string, Error> {
-  return Effect.gen(function* () {
-    const absolutePath = StorageFS.fullPath(
-      `executions/${childExecutionId}/${relativePath}`,
-    );
-    const parentStreamId = `stream-${parentId}` as StreamTabId;
-    publishTestRunStart(session, parentStreamId, parentId);
-    yield* Effect.promise(() => session.settlePublications());
-    yield* session.commit([
+async function persistCompletedChild(
+  parentId: RunId = parentRunId,
+): Promise<string> {
+  const absolutePath = StorageFS.fullPath(
+    `executions/${childRunId}/${relativePath}`,
+  );
+  publishTestRunStart(session, parentId);
+  await session.settlePublications();
+  await Effect.runPromise(
+    session.commit([
       {
         type: 'run.start',
-        aggregateId: aggregateId('stream', `stream-${childExecutionId}`),
-        executionId: childExecutionId,
-        parentStreamId,
+        aggregateId: aggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
         category: 'workflow',
         isRemote: false,
         userFollowUpSupport: 'unsupported',
+        parent: { id: parentId },
       },
-    ]);
-    yield* getExecutionRecords(session, childExecutionId).writeResultMeta(
+    ]),
+  );
+  await Effect.runPromise(
+    getRunRecords(session, childRunId).writeResultMeta(
       completedWorkflowResult(absolutePath),
-    );
-    yield* Effect.promise(() =>
-      StorageFS.ensureDir(`executions/${childExecutionId}/r1`),
-    );
-    yield* Effect.promise(() =>
-      StorageFS.write(
-        `executions/${childExecutionId}/${relativePath}`,
-        'draft',
-      ),
-    );
-    return absolutePath;
-  });
+    ),
+  );
+  await StorageFS.ensureDir(`executions/${childRunId}/r1`);
+  await StorageFS.write(`executions/${childRunId}/${relativePath}`, 'draft');
+  return absolutePath;
 }
 
 describe('resolveChildRunOutput', () => {
   afterEach(() => clearStoreCache());
 
-  it.effect(
-    'resolves a declared regular output of a completed direct child',
-    () =>
-      Effect.gen(function* () {
-        const absolutePath = yield* persistCompletedChild();
+  it('resolves a declared regular output of a completed direct child', async () => {
+    const absolutePath = await persistCompletedChild();
 
-        expect(
-          yield* resolveChildRunOutput(
-            parentExecutionId,
-            absolutePath,
-            session,
-          ),
-        ).toEqual({
-          kind: 'runStorage',
-          absolutePath,
-          relativePath,
-          executionId: childExecutionId,
-        });
-      }),
-  );
+    await expect(
+      Effect.runPromise(
+        resolveChildRunOutput(parentRunId, absolutePath, session),
+      ),
+    ).resolves.toEqual({
+      kind: 'runStorage',
+      absolutePath,
+      relativePath,
+      runId: childRunId,
+    });
+  });
 
-  it.effect('rejects output references from an unrelated execution tree', () =>
-    Effect.gen(function* () {
-      const absolutePath = yield* persistCompletedChild(otherParentExecutionId);
+  it('rejects output references from an unrelated run tree', async () => {
+    const absolutePath = await persistCompletedChild(otherParentRunId);
 
-      const failure = yield* Effect.flip(
-        resolveChildRunOutput(parentExecutionId, absolutePath, session),
-      );
-      expect(failure.message).toContain('is not a direct child');
-    }),
-  );
+    await expect(
+      Effect.runPromise(
+        resolveChildRunOutput(parentRunId, absolutePath, session),
+      ),
+    ).rejects.toThrow('is not a direct child');
+  });
 
-  it.effect(
-    'rejects files that are present but absent from the result manifest',
-    () =>
-      Effect.gen(function* () {
-        const absolutePath = yield* persistCompletedChild();
-        const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
-        yield* Effect.promise(() =>
-          StorageFS.write(
-            `executions/${childExecutionId}/r1/notes.tex`,
-            'notes',
-          ),
-        );
+  it('rejects files that are present but absent from the result manifest', async () => {
+    const absolutePath = await persistCompletedChild();
+    const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
+    await StorageFS.write(`executions/${childRunId}/r1/notes.tex`, 'notes');
 
-        const failure = yield* Effect.flip(
-          resolveChildRunOutput(parentExecutionId, undeclaredPath, session),
-        );
-        expect(failure.message).toContain('is not a declared output');
-      }),
-  );
+    await expect(
+      Effect.runPromise(
+        resolveChildRunOutput(parentRunId, undeclaredPath, session),
+      ),
+    ).rejects.toThrow('is not a declared output');
+  });
 
-  it.effect('fails loudly when a declared output has disappeared', () =>
-    Effect.gen(function* () {
-      const absolutePath = yield* persistCompletedChild();
-      yield* Effect.promise(() =>
-        StorageFS.delete(`executions/${childExecutionId}/${relativePath}`),
-      );
+  it('fails loudly when a declared output has disappeared', async () => {
+    const absolutePath = await persistCompletedChild();
+    await StorageFS.delete(`executions/${childRunId}/${relativePath}`);
 
-      const failure = yield* Effect.flip(
-        resolveChildRunOutput(parentExecutionId, absolutePath, session),
-      );
-      expect(failure.message).toContain('is missing');
-    }),
-  );
+    await expect(
+      Effect.runPromise(
+        resolveChildRunOutput(parentRunId, absolutePath, session),
+      ),
+    ).rejects.toThrow('is missing');
+  });
 
-  it.effect('rejects paths outside run storage', () =>
-    Effect.gen(function* () {
-      const failure = yield* Effect.flip(
-        resolveChildRunOutput(
-          parentExecutionId,
-          '/workspace/draft.tex',
-          session,
-        ),
-      );
-      expect(failure.message).toContain('not inside task-run storage');
-    }),
-  );
+  it('rejects paths outside run storage', async () => {
+    await expect(
+      Effect.runPromise(
+        resolveChildRunOutput(parentRunId, '/workspace/draft.tex', session),
+      ),
+    ).rejects.toThrow('not inside task-run storage');
+  });
 });

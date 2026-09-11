@@ -11,7 +11,7 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { RunOutcome, UpdateStreamUsagePayload } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 
 import type {
   AgentEvent,
@@ -19,6 +19,7 @@ import type {
   ResponseFinalizedEvent,
   StreamKind,
   ToolStatus,
+  UsageReport,
 } from './events';
 
 /** Subscriber receives every event emitted on the trace. */
@@ -60,7 +61,7 @@ export interface StageHandle {
   child(label: string, options?: StageOptions): StageHandle;
 }
 
-/** Options accepted by `openStream`. */
+/** Options accepted by `openRun`. */
 export interface StreamOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
@@ -91,7 +92,7 @@ export interface StreamOptions {
   readonly phaseOnly?: boolean;
 }
 
-/** Handle returned by `openStream` — append chunks then finalize. */
+/** Handle returned by `openRun` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
   /** Append a chunk of text; emits `stream.chunk`. */
@@ -155,7 +156,7 @@ export interface AgentTrace {
   error(message: string, options?: LogOptions): void;
 
   // ─── First-class agent-general union arms ───────────────────────────
-  usage(payload: UpdateStreamUsagePayload, options?: UsageEmitOptions): void;
+  usage(payload: UsageReport, options?: UsageEmitOptions): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   toolStart(
     input: { logId: string; toolName: string; input: unknown },
@@ -183,5 +184,5 @@ export interface AgentTrace {
    * signal — so subscribers can surface liveness ("thinking…", "responding…")
    * from the start event alone.
    */
-  openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
+  openRun(kind: StreamKind, options?: StreamOptions): StreamHandle;
 }

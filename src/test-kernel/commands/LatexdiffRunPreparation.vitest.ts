@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   withProgress: vi.fn(),
   registerCommandEntries: vi.fn(),
   normalizeRunLatexdiffOutputsByRound: vi.fn(),
-  runLatexdiffForExecution: vi.fn(),
+  runLatexdiffForRun: vi.fn(),
   runLatexdiffHandler: undefined as
     ((config: unknown) => Promise<void>) | undefined,
 }));
@@ -43,7 +43,7 @@ vi.mock('@agent/runtime', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  createLatexExecutionDiscovery: vi.fn(),
+  createLatexRunDiscovery: vi.fn(),
 }));
 
 vi.mock('@commands/_shared/registerCommands', () => ({
@@ -77,7 +77,7 @@ vi.mock('@housekeeping/packLatexdiffvc', () => ({
 vi.mock('@latex/latexdiff/runLatexdiff', () => ({
   normalizeRunLatexdiffOutputsByRound:
     mocks.normalizeRunLatexdiffOutputsByRound,
-  runLatexdiffForExecution: mocks.runLatexdiffForExecution,
+  runLatexdiffForRun: mocks.runLatexdiffForRun,
 }));
 
 vi.mock('@latex/latexdiff', () => ({
@@ -188,7 +188,7 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     mocks.showLoggedMessageWithDocs.mockResolvedValue(undefined);
     mocks.checkToolInstalled.mockResolvedValue(true);
     mocks.normalizeRunLatexdiffOutputsByRound.mockReturnValue(null);
-    mocks.runLatexdiffForExecution.mockReturnValue(
+    mocks.runLatexdiffForRun.mockReturnValue(
       Effect.succeed({
         outcome: { results: mixedResults },
       }),

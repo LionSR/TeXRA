@@ -2,7 +2,7 @@
 export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   memory: 'memories',
   runs: 'executions',
-  executionLeases: 'executionLeases',
+  runLeases: 'runLeases',
   original: 'original',
 } as const);
 

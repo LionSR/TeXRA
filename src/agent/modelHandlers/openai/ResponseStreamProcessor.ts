@@ -1,6 +1,6 @@
 // Streaming-event aggregator for the OpenAI Responses API.
 //
-// Encapsulates the per-request streaming state (thinking/output streams,
+// Encapsulates the per-request streaming state (thinking/output runs,
 // emitted web-search IDs, accumulated output items and text) and the event
 // state-machine shared by the WebSocket transport and the HTTP streaming loop.
 // The handler creates one processor per request, feeds it events via
@@ -36,7 +36,7 @@ export class ResponseStreamProcessor {
   /**
    * Open only while the model is inside a reasoning phase. Opening on the
    * reasoning output item — not the first summary delta — lets subscribers
-   * surface "the model is thinking" even when no summary text ever streams
+   * surface "the model is thinking" even when no summary text ever runs
    * (e.g. gpt-5 with reasoning summaries disabled).
    */
   private thinkingStream: StreamHandle | null = null;
@@ -47,7 +47,7 @@ export class ResponseStreamProcessor {
 
   constructor(private readonly deps: ResponseStreamProcessorDeps) {
     // Deferred start: announces the response phase at the first text delta.
-    // Whether content streams or only the phase boundaries is the handler's
+    // Whether content runs or only the phase boundaries is the handler's
     // output-stream policy, not this processor's concern.
     this.outputStream = deps.createOutputStream();
   }
@@ -114,7 +114,7 @@ export class ResponseStreamProcessor {
   }
 
   /**
-   * Finalize thinking/output streams and emit remaining web searches.
+   * Finalize thinking/output runs and emit remaining web searches.
    * Called after background polling (if needed) completes so the final text
    * reflects the completed response, not the pre-poll snapshot.
    */
@@ -125,9 +125,9 @@ export class ResponseStreamProcessor {
   }
 
   /**
-   * Finalize the thinking/output streams without a completed response. Used on
+   * Finalize the thinking/output runs without a completed response. Used on
    * the error path so a mid-stream failure does not leave the progress view's
-   * streams hanging in a loading state. Finalizes with no explicit text so any
+   * runs hanging in a loading state. Finalizes with no explicit text so any
    * chunks already streamed are preserved (passing `''` would overwrite the
    * visible partial output). `StreamHandle.finalize` is idempotent, so calling
    * this after a partial `finalize` is safe.

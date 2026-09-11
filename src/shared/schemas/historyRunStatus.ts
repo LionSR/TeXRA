@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { RUN_OUTCOME, type RunOutcome } from './stream';
+import { RUN_OUTCOME, type RunOutcome } from './run';
 
 /** Status of a persisted run in the CLI history output. */
 export const HISTORY_RUN_STATUS = {

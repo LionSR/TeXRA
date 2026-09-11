@@ -1,6 +1,6 @@
 import { logContextManagementEvent, type AgentTrace } from '@agent/trace';
 
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 
 interface LogCompactionEventOptions {
   readonly logger: AgentTrace;

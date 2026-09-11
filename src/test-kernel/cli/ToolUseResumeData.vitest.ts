@@ -1,29 +1,24 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
-import {
-  RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
 
-function isCliRunResumable(
-  facts: CliRunResumabilityFacts,
-): Effect.Effect<boolean> {
-  return isCliRunResumableEffect(facts, createProcessSession());
+function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
+  return Effect.runPromise(
+    isCliRunResumableEffect(facts, createProcessSession()),
+  );
 }
 
 const config = {
@@ -34,17 +29,24 @@ const config = {
 
 /** A failed workflow row: the one shape whose checkpoint is still read. */
 function listingFacts(
-  executionId: ExecutionId,
+  runId: RunId,
   overrides: Partial<CliRunResumabilityFacts> = {},
 ): CliRunResumabilityFacts {
   return {
-    id: executionId,
+    id: runId,
     checkpointPresent: true,
-    streamId: `${config.agent}@run#${executionId}` as StreamTabId,
     agentCategory: config.agentCategory,
     outcome: RUN_OUTCOME.FAILED,
     ...overrides,
   };
+}
+
+let runCounter = 0;
+
+/** Run ids are hex-branded; the case name lives in the test title. */
+function mintRunId(): RunId {
+  runCounter += 1;
+  return `beef${runCounter.toString(16).padStart(2, '0')}` as RunId;
 }
 
 const TERMINAL_REJECTION = {
@@ -54,10 +56,10 @@ const TERMINAL_REJECTION = {
 };
 
 async function writeFlowRecord(
-  executionId: ExecutionId,
+  runId: RunId,
   shared: Record<string, unknown>,
 ): Promise<void> {
-  await getExecutionStore(executionId).write(flowKey(executionId), {
+  await getRunStore(runId).write(flowKey(runId), {
     shared,
     cursor: { nextNodeId: 'start' },
   });
@@ -71,52 +73,41 @@ afterEach(async () => {
 });
 
 describe('CLI listing resumability', () => {
-  it.effect.each([
-    ['no checkpoint file', { checkpointPresent: false }],
-    ['no stamped stream id', { streamId: undefined }],
-  ] as const)(
+  it.each([['no checkpoint file', { checkpointPresent: false }]])(
     'does not advertise a row with %s, without reading its state',
-    ([description, overrides]) =>
-      Effect.gen(function* () {
-        const executionId =
-          `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
-        // A continuable record is on disk, so reading it would answer `true`.
-        // Only the two free facts can produce the `false` asserted below.
-        yield* Effect.promise(() =>
-          writeFlowRecord(executionId, { currentRound: 0, totalRounds: 4 }),
-        );
+    async (_description, overrides) => {
+      const runId = mintRunId();
+      // A continuable record is on disk, so reading it would answer `true`.
+      // Only the free fact can produce the `false` asserted below.
+      await writeFlowRecord(runId, { currentRound: 0, totalRounds: 4 });
 
-        expect(
-          yield* isCliRunResumable(listingFacts(executionId, overrides)),
-        ).toBe(false);
-      }),
+      await expect(
+        isCliRunResumable(listingFacts(runId, overrides)),
+      ).resolves.toBe(false);
+    },
   );
 
-  it.effect.each([
+  it.each([
     [
       'a tool-use row',
       { agentCategory: 'toolUse' as AgentConfig['agentCategory'] },
     ],
     ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
-  ] as const)(
+  ])(
     'advertises %s without parsing its checkpoint',
-    ([description, overrides]) =>
-      Effect.gen(function* () {
-        const executionId =
-          `free-${description.replaceAll(' ', '-')}` as ExecutionId;
-        // A terminal rejection is on disk, so a parse would answer `false`.
-        // Only the short-circuit can produce the `true` asserted below.
-        yield* Effect.promise(() =>
-          writeFlowRecord(executionId, TERMINAL_REJECTION),
-        );
+    async (_description, overrides) => {
+      const runId = mintRunId();
+      // A terminal rejection is on disk, so a parse would answer `false`.
+      // Only the short-circuit can produce the `true` asserted below.
+      await writeFlowRecord(runId, TERMINAL_REJECTION);
 
-        expect(
-          yield* isCliRunResumable(listingFacts(executionId, overrides)),
-        ).toBe(true);
-      }),
+      await expect(
+        isCliRunResumable(listingFacts(runId, overrides)),
+      ).resolves.toBe(true);
+    },
   );
 
-  it.effect.each([
+  it.each([
     ['the unresolved rejection marker', TERMINAL_REJECTION],
     [
       'legacy compile failure context',
@@ -126,15 +117,13 @@ describe('CLI listing resumability', () => {
         compileFailureContext: 'The generated document did not compile.',
       },
     ],
-  ] as const)(
+  ])(
     'does not advertise a failed workflow with terminal %s as resumable',
-    ([description, shared]) =>
-      Effect.gen(function* () {
-        const executionId =
-          `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
-        yield* Effect.promise(() => writeFlowRecord(executionId, shared));
+    async (_description, shared) => {
+      const runId = mintRunId();
+      await writeFlowRecord(runId, shared);
 
-        expect(yield* isCliRunResumable(listingFacts(executionId))).toBe(false);
-      }),
+      await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
+    },
   );
 });

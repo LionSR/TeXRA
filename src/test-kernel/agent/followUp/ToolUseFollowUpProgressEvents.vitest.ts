@@ -1,8 +1,7 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
@@ -10,16 +9,12 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
 import {
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
-  type StreamTabId,
-} from '@shared/schemas';
-import {
-  clearAllStreamStatusesForTest,
-  seedStreamStatusForTest,
-} from '@test/support/streamStatusTestUtils';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+  clearAllRunStatusesForTest,
+  seedRunStatusForTest,
+} from '@test/support/runStatusTestUtils';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { listenForFollowUp } from '@tools/executions/waitCoordination';
@@ -30,7 +25,7 @@ import {
   recordSessionEvents,
 } from '../progressTestUtils';
 
-const streamId = 'stream:follow-up' as StreamTabId;
+const runId = 'run:follow-up' as RunId;
 
 let paperCount = 0;
 
@@ -45,9 +40,9 @@ function paperRoots() {
 
 describe('tool-use follow-up progress events', () => {
   const unsubscribeFollowUpObservers: Array<() => void> = [];
-  const trackedExecutions: Array<{
+  const trackedRuns: Array<{
     readonly session: SessionHandle;
-    readonly executionId: string;
+    readonly runId: RunId;
   }> = [];
   const sessions = new Set<SessionHandle>();
 
@@ -55,14 +50,14 @@ describe('tool-use follow-up progress events', () => {
     for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
       unsubscribe();
     }
-    for (const { session, executionId } of trackedExecutions.splice(0)) {
-      session.executions.untrack(executionId);
+    for (const { session, runId } of trackedRuns.splice(0)) {
+      session.runs.untrack(runId);
     }
     for (const session of sessions) {
       session.dispose();
     }
     sessions.clear();
-    clearAllStreamStatusesForTest(defaultSession().status);
+    clearAllRunStatusesForTest(defaultSession().status);
   });
 
   function trackSession(): SessionHandle {
@@ -72,19 +67,11 @@ describe('tool-use follow-up progress events', () => {
   }
 
   function trackToolUseFlow({
-    stream = streamId,
-    executionId = `exec-${stream}`,
     session,
   }: {
-    readonly stream?: StreamTabId;
-    readonly executionId?: string;
     readonly session?: SessionHandle;
   } = {}): void {
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: stream,
-      agent: 'search',
-    });
+    const handle = testRunHandle({ runId, agent: 'search' });
     const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
       ownerSession: owner,
@@ -94,33 +81,31 @@ describe('tool-use follow-up progress events', () => {
       switchModel: async () => {},
       interrupt: () => {},
     });
-    owner.executions.track(handle);
-    trackedExecutions.push({ session: owner, executionId });
+    owner.runs.track(handle);
+    trackedRuns.push({ session: owner, runId });
   }
 
-  it.effect(
-    'publishes sent follow-up events through the owning session fact hub',
-    () =>
-      Effect.gen(function* () {
-        const run = createRecordingHost();
-        const session = trackSession();
-        const sent = recordFollowUpsSent(session);
-        const lease = session.followUps.claimLive(streamId, 'flow')!;
+  it('publishes sent follow-up events through the owning session fact hub', async () => {
+    const run = createRecordingHost();
+    const session = trackSession();
+    const sent = recordFollowUpsSent(session);
+    const lease = session.followUps.claimLive(runId, 'flow')!;
 
-        trackToolUseFlow({ session });
+    trackToolUseFlow({ session });
 
-        const result = yield* submitFollowUp(streamId, 'please continue', {
-          session,
-        });
-
-        expect(result).toEqual({ status: 'sent' });
-        expect(session.followUps.queue(lease).drainItems()).toMatchObject([
-          { text: 'please continue', origin: 'user' },
-        ]);
-        expect(sent.sent).toEqual([streamId]);
-        expect(run.events).toEqual([]);
+    const result = await Effect.runPromise(
+      submitFollowUp(runId, 'please continue', {
+        session,
       }),
-  );
+    );
+
+    expect(result).toEqual({ status: 'sent' });
+    expect(session.followUps.queue(lease).drainItems()).toMatchObject([
+      { text: 'please continue', origin: 'user' },
+    ]);
+    expect(sent.sent).toEqual([runId]);
+    expect(run.events).toEqual([]);
+  });
 
   it('prefers an explicit session over the active run context when notifying follow-up sent', () => {
     const run = createRecordingHost();
@@ -133,10 +118,10 @@ describe('tool-use follow-up progress events', () => {
       createRunContext({
         session: activeSession,
       }),
-      () => notifyFollowUpSent(streamId, explicitSession),
+      () => notifyFollowUpSent(runId, explicitSession),
     );
 
-    expect(explicit.sent).toEqual([streamId]);
+    expect(explicit.sent).toEqual([runId]);
     expect(active.sent).toEqual([]);
     expect(run.events).toEqual([]);
   });
@@ -147,28 +132,28 @@ describe('tool-use follow-up progress events', () => {
     const sent = recordFollowUpsSent(session);
 
     withRunContext(createRunContext({ session }), () =>
-      notifyFollowUpSent(streamId),
+      notifyFollowUpSent(runId),
     );
 
-    expect(sent.sent).toEqual([streamId]);
+    expect(sent.sent).toEqual([runId]);
     expect(run.events).toEqual([]);
   });
 
   it('breaks a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
     const onFollowUp = vi.fn();
-    const otherStream = 'stream:other' as StreamTabId;
+    const otherRun = 'run:other' as RunId;
 
     let cleanup: () => void = () => {};
-    withRunContext(createRunContext({ session, streamId }), () => {
+    withRunContext(createRunContext({ session, runId }), () => {
       cleanup = listenForFollowUp(onFollowUp);
     });
     unsubscribeFollowUpObservers.push(cleanup);
 
-    notifyFollowUpSent(otherStream, session);
+    notifyFollowUpSent(otherRun, session);
     expect(onFollowUp).not.toHaveBeenCalled();
 
-    notifyFollowUpSent(streamId, session);
+    notifyFollowUpSent(runId, session);
     expect(onFollowUp).toHaveBeenCalledOnce();
   });
 
@@ -177,78 +162,66 @@ describe('tool-use follow-up progress events', () => {
     const onFollowUp = vi.fn();
 
     let cleanup: () => void = () => {};
-    withRunContext(createRunContext({ session, streamId }), () => {
+    withRunContext(createRunContext({ session, runId }), () => {
       cleanup = listenForFollowUp(onFollowUp);
     });
     cleanup();
 
-    notifyFollowUpSent(streamId, session);
+    notifyFollowUpSent(runId, session);
     expect(onFollowUp).not.toHaveBeenCalled();
   });
 
-  it.effect(
-    'does not append through stale active contexts after final status',
-    () =>
-      Effect.gen(function* () {
-        seedStreamStatusForTest(defaultSession().status, streamId, {
-          phase: STREAM_PHASE.COMPLETED,
-        });
-        trackToolUseFlow();
+  it('does not append through stale active contexts after final status', async () => {
+    seedRunStatusForTest(defaultSession().status, runId, {
+      phase: RUN_PHASE.COMPLETED,
+    });
+    trackToolUseFlow();
 
-        const result = yield* submitFollowUp(streamId, 'late follow-up', {
+    const result = await Effect.runPromise(
+      submitFollowUp(runId, 'late follow-up', { session: defaultSession() }),
+    );
+
+    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+    expect(defaultSession().followUps.getAll(runId)).toEqual([]);
+  });
+
+  it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
+    const session = trackSession();
+    const recorded = recordSessionEvents(session);
+
+    const result = await Effect.runPromise(
+      submitFollowUp('run:no-follow-up-session' as RunId, 'cannot deliver', {
+        session,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+    expect(await recorded.read()).toEqual([]);
+  });
+
+  it('queues follow-ups for resuming runs through registry admission', async () => {
+    const resumingRunId = 'run:resuming-follow-up' as RunId;
+
+    seedRunStatusForTest(defaultSession().status, resumingRunId, {
+      phase: RUN_PHASE.RUNNING,
+      substate: RUN_SUBSTATE.RESUMING,
+    });
+
+    try {
+      const result = await Effect.runPromise(
+        submitFollowUp(resumingRunId, 'queued while resuming', {
           session: defaultSession(),
-        });
+        }),
+      );
 
-        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-        expect(defaultSession().followUps.getAll(streamId)).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'does not emit a follow-up sent fact when no follow-up reaches a live session',
-    () =>
-      Effect.gen(function* () {
-        const session = trackSession();
-        const recorded = recordSessionEvents(session);
-
-        const result = yield* submitFollowUp(
-          'stream:no-follow-up-session' as StreamTabId,
-          'cannot deliver',
-          { session },
-        );
-
-        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-        expect(yield* Effect.promise(() => recorded.read())).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'queues follow-ups for resuming streams through registry admission',
-    () =>
-      Effect.gen(function* () {
-        const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
-
-        seedStreamStatusForTest(defaultSession().status, resumingStreamId, {
-          phase: STREAM_PHASE.RUNNING,
-          substate: STREAM_SUBSTATE.RESUMING,
-        });
-
-        try {
-          const result = yield* submitFollowUp(
-            resumingStreamId,
-            'queued while resuming',
-            { session: defaultSession() },
-          );
-
-          // The fake platform's resume port refuses, so the input stays queued
-          // behind a failed wake.
-          expect(result).toEqual({ status: 'queued', wake: 'failed' });
-          expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
-            'queued while resuming',
-          ]);
-        } finally {
-          defaultSession().followUps.terminalize(resumingStreamId);
-        }
-      }),
-  );
+      // The fake platform's resume port refuses, so the input stays queued
+      // behind a failed wake.
+      expect(result).toEqual({ status: 'queued', wake: 'failed' });
+      expect(defaultSession().followUps.getAll(resumingRunId)).toEqual([
+        'queued while resuming',
+      ]);
+    } finally {
+      defaultSession().followUps.terminalize(resumingRunId);
+    }
+  });
 });

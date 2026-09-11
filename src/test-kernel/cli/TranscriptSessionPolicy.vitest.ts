@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe('CLI transcript session policy', () => {
-  it('fails a headless execution before runtime construction when opening fails', async () => {
+  it('fails a headless run before runtime construction when opening fails', async () => {
     vi.resetModules();
     await import('@test/support/sessionGraphTestSetup');
     const failure = new Error('transcript directory is unreadable');
@@ -33,13 +33,13 @@ describe('CLI transcript session policy', () => {
       createCliRuntimeHost,
     }));
     const { executeCliRequest: nativeExecute } =
-      await import('@cli/runtime/runExecution');
+      await import('@cli/runtime/executeCli');
 
     const executeCliRequest = (...args: Parameters<typeof nativeExecute>) =>
       Effect.runPromise(nativeExecute(...args));
     await expect(
       executeCliRequest(
-        { config: {}, executionId: 'exec-open-failure' } as never,
+        { config: {}, runId: 'exec-open-failure' } as never,
         {
           cwd: '/workspace',
           mode: 'headless',

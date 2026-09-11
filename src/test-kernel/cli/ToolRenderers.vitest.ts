@@ -202,7 +202,7 @@ describe('CLI tool display lines', () => {
 
     expect(
       toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
+        runLabels: new Map([['sub-1', 'reviewer']]),
       }),
     ).toEqual([
       '● executions (finished waiting)',
@@ -219,7 +219,7 @@ describe('CLI tool display lines', () => {
 
     expect(
       toolUseDisplayLines(entry, {
-        executionLabels: new Map([
+        runLabels: new Map([
           ['sub-1', 'reviewer'],
           ['sub-2', 'leanSolver'],
         ]),
@@ -238,7 +238,7 @@ describe('CLI tool display lines', () => {
 
     expect(
       toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
+        runLabels: new Map([['sub-1', 'reviewer']]),
       }),
     ).toEqual(['● executions (view /executions/process-1)']);
   });
@@ -250,7 +250,7 @@ describe('CLI tool display lines', () => {
 
     expect(
       toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
+        runLabels: new Map([['sub-1', 'reviewer']]),
       }),
     ).toEqual(['● executions (view: reviewer/workspace-files/review.md)']);
   });

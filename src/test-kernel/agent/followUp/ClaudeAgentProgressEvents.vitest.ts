@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/claudeAgent';
@@ -18,9 +18,9 @@ vi.mock('@tools/claudeAgentImport', () => ({
   findClaudeBinaryPath: () => undefined,
 }));
 
-const streamId = 'stream:claude-child' as StreamTabId;
+const runId = 'stream:claude-child' as RunId;
 
-async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
+async function* runMessages(messages: unknown[]): AsyncGenerator<unknown> {
   yield* messages;
 }
 
@@ -29,7 +29,7 @@ async function runWithLoggerStore<T>(
 ): Promise<T> {
   const store = new StreamLog();
 
-  return await fn(store, createTestRunTrace(streamId, store).trace);
+  return await fn(store, createTestRunTrace(runId, store).trace);
 }
 
 function collectToolLogs(store: StreamLog): unknown[] {
@@ -62,7 +62,7 @@ describe('claude agent progress events', () => {
 
   it('updates Claude tool-use logs without dropping the original tool metadata', async () => {
     mocks.query.mockReturnValue(
-      streamMessages([
+      runMessages([
         { type: 'system', subtype: 'init', session_id: 'sess-1' },
         {
           type: 'assistant',
@@ -138,7 +138,7 @@ describe('claude agent progress events', () => {
 
   it('keeps Claude tool-result errors on the completed tool log', async () => {
     mocks.query.mockReturnValue(
-      streamMessages([
+      runMessages([
         {
           type: 'assistant',
           message: {

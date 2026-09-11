@@ -48,7 +48,7 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // the vocabulary is a shared, growing const). Every producer
 // (deliveryEnvelope.ts / subagentResults.ts / github/formatUtils.ts) only ever
 // follows a tag name with whitespace (attributes), `>` (bare open, e.g.
-// `<execution-activity>`), or the exact `/>` self-closing delimiter (bare open, e.g.
+// `<run-activity>`), or the exact `/>` self-closing delimiter (bare open, e.g.
 // `<subagent-result>`), so anchor
 // on those delimiters instead of accepting any slash continuation.
 const TAG_NAME_END = '(?=[\\s>]|/>)';
@@ -239,12 +239,12 @@ export function formatWorkflowScriptDeliverySummary(
 
 /** Format a typed progress update as XML for injection into orchestrator context. */
 export function formatSubagentProgress(
-  executionId: string,
+  runId: string,
   agentName: string,
   update: SubagentProgressUpdate,
 ): string {
   const tag = DELIVERY_TAG.subagentProgress;
-  const idAttr = `id="${escapeAttr(executionId)}"`;
+  const idAttr = `id="${escapeAttr(runId)}"`;
   const agentAttr = `agent="${escapeAttr(agentName)}"`;
 
   switch (update.kind) {

@@ -7,9 +7,9 @@ import {
   aggregateTarget,
   type ActiveChildInfo,
   type DisplaySessionEvent,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
-import { roundStageFromStageStart } from '@shared/streams/stage';
+import { roundStageFromStageStart } from '@shared/runs/stage';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
@@ -27,16 +27,17 @@ import type {
 function projectCliActiveChildRow(
   item: ActiveChildInfo,
 ): CliNdjsonActiveChildRow {
-  const { identity, childStreamId, ...rest } = item;
+  const { identity, childRunId, ...rest } = item;
   const toolName =
     identity.kind === 'multiAgentWorkflow'
       ? 'delegate_multi_agents'
       : identity.tool;
   return {
     kind: identity.kind === 'process' ? 'process' : 'subagent',
+    executionId: childRunId,
     ...rest,
     ...(toolName !== undefined ? { toolName } : {}),
-    ...(identity.kind === 'process' ? {} : { childStreamId }),
+    ...(identity.kind === 'process' ? {} : { childStreamId: childRunId }),
   };
 }
 
@@ -51,36 +52,71 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
 /**
  * Project one session event onto the frozen NDJSON progress-event
- * vocabulary: one event to zero or one line, no cumulative state (PRD 10.3).
+ * vocabulary: one event to zero or one line, and one bit of state per run,
+ * the parent edge its `run.start` carried (PRD 10.3).
  *
  * `run.activate` projects to the public `setActiveStream` record, one to one
- * and byte for byte: every activation (a launch, a resume) emits one line,
- * `background` (a delegated child) is the record's `suppressViewSwitch:
- * true`, and `isRemote` appears only where the fact carries one (agent
- * launches; a child stream never did). `run.start` is the existence fact and
- * projects nothing: a resume mints none, and a launch emits both.
+ * and byte for byte: every activation (a launch, a resume) emits one line, a
+ * delegated child's activation carries the record's `suppressViewSwitch:
+ * true` (the 0.40 spelling of the parent edge), and `isRemote` appears only
+ * where the fact carries one (agent launches; a child never did). `run.start`
+ * is the existence fact: a child's projects the frozen `setParentStream`
+ * line its parent edge used to be published as, a root's projects nothing.
  * `context.state`, the approval facts, the terminal result, and transcript
  * rows are intentionally unprojected (the result has its own NDJSON record,
  * and the public wire carries neither a context-occupancy, an approval, nor a
  * transcript record). The goal and queued-follow-up records carry only the
- * stream they name, as the public wire always did.
+ * run they name, as the public wire always did.
  */
 function projectCliSessionEvent(
   event: DisplaySessionEvent,
+  isChild: (runId: RunId) => boolean,
 ): CliProjectedNdjsonProgressEvent | undefined {
-  const streamId = aggregateTarget(event.aggregateId).id;
+  const target = aggregateTarget(event.aggregateId);
+  if (target.kind !== 'run') {
+    if (event.type !== 'inquiryThreadUpdated') return undefined;
+    const {
+      aggregateId: _aggregateId,
+      seq: _seq,
+      commit: _commit,
+      ownerId: _ownerId,
+      at: _at,
+      type: _type,
+      parentRunId,
+      ...thread
+    } = event;
+    return {
+      event: 'inquiryThreadUpdated',
+      payload: { ...thread, parentStreamId: parentRunId },
+    };
+  }
+  const runId = target.id;
   switch (event.type) {
     case 'run.activate':
       return {
         event: 'setActiveStream',
         payload: {
-          streamId,
+          streamId: runId,
           agentCategory: event.category,
           ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
-          ...(event.background ? { suppressViewSwitch: true } : {}),
+          ...(isChild(runId) ? { suppressViewSwitch: true } : {}),
         },
       };
     case 'run.start':
+      return event.parent === null
+        ? undefined
+        : {
+            event: 'setParentStream',
+            payload: {
+              childStreamId: runId,
+              parentStreamId: event.parent.id,
+            },
+          };
+    case 'run.detach':
+      return {
+        event: 'setParentStream',
+        payload: { childStreamId: runId, parentStreamId: null },
+      };
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
@@ -103,7 +139,7 @@ function projectCliSessionEvent(
       return {
         event: 'updateStreamStatus',
         payload: {
-          streamId,
+          streamId: runId,
           status: event.phase,
           cause: event.cause,
           ...(event.previousPhase
@@ -116,8 +152,8 @@ function projectCliSessionEvent(
       return {
         event: 'updateStreamUsage',
         payload: {
-          streamId,
-          storageKey: event.storageKey,
+          streamId: runId,
+          storageKey: event.runId,
           usage: event.usage,
         },
       };
@@ -127,43 +163,43 @@ function projectCliSessionEvent(
       return {
         event: 'setTaskState',
         payload: {
-          streamId,
-          executionId: event.executionId,
+          streamId: runId,
+          executionId: runId,
           taskState: agentConfigToTaskState(event.config),
         },
       };
     case 'conversation.progress':
       return {
         event: 'updateConversationProgress',
-        payload: { streamId, progress: event.progress },
+        payload: { streamId: runId, progress: event.progress },
       };
     case 'updateTodos':
       return {
         event: 'updateTodos',
-        payload: { streamId, todos: event.todos },
+        payload: { streamId: runId, todos: event.todos },
       };
     case 'updatePlan':
       return {
         event: 'updatePlan',
-        payload: { streamId, plan: event.plan },
+        payload: { streamId: runId, plan: event.plan },
       };
     case 'addOutputFiles':
       return {
         event: 'addOutputFiles',
-        payload: { streamId, filesByRound: event.filesByRound },
+        payload: { streamId: runId, filesByRound: event.filesByRound },
       };
     case 'updateMissingOutputs':
       return {
         event: 'updateMissingOutputs',
-        payload: { streamId, filesByRound: event.filesByRound },
+        payload: { streamId: runId, filesByRound: event.filesByRound },
       };
     case 'updateCompileFailures':
       return {
         event: 'updateCompileFailures',
-        payload: { streamId, filesByRound: event.filesByRound },
+        payload: { streamId: runId, filesByRound: event.filesByRound },
       };
     case 'goalPaused':
-      return { event: 'goalPaused', payload: { streamId } };
+      return { event: 'goalPaused', payload: { streamId: runId } };
     case 'stage.start': {
       // The frozen public wire carries round progress only; phase progress
       // stays internal.
@@ -174,39 +210,25 @@ function projectCliSessionEvent(
         total: event.total ?? undefined,
       });
       if (!roundStage) return undefined;
-      return { event: 'updateRoundStage', payload: { streamId, roundStage } };
+      return {
+        event: 'updateRoundStage',
+        payload: { streamId: runId, roundStage },
+      };
     }
     case 'goalStateChanged':
-      return { event: 'goalStateChanged', payload: { streamId } };
-    case 'inquiryThreadUpdated': {
-      const {
-        aggregateId: _aggregateId,
-        seq: _seq,
-        commit: _commit,
-        ownerId: _ownerId,
-        at: _at,
-        type: _type,
-        ...thread
-      } = event;
-      return { event: 'inquiryThreadUpdated', payload: thread };
-    }
+      return { event: 'goalStateChanged', payload: { streamId: runId } };
+    case 'inquiryThreadUpdated':
+      // The thread aggregate is not a run; handled above.
+      return undefined;
     case 'updateQueuedFollowUps':
-      return { event: 'updateQueuedFollowUps', payload: { streamId } };
-    case 'updateStreamDescription':
+      return { event: 'updateQueuedFollowUps', payload: { streamId: runId } };
+    case 'updateRunDescription':
       return {
         event: 'updateStreamDescription',
-        payload: { streamId, description: event.description },
+        payload: { streamId: runId, description: event.description },
       };
-    case 'setParentStream':
-      return {
-        event: 'setParentStream',
-        payload: {
-          childStreamId: streamId,
-          parentStreamId: event.parentStreamId,
-        },
-      };
-    case 'stream.removed':
-      return { event: 'removeStream', payload: { streamId } };
+    case 'run.removed':
+      return { event: 'removeStream', payload: { streamId: runId } };
   }
   assertNever(event, 'Unhandled CLI NDJSON session event');
 }
@@ -235,11 +257,20 @@ function projectCliSessionEvent(
  * captured at detach may be exactly that row's.
  */
 export function attachCliSessionProgressProjection(
-  session: Pick<SessionHandle, 'events' | 'now'> & {
-    readonly executions: Pick<SessionHandle['executions'], 'onChildActivity'>;
+  session: Pick<SessionHandle, 'events' | 'now' | 'view'> & {
+    readonly runs: Pick<SessionHandle['runs'], 'onChildActivity'>;
   },
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => Promise<void> {
+  // The parent edge as this tail has seen it: a `run.start` with a parent
+  // adds, a `run.detach` removes. A run whose creation predates the tail (a
+  // resume of an earlier run) is asked of the folded view, which holds its
+  // `run.start` by then.
+  const children = new Set<RunId>();
+  const isChild = (runId: RunId): boolean =>
+    children.has(runId) ||
+    (SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.parentId ??
+      null) !== null;
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
     writeRecord({
       kind: 'progress',
@@ -285,7 +316,21 @@ export function attachCliSessionProgressProjection(
     Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
       Effect.sync(() => {
         if (stopAt !== undefined && event.commit > stopAt) return;
-        const projected = projectCliSessionEvent(event);
+        if (event.type === 'run.start' || event.type === 'run.detach') {
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind === 'run') {
+            // The edge as this tail last saw it: `run.start` with a parent
+            // opens it, `run.detach` closes it. Without the removal a
+            // detached run that activates again would still be projected as
+            // a child.
+            if (event.type === 'run.start' && event.parent !== null) {
+              children.add(target.id);
+            } else {
+              children.delete(target.id);
+            }
+          }
+        }
+        const projected = projectCliSessionEvent(event, isChild);
         if (projected) emitProjected(projected);
         passed(event.commit);
       }),
@@ -296,20 +341,18 @@ export function attachCliSessionProgressProjection(
       Effect.sync(() => passed(commit)),
     ),
   );
-  const detachRosters = session.executions.onChildActivity(
-    (parentStreamId, items) => {
-      const projected: CliProjectedNdjsonProgressEvent = {
-        event: 'updateActiveSubagents',
-        payload: {
-          parentStreamId,
-          children: items.map(projectCliActiveChildRow),
-        },
-      };
-      const at = session.now();
-      if (at <= delivered) emitProjected(projected);
-      else heldRosters.push({ at, projected });
-    },
-  );
+  const detachRosters = session.runs.onChildActivity((parentRunId, items) => {
+    const projected: CliProjectedNdjsonProgressEvent = {
+      event: 'updateActiveSubagents',
+      payload: {
+        parentStreamId: parentRunId,
+        children: items.map(projectCliActiveChildRow),
+      },
+    };
+    const at = session.now();
+    if (at <= delivered) emitProjected(projected);
+    else heldRosters.push({ at, projected });
+  });
 
   return async () => {
     if (stopAt !== undefined) return drained;

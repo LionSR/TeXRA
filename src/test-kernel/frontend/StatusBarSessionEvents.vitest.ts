@@ -5,15 +5,17 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { STREAM_PHASE, type ExecutionId } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 
+const runId = 'a0b0c0' as RunId;
+
 function subscribeOverTestSession() {
   const session = createTestSession();
-  publishTestRunStart(session, 'stream-a', 'a0b0c0' as ExecutionId);
+  publishTestRunStart(session, runId);
   const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
@@ -26,36 +28,35 @@ function subscribeOverTestSession() {
 }
 
 function emitUsage(session: SessionHandle): void {
-  session.publishRunEvent('stream-a', {
+  session.publishRunEvent(runId, {
     type: 'usage',
     payload: {
-      streamId: 'stream-a',
-      storageKey: 'a0b0c0' as ExecutionId,
+      runId,
       usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
     },
   });
 }
 
 describe('subscribeStatusBarSessionEvents', () => {
-  it('tracks stream status changes from the session status plane', async () => {
+  it('tracks run status changes from the session status plane', async () => {
     const { session, tracker, onStatusChanged, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
-    session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
+    session.status.transition(runId, RUN_PHASE.RUNNING, 'lifecycle');
     await session.settlePublications();
 
-    expect(tracker.activeStreamCount).toBe(1);
+    expect(tracker.activeRunCount).toBe(1);
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
     expect(onUsageChanged).not.toHaveBeenCalled();
 
     dispose();
     await session.settlePublications();
-    session.status.transition('stream-a', STREAM_PHASE.COMPLETED, 'lifecycle');
+    session.status.transition(runId, RUN_PHASE.COMPLETED, 'lifecycle');
     await session.settlePublications();
     // Disposal stops the status-bar refresh, not the underlying fact: the
     // count is read live from the session status plane, so it still follows
     // the terminal transition.
-    expect(tracker.activeStreamCount).toBe(0);
+    expect(tracker.activeRunCount).toBe(0);
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -63,13 +64,13 @@ describe('subscribeStatusBarSessionEvents', () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
-    session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
+    session.status.transition(runId, RUN_PHASE.RUNNING, 'lifecycle');
     emitUsage(session);
     emitUsage(session);
     await session.settlePublications();
 
     // The snapshot store subscribed at session construction is the one
-    // accumulator; the tracker's total is its per-run sum for the stream.
+    // accumulator; the tracker's total is its per-run sum for the run.
     expect(tracker.totalUsage.inputTokens).toBe(20);
     expect(tracker.totalUsage.outputTokens).toBe(40);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.02);
@@ -78,7 +79,7 @@ describe('subscribeStatusBarSessionEvents', () => {
     dispose();
   });
 
-  it('skips the refresh for usage on streams not in flight', async () => {
+  it('skips the refresh for usage on runs not in flight', async () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 

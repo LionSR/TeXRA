@@ -16,7 +16,7 @@ import {
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type {
   SessionEvent,
-  StreamTabId,
+  RunId,
   ToolEditApprovalAction,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -233,10 +233,10 @@ export class ToolEditApprovalController {
   }
 
   /** Approve requests already awaiting the user on one stream. */
-  async approvePendingForStream(streamId: StreamTabId): Promise<void> {
+  async approvePendingForRun(runId: RunId): Promise<void> {
     const staged: PendingToolEditApproval[] = [];
     for (const state of this.requests.values()) {
-      if (state.request.streamId !== streamId) continue;
+      if (state.request.runId !== runId) continue;
       if (state.phase === 'initializing') {
         state.resolution ??= {
           action: 'apply',
@@ -256,7 +256,7 @@ export class ToolEditApprovalController {
     for (const state of [...this.requests.values()]) {
       if (
         !matchesCancelSelector(
-          { kind: 'toolEdit', streamId: state.request.streamId ?? undefined },
+          { kind: 'toolEdit', runId: state.request.runId ?? undefined },
           selector,
         )
       ) {

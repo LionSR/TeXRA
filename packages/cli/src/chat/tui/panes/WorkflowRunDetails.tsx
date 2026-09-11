@@ -23,7 +23,7 @@ import {
   WARNING,
 } from '@cli/tui/ui/glyphs';
 import {
-  STREAM_PHASE,
+  RUN_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
   fileLocationDisplayPath,
   outputDiffCounts,
@@ -38,9 +38,9 @@ import {
 } from '@shared/schemas';
 import {
   formatRoundStageLabel,
-  formatStreamStatusLabel,
-} from '@shared/streams/streamStatusDisplay';
-import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
+  formatRunStatusLabel,
+} from '@shared/runs/runStatusDisplay';
+import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 type WorkflowRunDetailTone =
@@ -73,10 +73,10 @@ interface WorkflowRunDetailGroup {
 }
 
 const TASK_GROUP_APPEARANCE = {
-  [STREAM_PHASE.RUNNING]: { marker: STATUS_DOT, tone: 'hint' },
-  [STREAM_PHASE.COMPLETED]: { marker: TICK, tone: 'success' },
-  [STREAM_PHASE.CANCELLED]: { marker: SKIP_CIRCLE, tone: 'muted' },
-  [STREAM_PHASE.FAILED]: { marker: CROSS, tone: 'error' },
+  [RUN_PHASE.RUNNING]: { marker: STATUS_DOT, tone: 'hint' },
+  [RUN_PHASE.COMPLETED]: { marker: TICK, tone: 'success' },
+  [RUN_PHASE.CANCELLED]: { marker: SKIP_CIRCLE, tone: 'muted' },
+  [RUN_PHASE.FAILED]: { marker: CROSS, tone: 'error' },
 } as const satisfies Record<
   TaskGroupStatus,
   { readonly marker: string; readonly tone: WorkflowRunDetailTone }
@@ -103,12 +103,12 @@ function taskGroupLine(
       : '';
   return {
     key: `group:${group.id}`,
-    // A task group's status is a StreamPhase, so it is worded with the stream
+    // A task group's status is a RunPhase, so it is worded with the stream
     // vocabulary — the same one the progress view's group icon announces.
     // WORKFLOW_TASK_STATUS_LABEL words a workflow *call* ('Finished',
     // 'Saved result'), which is a different thing that happens to share four
     // key names with this one.
-    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(status)}${duration}`,
+    text: `${appearance.marker} ${safeTerminalText(label)} ${formatRunStatusLabel(status)}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };
@@ -119,8 +119,8 @@ function lifecyclePriority(
   currentRound: boolean,
   planned: boolean,
 ): number {
-  if (status === STREAM_PHASE.FAILED) return 0;
-  if (status === STREAM_PHASE.RUNNING) return 1;
+  if (status === RUN_PHASE.FAILED) return 0;
+  if (status === RUN_PHASE.RUNNING) return 1;
   if (currentRound) return 2;
   if (!planned) return 3;
   return 5;

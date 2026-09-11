@@ -8,13 +8,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
-  type StreamTabId,
+  type RunId,
   type ToolResult,
 } from '@shared/schemas';
 import {
@@ -46,9 +46,9 @@ function prepareBashApprovalPrompt(
   request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {
-  const streamId = request.streamId ?? undefined;
-  const isBypassed = streamId
-    ? (session ?? currentSession()).approvals.bash.bypass.isBypassed(streamId)
+  const runId = request.runId ?? undefined;
+  const isBypassed = runId
+    ? (session ?? currentSession()).approvals.bash.bypass.isBypassed(runId)
     : false;
   const cwd = request.cwd?.trim();
   return {
@@ -56,7 +56,7 @@ function prepareBashApprovalPrompt(
     command: request.command,
     ...(cwd && { cwd }),
     allowBypass: !isBypassed,
-    streamId: streamId ?? '',
+    runId: runId ?? '',
   };
 }
 
@@ -67,14 +67,14 @@ export async function requestBashApproval(
 
   const context = tryUseRunContext();
   const session = currentSession();
-  const streamId = request.streamId ?? getRunContextStreamId(context);
-  const isStreamBypassed = Boolean(
-    streamId && session.approvals.bash.bypass.isBypassed(streamId),
+  const runId = request.runId ?? getRunContextRunId(context);
+  const isRunBypassed = Boolean(
+    runId && session.approvals.bash.bypass.isBypassed(runId),
   );
   const decision = decideTexraApproval({
     policy: session.approvalPolicy,
     promptRequired: approvalsEnabled,
-    scopedBypass: isStreamBypassed,
+    scopedBypass: isRunBypassed,
     canPresent: context?.approvalPromptsUnavailable !== true,
   });
 
@@ -92,9 +92,9 @@ export async function requestBashApproval(
   const hostRequest: Omit<HostBashApprovalRequest, 'permission'> = {
     command: request.command,
     ...(request.cwd && { cwd: request.cwd }),
-    streamId,
+    runId,
   };
-  return session.approvals.bash.enqueue(streamId, {
+  return session.approvals.bash.enqueue(runId, {
     prompt: () =>
       session.interactions.requestBashApproval({
         ...hostRequest,

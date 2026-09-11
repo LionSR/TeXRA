@@ -14,7 +14,7 @@ import { durableFinalizationResult } from './agentStorageFixtures';
  * Importing this module registers the mock for the importing suite. Suites
  * needing only the default durable result use the side-effect import; suites
  * asserting on `finalizeRun` — or needing more than the finalization
- * edge, e.g. `getExecutionStore` — keep a local `vi.mock('@agent/storage',
+ * edge, e.g. `getRunStore` — keep a local `vi.mock('@agent/storage',
  * ...)` (the `WorkflowRunCommand` pattern, using
  * {@link durableFinalizationResult} for the default) and must not import this
  * module: the two registrations would race. Vitest gives each test file a

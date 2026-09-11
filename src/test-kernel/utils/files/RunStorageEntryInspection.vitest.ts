@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { errnoError } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
@@ -16,7 +16,7 @@ import {
 } from '@utils/files/runStorageFs';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-const executionId = 'abcdef123456' as ExecutionId;
+const runId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');
 const workspaceRoot = path.resolve(path.sep, 'workspace');
 const originalStat = StorageFS.stat;
@@ -25,7 +25,7 @@ const originalFullPath = StorageFS.fullPath;
 setupPlatform({ storagePath: storageRoot, workspacePath: workspaceRoot });
 
 function primaryEntry(...segments: string[]): string {
-  return path.posix.join('executions', executionId, ...segments);
+  return path.posix.join('executions', runId, ...segments);
 }
 
 function storagePath(...segments: string[]): string {
@@ -62,14 +62,14 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(executionId, 'r1\\draft.tex'),
+      inspectRunStorageEntry(runId, 'r1\\draft.tex'),
     ).resolves.toEqual({
       kind: 'file',
       location: {
         kind: 'runStorage',
-        absolutePath: storagePath('executions', executionId, 'r1', 'draft.tex'),
+        absolutePath: storagePath('executions', runId, 'r1', 'draft.tex'),
         relativePath: 'r1/draft.tex',
-        executionId,
+        runId,
       },
     });
   });
@@ -84,7 +84,7 @@ describe('inspectRunStorageEntry', () => {
       StorageFS.stat = async () => fileStat(type);
 
       await expect(
-        inspectRunStorageEntry(executionId, 'result.tex'),
+        inspectRunStorageEntry(runId, 'result.tex'),
       ).resolves.toMatchObject({ kind });
     },
   );
@@ -94,14 +94,14 @@ describe('inspectRunStorageEntry', () => {
       throw missing(target);
     };
 
+    await expect(inspectRunStorageEntry(runId, 'missing.tex')).resolves.toEqual(
+      { kind: 'missing' },
+    );
     await expect(
-      inspectRunStorageEntry(executionId, 'missing.tex'),
-    ).resolves.toEqual({ kind: 'missing' });
-    await expect(
-      inspectRunStorageEntry(executionId, '../outside.tex'),
+      inspectRunStorageEntry(runId, '../outside.tex'),
     ).resolves.toMatchObject({ kind: 'invalid' });
     await expect(
-      inspectRunStorageEntry(executionId, '/outside.tex'),
+      inspectRunStorageEntry(runId, '/outside.tex'),
     ).resolves.toMatchObject({ kind: 'invalid' });
   });
 
@@ -123,10 +123,10 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(executionId, 'r1/link/result.tex'),
+      inspectRunStorageEntry(runId, 'r1/link/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
-      absolutePath: storagePath('executions', executionId, 'r1', 'link'),
+      absolutePath: storagePath('executions', runId, 'r1', 'link'),
     });
   });
 
@@ -144,10 +144,10 @@ describe('inspectRunStorageEntry', () => {
     };
 
     await expect(
-      inspectRunStorageEntry(executionId, 'dangling/result.tex'),
+      inspectRunStorageEntry(runId, 'dangling/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
-      absolutePath: storagePath('executions', executionId, 'dangling'),
+      absolutePath: storagePath('executions', runId, 'dangling'),
     });
     expect(inspected).not.toContain(primaryEntry('dangling', 'result.tex'));
   });
@@ -157,19 +157,19 @@ describe('inspectRunStorageEntry', () => {
       throw Object.assign(new Error('Denied'), { code: 'EACCES' });
     };
 
-    await expect(
-      inspectRunStorageEntry(executionId, 'result.tex'),
-    ).rejects.toThrow('Denied');
+    await expect(inspectRunStorageEntry(runId, 'result.tex')).rejects.toThrow(
+      'Denied',
+    );
   });
 
-  it('recovers execution identity from absolute run-storage paths', () => {
+  it('recovers run identity from absolute run-storage paths', () => {
     expect(
       runStorageLocationFromAnyAbsolutePath(
-        storagePath('executions', executionId, 'r2', 'result.tex'),
+        storagePath('executions', runId, 'r2', 'result.tex'),
       ),
     ).toMatchObject({
       kind: 'runStorage',
-      executionId,
+      runId,
       relativePath: 'r2/result.tex',
     });
     expect(
@@ -180,7 +180,7 @@ describe('inspectRunStorageEntry', () => {
   });
 
   it('preserves source provenance instead of treating workspace inputs as outputs', () => {
-    const fileService = new TaskRunFileService(executionId);
+    const fileService = new TaskRunFileService(runId);
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',
@@ -189,11 +189,11 @@ describe('inspectRunStorageEntry', () => {
     });
     expect(
       fileService.locateSource(
-        storagePath('executions', executionId, 'r1', 'draft.tex'),
+        storagePath('executions', runId, 'r1', 'draft.tex'),
       ),
     ).toMatchObject({
       kind: 'runStorage',
-      executionId,
+      runId,
       relativePath: 'r1/draft.tex',
     });
   });

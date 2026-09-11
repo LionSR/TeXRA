@@ -15,20 +15,19 @@ import { redactSecrets } from '@logger/redaction';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
-  STREAM_PHASE,
+  RUN_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
-  type ExecutionId,
-  type StreamPhase,
-  type StreamTabId,
+  type RunId,
+  type RunPhase,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
-  type StreamView,
+  type RunView,
 } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -53,11 +52,11 @@ export type WorkflowPlainSession = Pick<
 >;
 
 export interface RunProgressRenderer {
-  /** Follow the session's view; `executionId` names the run to describe
+  /** Follow the session's view; `runId` names the run to describe
    *  (the first root run the view gains after attach, when omitted). */
   attach(
     session: RunProgressSession,
-    options?: { readonly executionId?: ExecutionId },
+    options?: { readonly runId?: RunId },
   ): () => void;
   clear(): void;
   preserve(): void;
@@ -100,20 +99,20 @@ export function createRunProgressRenderer(
 }
 
 /**
- * The run a headless renderer describes: the stream of the named execution,
+ * The run a headless renderer describes: the stream of the named run,
  * or the first top-level stream created after the renderer attached (the
  * view cursor it read then). Claimed once by each renderer; a child's later
  * appearance never moves it.
  */
-function claimRootStream(
+function claimRootRun(
   view: SessionView,
-  wantedExecutionId: ExecutionId | undefined,
+  wantedRunId: RunId | undefined,
   attachCursor: number,
-): StreamTabId | undefined {
-  const candidates = [...view.streams.values()].filter((stream) =>
-    wantedExecutionId !== undefined
-      ? stream.executionId === wantedExecutionId
-      : stream.parentId === null && stream.createdAt > attachCursor,
+): RunId | undefined {
+  const candidates = [...view.runs.values()].filter((run) =>
+    wantedRunId !== undefined
+      ? run.id === wantedRunId
+      : run.parentId === null && run.createdAt > attachCursor,
   );
   candidates.sort((a, b) => a.createdAt - b.createdAt);
   return candidates.at(0)?.id;
@@ -148,11 +147,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private view: SessionView | undefined;
-  private rootStreamId: StreamTabId | undefined;
-  private wantedExecutionId: ExecutionId | undefined;
+  private rootRunId: RunId | undefined;
+  private wantedRunId: RunId | undefined;
   private attachCursor = 0;
   /** The last root phase the renderer painted; a repeat is not a change. */
-  private paintedPhase: StreamPhase | undefined;
+  private paintedPhase: RunPhase | undefined;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -173,9 +172,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   attach(
     session: RunProgressSession,
-    options: { readonly executionId?: ExecutionId } = {},
+    options: { readonly runId?: RunId } = {},
   ): () => void {
-    this.wantedExecutionId = options.executionId;
+    this.wantedRunId = options.runId;
     this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
     const detach = followView(session, (view) => this.applyView(view));
     return () => {
@@ -200,10 +199,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private root(): StreamView | undefined {
-    return this.rootStreamId
-      ? this.view?.streams.get(this.rootStreamId)
-      : undefined;
+  private root(): RunView | undefined {
+    return this.rootRunId ? this.view?.runs.get(this.rootRunId) : undefined;
   }
 
   private get rootStreamTerminal(): boolean {
@@ -213,16 +210,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    this.rootStreamId ??= claimRootStream(
-      view,
-      this.wantedExecutionId,
-      this.attachCursor,
-    );
+    this.rootRunId ??= claimRootRun(view, this.wantedRunId, this.attachCursor);
     const root = this.root();
     if (!root) return;
     const wasTerminal = isTerminalOutcomePhase(
-      previous && this.rootStreamId
-        ? previous.streams.get(this.rootStreamId)?.status
+      previous && this.rootRunId
+        ? previous.runs.get(this.rootRunId)?.status
         : undefined,
     );
     const phase = root.status;
@@ -234,11 +227,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.render(phaseChanged || this.rootStreamTerminal);
   }
 
-  private liveChildren(): readonly StreamView[] {
+  private liveChildren(): readonly RunView[] {
     const root = this.root();
     if (!root || this.rootStreamTerminal) return [];
     return root.childIds.flatMap((childId) => {
-      const child = this.view?.streams.get(childId);
+      const child = this.view?.runs.get(childId);
       return child && !isTerminalOutcomePhase(child.status) ? [child] : [];
     });
   }
@@ -259,7 +252,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private updateHeartbeat(): void {
-    if (this.rootStreamTerminal || !this.rootStreamId) {
+    if (this.rootStreamTerminal || !this.rootRunId) {
       this.stopHeartbeat();
       return;
     }
@@ -353,9 +346,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
 /** The fold's label (G4, one table) for every state but a running run,
  *  whose live task is its description once the AI one-liner has arrived. */
-function livePhaseText(root: StreamView): string | undefined {
+function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;
-  if (root.status === STREAM_PHASE.RUNNING) {
+  if (root.status === RUN_PHASE.RUNNING) {
     return root.description ?? root.statusLabel;
   }
   return root.statusLabel;
@@ -370,12 +363,12 @@ function formatInputLabel(files: readonly string[]): string | undefined {
 
 /** The named agent children (a process child has no agent to name). */
 function formatActiveChildren(
-  children: readonly StreamView[],
+  children: readonly RunView[],
   descriptionColumns: number,
 ): string | undefined {
   const agents = children.filter((child) => child.identity?.kind === 'agent');
   const first =
-    agents.find((child) => child.status === STREAM_PHASE.RUNNING) ?? agents[0];
+    agents.find((child) => child.status === RUN_PHASE.RUNNING) ?? agents[0];
   if (!first) return undefined;
   const label = pluralize(agents.length, 'subagent');
   const suffix = agents.length > 1 ? ` +${agents.length - 1}` : '';
@@ -408,16 +401,16 @@ function isMultiRound(rounds: number | undefined): rounds is number {
 
 interface WorkflowPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
-   *  stream created after attach: the output prints the workflow streams
+   *  stream created after attach: the output prints the workflow runs
    *  under it. */
-  readonly executionId?: ExecutionId;
+  readonly runId?: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
 
 /** The lines one workflow-script stream's view level says: phase headings,
  *  task lines, log lines, and its outcome, keyed by the row they come from. */
-function workflowPlainLines(stream: StreamView): ReadonlyMap<string, string> {
+function workflowPlainLines(stream: RunView): ReadonlyMap<string, string> {
   const lines = new Map<string, string>();
   const run = stream.transcript.run;
   for (const phase of run?.phases ?? []) {
@@ -455,8 +448,8 @@ function workflowPlainLines(stream: StreamView): ReadonlyMap<string, string> {
 /**
  * The plain-text workflow progress of `texra run` (text output): what
  * `transcript.run` and the stream's rows say, printed as they change
- * between consecutive view levels (PRD 10.3), for the workflow streams in
- * the launched execution's subtree. A line prints when its entry is new or
+ * between consecutive view levels (PRD 10.3), for the workflow runs in
+ * the launched run's subtree. A line prints when its entry is new or
  * reads differently than at the previous level; nothing here folds, gates,
  * or relabels.
  */
@@ -464,15 +457,15 @@ export function attachWorkflowPlainOutput(
   session: WorkflowPlainSession,
   options: WorkflowPlainOutputOptions,
 ): () => void {
-  const previous = new Map<StreamTabId, ReadonlyMap<string, string>>();
+  const previous = new Map<RunId, ReadonlyMap<string, string>>();
   let subscribed = '';
-  let rootStreamId: StreamTabId | undefined;
+  let rootRunId: RunId | undefined;
   const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
   const write = (line: string): void => {
     options.beforeWrite?.();
     options.writeLine(line);
   };
-  const printStream = (stream: StreamView): void => {
+  const printStream = (stream: RunView): void => {
     const before = previous.get(stream.id);
     const lines = workflowPlainLines(stream);
     previous.set(stream.id, lines);
@@ -481,21 +474,21 @@ export function attachWorkflowPlainOutput(
     }
   };
   const detach = followView(session, (view) => {
-    for (const streamId of [...previous.keys()]) {
-      if (!view.streams.has(streamId)) previous.delete(streamId);
+    for (const runId of [...previous.keys()]) {
+      if (!view.runs.has(runId)) previous.delete(runId);
     }
     // The view also holds every earlier run hydrated from the transcript
     // summary; only the launched run's own subtree is this run's output.
-    rootStreamId ??= claimRootStream(view, options.executionId, attachCursor);
-    const root = rootStreamId;
+    rootRunId ??= claimRootRun(view, options.runId, attachCursor);
+    const root = rootRunId;
     const rootedIds =
       root === undefined
         ? undefined
-        : new Set(descendantStreams(view, root, { includeRoot: true }));
+        : new Set(descendantRuns(view, root, { includeRoot: true }));
     const workflows =
       rootedIds === undefined
         ? []
-        : [...view.streams.values()].filter(
+        : [...view.runs.values()].filter(
             (stream) =>
               stream.identity?.kind === 'multiAgentWorkflow' &&
               rootedIds.has(stream.id),

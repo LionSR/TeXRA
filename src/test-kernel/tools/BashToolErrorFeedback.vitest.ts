@@ -151,7 +151,7 @@ describe('BashTool error feedback', () => {
     },
   );
 
-  it('rejects shell-level backgrounding before command execution', async () => {
+  it('rejects shell-level backgrounding before command run', async () => {
     stubBashApprovalDisabled();
     const executeSpy = vi.spyOn(execUtils, 'executeCommand');
 

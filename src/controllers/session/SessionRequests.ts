@@ -8,7 +8,7 @@
  * and ahead of every fold), so a stop issued the moment a launch exposes its
  * stream is admitted; a stream with no row is `Unavailable`, never a defect
  * (a second surface can act from a view that has not yet folded a
- * `stream.removed`). Ownership comes from that same current sequence row:
+ * `run.removed`). Ownership comes from that same current sequence row:
  * a foreign claim
  * without a death proof is `NotOwner`. Display residency and historical
  * event writers never establish present ownership. A collaborator that
@@ -32,9 +32,9 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ExecutionBusy } from '@agent/runtime/executionLanes';
+import { RunBusy } from '@agent/runtime/runLanes';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
-import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
+import type { LocalRuntimeState, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
@@ -56,7 +56,7 @@ const done: Outcome = { kind: 'done' };
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'readAll' | 'removeStream'
+  'aggregateState' | 'readAll' | 'removeRun'
 >;
 
 /** The session's request handler, admitting on the log's sequence table. */
@@ -74,26 +74,26 @@ export function sessionRequests(
       Effect.provideService(InquiryRecords, inquiryRecords),
     );
   });
-  const removeStream = Effect.fn('SessionRequests.removeStream')(function* (
-    streamId: StreamTabId,
+  const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
+    runId: RunId,
     mode: DeletionMode,
     expectedStartCommit: number,
   ) {
     const admitted = yield* admit(log, local, {
-      kind: 'stream.delete',
-      streamId,
+      kind: 'run.delete',
+      runId,
     });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
         new Unavailable({
-          streamId,
+          runId,
           reason: 'The run changed after it was listed.',
         }),
       );
     }
-    return yield* deleteAdmittedStream(session, log, streamId, admitted, mode);
+    return yield* deleteAdmittedRun(session, log, runId, admitted, mode);
   });
-  return { request, removeStream };
+  return { request, removeRun };
 }
 
 /** Admit against current sequence-row existence and claims. A foreign owner
@@ -104,11 +104,10 @@ function admit(
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   req: RuntimeRequest,
 ): Effect.Effect<AggregateState, RequestError> {
-  // The stream a request acts on.
-  const streamId =
-    req.kind === 'policy.set' ? req.change.streamId : req.streamId;
+  // The run a request acts on.
+  const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
-    log.aggregateState([qualifyAggregateId('stream', streamId)]).pipe(
+    log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
       Effect.orDie,
       Effect.map((rows) => rows[0]),
     ),
@@ -116,19 +115,19 @@ function admit(
       if (!state || state.closed) {
         return Effect.fail(
           new Unavailable({
-            streamId,
+            runId,
             reason: 'The stream is no longer open.',
           }),
         );
       }
       const liveness = SubscriptionRef.getUnsafe(local);
       if (
-        req.kind !== 'stream.delete' &&
+        req.kind !== 'run.delete' &&
         state.ownerId !== null &&
         !liveness.self.includes(state.ownerId) &&
         !liveness.dead.includes(state.ownerId)
       ) {
-        return Effect.fail(new NotOwner({ streamId }));
+        return Effect.fail(new NotOwner({ runId }));
       }
       return Effect.succeed(state);
     },
@@ -136,9 +135,9 @@ function admit(
 }
 
 /** A decision for a request no longer pending: settled already, or never made. */
-function settled(streamId: StreamTabId, what: string): Unavailable {
+function settled(runId: RunId, what: string): Unavailable {
   return new Unavailable({
-    streamId,
+    runId,
     reason: `No pending ${what} request under that id.`,
   });
 }
@@ -176,20 +175,20 @@ function proposalDecision(
   }
 }
 
-/** Delete the admitted lifetime after acquiring its inactive execution slot. */
-function deleteAdmittedStream(
+/** Delete the admitted lifetime after acquiring its inactive run slot. */
+function deleteAdmittedRun(
   session: SessionHandle,
   log: SessionRequestLog,
-  streamId: StreamTabId,
+  runId: RunId,
   admitted: AggregateState,
   mode: DeletionMode,
 ): Effect.Effect<Outcome, RequestError> {
-  const aggregateId = qualifyAggregateId('stream', streamId);
+  const aggregateId = qualifyAggregateId('run', runId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
       return yield* Effect.fail(
         new Unavailable({
-          streamId: streamId,
+          runId,
           reason: 'The stream has no recorded start.',
         }),
       );
@@ -200,32 +199,32 @@ function deleteAdmittedStream(
     if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
       return yield* Effect.fail(
         new Unavailable({
-          streamId: streamId,
+          runId,
           reason: 'The stream start could not be read.',
         }),
       );
     }
-    yield* session.executions
-      .withInactiveExecutionStep(
-        start.executionId,
-        log.removeStream(aggregateId, mode, start.commit),
+    yield* session.runs
+      .withInactiveRunStep(
+        runId,
+        log.removeRun(aggregateId, mode, start.commit),
       )
       .pipe(
         Effect.mapError((error): RequestError => {
-          if (error instanceof ExecutionBusy) return new NotOwner({ streamId });
+          if (error instanceof RunBusy) return new NotOwner({ runId });
           if (
             error instanceof DatabaseWriteFailed &&
             error.cause instanceof DatabaseClaimRefused
           ) {
             return error.cause.verdict === 'alive'
-              ? new NotOwner({ streamId })
+              ? new NotOwner({ runId })
               : new Rejected({
                   reason:
                     'The current owner could not be verified, so automatic or bulk deletion was refused.',
                 });
           }
           return new Unavailable({
-            streamId,
+            runId,
             reason: 'The stream could not be removed from the listing.',
           });
         }),
@@ -241,23 +240,17 @@ function handle(
   admitted: AggregateState,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   switch (req.kind) {
-    case 'stream.stop':
+    case 'run.stop':
       return Effect.suspend(() =>
-        session.executions.stopAgentStream(req.streamId, {
+        session.runs.stopAgentRun(req.runId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
         }),
       ).pipe(Effect.as(done), Effect.uninterruptible);
-    case 'stream.delete':
-      return deleteAdmittedStream(
-        session,
-        log,
-        req.streamId,
-        admitted,
-        'single',
-      );
-    case 'stream.compact':
+    case 'run.delete':
+      return deleteAdmittedRun(session, log, req.runId, admitted, 'single');
+    case 'run.compact':
       return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
-        const result = session.executions.requestManualCompaction(req.streamId);
+        const result = session.runs.requestManualCompaction(req.runId);
         switch (result.kind) {
           case 'requested':
             return Effect.succeed(done);
@@ -271,7 +264,7 @@ function handle(
           case 'no_active_tool_use':
             return Effect.fail(
               new Unavailable({
-                streamId: req.streamId,
+                runId: req.runId,
                 reason: 'No active tool-use session found for this stream.',
               }),
             );
@@ -279,7 +272,7 @@ function handle(
       });
     case 'followUp.send':
       return submitFollowUp(
-        req.streamId,
+        req.runId,
         {
           text: req.text,
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
@@ -292,7 +285,7 @@ function handle(
           result.status === 'failed'
             ? Effect.fail(
                 new Unavailable({
-                  streamId: req.streamId,
+                  runId: req.runId,
                   reason: result.reason,
                 }),
               )
@@ -318,7 +311,7 @@ function handle(
               },
         )
           ? Effect.succeed(done)
-          : Effect.fail(settled(req.streamId, 'bash approval')),
+          : Effect.fail(settled(req.runId, 'bash approval')),
       );
     case 'decision.plan':
       return Effect.suspend(() =>
@@ -328,7 +321,7 @@ function handle(
           planDecision(req.decision),
         )
           ? Effect.succeed(done)
-          : Effect.fail(settled(req.streamId, 'plan approval')),
+          : Effect.fail(settled(req.runId, 'plan approval')),
       );
     case 'decision.proposal':
       return Effect.suspend(() =>
@@ -338,7 +331,7 @@ function handle(
           proposalDecision(req.decision),
         )
           ? Effect.succeed(done)
-          : Effect.fail(settled(req.streamId, 'proposal')),
+          : Effect.fail(settled(req.runId, 'proposal')),
       );
     case 'decision.userQuestion':
       return Effect.suspend(() =>
@@ -353,7 +346,7 @@ function handle(
               },
         )
           ? Effect.succeed(done)
-          : Effect.fail(settled(req.streamId, 'user question')),
+          : Effect.fail(settled(req.runId, 'user question')),
       );
     case 'decision.retry':
       // A rejection from the run's client preparation is a handler defect,
@@ -377,7 +370,7 @@ function handle(
         Effect.flatMap((accepted) =>
           accepted
             ? Effect.succeed(done)
-            : Effect.fail(settled(req.streamId, 'retry')),
+            : Effect.fail(settled(req.runId, 'retry')),
         ),
       );
     case 'externalInquiry.submit':
@@ -407,7 +400,7 @@ function handle(
             ? Effect.succeed(done)
             : Effect.fail(
                 new Unavailable({
-                  streamId: req.streamId,
+                  runId: req.runId,
                   reason: 'This inquiry turn is no longer open.',
                 }),
               ),
@@ -419,19 +412,19 @@ function handle(
         switch (change.bypass) {
           case 'bash':
             session.approvals.bash.bypass.setBypass(
-              change.streamId,
+              change.runId,
               change.enabled,
             );
             break;
           case 'toolEdit':
             session.approvals.toolEdit.bypass.setBypass(
-              change.streamId,
+              change.runId,
               change.enabled,
             );
             break;
           case 'superYolo':
             session.approvals.setDelegatedWorkBypasses(
-              change.streamId,
+              change.runId,
               change.enabled,
             );
             break;
@@ -441,12 +434,12 @@ function handle(
     case 'workflow.control':
       // A settled call, or an id no live run of this session owns, acted on
       // nothing: the surface hears that, never a `done`.
-      return session.workflowControls.control(req.executionId, req.action)
+      return session.workflowControls.control(req.childRunId, req.action)
         ? Effect.succeed(done)
         : Effect.fail(
             new Unavailable({
-              streamId: req.streamId,
-              reason: 'No live call under that execution id.',
+              runId: req.runId,
+              reason: 'No live call under that run id.',
             }),
           );
   }

@@ -4,7 +4,7 @@ import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type ExecutionId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
@@ -18,7 +18,7 @@ export interface SlashCommandContext {
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
   readonly canSelectModel: () => boolean;
   readonly resetSession: () => void;
-  readonly resumeExecution: (id: ExecutionId) => Promise<void>;
+  readonly resumeRun: (id: RunId) => Promise<void>;
 }
 
 /** Output boundary shared by direct slash dispatch and busy form submission. */

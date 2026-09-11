@@ -119,8 +119,8 @@ export { getHelperModelName } from './helperModelName';
 // textConnection
 export { agentResponseTextConnector } from './textConnection';
 
-// ExecutionHandle
-export type { AgentRunHandle } from './ExecutionHandle';
+// RunHandle
+export type { AgentRunHandle } from './RunHandle';
 
 // bundledPrompts
 export { initializeBundledPrompts } from './bundledPrompts';

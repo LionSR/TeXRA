@@ -4,9 +4,9 @@
  * controls a run without a chat offers instead of a composer.
  *
  * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
- * streams the model joins by row, the stream's `readOnly` and
+ * runs the model joins by row, the stream's `readOnly` and
  * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
- * surface's phase, groups, and focus. Dispatches `workflow.control` and `stream.stop` runtime
+ * surface's phase, groups, and focus. Dispatches `workflow.control` and `run.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
  * it holds no state of its own. The host passes its clock as `nowMs` (G4).
  */
@@ -21,7 +21,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type {
   AgentCategory,
   PermissionPayload,
-  StreamTabId,
+  RunId,
   WorkflowCallProgress,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
@@ -29,7 +29,7 @@ import type { WorkflowTaskRow } from '@shared/transcript';
 import type {
   ApprovalRequest,
   SessionView,
-  StreamView,
+  RunView,
 } from '@shared/session/sessionView';
 import {
   resolvePhase,
@@ -45,7 +45,7 @@ import {
   type WorkflowPhaseRow,
   type WorkflowRowGroup,
   type WorkflowRunModel,
-} from '@shared/streams/workflowRunModel';
+} from '@shared/runs/workflowRunModel';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
@@ -68,8 +68,8 @@ import '@awesome.me/webawesome/dist/components/tab-group/tab-group.js';
 import '@awesome.me/webawesome/dist/components/tab/tab.js';
 import '@awesome.me/webawesome/dist/components/tab-panel/tab-panel.js';
 
-type WorkflowStreamView = Extract<
-  StreamView,
+type WorkflowRunView = Extract<
+  RunView,
   { readonly category: typeof AgentCategory.Workflow }
 >;
 
@@ -166,7 +166,7 @@ function groupKey(phaseKey: string, group: WorkflowRowGroup): string {
 export class WorkflowRunBoard extends LitElement {
   static override styles = [designTokens, workflowRunBoardStyles];
 
-  @property({ attribute: false }) stream!: WorkflowStreamView;
+  @property({ attribute: false }) stream!: WorkflowRunView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
   /** The host's clock; null shows no elapsed time. */
@@ -191,19 +191,19 @@ export class WorkflowRunBoard extends LitElement {
   }
 
   /** The child a card opened, when the model resolved one. */
-  private childOf(rowId: string): StreamView | undefined {
-    const childId = this.run?.childStreamOf.get(rowId);
-    return childId === undefined ? undefined : this.view.streams.get(childId);
+  private childOf(rowId: string): RunView | undefined {
+    const childId = this.run?.childRunOf.get(rowId);
+    return childId === undefined ? undefined : this.view.runs.get(childId);
   }
 
   /** The stream under `stream` that is asking: itself on `own`, else the
    *  first descendant the fold marked, following `descendant` down. */
-  private askingStream(stream: StreamView): StreamView | undefined {
+  private askingRun(stream: RunView): RunView | undefined {
     if (stream.approval === 'own') return stream;
     if (stream.approval !== 'descendant') return undefined;
     for (const childId of stream.childIds) {
-      const child = this.view.streams.get(childId);
-      const asking = child === undefined ? undefined : this.askingStream(child);
+      const child = this.view.runs.get(childId);
+      const asking = child === undefined ? undefined : this.askingRun(child);
       if (asking) return asking;
     }
     return undefined;
@@ -213,9 +213,9 @@ export class WorkflowRunBoard extends LitElement {
    *  descendant's: the one fact the buckets, the badge, and the row read. */
   private approvalOf(rowId: string): ApprovalRequest | undefined {
     const child = this.childOf(rowId);
-    const asking = child === undefined ? undefined : this.askingStream(child);
+    const asking = child === undefined ? undefined : this.askingRun(child);
     if (!asking) return undefined;
-    return this.view.approvals.find((entry) => entry.streamId === asking.id);
+    return this.view.approvals.find((entry) => entry.runId === asking.id);
   }
 
   private waiting(rowId: string): boolean {
@@ -297,22 +297,22 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'workflow.control',
-        streamId: child.id,
-        executionId: child.executionId,
+        runId: this.stream.id,
+        childRunId: child.id,
         action,
       }),
     );
   }
 
-  private select(streamId: StreamTabId): void {
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
+  private select(runId: RunId): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
   }
 
   private handleTabShow(event: CustomEvent<{ name: string }>): void {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'phase',
-        streamId: this.stream.id,
+        runId: this.stream.id,
         phase: event.detail.name,
       }),
     );
@@ -322,7 +322,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'group',
-        streamId: this.stream.id,
+        runId: this.stream.id,
         key,
         expanded,
       }),
@@ -332,8 +332,8 @@ export class WorkflowRunBoard extends LitElement {
   private killRun(): void {
     this.dispatchEvent(
       SessionUiEvents.runtime({
-        kind: 'stream.stop',
-        streamId: this.stream.id,
+        kind: 'run.stop',
+        runId: this.stream.id,
       }),
     );
   }
@@ -363,7 +363,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'phase',
-        streamId: this.stream.id,
+        runId: this.stream.id,
         phase: next.phase,
       }),
     );
@@ -462,8 +462,8 @@ export class WorkflowRunBoard extends LitElement {
    *  or skips. */
   private renderActions(
     row: WorkflowTaskRow,
-    child: StreamView | undefined,
-    asking: StreamTabId | undefined,
+    child: RunView | undefined,
+    asking: RunId | undefined,
   ): TemplateResult | typeof nothing {
     if (asking !== undefined) {
       return html`<span class="row-actions"
@@ -531,12 +531,12 @@ export class WorkflowRunBoard extends LitElement {
     const waiting = approval !== undefined;
     // A card opens its child; a waiting card opens the stream asking, which
     // is the child or one of its descendants.
-    const target = approval?.streamId ?? child?.id;
+    const target = approval?.runId ?? child?.id;
     const meta = this.rowMeta(row);
     const last = waiting
       ? approvalLine(approval.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
-    const actions = this.renderActions(row, child, approval?.streamId);
+    const actions = this.renderActions(row, child, approval?.runId);
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div

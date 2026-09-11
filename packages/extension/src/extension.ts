@@ -7,7 +7,7 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache, listExecutions } from '@agent/storage';
+import { clearStoreCache, listRuns } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
   agentResponseTextConnector,
@@ -181,7 +181,7 @@ async function initVscodePlatform(
       lifecycle,
       agentDirectories,
       agentResume: {
-        tryResumeStream: tryResumeFromResumeData,
+        tryResumeRun: tryResumeFromResumeData,
       },
       ...extras,
     }),
@@ -543,10 +543,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => effectRuntime().runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    afterExecutionSettlement: [
-      () => clearStoreCache(),
-      () => disposeDiffRefresh(),
-    ],
+    afterRunSettlement: [() => clearStoreCache(), () => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
@@ -596,7 +593,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential(),
         effectRuntime()
-          .runPromise(listExecutions(defaultSession()))
+          .runPromise(listRuns(defaultSession()))
           .then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {
@@ -789,7 +786,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   apiKeyStatusBarItem.name = 'TeXRA Setup';
   context.subscriptions.push(apiKeyStatusBarItem);
   const apiKeyStatusRefreshQueue = new PQueue({ concurrency: 1 });
-  // Serial execution ensures the last refresh sees the newest credential
+  // Serial run ensures the last refresh sees the newest credential
   // state and is the last one to update the UI. `add` widens to
   // `T | void` to cover abort via signal/timeout; we pass neither, so the
   // task always runs and resolves with `void`.
@@ -842,7 +839,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   };
   const updateStatusBarText = () => {
     if (!statusBarItem) return;
-    const count = statusBarUsageTracker.activeStreamCount;
+    const count = statusBarUsageTracker.activeRunCount;
     if (count > 1) {
       statusBarItem.text = `$(loading~spin) TeXRA: ${count} active`;
       statusBarItem.accessibilityInformation = {
@@ -868,7 +865,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       updateStatusBarText();
     },
     // The snapshot store accumulates the per-round deltas; the tracker
-    // projects the running streams' totals from it on each refresh.
+    // projects the running runs' totals from it on each refresh.
     onUsageChanged: updateStatusBarTooltip,
   });
   // Paint the policy line immediately; otherwise the tooltip shows the

@@ -8,6 +8,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   aggregateId,
   isTranscriptEvent,
+  type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
@@ -16,15 +17,16 @@ import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const STREAM = 'chat#ab12cd';
+const RUN = 'ab12cd' as RunId;
+const OTHER_RUN = 'bb34ef' as RunId;
 const start: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: aggregateId('stream', STREAM),
-  executionId: 'ab12cd',
+  aggregateId: aggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: 'toolUse',
   isRemote: false,
+  parent: null,
 };
 const substrate = databaseLayer('ephemeral').pipe(
   Layer.provide(
@@ -81,11 +83,11 @@ describe('StreamLogStore event reads', () => {
               debug: row.transcriptDebug ?? false,
             });
         }
-        expect(store.has(STREAM)).toBe(true);
-        expect(yield* store.readEntries(STREAM)).toEqual(live.toJSON());
-        expect(store.get(STREAM)).toBeUndefined();
-        yield* store.ensureLoaded(STREAM);
-        expect(store.get(STREAM)?.toJSON()).toEqual(live.toJSON());
+        expect(store.has(RUN)).toBe(true);
+        expect(yield* store.readEntries(RUN)).toEqual(live.toJSON());
+        expect(store.get(RUN)).toBeUndefined();
+        yield* store.ensureLoaded(RUN);
+        expect(store.get(RUN)?.toJSON()).toEqual(live.toJSON());
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -97,12 +99,12 @@ describe('StreamLogStore event reads', () => {
         yield* database.appendAll(history);
         const store = yield* StreamLogStore.open(database);
         yield* database.appendAll([
-          { type: 'stream.removed', aggregateId: start.aggregateId },
+          { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
-        expect(yield* store.hasAuthoritativeStream(STREAM)).toBe(false);
-        expect(yield* store.readEntries(STREAM)).toEqual([]);
-        yield* store.ensureLoaded(STREAM);
-        expect(store.has(STREAM)).toBe(false);
+        expect(yield* store.hasAuthoritativeRun(RUN)).toBe(false);
+        expect(yield* store.readEntries(RUN)).toEqual([]);
+        yield* store.ensureLoaded(RUN);
+        expect(store.has(RUN)).toBe(false);
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -123,19 +125,17 @@ describe('StreamLogStore event reads', () => {
               return yield* database.readAggregate(id, seq);
             }),
         });
-        const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
-        );
+        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
         yield* Deferred.await(entered);
-        store.requestEviction(STREAM);
+        store.requestEviction(RUN);
         yield* Deferred.succeed(release, undefined);
         const writer = yield* Fiber.join(loading);
-        expect(store.get(STREAM)?.head).toBeGreaterThan(0);
-        const successor = yield* store.acquireRunResidency(STREAM, 'execution');
+        expect(store.get(RUN)?.head).toBeGreaterThan(0);
+        const successor = yield* store.acquireRunResidency(RUN);
         writer.close();
-        expect(store.get(STREAM)).toBeDefined();
+        expect(store.get(RUN)).toBeDefined();
         successor.close();
-        expect(store.get(STREAM)).toBeUndefined();
+        expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -157,9 +157,7 @@ describe('StreamLogStore event reads', () => {
               return captured;
             }),
         });
-        const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
-        );
+        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
         yield* Deferred.await(entered);
         const suffix = yield* database.appendAll([
           {
@@ -177,12 +175,10 @@ describe('StreamLogStore event reads', () => {
         yield* Deferred.succeed(release, undefined);
         const writer = yield* Fiber.join(loading);
         yield* Fiber.join(tail);
-        expect(store.get(STREAM)?.toJSON()).toEqual(
-          yield* store.readEntries(STREAM),
-        );
+        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
         expect(
           store
-            .get(STREAM)
+            .get(RUN)
             ?.toJSON()
             .filter((entry) => entry.text === 'Committed during hydration'),
         ).toHaveLength(1);
@@ -198,7 +194,7 @@ describe('StreamLogStore event reads', () => {
         yield* database.appendAll(history);
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const other = aggregateId('stream', 'chat#other');
+        const other = aggregateId('run', OTHER_RUN);
         const store = yield* StreamLogStore.open({
           readListing: database.readListing,
           readAggregate: (id, seq) =>
@@ -210,9 +206,7 @@ describe('StreamLogStore event reads', () => {
               return yield* database.readAggregate(id, seq);
             }),
         });
-        const blocking = yield* Effect.forkChild(
-          store.ensureLoaded('chat#other'),
-        );
+        const blocking = yield* Effect.forkChild(store.ensureLoaded(OTHER_RUN));
         yield* Deferred.await(entered);
         const suffix = yield* database.appendAll([
           {
@@ -224,17 +218,13 @@ describe('StreamLogStore event reads', () => {
         ]);
         const tail = yield* Effect.forkChild(store.acceptCommitted(suffix[0]!));
         yield* Effect.yieldNow;
-        const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
-        );
+        const loading = yield* Effect.forkChild(store.acquireRunResidency(RUN));
         yield* Effect.yieldNow;
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(blocking);
         yield* Fiber.join(tail);
         const writer = yield* Fiber.join(loading);
-        expect(store.get(STREAM)?.toJSON()).toEqual(
-          yield* store.readEntries(STREAM),
-        );
+        expect(store.get(RUN)?.toJSON()).toEqual(yield* store.readEntries(RUN));
         writer.close();
       }).pipe(Effect.provide(substrate)),
   );
@@ -247,14 +237,14 @@ describe('StreamLogStore event reads', () => {
         const store = yield* StreamLogStore.open(database);
         const rows = yield* database.appendAll(history);
         yield* Effect.forEach(rows, (row) => store.acceptCommitted(row));
-        expect(store.has(STREAM)).toBe(true);
-        yield* store.ensureLoaded(STREAM);
+        expect(store.has(RUN)).toBe(true);
+        yield* store.ensureLoaded(RUN);
         const removed = yield* database.appendAll([
-          { type: 'stream.removed', aggregateId: start.aggregateId },
+          { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
         yield* Effect.forEach(removed, (row) => store.acceptCommitted(row));
-        expect(store.has(STREAM)).toBe(false);
-        expect(store.get(STREAM)).toBeUndefined();
+        expect(store.has(RUN)).toBe(false);
+        expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -263,18 +253,18 @@ describe('StreamLogStore event reads', () => {
       const database = yield* Database;
       yield* database.appendAll(history);
       const store = yield* StreamLogStore.open(database);
-      const first = yield* store.ensureLoaded(STREAM, {
+      const first = yield* store.ensureLoaded(RUN, {
         retainForPresentation: true,
       });
-      const second = yield* store.ensureLoaded(STREAM, {
+      const second = yield* store.ensureLoaded(RUN, {
         retainForPresentation: true,
       });
       first.close();
       first.close();
-      expect(store.get(STREAM)).toBeDefined();
+      expect(store.get(RUN)).toBeDefined();
       second.close();
-      expect(store.get(STREAM)).toBeUndefined();
-      expect(yield* store.readEntries(STREAM)).not.toEqual([]);
+      expect(store.get(RUN)).toBeUndefined();
+      expect(yield* store.readEntries(RUN)).not.toEqual([]);
     }).pipe(Effect.provide(substrate)),
   );
 });

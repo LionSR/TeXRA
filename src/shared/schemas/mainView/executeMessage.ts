@@ -11,9 +11,9 @@ const MainViewExecuteFilesSchema = z.object({
 });
 
 /**
- * Payload from the main view for agent execution. The IPC dispatcher adds the
+ * Payload from the main view for agent run. The IPC dispatcher adds the
  * command discriminant separately; keeping the payload schema command-free
- * matches the browser-side builder and the execution controller.
+ * matches the browser-side builder and the run controller.
  */
 const MainViewExecuteMessageSchema = z.object({
   agent: z.string().optional(),
@@ -33,7 +33,7 @@ const MainViewExecuteMessageSchema = z.object({
         })
         .nullish(),
       // Team runs send team identity only; hosts resolve the roster at the
-      // execution boundary where catalog/auth state is authoritative.
+      // run boundary where catalog/auth state is authoritative.
       launchTarget: LaunchTargetSchema.nullish(),
       teamId: z.string().nullish(),
     })

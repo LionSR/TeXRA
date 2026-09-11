@@ -8,16 +8,14 @@ export function executionsAction(input: Record<string, unknown>): string {
   return action || EXECUTIONS_DEFAULT_ACTION;
 }
 
-export type ExecutionLabels = ReadonlyMap<string, string>;
+export type RunLabels = ReadonlyMap<string, string>;
 
-interface ExecutionPathTarget {
+interface RunPathTarget {
   id: string;
   resourceSuffix: string;
 }
 
-function executionTargetFromPath(
-  path: unknown,
-): ExecutionPathTarget | undefined {
+function runTargetFromPath(path: unknown): RunPathTarget | undefined {
   if (typeof path !== 'string') return undefined;
   const segments = path.split('/').filter(Boolean);
   if (segments[0] !== 'executions' || segments.length < 2) return undefined;
@@ -39,15 +37,15 @@ function executionTargetFromPath(
  */
 export function executionsSubagentSummary(
   input: unknown,
-  labels: ExecutionLabels,
+  labels: RunLabels,
 ): string | undefined {
   if (!isObject(input)) return undefined;
 
   const listedIds = Array.isArray(input.ids)
     ? input.ids.filter((id): id is string => typeof id === 'string' && !!id)
     : [];
-  const pathTarget = executionTargetFromPath(input.path);
-  const targets: ExecutionPathTarget[] = listedIds.map((id) => ({
+  const pathTarget = runTargetFromPath(input.path);
+  const targets: RunPathTarget[] = listedIds.map((id) => ({
     id,
     resourceSuffix: '',
   }));

@@ -24,16 +24,10 @@ describe('agent shutdown', () => {
     const firstSession = createTestSession();
     const secondSession = createTestSession();
     const compatibilitySession = defaultSession();
-    const firstDrain = vi.spyOn(
-      firstSession.executions,
-      'killBackgroundProcesses',
-    );
-    const secondDrain = vi.spyOn(
-      secondSession.executions,
-      'killBackgroundProcesses',
-    );
+    const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
+    const secondDrain = vi.spyOn(secondSession.runs, 'killBackgroundProcesses');
     const compatibilityDrain = vi.spyOn(
-      compatibilitySession.executions,
+      compatibilitySession.runs,
       'killBackgroundProcesses',
     );
     // Session-keyed registries: only sessions whose registry exists are swept.
@@ -68,11 +62,9 @@ describe('agent shutdown', () => {
   it('preserves the shared shutdown order around host hooks', async () => {
     const session = createTestSession();
     const order: string[] = [];
-    vi.spyOn(session.executions, 'killBackgroundProcesses').mockImplementation(
-      () => {
-        order.push('agent-shutdown');
-      },
-    );
+    vi.spyOn(session.runs, 'killBackgroundProcesses').mockImplementation(() => {
+      order.push('agent-shutdown');
+    });
 
     try {
       const lifecycle = createLifecycleHost();
@@ -82,7 +74,7 @@ describe('agent shutdown', () => {
         afterAgentShutdown: [() => void order.push('after-agent')],
         flushArtifacts: () => void order.push('flush'),
         afterFlushArtifacts: [() => void order.push('after-flush')],
-        afterExecutionSettlement: [() => void order.push('after-settle')],
+        afterRunSettlement: [() => void order.push('after-settle')],
       });
 
       await lifecycle.runShutdown();

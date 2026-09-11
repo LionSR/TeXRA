@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 
 // ============================================================================
 // Identifiers + session links (canonical home)
@@ -33,7 +33,8 @@ export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
 const InquiryThreadSummarySchema = z.object({
   threadId: InquiryThreadIdSchema,
-  parentStreamId: StreamTabIdSchema.nullable(),
+  /** The run the last question was asked under; continuations flow back to it. */
+  parentRunId: RunIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   lastQuestionPreview: z.string(),
   lastActivityIso: z.iso.datetime(),
@@ -140,22 +141,14 @@ const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
 
 const InquiryThreadRecordShape = {
   threadId: InquiryThreadIdSchema,
-  parentStreamId: StreamTabIdSchema.nullable(),
-  /**
-   * The execution the last question was asked under. A continuation is
-   * addressed to it: a stream re-run under a new execution never receives
-   * an answer meant for the old one.
-   */
-  parentExecutionId: ExecutionIdSchema.nullable(),
+  /** The run the last question was asked under; a continuation is addressed to it. */
+  parentRunId: RunIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   turns: z.array(ExternalInquiryTurnRecordSchema),
 };
 
-/**
- * Canonical thread record: explicit `status` + `parentStreamId` +
- * `parentExecutionId`.
- */
+/** Canonical thread record: explicit `status` + the asking run. */
 export const InquiryThreadRecordSchema = z.object(InquiryThreadRecordShape);
 export type InquiryThreadRecord = z.infer<typeof InquiryThreadRecordSchema>;

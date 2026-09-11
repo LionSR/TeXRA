@@ -37,7 +37,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -66,19 +66,19 @@ import {
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
-import { sweepLeftoverStreams } from './sweepLeftoverStreams';
-import { applyCommittedStreamRemoval } from './applyCommittedStreamRemoval';
+import { sweepLeftoverRuns } from './sweepLeftoverRuns';
+import { applyCommittedRunRemoval } from './applyCommittedRunRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -124,10 +124,10 @@ class Session extends Context.Service<Session, SessionHandle>()(
   '@texra/session/Session',
 ) {}
 
-/** The owner ids of the non-terminal streams another process wrote. */
+/** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   const owners = new Set<OwnerId>();
-  for (const stream of view.streams.values()) {
+  for (const stream of view.runs.values()) {
     if (
       stream.ownerId !== null &&
       stream.ownerId !== self &&
@@ -266,10 +266,10 @@ const sessionHandleLayer = (
         });
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
-        publishText: (streamId, id, text) =>
+        publishText: (runId, id, text) =>
           SubscriptionRef.update(chunks.ref, (held) => {
             const next = new Map(held);
-            const key = `${streamId}/${id}`;
+            const key = `${runId}/${id}`;
             const previous = next.get(key);
             next.set(key, {
               previous,
@@ -278,9 +278,9 @@ const sessionHandleLayer = (
             });
             return next;
           }),
-        readText: (streamId, id) => {
+        readText: (runId, id) => {
           let chunk = SubscriptionRef.getUnsafe(chunks.ref).get(
-            `${streamId}/${id}`,
+            `${runId}/${id}`,
           );
           if (chunk === undefined) return undefined;
           const pieces: string[] = [];
@@ -290,34 +290,22 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
-        acquireExecutionClaims: (executionId, streamId) =>
+        acquireRunClaims: (runId) =>
+          eventLog.acquireClaims([qualifyAggregateId('run', runId)]).pipe(
+            Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
+            Effect.orDie,
+          ),
+        releaseRunClaims: (runId) =>
           eventLog
-            .acquireClaims([
-              qualifyAggregateId('stream', streamId),
-              qualifyAggregateId('execution', executionId),
-            ])
-            .pipe(
-              Effect.map((ids) =>
-                eventLog.releaseClaims(ids).pipe(Effect.orDie),
-              ),
-              Effect.orDie,
-            ),
-        releaseExecutionClaims: (executionId) =>
-          Effect.gen(function* () {
-            const id = qualifyAggregateId('execution', executionId);
-            const rows = yield* eventLog.aggregateState([id]);
-            const parent = rows[0]?.parentId;
-            yield* eventLog.releaseClaims(
-              parent === undefined || parent === null ? [id] : [id, parent],
-            );
-          }).pipe(Effect.orDie),
-        executionRecords: (id) =>
-          eventLog
-            .readExecutionRecords(qualifyAggregateId('execution', id))
+            .releaseClaims([qualifyAggregateId('run', runId)])
             .pipe(Effect.orDie),
-        executionChildren: (id) =>
+        runRecords: (id) =>
           eventLog
-            .readExecutionChildren(qualifyAggregateId('execution', id))
+            .readRunRecords(qualifyAggregateId('run', id))
+            .pipe(Effect.orDie),
+        runChildren: (id) =>
+          eventLog
+            .readRunChildren(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         recordListing: () => eventLog.readListing().pipe(Effect.orDie),
         publish: (events) =>
@@ -326,12 +314,7 @@ const sessionHandleLayer = (
           Effect.gen(function* () {
             const rows = yield* publish(events);
             const born = rows.flatMap((row) =>
-              row.type === 'run.start'
-                ? [
-                    row.aggregateId,
-                    qualifyAggregateId('execution', row.executionId),
-                  ]
-                : [],
+              row.type === 'run.start' ? [row.aggregateId] : [],
             );
             return yield* settlePublication(rows).pipe(
               Effect.onError(() =>
@@ -388,7 +371,7 @@ const sessionHandleLayer = (
             new SessionHandle({
               ...key.open,
               transcripts,
-              snapshots: new StreamSnapshotStore(eventLog),
+              snapshots: new RunSnapshotStore(eventLog),
               graph,
             }),
         ),
@@ -419,14 +402,12 @@ const sessionHandleLayer = (
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
           session.receiveCommittedEvent(event).pipe(
-            Effect.andThen(() =>
-              event.type === 'stream.removed'
-                ? applyCommittedStreamRemoval(
-                    session,
-                    aggregateTarget(event.aggregateId).id,
-                  )
-                : Effect.void,
-            ),
+            Effect.andThen(() => {
+              const target = aggregateTarget(event.aggregateId);
+              return event.type === 'run.removed' && target.kind === 'run'
+                ? applyCommittedRunRemoval(session, target.id)
+                : Effect.void;
+            }),
             Effect.andThen(
               event.type === 'stream.end'
                 ? SubscriptionRef.update(chunks.ref, (held) => {
@@ -444,7 +425,7 @@ const sessionHandleLayer = (
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
-      yield* sweepLeftoverStreams(session, initialListing).pipe(
+      yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
             log.warn('Background-shell cleanup failed.', {
@@ -589,27 +570,27 @@ const heldSession = (root: string) =>
   });
 
 /**
- * Resolve once every execution the registry holds has left it. Interrupting
+ * Resolve once every run the registry holds has left it. Interrupting
  * this fiber — which is what the close budget below does — detaches the
  * registry listeners with it, so a bounded wait leaves none behind. The
  * registry state is re-read once those listeners are attached, closing the
  * window between the read below and a registration the fiber only reaches a
  * scheduler step later: `raceAllFirst` starts its arms immediately and in
  * order, so the wait registers first and the re-check then sees a last
- * execution that left inside the window, instead of waiting out the whole
+ * run that left inside the window, instead of waiting out the whole
  * close budget for a notification that can no longer come. The loop reads
  * registry state only, so it needs no session scope of its own.
  */
-const untilSettled = (executions: ExecutionRegistry): Effect.Effect<void> =>
+const untilSettled = (runs: RunRegistry): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (;;) {
-      const active = executions.getActiveIds();
+      const active = runs.getActiveIds();
       if (active.length === 0) return;
       const alreadySettled = Effect.suspend(() =>
-        executions.getActiveIds().length === 0 ? Effect.void : Effect.never,
+        runs.getActiveIds().length === 0 ? Effect.void : Effect.never,
       );
       yield* Effect.raceAllFirst([
-        executions.waitForAnyChange(active).pipe(Effect.asVoid),
+        runs.waitForAnyChange(active).pipe(Effect.asVoid),
         alreadySettled,
       ]);
     }
@@ -630,7 +611,7 @@ const aborted = (signal: AbortSignal) =>
 
 /**
  * Close the session of one root (PR #11893, agent SDK architecture
- * proposal, section 9): refuse new executions, stop the root executions it
+ * proposal, section 9): refuse new runs, stop the root runs it
  * owns (the stop cascades into their children) and the children no root
  * owns any more (a native subagent detached from a stopped parent, between
  * turns), wait for their drivers to settle them inside one budget,
@@ -645,7 +626,7 @@ const aborted = (signal: AbortSignal) =>
  *
  * The whole close is uninterruptible, so the budget above is its one
  * cancellation channel: its first steps (closing admissions and killing the
- * root's executions) cannot be undone and its last (the artifact flush and
+ * root's runs) cannot be undone and its last (the artifact flush and
  * the entry's release) must still run, so a caller that races or times out
  * this effect must not be able to leave a session shut to new runs, its
  * artifacts unflushed and its entry never released. It does not mask the
@@ -659,8 +640,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const held = yield* heldSession(root);
     if (held === undefined) return NOTHING_TO_CLOSE;
     const { key, session } = held;
-    const { executions } = session;
-    executions.closeAdmissions();
+    const { runs } = session;
+    runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
     // writes its stores there. A child with a handle is stopped by its
@@ -668,12 +649,9 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // its kill interrupts the loop the registry retains for it.
     const termination = yield* Effect.forkDetach(
       Effect.all(
-        executions.getActiveIds().flatMap((executionId) => {
-          if (executions.getHandle(executionId)?.isChildExecution) return [];
-          return [
-            executions.kill(executionId, { detachActiveChildren: false })
-              .settlement,
-          ];
+        runs.getActiveIds().flatMap((runId) => {
+          if (runs.getHandle(runId)?.isChild) return [];
+          return [runs.kill(runId, { detachActiveChildren: false }).settlement];
         }),
         { concurrency: 'unbounded', discard: true },
       ),
@@ -682,7 +660,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The entry remains owned until waiting metadata finalization, not merely
     // handle removal, has completed as well as every live driver.
     const settled = Fiber.join(termination).pipe(
-      Effect.andThen(untilSettled(executions)),
+      Effect.andThen(untilSettled(runs)),
     );
     // One budget for the whole close: the caller's signal, else the phase
     // deadline, forked once so the flush below shares what settlement left.
@@ -693,12 +671,12 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       settled.pipe(Effect.as(true)),
       Fiber.join(budget).pipe(Effect.as(false)),
     );
-    const abandoned = executions.getActiveIds();
+    const abandoned = runs.getActiveIds();
     const release = didSettle
       ? sessions.invalidate(key)
       : Effect.sync(() =>
           log.warn(
-            `Session ${root} is closing with executions still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
+            `Session ${root} is closing with runs still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
           ),
         ).pipe(
           // Started now, so the wait holds its listener before this close

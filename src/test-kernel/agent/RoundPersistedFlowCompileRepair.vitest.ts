@@ -17,10 +17,10 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   type RunOutcome,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
-import { createFakeKv } from '@test/support/FakeExecutionKVStore';
+import { createFakeKv } from '@test/support/FakeRunKVStore';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
@@ -39,7 +39,7 @@ interface FakeShared extends RoundAwareState {
   failingRounds: number[];
   /** Round indices with an explicit successful compile result. */
   successfulRounds: number[];
-  /** Round indices after which execution should be cancelled. */
+  /** Round indices after which run should be cancelled. */
   cancellingRounds: number[];
   /** Durable rejection, separate from one-shot prompt feedback. */
   unresolvedCompileRejection?: boolean;
@@ -170,7 +170,7 @@ async function expectFlowDidNotResume(
   expect((await flow.getShared())?.roundsRun).toEqual([]);
   expect(stages).toEqual([]);
   await expect(
-    kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
+    kv.read<FlowRecord>(flowKey(kv.getRunId())),
   ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
 }
 
@@ -256,7 +256,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
     expect(outcome).toBe(RUN_OUTCOME.FAILED);
   });
 
-  it('persists unresolved rejection when execution crashes after prompt consumption', async () => {
+  it('persists unresolved rejection when run crashes after prompt consumption', async () => {
     const kv = createFakeKv();
     const prepare = new ConsumeCompileFeedbackNode();
     prepare.next(new CrashingRoundNode());
@@ -307,7 +307,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       compileFailureContext: 'compile failed on round 0',
       unresolvedCompileRejection: true,
     });
-    await kv.write(flowKey(kv.getExecutionId()), {
+    await kv.write(flowKey(kv.getRunId()), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: persisted,
       cursor: { nextNodeId: 'start' },
@@ -331,7 +331,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       compileFailureContext: 'compile failed on round 1',
       unresolvedCompileRejection: true,
     });
-    await kv.write(flowKey(kv.getExecutionId()), {
+    await kv.write(flowKey(kv.getRunId()), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: { ...persisted, compileRepairRoundGranted: true },
       cursor: { nextNodeId: 'start' },
@@ -350,7 +350,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       totalRounds: 3,
       unresolvedCompileRejection: true,
     });
-    await kv.write(flowKey(kv.getExecutionId()), {
+    await kv.write(flowKey(kv.getRunId()), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: persisted,
       cursor: { nextNodeId: 'start' },
@@ -372,7 +372,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       compileFailureContext: 'compile failed on round 0',
       unresolvedCompileRejection: true,
     });
-    await kv.write(flowKey(kv.getExecutionId()), {
+    await kv.write(flowKey(kv.getRunId()), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: persisted,
       cursor: { nextNodeId: null },
@@ -406,7 +406,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       },
     });
     const persisted = initialShared({ currentRound: 1, totalRounds: 2 });
-    await kv.write(flowKey(kv.getExecutionId()), {
+    await kv.write(flowKey(kv.getRunId()), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: persisted,
       cursor: { nextNodeId: 'start/resume', lastAction: 'resume' },
@@ -477,7 +477,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
     async ({ name, terminalOutcome, persistedOutcome }) => {
       const kv = createFakeKv();
       const logger = new TraceEmitter();
-      const streamId = `stream:reflection-round-${name}` as StreamTabId;
+      const runId = `stream:reflection-round-${name}` as RunId;
       const store = new StreamLog();
       const control: OutcomeControl = {
         terminalOutcome,
@@ -506,7 +506,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
         continueRounds: true,
       };
 
-      const recorder = attachTestTranscriptFold(logger, streamId, store);
+      const recorder = attachTestTranscriptFold(logger, runId, store);
 
       try {
         const run = flow.run(shared);

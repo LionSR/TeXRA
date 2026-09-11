@@ -25,13 +25,12 @@ import {
 } from '@platform/workspaceRoots';
 import type {
   CommitOrdinal,
-  ExecutionId,
+  RunId,
   LocalRuntimeState,
   SessionCloseReport,
   SessionEvent,
   TranscriptSubscription,
 } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
 import type { DeletionMode } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -47,28 +46,22 @@ export interface SessionGraph {
   readonly events: Omit<SessionEventsShape, 'publish'>;
   readonly publish: SessionEventsShape['publish'];
   readonly publishRegistration: SessionEventsShape['publish'];
-  /** Private execution metadata reads never enter display transport. */
-  readonly acquireExecutionClaims: (
-    executionId: ExecutionId,
-    streamId: StreamTabId,
+  /** The run's one claim, acquired before a resume reads or mutates. Private
+   *  record reads never enter display transport. */
+  readonly acquireRunClaims: (
+    runId: RunId,
   ) => Effect.Effect<Effect.Effect<void>>;
-  readonly releaseExecutionClaims: (
-    executionId: ExecutionId,
-  ) => Effect.Effect<void>;
-  readonly executionRecords: (
-    id: ExecutionId,
-  ) => Effect.Effect<readonly SessionEvent[]>;
-  readonly executionChildren: (
-    id: ExecutionId,
-  ) => Effect.Effect<readonly SessionEvent[]>;
+  readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
+  readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  readonly runChildren: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
-    streamId: StreamTabId,
+    runId: RunId,
     id: string,
     text: string,
   ) => Effect.Effect<void>;
-  readonly readText: (streamId: StreamTabId, id: string) => string | undefined;
+  readonly readText: (runId: RunId, id: string) => string | undefined;
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
@@ -94,8 +87,8 @@ export interface SessionGraph {
    *  (PRD 7.6, 8.2): answered exactly once, an outcome or a request error. */
   readonly requests: {
     /** Internal deletion policies share the same admission and transaction as user requests. */
-    readonly removeStream: (
-      streamId: StreamTabId,
+    readonly removeRun: (
+      runId: RunId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<Outcome, RequestError>;

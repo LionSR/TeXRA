@@ -6,7 +6,7 @@ import {
   aggregateTarget,
   isTranscriptEvent,
   type SessionEvent,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -20,21 +20,21 @@ export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
-interface StreamRunOwnership {
+interface RunOwnership {
   readonly ownerKey: string;
   readonly tokens: Set<symbol>;
 }
 type TranscriptResidencyLeaseReason = 'run' | 'focus';
 export interface TranscriptResidencyLease {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   close(): void;
 }
-interface StreamState {
+interface RunState {
   log?: StreamLog;
   fold?: ReturnType<typeof createTranscriptFold>;
   seq?: number;
   pins?: Set<TranscriptResidencyLeaseReason | symbol>;
-  runOwner?: StreamRunOwnership;
+  runOwner?: RunOwnership;
 }
 
 /** Apply one event with the same projection used by the live recorder. */
@@ -53,8 +53,8 @@ function applyEvent(
     });
 }
 
-function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
-  if (events.length === 0 || events.at(-1)?.type === 'stream.removed') return;
+function foldEntries(events: readonly SessionEvent[]): RunState | undefined {
+  if (events.length === 0 || events.at(-1)?.type === 'run.removed') return;
   if (events[0]?.type !== 'run.start' || events[0].seq !== 1) {
     throw new Error('A transcript read must begin with its creation row.');
   }
@@ -66,9 +66,9 @@ function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
 }
 
 export class StreamLogStore {
-  private readonly streams = new Map<StreamTabId, StreamState>();
-  private readonly known = new Set<StreamTabId>();
-  private readonly releaseRequests = new Set<StreamTabId>();
+  private readonly runs = new Map<RunId, RunState>();
+  private readonly known = new Set<RunId>();
+  private readonly releaseRequests = new Set<RunId>();
   private readonly gate = Semaphore.makeUnsafe(1);
 
   private constructor(
@@ -86,10 +86,10 @@ export class StreamLogStore {
       const store = new StreamLogStore(mode, database);
       for (const event of listing ?? (yield* database.readListing())) {
         const target = aggregateTarget(event.aggregateId);
-        if (target.kind !== 'stream') continue;
+        if (target.kind !== 'run') continue;
         const id = target.id;
         if (event.type === 'run.start') store.known.add(id);
-        else if (event.type === 'stream.removed') store.known.delete(id);
+        else if (event.type === 'run.removed') store.known.delete(id);
       }
       return store;
     });
@@ -103,56 +103,57 @@ export class StreamLogStore {
     return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
-  get(streamId: StreamTabId): StreamLog | undefined {
-    return this.streams.get(streamId)?.log;
+  get(runId: RunId): StreamLog | undefined {
+    return this.runs.get(runId)?.log;
   }
-  has(streamId: StreamTabId): boolean {
-    return this.known.has(streamId);
+  has(runId: RunId): boolean {
+    return this.known.has(runId);
   }
 
   /** Read a complete event prefix without changing residency. */
-  readEntries(streamId: StreamTabId) {
+  readEntries(runId: RunId) {
     return this.database === undefined
-      ? Effect.sync(() => this.get(streamId)?.toJSON() ?? [])
+      ? Effect.sync(() => this.get(runId)?.toJSON() ?? [])
       : this.database
-          .readAggregate(aggregateId('stream', streamId), 0)
+          .readAggregate(aggregateId('run', runId), 0)
           .pipe(
             Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []),
           );
   }
 
-  hasAuthoritativeStream(streamId: StreamTabId) {
+  hasAuthoritativeRun(runId: RunId) {
     return this.database === undefined
-      ? Effect.sync(() => this.has(streamId))
+      ? Effect.sync(() => this.has(runId))
       : this.database
-          .readAggregate(aggregateId('stream', streamId), 0)
+          .readAggregate(aggregateId('run', runId), 0)
           .pipe(
             Effect.map(
               (events) =>
-                events.length > 0 && events.at(-1)?.type !== 'stream.removed',
+                events.length > 0 && events.at(-1)?.type !== 'run.removed',
             ),
           );
   }
 
-  ensureStream(streamId: StreamTabId): void {
-    if (this.known.has(streamId)) return;
-    this.known.add(streamId);
-    this.ensureStreamState(streamId).log = new StreamLog();
+  ensureRun(runId: RunId): void {
+    if (this.known.has(runId)) return;
+    this.known.add(runId);
+    this.ensureRunState(runId).log = new StreamLog();
   }
 
-  requestEviction(streamId: StreamTabId): void {
+  requestEviction(runId: RunId): void {
     if (this.mode.kind === 'ephemeral') return;
-    this.releaseRequests.add(streamId);
-    const state = this.streams.get(streamId);
+    this.releaseRequests.add(runId);
+    const state = this.runs.get(runId);
     if (state) this.unpin(state, 'focus');
-    this.tryRelease(streamId);
+    this.tryRelease(runId);
   }
 
-  acquireRunResidency(streamId: StreamTabId, ownerKey: string) {
+  /** Retain a run's transcript for the run itself: the run is its own owner key. */
+  acquireRunResidency(runId: RunId) {
     return this.gate.withPermit(
       Effect.gen({ self: this }, function* () {
-        const residency = this.retainRun(streamId, ownerKey);
-        yield* this.loadEntries(streamId).pipe(
+        const residency = this.retainRun(runId, runId);
+        yield* this.loadEntries(runId).pipe(
           Effect.onError(() => Effect.sync(() => residency.close())),
         );
         return residency;
@@ -161,54 +162,53 @@ export class StreamLogStore {
   }
 
   ensureLoaded(
-    streamId: StreamTabId,
+    runId: RunId,
     options: { retainForPresentation: true },
   ): Effect.Effect<TranscriptResidencyLease, Error>;
-  ensureLoaded(streamId: StreamTabId): Effect.Effect<void, Error>;
+  ensureLoaded(runId: RunId): Effect.Effect<void, Error>;
   ensureLoaded(
-    streamId: StreamTabId,
+    runId: RunId,
     options?: { retainForPresentation: true },
   ): Effect.Effect<void | TranscriptResidencyLease, Error> {
     return Effect.gen({ self: this }, function* () {
       if (!options?.retainForPresentation) {
-        this.acquireLease(streamId, 'focus');
-        this.releaseRequests.delete(streamId);
-        yield* this.gate.withPermit(this.loadEntries(streamId));
+        this.acquireLease(runId, 'focus');
+        this.releaseRequests.delete(runId);
+        yield* this.gate.withPermit(this.loadEntries(runId));
         return;
       }
-      const token = Symbol(streamId);
-      const state = this.ensureStreamState(streamId);
+      const token = Symbol(runId);
+      const state = this.ensureRunState(runId);
       state.pins ??= new Set();
       state.pins.add(token);
       let closed = false;
       const close = () => {
         if (closed) return;
         closed = true;
-        const current = this.streams.get(streamId);
+        const current = this.runs.get(runId);
         if (current) this.unpin(current, token);
-        this.requestEviction(streamId);
-        this.pruneStreamState(streamId);
+        this.requestEviction(runId);
+        this.pruneRunState(runId);
       };
       yield* this.gate
-        .withPermit(this.loadEntries(streamId))
+        .withPermit(this.loadEntries(runId))
         .pipe(Effect.onError(() => Effect.sync(close)));
-      return { streamId, close };
+      return { runId, close };
     });
   }
 
-  private loadEntries(streamId: StreamTabId) {
+  private loadEntries(runId: RunId) {
     return Effect.gen({ self: this }, function* () {
-      if (this.get(streamId) !== undefined || this.database === undefined)
-        return;
+      if (this.get(runId) !== undefined || this.database === undefined) return;
       const entries = foldEntries(
-        yield* this.database.readAggregate(aggregateId('stream', streamId), 0),
+        yield* this.database.readAggregate(aggregateId('run', runId), 0),
       );
       if (entries === undefined) {
-        this.known.delete(streamId);
+        this.known.delete(runId);
         return;
       }
-      this.known.add(streamId);
-      Object.assign(this.ensureStreamState(streamId), entries);
+      this.known.add(runId);
+      Object.assign(this.ensureRunState(runId), entries);
     });
   }
 
@@ -217,16 +217,16 @@ export class StreamLogStore {
     return this.gate.withPermit(
       Effect.sync(() => {
         const target = aggregateTarget(event.aggregateId);
-        if (target.kind !== 'stream') return;
-        const streamId = target.id;
-        if (event.type === 'run.start') this.known.add(streamId);
-        if (event.type === 'stream.removed') {
-          this.streams.delete(streamId);
-          this.known.delete(streamId);
-          this.releaseRequests.delete(streamId);
+        if (target.kind !== 'run') return;
+        const runId = target.id;
+        if (event.type === 'run.start') this.known.add(runId);
+        if (event.type === 'run.removed') {
+          this.runs.delete(runId);
+          this.known.delete(runId);
+          this.releaseRequests.delete(runId);
           return;
         }
-        const state = this.streams.get(streamId);
+        const state = this.runs.get(runId);
         if (
           state === undefined ||
           (state.log === undefined && state.runOwner === undefined)
@@ -247,12 +247,12 @@ export class StreamLogStore {
   }
 
   /** Forget only the resident projection after committed deletion. */
-  delete(streamId: StreamTabId) {
+  delete(runId: RunId) {
     return this.gate.withPermit(
       Effect.sync(() => {
-        this.streams.delete(streamId);
-        this.known.delete(streamId);
-        this.releaseRequests.delete(streamId);
+        this.runs.delete(runId);
+        this.known.delete(runId);
+        this.releaseRequests.delete(runId);
       }),
     );
   }
@@ -260,108 +260,105 @@ export class StreamLogStore {
   clear() {
     return this.gate.withPermit(
       Effect.sync(() => {
-        this.streams.clear();
+        this.runs.clear();
         this.known.clear();
         this.releaseRequests.clear();
       }),
     );
   }
 
-  private retainRun(
-    streamId: StreamTabId,
-    ownerKey: string,
-  ): TranscriptResidencyLease {
+  private retainRun(runId: RunId, ownerKey: string): TranscriptResidencyLease {
     if (!ownerKey.trim()) {
       throw new Error(
         'Transcript run residency requires a non-empty owner key.',
       );
     }
 
-    const current = this.streams.get(streamId)?.runOwner;
+    const current = this.runs.get(runId)?.runOwner;
     if (current && current.ownerKey !== ownerKey) {
       throw new Error(
-        `Transcript stream ${streamId} is already owned by another run.`,
+        `Transcript run ${runId} is already owned by another run.`,
       );
     }
     const ownership =
-      current ?? ({ ownerKey, tokens: new Set() } satisfies StreamRunOwnership);
+      current ?? ({ ownerKey, tokens: new Set() } satisfies RunOwnership);
     const token = Symbol(ownerKey);
     ownership.tokens.add(token);
-    const runState = this.ensureStreamState(streamId);
+    const runState = this.ensureRunState(runId);
     runState.runOwner = ownership;
-    this.acquireLease(streamId, 'run');
+    this.acquireLease(runId, 'run');
     let closed = false;
 
     return {
-      streamId,
+      runId,
       close: () => {
         if (closed) return;
         closed = true;
-        const state = this.streams.get(streamId);
+        const state = this.runs.get(runId);
         if (!state || state.runOwner !== ownership) return;
         ownership.tokens.delete(token);
         if (ownership.tokens.size > 0) return;
         state.runOwner = undefined;
-        this.releaseLease(streamId, 'run');
+        this.releaseLease(runId, 'run');
       },
     };
   }
 
-  private pruneStreamState(streamId: StreamTabId): void {
-    const state = this.streams.get(streamId);
+  private pruneRunState(runId: RunId): void {
+    const state = this.runs.get(runId);
     if (
       state &&
       state.log === undefined &&
       (state.pins?.size ?? 0) === 0 &&
       state.runOwner === undefined
     ) {
-      this.streams.delete(streamId);
+      this.runs.delete(runId);
     }
   }
   private acquireLease(
-    streamId: StreamTabId,
+    runId: RunId,
     reason: TranscriptResidencyLeaseReason,
   ): void {
-    const state = this.ensureStreamState(streamId);
+    const state = this.ensureRunState(runId);
     state.pins ??= new Set();
     state.pins.add(reason);
   }
   private releaseLease(
-    streamId: StreamTabId,
+    runId: RunId,
     reason: TranscriptResidencyLeaseReason,
   ): void {
-    const state = this.streams.get(streamId);
+    const state = this.runs.get(runId);
     if (!state) return;
     this.unpin(state, reason);
-    this.tryRelease(streamId);
-    this.pruneStreamState(streamId);
+    this.tryRelease(runId);
+    this.pruneRunState(runId);
   }
   private unpin(
-    state: StreamState,
+    state: RunState,
     pin: TranscriptResidencyLeaseReason | symbol,
   ): void {
     state.pins?.delete(pin);
     if (state.pins?.size === 0) state.pins = undefined;
   }
-  private tryRelease(streamId: StreamTabId): void {
-    const state = this.streams.get(streamId);
+  private tryRelease(runId: RunId): void {
+    const state = this.runs.get(runId);
     if (
       this.mode.kind === 'ephemeral' ||
       !state ||
-      !this.releaseRequests.has(streamId) ||
+      !this.releaseRequests.has(runId) ||
       (state.pins?.size ?? 0) > 0
     )
       return;
     state.log = undefined;
     state.fold = undefined;
     state.seq = undefined;
-    this.pruneStreamState(streamId);
+    this.pruneRunState(runId);
   }
-  private ensureStreamState(streamId: StreamTabId): StreamState {
-    let state = this.streams.get(streamId);
+  private ensureRunState(runId: RunId): RunState {
+    let state = this.runs.get(runId);
     if (!state) {
       state = {};
-      this.streams.set(streamId, state);
+      this.runs.set(runId, state);
     }
     return state;
   }

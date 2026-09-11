@@ -1,5 +1,5 @@
 /**
- * CLI TUI shared signal store. All view-level state (streams, session,
+ * CLI TUI shared signal store. All view-level state (runs, session,
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
@@ -11,11 +11,11 @@ import {
 import {
   AgentCategory,
   type AgentDelegationScope,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
-import type { StreamView } from '@shared/session/sessionView';
-import { STREAM_GROUP_LABELS } from '@shared/streams/streamStatusDisplay';
-import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
+import type { RunView } from '@shared/session/sessionView';
+import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
+import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
 import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
@@ -25,7 +25,7 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
-// (one record per stream + an `activeStreamId`) so future feature parity is a
+// (one record per run + an `activeRunId`) so future feature parity is a
 // port, not a rewrite.
 
 /**
@@ -81,52 +81,51 @@ function defaultSessionMeta(): SessionMeta {
 // focusSlice
 // ---------------------------------------------------------------------------
 
-// Which stream is focused / rooted, and whether starting a new root run is
-// currently available. Focus moves only through `focusStream`;
-// stream-lifecycle side effects that touch these signals alongside others
-// (e.g. `removeStream`) live in the `removeStream` section below.
+// Which run is focused / rooted, and whether starting a new root run is
+// currently available. Focus moves only through `focusRun`;
+// run-lifecycle side effects that touch these signals alongside others
+// (e.g. `removeRun`) live in the `removeRun` section below.
 
-/** The Surface's selection as written by `focusStream`; renders read
- *  `selectedStreamId`, which resolves it against the view. */
-export const activeStreamId = signal<StreamTabId | undefined>(undefined);
+/** The Surface's selection as written by `focusRun`; renders read
+ *  `selectedRunId`, which resolves it against the view. */
+export const activeRunId = signal<RunId | undefined>(undefined);
 
 /**
- * The stream the transcript and status bar show: the Surface's selection
- * resolved against the view (PRD 9). The selected stream while the view
- * holds it; the first top-level stream once it has left; the selection
- * itself while the view holds no stream at all (the pre-run local
+ * The run the transcript and status bar show: the Surface's selection
+ * resolved against the view (PRD 9). The selected run while the view
+ * holds it; the first top-level run once it has left; the selection
+ * itself while the view holds no run at all (the pre-run local
  * conversation is a Surface-only id). A computed rather than an effect that
  * clears a stale selection, and a signal rather than a per-render derivation
  * so every component reads one answer.
  */
-export const selectedStreamId: Signal.Computed<StreamTabId | undefined> =
-  computed(() => {
-    const selected = activeStreamId.get();
+export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
+  () => {
+    const selected = activeRunId.get();
     const view = sessionView().get();
-    if (selected === undefined || view.streams.has(selected)) return selected;
-    return view.streams.size === 0 ? selected : view.order.at(0);
-  });
+    if (selected === undefined || view.runs.has(selected)) return selected;
+    return view.runs.size === 0 ? selected : view.order.at(0);
+  },
+);
 
 /**
- * Move transcript/status focus onto a stream. Sole focus writer: a stream
- * identity tombstoned by `removeStream`, or retired by `resetCliState`, is
+ * Move transcript/status focus onto a run. Sole focus writer: a run
+ * identity tombstoned by `removeRun`, or retired by `resetCliState`, is
  * never focused, so a fact that arrives after the row is gone cannot pull the
- * view onto a stream that no longer exists. `onlyIfUnset` is for the facts
+ * view onto a run that no longer exists. `onlyIfUnset` is for the facts
  * that adopt focus only while nothing holds it (the first log sync, the first
  * local transcript row).
  */
-export function focusStream(
-  streamId: StreamTabId,
+export function focusRun(
+  runId: RunId,
   options: { readonly onlyIfUnset?: boolean } = {},
 ): void {
-  if (options.onlyIfUnset && activeStreamId.get() !== undefined) return;
-  activeStreamId.set(streamId);
+  if (options.onlyIfUnset && activeRunId.get() !== undefined) return;
+  activeRunId.set(runId);
 }
 
 /** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
-export const expandedStreams = signal<ReadonlyMap<StreamTabId, boolean>>(
-  new Map(),
-);
+export const expandedRuns = signal<ReadonlyMap<RunId, boolean>>(new Map());
 
 export type SessionListRow =
   | {
@@ -134,8 +133,8 @@ export type SessionListRow =
       readonly label: string;
     }
   | {
-      readonly kind: 'stream';
-      readonly stream: StreamView;
+      readonly kind: 'run';
+      readonly run: RunView;
       readonly depth: number;
       readonly expanded: boolean;
     };
@@ -143,56 +142,55 @@ export type SessionListRow =
 /** The visible tree, including section headings, shared by the list and its shortcuts. */
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
-  const expanded = expandedStreams.get();
+  const expanded = expandedRuns.get();
   const rows: SessionListRow[] = [];
-  const groups: Record<StreamView['group'], StreamView[]> = {
+  const groups: Record<RunView['group'], RunView[]> = {
     running: [],
     waiting: [],
     interrupted: [],
     recent: [],
   };
   for (const id of view.order) {
-    const stream = view.streams.get(id)!;
-    groups[stream.group].push(stream);
+    const run = view.runs.get(id)!;
+    groups[run.group].push(run);
   }
-  const append = (stream: StreamView, depth: number): void => {
+  const append = (run: RunView, depth: number): void => {
     const open =
-      stream.category !== AgentCategory.Workflow &&
-      (stream.forceExpanded || expanded.get(stream.id) === true);
-    rows.push({ kind: 'stream', stream, depth, expanded: open });
+      run.category !== AgentCategory.Workflow &&
+      (run.forceExpanded || expanded.get(run.id) === true);
+    rows.push({ kind: 'run', run, depth, expanded: open });
     // A workflow's calls belong to its existing popup.
     if (open) {
-      for (const id of stream.childIds)
-        append(view.streams.get(id)!, depth + 1);
+      for (const id of run.childIds) append(view.runs.get(id)!, depth + 1);
     }
   };
-  for (const streams of Object.values(groups)) {
-    const first = streams.at(0);
+  for (const runs of Object.values(groups)) {
+    const first = runs.at(0);
     if (!first) continue;
-    rows.push({ kind: 'group', label: STREAM_GROUP_LABELS[first.group] });
-    for (const stream of streams) append(stream, 0);
+    rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
+    for (const run of runs) append(run, 0);
   }
   return rows;
 });
 
-/** Stream shortcuts follow the visible tree and skip section headings. */
-export const sessionListStreamIds = computed(() =>
+/** Run shortcuts follow the visible tree and skip section headings. */
+export const sessionListRunIds = computed(() =>
   sessionListRows
     .get()
-    .flatMap((row) => (row.kind === 'stream' ? [row.stream.id] : [])),
+    .flatMap((row) => (row.kind === 'run' ? [row.run.id] : [])),
 );
 
-/** The top-level stream the current session rooted at. */
-export const rootStreamId = signal<StreamTabId | undefined>(undefined);
+/** The top-level run the current session rooted at. */
+export const rootRunId = signal<RunId | undefined>(undefined);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
  *  run-state reactively instead of calling impure session closures that
  *  memoized renders would cache stale (#8273). */
 export const rootRunPending = signal<boolean>(false);
-/** Run-control mirror of `TuiSession.streamId` — cleared while a new run is
- *  pending, unlike `rootStreamId`, which stays put as the transcript anchor
+/** Run-control mirror of `TuiSession.runId` — cleared while a new run is
+ *  pending, unlike `rootRunId`, which stays put as the transcript anchor
  *  across pending windows. Published only by `TuiSession`. */
-export const rootRunStreamId = signal<StreamTabId | undefined>(undefined);
+export const claimedRunId = signal<RunId | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -246,24 +244,24 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/** Passive reader target. Holding the captured stream id rather than a text
+/** Passive reader target. Holding the captured run id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 interface WorkPlanReaderRequest {
   readonly revision: number;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
 }
 
 type ForegroundReaderTarget =
-  | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
-  | { readonly kind: 'workflow'; readonly streamId: StreamTabId }
+  | { readonly kind: 'transcript'; readonly runId: RunId }
+  | { readonly kind: 'workflow'; readonly runId: RunId }
   | {
       readonly kind: 'workPlan';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly loading?: false;
     }
   | {
       readonly kind: 'workPlan';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly loading: true;
       readonly requestRevision: number;
     };
@@ -271,19 +269,18 @@ type ForegroundReaderTarget =
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
 let WORK_PLAN_REQUEST_REVISION = 0;
 /** The open reader, resolved against the view like the selection: a reader
- *  whose stream has left the view is closed. */
+ *  whose run has left the view is closed. */
 export const foregroundReader: Signal.Computed<
   ForegroundReaderTarget | undefined
 > = computed(() => {
   const reader = FOREGROUND_READER.get();
-  return reader !== undefined &&
-    sessionView().get().streams.has(reader.streamId)
+  return reader !== undefined && sessionView().get().runs.has(reader.runId)
     ? reader
     : undefined;
 });
 
-export function openTranscriptReader(streamId: StreamTabId): void {
-  FOREGROUND_READER.set({ kind: 'transcript', streamId });
+export function openTranscriptReader(runId: RunId): void {
+  FOREGROUND_READER.set({ kind: 'transcript', runId });
 }
 
 /** View state of the workflow popup — which phase tab is open, which row is
@@ -308,25 +305,25 @@ const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
   filterEditing: false,
 };
 
-/** The view belongs to the workflow stream, not to the mounted reader:
+/** The view belongs to the workflow run, not to the mounted reader:
  *  closing the popup to look at one of its agents and coming back lands
  *  where the user left it; only a different workflow starts fresh. */
 const WORKFLOW_POPUP_VIEW = signal<{
-  readonly streamId: StreamTabId | undefined;
+  readonly runId: RunId | undefined;
   readonly view: WorkflowPopupView;
-}>({ streamId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
+}>({ runId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
 export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
   () => WORKFLOW_POPUP_VIEW.get().view,
 );
 
-/** Open the workflow popup on a workflow-script stream. A workflow is never
+/** Open the workflow popup on a workflow-script run. A workflow is never
  *  a viewport: this is the one way to look inside one (see
- *  `presentStream`). */
-export function openWorkflowPopup(streamId: StreamTabId): void {
-  if (WORKFLOW_POPUP_VIEW.get().streamId !== streamId) {
-    WORKFLOW_POPUP_VIEW.set({ streamId, view: INITIAL_WORKFLOW_POPUP_VIEW });
+ *  `presentRun`). */
+export function openWorkflowPopup(runId: RunId): void {
+  if (WORKFLOW_POPUP_VIEW.get().runId !== runId) {
+    WORKFLOW_POPUP_VIEW.set({ runId, view: INITIAL_WORKFLOW_POPUP_VIEW });
   }
-  FOREGROUND_READER.set({ kind: 'workflow', streamId });
+  FOREGROUND_READER.set({ kind: 'workflow', runId });
 }
 
 export function updateWorkflowPopupView(
@@ -338,12 +335,12 @@ export function updateWorkflowPopupView(
 
 /** Capture one `/plan` invocation as the sole owner of async reader output. */
 export function beginWorkPlanReaderRequest(
-  streamId: StreamTabId,
+  runId: RunId,
 ): WorkPlanReaderRequest {
-  const request = { streamId, revision: ++WORK_PLAN_REQUEST_REVISION };
+  const request = { runId, revision: ++WORK_PLAN_REQUEST_REVISION };
   FOREGROUND_READER.set({
     kind: 'workPlan',
-    streamId,
+    runId,
     loading: true,
     requestRevision: request.revision,
   });
@@ -357,7 +354,7 @@ export function workPlanReaderRequestIsCurrent(
   return (
     target?.kind === 'workPlan' &&
     target.loading === true &&
-    target.streamId === request.streamId &&
+    target.runId === request.runId &&
     target.requestRevision === request.revision
   );
 }
@@ -369,7 +366,7 @@ export function finishWorkPlanReaderRequest(
   if (!workPlanReaderRequestIsCurrent(request)) return false;
   FOREGROUND_READER.set({
     kind: 'workPlan',
-    streamId: request.streamId,
+    runId: request.runId,
   });
   return true;
 }
@@ -396,7 +393,7 @@ export function closeForegroundReader(): void {
 
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
- *  with stream-focus Tab. */
+ *  with run-focus Tab. */
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
@@ -549,17 +546,17 @@ export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
   sessionMeta.set(nextSessionMeta);
-  activeStreamId.set(undefined);
-  rootStreamId.set(undefined);
-  expandedStreams.set(new Map());
+  activeRunId.set(undefined);
+  rootRunId.set(undefined);
+  expandedRuns.set(new Map());
   rootRunPending.set(false);
-  rootRunStreamId.set(undefined);
+  claimedRunId.set(undefined);
   activeForm.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
   WORKFLOW_POPUP_VIEW.set({
-    streamId: undefined,
+    runId: undefined,
     view: INITIAL_WORKFLOW_POPUP_VIEW,
   });
   slashPaletteOpen.set(false);

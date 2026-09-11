@@ -8,7 +8,7 @@ import type {
   PendingApproval,
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
@@ -36,7 +36,7 @@ describe('CLI retry request', () => {
       kind: 'retry',
       data: {
         requestId: 'subscription-limit',
-        streamId: 'retry-stream' as StreamTabId,
+        runId: 'retry-stream' as RunId,
         operation: 'Tool-use call',
         errorMessage: 'ChatGPT subscription usage limit reached.',
         errorDetails: {
@@ -55,7 +55,7 @@ describe('CLI retry request', () => {
       kind: 'retry',
       data: {
         requestId: 'retry-request',
-        streamId: 'retry-stream' as StreamTabId,
+        runId: 'retry-stream' as RunId,
         operation: 'Model invocation',
         errorMessage: 'Connection error',
       },
@@ -86,7 +86,7 @@ describe('CLI retry request', () => {
           kind: 'retry',
           data: {
             requestId: 'tall-error',
-            streamId: 'retry-stream' as StreamTabId,
+            runId: 'retry-stream' as RunId,
             operation: 'Model invocation',
             errorMessage: Array.from(
               { length: 40 },

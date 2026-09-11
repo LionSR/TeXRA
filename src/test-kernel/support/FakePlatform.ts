@@ -618,7 +618,7 @@ export function createFakePlatform(
     },
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
-    agentResume: { tryResumeStream: async () => false },
+    agentResume: { tryResumeRun: async () => false },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,

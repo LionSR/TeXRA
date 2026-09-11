@@ -49,7 +49,7 @@ import {
   SignOutMessageSchema,
   UpdateProfileMessageSchema,
 } from './profileViewMessages';
-import { StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { SubscriptionUsageSnapshotsSchema } from './subscriptionUsage';
 import {
   DeleteMemoryMessageSchema,
@@ -475,7 +475,7 @@ const UpdateToolDashboardMessageSchema = z.object({
 // ============================================================
 
 /**
- * Outbound: backend → frontend snapshot of workspace execution permissions
+ * Outbound: backend → frontend snapshot of workspace run permissions
  * and safety.
  *
  * The command string predates the Codex, Claude, and tool-path controls it now
@@ -551,7 +551,7 @@ const UpdateSubscriptionUsageMessageSchema = z.object({
   snapshots: SubscriptionUsageSnapshotsSchema,
 });
 const PRSubscriptionOwnerSchema = z.object({
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
   label: z.string(),
 });
 
@@ -1014,7 +1014,7 @@ const UnsubscribePRMessageSchema = z.object({
 
 const OpenPRSubscriptionStreamMessageSchema = z.object({
   command: z.literal(CMD.OPEN_PR_SUBSCRIPTION_STREAM),
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
@@ -1062,9 +1062,9 @@ const UpdateStateSettingMessageSchema = z.object({
 // Settings-tab IPC is read-only: state transitions are owned by the
 // agent-side plan tool, not the user. Don't add mutation commands here.
 const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
-const RevealGoalStreamMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_GOAL_STREAM),
-  streamId: StreamTabIdSchema,
+const RevealGoalRunMessageSchema = z.object({
+  command: z.literal(CMD.REVEAL_GOAL_RUN),
+  runId: RunIdSchema,
 });
 
 // ============================================================
@@ -1146,7 +1146,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     DeleteAgentModePresetMessageSchema,
     // Goal settings-tab messages (read-only)
     GetGoalListMessageSchema,
-    RevealGoalStreamMessageSchema,
+    RevealGoalRunMessageSchema,
   ],
 );
 

@@ -37,7 +37,7 @@ export class ToolUsePrepareNode extends BaseNode<
     const promptOptions = {
       resolvedToolNames,
       hasDelegationTools,
-      isSubagent: this.services.isSubagent,
+      isSubagent: this.services.parentRunId !== undefined,
     };
     // `MODEL` comes from the run's ModelCell rather than the launch snapshot
     // baked into the channel, so a resume that rebuilds this prompt states the

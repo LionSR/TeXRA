@@ -10,7 +10,7 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -25,7 +25,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
-import { disposeAfterTest } from './desktopAgentExecutionTestHarness.ts';
+import { disposeAfterTest } from './desktopAgentRunTestHarness.ts';
 import {
   commandOf,
   createStubDesktopAgentSettingsController,
@@ -430,12 +430,12 @@ describe('desktop settings IPC', () => {
   describe('goal-list failures', () => {
     setupPlatform();
 
-    const streamId = 'stream:desktop-settings-goal-list' as StreamTabId;
-    const goalKey = `goals:byStream:${streamId}`;
+    const runId = 'd5e77105' as RunId;
+    const goalKey = `goals:byRun:${runId}`;
     const malformed = { goalId: 'not-valid' };
 
     async function seedMalformedGoal(): Promise<void> {
-      await workspaceRoots().workspaceState.update('goals:index', [streamId]);
+      await workspaceRoots().workspaceState.update('goals:index', [runId]);
       await workspaceRoots().workspaceState.update(goalKey, malformed);
     }
 
@@ -457,7 +457,7 @@ describe('desktop settings IPC', () => {
       expect(onError).toHaveBeenCalledOnce();
       expect(showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining(
-          `Failed to load goals: Failed to parse persisted goal for stream "${streamId}"`,
+          `Failed to load goals: Failed to parse persisted goal for run "${runId}"`,
         ),
       );
       expect(posted).not.toContainEqual(
@@ -491,13 +491,13 @@ describe('desktop settings IPC', () => {
     setupPlatform();
 
     it('reposts the goal list when a run mutates a goal', async () => {
-      const streamId = 'stream:desktop-settings-goal-push' as StreamTabId;
+      const runId = 'd5e77190' as RunId;
       const { posted, session } = createCapturedSettingsFixture();
-      publishTestRunStart(session, streamId);
+      publishTestRunStart(session, runId);
 
       // A run mutates goals inside its paper's session, as the desktop does.
       await runInSession(session, () =>
-        GoalStore.start(streamId, 'Finish the proof'),
+        GoalStore.start(runId, 'Finish the proof'),
       );
       await flushAsyncWork();
 
@@ -508,13 +508,13 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('routes revealGoalStream to the window-owned progress bridge (issue #7751 FS6)', async () => {
+  it('routes revealGoalRun to the window-owned progress bridge (issue #7751 FS6)', async () => {
     const revealed: string[] = [];
 
     const { settings } = createSettingsFixture({
       ui: {
-        revealStream: async (streamId) => {
-          revealed.push(streamId);
+        revealRun: async (runId) => {
+          revealed.push(runId);
           return 'revealed';
         },
       },
@@ -522,13 +522,13 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM,
-        streamId: 'goal-owning-stream',
+        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN,
+        runId: 'a0a1b2c3',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(revealed).toEqual(['goal-owning-stream']);
+    expect(revealed).toEqual(['a0a1b2c3']);
   });
 
   it('shows unsupported-command reasons without reporting an error', async () => {

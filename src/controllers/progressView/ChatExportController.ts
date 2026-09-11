@@ -1,7 +1,7 @@
 /**
  * Chat export orchestration controller.
  *
- * Owns execution loading, export input construction, formatter selection,
+ * Owns run loading, export input construction, formatter selection,
  * storage writes, HTML asset staging, and LaTeX compilation. The progress-view
  * toolbar (`EXPORT_TRANSCRIPT`) is the GUI caller; the CLI's
  * `texra history --export` shares the same loaders and formatters. Hosts
@@ -31,7 +31,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   assembleTrace,
   injectStandaloneTrace,
@@ -42,7 +42,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { StorageFS } from '@utils/files/storageFS';
 
-/** Outcome of loading execution data for export. */
+/** Outcome of loading run data for export. */
 export type ExportInputStatus =
   'ok' | 'config_missing' | 'conversation_missing';
 
@@ -84,7 +84,7 @@ export class ChatExportController {
   constructor(private readonly deps: ChatExportControllerDeps) {}
 
   /**
-   * Load execution data and construct the format-agnostic {@link ChatExportInput}.
+   * Load run data and construct the format-agnostic {@link ChatExportInput}.
    *
    * Returns a discriminated status so the caller can show the right error
    * message for each missing piece without coupling to storage details.
@@ -97,10 +97,10 @@ export class ChatExportController {
     'ChatExportController.buildExportInput',
   )(function* (
     this: ChatExportController,
-    historyId: string,
+    runId: RunId,
   ): Effect.fn.Return<ExportInputResult, Error> {
     const { config, exportInput } = yield* loadChatExportInput(
-      historyId as ExecutionId,
+      runId,
       this.deps.session,
     );
 
@@ -119,11 +119,11 @@ export class ChatExportController {
    * Format and write a Markdown export.
    */
   async exportAsMarkdown(
-    historyId: string,
+    runId: RunId,
     exportInput: ChatExportInput,
   ): Promise<ChatExportResult> {
     return this.writeExport(
-      historyId,
+      runId,
       generateExportFilename(exportInput, 'md'),
       formatChatAsMarkdown(exportInput),
     );
@@ -137,11 +137,11 @@ export class ChatExportController {
    * can decide whether to open the PDF or fall back to the `.tex` source.
    */
   async exportAsLatex(
-    historyId: string,
+    runId: RunId,
     exportInput: ChatExportInput,
   ): Promise<LatexExportResult> {
     const { storagePath, absolutePath } = await this.writeExport(
-      historyId,
+      runId,
       generateExportFilename(exportInput, 'tex'),
       formatChatAsLatex(exportInput, this.deps.latexPreamble),
     );
@@ -158,7 +158,7 @@ export class ChatExportController {
   }
 
   /**
-   * Assemble the execution's trace and embed it into the trace-viewer's
+   * Assemble the run's trace and embed it into the trace-viewer's
    * single-file standalone bundle: the same faithful Progress View replay
    * the CLI's `--export html` produces, not the retired hand-written
    * chat-bubble exporter. Single file, no separate `assets/` folder: it
@@ -169,13 +169,10 @@ export class ChatExportController {
   readonly exportAsHtml = Effect.fn('ChatExportController.exportAsHtml')(
     function* (
       this: ChatExportController,
-      historyId: string,
+      runId: RunId,
       standaloneTemplatePath: string,
     ): Effect.fn.Return<HtmlExportOutcome, Error> {
-      const traceResult = yield* assembleTrace(
-        historyId as ExecutionId,
-        this.deps.session,
-      );
+      const traceResult = yield* assembleTrace(runId, this.deps.session);
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
@@ -215,22 +212,22 @@ export class ChatExportController {
       return {
         status: 'ok',
         result: yield* Effect.tryPromise({
-          try: () => this.writeExport(historyId, filename, html),
+          try: () => this.writeExport(runId, filename, html),
           catch: ensureError,
         }),
       };
     },
   );
 
-  /** Write an export payload into the execution's storage directory. */
+  /** Write an export payload into the run's storage directory. */
   private async writeExport(
-    historyId: string,
+    runId: RunId,
     filename: string,
     content: string,
   ): Promise<ChatExportResult> {
-    const storagePath = `executions/${historyId}/${filename}`;
+    const storagePath = `executions/${runId}/${filename}`;
     return runWithWorkspaceRoots(this.deps.session.roots, async () => {
-      await StorageFS.ensureDir(`executions/${historyId}`);
+      await StorageFS.ensureDir(`executions/${runId}`);
       await StorageFS.write(storagePath, content);
       return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
     });

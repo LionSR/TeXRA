@@ -1,4 +1,4 @@
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { readCliCwd, type CliContext } from './cliContext';
@@ -27,12 +27,12 @@ export function writeInterruptedResumeHint(
 /** Format a copyable command after the caller has established resumability. */
 export function formatInterruptedResumeHint(
   context: CliContext,
-  executionId: ExecutionId,
+  runId: RunId,
   subject: 'session' | 'workflow',
   workingDirectory: string,
   processCwd: string | undefined,
 ): string {
-  const resumeCommand = formatResumeCommand(context.commandName, executionId, {
+  const resumeCommand = formatResumeCommand(context.commandName, runId, {
     cwd: workingDirectory,
     processCwd,
     approvalPolicy: context.approvalPolicy,

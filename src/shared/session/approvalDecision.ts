@@ -12,7 +12,7 @@
 
 import type {
   PermissionPayload,
-  StreamTabId,
+  RunId,
   UserQuestionAnswers,
 } from '@shared/schemas';
 import { getExhaustionReason } from '@shared/schemas';
@@ -147,12 +147,12 @@ type RuntimeOnlyPermissionKind = Exclude<PermissionKind, 'toolEdit' | 'retry'>;
 /** Enable a session-wide bypass on one stream: the field-level mutation the
  *  approval authority applies, not a snapshot. */
 export function sessionBypassRequest(
-  streamId: StreamTabId,
+  runId: RunId,
   bypass: ApprovalBypassKind,
 ): Extract<RuntimeRequest, { kind: 'policy.set' }> {
   return {
     kind: 'policy.set',
-    change: { field: 'bypass', streamId, bypass, enabled: true },
+    change: { field: 'bypass', runId, bypass, enabled: true },
   };
 }
 
@@ -173,9 +173,14 @@ export function approvalDecisionArms(
   permission: PermissionPayload,
   decision: PermissionDecision<PermissionKind>,
 ): readonly ApprovalArm[] {
-  const { streamId, requestId: approvalId } = permission.data;
+  const { runId, requestId: approvalId } = permission.data;
+  if (runId === '') {
+    throw new Error(
+      `Permission ${permission.kind}:${approvalId} names no run to decide on.`,
+    );
+  }
   const bypass = (kind: ApprovalBypassKind): ApprovalArm => ({
-    runtime: sessionBypassRequest(streamId, kind),
+    runtime: sessionBypassRequest(runId, kind),
   });
   switch (permission.kind) {
     case 'toolEdit': {
@@ -204,7 +209,7 @@ export function approvalDecisionArms(
       const approve: ApprovalArm = {
         runtime: {
           kind: 'decision.bash',
-          streamId,
+          runId,
           approvalId,
           decision:
             d.action === 'reject'
@@ -224,7 +229,7 @@ export function approvalDecisionArms(
           {
             host: {
               kind: 'useOwnApiKey',
-              streamId,
+              runId,
               requestId: approvalId,
               model: data.model,
               provider: data.errorDetails?.provider ?? null,
@@ -238,7 +243,7 @@ export function approvalDecisionArms(
         {
           runtime: {
             kind: 'decision.retry',
-            streamId,
+            runId,
             approvalId,
             decision:
               d.action === 'retry' ? { action: 'retry' } : { action: 'cancel' },
@@ -256,7 +261,7 @@ export function approvalDecisionArms(
       ): ApprovalArm => ({
         runtime: {
           kind: 'decision.proposal',
-          streamId,
+          runId,
           approvalId,
           decision: inner,
         },
@@ -280,7 +285,7 @@ export function approvalDecisionArms(
         {
           runtime: {
             kind: 'decision.plan',
-            streamId,
+            runId,
             approvalId,
             decision: planDecision(d),
           },
@@ -296,7 +301,7 @@ export function approvalDecisionArms(
             d.action === 'submit'
               ? {
                   kind: 'externalInquiry.submit',
-                  streamId,
+                  runId,
                   threadId,
                   turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
                   answer: d.answer,
@@ -304,7 +309,7 @@ export function approvalDecisionArms(
                 }
               : {
                   kind: 'externalInquiry.drop',
-                  streamId,
+                  runId,
                   threadId,
                   turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
                   feedback: d.feedback ?? null,
@@ -318,7 +323,7 @@ export function approvalDecisionArms(
         {
           runtime: {
             kind: 'decision.userQuestion',
-            streamId,
+            runId,
             approvalId,
             decision: userQuestionDecision(d),
           },

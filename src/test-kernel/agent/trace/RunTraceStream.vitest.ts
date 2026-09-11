@@ -7,7 +7,11 @@ import {
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
-import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type RunId,
+  type StreamLogEntry,
+} from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -17,14 +21,14 @@ function streamEntries(store: StreamLog): StreamLogEntry[] {
 
 function openDeferredThinking(
   logger: AgentTrace,
-): ReturnType<AgentTrace['openStream']> {
-  return logger.openStream(MESSAGE_TYPES.THINKING, { deferStart: true });
+): ReturnType<AgentTrace['openRun']> {
+  return logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true });
 }
 
 /** Run against a fresh, test-local store. */
 function withStore(run: (store: StreamLog, logger: AgentTrace) => void): void {
   const store = new StreamLog();
-  const handle = createTestRunTrace('stream', store);
+  const handle = createTestRunTrace('stream' as RunId, store);
   try {
     run(store, handle.trace);
   } finally {
@@ -37,9 +41,9 @@ describe('AgentTrace stream output', () => {
     vi.useRealTimers();
   });
 
-  it('materializes streams at stream start, before any delta', () => {
+  it('materializes runs at stream start, before any delta', () => {
     withStore((store, logger) => {
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+      const thinking = logger.openRun(MESSAGE_TYPES.THINKING);
 
       // The running entry exists immediately — the CLI keys its "model is
       // thinking" indicator off it, and hidden reasoning may never emit a
@@ -107,11 +111,11 @@ describe('AgentTrace stream output', () => {
     });
   });
 
-  it('announces phase boundaries without content for phase-only streams', () => {
+  it('announces phase boundaries without content for phase-only runs', () => {
     withStore((store, logger) => {
       // Workflow runs hide the response text (it is extracted and logged
       // separately) but still announce that the response phase started.
-      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const output = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         deferStart: true,
         phaseOnly: true,
       });
@@ -134,11 +138,11 @@ describe('AgentTrace stream output', () => {
     });
   });
 
-  it('accumulates disabled progress streams without scheduled updates', () => {
+  it('accumulates disabled progress runs without scheduled updates', () => {
     vi.useFakeTimers();
 
     withStore((store, logger) => {
-      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const stream = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
 
@@ -157,7 +161,7 @@ describe('AgentTrace stream output', () => {
 describe('tool-use card input redaction', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const store = new StreamLog();
-    const logger = createTestRunTrace('stream', store).trace;
+    const logger = createTestRunTrace('stream' as RunId, store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
       startToolUseCard(logger, 'demoTool', { arg: 1 }),
@@ -185,7 +189,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.
-    const orchestrator = createTestRunTrace('orchestrator').trace;
+    const orchestrator = createTestRunTrace('orchestrator' as RunId).trace;
     const taskStage = orchestrator.openStage('Task: orchestrator');
 
     // Subagent run on a SEPARATE trace/stream, opened *inside* the
@@ -194,7 +198,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
     // subagent's run stage is a root on its own stream with no extra flag.
     // (A module-level shared scope would orphan it under the cross-trace id.)
     await taskStage.within(async () => {
-      const subagent = createTestRunTrace('subagent', store).trace;
+      const subagent = createTestRunTrace('subagent' as RunId, store).trace;
       subagent.openStage('Run: subagent');
     });
 

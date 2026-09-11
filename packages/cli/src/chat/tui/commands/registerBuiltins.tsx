@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type ExecutionId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -274,7 +274,7 @@ export function registerBuiltinSlashCommands(options?: {
   onLoginSelect?: FormActionHandler<LoginFormValue>;
   onLogoutSelect?: FormActionHandler<CliLogoutTarget>;
   onMemorySelect?: SelectHandler<string>;
-  onResumeSelect?: SelectHandler<ExecutionId>;
+  onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
   workPlanSnapshots?: StreamArtifactReader;
   getConfigStores?: () => SettingsStores;
@@ -492,7 +492,7 @@ export function registerBuiltinSlashCommands(options?: {
   );
   const ResumeListFormAdapter = makeSelectFormAdapter(
     ResumeListForm,
-    (id: ExecutionId) => options?.onResumeSelect?.(id),
+    (id: RunId) => options?.onResumeSelect?.(id),
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(
     SkillsListForm,
@@ -650,8 +650,8 @@ export function registerBuiltinSlashCommands(options?: {
     echo: 'ifPersists',
     handler: async (remainder, context) => {
       const id = parseCliHistoryId(remainder);
-      if (!id) throw new Error(`Invalid execution id: ${remainder}`);
-      await context.resumeExecution(id);
+      if (!id) throw new Error(`Invalid run id: ${remainder}`);
+      await context.resumeRun(id);
     },
     formComponent: ResumeListFormAdapter,
   });

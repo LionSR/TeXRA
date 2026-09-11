@@ -12,23 +12,23 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import type {
   HostInteractions,
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
+import { RunLeaseLostError } from '@agent/storage/runLease';
 import {
-  STREAM_PHASE,
+  RUN_PHASE,
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import type { RunId } from '@shared/schemas';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentExecution';
+import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -45,13 +45,13 @@ const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   prepareAgentDefinition: vi.fn(),
   resumeToolUseTurn: vi.fn(),
-  getExecutionStore: vi.fn(),
+  getRunStore: vi.fn(),
   getVisibleAgents: vi.fn(),
-  inspectExecutionLease: vi.fn(),
-  isApprovalBypassedForStream: vi.fn(),
+  inspectRunLease: vi.fn(),
+  isApprovalBypassedForRun: vi.fn(),
   isProposalBypassed: vi.fn(),
-  registerExecution: vi.fn(),
-  releaseOwnedExecutionLease: vi.fn(),
+  registerRun: vi.fn(),
+  releaseOwnedRunLease: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
   computeModelOptionsData: vi.fn(),
@@ -75,57 +75,55 @@ vi.mock('@agent/index/agentRegistry', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionStore: mocks.getExecutionStore,
-  getExecutionRecords: (_session: unknown, executionId: ExecutionId) => ({
+  getRunStore: mocks.getRunStore,
+  getRunRecords: (_session: unknown, runId: RunId) => ({
     readMeta: () =>
       Effect.tryPromise({
-        try: () => mocks.getExecutionStore(executionId).readMeta(),
+        try: () => mocks.getRunStore(runId).readMeta(),
         catch: ensureError,
       }),
     readResultMeta: () =>
       Effect.tryPromise({
-        try: () => mocks.getExecutionStore(executionId).readResultMeta(),
+        try: () => mocks.getRunStore(runId).readResultMeta(),
         catch: ensureError,
       }),
   }),
-  registerExecution: mocks.registerExecution,
+  registerRun: mocks.registerRun,
 }));
 
-// The launch sites register through `registerExecution`; route the spy through it.
-vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+// The launch sites register through `registerRun`; route the spy through it.
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+    await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
+    registerRun: mocks.registerRun,
   };
 });
 
-vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  assertOwnedExecutionLease: vi.fn(),
-  inspectExecutionLease: mocks.inspectExecutionLease,
-  ownsExecutionLease: vi.fn(() => true),
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
+  assertOwnedRunLease: vi.fn(),
+  inspectRunLease: mocks.inspectRunLease,
+  ownsRunLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
   // verbs.
-  validateOwnedExecutionLease: vi.fn(async () => {}),
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
+  validateOwnedRunLease: vi.fn(async () => {}),
+  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
 }));
 
 vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
   persistChildRunDelivery: (
     _session: unknown,
-    executionId: ExecutionId,
+    runId: RunId,
     message: string,
     resultMeta: unknown,
   ) =>
     Effect.tryPromise({
       try: async () => {
-        await mocks.getExecutionStore(executionId).writeReport(message);
+        await mocks.getRunStore(runId).writeReport(message);
         if (resultMeta !== undefined)
-          await mocks
-            .getExecutionStore(executionId)
-            .writeResultMeta(resultMeta);
+          await mocks.getRunStore(runId).writeResultMeta(resultMeta);
       },
       catch: ensureError,
     }),
@@ -137,27 +135,26 @@ vi.mock('@model/computeModelOptions', () => ({
 
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
-  isApprovalBypassedForStream: mocks.isApprovalBypassedForStream,
+  isApprovalBypassedForRun: mocks.isApprovalBypassedForRun,
   proposalApprovals: () => ({
     isBypassed: mocks.isProposalBypassed,
   }),
 }));
 
-const PARENT_STREAM_ID = 'parent-stream' as StreamTabId;
-const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
+const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
+const CHILD_RUN_ID = 'bbbbbb333333' as RunId;
 
-/** The run context shared by nearly every case (stream/stopAfterCycle/session vary). */
+/** The run context shared by nearly every case (run/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
-    streamId: StreamTabId;
+    runId: RunId;
     stopAfterCycle: boolean;
     session: SessionHandle;
     approvalPromptsUnavailable: boolean;
   }> = {},
 ): RunContext {
   return createRunContext({
-    streamId: PARENT_STREAM_ID,
-    executionId: 'parent-exec',
+    runId: PARENT_RUN_ID,
     modelCell: { modelId: 'deepseekT' },
     session: defaultSession(),
     ...overrides,
@@ -179,9 +176,9 @@ function callDelegateReview() {
 /** Await actual child activation release before disposing its test session. */
 async function waitForChildren(session: SessionHandle): Promise<void> {
   while (true) {
-    const active = session.executions.getActiveIds();
+    const active = session.runs.getActiveIds();
     if (active.length === 0) return;
-    await Effect.runPromise(session.executions.waitForAnyChange(active));
+    await Effect.runPromise(session.runs.waitForAnyChange(active));
   }
 }
 
@@ -206,21 +203,20 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
   }
 }
 
-const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
-const IN_BAND_LOGICAL_EXECUTION_ID = 'aaaaaa111111' as ExecutionId;
+const STABLE_PARENT_RUN_ID = 'abcdef123456' as RunId;
+const IN_BAND_LOGICAL_RUN_ID = 'aaaaaa111111' as RunId;
 
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeStableSubagentInBand>[0]['prepare']>
 >;
-type InBandSubagentExecutionOptions = PreparedInBandSubagentOptions & {
-  parentExecutionId: ExecutionId;
+type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
   signal?: AbortSignal;
 };
 
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
-  overrides: Partial<InBandSubagentExecutionOptions> = {},
-): InBandSubagentExecutionOptions {
+  overrides: Partial<InBandSubagentRunOptions> = {},
+): InBandSubagentRunOptions {
   return {
     configPayload: {
       agent: 'review',
@@ -228,8 +224,7 @@ function delegationOptions(
       model: 'deepseekT',
     },
     agentName: 'review',
-    parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-    parentStreamId: PARENT_STREAM_ID,
+    parentRunId: STABLE_PARENT_RUN_ID,
     session: defaultSession(),
     ...overrides,
   };
@@ -237,13 +232,13 @@ function delegationOptions(
 
 /** Run the typed required-result path the way production callers reach it. */
 function runInBand(
-  options: InBandSubagentExecutionOptions,
-  executionId: ExecutionId = IN_BAND_LOGICAL_EXECUTION_ID,
+  options: InBandSubagentRunOptions,
+  runId: RunId = IN_BAND_LOGICAL_RUN_ID,
 ) {
-  const { parentExecutionId, signal, ...prepared } = options;
+  const { signal, ...prepared } = options;
   return executeStableSubagentInBand({
-    executionId,
-    parentExecutionId,
+    runId,
+    parentRunId: prepared.parentRunId,
     session: prepared.session,
     signal,
     prepare: () => Effect.succeed(prepared),
@@ -262,8 +257,7 @@ function mockExecuteAgentErrorOnce(
     const failed = {
       category: 'toolUse',
       outcome: 'failed',
-      executionId: 'child-exec',
-      streamId: 'child-stream',
+      runId: CHILD_RUN_ID,
       totalCostUsd,
       ...extra,
     };
@@ -290,28 +284,26 @@ async function expectDurabilityErrorPreservingChildFailure(
 function mockWaitingChildOnce(
   options: {
     memoryMisses?: ReadonlyArray<{ path: string; reason: string }>;
-    afterRun?: (handle: AgentExecutionHandle) => void;
+    afterRun?: (handle: RunHandle) => void;
   } = {},
 ): void {
   mocks.executeAgent.mockImplementationOnce(
-    async (_config, executionId: string, runOptions) => {
-      const handle = testExecutionHandle({
-        executionId,
-        parentStreamId: PARENT_STREAM_ID,
-        childStreamId: CHILD_STREAM_ID,
+    async (_config, runId: RunId, runOptions) => {
+      const handle = testRunHandle({
+        runId,
+        parent: PARENT_RUN_ID,
         agent: 'review',
       });
-      defaultSession().executions.track(handle);
-      runOptions.onStreamResolved?.(CHILD_STREAM_ID);
+      defaultSession().runs.track(handle);
+      runOptions.onRunResolved?.(runId);
       runOptions.onRun?.(handle);
       options.afterRun?.(handle);
       return {
         category: 'toolUse',
-        outcome: STREAM_PHASE.WAITING,
+        outcome: RUN_PHASE.WAITING,
         response: 'The proof is correct.',
         files: [],
-        executionId,
-        streamId: CHILD_STREAM_ID,
+        runId,
         ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
       };
     },
@@ -319,19 +311,19 @@ function mockWaitingChildOnce(
 }
 
 function stableAttempt(
-  logicalExecutionId: ExecutionId,
+  logicalRunId: RunId,
   phase: 'reserved' | 'launched' | 'committed' | 'retryable' = 'launched',
 ) {
   return {
     schemaVersion: 1,
-    logicalExecutionId,
-    parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+    logicalRunId,
+    parentRunId: STABLE_PARENT_RUN_ID,
     phase,
   } as const;
 }
 
-/** In-memory execution KV store: enough surface for the stable attempt path. */
-function memoryExecutionStore() {
+/** In-memory run KV store: enough surface for the stable attempt path. */
+function memoryRunStore() {
   const kv = new Map<string, unknown>();
   // The loop persists the manifest and the awaiting caller verifies it by
   // read-back, so the fixture must retain writes like the real store does.
@@ -357,27 +349,20 @@ function memoryExecutionStore() {
 
 /** Child store with nothing persisted: what a fresh attempt starts from. */
 function emptyChildStore() {
-  return memoryExecutionStore();
+  return memoryRunStore();
 }
 
 /** Child store holding a launched attempt marker and its result manifest. */
-function completedChildStore(
-  logicalExecutionId: ExecutionId,
-  result: unknown,
-  parentExecutionId: string = STABLE_PARENT_EXECUTION_ID,
-) {
+function completedChildStore(logicalRunId: RunId, result: unknown) {
   return {
     listKeys: vi
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-    read: vi
-      .fn()
-      .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
+    read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
     readMeta: vi.fn(async () => null),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
-      parentExecutionId,
       wallTimeMs: 100,
       result,
     }),
@@ -386,19 +371,19 @@ function completedChildStore(
 
 /** Route parent reads to the sequence store and every child read elsewhere. */
 function useStableStores(sequenceStore: unknown, childStore: unknown): void {
-  mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
-    executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+  mocks.getRunStore.mockImplementation((runId: RunId) =>
+    runId === STABLE_PARENT_RUN_ID ? sequenceStore : childStore,
   );
 }
 
-function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
+function stableSequenceStore(logicalRunId: RunId, nextAttempt = 0) {
   let sequence =
     nextAttempt === 0
       ? undefined
       : {
           schemaVersion: 1 as const,
-          logicalExecutionId,
-          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+          logicalRunId,
+          parentRunId: STABLE_PARENT_RUN_ID,
           nextAttempt,
         };
   return {
@@ -418,8 +403,8 @@ describe('headless delegation', () => {
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, setting: { defaultOutputFiles: [] } }),
     );
-    mocks.registerExecution.mockReturnValue(Effect.void);
-    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.registerRun.mockReturnValue(Effect.void);
+    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     restoreAgentEngine = provideAgentEngine({
       executeAgent: (...args) =>
         Effect.tryPromise({
@@ -449,25 +434,21 @@ describe('headless delegation', () => {
       },
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
-    mocks.isApprovalBypassedForStream.mockReturnValue(false);
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
-    const memoryStores = new Map<
-      ExecutionId,
-      ReturnType<typeof memoryExecutionStore>
-    >();
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) => {
-      let store = memoryStores.get(executionId);
+    mocks.isApprovalBypassedForRun.mockReturnValue(false);
+    mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
+    const memoryStores = new Map<RunId, ReturnType<typeof memoryRunStore>>();
+    mocks.getRunStore.mockImplementation((runId: RunId) => {
+      let store = memoryStores.get(runId);
       if (!store) {
-        store = memoryExecutionStore();
-        memoryStores.set(executionId, store);
+        store = memoryRunStore();
+        memoryStores.set(runId, store);
       }
       return store;
     });
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
       outcome: 'completed',
-      executionId: 'child-exec',
-      streamId: 'child-stream',
+      runId: CHILD_RUN_ID,
       response: 'The proof is correct.',
       files: [],
     });
@@ -493,11 +474,11 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { parentExecutionId, signal, ...prepared } = options;
+        const { signal, ...prepared } = options;
         const run = () =>
           executeStableSubagentInBandEffect({
-            executionId: IN_BAND_LOGICAL_EXECUTION_ID,
-            parentExecutionId,
+            runId: IN_BAND_LOGICAL_RUN_ID,
+            parentRunId: prepared.parentRunId,
             session: prepared.session,
             signal,
             prepare: () => Effect.succeed(prepared),
@@ -506,7 +487,7 @@ describe('headless delegation', () => {
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining('pass options.inputFiles'),
         });
-        expect(mocks.registerExecution).not.toHaveBeenCalled();
+        expect(mocks.registerRun).not.toHaveBeenCalled();
         setting.defaultOutputFiles = ['generated.tex'];
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
@@ -527,14 +508,14 @@ describe('headless delegation', () => {
 
   afterEach(async () => {
     const session = defaultSession();
-    for (const executionId of session.executions.getActiveIds()) {
+    for (const runId of session.runs.getActiveIds()) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
-      session.executions.untrack(executionId);
-      await Effect.runPromise(session.executions.kill(executionId).settlement);
+      session.runs.untrack(runId);
+      await Effect.runPromise(session.runs.kill(runId).settlement);
     }
-    session.followUps.terminalize(PARENT_STREAM_ID);
-    session.followUps.terminalize(CHILD_STREAM_ID);
+    session.followUps.terminalize(PARENT_RUN_ID);
+    session.followUps.terminalize(CHILD_RUN_ID);
     await waitForChildren(session);
     restoreAgentEngine();
   });
@@ -556,8 +537,7 @@ describe('headless delegation', () => {
       }),
       expect.any(String),
       expect.objectContaining({
-        isSubagent: true,
-        parentStreamId: 'parent-stream',
+        parentRunId: PARENT_RUN_ID,
         session: expect.any(Object),
         stopAfterCycle: true,
       }),
@@ -580,8 +560,7 @@ describe('headless delegation', () => {
       return {
         category: 'toolUse',
         outcome: 'completed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
+        runId: CHILD_RUN_ID,
         response: 'done',
         files: [],
       };
@@ -611,7 +590,7 @@ describe('headless delegation', () => {
       expect.objectContaining({
         config: expect.objectContaining({ agent: 'review' }),
       }),
-      result.executionId,
+      result.runId,
       expect.objectContaining({
         stopAfterCycle: true,
         workflowPhase: 'proof-review',
@@ -628,21 +607,17 @@ describe('headless delegation', () => {
     // child — a scripted grandchild is debuggable through the same artifacts
     // as any detached child (this closed item 10's report gap).
     expect(mocks.writeReport).toHaveBeenCalled();
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       defaultSession(),
-      result.executionId,
+      result.runId,
       expect.objectContaining({ agent: 'review' }),
       'review',
-      expect.objectContaining({
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        streamId: expect.stringContaining(`#${result.executionId}`),
-      }),
+      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         producer: 'subagent',
         agentName: 'review',
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
         wallTimeMs: expect.any(Number),
         // The loop stamps turn attribution on every manifest it persists —
         // scripted children included (this closed item 10's turnToken gap).
@@ -651,13 +626,13 @@ describe('headless delegation', () => {
       }),
     );
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
+      mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
     );
   });
 
   it('commits stable success after artifact drain but before lease release', async () => {
-    const logicalExecutionId = 'cccccc666666' as ExecutionId;
-    const childStore = memoryExecutionStore();
+    const logicalRunId = 'cccccc666666' as RunId;
+    const childStore = memoryRunStore();
     const order: string[] = [];
     const originalWrite = childStore.write.getMockImplementation();
     childStore.write.mockImplementation(async (key, value) => {
@@ -673,13 +648,13 @@ describe('headless delegation', () => {
         order.push('drain');
         await settle();
       });
-    mocks.releaseOwnedExecutionLease.mockImplementationOnce(async () => {
+    mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
       order.push('release');
     });
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
 
     try {
-      await runInBand(delegationOptions(), logicalExecutionId);
+      await runInBand(delegationOptions(), logicalRunId);
     } finally {
       drain.mockRestore();
     }
@@ -687,12 +662,12 @@ describe('headless delegation', () => {
     expect(order).toContain('launched');
     expect(order.lastIndexOf('drain')).toBeLessThan(order.indexOf('committed'));
     expect(order.indexOf('committed')).toBeLessThan(order.indexOf('release'));
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledOnce();
   });
 
   it('releases the lease even when the post-drain stable commit fails', async () => {
-    const logicalExecutionId = 'cccccc777777' as ExecutionId;
-    const childStore = memoryExecutionStore();
+    const logicalRunId = 'cccccc777777' as RunId;
+    const childStore = memoryRunStore();
     const commitError = new Error('commit write failed');
     const originalWrite = childStore.write.getMockImplementation();
     childStore.write.mockImplementation(async (key, value) => {
@@ -701,19 +676,17 @@ describe('headless delegation', () => {
       }
       await originalWrite?.(key, value);
     });
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
 
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toMatchObject({
       name: 'SubagentCommitError',
       message: expect.stringContaining('Failed to commit durable completion'),
       cause: commitError,
     });
 
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
-      logicalExecutionId,
-    );
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(logicalRunId);
     expect(childStore.write).toHaveBeenCalledWith(
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'launched' }),
@@ -725,22 +698,22 @@ describe('headless delegation', () => {
   });
 
   it('recovers committed success when lease deletion fails', async () => {
-    const logicalExecutionId = 'cccccc999999' as ExecutionId;
-    const childStore = memoryExecutionStore();
+    const logicalRunId = 'cccccc999999' as RunId;
+    const childStore = memoryRunStore();
     const releaseError = new Error('lease deletion failed');
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(releaseError);
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
+    mocks.releaseOwnedRunLease.mockRejectedValueOnce(releaseError);
 
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
       message: expect.stringContaining('committed durable completion'),
       cause: releaseError,
     });
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).resolves.toMatchObject({ executionId: logicalExecutionId });
+      runInBand(delegationOptions(), logicalRunId),
+    ).resolves.toMatchObject({ runId: logicalRunId });
 
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     expect(childStore.write).toHaveBeenCalledWith(
@@ -753,10 +726,10 @@ describe('headless delegation', () => {
     );
   });
 
-  it('records a failed child cost once for durable in-band execution', async () => {
+  it('records a failed child cost once for durable in-band run', async () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {
-      executionId: IN_BAND_LOGICAL_EXECUTION_ID,
+      runId: IN_BAND_LOGICAL_RUN_ID,
       response: 'Partial review.',
     });
 
@@ -782,22 +755,21 @@ describe('headless delegation', () => {
     const onCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce({
       category: 'toolUse',
-      outcome: STREAM_PHASE.WAITING,
-      executionId: IN_BAND_LOGICAL_EXECUTION_ID,
-      streamId: 'child-stream',
+      outcome: RUN_PHASE.WAITING,
+      runId: IN_BAND_LOGICAL_RUN_ID,
       response: 'Waiting for clarification.',
       totalCostUsd: 0.73,
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      `Single-cycle subagent ${IN_BAND_LOGICAL_EXECUTION_ID} unexpectedly suspended.`,
+      `Single-cycle subagent ${IN_BAND_LOGICAL_RUN_ID} unexpectedly suspended.`,
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.any(Object),
-      IN_BAND_LOGICAL_EXECUTION_ID,
+      IN_BAND_LOGICAL_RUN_ID,
       expect.objectContaining({
-        isSubagent: true,
+        parentRunId: STABLE_PARENT_RUN_ID,
         stopAfterCycle: true,
       }),
     );
@@ -816,7 +788,7 @@ describe('headless delegation', () => {
   });
 
   it('recovers a completed stable child before resolving launch prerequisites', async () => {
-    const stableExecutionId = 'cccccc333333' as ExecutionId;
+    const stableRunId = 'cccccc333333' as RunId;
     const persistedResult = {
       category: 'toolUse' as const,
       outcome: 'completed' as const,
@@ -824,10 +796,10 @@ describe('headless delegation', () => {
       files: [],
       cost: 0,
     };
-    const sequenceStore = stableSequenceStore(stableExecutionId, 1);
+    const sequenceStore = stableSequenceStore(stableRunId, 1);
     useStableStores(
       sequenceStore,
-      completedChildStore(stableExecutionId, persistedResult),
+      completedChildStore(stableRunId, persistedResult),
     );
     const prepare = vi.fn(() =>
       Effect.fail(new Error('current agent is unavailable')),
@@ -835,23 +807,23 @@ describe('headless delegation', () => {
 
     await expect(
       executeStableSubagentInBand({
-        executionId: stableExecutionId,
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        runId: stableRunId,
+        parentRunId: STABLE_PARENT_RUN_ID,
         session: defaultSession(),
         prepare,
       }),
     ).resolves.toEqual({
-      executionId: stableExecutionId,
+      runId: stableRunId,
       result: persistedResult,
     });
     expect(prepare).not.toHaveBeenCalled();
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 
   it('recovers a later completed attempt when an earlier child was deleted', async () => {
-    const logicalExecutionId = 'cccccc444444' as ExecutionId;
+    const logicalRunId = 'cccccc444444' as RunId;
     const persistedResult = {
       category: 'toolUse' as const,
       outcome: 'completed' as const,
@@ -859,108 +831,73 @@ describe('headless delegation', () => {
       files: [],
       cost: 0,
     };
-    const sequenceStore = stableSequenceStore(logicalExecutionId, 2);
+    const sequenceStore = stableSequenceStore(logicalRunId, 2);
     const missingStore = emptyChildStore();
-    const completedStore = completedChildStore(
-      logicalExecutionId,
-      persistedResult,
-    );
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) => {
-      if (executionId === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
-      return executionId === logicalExecutionId ? missingStore : completedStore;
+    const completedStore = completedChildStore(logicalRunId, persistedResult);
+    mocks.getRunStore.mockImplementation((runId: RunId) => {
+      if (runId === STABLE_PARENT_RUN_ID) return sequenceStore;
+      return runId === logicalRunId ? missingStore : completedStore;
     });
     const prepare = vi.fn();
 
     const recovered = await executeStableSubagentInBand({
-      executionId: logicalExecutionId,
-      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      runId: logicalRunId,
+      parentRunId: STABLE_PARENT_RUN_ID,
       session: defaultSession(),
       prepare,
     });
 
     expect(recovered.result).toBe(persistedResult);
-    expect(recovered.executionId).not.toBe(logicalExecutionId);
+    expect(recovered.runId).not.toBe(logicalRunId);
     expect(prepare).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
-  it('rejects a result manifest with different parent lineage', async () => {
-    const stableExecutionId = 'cccccc555555' as ExecutionId;
-    const sequenceStore = stableSequenceStore(stableExecutionId, 1);
-    useStableStores(
-      sequenceStore,
-      completedChildStore(
-        stableExecutionId,
-        {
-          category: 'toolUse',
-          outcome: 'completed',
-          response: 'Wrong workflow.',
-          files: [],
-          cost: 0,
-        },
-        'deadbeef',
-      ),
-    );
-
-    await expect(
-      executeStableSubagentInBand({
-        executionId: stableExecutionId,
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        session: defaultSession(),
-        prepare: vi.fn(),
-      }),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
   it('refuses to repeat a committed child whose result manifest is missing', async () => {
-    const logicalExecutionId = 'cccccc777777' as ExecutionId;
-    const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+    const logicalRunId = 'cccccc777777' as RunId;
+    const sequenceStore = stableSequenceStore(logicalRunId, 1);
     useStableStores(sequenceStore, {
       ...emptyChildStore(),
       listKeys: vi
         .fn()
         .mockResolvedValue(['stable-subagent-attempt', 'config']),
-      read: vi
-        .fn()
-        .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
+      read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
     });
 
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it('refuses to repeat an incomplete stable child', async () => {
-    const logicalExecutionId = 'dddddd444444' as ExecutionId;
-    const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
+    const logicalRunId = 'dddddd444444' as RunId;
+    const sequenceStore = stableSequenceStore(logicalRunId, 1);
     useStableStores(sequenceStore, {
       ...emptyChildStore(),
       listKeys: vi.fn().mockResolvedValue(['meta']),
     });
 
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it.each(['reserved', 'retryable'] as const)(
     'retries a %s child without a result manifest',
     async (phase) => {
-      const logicalExecutionId = 'dddddd555555' as ExecutionId;
-      const stores = new Map<ExecutionId, Record<string, unknown>>();
-      const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
-      mocks.getExecutionStore.mockImplementation((id: ExecutionId) => {
-        if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+      const logicalRunId = 'dddddd555555' as RunId;
+      const stores = new Map<RunId, Record<string, unknown>>();
+      const sequenceStore = stableSequenceStore(logicalRunId, 1);
+      mocks.getRunStore.mockImplementation((id: RunId) => {
+        if (id === STABLE_PARENT_RUN_ID) return sequenceStore;
         let store = stores.get(id);
         if (store) return store;
         store =
-          id === logicalExecutionId
+          id === logicalRunId
             ? {
                 ...emptyChildStore(),
                 listKeys: vi
@@ -968,26 +905,23 @@ describe('headless delegation', () => {
                   .mockResolvedValue(['stable-subagent-attempt', 'config']),
                 read: vi
                   .fn()
-                  .mockResolvedValue(stableAttempt(logicalExecutionId, phase)),
+                  .mockResolvedValue(stableAttempt(logicalRunId, phase)),
               }
             : emptyChildStore();
         stores.set(id, store);
         return store;
       });
 
-      const completed = await runInBand(
-        delegationOptions(),
-        logicalExecutionId,
-      );
+      const completed = await runInBand(delegationOptions(), logicalRunId);
 
-      expect(completed.executionId).not.toBe(logicalExecutionId);
+      expect(completed.runId).not.toBe(logicalRunId);
       expect(mocks.executeAgent).toHaveBeenCalledOnce();
     },
   );
 
   it('refuses to repeat a completed stable child when its manifest cannot be written', async () => {
-    const logicalExecutionId = 'dddddd666666' as ExecutionId;
-    const sequenceStore = stableSequenceStore(logicalExecutionId);
+    const logicalRunId = 'dddddd666666' as RunId;
+    const sequenceStore = stableSequenceStore(logicalRunId);
     let marker: ReturnType<typeof stableAttempt> | undefined;
     const write = vi.fn(async (key: string, value: typeof marker) => {
       if (key === 'stable-subagent-attempt') marker = value;
@@ -1002,7 +936,7 @@ describe('headless delegation', () => {
     });
     const options = delegationOptions();
 
-    await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
+    await expect(runInBand(options, logicalRunId)).rejects.toBeInstanceOf(
       SubagentDurabilityError,
     );
 
@@ -1010,24 +944,24 @@ describe('headless delegation', () => {
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'launched' }),
     );
-    await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
+    await expect(runInBand(options, logicalRunId)).rejects.toBeInstanceOf(
       SubagentDurabilityError,
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
   it('uses a new durable attempt after failed and cancelled children', async () => {
-    const logicalExecutionId = 'eeeeee555555' as ExecutionId;
-    const stores = new Map<ExecutionId, Record<string, unknown>>();
-    const sequenceStore = stableSequenceStore(logicalExecutionId);
+    const logicalRunId = 'eeeeee555555' as RunId;
+    const stores = new Map<RunId, Record<string, unknown>>();
+    const sequenceStore = stableSequenceStore(logicalRunId);
     const priorOutcomes = ['failed', 'cancelled'] as const;
-    mocks.getExecutionStore.mockImplementation((id: ExecutionId) => {
-      if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+    mocks.getRunStore.mockImplementation((id: RunId) => {
+      if (id === STABLE_PARENT_RUN_ID) return sequenceStore;
       let store = stores.get(id);
       if (store) return store;
       const priorOutcome = priorOutcomes[stores.size];
       store = priorOutcome
-        ? completedChildStore(logicalExecutionId, {
+        ? completedChildStore(logicalRunId, {
             category: 'toolUse',
             outcome: priorOutcome,
             response: '',
@@ -1039,37 +973,33 @@ describe('headless delegation', () => {
       return store;
     });
 
-    const completed = await runInBand(delegationOptions(), logicalExecutionId);
+    const completed = await runInBand(delegationOptions(), logicalRunId);
 
-    expect(completed.executionId).not.toBe(logicalExecutionId);
+    expect(completed.runId).not.toBe(logicalRunId);
     expect(stores.size).toBe(3);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       defaultSession(),
-      completed.executionId,
+      completed.runId,
       expect.anything(),
       'review',
-      expect.objectContaining({
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        streamId: expect.stringContaining(`#${completed.executionId}`),
-      }),
+      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
     );
   });
 
   it('does not commit a cancelled stable child as successful', async () => {
-    const logicalExecutionId = 'eeeeee666666' as ExecutionId;
-    const childStore = memoryExecutionStore();
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    const logicalRunId = 'eeeeee666666' as RunId;
+    const childStore = memoryRunStore();
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
     mocks.executeAgent.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'cancelled',
-      executionId: logicalExecutionId,
-      streamId: 'child-stream',
+      runId: logicalRunId,
       response: '',
       files: [],
     });
 
-    const completed = await runInBand(delegationOptions(), logicalExecutionId);
+    const completed = await runInBand(delegationOptions(), logicalRunId);
 
     expect(completed.result.outcome).toBe('cancelled');
     expect(childStore.write).not.toHaveBeenCalledWith(
@@ -1092,7 +1022,7 @@ describe('headless delegation', () => {
   it('preserves the child failure when final lease cleanup also fails', async () => {
     const childFailure = new Error('review model failed');
     mocks.executeAgent.mockRejectedValueOnce(childFailure);
-    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
+    mocks.releaseOwnedRunLease.mockRejectedValueOnce(
       new Error('artifact flush failed'),
     );
 
@@ -1101,26 +1031,26 @@ describe('headless delegation', () => {
 
   it('does not recover a typed result after failed artifact cleanup', async () => {
     const cleanupFailure = new Error('artifact flush failed');
-    const logicalExecutionId = 'dddddd777777' as ExecutionId;
-    const childStore = memoryExecutionStore();
+    const logicalRunId = 'dddddd777777' as RunId;
+    const childStore = memoryRunStore();
     const write = childStore.write.getMockImplementation();
     childStore.write.mockImplementation(async (key, value) => {
       if (
         key === 'stable-subagent-attempt' &&
         (value as { phase?: string }).phase === 'retryable'
       ) {
-        throw new ExecutionLeaseLostError(logicalExecutionId);
+        throw new RunLeaseLostError(logicalRunId);
       }
       return await write?.(key, value);
     });
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
     const cleanup = vi
       .spyOn(defaultSession(), 'flushArtifacts')
       .mockRejectedValue(cleanupFailure);
 
     try {
       await expect(
-        runInBand(delegationOptions(), logicalExecutionId),
+        runInBand(delegationOptions(), logicalRunId),
       ).rejects.toMatchObject({
         name: 'SubagentDurabilityError',
         cause: cleanupFailure,
@@ -1128,21 +1058,21 @@ describe('headless delegation', () => {
     } finally {
       cleanup.mockRestore();
     }
-    mocks.inspectExecutionLease.mockResolvedValueOnce({
+    mocks.inspectRunLease.mockResolvedValueOnce({
       status: 'held',
       owner: { pid: 1, processStart: '1', hostname: 'test-host' },
     });
 
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
   it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
     const cleanupFailure = new Error('artifact flush failed');
-    const logicalExecutionId = 'dddddd888888' as ExecutionId;
-    const childStore = memoryExecutionStore();
+    const logicalRunId = 'dddddd888888' as RunId;
+    const childStore = memoryRunStore();
     const write = childStore.write.getMockImplementation();
     let abandonedLeasePresent = true;
     childStore.write.mockImplementation(async (key, value) => {
@@ -1151,18 +1081,18 @@ describe('headless delegation', () => {
         key === 'stable-subagent-attempt' &&
         (value as { phase?: string }).phase === 'retryable'
       ) {
-        throw new ExecutionLeaseLostError(logicalExecutionId);
+        throw new RunLeaseLostError(logicalRunId);
       }
       return await write?.(key, value);
     });
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
+    useStableStores(stableSequenceStore(logicalRunId), childStore);
     const cleanup = vi
       .spyOn(defaultSession(), 'flushArtifacts')
       .mockRejectedValue(cleanupFailure);
 
     try {
       await expect(
-        runInBand(delegationOptions(), logicalExecutionId),
+        runInBand(delegationOptions(), logicalRunId),
       ).rejects.toMatchObject({
         name: 'SubagentDurabilityError',
         cause: cleanupFailure,
@@ -1177,7 +1107,7 @@ describe('headless delegation', () => {
     // post-drain commit marker can do that.
     abandonedLeasePresent = false;
     await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
+      runInBand(delegationOptions(), logicalRunId),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
@@ -1196,8 +1126,7 @@ describe('headless delegation', () => {
       const failed = {
         category: 'toolUse',
         outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
+        runId: CHILD_RUN_ID,
         files: [42],
       } as never;
       await options.onRunError?.(new Error('review model failed'), failed);
@@ -1224,8 +1153,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'completed',
-      executionId: 'child-exec',
-      streamId: 'child-stream',
+      runId: CHILD_RUN_ID,
       files: [42],
     });
 
@@ -1256,8 +1184,7 @@ describe('headless delegation', () => {
       return {
         category: 'toolUse',
         outcome: 'cancelled',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
+        runId: CHILD_RUN_ID,
       };
     });
 
@@ -1313,7 +1240,7 @@ describe('headless delegation', () => {
     await expect(
       runInBand(delegationOptions({ signal: controller.signal })),
     ).rejects.toThrow('Workflow already stopped.');
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
@@ -1435,7 +1362,7 @@ describe('headless delegation', () => {
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
-        isSubagent: true,
+        parentRunId: PARENT_RUN_ID,
         onRun: expect.any(Function),
         session: expect.any(Object),
       }),
@@ -1556,7 +1483,7 @@ describe('headless delegation', () => {
       ],
     });
 
-    await withRunContext(parentRunContext({ streamId: PARENT_STREAM_ID }), () =>
+    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1570,7 +1497,7 @@ describe('headless delegation', () => {
   });
 
   it('does not deliver detached subagent results back to the released parent', async () => {
-    let capturedHandle: AgentExecutionHandle | undefined;
+    let capturedHandle: RunHandle | undefined;
 
     mockWaitingChildOnce({
       // Detach happens between the loop capturing the handle (onRun) and the
@@ -1578,11 +1505,11 @@ describe('headless delegation', () => {
       // same ordering a real stop-with-detach produces mid-turn.
       afterRun: (handle) => {
         capturedHandle = handle;
-        defaultSession().executions.detachActiveChildren(PARENT_STREAM_ID);
+        defaultSession().runs.detachActiveChildren(PARENT_RUN_ID);
       },
     });
 
-    await withRunContext(parentRunContext({ streamId: PARENT_STREAM_ID }), () =>
+    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1591,8 +1518,8 @@ describe('headless delegation', () => {
         expect.stringContaining('The proof is correct.'),
       );
     });
-    expect(capturedHandle?.deliveryTargetStreamId).toBeUndefined();
-    expect(defaultSession().followUps.getAll(PARENT_STREAM_ID)).toEqual([]);
-    expect(defaultSession().followUps.getAll(CHILD_STREAM_ID)).toEqual([]);
+    expect(capturedHandle?.deliveryTarget).toBeUndefined();
+    expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
+    expect(defaultSession().followUps.getAll(CHILD_RUN_ID)).toEqual([]);
   });
 });

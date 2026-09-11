@@ -87,11 +87,11 @@ export interface AttachedPort {
 function wireError(error: RequestError): RequestErrorWire {
   switch (error._tag) {
     case 'NotOwner':
-      return { _tag: 'NotOwner', streamId: error.streamId };
+      return { _tag: 'NotOwner', runId: error.runId };
     case 'Unavailable':
       return {
         _tag: 'Unavailable',
-        streamId: error.streamId,
+        runId: error.runId,
         reason: error.reason,
       };
     case 'Cancelled':

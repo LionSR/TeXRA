@@ -3,7 +3,7 @@
  *
  * Format helpers convert a completed or failed background bash run into
  * structured XML strings for FollowUpQueue delivery to the orchestrator,
- * including a tail/head output excerpt for long streams.
+ * including a tail/head output excerpt for long runs.
  */
 
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -52,7 +52,7 @@ export interface BashDeliveryStreamExcerpt {
  * always empty.
  */
 export function formatBashDelivery(
-  executionId: string,
+  runId: string,
   command: string,
   wallTimeMs: number,
   result: ExecResult,
@@ -63,11 +63,11 @@ export function formatBashDelivery(
     `<exit-code>${result.exitCode}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
-  const streams = [
+  const outputStreams = [
     ['output', stdout],
     ['stderr', stderr],
   ] as const;
-  for (const [name, excerpt] of streams) {
+  for (const [name, excerpt] of outputStreams) {
     const elidedChars = excerpt.elidedChars ?? 0;
     if (excerpt.head) {
       lines.push(`<${name}-head>${escapeText(excerpt.head)}</${name}-head>`);
@@ -89,7 +89,7 @@ export function formatBashDelivery(
   return formatChildRunDelivery(
     {
       tag: DELIVERY_TAG.backgroundResult,
-      executionId,
+      runId,
       attributes: [{ name: 'command', value: command }],
     },
     { lines },
@@ -100,14 +100,14 @@ export function formatBashDelivery(
  * Format a failed background bash result as a delivery message.
  */
 export function formatBashError(
-  executionId: string,
+  runId: string,
   command: string,
   err: unknown,
 ): string {
   return formatChildRunError(
     {
       tag: DELIVERY_TAG.backgroundError,
-      executionId,
+      runId,
       attributes: [{ name: 'command', value: command }],
     },
     { message: toErrorMessage(err) },

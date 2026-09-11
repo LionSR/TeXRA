@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { OpenPdfTool } from '@tools/OpenPdfTool';
 
@@ -97,7 +98,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        executionId: 'run-1',
+        runId: 'run-1' as RunId,
       }),
       () =>
         tool.call({
@@ -112,7 +113,7 @@ describe('OpenPdfTool', () => {
         kind: 'runStorage',
         absolutePath: '/storage/executions/run-1/output.pdf',
         relativePath: 'output.pdf',
-        executionId: 'run-1',
+        runId: 'run-1',
       },
       preserveFocus: true,
     });
@@ -124,7 +125,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        executionId: 'run-1',
+        runId: 'run-1' as RunId,
         workingDirectory: 'relative-path',
       }),
       () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),

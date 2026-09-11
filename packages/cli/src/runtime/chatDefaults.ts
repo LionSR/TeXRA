@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import {
-  isUserVisibleExecution,
-  listExecutions,
-  type ExecutionListingEntry,
+  isUserVisibleRun,
+  listRuns,
+  type RunListingEntry,
 } from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import {
@@ -151,11 +151,11 @@ const loadHistoryDefaults = Effect.fn(function* (
   session: SessionHandle,
 ): Effect.fn.Return<PartialDefaults> {
   // An unreadable history listing means no history defaults.
-  const entries: ExecutionListingEntry[] = yield* listExecutions(session).pipe(
+  const entries: RunListingEntry[] = yield* listRuns(session).pipe(
     Effect.catch(() => Effect.succeed([])),
   );
   const candidates = toNewestFirstByTimestamp(
-    entries.filter(isUserVisibleExecution).filter(
+    entries.filter(isUserVisibleRun).filter(
       (entry) =>
         entry.record.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
@@ -186,7 +186,7 @@ interface ResolveChatDefaultsInit {
 /**
  * Four-tier lookup per `.agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-10-architecture.md#entrypoint-default`:
  * workspace `.texra/config.json` → user `<global-storage>/config.json` →
- * last single-agent toolUse execution's model → built-in. Per-field
+ * last single-agent toolUse run's model → built-in. Per-field
  * independence: a workspace that only sets `agent` still falls through to
  * user/history for `model`, but history never changes the single-chat agent.
  */

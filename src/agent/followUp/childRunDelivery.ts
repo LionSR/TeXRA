@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { submitFollowUp, type FollowUpFailureReason } from './ToolUseFollowUp';
 import type { FollowUpQueueInput } from './FollowUpQueue';
@@ -14,18 +14,14 @@ type ChildRunDeliveryResult =
 
 export const deliverChildRunFollowUp = Effect.fn('deliverChildRunFollowUp')(
   function* (params: {
-    readonly targetStreamId: StreamTabId;
+    readonly targetRunId: RunId;
     readonly followUp: FollowUpQueueInput;
     readonly session: SessionHandle;
   }): Effect.fn.Return<ChildRunDeliveryResult, Error> {
-    const result = yield* submitFollowUp(
-      params.targetStreamId,
-      params.followUp,
-      {
-        session: params.session,
-        mode: 'child_delivery',
-      },
-    );
+    const result = yield* submitFollowUp(params.targetRunId, params.followUp, {
+      session: params.session,
+      mode: 'child_delivery',
+    });
     if (result.status === 'failed') {
       return { kind: 'failed', reason: result.reason };
     }

@@ -24,7 +24,7 @@ import type {
   PermissionPayload,
   PlanApprovalAction,
   ProgressPermissionKind,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import {
   APPROVE_ALL_DELEGATED_WORK_ACTION,
@@ -105,7 +105,7 @@ export type PendingApprovalKind = ProgressPermissionKind;
 /** One request the user's attention is on: a fold fact, read once. */
 interface AttentionRequest {
   readonly requestId: string;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly kind: PendingApprovalKind;
   /** The fact's payload; the host payload replaces it when presented. */
   readonly payload: PermissionPayload;
@@ -133,8 +133,8 @@ const decided = signal<ReadonlySet<string>>(new Set());
 /** Jump-to-waiting: the focused stream's requests lead the order. */
 const promoted = signal<
   | {
-      readonly streamId: StreamTabId;
-      readonly includeStreamIds: ReadonlySet<StreamTabId>;
+      readonly runId: RunId;
+      readonly includeRunIds: ReadonlySet<RunId>;
     }
   | undefined
 >(undefined);
@@ -145,10 +145,10 @@ const INTERRUPT: ApprovalDecision = {
 };
 
 /** Whether `payload` presents; a hook keys its host entry by the same id. */
-export function approvalPayloadStreamId(
+export function approvalPayloadRunId(
   payload: Pick<ApprovalPayload, 'data'>,
-): StreamTabId | undefined {
-  return payload.data.streamId || undefined;
+): RunId | undefined {
+  return payload.data.runId || undefined;
 }
 
 function inquiryHostRequest(
@@ -180,7 +180,7 @@ export function attentionRequests(
 ): readonly AttentionRequest[] {
   const requests: AttentionRequest[] = view.approvals.map((approval) => ({
     requestId: approval.requestId,
-    streamId: approval.streamId,
+    runId: approval.runId,
     kind: approval.payload.kind,
     payload: approval.payload,
   }));
@@ -190,15 +190,14 @@ export function attentionRequests(
     if (!entry) continue;
     requests.push({
       requestId: entry[0],
-      streamId: entry[1].payload.data.streamId as StreamTabId,
+      runId: entry[1].payload.data.runId as RunId,
       kind: 'externalInquiry',
       payload: entry[1].payload,
     });
   }
   if (!lead) return requests;
   const leads = (request: AttentionRequest): boolean =>
-    request.streamId === lead.streamId ||
-    lead.includeStreamIds.has(request.streamId);
+    request.runId === lead.runId || lead.includeRunIds.has(request.runId);
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
 }
 
@@ -254,8 +253,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const lead = promoted.get();
   const leads = (request: AttentionRequest): boolean =>
     lead !== undefined &&
-    (request.streamId === lead.streamId ||
-      lead.includeStreamIds.has(request.streamId));
+    (request.runId === lead.runId || lead.includeRunIds.has(request.runId));
   candidates.sort((a, b) => {
     const leadDelta = Number(leads(b.request)) - Number(leads(a.request));
     if (leadDelta !== 0) return leadDelta;
@@ -273,19 +271,19 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
 });
 
 /**
- * Stable-partition the pending requests so `streamId`'s lead, then re-read
+ * Stable-partition the pending requests so `runId`'s lead, then re-read
  * the head. Used by jump-to-waiting: focusing a session surfaces that
- * session's request immediately. `includeStreamIds` lets a composite surface
- * promote requests owned by the streams it presents, such as a workflow
+ * session's request immediately. `includeRunIds` lets a composite surface
+ * promote requests owned by the runs it presents, such as a workflow
  * popup's direct children.
  */
-export function promoteApprovalsForStream(
-  streamId: StreamTabId,
-  options: { readonly includeStreamIds?: ReadonlySet<StreamTabId> } = {},
+export function promoteApprovalsForRun(
+  runId: RunId,
+  options: { readonly includeRunIds?: ReadonlySet<RunId> } = {},
 ): void {
   promoted.set({
-    streamId,
-    includeStreamIds: options.includeStreamIds ?? new Set(),
+    runId,
+    includeRunIds: options.includeRunIds ?? new Set(),
   });
 }
 
@@ -333,14 +331,14 @@ function settleHost(
 }
 
 /** Issue runtime requests in order; a refusal reads in the conversation. */
-function issue(streamId: StreamTabId, ...requests: RuntimeRequest[]): void {
+function issue(runId: RunId, ...requests: RuntimeRequest[]): void {
   const session = currentSession();
   void effectRuntime().runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
-        onFailure: (error) => appendLocalRequestRefusal(error, streamId),
+        onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => undefined,
       }),
     ),
@@ -349,10 +347,10 @@ function issue(streamId: StreamTabId, ...requests: RuntimeRequest[]): void {
 
 /** The runtime requests `arms` names, in the order they name them. */
 function issueArms(
-  streamId: StreamTabId,
+  runId: RunId,
   arms: readonly { readonly runtime: RuntimeRequest }[],
 ): void {
-  issue(streamId, ...arms.map((arm) => arm.runtime));
+  issue(runId, ...arms.map((arm) => arm.runtime));
 }
 
 /**
@@ -430,40 +428,40 @@ function decideRequest(
   decision: ApprovalDecision,
 ): void {
   markDecided(request.requestId);
-  const { streamId } = request;
+  const { runId } = request;
   switch (payload.kind) {
     case 'toolEdit':
     case 'retry':
     case 'externalInquiry':
       if (decision.accepted && decision.bypass === 'toolEdit') {
-        issue(streamId, sessionBypassRequest(streamId, 'toolEdit'));
+        issue(runId, sessionBypassRequest(runId, 'toolEdit'));
       }
       settleHost(request.requestId, decision);
       return;
     case 'bash':
       issueArms(
-        streamId,
+        runId,
         approvalDecisionArms<'bash'>(payload, bashDecision(decision)),
       );
       return;
     case 'planApproval':
       issueArms(
-        streamId,
+        runId,
         approvalDecisionArms<'planApproval'>(payload, planDecision(decision)),
       );
       return;
     case 'proposal':
       issueArms(
-        streamId,
+        runId,
         approvalDecisionArms<'proposal'>(payload, proposalDecision(decision)),
       );
       if (decision.accepted && decision.bypass === 'superYolo') {
-        approveQueuedDelegatedWorkForStream(streamId);
+        approveQueuedDelegatedWorkForRun(runId);
       }
       return;
     case 'userQuestion':
       issueArms(
-        streamId,
+        runId,
         approvalDecisionArms<'userQuestion'>(
           payload,
           userQuestionDecision(decision),
@@ -566,14 +564,14 @@ export function settleHostRequestsWhere(
   return count;
 }
 
-/** Approve every delegated request pending on `streamId` once its bypass is
+/** Approve every delegated request pending on `runId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
-function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): void {
+function approveQueuedDelegatedWorkForRun(runId: RunId): void {
   const view = sessionView().get();
   const host = hostRequests.get();
   const done = decided.get();
   for (const request of attentionRequests(view, host, undefined)) {
-    if (request.streamId !== streamId || done.has(request.requestId)) continue;
+    if (request.runId !== runId || done.has(request.requestId)) continue;
     if (
       request.kind !== 'proposal' &&
       request.kind !== 'toolEdit' &&

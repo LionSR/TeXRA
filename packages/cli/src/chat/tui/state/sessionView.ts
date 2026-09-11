@@ -15,22 +15,22 @@ import {
   AgentCategory,
   isEmptyUsage,
   isPlainAgentIdentity,
-  STREAM_LIFECYCLE_READY,
-  STREAM_PHASE,
+  RUN_LIFECYCLE_READY,
+  RUN_PHASE,
   sumUsageStats,
   USER_FOLLOW_UP_SUPPORT,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
+  type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
-  type StreamView,
+  type RunView,
 } from '@shared/session/sessionView';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
+import { isInFlightPhase } from '@shared/runs/runStatus';
+import { formatPhaseStageLabel } from '@shared/runs/runStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -74,26 +74,24 @@ export function currentView(): SessionView {
   return sessionView().get();
 }
 
-export function streamViewOf(
+export function runViewOf(
   view: SessionView,
-  streamId: StreamTabId | undefined,
-): StreamView | undefined {
-  return streamId === undefined ? undefined : view.streams.get(streamId);
+  runId: RunId | undefined,
+): RunView | undefined {
+  return runId === undefined ? undefined : view.runs.get(runId);
 }
 
-/** The execution to stop when a child is still running or waiting. */
-export function killableExecutionId(
-  stream: StreamView | undefined,
-): string | undefined {
+/** The run to stop when a child is still running or waiting. */
+export function killableRunId(stream: RunView | undefined): RunId | undefined {
   return stream &&
     stream.parentId !== null &&
     (stream.group === 'running' || stream.group === 'waiting')
-    ? stream.executionId
+    ? stream.id
     : undefined;
 }
 
 /** Whether a focused child stream takes the composer's follow-ups (PRD 10.1). */
-export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
+export function focusedChildAcceptsFollowUps(stream: RunView): boolean {
   return (
     stream.followUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
     isPlainAgentIdentity(stream.identity) &&
@@ -104,47 +102,45 @@ export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
 
 /** The name a stream goes by on this surface: `main` for a root, the
  *  fold's label below it. */
-export function streamLabelOf(stream: StreamView): string {
+export function runLabelOf(stream: RunView): string {
   return stream.parentId === null ? 'main' : stream.label;
 }
 
 /** The stream's phase: undefined before the first `status` folds. */
-export function streamPhaseOf(
-  stream: StreamView | undefined,
-): StreamPhase | undefined {
-  return stream === undefined || stream.status === STREAM_LIFECYCLE_READY
+export function runPhaseOf(stream: RunView | undefined): RunPhase | undefined {
+  return stream === undefined || stream.status === RUN_LIFECYCLE_READY
     ? undefined
     : stream.status;
 }
 
 /**
  * The direct children in the RUNNING phase. The fold's `rollup.running`
- * counts in-flight streams (running or idle-waiting); the TUI's "active"
+ * counts in-flight runs (running or idle-waiting); the TUI's "active"
  * excludes a child parked between turns, so it reads each child's status
  * fact rather than the rollup.
  */
 export function runningChildCount(
   view: SessionView,
-  stream: StreamView | undefined,
+  stream: RunView | undefined,
 ): number {
   return (stream?.childIds ?? []).filter(
-    (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
+    (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   ).length;
 }
 
 /** Whether the root or any stream under it is in the RUNNING phase. */
-export function anyStreamRunning(
+export function anyRunRunning(
   view: SessionView,
-  rootStreamId: StreamTabId | undefined,
+  rootRunId: RunId | undefined,
 ): boolean {
-  return descendantStreams(view, rootStreamId, { includeRoot: true }).some(
-    (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
+  return descendantRuns(view, rootRunId, { includeRoot: true }).some(
+    (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   );
 }
 
 /** The run's usage across its executions; undefined when nothing was metered. */
 export function cumulativeUsageOf(
-  stream: StreamView | undefined,
+  stream: RunView | undefined,
 ): TokenUsageStats | undefined {
   if (!stream) return undefined;
   const total = sumUsageStats(Object.values(stream.usage));
@@ -154,12 +150,12 @@ export function cumulativeUsageOf(
 /** The nearest ancestor's workflow-phase heading, for a child's location. */
 export function ancestorPhaseLabel(
   view: SessionView,
-  streamId: StreamTabId,
+  runId: RunId,
 ): string | undefined {
-  const ancestors = streamViewOf(view, streamId)?.ancestors ?? [];
+  const ancestors = runViewOf(view, runId)?.ancestors ?? [];
   // Root first in the view; the nearest ancestor's phase wins.
   for (const ancestor of ancestors.toReversed()) {
-    const stage = streamViewOf(view, ancestor.id)?.stage;
+    const stage = runViewOf(view, ancestor.id)?.stage;
     if (stage?.kind === 'phase') return formatPhaseStageLabel(stage);
   }
   return undefined;

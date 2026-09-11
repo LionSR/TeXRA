@@ -46,7 +46,7 @@ import {
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -306,7 +306,7 @@ describe('CLI root argument routing', () => {
     );
   });
 
-  it('detects unknown command-scoped flags before command execution', async () => {
+  it('detects unknown command-scoped flags before command run', async () => {
     await expect(
       detectUnknownCliFlag(rootCommand, ['doctor', '--bogus']),
     ).resolves.toEqual({
@@ -834,17 +834,16 @@ describe('CLI root argument routing', () => {
         {
           outcome: RUN_OUTCOME.FAILED,
           category: AgentCategory.Workflow,
-          executionId: 'execution-without-output',
-          streamId: 'stream-without-output',
+          runId: 'run-without-output' as RunId,
           outputs: [],
           compileFailures: [],
         },
         createRunCommandCliContext(),
-        { runDirectory: '/tmp/runs/execution-without-output' },
+        { runDirectory: '/tmp/runs/run-without-output' },
       ),
     ).resolves.toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
-      runDirectory: '/tmp/runs/execution-without-output',
+      runDirectory: '/tmp/runs/run-without-output',
       outputs: [],
     });
   });
@@ -940,8 +939,7 @@ describe('CLI root argument routing', () => {
         {
           outcome: RUN_OUTCOME.COMPLETED,
           category: AgentCategory.Workflow,
-          executionId: 'completed-without-output',
-          streamId: 'completed-stream-without-output',
+          runId: 'completed-without-output' as RunId,
           outputs: [],
           compileFailures: [],
         },
@@ -960,8 +958,7 @@ describe('CLI root argument routing', () => {
       {
         outcome: RUN_OUTCOME.CANCELLED,
         category: AgentCategory.Workflow,
-        executionId: 'stopped-without-output',
-        streamId: 'stopped-stream-without-output',
+        runId: 'stopped-without-output' as RunId,
         outputs: [],
         compileFailures: [],
       },
@@ -1317,7 +1314,7 @@ describe('runCli usage output stream routing', () => {
 
   it('accepts headless globals on resume instead of rejecting them', async () => {
     const result = await runCli(['resume', 'abc123', '--print']);
-    expectUsageError(result, 'Execution not found: abc123');
+    expectUsageError(result, 'Run not found: abc123');
     expect(stderr).not.toContain('is interactive');
     expect(stderr).not.toContain('Unknown option');
 
@@ -1328,7 +1325,7 @@ describe('runCli usage output stream routing', () => {
       '--resume',
       'abc123',
     ]);
-    expectUsageError(shortcutResult, 'Execution not found: abc123');
+    expectUsageError(shortcutResult, 'Run not found: abc123');
     expect(stderr).not.toContain('is interactive');
     expect(stderr).not.toContain('Unknown option');
   });
@@ -1513,7 +1510,7 @@ describe('runCli usage output stream routing', () => {
   it('shows full command paths for nested --help usage', async () => {
     const result = await runCli(['history', 'show', '--help']);
     expectOk(result);
-    expect(stdout).toContain('Show one stored execution');
+    expect(stdout).toContain('Show one stored run');
     expect(stdout).toContain('USAGE texra history show');
     expect(stdout).toContain('Show the full stored conversation');
   });

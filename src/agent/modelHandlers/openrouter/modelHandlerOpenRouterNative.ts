@@ -293,7 +293,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         }
 
         const response = aggregator.buildResponse();
-        this.finalizeProgressStreams(thinking, output, response, () => {
+        this.finalizeProgressRuns(thinking, output, response, () => {
           const finalOutput = response.choices?.[0]?.message?.content ?? '';
           return typeof finalOutput === 'string' ? finalOutput : '';
         });
@@ -301,7 +301,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };
       } catch (err) {
-        this.finalizeProgressStreamsOnError(thinking, output);
+        this.finalizeProgressRunsOnError(thinking, output);
         attachPartialText(
           err,
           takeTail(aggregator.getFullContent(), PARTIAL_TEXT_TAIL_MAX),

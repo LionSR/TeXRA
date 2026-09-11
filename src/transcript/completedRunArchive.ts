@@ -1,6 +1,5 @@
-/** Completed-run display reads, keyed by the registered execution-to-stream link. */
+/** Completed-run display reads, keyed by run id. */
 import { Effect } from 'effect';
-import { resolveStreamForExecution } from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
@@ -9,24 +8,21 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolResultSchema,
-  type ExecutionId,
+  type RunId,
   type StreamLogEntry,
   type StreamLogEntryOf,
-  type StreamTabId,
   type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
 
-/** Read completed tasks from the session's committed stream fold. */
+/** Read completed tasks from the session's committed run fold. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
-    executionId: ExecutionId,
+    runId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const resolution = yield* resolveStreamForExecution(executionId, session);
-    if (!resolution) return [];
-    const snapshot = yield* session.snapshots.read(resolution.streamId);
+    const snapshot = yield* session.snapshots.read(runId);
     return snapshot.todos;
   },
 );
@@ -42,16 +38,13 @@ export interface CompletedRunConversationReadResult {
    *  transcript sidecar holds no conversation data. */
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
-  readonly streamId?: StreamTabId;
 }
 
 /** Whether completed-run storage proves a conversation or transcript association exists. */
 export function hasCompletedRunConversationEvidence(
   result: CompletedRunConversationReadResult,
 ): boolean {
-  return (
-    (result.conversation?.length ?? 0) > 0 || result.streamId !== undefined
-  );
+  return (result.conversation?.length ?? 0) > 0;
 }
 
 /**
@@ -286,16 +279,13 @@ function streamLogEntriesToConversation(
 export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const resolution = yield* resolveStreamForExecution(executionId, session);
-  if (!resolution) return { conversation: null, source: 'none' };
-  const { streamId } = resolution;
   const conversation = streamLogEntriesToConversation(
-    yield* session.transcripts.readEntries(streamId),
+    yield* session.transcripts.readEntries(runId),
   );
   return conversation.length > 0
-    ? { conversation, source: 'streamLog', streamId }
-    : { conversation: null, source: 'none', streamId };
+    ? { conversation, source: 'streamLog' }
+    : { conversation: null, source: 'none' };
 });

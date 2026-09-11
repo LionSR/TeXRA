@@ -10,7 +10,7 @@
  */
 
 import { BaseNode } from '@agent/node';
-import type { ExecutionKVStore } from '@agent/storage';
+import type { RunKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PersistedFlow } from '@agent/node/persistedFlow';
 import { isTerminalPersistedCompileRejection } from '@agent/runtime/persistedCompileRejection';
@@ -19,7 +19,7 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
 } from '@shared/schemas';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
+import { deriveRunOutcome } from '@shared/runs/runStatus';
 
 import type { z } from 'zod';
 
@@ -41,7 +41,7 @@ export interface RoundAwareState {
   /** Whether to continue to next round (can be set false by nodes) */
   continueRounds: boolean;
 
-  /** Set by nodes when execution fails. Skips round completion callbacks. */
+  /** Set by nodes when run fails. Skips round completion callbacks. */
   lastError?: RetryErrorInfo;
 
   /** One-shot output-rejection feedback for the next configured round. */
@@ -69,7 +69,7 @@ interface RoundCallbacks<S extends RoundAwareState> {
     shared: S,
   ) => StageHandle;
 
-  /** Check if execution should be interrupted. */
+  /** Check if run should be interrupted. */
   signal?: AbortSignal;
 
   /** Reset workspace state for a new round. */
@@ -99,7 +99,7 @@ export class RoundPersistedFlow<
 
   constructor(
     start: BaseNode,
-    kv: ExecutionKVStore,
+    kv: RunKVStore,
     options: {
       callbacks?: RoundCallbacks<S>;
       parentStage?: StageHandle | null;

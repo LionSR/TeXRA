@@ -7,33 +7,29 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
-import { getExecutionStore, getExecutionRecords } from '@agent/storage';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import { getRunStore, getRunRecords } from '@agent/storage';
+import { RunLeaseActiveError } from '@agent/storage/runLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StreamTabId,
-  WorkflowScriptFiles,
-} from '@shared/schemas';
+import type { RunId, WorkflowScriptFiles } from '@shared/schemas';
 import {
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
-import { deriveExecutionId } from '@utils/core/idHash';
+import { deriveRunId } from '@utils/core/idHash';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 const mocks = vi.hoisted(() => ({
-  registerExecution: vi.fn(),
-  recordStores: new Map<string, ReturnType<typeof getExecutionRecords>>(),
+  registerRun: vi.fn(),
+  recordStores: new Map<string, ReturnType<typeof getRunRecords>>(),
   startChildRunLoop: vi.fn(),
-  createChildStream: vi.fn(),
+  createChildRun: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   requireWorkflowOrToolUseAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
@@ -43,22 +39,21 @@ const mocks = vi.hoisted(() => ({
   lastStrategyParams: undefined as { initialSnapshot?: unknown } | undefined,
 }));
 
-// Spread the real storage module so `getExecutionStore` stays authentic;
+// Spread the real storage module so `getRunStore` stays authentic;
 // only registration is spied so the launch can be observed without touching
-// the async run loop. The executionLease mock below spreads the real
-// `ExecutionLeaseActiveError` and lease helpers the same way.
+// the async run loop. The runLease mock below spreads the real
+// `RunLeaseActiveError` and lease helpers the same way.
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
-  const { createFakeExecutionRecords } =
-    await import('@test/support/FakeExecutionKVStore');
+  const { createFakeRunRecords } = await import('@test/support/FakeRunKVStore');
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
-    getExecutionRecords: (_session: unknown, id: string) => {
+    registerRun: mocks.registerRun,
+    getRunRecords: (_session: unknown, id: string) => {
       const existing = mocks.recordStores.get(id);
       if (existing) return existing;
       let report: string | null = null;
-      const records = createFakeExecutionRecords({
+      const records = createFakeRunRecords({
         readReport: () => Effect.succeed(report),
         writeReport: (value) =>
           Effect.sync(() => {
@@ -75,13 +70,13 @@ vi.mock('@agent/storage', async (importOriginal) => {
   };
 });
 
-// The launch sites register through `registerExecution`; route the spy through it.
-vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+// The launch sites register through `registerRun`; route the spy through it.
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+    await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
+    registerRun: mocks.registerRun,
   };
 });
 
@@ -102,9 +97,9 @@ vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
   };
 });
 
-vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  assertOwnedExecutionLease: vi.fn(),
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
+  assertOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
@@ -112,9 +107,9 @@ vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@tools/delegation/childStream', () => ({
-  createChildStream: mocks.createChildStream,
-  childStreamDescription: (raw: string) => raw,
+vi.mock('@tools/delegation/childRun', () => ({
+  createChildRun: mocks.createChildRun,
+  childRunDescription: (raw: string) => raw,
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -138,8 +133,7 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
-const executionId = '7154scripttool' as ExecutionId;
-const streamId = 'stream:workflow-script-tool' as StreamTabId;
+const parentRunId = '7154c4700700' as RunId;
 const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',
@@ -152,9 +146,7 @@ function parentContext(stopAfterCycle = false): LaunchRunContext {
     model: 'parent-model',
     stopAfterCycle,
     runScope: {
-      executionId,
-      streamId,
-      agentName: 'orchestrator',
+      runId: parentRunId,
       session: currentSession(),
       signal: new AbortController().signal,
     },
@@ -166,13 +158,13 @@ function checkpointIdFor(name: string): string {
   return deriveWorkflowScriptCheckpointId({
     name,
     defaultAgent: 'correct',
-    parentExecutionId: executionId,
+    parentRunId,
   });
 }
 
-/** The deterministic run executionId derived from that checkpoint identity. */
-function runExecutionIdFor(name: string): ExecutionId {
-  return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
+/** The deterministic run id derived from that checkpoint identity. */
+function runIdFor(name: string): RunId {
+  return deriveRunId({ checkpointId: checkpointIdFor(name) });
 }
 
 /** The exact durable run record a launch of `name` must preserve. */
@@ -187,10 +179,9 @@ function registrationRecordFor(name: string, model = 'parent-model') {
 /** The registration options a launch of `name` must record. */
 function registrationOptionsFor(name: string) {
   return expect.objectContaining({
-    streamId: `workflow-script#${runExecutionIdFor(name)}`,
     identity: { kind: 'multiAgentWorkflow', workflowName: name },
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    parentExecutionId: executionId,
+    parentRunId,
     description: 'tests the workflow script tool',
   });
 }
@@ -209,7 +200,7 @@ function mockPersistedReport(
   report: string,
   outcome: (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME],
 ): void {
-  const store = getExecutionRecords(currentSession(), runExecutionIdFor(name));
+  const store = getRunRecords(currentSession(), runIdFor(name));
   vi.spyOn(store, 'readReport').mockReturnValue(Effect.succeed(report));
   vi.spyOn(store, 'readMeta').mockReturnValue(
     Effect.succeed({ outcome } as never),
@@ -264,7 +255,7 @@ beforeEach(async () => {
   await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
   await WorkspaceFS.write('references.bib', '@book{example}');
   await WorkspaceFS.write('figure.pdf', 'pdf');
-  mocks.registerExecution.mockReturnValue(Effect.void);
+  mocks.registerRun.mockReturnValue(Effect.void);
   mocks.selectAvailableDelegationModel.mockReturnValue(
     Effect.succeed('parent-model'),
   );
@@ -286,20 +277,19 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     };
   });
-  mocks.createChildStream.mockImplementation(
-    (_session: unknown, runId: ExecutionId) =>
-      Effect.sync(() => {
-        const logger = new TraceEmitter();
-        vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
-        return {
-          childStreamId: `workflow-script#${runId}` as StreamTabId,
-          logger,
-          waitForInput: vi.fn(),
-          beginTurn: vi.fn(),
-          failTurn: vi.fn(),
-          finalize: vi.fn(() => Effect.void),
-        };
-      }),
+  mocks.createChildRun.mockImplementation((_session: unknown, runId: RunId) =>
+    Effect.sync(() => {
+      const logger = new TraceEmitter();
+      vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
+      return {
+        childRunId: runId,
+        logger,
+        waitForInput: vi.fn(),
+        beginTurn: vi.fn(),
+        failTurn: vi.fn(),
+        finalize: vi.fn(() => Effect.void),
+      };
+    }),
   );
 });
 
@@ -323,12 +313,12 @@ describe('WorkflowScriptTool', () => {
     await vi.waitFor(() =>
       expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce(),
     );
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
     approve();
     await pending;
-    expect(mocks.registerExecution).toHaveBeenCalledOnce();
+    expect(mocks.registerRun).toHaveBeenCalledOnce();
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
   });
 
@@ -341,8 +331,8 @@ describe('WorkflowScriptTool', () => {
     await callTool();
 
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionIdFor('tool-test')}`,
-      streamId,
+      runIdFor('tool-test'),
+      parentRunId,
       'auto-approved',
       currentSession(),
     );
@@ -352,8 +342,8 @@ describe('WorkflowScriptTool', () => {
     await callTool();
 
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionIdFor('tool-test')}`,
-      streamId,
+      runIdFor('tool-test'),
+      parentRunId,
       'inherit',
       currentSession(),
     );
@@ -376,7 +366,7 @@ describe('WorkflowScriptTool', () => {
       const result = await callTool();
 
       expect(result.status).toBe(status);
-      expect(mocks.registerExecution).not.toHaveBeenCalled();
+      expect(mocks.registerRun).not.toHaveBeenCalled();
       expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       if (decision.action === 'reject') {
         expect(result).toMatchObject({
@@ -418,7 +408,7 @@ return null`;
           ],
         }),
       }),
-      streamId,
+      parentRunId,
       currentSession(),
       expect.objectContaining({ kind: 'launch' }),
     );
@@ -515,41 +505,39 @@ return null`;
   it('launches the run as a detached child with a deterministic run id', async () => {
     const result = await callTool();
 
-    const runExecutionId = runExecutionIdFor('tool-test');
+    const runId = runIdFor('tool-test');
     // The run id is derived from the checkpoint identity (NOT random), so a
     // relaunch with the same meta.name re-roots at the same anchor and resume
     // still works (#8712).
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionId,
+      runId,
       // The durable record is honest: workflow name, launch summary, and the
       // real delegation model. It has no fabricated agent identity or category.
       registrationRecordFor('tool-test'),
       'tool-test',
       registrationOptionsFor('tool-test'),
     );
-    expect(mocks.createChildStream).toHaveBeenCalledWith(
+    expect(mocks.createChildRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionId,
-      streamId,
+      runId,
+      parentRunId,
       expect.objectContaining({
-        streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
       }),
     );
-    // The run's own stream inherits the orchestrator's approval ancestry.
+    // The child run inherits the orchestrator's approval ancestry.
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionId}`,
-      streamId,
+      runId,
+      parentRunId,
       'inherit',
       currentSession(),
     );
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
     expect(loopParams).toMatchObject({
-      childStreamId: `workflow-script#${runExecutionId}`,
-      parentStreamId: streamId,
-      executionId: runExecutionId,
+      parentRunId,
+      runId,
       agentName: 'tool-test',
     });
     expect(loopParams.strategy).toMatchObject({
@@ -567,7 +555,7 @@ return null`;
       status: 'executed',
       summary: "Launched workflow script 'tool-test' (async)",
     });
-    expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
+    expect(result.output).toContain(`Run ID: ${runId}`);
     expect(result.output).toContain(
       'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
     );
@@ -615,9 +603,9 @@ return null`;
       summary: "Launched workflow script 'edited-tool-test' (async)",
     });
     expect(result.output).toContain(`Script file: ${scriptPath}`);
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionIdFor('edited-tool-test'),
+      runIdFor('edited-tool-test'),
       registrationRecordFor('edited-tool-test'),
       'edited-tool-test',
       registrationOptionsFor('edited-tool-test'),
@@ -638,7 +626,7 @@ return null`;
     )?.[1];
     expect(draftPath).toBeTruthy();
     expect(await WorkspaceFS.read(draftPath ?? '')).toBe(invalidScript);
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
   });
 
   it('reports the same editable file when file-mode parsing fails', async () => {
@@ -744,8 +732,8 @@ return null`;
       "name: 'tool-test'",
       "name: 'interrupted-resume'",
     );
-    const runExecutionId = runExecutionIdFor('interrupted-resume');
-    const store = getExecutionRecords(currentSession(), runExecutionId);
+    const runId = runIdFor('interrupted-resume');
+    const store = getRunRecords(currentSession(), runId);
     await Effect.runPromise(
       store.writeReport('stale success from the prior attempt'),
     );
@@ -780,8 +768,8 @@ return null`;
       error: expect.stringContaining("Unknown workflow agent 'missing-agent'"),
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
+    expect(mocks.createChildRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -796,9 +784,9 @@ return null`;
       parentModel: 'parent-model',
       withScope: expect.any(Function),
     });
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionIdFor('tool-test'),
+      runIdFor('tool-test'),
       registrationRecordFor('tool-test', 'served-model'),
       'tool-test',
       registrationOptionsFor('tool-test'),
@@ -821,12 +809,12 @@ return null`;
       ),
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
+    expect(mocks.createChildRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('validates files and binds them to the live workflow run stream', async () => {
+  it('validates files and binds them to the live workflow run', async () => {
     const files = {
       inputFiles: ['paper.tex'],
       contextFiles: ['references.bib'],
@@ -836,10 +824,10 @@ return null`;
 
     expect(result.status).toBe('executed');
     // The durable record stays honest (no file lists); the binding rides the
-    // checkpoint and the live stream config the agent steps consume.
-    expect(mocks.createChildStream).toHaveBeenCalledWith(
+    // checkpoint and the live run config the agent steps consume.
+    expect(mocks.createChildRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionIdFor('tool-test'),
+      runIdFor('tool-test'),
       expect.anything(),
       expect.objectContaining({
         config: expect.objectContaining({
@@ -872,7 +860,7 @@ return null`;
         limitBytes: 100 * 1024,
       },
     });
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.registerRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -884,7 +872,7 @@ return null`;
       mediaFiles: ['figure.pdf'],
     } as const satisfies WorkflowScriptFiles;
     await writeWorkflowScriptCheckpoint(
-      getExecutionStore(executionId),
+      getRunStore(parentRunId),
       checkpointIdFor('resume'),
       {
         script: resumeScript,
@@ -897,9 +885,9 @@ return null`;
     const result = await callTool({ script: resumeScript });
 
     expect(result.status).toBe('executed');
-    expect(mocks.createChildStream).toHaveBeenCalledWith(
+    expect(mocks.createChildRun).toHaveBeenCalledWith(
       currentSession(),
-      runExecutionIdFor('resume'),
+      runIdFor('resume'),
       expect.anything(),
       expect.objectContaining({
         config: expect.objectContaining({
@@ -913,20 +901,20 @@ return null`;
 
   it('regenerates the same run id across relaunches of one meta.name', async () => {
     await callTool();
-    const first = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
+    const first = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
     mocks.startChildRunLoop.mockClear();
     // A retrying model rewrites its source; the deterministic run id and the
     // meta.name-anchored checkpoint keep resume intact.
     await callTool({ script: `${script}\n// retry rewrote me` });
-    const second = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
+    const second = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
 
-    expect(first).toBe(runExecutionIdFor('tool-test'));
+    expect(first).toBe(runIdFor('tool-test'));
     expect(second).toBe(first);
   });
 
-  it('hydrates the committed workflow snapshot when reopening a named execution', async () => {
-    const runId = runExecutionIdFor('tool-test');
-    const store = getExecutionRecords(currentSession(), runId);
+  it('hydrates the committed workflow snapshot when reopening a named run', async () => {
+    const runId = runIdFor('tool-test');
+    const store = getRunRecords(currentSession(), runId);
     const priorWorkflow = {
       lifecycle: 'active' as const,
       stages: [],
@@ -938,13 +926,13 @@ return null`;
           attempts: [
             {
               number: 1,
-              id: 'bbbbbb222222',
+              id: 'bbbbbb222222' as RunId,
               startedAt: '2026-08-01T00:00:00.000Z',
             },
           ],
           status: 'running' as const,
           costUsd: 1.25,
-          childExecutionId: 'bbbbbb222222',
+          childRunId: 'bbbbbb222222' as RunId,
           timestamps: {
             createdAt: '2026-08-01T00:00:00.000Z',
             updatedAt: '2026-08-01T00:00:01.000Z',
@@ -965,31 +953,30 @@ return null`;
           schemaVersion: 1,
           timestamp: '2026-08-01T00:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
-          streamId: 'stream-test',
           workflow: priorWorkflow,
         };
       }),
     );
-    mocks.registerExecution.mockImplementation(() =>
+    mocks.registerRun.mockImplementation(() =>
       Effect.sync(() => {
-        callOrder.push('registerExecution');
+        callOrder.push('registerRun');
       }),
     );
 
     const result = await callTool();
 
     expect(result.status).toBe('executed');
-    expect(callOrder).toEqual(['readMeta', 'registerExecution']);
+    expect(callOrder).toEqual(['readMeta', 'registerRun']);
     // Strategy must receive the pre-register snapshot, not a post-wipe read.
     expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(priorWorkflow);
     readStrict.mockRestore();
   });
 
   it('reports already-running when the deterministic id is still leased', async () => {
-    const runExecutionId = runExecutionIdFor('tool-test');
-    mocks.registerExecution.mockReturnValueOnce(
+    const runId = runIdFor('tool-test');
+    mocks.registerRun.mockReturnValueOnce(
       Effect.fail(
-        new ExecutionLeaseActiveError(runExecutionId, {
+        new RunLeaseActiveError(runId, {
           pid: 1,
           processStart: '1',
           hostname: 'test-host',
@@ -1003,9 +990,9 @@ return null`;
       status: 'executed',
       summary: "Workflow script 'tool-test' is already running",
     });
-    expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
+    expect(result.output).toContain(`Run ID: ${runId}`);
     // A relaunch over a live run never starts a second competing loop.
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.createChildRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -1016,7 +1003,7 @@ return null`;
       deriveWorkflowScriptCheckpointId({
         name: 'tool-test',
         defaultAgent: 'merge',
-        parentExecutionId: executionId,
+        parentRunId,
       }),
     ).not.toBe(base);
   });

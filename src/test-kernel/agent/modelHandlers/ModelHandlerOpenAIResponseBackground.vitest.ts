@@ -142,7 +142,7 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
 
     assert.ok(
       messages.some((message) =>
-        message.includes('this handler does not support background execution'),
+        message.includes('this handler does not support background run'),
       ),
     );
   });
@@ -154,14 +154,12 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
 
     assert.ok(
       messages.some((message) =>
-        message.includes(
-          'active provider profile disables background execution',
-        ),
+        message.includes('active provider profile disables background run'),
       ),
     );
     assert.equal(
       messages.some((message) =>
-        message.includes('this handler does not support background execution'),
+        message.includes('this handler does not support background run'),
       ),
       false,
     );

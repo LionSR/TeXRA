@@ -31,7 +31,7 @@ function forward(log: Log, fact: LogFact): void {
 
 /**
  * Produce a log-only trace for module-level work outside an agent run.
- * Structured events, stages, and streams remain inert through `noopTrace`.
+ * Structured events, stages, and runs remain inert through `noopTrace`.
  */
 export function createChannelTrace(name: string): AgentTrace {
   const log = createLog(name);

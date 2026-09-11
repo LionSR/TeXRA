@@ -113,7 +113,7 @@ export async function initializeElectronPlatform(
   // The one Effect runtime of this process (PRD 7.7) is installed first: the
   // stores below open as Effect programs, and every project's session graph and
   // Promise-facing fiber runs on it. The entry disposes it last
-  // (`disposeProcessRuntime`), after execution settlement and the projects'
+  // (`disposeProcessRuntime`), after run settlement and the projects'
   // release of their graphs. Its identity is the Node default
   // `createNodePlatform` wires as `platform().processes`, read before
   // installing: an opener that uses the synchronous `open` would otherwise

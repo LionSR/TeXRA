@@ -8,7 +8,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { ExecutionIdSchema } from '@shared/schemas';
+import { RunIdSchema } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -47,7 +47,7 @@ const ViewActionSchema = z.strictObject({
     .literal('view')
     .optional()
     .default('view')
-    .describe('Read execution data (returns immediately). Default action.'),
+    .describe('Read run data (returns immediately). Default action.'),
 
   /** Optional line range [start, end] for large outputs. */
   view_range: ViewRangeSchema.nullish().describe(
@@ -73,16 +73,16 @@ const WaitActionSchema = z.strictObject({
       'Wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops).',
     ),
 
-  /** Execution IDs to wait on (with /executions only; ignored on /executions/{id}). */
+  /** Run IDs to wait on (with /executions only; ignored on /executions/{id}). */
   ids: z
-    .array(ExecutionIdSchema)
+    .array(RunIdSchema)
     .min(1)
     .max(50)
     .nullish()
     .describe(
-      'List of execution IDs to wait on (with /executions only). ' +
+      'List of run IDs to wait on (with /executions only). ' +
         'Waits for any of the listed executions to change status. ' +
-        'If omitted, waits for any active execution.',
+        'If omitted, waits for any active run.',
     ),
 
   /** Max seconds to wait. Default: 300. */
@@ -112,7 +112,7 @@ const KillActionSchema = z.strictObject({
   path: PathFieldSchema,
   action: z
     .literal('kill')
-    .describe('Terminate a running execution by ID (use on /executions/{id}).'),
+    .describe('Terminate a running run by ID (use on /executions/{id}).'),
 });
 
 const ExecutionsToolActionSchema = z.discriminatedUnion('action', [

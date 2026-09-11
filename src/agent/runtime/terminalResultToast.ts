@@ -1,13 +1,28 @@
 /**
  * Session hooks for hosts that present failures from terminal results.
- * Shared error guidance comes from `agentErrorPresentation`. Subagent results
+ * Shared error guidance comes from `agentErrorPresentation`. Child results
  * and outcomes without error metadata do not produce a notification.
  */
+import { SubscriptionRef } from 'effect';
+
 import type { ResultEvent } from '@agent/trace';
 import { agentErrorPresentation } from '@common/errors/agentErrorClassification';
 
 import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
+
+/**
+ * Whether a terminal result belongs to a child run: the handle's parent edge
+ * while the run is tracked (a result is emitted before untrack), else the
+ * fold's, which has the run's `run.start` for a launch that failed before a
+ * handle existed.
+ */
+function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
+  const handle = session.runs.getHandle(event.runId);
+  if (handle) return handle.isChild;
+  const run = SubscriptionRef.getUnsafe(session.view).runs.get(event.runId);
+  return run !== undefined && run.parentId !== null;
+}
 
 /**
  * Track whether a matching terminal result has already claimed failure
@@ -25,7 +40,7 @@ export function trackTerminalResultPresentation(
     if (!matches(event)) return;
     handled =
       event.error?.kind === 'abort' ||
-      (!event.isSubagent &&
+      (!isChildResult(session, event) &&
         event.error !== undefined &&
         agentErrorPresentation(event.error) !== null);
   });
@@ -42,7 +57,7 @@ export function attachTerminalResultToast(
   options: { replayWhenAttached?: boolean } = {},
 ): () => void {
   return session.onResult((event) => {
-    if (event.isSubagent || !event.error) return;
+    if (!event.error || isChildResult(session, event)) return;
     const toast = agentErrorPresentation(event.error);
     if (toast?.type === 'instruction') {
       interactions.emit('requestShowInstruction', toast.payload, options);

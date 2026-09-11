@@ -14,7 +14,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 

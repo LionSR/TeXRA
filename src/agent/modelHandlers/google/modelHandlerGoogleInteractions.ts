@@ -1795,7 +1795,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
-      // A streaming call's own finally has already closed its progress streams.
+      // A streaming call's own finally has already closed its progress runs.
       attachPartialText(error, takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX));
       throw error;
     }
@@ -2168,7 +2168,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /**
    * Consume the SSE event stream, routing deltas to the output / thinking
-   * streams and tool-argument buffers, then assemble the finalized response.
+   * runs and tool-argument buffers, then assemble the finalized response.
    */
   private async consumeStream(
     stream: Stream<InteractionSSEEvent>,
@@ -2177,7 +2177,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
     const output = this.createOutputStream();
     const thinking = this.createThinkingStream();
-    let streamsFinalized = false;
+    let runsFinalized = false;
 
     try {
       const pending = new Map<number, PendingStepBuffer>();
@@ -2271,21 +2271,21 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
             : (completedInteraction?.steps ?? []),
       };
 
-      this.finalizeProgressStreams(
+      this.finalizeProgressRuns(
         thinking,
         output,
         response,
         () => this.extractResponse(response, endTag ?? '').text,
       );
-      streamsFinalized = true;
+      runsFinalized = true;
 
       return { response };
     } finally {
-      // Finalize the progress streams on a mid-stream failure so the progress
+      // Finalize the progress runs on a mid-stream failure so the progress
       // view does not hang in a loading state. Guarded so the success-path
       // finalize above (with the real content) is not overwritten.
-      if (!streamsFinalized) {
-        this.finalizeProgressStreamsOnError(thinking, output);
+      if (!runsFinalized) {
+        this.finalizeProgressRunsOnError(thinking, output);
       }
     }
   }

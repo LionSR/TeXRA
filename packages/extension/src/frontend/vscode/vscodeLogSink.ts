@@ -5,7 +5,7 @@
  * tag, a user-selectable level, and the Output view's level filter, so nothing
  * here formats a line: an entry's level picks the channel method and the rest
  * is the message. One channel serves the whole extension — a run's events are
- * the transcript's to render, not a per-execution output channel's.
+ * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
 import * as vscode from 'vscode';

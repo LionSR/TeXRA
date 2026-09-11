@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -12,7 +12,7 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -42,49 +42,49 @@ class SuspendNode extends BaseNode<{ count: number }> {
   }
 }
 
-type ExecutionStore = ReturnType<typeof getExecutionStore>;
+type RunStore = ReturnType<typeof getRunStore>;
 
 function expectStoredRecord(
-  store: ExecutionStore,
-  executionId: ExecutionId,
+  store: RunStore,
+  runId: RunId,
   expected: Record<string, unknown>,
 ): Promise<void> {
-  return expect(
-    store.read<FlowRecord>(flowKey(executionId)),
-  ).resolves.toMatchObject(expected);
+  return expect(store.read<FlowRecord>(flowKey(runId))).resolves.toMatchObject(
+    expected,
+  );
 }
 
 describe('PersistedFlow', () => {
-  // Regression for the executionKvFiles leak fix: consumers that recognize a
+  // Regression for the runKvFiles leak fix: consumers that recognize a
   // flow record's KV filename (e.g. `isKVFile`) now import FLOW_KEY_PREFIX
   // instead of hard-coding 'flow_', so pin that flowKey() is still built from it.
   it('builds the flow key from the exported FLOW_KEY_PREFIX', () => {
-    const executionId = 'abc125' as ExecutionId;
-    expect(flowKey(executionId)).toBe(`${FLOW_KEY_PREFIX}${executionId}`);
+    const runId = 'abc125' as RunId;
+    expect(flowKey(runId)).toBe(`${FLOW_KEY_PREFIX}${runId}`);
   });
 
   it('writes the current schema version into new flow records', async () => {
-    const executionId = 'abc126' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    const flow = new PersistedFlow(new CompleteNode(), store, executionId);
+    const runId = 'abc126' as RunId;
+    const store = getRunStore(runId);
+    const flow = new PersistedFlow(new CompleteNode(), store, runId);
 
     await flow.run({ count: 0 });
 
-    await expectStoredRecord(store, executionId, {
+    await expectStoredRecord(store, runId, {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       cursor: { nextNodeId: null, lastAction: 'complete' },
     });
   });
 
   it('replays from the persisted cursor, not from the start node', async () => {
-    const executionId = 'abc127' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const runId = 'abc127' as RunId;
+    const store = getRunStore(runId);
     const first = new ContinueOnceNode();
     const second = new CompleteNode();
     first.on('again', second);
-    const flow = new PersistedFlow(first, store, executionId);
+    const flow = new PersistedFlow(first, store, runId);
 
-    await store.write(flowKey(executionId), {
+    await store.write(flowKey(runId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: { count: 0, continue: false },
       cursor: { nextNodeId: 'start/again', lastAction: 'again' },
@@ -92,22 +92,22 @@ describe('PersistedFlow', () => {
 
     await flow.run({ count: 999, continue: true });
 
-    await expectStoredRecord(store, executionId, {
+    await expectStoredRecord(store, runId, {
       shared: { count: 1, continue: false },
       cursor: { nextNodeId: null, lastAction: 'complete' },
     });
   });
 
   it('rejects a legacy no-cursor record loudly', async () => {
-    const executionId = 'abc128' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const runId = 'abc128' as RunId;
+    const store = getRunStore(runId);
     const first = new ContinueOnceNode();
     const second = new CompleteNode();
     first.on('again', second);
-    const flow = new PersistedFlow(first, store, executionId);
+    const flow = new PersistedFlow(first, store, runId);
 
     // Deliberately invalid: pre-cursor records are no longer supported.
-    await store.write(flowKey(executionId), {
+    await store.write(flowKey(runId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       shared: { count: 1, continue: false },
     });
@@ -118,13 +118,13 @@ describe('PersistedFlow', () => {
   });
 
   it('persists WAITING without advancing the replay cursor', async () => {
-    const executionId = 'abc129' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    const flow = new PersistedFlow(new SuspendNode(), store, executionId);
+    const runId = 'abc129' as RunId;
+    const store = getRunStore(runId);
+    const flow = new PersistedFlow(new SuspendNode(), store, runId);
 
     await expect(flow.run({ count: 0 })).resolves.toBe(FlowTransition.WAITING);
 
-    await expectStoredRecord(store, executionId, {
+    await expectStoredRecord(store, runId, {
       shared: { count: 1 },
       cursor: {
         nextNodeId: 'start',
@@ -135,7 +135,7 @@ describe('PersistedFlow', () => {
     await expect(flow.run({ count: 999 })).resolves.toBe(
       FlowTransition.WAITING,
     );
-    await expectStoredRecord(store, executionId, {
+    await expectStoredRecord(store, runId, {
       shared: { count: 2 },
       cursor: {
         nextNodeId: 'start',
@@ -145,23 +145,23 @@ describe('PersistedFlow', () => {
   });
 
   it('persists flow records as compact JSON', async () => {
-    const executionId = 'abc130' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const runId = 'abc130' as RunId;
+    const store = getRunStore(runId);
 
-    await new PersistedFlow(new CompleteNode(), store, executionId).run({
+    await new PersistedFlow(new CompleteNode(), store, runId).run({
       count: 0,
     });
 
     const raw = await StorageFS.read(
-      resolveRunStoragePath(executionId, `${flowKey(executionId)}.json`),
+      resolveRunStoragePath(runId, `${flowKey(runId)}.json`),
     );
     expect(raw).toContain('"schemaVersion"');
     expect(raw).not.toContain('\n');
   });
 
   it('parses shared through the schema only at the deserialization boundary', async () => {
-    const executionId = 'abc131' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const runId = 'abc131' as RunId;
+    const store = getRunStore(runId);
     interface Shared {
       count: number;
       continue: boolean;
@@ -176,7 +176,7 @@ describe('PersistedFlow', () => {
     const buildFlow = () => {
       const first = new ContinueOnceNode();
       first.on('again', new CompleteNode());
-      return new PersistedFlow(first, store, executionId, schema);
+      return new PersistedFlow(first, store, runId, schema);
     };
 
     // A fresh run owns every record it writes: no re-parse per transition.

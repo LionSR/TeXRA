@@ -10,7 +10,7 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   TOOL_USE_STATUS,
   isTerminalWorkflowCallProgress,
   type LogLevel,
@@ -19,10 +19,10 @@ import {
   type WorkflowPlanMarker,
   type WorkflowCallProgress,
   type TranscriptEvent,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLog,
   StreamLogAppendInput,
@@ -62,7 +62,7 @@ export function createTranscriptFold(
   writer: Pick<StreamLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
 ) {
   /** Stream rows opened by `stream.start` that nothing has settled yet. */
-  const streams = new Set<string>();
+  const runs = new Set<string>();
   const activeToolEntries = new Map<string, ToolUseLog>();
   const stageMetadata = new Map<string, StageMetadata>();
   const workflowCallEntries = new Set<string>();
@@ -136,7 +136,7 @@ export function createTranscriptFold(
           messageType: MESSAGE_TYPES.DEFAULT,
           text: redactSecrets(event.label),
           data: {
-            status: STREAM_PHASE.RUNNING,
+            status: RUN_PHASE.RUNNING,
             ...metadata,
           },
           verbose: stamp.debug,
@@ -163,7 +163,7 @@ export function createTranscriptFold(
         pendingModelResponseId = undefined;
         // event.logId is the canonical id. SDK consumers correlate
         // tool.start/end by it and the store entry shares the same id so
-        // callers can lookup with store.get(streamId).find(e => e.id === logId).
+        // callers can lookup with store.get(runId).find(e => e.id === logId).
         const data = {
           toolName: event.toolName,
           input: event.input,
@@ -326,7 +326,7 @@ export function createTranscriptFold(
       case 'stream.start': {
         if (transcriptBoundaryClosed) return;
         const messageType = asMessageType(event.kind);
-        streams.add(event.id);
+        runs.add(event.id);
         if (messageType === MESSAGE_TYPES.MODEL_RESPONSE)
           pendingModelResponseId = event.id;
         writer.append({
@@ -343,14 +343,14 @@ export function createTranscriptFold(
         return;
       }
       case 'stream.end': {
-        if (!streams.has(event.id) || transcriptBoundaryClosed) return;
+        if (!runs.has(event.id) || transcriptBoundaryClosed) return;
         writer.settle(event.id, {
           ...(event.finalText !== undefined && {
             text: redactSecrets(event.finalText),
           }),
           data: { status: 'completed' },
         });
-        streams.delete(event.id);
+        runs.delete(event.id);
         return;
       }
       case 'response.finalized': {
@@ -365,7 +365,7 @@ export function createTranscriptFold(
         const correlatorId = pendingModelResponseId;
         pendingModelResponseId = undefined;
         if (correlatorId) {
-          streams.delete(correlatorId);
+          runs.delete(correlatorId);
           writer.settle(correlatorId, {
             text: redactSecrets(event.text),
             data: { status: 'completed' },
@@ -423,19 +423,18 @@ export function createTranscriptFold(
       }
     }
   };
-  const status = (phase: StreamPhase): void => {
-    if (phase === STREAM_PHASE.RUNNING) {
+  const status = (phase: RunPhase): void => {
+    if (phase === RUN_PHASE.RUNNING) {
       transcriptBoundaryClosed = false;
       return;
     }
-    if (phase !== STREAM_PHASE.WAITING && !isTerminalOutcomePhase(phase))
-      return;
+    if (phase !== RUN_PHASE.WAITING && !isTerminalOutcomePhase(phase)) return;
     transcriptBoundaryClosed = true;
     pendingModelResponseId = undefined;
-    for (const id of streams) {
+    for (const id of runs) {
       writer.settle(id, { data: { status: 'completed' } });
     }
-    streams.clear();
+    runs.clear();
     for (const [id, data] of activeToolEntries) {
       writer.settle(id, {
         data: {

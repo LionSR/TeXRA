@@ -1,27 +1,27 @@
 /**
- * Post-compaction execution context: formats active subagents, todos, and the
+ * Post-compaction run context: formats active subagents, todos, and the
  * work plan as XML so the agent can pick up its task after context has been
  * compacted (summarized) mid-run.
  */
 
 import {
-  STREAM_PHASE,
+  RUN_PHASE,
   type ActiveChildInfo,
   type TodoItem,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { childElapsedMs } from '@shared/streams/childElapsed';
+import { childElapsedMs } from '@shared/runs/childElapsed';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 
 /**
- * Format active execution state as context for the agent after compaction.
+ * Format active run state as context for the agent after compaction.
  * Returns null if there are no active children to report.
  *
  * This helps the agent understand what subagents are still running after
  * context was compressed, so it can:
  * - Avoid launching duplicate subagents
- * - Know which execution IDs to check on
+ * - Know which run IDs to check on
  * - Understand that pending results may arrive as follow-up messages
  */
 export function formatPostCompactionContext(
@@ -54,9 +54,9 @@ export function formatPostCompactionContext(
     for (const sa of subagents) {
       const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
       // Paused and settled children have no live elapsed reading. This mirrors
-      // the CLI child list and avoids presenting pause time as execution time.
+      // the CLI child list and avoids presenting pause time as run time.
       const elapsedMs =
-        sa.status === STREAM_PHASE.RUNNING
+        sa.status === RUN_PHASE.RUNNING
           ? childElapsedMs(sa, Date.now())
           : undefined;
       const elapsedAttr =
@@ -64,7 +64,7 @@ export function formatPostCompactionContext(
           ? ''
           : ` elapsed="${escapeAttr(formatDuration(elapsedMs))}"`;
       lines.push(
-        `  <subagent id="${escapeAttr(sa.executionId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
+        `  <subagent id="${escapeAttr(sa.childRunId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
       );
     }
     lines.push('</active-subagents>');

@@ -19,8 +19,8 @@ export function createStubDesktopSettingsUiHost(
 ): DesktopSettingsUiHost {
   return {
     openPath: noOp,
-    revealStream: async () => 'revealed',
-    getStreamLabel: () => undefined,
+    revealRun: async () => 'revealed',
+    getRunLabel: () => undefined,
     promptForSecret: async () => undefined,
     openExternal: noOp,
     showInfoMessage: noOp,

@@ -28,7 +28,7 @@ const program = Effect.gen(function* () {
   const level = yield* Stream.runHead(session.view.changes);
   console.log(
     'first view level:',
-    level._tag === 'Some' ? `${level.value.streams.size} streams` : 'none',
+    level._tag === 'Some' ? `${level.value.runs.size} runs` : 'none',
   );
 
   const open = yield* sessions.list;

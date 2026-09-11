@@ -52,6 +52,16 @@
       "specifier": "@agent/index"
     },
     {
+      "file": "src/test-kernel/cli/ExecuteCli.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
+      "file": "src/test-kernel/cli/ExecuteCli.vitest.ts",
+      "form": "mock",
+      "specifier": "@agent/storage"
+    },
+    {
       "file": "src/test-kernel/cli/History.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"
@@ -75,16 +85,6 @@
       "file": "src/test-kernel/cli/RunChatConfig.vitest.ts",
       "form": "mock",
       "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/runtime/runAgent"
-    },
-    {
-      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunProgressRenderer.vitest.ts",

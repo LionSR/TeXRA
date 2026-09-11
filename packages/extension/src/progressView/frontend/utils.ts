@@ -1,6 +1,6 @@
 // Shared utility functions for the progress view frontend.
 
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 
 /**
@@ -31,14 +31,14 @@ export function getComposedPathElement<T extends Element>(
 export function dispatchGroupToggle(
   host: EventTarget,
   event: Event,
-  streamId: StreamTabId | null,
+  runId: RunId | null,
   key: string,
 ): void {
-  if (event.target !== event.currentTarget || streamId === null) return;
+  if (event.target !== event.currentTarget || runId === null) return;
   host.dispatchEvent(
     SessionUiEvents.surface({
       kind: 'group',
-      streamId,
+      runId,
       key,
       expanded: event.type === 'wa-show',
     }),

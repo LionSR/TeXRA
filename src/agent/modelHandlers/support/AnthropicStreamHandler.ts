@@ -52,7 +52,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<AgentTrace['openStream']> | null;
+  outputStream: ReturnType<AgentTrace['openRun']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /**
@@ -92,11 +92,11 @@ interface StreamHandlerConfig {
 }
 
 /**
- * Factory functions for creating streams.
+ * Factory functions for creating token streams.
  */
-interface StreamFactories {
-  createThinkingStream: () => ReturnType<AgentTrace['openStream']>;
-  createOutputStream: () => ReturnType<AgentTrace['openStream']>;
+interface RunFactories {
+  createThinkingStream: () => ReturnType<AgentTrace['openRun']>;
+  createOutputStream: () => ReturnType<AgentTrace['openRun']>;
 }
 
 /**
@@ -114,7 +114,7 @@ export class AnthropicStreamHandler {
   private compactionActivity: CompactionActivityOperation | undefined;
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<AgentTrace['openStream']>
+    ReturnType<AgentTrace['openRun']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,
@@ -140,7 +140,7 @@ export class AnthropicStreamHandler {
   constructor(
     private readonly logger: AgentTrace,
     private readonly config: StreamHandlerConfig,
-    private readonly factories: StreamFactories,
+    private readonly factories: RunFactories,
   ) {}
 
   /**

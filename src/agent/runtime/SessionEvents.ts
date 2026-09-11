@@ -16,7 +16,7 @@ import {
   type SessionEvent,
   type DisplaySessionEvent,
   type SessionEventDraft,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import {
@@ -122,12 +122,12 @@ export const sessionEventsLayer = Layer.effect(
   }),
 );
 
-/** A source trace fact on its stream aggregate. Streaming chunks remain transient. */
+/** A source trace fact on its run aggregate. Streaming chunks remain transient. */
 export function runEventDraft(
-  streamId: StreamTabId,
+  runId: RunId,
   event: AgentEvent,
 ): SessionEventDraft | null {
-  const aggregateId = qualifyAggregateId('stream', streamId);
+  const aggregateId = qualifyAggregateId('run', runId);
   switch (event.type) {
     case 'stream.chunk':
       return null;
@@ -139,6 +139,12 @@ export function runEventDraft(
         recordTranscript: event.recordTranscript,
         stageId: event.stageId,
       };
+    case 'run.config':
+    case 'result': {
+      // The aggregate is the run: the row carries no second copy of its id.
+      const { runId: _runId, ...body } = event;
+      return { ...body, aggregateId };
+    }
     default:
       // Trace arrays are readonly; publication validates and serializes them
       // at the database boundary without changing their contents.
@@ -146,10 +152,10 @@ export function runEventDraft(
   }
 }
 
-/** The `status` arm of one canonical status fact, on the stream it names. */
+/** The `status` arm of one canonical status fact, on the run it names. */
 export function statusDraft(event: StatusEvent): SessionEventDraft {
   return {
     ...event,
-    aggregateId: qualifyAggregateId('stream', event.streamId),
+    aggregateId: qualifyAggregateId('run', event.runId),
   };
 }

@@ -33,13 +33,13 @@ export interface AgentReviewRunToken {
 }
 
 /**
- * Owns the active Agent Review execution: its stop request, the findings it
+ * Owns the active Agent Review run: its stop request, the findings it
  * collects against, and whether its results are still wanted.
  *
  * Token identity plus the discarded bit is the sole currency test — a result
  * or a reported issue is applied only while {@link isCurrent} holds for the
  * token that produced it. `clear()` discards without releasing the slot,
- * because the underlying execution settles on its own schedule.
+ * because the underlying run settles on its own schedule.
  */
 export class AgentReviewRunController {
   private activeRun: AgentReviewRunToken | undefined;
@@ -85,7 +85,7 @@ export class AgentReviewRunController {
     run.collection = collection;
   }
 
-  /** Attach the exact execution handle and replay any earlier stop. */
+  /** Attach the exact run handle and replay any earlier stop. */
   bind(run: AgentReviewRunToken, handle: AgentRunHandle): Effect.Effect<void> {
     if (this.activeRun !== run) return Effect.void;
     run.handle = handle;
@@ -124,9 +124,8 @@ export class AgentReviewRunController {
   private stop(run: AgentReviewRunToken): Effect.Effect<void> {
     const handle = run.handle;
     if (!handle) return Effect.void;
-    if (run.session.executions.getHandle(handle.executionId) !== handle)
-      return Effect.void;
-    return run.session.executions.stopAgentStream(handle.childStreamId, {
+    if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
+    return run.session.runs.stopAgentRun(handle.runId, {
       detachActiveChildren: detachSubagentsOnStop(),
     });
   }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
@@ -8,11 +8,11 @@ import {
   type WorkflowScriptControl,
 } from '@agent/workflowScript';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
-const executionId = '7154costtest' as ExecutionId;
+const runId = '7154c0570057' as RunId;
 const key = '0000000000000000';
 const meta = `export const meta = {
   name: 'cost-test',
@@ -78,7 +78,7 @@ return await agent('retry cost')`,
         attempt += 1;
         invocation.report?.({
           costUsd: attempt === 1 ? 0.2 : 0.3,
-          childExecutionId: `retry-cost-${attempt}` as ExecutionId,
+          childRunId: `retry-cost-${attempt}` as RunId,
         });
         if (attempt === 1) {
           await new Promise<void>((_resolve, reject) =>
@@ -97,7 +97,7 @@ return await agent('retry cost')`,
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
-    control('retry-cost-1' as ExecutionId, 'retry');
+    control('retry-cost-1' as RunId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
 
@@ -222,7 +222,7 @@ describe('workflow-script completed journal cost', () => {
   });
 
   it('produces the same total after a checkpoint replay', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(runId);
     const script = `${meta}
 await agent('first')
 return await agent('second')`;
@@ -237,7 +237,7 @@ return await agent('second')`;
     clearStoreCache();
     const runner = vi.fn(() => Promise.reject(new Error('must replay')));
     const replayed = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(runId),
       checkpointId: 'replay',
       runAgent: runner,
     });
@@ -248,7 +248,7 @@ return await agent('second')`;
   });
 
   it('can settle completed entries retained after a script failure', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(runId);
     const script = `${meta}
 await agent('completed')
 throw new Error('later failure')`;

@@ -382,7 +382,7 @@ describe('Edge cases', () => {
       {
         role: 'assistant',
         content: [
-          { type: 'code_execution_tool_result', content: 'execution output' },
+          { type: 'code_execution_tool_result', content: 'run output' },
           { type: 'bash_code_execution_tool_result', content: 'bash output' },
           {
             type: 'text_editor_code_execution_tool_result',

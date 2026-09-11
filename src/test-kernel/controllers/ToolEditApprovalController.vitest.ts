@@ -11,11 +11,11 @@ import {
   type ToolEditPreview,
   type ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
-const STREAM_ID = 'TestAgent@model: paper.tex' as StreamTabId;
+const STREAM_ID = 'TestAgent@model: paper.tex' as RunId;
 
 function approvalRequest(): ToolEditApprovalRequest {
   return toolEditApprovalRequest({
@@ -23,7 +23,7 @@ function approvalRequest(): ToolEditApprovalRequest {
     originalContent: 'old',
     proposedContent: 'new',
     sourceTool: 'edit_file',
-    streamId: STREAM_ID,
+    runId: STREAM_ID,
   });
 }
 
@@ -99,7 +99,7 @@ describe('tool edit approval controller', () => {
 
     const approval = controller.requestApproval(approvalRequest());
     await vi.waitFor(() => testHost.contextForRequest());
-    await controller.approvePendingForStream(STREAM_ID);
+    await controller.approvePendingForRun(STREAM_ID);
     testHost.staging.resolve();
 
     await expect(approval).resolves.toEqual({

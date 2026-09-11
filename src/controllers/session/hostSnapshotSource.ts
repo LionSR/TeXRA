@@ -44,7 +44,7 @@ interface HostSnapshotSourceOptions {
    *  never shown. */
   apiKeyBanner?: () => Promise<Banners['apiKey']>;
   dependencyBanner?: () => Promise<Banners['dependency']>;
-  /** Write directly to the bridge's host snapshot, which its streams replay. */
+  /** Write directly to the bridge's host snapshot, which its runs replay. */
   publish(snapshot: HostSnapshot): void;
   onError(error: unknown): void;
 }

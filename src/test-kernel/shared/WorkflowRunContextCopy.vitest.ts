@@ -1,21 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { type CompileFailure, type OutputFileInfo } from '@shared/schemas';
+import {
+  type CompileFailure,
+  type OutputFileInfo,
+  type RunId,
+} from '@shared/schemas';
 import {
   formatWorkflowRunContext,
   type WorkflowRunContextInput,
 } from '@shared/copy/workflowRunContext';
 
-type StreamFields = WorkflowRunContextInput['stream'];
+type RunFields = WorkflowRunContextInput['run'];
 
-function baseStream(overrides: Partial<StreamFields> = {}): StreamFields {
+function baseRun(overrides: Partial<RunFields> = {}): RunFields {
   return {
     // The resolved identity display name — a producer never ships an
     // arbitrary label beside a resolved identity.
     label: 'writer',
     model: 'gemini31p',
     modelLabel: 'Gemini 3.1 Pro',
-    executionId: 'a1b2c3d4',
+    runId: 'a1b2c3d4',
     ...overrides,
   };
 }
@@ -30,7 +34,7 @@ function output(overrides: Partial<OutputFileInfo> = {}): OutputFileInfo {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     ...overrides,
   };
@@ -46,13 +50,13 @@ function compileFailure(
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     log: {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.log',
       relativePath: 'answer.log',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     logRelativePath: 'answer.log',
     ...overrides,
@@ -62,7 +66,7 @@ function compileFailure(
 describe('formatWorkflowRunContext', () => {
   it('addresses run-storage outputs the way an agent reads them', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ description: 'Rewrite the introduction' }),
+      run: baseRun({ description: 'Rewrite the introduction' }),
       files: { 2: [output()] },
       compileFailures: {},
     });
@@ -70,7 +74,7 @@ describe('formatWorkflowRunContext', () => {
     expect(text).toBe(
       [
         'Workflow run: writer (Gemini 3.1 Pro)',
-        'Execution: a1b2c3d4',
+        'Run: a1b2c3d4',
         'Goal: Rewrite the introduction',
         '',
         'Outputs:',
@@ -81,7 +85,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('renders workspace outputs relative and external outputs absolute', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {
         1: [
           output({
@@ -114,7 +118,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('orders rounds numerically rather than by key string', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {
         10: [
           output({
@@ -136,7 +140,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('lists compile failures with their log paths', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: { 2: [output()] },
       compileFailures: { 2: [compileFailure()] },
     });
@@ -148,7 +152,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('copies a failed run that produced no outputs', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {},
       compileFailures: { 2: [compileFailure()] },
     });
@@ -157,21 +161,21 @@ describe('formatWorkflowRunContext', () => {
     expect(text).toContain('Compile failures:');
   });
 
-  it('omits the execution and goal lines when the stream has neither', () => {
+  it('omits the run and goal lines when the run has neither', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ executionId: undefined, description: undefined }),
+      run: baseRun({ runId: undefined, description: undefined }),
       files: { 2: [output()] },
       compileFailures: {},
     });
 
-    expect(text).not.toContain('Execution:');
+    expect(text).not.toContain('Run:');
     expect(text).not.toContain('Goal:');
     expect(text.startsWith('Workflow run: writer (Gemini 3.1 Pro)')).toBe(true);
   });
 
   it('drops the model parenthetical when the run has no model', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ model: undefined, modelLabel: undefined }),
+      run: baseRun({ model: undefined, modelLabel: undefined }),
       files: { 2: [output()] },
       compileFailures: {},
     });
@@ -182,7 +186,7 @@ describe('formatWorkflowRunContext', () => {
   it('returns empty when the run has no outputs and no failures', () => {
     expect(
       formatWorkflowRunContext({
-        stream: baseStream(),
+        run: baseRun(),
         files: {},
         compileFailures: {},
       }),
@@ -191,7 +195,7 @@ describe('formatWorkflowRunContext', () => {
     // An empty per-round bucket is still nothing to copy.
     expect(
       formatWorkflowRunContext({
-        stream: baseStream(),
+        run: baseRun(),
         files: { 2: [] },
         compileFailures: {},
       }),

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -14,7 +14,7 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
+import type { ToolResult, UserQuestionPermission } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -48,19 +48,19 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
 ) {
   const context = tryUseRunContext();
   requireInteractions('ask_user_question', context);
-  const streamId = getRunContextStreamId(context);
+  const runId = getRunContextRunId(context);
   const requestId = `user-question-${generateShortId()}`;
 
   logger.info('User question requested', {
     data: input.questions[0]?.question.slice(0, 100) ?? '',
   });
 
-  const permission = {
+  const permission: UserQuestionPermission = {
     requestId,
     questions: input.questions,
     context: input.context ?? undefined,
     allowBypass: false,
-    streamId: streamId ?? '',
+    runId: runId ?? '',
   };
   const session = currentSession();
   const result = yield* hostPort(() =>

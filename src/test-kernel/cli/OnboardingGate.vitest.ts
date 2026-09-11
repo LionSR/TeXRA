@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   hasUsableSetupCredential: vi.fn(),
-  listExecutions: vi.fn(),
+  listRuns: vi.fn(),
 }));
 
 vi.mock('@model/setupCredentialAccess', () => ({
@@ -17,7 +17,7 @@ vi.mock('@model/setupCredentialAccess', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  listExecutions: () => Effect.tryPromise(() => mocks.listExecutions()),
+  listRuns: () => Effect.tryPromise(() => mocks.listRuns()),
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({
@@ -52,7 +52,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
-    mocks.listExecutions.mockReset().mockResolvedValue([]);
+    mocks.listRuns.mockReset().mockResolvedValue([]);
     services = createFakePlatform();
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -158,7 +158,7 @@ describe('maybeRunCliOnboarding gate', () => {
     'skips onboarding for credential-less users with prior run history',
     () =>
       Effect.gen(function* () {
-        mocks.listExecutions.mockResolvedValue([{ id: 'previous-run' }]);
+        mocks.listRuns.mockResolvedValue([{ id: 'previous-run' }]);
 
         expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
           SKIPPED,

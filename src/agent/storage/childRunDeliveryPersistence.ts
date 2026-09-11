@@ -4,7 +4,7 @@ import { Cause, Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
-  type ExecutionId,
+  type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -12,17 +12,17 @@ import type { ResultMeta } from './resultMeta';
 
 export function persistChildRunDelivery(
   session: SessionHandle,
-  executionId: ExecutionId,
+  runId: RunId,
   message: string,
   resultMeta: ResultMeta | undefined,
 ): Effect.Effect<void, Error> {
-  const target = aggregateId('execution', executionId);
+  const target = aggregateId('run', runId);
   const events: SessionEventDraft[] = [
-    { type: 'execution.report', aggregateId: target, report: message },
+    { type: 'run.report', aggregateId: target, report: message },
   ];
   if (resultMeta !== undefined)
     events.push({
-      type: 'execution.result',
+      type: 'run.result',
       aggregateId: target,
       result: resultMeta,
     });

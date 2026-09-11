@@ -15,9 +15,9 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
+import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   ProgressWorkflowRunActionsController,
@@ -42,9 +42,8 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   cloneRoundIndexed,
-  type ExecutionId,
   type FileOpResult,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
@@ -75,14 +74,14 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { DesktopAgentExecution } from './desktopAgentExecution.js';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRun } from './desktopAgentRun.js';
+import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
-  host: DesktopAgentExecutionHost;
-  execution: DesktopAgentExecution;
+  host: DesktopAgentRunHost;
+  run: DesktopAgentRun;
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
   draftRequests: HostDraftRequests;
@@ -129,7 +128,7 @@ function operationLabel(operation: WorkflowFileOperation): {
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, execution, logger } = options;
+  const { session, host, run, logger } = options;
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -139,20 +138,18 @@ export function createDesktopHostRequests(
   );
   const snapshots = session.snapshots;
 
-  const stream = (streamId: StreamTabId) => {
-    const found = SubscriptionRef.getUnsafe(session.view).streams.get(streamId);
-    if (!found) {
+  const requireOpenRun = (runId: RunId): void => {
+    if (!SubscriptionRef.getUnsafe(session.view).runs.has(runId)) {
       throw new Unavailable({
-        streamId,
+        runId,
         reason: 'The stream is no longer open.',
       });
     }
-    return found;
   };
 
   const runActions = createHostRunActions({
     session,
-    runExecutionRequest: execution.runExecutionRequest,
+    runAgentRequest: run.runAgentRequest,
     loadModelOptions: () => computeModelOptionsData(),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
@@ -166,8 +163,6 @@ export function createDesktopHostRequests(
     showInfo: (message) => host.showInfoMessage(message),
     showWarning: (message) => host.showWarningMessage(message),
   });
-  const { getRunMetadata } = runActions.snapshotPort;
-
   const { snapshotPort } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
@@ -186,15 +181,15 @@ export function createDesktopHostRequests(
       session,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
-      startExecution: (request) => {
+      startRun: (request) => {
         effectRuntime().runFork(
           Effect.tryPromise({
-            try: () => execution.runValidated(request),
+            try: () => run.runValidated(request),
             catch: (error) => error,
           }).pipe(
             Effect.catch((error) =>
               Effect.sync(() => {
-                logger.error('Desktop merge execution failed', {
+                logger.error('Desktop merge run failed', {
                   data: toLogData(error),
                 });
                 const primaryError = primaryAgentError(error);
@@ -229,12 +224,12 @@ export function createDesktopHostRequests(
   async function runLatexdiffFile(
     baseFile: string,
     editedFile: string,
-    streamId?: StreamTabId,
+    runId?: RunId,
   ): Promise<void> {
     const context =
-      streamId === undefined
+      runId === undefined
         ? undefined
-        : await getLatexdiffRunContext(streamId, editedFile);
+        : await getLatexdiffRunContext(runId, editedFile);
     if (!context) {
       await fileActions.runLatexdiffFile(baseFile, editedFile);
       return;
@@ -249,16 +244,13 @@ export function createDesktopHostRequests(
    * this context crosses several awaits before anything enumerates it.
    */
   async function getLatexdiffRunContext(
-    streamId: StreamTabId,
+    runId: RunId,
     editedFile: string,
   ): Promise<DesktopLatexdiffRunContext | undefined> {
     const config = await effectRuntime().runPromise(
-      runActions.readConfig(streamId),
+      runActions.readConfig(runId),
     );
-    const outputsByRound = cloneRoundIndexed(
-      snapshots.getOutputFiles(streamId),
-    );
-    const { executionId } = getRunMetadata(streamId);
+    const outputsByRound = cloneRoundIndexed(snapshots.getOutputFiles(runId));
     const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
       ? {
           agent: config.agent,
@@ -276,7 +268,7 @@ export function createDesktopHostRequests(
     }
     return {
       outputsByRound,
-      ...(executionId && { executionId }),
+      runId,
       ...(workspaceScan && { workspaceScan }),
     };
   }
@@ -302,8 +294,8 @@ export function createDesktopHostRequests(
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
-    sendFollowUp: (streamId, text) =>
-      effectRuntime().runPromise(runActions.sendFollowUp(streamId, text)),
+    sendFollowUp: (runId, text) =>
+      effectRuntime().runPromise(runActions.sendFollowUp(runId, text)),
   });
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
@@ -314,7 +306,7 @@ export function createDesktopHostRequests(
     }
     await fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
-      ...(request.runId && { executionId: request.runId }),
+      runId: request.runId,
       workspaceScan: {
         agent: request.agent,
         model: request.model,
@@ -355,19 +347,19 @@ export function createDesktopHostRequests(
     request: WorkflowFileOperationRequest,
   ): Promise<void> {
     const { verb, gerund } = operationLabel(operation);
-    const { agent, model, inputFile, executionId } = request;
+    const { agent, model, inputFile, runId } = request;
     if (!agent || !model || !inputFile) {
       throw new Rejected({ reason: `Select an input file before ${gerund}.` });
     }
-    if (!executionId) {
-      throw new Rejected({ reason: `Missing execution identity for ${verb}.` });
+    if (!runId) {
+      throw new Rejected({ reason: `Missing run identity for ${verb}.` });
     }
     const ran = await effectRuntime().runPromiseExit(
       Effect.tryPromise({
         try: () =>
           operation === 'pack'
-            ? runPackRunDir(executionId as ExecutionId, agent, model, inputFile)
-            : runCleanRunDir(executionId as ExecutionId),
+            ? runPackRunDir(runId as RunId, agent, model, inputFile)
+            : runCleanRunDir(runId as RunId),
         catch: (error) => error,
       }),
     );
@@ -421,10 +413,10 @@ export function createDesktopHostRequests(
     return chatExportControllerLoad;
   }
 
-  async function exportTranscript(streamId: StreamTabId): Promise<void> {
-    const { executionId } = stream(streamId);
+  async function exportTranscript(runId: RunId): Promise<void> {
+    requireOpenRun(runId);
     await effectRuntime().runPromise(
-      exportStreamTranscript(executionId, {
+      exportRunTranscript(runId, {
         pickFormat: () => host.pickTranscriptExportFormat(),
         openPath: (filePath) => host.openPath(filePath),
         showInfo: (message) => host.showInfoMessage(message),
@@ -593,32 +585,32 @@ export function createDesktopHostRequests(
       }
       case 'openTaskStorage':
         await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+          session.snapshots.preload([request.runId]),
         );
-        await workflowFileActions.openTaskStorage(request.streamId);
+        await workflowFileActions.openTaskStorage(request.runId);
         return done;
       case 'exportTranscript':
-        await exportTranscript(request.streamId);
+        await exportTranscript(request.runId);
         return done;
       case 'restoreIntoLauncher':
         restoreIntoLauncher(
           await effectRuntime().runPromise(
-            runActions.restoreState(request.streamId),
+            runActions.restoreState(request.runId),
           ),
         );
         return done;
       case 'resume':
-        await effectRuntime().runPromise(runActions.resume(request.streamId));
+        await effectRuntime().runPromise(runActions.resume(request.runId));
         return done;
       case 'runNew':
-        await effectRuntime().runPromise(runActions.runNew(request.streamId));
+        await effectRuntime().runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
         await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+          session.snapshots.preload([request.runId]),
         );
         await effectRuntime().runPromise(
-          runActions.runCompileFixer(request.streamId),
+          runActions.runCompileFixer(request.runId),
         );
         return done;
       case 'useOwnApiKey':
@@ -626,18 +618,18 @@ export function createDesktopHostRequests(
         return done;
       case 'latexdiff': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
-        await workflowRunActions.diffStream(request.streamId, config);
+        await workflowRunActions.diffStream(request.runId, config);
         return done;
       }
       case 'pack':
       case 'clean': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
         await workflowRunActions.runFileOperation(
-          request.streamId,
+          request.runId,
           request.kind,
           config,
         );
@@ -689,7 +681,7 @@ export function createDesktopHostRequests(
           ),
         };
       case 'launch':
-        await execution.runValidated(
+        await run.runValidated(
           await effectRuntime().runPromise(prepareSurfaceLaunch(request, host)),
         );
         return done;
@@ -698,7 +690,7 @@ export function createDesktopHostRequests(
       case 'extractFigures':
         throw notOnDesktop('Figure extraction');
       case 'toolEdit':
-        execution.toolEditApprovals.handleAction({
+        run.toolEditApprovals.handleAction({
           requestId: request.requestId,
           action: request.action,
           ...(request.feedback == null ? {} : { feedback: request.feedback }),
@@ -706,7 +698,7 @@ export function createDesktopHostRequests(
         return done;
       case 'fileAction': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
         await workflowFileActions.handle(request, config);
         return done;

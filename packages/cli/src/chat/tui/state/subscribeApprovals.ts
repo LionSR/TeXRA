@@ -74,7 +74,7 @@ import {
   type ExternalInquiryPermission,
   type PermissionPayload,
   type PlanApprovalPermission,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
@@ -88,7 +88,7 @@ import {
   setCliSubscriptionPreference,
 } from './subscriptionPreference';
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   currentApproval,
   reserveHostRequest,
   settleHostRequestsWhere,
@@ -132,13 +132,13 @@ function maybeAutoSwitchRetry(
 
 /** A request the surface answers through a `decision.*` runtime request:
  *  the hook's promise stays pending; the runtime's own settlement resolves
- *  the caller. A streamless request has no fact for the fold to list, so
+ *  the caller. A runless request has no fact for the fold to list, so
  *  nothing could answer it; it is declined rather than parked forever. */
 function park<T>(
   kind: PermissionPayload['kind'],
-  streamId: StreamTabId | string | null | undefined,
+  runId: RunId | string | null | undefined,
 ): Promise<T> | undefined {
-  if (!streamId) {
+  if (!runId) {
     logWarning(
       'cli.tui',
       `A ${kind} request named no stream; the TUI cannot present it.`,
@@ -186,18 +186,18 @@ export function createTuiHostInteractions(
       }
     },
     requestBashApproval(request: HostBashApprovalRequest) {
-      return park<BashSettlement>('bash', request.streamId);
+      return park<BashSettlement>('bash', request.runId);
     },
     requestPlanApproval(request: PlanApprovalPermission) {
       return (
         settleByPolicy<PlanApprovalResult>(context) ??
-        park('planApproval', request.streamId)
+        park('planApproval', request.runId)
       );
     },
     requestAgentProposal(request: AgentProposalPermission) {
       return (
         settleByPolicy<ProposalResult>(context) ??
-        park('proposal', request.streamId)
+        park('proposal', request.runId)
       );
     },
     requestRetry(request, options) {
@@ -216,7 +216,7 @@ export function createTuiHostInteractions(
           reason: denial.reason,
         });
       }
-      return park<UserQuestionSettlement>('userQuestion', request.streamId);
+      return park<UserQuestionSettlement>('userQuestion', request.runId);
     },
     async openExternalInquiry(request) {
       handleExternalInquiry(request, context, interactionOwner);
@@ -232,7 +232,7 @@ export function createTuiHostInteractions(
       settleHostRequestsWhere(
         (payload) =>
           matchesCancelSelector(
-            { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
+            { kind: payload.kind, runId: approvalPayloadRunId(payload) },
             selector,
           ),
         {
@@ -324,7 +324,7 @@ async function requestRetryInteraction(
     (payload, owner) =>
       owner === attachment.owner &&
       payload.kind === 'retry' &&
-      payload.data.streamId === request.streamId &&
+      payload.data.runId === request.runId &&
       payload.data.requestId !== request.requestId,
   );
   const reservation = reserveHostRequest(

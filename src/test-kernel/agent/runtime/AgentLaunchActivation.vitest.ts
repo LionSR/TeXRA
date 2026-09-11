@@ -2,12 +2,11 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  acquireResumedExecutionLease: vi.fn(),
+  acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
-  hasPersistedParent: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
@@ -29,17 +28,14 @@ vi.mock('@transcript', async (importActual) => ({
   createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
-vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@agent/storage/executionLifecycle')
-  >()),
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
-  hasPersistedParent: mocks.hasPersistedParent,
 }));
-vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
+  acquireResumedRunLease: mocks.acquireResumedRunLease,
+  assertOwnedRunLease: vi.fn(),
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
@@ -47,8 +43,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
@@ -56,12 +51,12 @@ import {
 } from '@agent/runtime/executeAgent';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  type AggregateId,
   AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
@@ -72,7 +67,16 @@ import {
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 
-const LAUNCH_FAILURE = new Error('stop after stream activation');
+const LAUNCH_FAILURE = new Error('stop after run activation');
+
+/** The run an aggregate key names: every fact here lives on a run. */
+function runOf(key: AggregateId): RunId {
+  const target = aggregateTarget(key);
+  if (target.kind !== 'run') throw new Error('expected a run aggregate');
+  return target.id;
+}
+
+const FRESH_RUN_ID = 'f1e501' as RunId;
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;
 
 const config = AgentConfigSchema.parse({
@@ -84,7 +88,7 @@ const config = AgentConfigSchema.parse({
 interface StartedLaunch {
   readonly session: ReturnType<typeof createTestSession>;
   /** The creation fact; absent on a resume, which activates an existing
-   *  stream and mints no `run.start` (decision 9). */
+   *  run and mints no `run.start` (decision 9). */
   readonly start: Extract<SessionEvent, { type: 'run.start' }> | undefined;
   readonly activate: Extract<SessionEvent, { type: 'run.activate' }>;
   readonly result: Extract<SessionEvent, { type: 'result' }>;
@@ -100,17 +104,21 @@ async function captureStartedLaunch(
     session: ReturnType<typeof createTestSession>,
   ) => Effect.Effect<unknown, Error>,
   options: {
-    readonly isSubagent?: boolean;
-    readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
+    /** The launching run, when this launch is a child. */
+    readonly parentRunId?: RunId;
+    /** A resume activates this already-created run instead of minting one. */
+    readonly resumedRunId?: RunId;
   } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
-  if (options.resumed) {
-    publishTestRunStart(
-      session,
-      options.resumed.streamId,
-      options.resumed.executionId,
-    );
+  if (options.parentRunId) {
+    publishTestRunStart(session, options.parentRunId);
+    await session.settlePublications();
+  }
+  if (options.resumedRunId) {
+    publishTestRunStart(session, options.resumedRunId, {
+      parent: options.parentRunId ?? null,
+    });
     await session.settlePublications();
   }
   const recordedSession = recordSessionEvents(session);
@@ -138,17 +146,16 @@ async function captureStartedLaunch(
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
 
   try {
-    if (!options.resumed)
+    if (!options.resumedRunId)
       await Effect.runPromise(
-        registerExecution(session, 'f1e501', config, 'chat', {
-          streamId: getStreamTabId(config.agent, { executionId: 'f1e501' }),
+        registerRun(session, FRESH_RUN_ID, config, 'chat', {
           identity: { kind: 'agent', agent: 'chat' },
-          background: options.isSubagent ?? false,
+          parentRunId: options.parentRunId,
         }),
       );
     await expect(Effect.runPromise(run(session))).rejects.toBe(LAUNCH_FAILURE);
     const starts = eventsOfType(await recordedSession.read(), 'run.start');
-    expect(starts).toHaveLength(options.resumed ? 0 : 1);
+    expect(starts).toHaveLength(options.resumedRunId ? 0 : 1);
     const activations = eventsOfType(
       await recordedSession.read(),
       'run.activate',
@@ -170,12 +177,12 @@ async function captureStartedLaunch(
 /**
  * A launch that fails after `run.start` folds to failed, never to a ghost:
  * the existence fact carries the launch facts and the session's owner
- * token, and the same failure path ends the stream with its terminal
+ * token, and the same failure path ends the run with its terminal
  * `result` and the FAILED phase.
  */
 function expectStartedThenFailed(
   launch: StartedLaunch,
-  isSubagent: boolean,
+  parentRunId: RunId | undefined,
 ): void {
   const { start } = launch;
   if (!start) throw new Error('a fresh launch emits run.start');
@@ -183,90 +190,86 @@ function expectStartedThenFailed(
     identity: { kind: 'agent', agent: 'chat' },
     category: AgentCategory.ToolUse,
     isRemote: false,
-    background: isSubagent,
+    // The parent edge is the whole of "is a child": the birth fact carries
+    // it, and nothing else spells it.
+    parent:
+      parentRunId === undefined
+        ? null
+        : expect.objectContaining({ id: parentRunId }),
     approvalPolicy: launch.session.approvalPolicySnapshotFor(
-      aggregateTarget(start.aggregateId).id,
+      runOf(start.aggregateId),
     ),
   });
-  expectActivatedThenFailed(launch, isSubagent);
-  expect(launch.result).toMatchObject({ executionId: start.executionId });
+  expectActivatedThenFailed(launch);
+  expect(launch.result.aggregateId).toBe(start.aggregateId);
 }
 
 /** Every activation, fresh or resumed, carries the activation metadata the
  *  frozen wire projects and ends on the same failure path. */
-function expectActivatedThenFailed(
-  launch: StartedLaunch,
-  isSubagent: boolean,
-): void {
+function expectActivatedThenFailed(launch: StartedLaunch): void {
   expect(launch.activate).toMatchObject({
     category: AgentCategory.ToolUse,
     isRemote: false,
-    background: isSubagent,
   });
   expect(launch.result).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
     aggregateId: launch.activate.aggregateId,
-    isSubagent,
   });
-  expect(
-    launch.session.status.get(aggregateTarget(launch.activate.aggregateId).id),
-  ).toBe(STREAM_PHASE.FAILED);
+  expect(launch.session.status.get(runOf(launch.activate.aggregateId))).toBe(
+    RUN_PHASE.FAILED,
+  );
 }
 
 describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.acquireResumedRunLease.mockResolvedValue('existing');
     mocks.getPersistedUserFollowUpSupport.mockReturnValue(
       Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
     );
   });
 
   it.each([
-    { label: 'child', isSubagent: true },
-    { label: 'root', isSubagent: undefined },
+    { label: 'child', parentRunId: 'e11000' as RunId },
+    { label: 'root', parentRunId: undefined },
   ])(
     'starts a fresh $label launch at the commit point and fails it on the same path',
-    async ({ isSubagent }) => {
-      // The subagent flag picks an `executeAgent` overload, so the literal
-      // has to be visible at the call site rather than widened by `it.each`.
+    async ({ parentRunId }) => {
+      // The parent edge picks an `executeAgent` overload, so the call site
+      // has to name it rather than let `it.each` widen it.
       const launch = await captureStartedLaunch(
         (session) =>
           prepareAgentDefinition({ config, session }).pipe(
             Effect.flatMap((definition) =>
-              isSubagent
-                ? executeAgent(definition, 'f1e501' as ExecutionId, {
+              parentRunId
+                ? executeAgent(definition, FRESH_RUN_ID, {
                     session,
-                    isSubagent: true,
+                    parentRunId,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   })
-                : executeAgent(definition, 'f1e501' as ExecutionId, {
+                : executeAgent(definition, FRESH_RUN_ID, {
                     session,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   }),
             ),
           ),
-        { isSubagent },
+        { parentRunId },
       );
 
-      expectStartedThenFailed(launch, isSubagent === true);
-      expect(launch.start).not.toHaveProperty('parentStreamId');
+      expectStartedThenFailed(launch, parentRunId);
       expect(launch.activate.aggregateId).toBe(launch.start?.aggregateId);
     },
   );
 
   it.each([
-    { label: 'child', isSubagent: true },
-    { label: 'root', isSubagent: false },
+    { label: 'child', parentRunId: 'e11001' as RunId },
+    { label: 'root', parentRunId: undefined },
   ])(
     'starts a resumed $label launch at the commit point and fails it on the same path',
-    async ({ isSubagent }) => {
-      const executionId = 'ae5010' as ExecutionId;
-      const streamId = 'resumed-stream' as StreamTabId;
-      mocks.hasPersistedParent.mockReturnValueOnce(Effect.succeed(isSubagent));
+    async ({ parentRunId }) => {
+      const runId = 'ae5010' as RunId;
       const resume = createToolUseResumeData({
-        executionId,
-        streamId,
+        runId,
         agentConfig: config,
         shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
       });
@@ -276,15 +279,15 @@ describe('native agent launch activation', () => {
 
       const launch = await captureStartedLaunch(
         (session) => resumeToolUseFromResumeData(resume, { session }),
-        { resumed: { executionId, streamId } },
+        { parentRunId, resumedRunId: runId },
       );
 
-      // A resume activates the stream it already has: no second creation
+      // A resume activates the run it already has: no second creation
       // fact, one activation on the same failure path.
-      expectActivatedThenFailed(launch, isSubagent);
+      expectActivatedThenFailed(launch);
       expect(launch.start).toBeUndefined();
       expect(launch.activate.aggregateId).toBe(
-        qualifyAggregateId('stream', streamId),
+        qualifyAggregateId('run', runId),
       );
     },
   );

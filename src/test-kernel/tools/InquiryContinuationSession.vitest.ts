@@ -27,7 +27,7 @@ import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   type InquiryThreadId,
-  type StreamTabId,
+  RunIdSchema,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -43,7 +43,7 @@ import {
 import { recordSessionEvents } from '../agent/progressTestUtils';
 
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
-const STREAM = 'stream:desktop-parent' as StreamTabId;
+const PARENT_RUN = RunIdSchema.parse('d5e700000001');
 
 /**
  * A host-supplied session: only identity plus the publisher the continuation
@@ -89,8 +89,7 @@ function captureFacts(session: SessionHandle): {
 function answeredManifest(): InquiryThreadRecord {
   return {
     threadId: THREAD,
-    parentStreamId: STREAM,
-    parentExecutionId: null,
+    parentRunId: PARENT_RUN,
     status: 'answered',
     createdAt: '2026-06-14T08:00:00.000Z',
     updatedAt: '2026-06-14T08:01:00.000Z',
@@ -115,7 +114,7 @@ describe('external inquiry continuation session routing', () => {
     getThreadSummaryMock.mockReturnValue(
       Effect.succeed({
         threadId: THREAD,
-        parentStreamId: STREAM,
+        parentRunId: PARENT_RUN,
         status: 'answered',
         lastQuestionPreview: 'Check the boundary case.',
         lastActivityIso: '2026-06-14T08:01:00.000Z',
@@ -139,7 +138,7 @@ describe('external inquiry continuation session routing', () => {
 
       expect(outcome).toBe('sent');
       expect(submitFollowUpMock).toHaveBeenCalledWith(
-        STREAM,
+        PARENT_RUN,
         expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
         { session },
       );
@@ -171,7 +170,7 @@ describe('external inquiry continuation session routing', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession({ roots: paperRoots() });
-        publishTestRunStart(session, STREAM);
+        publishTestRunStart(session, PARENT_RUN);
         yield* Effect.promise(() => session.settlePublications());
         const explicit = captureFacts(session);
         const fallback = captureFacts(defaultSession());
@@ -190,7 +189,7 @@ describe('external inquiry continuation session routing', () => {
               type: 'inquiryThreadUpdated',
               aggregateId: qualifyAggregateId('inquiry', THREAD),
               threadId: THREAD,
-              parentStreamId: STREAM,
+              parentRunId: PARENT_RUN,
               status: 'answered',
               lastQuestionPreview: 'Check the boundary case.',
               lastActivityIso: '2026-06-14T08:01:00.000Z',

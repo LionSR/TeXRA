@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
-import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
+import type { ChildRecord, RunListingEntry } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 /**
  * The one display model for the /executions surface: the listing lines, the
  * /executions/{id} summary line sets, and the predicates both answer their
  * questions with — what a run's display category is, whether it shows a model,
  * and which sub-paths it serves. Formatting only: the one exception is the
- * status reading, which asks `resolveExecutionLiveness` for the durable
+ * status reading, which asks `resolveRunLiveness` for the durable
  * ownership facts a missing in-process handle cannot supply.
  */
 
@@ -15,17 +15,14 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type {
-  AgentExecutionHandle,
-  ExecutionStatusInfo,
-} from '@agent/runtime/ExecutionHandle';
+import type { RunHandle, RunStatusInfo } from '@agent/runtime/RunHandle';
 import type {
   AgentCategory,
-  ExecutionId,
-  ExecutionMeta,
+  RunId,
+  RunMeta,
   RunIdentity,
   TodoItem,
 } from '@shared/schemas';
@@ -39,24 +36,24 @@ import { formatTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - liveness
 import {
-  resolveExecutionLiveness,
-  type ExecutionLiveness,
-  type KnownExecutionMeta,
-} from './executions/executionLiveness';
+  resolveRunLiveness,
+  type RunLiveness,
+  type KnownRunMeta,
+} from './executions/runLiveness';
 
 /**
- * The display category of a run: an agent run shows its execution mode
+ * The display category of a run: an agent run shows its run mode
  * (`workflow` / `toolUse`), every other run shows what it IS
  * (`process` / `multiAgentWorkflow`). Identity-less legacy rows fall back to the
  * config's category.
  */
-export type ExecutionDisplayCategory =
+export type RunDisplayCategory =
   AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
 
-export function executionDisplayCategory(
+export function runDisplayCategory(
   identity: RunIdentity | undefined,
   record: RunRecord | null | undefined,
-): ExecutionDisplayCategory | undefined {
+): RunDisplayCategory | undefined {
   const agentCategory =
     record && isAgentRunRecord(record) ? record.agentCategory : undefined;
   if (!identity) return agentCategory;
@@ -71,7 +68,7 @@ export function executionDisplayCategory(
  * carry a model only when a real one backs the run, and then it is shown; a
  * legacy fabricated `AgentConfig` on a non-agent identity stays suppressed.
  */
-function executionDisplayModel(
+function runDisplayModel(
   identity: RunIdentity | undefined,
   record: RunRecord | null | undefined,
 ): string | null {
@@ -82,7 +79,7 @@ function executionDisplayModel(
     : null;
 }
 
-function listingDisplay(entry: ExecutionListingEntry): {
+function listingDisplay(entry: RunListingEntry): {
   agent: string;
   model: string | null;
   category: string | undefined;
@@ -91,8 +88,8 @@ function listingDisplay(entry: ExecutionListingEntry): {
     case 'run':
       return {
         agent: runIdentityName(entry.identity),
-        model: executionDisplayModel(entry.identity, entry.record),
-        category: executionDisplayCategory(entry.identity, entry.record),
+        model: runDisplayModel(entry.identity, entry.record),
+        category: runDisplayCategory(entry.identity, entry.record),
       };
     case 'incomplete':
       return { agent: 'unknown', model: 'unknown', category: undefined };
@@ -101,7 +98,7 @@ function listingDisplay(entry: ExecutionListingEntry): {
 
 /** Return paths available for a given agent category. */
 function getAvailablePaths(
-  category?: ExecutionDisplayCategory,
+  category?: RunDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
   const common = ['config', 'report', 'result'];
@@ -131,7 +128,7 @@ function getAvailablePaths(
 }
 
 /** Format status info as a display string. */
-export function formatStatusInfo(info: ExecutionStatusInfo): string {
+export function formatStatusInfo(info: RunStatusInfo): string {
   const base = info.elapsed
     ? `${info.status} (${info.elapsed} elapsed)`
     : info.status;
@@ -139,7 +136,7 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
 }
 
 /**
- * The runtime status for an execution ID, from `resolveExecutionLiveness`:
+ * The runtime status for a run ID, from `resolveRunLiveness`:
  * a live handle's phase, else the recorded outcome, else the fact that forbids
  * a terminal reading, else `cancelled` for an interrupted run.
  *
@@ -152,25 +149,21 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
  */
-export const getExecutionStatusInfo = Effect.fn('getExecutionStatusInfo')(
-  function* (
-    executionId: ExecutionId,
-    session: SessionHandle,
-    knownMeta?: KnownExecutionMeta,
-  ) {
-    return statusInfoFromLiveness(
-      yield* resolveExecutionLiveness(executionId, session, knownMeta),
-    );
-  },
-);
+export const getRunStatusInfo = Effect.fn('getRunStatusInfo')(function* (
+  runId: RunId,
+  session: SessionHandle,
+  knownMeta?: KnownRunMeta,
+) {
+  return statusInfoFromLiveness(
+    yield* resolveRunLiveness(runId, session, knownMeta),
+  );
+});
 
 /**
  * The same reading for a caller that already resolved the liveness and needs
  * the arm itself (to word a footer, say) as well as the status line.
  */
-export function statusInfoFromLiveness(
-  liveness: ExecutionLiveness,
-): ExecutionStatusInfo {
+export function statusInfoFromLiveness(liveness: RunLiveness): RunStatusInfo {
   switch (liveness.kind) {
     case 'live':
       return liveness.info;
@@ -192,21 +185,19 @@ export function statusInfoFromLiveness(
 
 /** Format a listing entry as a single summary line. */
 export const formatListingLine = Effect.fn('formatListingLine')(function* (
-  entry: ExecutionListingEntry,
+  entry: RunListingEntry,
   session: SessionHandle,
 ) {
   const ts = formatTimestamp(entry.timestamp);
-  // The row was built from this execution's metadata, outcome included, so the
+  // The row was built from this run's metadata, outcome included, so the
   // status reading reuses it instead of reading the same file again.
-  const info = yield* getExecutionStatusInfo(entry.id, session, {
+  const info = yield* getRunStatusInfo(entry.id, session, {
     outcome: entry.outcome,
   });
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
-  const parentSuffix = entry.parentExecutionId
-    ? `  parent=${entry.parentExecutionId}`
-    : '';
+  const parentSuffix = entry.parentRunId ? `  parent=${entry.parentRunId}` : '';
   const descSuffix = entry.description ? `: ${entry.description}` : '';
   return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 });
@@ -218,11 +209,11 @@ export function formatTodoSection(todos: readonly TodoItem[]): string[] {
 
 /** Format a todo header with counts. */
 export function formatTodoHeader(
-  executionId: ExecutionId,
+  runId: RunId,
   todos: readonly TodoItem[],
 ): string {
   const { completed, inProgress, pending } = countByStatus(todos);
-  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${pending} pending):`;
+  return `Tasks for ${runId} (${completed} done, ${inProgress} active, ${pending} pending):`;
 }
 
 // ============================================================================
@@ -230,79 +221,79 @@ export function formatTodoHeader(
 // ============================================================================
 
 /** Options controlling how showSummary renders a result report. */
-export interface ExecutionSummaryOptions {
+export interface RunSummaryOptions {
   readonly suppressAutoDeliveredSubagentReport?: boolean;
 }
 
 /**
  * Whether a report already auto-delivered to the caller should be elided from
- * the summary: true when `handle` is a tool-use child whose parent stream is
- * the calling stream — i.e. the caller already receives this child's report
+ * the summary: true when `handle` is a tool-use child whose parent run is
+ * the calling run — i.e. the caller already receives this child's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
  * Deliberately identity-kind-agnostic: background bash processes
  * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
  * like delegated agents do, and must stay suppressed too.
  */
 export function shouldSuppressAutoDeliveredSubagentReport(
-  options: ExecutionSummaryOptions,
-  handle: AgentExecutionHandle,
+  options: RunSummaryOptions,
+  handle: RunHandle,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
   return (
     handle.category === 'toolUse' &&
-    handle.isOwnedBy(getRunContextStreamId(tryUseRunContext()))
+    handle.isOwnedBy(getRunContextRunId(tryUseRunContext()))
   );
 }
 
-/** Format a single child execution as a summary line. */
+/** Format a single child run as a summary line. */
 export const formatChildLine = Effect.fn('formatChildLine')(function* (
   child: ChildRecord,
-  childMeta: ExecutionMeta | null,
+  childMeta: RunMeta | null,
   session: SessionHandle,
 ) {
-  const info = yield* getExecutionStatusInfo(child.id, session, childMeta);
+  const info = yield* getRunStatusInfo(child.id, session, childMeta);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
 });
 
-/** Build the summary lines for a still-running execution (in-memory handle). */
+/** Build the summary lines for a still-running run (in-memory handle). */
 export function buildRunningSummaryLines(
-  executionId: ExecutionId,
-  handle: AgentExecutionHandle,
-  category: ExecutionDisplayCategory | undefined,
-  info: ExecutionStatusInfo,
-  meta: ExecutionMeta | null,
+  runId: RunId,
+  handle: RunHandle,
+  category: RunDisplayCategory | undefined,
+  info: RunStatusInfo,
+  meta: RunMeta | null,
 ): string[] {
   const lines = [
-    `Execution: ${executionId}`,
+    `Run: ${runId}`,
     `Agent: ${handle.agentName}`,
     ...(category ? [`Category: ${category}`] : []),
     `Started: ${new Date(handle.startedAt).toISOString()}`,
     `Status: ${formatStatusInfo(info)}`,
   ];
 
-  if (meta?.parentExecutionId) {
-    lines.push(`Parent: ${meta.parentExecutionId}`);
+  if (meta?.parentRunId) {
+    lines.push(`Parent: ${meta.parentRunId}`);
   }
 
   return lines;
 }
 
-/** Build the summary lines for a completed execution (full KV fetch). */
+/** Build the summary lines for a completed run (full KV fetch). */
 export function buildCompletedSummaryLines(
-  executionId: ExecutionId,
+  runId: RunId,
   record: RunRecord | null,
   identity: RunIdentity | undefined,
-  category: ExecutionDisplayCategory | undefined,
-  info: ExecutionStatusInfo,
-  meta: ExecutionMeta | null,
+  category: RunDisplayCategory | undefined,
+  info: RunStatusInfo,
+  meta: RunMeta | null,
 ): string[] {
   const name =
     record && (isAgentRunRecord(record) ? record.agent : record.name);
-  const model = executionDisplayModel(identity, record);
+  const model = runDisplayModel(identity, record);
   const lines = [
-    `Execution: ${executionId}`,
+    `Run: ${runId}`,
     `Agent: ${name ?? 'unknown'}`,
     ...(category ? [`Category: ${category}`] : []),
     ...(model === null ? [] : [`Model: ${model}`]),
@@ -314,8 +305,8 @@ export function buildCompletedSummaryLines(
     lines.push(`Description: ${meta.description}`);
   }
 
-  if (meta?.parentExecutionId) {
-    lines.push(`Parent: ${meta.parentExecutionId}`);
+  if (meta?.parentRunId) {
+    lines.push(`Parent: ${meta.parentRunId}`);
   }
 
   return lines;
@@ -327,8 +318,8 @@ export function buildCompletedSummaryLines(
  * needs whether there were any children, not the records themselves.
  */
 export function buildSummaryTailLines(
-  executionId: ExecutionId,
-  category: ExecutionDisplayCategory | undefined,
+  runId: RunId,
+  category: RunDisplayCategory | undefined,
   hasChildren: boolean,
   todos: readonly TodoItem[],
   report: string | null,
@@ -343,7 +334,7 @@ export function buildSummaryTailLines(
   if (report && options.suppressReport) {
     lines.push(
       '',
-      `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${executionId}/report to read the persisted report explicitly.`,
+      `Result: delivered automatically to this parent run as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
     );
   } else if (report) {
     lines.push('', 'Result:', report);
@@ -352,7 +343,7 @@ export function buildSummaryTailLines(
   const paths = getAvailablePaths(category, hasChildren);
   lines.push(
     '',
-    `Available paths: ${paths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+    `Available paths: ${paths.map((p) => `/executions/${runId}/${p}`).join(', ')}`,
   );
 
   return lines;

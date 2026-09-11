@@ -2,7 +2,7 @@
 //
 // The thinking stream must open on the reasoning output item — not the first
 // summary delta — so subscribers can surface "the model is thinking" even
-// when no summary text ever streams (gpt-5 with summaries disabled), and it
+// when no summary text ever runs (gpt-5 with summaries disabled), and it
 // must close at every phase boundary so the indicator turns off.
 
 import { describe, expect, it } from 'vitest';

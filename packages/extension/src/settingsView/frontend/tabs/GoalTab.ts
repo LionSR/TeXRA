@@ -85,7 +85,7 @@ export class GoalTab extends LitElement {
         -webkit-box-orient: vertical;
       }
 
-      .stream-id {
+      .run-id {
         font-family: var(--wa-font-family-mono);
         font-size: var(--font-size-xs);
         color: var(--wa-color-text-quiet);
@@ -99,8 +99,8 @@ export class GoalTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST, {});
   };
 
-  private handleReveal(streamId: string): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM, { streamId });
+  private handleReveal(runId: string): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN, { runId });
   }
 
   private renderActions(): TemplateResult {
@@ -117,7 +117,7 @@ export class GoalTab extends LitElement {
 
   private renderRow(item: Goal): TemplateResult {
     const metaParts: MetaPart[] = [
-      html`<code class="stream-id" dir="ltr">${item.streamId}</code>`,
+      html`<code class="run-id" dir="ltr">${item.runId}</code>`,
       html`<span title="Wall-clock duration since this Goal started"
         >duration ${formatCompactDuration(goalElapsedMs(item))}</span
       >`,
@@ -126,7 +126,7 @@ export class GoalTab extends LitElement {
       <button
         type="button"
         class="goal-row is-clickable"
-        @click=${() => this.handleReveal(item.streamId)}
+        @click=${() => this.handleReveal(item.runId)}
       >
         <span class="visually-hidden">Open goal:</span>
         <wa-badge

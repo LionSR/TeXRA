@@ -8,12 +8,7 @@ import type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import type {
-  ExecutionId,
-  RunOutcome,
-  StreamTabId,
-  OutputFileSummary,
-} from '@shared/schemas';
+import type { RunId, RunOutcome, OutputFileSummary } from '@shared/schemas';
 
 const OUTPUT: OutputFileSummary = {
   round: 1,
@@ -25,7 +20,7 @@ const OUTPUT: OutputFileSummary = {
   removed: 2,
 };
 
-const EXECUTION_ID = 'abcdefabcdef' as ExecutionId;
+const RUN_ID = 'abcdefabcdef' as RunId;
 
 function workflowFlowResult(
   overrides: Partial<WorkflowFlowResult> = {},
@@ -33,8 +28,7 @@ function workflowFlowResult(
   return {
     category: 'workflow',
     outcome: 'completed',
-    executionId: EXECUTION_ID,
-    streamId: 'stream:workflow' as StreamTabId,
+    runId: RUN_ID,
     outputs: [],
     compileFailures: [],
     ...overrides,
@@ -47,8 +41,7 @@ function toolUseFlowResult(
   return {
     category: 'toolUse',
     outcome: 'completed',
-    executionId: EXECUTION_ID,
-    streamId: 'stream:tool-use' as StreamTabId,
+    runId: RUN_ID,
     ...overrides,
   };
 }
@@ -183,7 +176,7 @@ describe('AgentFinalResult', () => {
     expectInvalidFinalResult({
       category: 'toolUse',
       outcome: 'completed',
-      executionId: 'abcdefabcdef',
+      runId: 'abcdefabcdef',
     });
   });
 

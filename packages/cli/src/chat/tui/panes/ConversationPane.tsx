@@ -2,10 +2,10 @@ import { Box } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
-import { selectedStreamId as selectedStreamIdSignal } from '../state/cliState';
-import { sessionView, streamPhaseOf, streamViewOf } from '../state/sessionView';
+import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
+import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
 import {
   mergeLocalNotices,
   mergedSettledRows,
@@ -37,20 +37,20 @@ interface ConversationPaneProps {
   readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentRunLabels?: RunLabels;
 }
 
 function renderConversationPaneEntry({
   colorEnabled,
   entry,
   rowLimit,
-  subagentExecutionLabels,
+  subagentRunLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly rowLimit?: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentRunLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
   const content = ((): React.JSX.Element | null => {
@@ -60,7 +60,7 @@ function renderConversationPaneEntry({
           colorEnabled={colorEnabled}
           entry={entry}
           maxRows={rowLimit}
-          subagentExecutionLabels={subagentExecutionLabels}
+          subagentRunLabels={subagentRunLabels}
           width={width}
         />
       );
@@ -69,7 +69,7 @@ function renderConversationPaneEntry({
       case 'tool':
         return (
           <ToolUseRow
-            subagentExecutionLabels={subagentExecutionLabels}
+            subagentRunLabels={subagentRunLabels}
             toolRow={entry}
             width={width}
           />
@@ -117,23 +117,20 @@ function renderConversationPaneEntry({
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
-  const activeStreamId = useSignal(selectedStreamIdSignal);
+  const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
-  const stream = streamViewOf(view, activeStreamId);
-  const streamNotices = noticesFor(allNotices, activeStreamId);
-  const entries = mergeLocalNotices(
-    stream?.transcript.rows ?? [],
-    streamNotices,
-  );
+  const stream = runViewOf(view, activeRunId);
+  const runNotices = noticesFor(allNotices, activeRunId);
+  const entries = mergeLocalNotices(stream?.transcript.rows ?? [], runNotices);
   const displayEntries = pendingTranscriptEntries(
     entries,
     mergedSettledRows(
       stream?.transcript.rows ?? [],
       stream?.transcript.settledRows ?? 0,
-      streamNotices,
+      runNotices,
     ),
-    streamPhaseOf(stream),
+    runPhaseOf(stream),
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =
@@ -147,7 +144,7 @@ export function ConversationPane(
         estimateLiveTranscriptEntryRows(
           newestPendingEntry,
           props.width,
-          props.subagentExecutionLabels,
+          props.subagentRunLabels,
         ),
       )
     : 0;
@@ -171,7 +168,7 @@ export function ConversationPane(
     displayEntries,
     Math.max(0, maxRows - detailRows),
     props.width,
-    props.subagentExecutionLabels,
+    props.subagentRunLabels,
   );
   const visibleRows = detailRows + visibleEntries.usedRows;
   return (
@@ -185,7 +182,7 @@ export function ConversationPane(
           colorEnabled: props.colorEnabled,
           entry,
           rowLimit: visibleEntries.rowLimits.get(entry.id),
-          subagentExecutionLabels: props.subagentExecutionLabels,
+          subagentRunLabels: props.subagentRunLabels,
           width: props.width,
         }),
       )}

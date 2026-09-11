@@ -14,7 +14,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { FileSystemProvider } from '@platform/interfaces';
 import {
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
@@ -102,7 +102,7 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
  */
 export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   function* (
-    executionId: ExecutionId,
+    runId: RunId,
     inputFile: string,
     extraBaseFiles: string[] | undefined,
     channel: string,
@@ -110,7 +110,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   ): Effect.fn.Return<RoundIndexed<OutputFileInfo> | null, never> {
     const scan = Effect.gen(function* () {
       const runDirAbsolute = yield* Effect.tryPromise({
-        try: () => findRunDir(executionId),
+        try: () => findRunDir(runId),
         catch: ensureError,
       });
       if (!runDirAbsolute) return null;
@@ -170,7 +170,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
           const location = createRunStorageLocation(
             path.join(runDirAbsolute, relativePath),
             relativePath,
-            executionId,
+            runId,
           );
           // Preserve subdirectory in source (e.g. "chapters/main") so
           // traceFileLineage can match it back to the workspace original.
@@ -213,7 +213,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
     return yield* scan.pipe(
       Effect.catch((error) =>
         Effect.logWarning(
-          `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
+          `RunDir scan for ${runId} failed: ${toErrorMessage(error)}`,
         ).pipe(Effect.as<RoundIndexed<OutputFileInfo> | null>(null)),
       ),
       withLogChannel(channel),

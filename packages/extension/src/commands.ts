@@ -35,7 +35,7 @@ export function registerCommands(
   // `extensionCommandSurface.ts`, dispatched the same way as the desktop
   // registry. The per-command registrations above stay separate because
   // their handlers carry VS Code-specific arguments (TextEditor, Range,
-  // Uri, agent execution payloads) or capture VS Code state directly.
+  // Uri, agent run payloads) or capture VS Code state directly.
   registerExtensionCommandRegistry(
     context,
     createExtensionCommandActions(

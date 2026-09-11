@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
-import type { BashPermission } from '@shared/schemas';
+import type { BashPermission, RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -20,7 +20,7 @@ function createPermission(
     data: {
       requestId: 'bash-request-1',
       allowBypass: false,
-      streamId: '',
+      runId: '',
       command: 'echo hi',
       ...data,
     },
@@ -60,9 +60,9 @@ describe('bash-request-panel', () => {
     expect(actions).toEqual([]);
   });
 
-  it('renders a non-bypass Approve when streamId is empty even if bypass is allowed', async () => {
+  it('renders a non-bypass Approve when runId is empty even if bypass is allowed', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: '' }),
+      createPermission({ allowBypass: true, runId: '' }),
     );
 
     const split = querySplitButton(element);
@@ -72,7 +72,7 @@ describe('bash-request-panel', () => {
 
   it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: 'run-1' as RunId }),
     );
     const actions = recordPermissionActions(element);
 
@@ -85,14 +85,14 @@ describe('bash-request-panel', () => {
         kind: 'policy.set',
         change: {
           field: 'bypass',
-          streamId: 'stream-1',
+          runId: 'run-1',
           bypass: 'bash',
           enabled: true,
         },
       },
       {
         kind: 'decision.bash',
-        streamId: 'stream-1',
+        runId: 'run-1',
         approvalId: 'bash-request-1',
         decision: { action: 'approve' },
       },

@@ -75,7 +75,7 @@ export interface InkRenderHandles {
  *  for assertions and cleanup. The only `ink.render` call site in the test
  *  kernel: the option bag (raw mode, Ctrl-C handling, console patching) is what
  *  the per-suite copies used to drift on. Pass `stdin`/`stdout` when the test
- *  instruments the streams before the mount. */
+ *  instruments the runs before the mount. */
 export function renderInteractive(
   ink: any,
   node: any,

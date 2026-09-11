@@ -28,7 +28,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import {
   getRunContextInteractions,
-  getRunContextStreamId,
+  getRunContextRunId,
 } from '@agent/runtime/RunContext';
 import {
   currentSession,
@@ -41,9 +41,9 @@ import {
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import type { Goal, Plan, ToolResult } from '@shared/schemas';
+import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
-import { requireStreamId } from '@tools/contextHelpers';
+import { requireRunId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
@@ -142,13 +142,13 @@ interface PlanPorts {
 const setGoalAutoApproval = Effect.fn('PlanTool.setGoalAutoApproval')(
   function* (
     ports: PlanPorts,
-    streamId: string,
+    runId: RunId,
     scope: GoalAutoApprovalScope | false,
   ) {
     const interactions = getRunContextInteractions(ports.contexts?.runContext);
     if (interactions) {
       yield* hostPort(() =>
-        setGoalSessionAutoApproval(streamId, scope, {
+        setGoalSessionAutoApproval(runId, scope, {
           session: ports.session,
         }),
       );
@@ -159,13 +159,13 @@ const setGoalAutoApproval = Effect.fn('PlanTool.setGoalAutoApproval')(
 /**
  * Start an autonomous goal whose objective is the just-approved plan
  * document, verbatim. Falls back explicitly if goal is disabled. If one
- * is already in flight for the stream, retarget it so future
+ * is already in flight for the run, retarget it so future
  * continuations follow the current user decision.
  */
 const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   ports: PlanPorts,
   plan: Plan,
-  streamId: string,
+  runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
   if (!ports.inRunScope(isGoalEnabled)) {
@@ -185,22 +185,22 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   const objective = plan.objective;
 
-  // If a goal is already in flight on this stream, retarget it at the
+  // If a goal is already in flight on this run, retarget it at the
   // newly approved objective instead of silently leaving the loop driving
   // the stale one.
-  const existing = ports.inRunScope(() => GoalStore.getForStream(streamId));
+  const existing = ports.inRunScope(() => GoalStore.getForRun(runId));
   if (isGoalInFlight(existing)) {
     return yield* Effect.gen(function* () {
       const retargeted = yield* hostPort(() =>
-        ports.inRunScope(() => GoalStore.editObjective(streamId, objective)),
+        ports.inRunScope(() => GoalStore.editObjective(runId, objective)),
       );
       const active =
         retargeted.status === 'paused'
           ? ((yield* hostPort(() =>
-              ports.inRunScope(() => GoalStore.setStatus(streamId, 'active')),
+              ports.inRunScope(() => GoalStore.setStatus(runId, 'active')),
             )) ?? retargeted)
           : retargeted;
-      yield* setGoalAutoApproval(ports, streamId, autoApprovalScope);
+      yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
@@ -223,7 +223,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
         );
         return Effect.succeed(
           errorResult(
-            `The user approved this plan and requested autonomous execution, ` +
+            `The user approved this plan and requested autonomous run, ` +
               `but the in-flight goal could not be retargeted: ${reason}\n\n` +
               `Work toward the new objective turn-by-turn. The pre-existing ` +
               `goal is still active and will keep injecting continuations ` +
@@ -240,9 +240,9 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   return yield* Effect.gen(function* () {
     const goal = yield* hostPort(() =>
-      ports.inRunScope(() => GoalStore.start(streamId, objective)),
+      ports.inRunScope(() => GoalStore.start(runId, objective)),
     );
-    yield* setGoalAutoApproval(ports, streamId, autoApprovalScope);
+    yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
     return executed(
       `The user approved this plan and started an autonomous goal ` +
         `(${goal.goalId}) toward its stopping condition.\n\n` +
@@ -263,7 +263,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
       );
       return Effect.succeed(
         executed(
-          `The user approved this plan and requested autonomous execution, but ` +
+          `The user approved this plan and requested autonomous run, but ` +
             `the goal could not be started: ${reason}\n\n` +
             `Work toward the objective as a normal turn-by-turn workflow, ` +
             `tracking concrete steps with the todo tool.`,
@@ -275,12 +275,12 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 });
 
 /**
- * Request user approval for a new plan. Pauses execution until approved/rejected.
+ * Request user approval for a new plan. Pauses run until approved/rejected.
  */
 const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   ports: PlanPorts,
   plan: Plan,
-  streamId: string,
+  runId: RunId,
   workPlanState: WorkPlanState,
 ) {
   const requestId = `plan-${generateShortId()}`;
@@ -293,7 +293,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   const result: PlanApprovalResult = yield* hostPort(() => {
     const interaction = ports.session.interactions.requestPlanApproval({
       requestId,
-      streamId,
+      runId,
       plan,
       goalEnabled,
     });
@@ -313,7 +313,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     return yield* startGoalForPlan(
       ports,
       plan,
-      streamId,
+      runId,
       result.autoApproveAll ? 'allAgentWork' : 'commands',
     );
   }
@@ -388,28 +388,23 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and
   // that decision belongs to the user.
-  const streamId = getRunContextStreamId(runContext);
-  if (!streamId) {
-    logger.warn('Plan created without streamId: skipping approval gate');
+  const runId = getRunContextRunId(runContext);
+  if (!runId) {
+    logger.warn('Plan created without runId: skipping approval gate');
     return buildApprovedResult();
   }
-  return yield* requestApproval(
-    ports,
-    plan,
-    streamId,
-    callContext.workPlanState,
-  );
+  return yield* requestApproval(ports, plan, runId, callContext.workPlanState);
 });
 
 const executePause = Effect.fn('PlanTool.executePause')(function* (
   ports: PlanPorts,
-  streamId: string,
+  runId: RunId,
   reason: string,
 ) {
-  const goal = ports.inRunScope(() => GoalStore.getForStream(streamId));
+  const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
-      'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
+      'No autonomous goal is currently running on this run, so there is nothing to pause. ' +
         'If you need user input, ask the user directly in your next message; do not call plan(command="pause") again.',
       'No autonomous goal to pause.',
     );
@@ -422,9 +417,9 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   }
   const updated =
     (yield* hostPort(() =>
-      ports.inRunScope(() => GoalStore.setStatus(streamId, 'paused')),
+      ports.inRunScope(() => GoalStore.setStatus(runId, 'paused')),
     )) ?? goal;
-  yield* setGoalAutoApproval(ports, streamId, false);
+  yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
     'Goal paused.',
@@ -433,13 +428,13 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
 
 const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   ports: PlanPorts,
-  streamId: string,
+  runId: RunId,
   reason: string,
 ) {
-  const goal = ports.inRunScope(() => GoalStore.getForStream(streamId));
+  const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
-      'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
+      'No autonomous goal is currently running on this run, so there is nothing to mark complete. ' +
         'The plan work is otherwise finished; return the final answer to the user and do not call plan(command="complete") again.',
       'Plan-only work complete: summarize the result.',
     );
@@ -447,8 +442,8 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // Completing forgets the record — a goal is a live pursuit, not an
   // archived one. The autonomous loop stops because no `active` record
   // remains for the next wait-node continuation check.
-  yield* hostPort(() => ports.inRunScope(() => GoalStore.forget(streamId)));
-  yield* setGoalAutoApproval(ports, streamId, false);
+  yield* hostPort(() => ports.inRunScope(() => GoalStore.forget(runId)));
+  yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
       `Reason: ${reason}\n\n` +
@@ -460,7 +455,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
 
 /**
  * Build the program for one plan command. Called synchronously from
- * `execute`, so `requireStreamId` / `requireNonEmptyString` still reject a
+ * `execute`, so `requireRunId` / `requireNonEmptyString` still reject a
  * malformed call in the caller's own turn, before any fiber starts.
  */
 function planCommand(
@@ -473,13 +468,13 @@ function planCommand(
     case 'pause':
       return executePause(
         ports,
-        requireStreamId('plan(pause)', ports.contexts?.runContext),
+        requireRunId('plan(pause)', ports.contexts?.runContext),
         requireNonEmptyString(input.reason, 'reason'),
       );
     case 'complete':
       return executeComplete(
         ports,
-        requireStreamId('plan(complete)', ports.contexts?.runContext),
+        requireRunId('plan(complete)', ports.contexts?.runContext),
         requireNonEmptyString(input.reason, 'reason'),
       );
   }

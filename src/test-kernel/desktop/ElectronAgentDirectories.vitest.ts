@@ -131,7 +131,7 @@ describe('desktop agent directory bootstrap', () => {
         hostEnvironment: nodeHostEnvironment,
         secrets: new FakeSecrets(),
         lifecycle: createLifecycleHost(),
-        agentResume: { tryResumeStream: async () => false },
+        agentResume: { tryResumeRun: async () => false },
         agentDirectories: createPlatformAgentDirectories({
           channel: 'test',
           customDirectoryStore: {

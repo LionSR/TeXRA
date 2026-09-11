@@ -25,7 +25,7 @@ const PINNED_FRONTMATTER = [
   '---',
   'modifiedBy: pin-agent',
   'modifiedAt: 2026-01-01T00:00:00.000Z',
-  'executionId: run-7',
+  'runId: run-7',
   'pinned: true',
   '---',
   'pinned body',
@@ -49,7 +49,7 @@ function fileStat(size: number): FileStat {
   };
 }
 
-function streamOf(
+function runOfEvent(
   content: string,
 ): ReturnType<typeof StorageFS.createReadStream> {
   return Readable.from([Buffer.from(content)]) as unknown as ReturnType<
@@ -92,7 +92,7 @@ describe('MemoryTool view with an omitted path', () => {
     );
     vi.spyOn(StorageFS, 'read').mockResolvedValue(TEST_FRONTMATTER);
     vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
-      streamOf(TEST_FRONTMATTER),
+      runOfEvent(TEST_FRONTMATTER),
     );
 
     const omitted = await viewMemory();
@@ -176,7 +176,7 @@ describe('MemoryTool view with an omitted path', () => {
       return dirStat();
     });
     vi.spyOn(StorageFS, 'createReadStream').mockImplementation((target) =>
-      streamOf(target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER),
+      runOfEvent(target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER),
     );
 
     const result = await viewMemory(MEMORY_DISPLAY_ROOT);

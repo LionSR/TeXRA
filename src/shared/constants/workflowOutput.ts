@@ -2,7 +2,7 @@
  * Workflow output-file layout — current format (runDir-relative):
  *   r{round}/output.<ext>
  *
- * Per-execution isolation (executions/{id}/...) provides uniqueness;
+ * Per-run isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
  *
  * The `<base>_<agent>_r{round}_<model>` grammar below is not purely historic:
@@ -39,8 +39,8 @@ export function workflowOutputRoundDir(round: number): string {
  * Build a runDir-relative workflow output path for a round: `r{round}/output.{ext}`.
  *
  * IMPORTANT: callers MUST resolve this through a TaskRunFileService bound to an
- * executionId. The fixed-stem filename is only collision-safe when combined
- * with per-execution run storage; a workspace-scoped resolution would route
+ * runId. The fixed-stem filename is only collision-safe when combined
+ * with per-run run storage; a workspace-scoped resolution would route
  * every round to the same `<workspace>/r{round}/output.{ext}` and clobber
  * outputs across runs.
  */
@@ -55,7 +55,7 @@ export function workflowOutputPath(params: {
 // Agent/round/model filename grammar
 // ============================================================================
 //
-// Before workflow outputs moved to execution-scoped `r{round}/output.*`
+// Before workflow outputs moved to run-scoped `r{round}/output.*`
 // paths, their agent, round, and model were encoded in workspace filenames.
 // Housekeeping, XML packing, latexdiff discovery, and the extension's
 // "Save as copy" action still consume this grammar — the last of those still
@@ -91,7 +91,7 @@ export function workflowOutputCopyStem(params: {
  * Mid-era filename stem: `<base>_<cleanAgent>_<model>`.
  *
  * These files lived in workspace `r{round}/` directories, after the round
- * token left the basename but before outputs moved to execution storage.
+ * token left the basename but before outputs moved to run storage.
  */
 export function midEraWorkflowOutputStem(params: {
   base: string;

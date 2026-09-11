@@ -13,10 +13,7 @@ import { Effect } from 'effect';
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import {
-  lookupStreamExecutionId,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -26,7 +23,7 @@ import {
   type InquiryThreadSummary,
   type InquiryThreadUpdatedEvent,
   type InquiryResumeOutcome,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
@@ -135,12 +132,12 @@ const archiveAsParentFinished = Effect.fn('archiveAsParentFinished')(function* (
 
 const deliverContinuation = Effect.fn('deliverContinuation')(
   function* (params: {
-    parentStreamId: StreamTabId;
+    parentRunId: RunId;
     text: string;
     threadId: InquiryThreadId;
     session: SessionHandle;
   }): Effect.fn.Return<InjectionOutcome, Error, InquiryRecords> {
-    const result = yield* submitFollowUp(params.parentStreamId, params.text, {
+    const result = yield* submitFollowUp(params.parentRunId, params.text, {
       session: params.session,
     });
 
@@ -148,7 +145,7 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
     // Resume delivers it. A refusal has nothing left to continue.
     if (result.status === 'failed') {
       logger.warn(
-        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.reason}).`,
+        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentRunId} refused it (${result.reason}).`,
       );
       return yield* archiveAsParentFinished(params.threadId, params.session);
     }
@@ -166,8 +163,7 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
  * Shared body of the answered / dropped injectors: resolve the manifest,
  * archive when there is nothing to continue (missing thread, a turn-less
  * manifest, an `answered` event whose last turn is no longer answered, no
- * parent stream, or a parent stream since re-run under another execution),
- * then build and deliver the continuation.
+ * parent run), then build and deliver the continuation.
  */
 const injectContinuation = Effect.fn('injectContinuation')(function* (
   event: 'answered' | 'dropped',
@@ -190,29 +186,15 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
     return yield* archiveAsParentFinished(threadId, session);
   }
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
-  if (manifest.parentStreamId == null) {
+  if (manifest.parentRunId == null) {
     return yield* archiveAsParentFinished(threadId, session);
   }
-  // The answer is addressed to the execution that asked. A manifest written
-  // before the field existed names none and is delivered by stream alone.
-  if (manifest.parentExecutionId != null) {
-    const current = yield* lookupStreamExecutionId(
-      manifest.parentStreamId,
-      session,
-    );
-    if (current !== manifest.parentExecutionId) {
-      logger.warn(
-        `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
-      );
-      return yield* archiveAsParentFinished(threadId, session);
-    }
-  }
 
-  const parentStreamId = manifest.parentStreamId;
+  const parentRunId = manifest.parentRunId;
   const stillOpen = yield* records.listThreadsByStatus({
     status: 'open',
-    scope: 'stream',
-    streamId: parentStreamId,
+    scope: 'run',
+    runId: parentRunId,
   });
   const text = buildContinuationText({
     event,
@@ -226,7 +208,7 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   });
 
   return yield* deliverContinuation({
-    parentStreamId: manifest.parentStreamId,
+    parentRunId: manifest.parentRunId,
     text,
     threadId,
     session,

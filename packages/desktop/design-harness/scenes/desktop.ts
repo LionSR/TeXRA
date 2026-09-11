@@ -16,13 +16,13 @@ import type { WorkbenchTab } from '@desktop/shared/desktopTaskShell.js';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import {
   emptySessionView,
   type SessionView,
-  type StreamView,
+  type RunView,
 } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
@@ -125,7 +125,7 @@ const display = (
 function project(
   displayRecord: ProjectDisplay,
   view: SessionView,
-  selected: StreamTabId | null = null,
+  selected: RunId | null = null,
 ): RailProject {
   const surface: Surface = { ...emptySurface(displayRecord.key), selected };
   return { display: displayRecord, view, surface };
@@ -199,7 +199,7 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
 const conversationPane = (
   projects: readonly RailProject[],
   active: RailProject,
-  stream: StreamView | undefined,
+  stream: RunView | undefined,
   body: TemplateResult | typeof nothing,
   options: { chip?: boolean; dock?: boolean } = {},
 ) =>
@@ -237,7 +237,7 @@ const conversationPane = (
 
 /** What `progress-app` puts in the column for a selected stream: its header
  *  (label, ancestors path, status) over its transcript. */
-const transcriptBody = (project: RailProject, stream: StreamView) =>
+const transcriptBody = (project: RailProject, stream: RunView) =>
   html`<stream-header .stream=${stream} .view=${project.view}></stream-header>
     <log-list .stream=${stream} .surface=${project.surface}></log-list>`;
 
@@ -285,7 +285,7 @@ function sceneDesktopProjects(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.streams.get(CHILD);
+  const stream = lp.view.runs.get(CHILD);
   const tabs = [
     tab('pdf', 'main.pdf', '/paper/main.pdf'),
     tab('editor', 'section2.tex', '/paper/section2.tex'),
@@ -309,7 +309,7 @@ function sceneDesktopProjects(): TemplateResult {
 function sceneDesktopOneProject(): TemplateResult {
   const lp = project(LP, withConversation(), CHILD);
   const projects = [lp];
-  const stream = lp.view.streams.get(CHILD);
+  const stream = lp.view.runs.get(CHILD);
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(projects, shellOf('LP', ['LP'])),
@@ -322,7 +322,7 @@ function sceneDesktopOneProject(): TemplateResult {
   );
 }
 
-/** A project with no streams is a distinct Surface with its own composer
+/** A project with no runs is a distinct Surface with its own composer
  *  (PRD 9): its section is empty, the conversation is the launch state, and
  *  the other projects keep their badges. The running project's row is folded so
  *  its badge shows beside the waiting project's amber one. */
@@ -357,7 +357,7 @@ function sceneDesktopNarrow(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.streams.get(CHILD);
+  const stream = lp.view.runs.get(CHILD);
   return html`<div
     class="h-desktop"
     id="frame"
@@ -373,7 +373,7 @@ function sceneDesktopNarrow(): TemplateResult {
   </div>`;
 }
 
-/** Desktop 5: the rail lists top-level streams only while the Subagents
+/** Desktop 5: the rail lists top-level runs only while the Subagents
  *  workbench tab owns the tree; a child is selected. */
 function sceneDesktopSubagents(): TemplateResult {
   const lp = project(LP, withConversation(), CHILD);
@@ -382,8 +382,8 @@ function sceneDesktopSubagents(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.streams.get(CHILD);
-  const root = lp.view.streams.get(ROOT);
+  const stream = lp.view.runs.get(CHILD);
+  const root = lp.view.runs.get(ROOT);
   const tabs = [
     tab('subagents', `Subagents · ${root?.rollup.total ?? 0}`),
     tab('pdf', 'main.pdf', '/paper/main.pdf'),
@@ -415,11 +415,11 @@ function sceneDesktopSubagents(): TemplateResult {
 function sceneDesktopRun(): TemplateResult {
   const view = withWaitingCall();
   const rootId = view.order.find(
-    (id) => view.streams.get(id)?.category === 'workflow',
+    (id) => view.runs.get(id)?.category === 'workflow',
   );
   const co = project(CO, view, rootId ?? null);
   const projects = [co, project(LP, fanOutView())];
-  const stream = rootId ? view.streams.get(rootId) : undefined;
+  const stream = rootId ? view.runs.get(rootId) : undefined;
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(projects, shellOf('CO', ['CO', 'LP'])),

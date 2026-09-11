@@ -2,7 +2,7 @@
  * Tool for accepting output files from a completed run into the workspace.
  *
  * After a workflow agent completes, its output files live in task-run storage
- * (executions/{executionId}/). This tool copies those files into the workspace
+ * (executions/{runId}/). This tool copies those files into the workspace
  * — the programmatic equivalent of the "Accept" button in the progress view.
  *
  * Each file goes through the standard tool edit approval flow (same diff
@@ -15,19 +15,19 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 
 // Local imports
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { effectRuntime } from '@platform/processRuntime';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   ToolError,
   type EditRecord,
   type ToolResult,
 } from '@shared/schemas';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {
@@ -89,9 +89,9 @@ const FileMapping = z.strictObject({
 });
 
 const AcceptRunFilesInputSchema = z.strictObject({
-  /** Execution ID (matches `id` attribute in subagent-result XML). */
-  execution_id: ExecutionIdSchema.describe(
-    'Execution ID (matches id attribute in subagent-result delivery)',
+  /** Run ID (matches `id` attribute in subagent-result XML). */
+  execution_id: RunIdSchema.describe(
+    'Run ID (matches id attribute in subagent-result delivery)',
   ),
   /** Files to accept from run storage into the workspace. */
   files: z
@@ -144,10 +144,8 @@ Parameters map directly to subagent-result delivery attributes:
         });
         if (
           directory === undefined &&
-          (yield* getExecutionRecords(
-            session,
-            input.execution_id,
-          ).readMeta()) === null
+          (yield* getRunRecords(session, input.execution_id).readMeta()) ===
+            null
         )
           return yield* Effect.fail(
             new ToolError(
@@ -163,7 +161,7 @@ Parameters map directly to subagent-result delivery attributes:
   }
 
   private async acceptFiles(input: AcceptRunFilesInput): Promise<ToolResult> {
-    const { execution_id: executionId, files, strip_criticize } = input;
+    const { execution_id: runId, files, strip_criticize } = input;
 
     // Phase 1: Validate all source paths and read content before any approvals
     const prepared = await Promise.all(
@@ -171,7 +169,7 @@ Parameters map directly to subagent-result delivery attributes:
         assertNoParentTraversal(mapping.path);
 
         const sourceLocation = await this.resolveSourceFile(
-          executionId,
+          runId,
           mapping.path,
         );
 
@@ -193,10 +191,7 @@ Parameters map directly to subagent-result delivery attributes:
         // Determine original content for diff display. In-place workflow
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
-        const snapshotPath = getOriginalSnapshotPath(
-          executionId,
-          dest.relativePath,
-        );
+        const snapshotPath = getOriginalSnapshotPath(runId, dest.relativePath);
         const snapshotContent = (await AbsoluteFS.isFile(snapshotPath))
           ? await AbsoluteFS.read(snapshotPath)
           : undefined;
@@ -317,7 +312,7 @@ Parameters map directly to subagent-result delivery attributes:
       `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
 
     if (changed === 0) {
-      const summary = `No changes to accept from run ${executionId}`;
+      const summary = `No changes to accept from run ${runId}`;
       return {
         status: 'executed',
         summary,
@@ -372,7 +367,7 @@ Parameters map directly to subagent-result delivery attributes:
       unchanged > 0
         ? ` (${formatResultCount(unchanged, 'unchanged file')})`
         : '';
-    const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${executionId}${strippedSuffix}${unchangedSuffix}`;
+    const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${runId}${strippedSuffix}${unchangedSuffix}`;
     return {
       status: 'executed',
       summary,
@@ -387,21 +382,21 @@ Parameters map directly to subagent-result delivery attributes:
    * files are written directly to the workspace.
    */
   private async resolveSourceFile(
-    executionId: ExecutionId,
+    runId: RunId,
     runPath: string,
   ): Promise<FileLocation> {
-    const entry = await inspectRunStorageEntry(executionId, runPath);
+    const entry = await inspectRunStorageEntry(runId, runPath);
     switch (entry.kind) {
       case 'file':
         return entry.location;
       case 'symlink':
         throw new ToolError(
-          `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
         );
       case 'directory':
       case 'unsupported':
         throw new ToolError(
-          `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is not a regular file.`,
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
         );
       case 'invalid':
         throw new ToolError(`Cannot accept ${runPath}: ${entry.reason}`);
@@ -420,7 +415,7 @@ Parameters map directly to subagent-result delivery attributes:
 
     throw new ToolError(
       `File not found in run storage or workspace: ${runPath}. ` +
-        `Use executions tool with path /executions/${executionId}/files to list available files.`,
+        `Use executions tool with path /executions/${runId}/files to list available files.`,
     );
   }
 }

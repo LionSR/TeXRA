@@ -7,7 +7,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   wolframApprovalCommand,
   wolframRunSummary,
@@ -20,11 +20,11 @@ import {
 } from '../agent/progressTestUtils';
 import { waitForRecordedEvent } from '../support/asyncTestUtils';
 
-async function dispatchWolfram(streamId: StreamTabId, code: string) {
+async function dispatchWolfram(runId: RunId, code: string) {
   const explicit = createRecordingHost();
   const result = withRunContext(
     createRunContext({
-      streamId,
+      runId,
       session: sessionWithInteractions(explicit.interactions),
     }),
     () => new WolframTool().call({ code }),
@@ -44,7 +44,7 @@ describe('WolframTool approval', () => {
   });
 
   it('requests bash-style approval before executing wolframscript', async () => {
-    const streamId = 'stream:wolfram-approval' as StreamTabId;
+    const runId = 'a99f00000001' as RunId;
     const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockResolvedValue({
       success: true,
       stdout: '2',
@@ -53,11 +53,11 @@ describe('WolframTool approval', () => {
       exitCode: 0,
     });
 
-    const { explicit, result, show } = await dispatchWolfram(streamId, '1+1');
+    const { explicit, result, show } = await dispatchWolfram(runId, '1+1');
     expect(show.payload).toMatchObject({
       command: wolframApprovalCommand('1+1'),
       allowBypass: true,
-      streamId,
+      runId,
     });
 
     expect(
@@ -94,7 +94,7 @@ describe('WolframTool approval', () => {
     const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
 
     const { explicit, result, show } = await dispatchWolfram(
-      'stream:wolfram-rejected' as StreamTabId,
+      'a99f00000002' as RunId,
       'Factor[n^7 - n]',
     );
     expect(

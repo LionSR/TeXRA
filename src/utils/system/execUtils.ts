@@ -309,7 +309,7 @@ export async function executeCommand(
       signalProcessGroup(pid, signal);
 
       // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
-      // and destroy streams as a last resort to unblock `await subprocess`.
+      // and destroy runs as a last resort to unblock `await subprocess`.
       if (signal === 'SIGTERM' && forceKillTimeoutId === undefined) {
         forceKillTimeoutId = setTimeout(() => {
           signalProcessGroup(pid, 'SIGKILL');
@@ -382,7 +382,7 @@ export async function executeCommand(
       // `forceKillAfterDelay` above), but execa only signals the tracked
       // pid: a descendant that inherited stdio (e.g. `bash -c 'work &
       // wait'`) can keep the pipes open after the tracked process dies,
-      // hanging `await subprocess` forever. Destroy the streams once
+      // hanging `await subprocess` forever. Destroy the runs once
       // execa's force-kill delay has elapsed so the await always unblocks.
       // No signal is sent here — the array form intentionally keeps no
       // process-group semantics, so the descendant itself is left alone.
@@ -407,7 +407,7 @@ export async function executeCommand(
       }, shellTimeout);
     }
 
-    // Subscribe to stdout/stderr streams for live output if callbacks provided
+    // Subscribe to stdout/stderr runs for live output if callbacks provided
     if (options.onStdout && subprocess.stdout) {
       subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
     }
@@ -459,7 +459,7 @@ export async function executeCommand(
  * Synchronous companion to executeCommand for APIs that must return a value
  * synchronously, such as native binary resolvers passed to SDK constructors.
  * If no cwd is passed and the platform is not initialized yet, this falls back
- * to process.cwd(); prefer executeCommand for normal workspace command execution.
+ * to process.cwd(); prefer executeCommand for normal workspace command run.
  */
 export function executeCommandSync(
   command: readonly [string, ...string[]],

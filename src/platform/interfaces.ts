@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ export interface FileSystemProvider {
   /**
    * Make `path` appear complete and durable in one step: stage the content
    * beside it, fsync, then rename into place. For names that belong to
-   * exactly one writer (an execution-lease claim), where `writeFileAtomic`'s
+   * exactly one writer (a run-lease claim), where `writeFileAtomic`'s
    * replace-existing semantics are not wanted and a torn file must never be
    * observable.
    */
@@ -156,7 +156,7 @@ export interface StorageProvider {
 
 /**
  * Kernel facts about processes, used to prove whether the owner recorded in
- * an execution lease is still the same process. An identity is an opaque
+ * a run lease is still the same process. An identity is an opaque
  * string that cannot change while a process runs and that no later process
  * with the same pid can repeat: two equal strings name one process, two
  * different strings name two. Its format is the port's business; callers
@@ -278,7 +278,7 @@ export interface AgentDirectoriesPort {
  * importing the host-level command pipeline.
  */
 export interface RecoveryContinuation {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly kind: 'recovery';
 }
 
@@ -292,10 +292,7 @@ export interface AgentResumePort {
    * already active/resuming, etc.) — callers should fall back to leaving
    * the message queued for the next manual resume.
    */
-  tryResumeStream(
-    streamId: StreamTabId,
-    recovery?: RecoveryContinuation,
-  ): Promise<boolean>;
+  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------

@@ -99,10 +99,10 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
         editedFile: 'main_polish.tex',
       },
     },
-    { kind: 'expand', streamId: ROOT, expanded: true },
+    { kind: 'expand', runId: ROOT, expanded: true },
     {
       kind: 'draft',
-      streamId: CHILD,
+      runId: CHILD,
       patch: { text: 'Check appendix B before the Palomar claim' },
     },
   ];
@@ -160,7 +160,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // goes-to line.
   'ext-session': () => {
     const view = fanOutView();
-    return sidebar(view, surface(view, { kind: 'select', streamId: CHILD }));
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // ExtE-Tree: the drawer with the root collapsed under its rollup pill,
   // nothing pending to force the path open (the surface says collapsed).
@@ -170,8 +170,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, expanded: false },
-        { kind: 'select', streamId: ROOT },
+        { kind: 'expand', runId: ROOT, expanded: false },
+        { kind: 'select', runId: ROOT },
         { kind: 'drawer', open: true },
       ),
     );
@@ -183,8 +183,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, expanded: false },
-        { kind: 'select', streamId: GRANDCHILD },
+        { kind: 'expand', runId: ROOT, expanded: false },
+        { kind: 'select', runId: GRANDCHILD },
         { kind: 'drawer', open: true },
       ),
     );
@@ -197,8 +197,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, expanded: false },
-        { kind: 'select', streamId: CHILD },
+        { kind: 'expand', runId: ROOT, expanded: false },
+        { kind: 'select', runId: CHILD },
         { kind: 'drawer', open: true },
       ),
     );
@@ -210,7 +210,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'select', streamId: CHILD },
+        { kind: 'select', runId: CHILD },
         { kind: 'drawer', open: true },
       ),
     );
@@ -218,7 +218,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Real-ExtensionWide: the editor tab at 1100px, the list docked.
   'ext-wide': () => {
     const view = fanOutView();
-    return editorTab(view, surface(view, { kind: 'select', streamId: CHILD }));
+    return editorTab(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionTools: the Tools sheet with the real latexdiffs-section.
   'ext-tools': () => {
@@ -227,7 +227,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'select', streamId: CHILD },
+        { kind: 'select', runId: CHILD },
         { kind: 'toolsSheet', open: true },
       ),
     );
@@ -235,17 +235,17 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Real-ExtensionProposal: the workflow-script proposal card on the root.
   'ext-proposal': () => {
     const view = withProposal();
-    return sidebar(view, surface(view, { kind: 'select', streamId: ROOT }));
+    return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // Real-ExtensionInline: the dispatch card inside the child that fanned
   // out (the root is a workflow run, whose calls the run board lists).
   'ext-inline': () => {
     const view = fanOutView();
-    return sidebar(view, surface(view, { kind: 'select', streamId: CHILD }));
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The background process stream: its command strip over its raw output.
   'ext-process': () => {
     const view = fanOutView();
-    return sidebar(view, surface(view, { kind: 'select', streamId: PROCESS }));
+    return sidebar(view, surface(view, { kind: 'select', runId: PROCESS }));
   },
 };

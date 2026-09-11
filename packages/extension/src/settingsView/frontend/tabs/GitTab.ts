@@ -200,9 +200,9 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
     postMessage(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR, { key });
   }
 
-  private handleOpenPRSubscriptionStream(streamId: string): void {
+  private handleOpenPRSubscriptionStream(runId: string): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM, {
-      streamId,
+      runId,
     });
   }
 
@@ -342,7 +342,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                                               appearance: 'outlined',
                                               onClick: () =>
                                                 this.handleOpenPRSubscriptionStream(
-                                                  owner.streamId,
+                                                  owner.runId,
                                                 ),
                                             })}
                                           </div>

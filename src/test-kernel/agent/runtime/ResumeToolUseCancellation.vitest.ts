@@ -1,32 +1,30 @@
 // Third-party imports
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
-  hasPersistedParent: vi.fn(),
+  readRunMeta: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  acquireResumedExecutionLease: vi.fn(),
-  validateOwnedExecutionLease: vi.fn(),
-  runWithExecutionLeaseWriteFence: vi.fn(
-    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
-      operation(),
+  acquireResumedRunLease: vi.fn(),
+  validateOwnedRunLease: vi.fn(),
+  runWithRunLeaseWriteFence: vi.fn(
+    async (_runId: RunId, operation: () => Promise<unknown>) => operation(),
   ),
-  releaseOwnedExecutionLease: vi.fn(),
-  releaseExecutionClaims: vi.fn(),
+  releaseOwnedRunLease: vi.fn(),
+  releaseRunClaims: vi.fn(),
 }));
 
-vi.mock('@agent/storage/executionLease', () => ({
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
-  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
-  runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
+vi.mock('@agent/storage/runLease', () => ({
+  acquireResumedRunLease: mocks.acquireResumedRunLease,
+  assertOwnedRunLease: vi.fn(),
+  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
+  validateOwnedRunLease: mocks.validateOwnedRunLease,
+  runWithRunLeaseWriteFence: mocks.runWithRunLeaseWriteFence,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', async () => {
@@ -39,7 +37,7 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
         try: () => mocks.buildAgentLaunchContext(...args),
         catch: ensureError,
       }),
-    withExecutionRunContext: (
+    withLaunchRunContext: (
       _context: unknown,
       _options: unknown,
       run: () => Effect.Effect<unknown, unknown>,
@@ -55,18 +53,26 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
     }),
 }));
 
-vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
   getPersistedUserFollowUpSupport: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.getPersistedUserFollowUpSupport(...args),
       catch: ensureError,
     }),
-  hasPersistedParent: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.hasPersistedParent(...args),
-      catch: ensureError,
-    }),
+}));
+
+// The resumed run reads its parent edge off the persisted `run.start`, so the
+// lineage fixture is the run's metadata read.
+vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/RunKVStore')>()),
+  getRunRecords: (...args: unknown[]) => ({
+    readMeta: () =>
+      Effect.tryPromise({
+        try: () => mocks.readRunMeta(...args),
+        catch: ensureError,
+      }),
+  }),
 }));
 
 vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
@@ -97,8 +103,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -120,43 +125,42 @@ interface ModelSwitchingFlowInput {
 }
 
 /**
- * The session whose execution lane admits the resume. No competing generation
+ * The session whose run lane admits the resume. No competing generation
  * exists in this fixture, so the lane is a passthrough.
  */
 const LANE_SESSION = {
-  executions: {
-    launchExecution: (
-      _executionId: ExecutionId,
-      operation: Effect.Effect<unknown, unknown>,
-    ) => operation,
+  runs: {
+    launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
+      operation,
   },
-  acquireExecutionClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseExecutionClaims: mocks.releaseExecutionClaims },
+  acquireRunClaims: () => Effect.succeed(Effect.void),
+  graph: { releaseRunClaims: mocks.releaseRunClaims },
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   status: {},
   flushArtifacts: vi.fn(async () => {}),
   settlePublications: vi.fn(async () => {}),
-  releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
+  releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;
 
 function resumeToolUseFromResumeData(
   resume: Parameters<typeof resumeOnLane>[0],
   options: ResumeToolUseFromResumeDataOptions = {},
 ) {
-  return resumeOnLane(resume, { session: LANE_SESSION, ...options });
+  return Effect.runPromise(
+    resumeOnLane(resume, { session: LANE_SESSION, ...options }),
+  );
 }
 
+/** The launching run a child fixture's persisted `run.start` names. */
+const PARENT_RUN = 'aa00parent' as RunId;
+
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
-function buildResumeContext(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): AgentLaunchContext {
+function buildResumeContext(runId: RunId): AgentLaunchContext {
   const abortController = new AbortController();
   return {
     setting: { agentCategory: AgentCategory.ToolUse },
     runScope: {
-      executionId,
-      streamId,
+      runId,
       session: LANE_SESSION,
       signal: abortController.signal,
     },
@@ -179,16 +183,17 @@ function noopFlowHandle(): unknown {
 describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.acquireResumedRunLease.mockResolvedValue('existing');
     mocks.retrieveSessionResumeData.mockImplementation(
-      async (streamId, executionId, agentConfig) =>
-        createToolUseResumeData({ executionId, streamId, agentConfig }),
+      async (runId, agentConfig) =>
+        createToolUseResumeData({ runId, agentConfig }),
     );
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
       USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     );
-    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
-    mocks.releaseExecutionClaims.mockReturnValue(Effect.void);
+    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
+    mocks.releaseRunClaims.mockReturnValue(Effect.void);
+    mocks.readRunMeta.mockReset().mockResolvedValue({});
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -200,271 +205,223 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
   });
 
-  it.effect(
-    'preserves persisted native follow-up support across resumed waiting turns',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'e9911-native-resume' as ExecutionId;
-        const streamId = 'stream-9911-native-resume' as StreamTabId;
-        const snapshot = createToolUseResumeData({ executionId, streamId });
-        mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
-          USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        );
-        mocks.hasPersistedParent.mockResolvedValue(true);
-        mocks.buildAgentLaunchContext
-          .mockResolvedValueOnce(buildResumeContext(executionId, streamId))
-          .mockResolvedValueOnce(buildResumeContext(executionId, streamId));
-        mocks.runToolUseFlow.mockResolvedValue({
-          outcome: 'waiting',
-          response: 'ready for another follow-up',
-        });
+  it('preserves persisted native follow-up support across resumed waiting turns', async () => {
+    const runId = 'e9911-native-resume' as RunId;
+    const snapshot = createToolUseResumeData({ runId });
+    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    );
+    mocks.readRunMeta.mockResolvedValue({ parentRunId: PARENT_RUN });
+    mocks.buildAgentLaunchContext
+      .mockResolvedValueOnce(buildResumeContext(runId))
+      .mockResolvedValueOnce(buildResumeContext(runId));
+    mocks.runToolUseFlow.mockResolvedValue({
+      outcome: 'waiting',
+      response: 'ready for another follow-up',
+    });
 
-        yield* resumeToolUseFromResumeData(snapshot);
-        yield* resumeToolUseFromResumeData(snapshot);
+    await resumeToolUseFromResumeData(snapshot);
+    await resumeToolUseFromResumeData(snapshot);
 
-        // The persisted support rides the launch input: `run.start` stamps it
-        // at the reservation commit point, before the lifecycle runs.
-        expect(mocks.buildAgentLaunchContext).toHaveBeenCalledTimes(2);
-        expect(
-          mocks.buildAgentLaunchContext.mock.calls.map(
-            (call) => call[0]?.userFollowUpSupport,
-          ),
-        ).toEqual([
-          USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-          USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        ]);
-      }),
-  );
+    // The persisted support rides the launch input: `run.start` stamps it at
+    // the reservation commit point, before the lifecycle runs.
+    expect(mocks.buildAgentLaunchContext).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.buildAgentLaunchContext.mock.calls.map(
+        (call) => call[0]?.userFollowUpSupport,
+      ),
+    ).toEqual([
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    ]);
+  });
 
-  it.effect(
-    'resolves execution lineage before activating the resume stream',
-    () =>
-      Effect.gen(function* () {
-        const storageError = new Error('execution metadata unavailable');
-        const snapshot = createToolUseResumeData({
-          executionId: 'e8048' as ExecutionId,
-          streamId: 'stream-8048' as StreamTabId,
-        });
-        mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
+  it('resolves run lineage before activating the resume stream', async () => {
+    const storageError = new Error('run metadata unavailable');
+    const snapshot = createToolUseResumeData({ runId: 'e8048' as RunId });
+    mocks.readRunMeta.mockRejectedValueOnce(storageError);
 
-        expect(yield* Effect.flip(resumeToolUseFromResumeData(snapshot))).toBe(
-          storageError,
-        );
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
+      storageError,
+    );
 
-        expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-        expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
-          snapshot.executionId,
-        );
-        expect(mocks.releaseExecutionClaims).toHaveBeenCalledWith(
-          snapshot.executionId,
-        );
-        expect(mocks.releaseExecutionClaims).toHaveBeenCalledTimes(1);
-      }),
-  );
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(snapshot.runId);
+    expect(mocks.releaseRunClaims).toHaveBeenCalledWith(snapshot.runId);
+    expect(mocks.releaseRunClaims).toHaveBeenCalledTimes(1);
+  });
 
-  it.effect(
-    'reports a reloaded session that is no longer resumable distinctly',
-    () =>
-      Effect.gen(function* () {
-        const snapshot = createToolUseResumeData();
-        mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
+  it('reports a reloaded session that is no longer resumable distinctly', async () => {
+    const snapshot = createToolUseResumeData();
+    mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
 
-        expect(
-          yield* Effect.flip(resumeToolUseFromResumeData(snapshot)),
-        ).toBeInstanceOf(ResumeSessionUnavailableError);
-        expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-      }),
-  );
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBeInstanceOf(
+      ResumeSessionUnavailableError,
+    );
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+  });
 
-  it.effect('rejects a resumed launch that is not a tool-use agent', () =>
-    Effect.gen(function* () {
-      const resume = createToolUseResumeData();
-      mocks.hasPersistedParent.mockResolvedValueOnce(false);
-      // The guard runs inside the lifecycle so its failure ends the started
-      // stream; the mocked lifecycle only has to run the body.
-      mocks.runFlowWithLifecycle.mockImplementationOnce(
-        (_context: unknown, runner: (...args: unknown[]) => unknown) =>
-          runner({}, {}),
-      );
-      mocks.buildAgentLaunchContext.mockResolvedValueOnce({
-        setting: { agentCategory: AgentCategory.Workflow },
-        runScope: {
-          executionId: resume.executionId,
-          streamId: resume.streamId,
-          session: {
-            flushArtifacts: vi.fn(),
-            releaseExecutionLease: vi.fn(async () => {}),
-          },
+  it('rejects a resumed launch that is not a tool-use agent', async () => {
+    const resume = createToolUseResumeData();
+    mocks.readRunMeta.mockResolvedValueOnce({});
+    // The guard runs inside the lifecycle so its failure ends the started
+    // stream; the mocked lifecycle only has to run the body.
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      (_context: unknown, runner: (...args: unknown[]) => unknown) =>
+        runner({}, {}),
+    );
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce({
+      setting: { agentCategory: AgentCategory.Workflow },
+      runScope: {
+        runId: resume.runId,
+        session: {
+          flushArtifacts: vi.fn(),
+          releaseRunLease: vi.fn(async () => {}),
         },
-      } as unknown as AgentLaunchContext);
+      },
+    } as unknown as AgentLaunchContext);
 
-      expect(
-        (yield* Effect.flip(resumeToolUseFromResumeData(resume))).message,
-      ).toContain(
-        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-      );
-    }),
-  );
+    await expect(resumeToolUseFromResumeData(resume)).rejects.toThrow(
+      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+    );
+  });
 
-  it.effect(
-    'interrupts at flow attachment before substantive work starts',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'e8049' as ExecutionId;
-        const streamId = 'stream-8049' as StreamTabId;
-        const context = buildResumeContext(executionId, streamId);
-        const order: string[] = [];
-        const tools = [
-          {
-            definition: { name: 'run_scoped' },
-            call: vi.fn(),
+  it('interrupts at flow attachment before substantive work starts', async () => {
+    const runId = 'e8049' as RunId;
+    const context = buildResumeContext(runId);
+    const order: string[] = [];
+    const tools = [
+      {
+        definition: { name: 'run_scoped' },
+        call: vi.fn(),
+      },
+    ] as unknown as readonly ITool[];
+    let attachedContext: TestFlowContext | undefined;
+    const handle = {
+      attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
+        order.push('attach');
+        attachedContext = flowContext;
+      }),
+      detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
+        order.push('detach');
+        if (attachedContext === flowContext) attachedContext = undefined;
+      }),
+    };
+
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
+    mocks.readRunMeta.mockResolvedValueOnce({});
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      async (
+        _context: unknown,
+        run: (liveHandle: typeof handle) => Promise<unknown>,
+      ) => run(handle),
+    );
+    mocks.runToolUseFlow.mockImplementationOnce(
+      async (
+        input: InterruptibleFlowInput,
+        _registry: unknown,
+        attachment: {
+          attach: (flowContext: TestFlowContext) => void;
+          detach: (flowContext: TestFlowContext) => void;
+        },
+      ) => {
+        expect(input.tools).toBe(tools);
+        const flowContext: TestFlowContext = {
+          interrupt: () => {
+            order.push('interrupt');
+            input.interrupt();
           },
-        ] as unknown as readonly ITool[];
-        let attachedContext: TestFlowContext | undefined;
-        const handle = {
-          attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('attach');
-            attachedContext = flowContext;
-          }),
-          detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('detach');
-            if (attachedContext === flowContext) attachedContext = undefined;
-          }),
         };
-
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-        mocks.hasPersistedParent.mockResolvedValueOnce(false);
-        mocks.runFlowWithLifecycle.mockImplementationOnce(
-          async (
-            _context: unknown,
-            run: (liveHandle: typeof handle) => Promise<unknown>,
-          ) => run(handle),
-        );
-        mocks.runToolUseFlow.mockImplementationOnce(
-          async (
-            input: InterruptibleFlowInput,
-            _registry: unknown,
-            attachment: {
-              attach: (flowContext: TestFlowContext) => void;
-              detach: (flowContext: TestFlowContext) => void;
-            },
-          ) => {
-            expect(input.tools).toBe(tools);
-            const flowContext: TestFlowContext = {
-              interrupt: () => {
-                order.push('interrupt');
-                input.interrupt();
-              },
-            };
-            attachment.attach(flowContext);
-            input.takePendingFollowUps?.();
-            if (!input.runScope.signal.aborted) mocks.invokeModelOrTool();
-            attachment.detach(flowContext);
-            return {
-              outcome: input.runScope.signal.aborted
-                ? RUN_OUTCOME.CANCELLED
-                : RUN_OUTCOME.COMPLETED,
-            };
-          },
-        );
-
-        const snapshot = createToolUseResumeData({
-          executionId,
-          streamId,
-        });
-
-        const result = yield* resumeToolUseFromResumeData(snapshot, {
-          tools,
-          takePendingFollowUps: () => {
-            order.push('take');
-            return [];
-          },
-          isCancellationRequested: () => {
-            order.push('query');
-            expect(attachedContext).toBeDefined();
-            return true;
-          },
-          onCancellationAtFlowAttachment: () => order.push('cancel'),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
-          executionId,
-        );
-        expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-        expect(order).toEqual([
-          'attach',
-          'query',
-          'cancel',
-          'interrupt',
-          'take',
-          'detach',
-        ]);
-      }),
-  );
-
-  it.effect(
-    'mirrors a mid-run model switch onto the persisted config only',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'e9421-model' as ExecutionId;
-        const streamId = 'stream-9421-model' as StreamTabId;
-        const ctx = buildResumeContext(executionId, streamId);
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-        mocks.hasPersistedParent.mockResolvedValueOnce(false);
-        mocks.runToolUseFlow.mockImplementationOnce(
-          async (input: ModelSwitchingFlowInput) => {
-            input.onModelChanged('next-model');
-            return { outcome: RUN_OUTCOME.COMPLETED };
-          },
-        );
-
-        yield* resumeToolUseFromResumeData(
-          createToolUseResumeData({ executionId, streamId }),
-        );
-
-        // The cell is the live model: usage accounting and the prompt-side MODEL
-        // variable read it directly, so the only remaining mirror is the
-        // persisted AgentConfig schema field; the seeded transient stays as-is.
-        expect(ctx.config.model).toBe('next-model');
-        expect(ctx.userVarChannels.MODEL).toBe('test-model');
-      }),
-  );
-
-  it.effect(
-    'carries a failed resumed flow result, error included, to the lifecycle',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'e9421-error' as ExecutionId;
-        const streamId = 'stream-9421-error' as StreamTabId;
-        const flowError = {
-          message: 'provider failed mid-resume',
-          userRetryable: true,
+        attachment.attach(flowContext);
+        input.takePendingFollowUps?.();
+        if (!input.runScope.signal.aborted) mocks.invokeModelOrTool();
+        attachment.detach(flowContext);
+        return {
+          outcome: input.runScope.signal.aborted
+            ? RUN_OUTCOME.CANCELLED
+            : RUN_OUTCOME.COMPLETED,
         };
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-          buildResumeContext(executionId, streamId),
-        );
-        mocks.hasPersistedParent.mockResolvedValueOnce(true);
-        mocks.runToolUseFlow.mockResolvedValueOnce({
-          outcome: RUN_OUTCOME.FAILED,
-          response: 'partial answer',
-          totalCostUsd: 0.25,
-          error: flowError,
-        });
+      },
+    );
 
-        const result = yield* resumeToolUseFromResumeData(
-          createToolUseResumeData({ executionId, streamId }),
-        );
+    const snapshot = createToolUseResumeData({ runId });
 
-        expect(result).toMatchObject({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.FAILED,
-          response: 'partial answer',
-          totalCostUsd: 0.25,
-          executionId,
-          streamId,
-          error: flowError,
-        });
-      }),
-  );
+    const result = await resumeToolUseFromResumeData(snapshot, {
+      tools,
+      takePendingFollowUps: () => {
+        order.push('take');
+        return [];
+      },
+      isCancellationRequested: () => {
+        order.push('query');
+        expect(attachedContext).toBeDefined();
+        return true;
+      },
+      onCancellationAtFlowAttachment: () => order.push('cancel'),
+    });
+
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(runId);
+    expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
+    expect(order).toEqual([
+      'attach',
+      'query',
+      'cancel',
+      'interrupt',
+      'take',
+      'detach',
+    ]);
+  });
+
+  it('mirrors a mid-run model switch onto the persisted config only', async () => {
+    const runId = 'e9421-model' as RunId;
+    const ctx = buildResumeContext(runId);
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
+    mocks.readRunMeta.mockResolvedValueOnce({});
+    mocks.runToolUseFlow.mockImplementationOnce(
+      async (input: ModelSwitchingFlowInput) => {
+        input.onModelChanged('next-model');
+        return { outcome: RUN_OUTCOME.COMPLETED };
+      },
+    );
+
+    await resumeToolUseFromResumeData(createToolUseResumeData({ runId }));
+
+    // The cell is the live model: usage accounting and the prompt-side MODEL
+    // variable read it directly, so the only remaining mirror is the
+    // persisted AgentConfig schema field; the seeded transient stays as-is.
+    expect(ctx.config.model).toBe('next-model');
+    expect(ctx.userVarChannels.MODEL).toBe('test-model');
+  });
+
+  it('carries a failed resumed flow result, error included, to the lifecycle', async () => {
+    const runId = 'e9421-error' as RunId;
+    const flowError = {
+      message: 'provider failed mid-resume',
+      userRetryable: true,
+    };
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+      buildResumeContext(runId),
+    );
+    mocks.readRunMeta.mockResolvedValueOnce({ parentRunId: PARENT_RUN });
+    mocks.runToolUseFlow.mockResolvedValueOnce({
+      outcome: RUN_OUTCOME.FAILED,
+      response: 'partial answer',
+      totalCostUsd: 0.25,
+      error: flowError,
+    });
+
+    const result = await resumeToolUseFromResumeData(
+      createToolUseResumeData({ runId }),
+    );
+
+    expect(result).toMatchObject({
+      category: 'toolUse',
+      outcome: RUN_OUTCOME.FAILED,
+      response: 'partial answer',
+      totalCostUsd: 0.25,
+      runId,
+      error: flowError,
+    });
+  });
 });

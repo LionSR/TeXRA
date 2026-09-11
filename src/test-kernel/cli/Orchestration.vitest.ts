@@ -26,7 +26,7 @@ import type { CliHistoryEntry } from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { type CliMultiAgentPresetRunPlan } from '@cli/runtime/multiAgentPresets';
 import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory, HISTORY_RUN_STATUS } from '@shared/schemas';
 
 function codingPlans(
@@ -46,7 +46,7 @@ function historyEntry(
   overrides: Partial<CliHistoryEntry> = {},
 ): CliHistoryEntry {
   return {
-    id: id as ExecutionId,
+    id: id as RunId,
     timestamp: '2026-05-21T00:00:00Z',
     agent: 'orchestrator',
     model: 'claude-opus-4-7',

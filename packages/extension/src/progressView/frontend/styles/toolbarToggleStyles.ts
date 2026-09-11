@@ -11,7 +11,7 @@ export const toolbarToggleStyles = css`
      rather than the host: the pressed state's action-icon-button skin
      (controlStyles.ts) also paints ::part(base), and this rule must win that
      tie by winning the cascade at equal specificity — toolbarToggleStyles is
-     adopted after commonViewStyles in StreamHeader.ts — for one fill at one
+     adopted after commonViewStyles in RunHeader.ts — for one fill at one
      radius instead of two mismatched stacked fills. */
   .bypass-toggle-button.is-active::part(base) {
     --_toggle-color: var(--color-warning);

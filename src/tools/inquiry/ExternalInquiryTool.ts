@@ -7,7 +7,7 @@
  * cycle continues. When an answer (or rejection) arrives — even hours
  * later, even after extension reload — the action handler injects a
  * `[inquiry] …` continuation message that auto-resumes the originating
- * stream.
+ * run.
  *
  * Three subcommands:
  *   - `ask`  → dispatch (default behavior)
@@ -20,8 +20,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
@@ -36,10 +35,9 @@ import {
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
-  type StreamTabId,
   type ToolResult,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -134,8 +132,8 @@ const ListSchema = z.looseObject({
       '"dropped" → user rejected the inquiry. ' +
       '"any" → all threads regardless of status.',
   ),
-  scope: nullishWithDefault(z.enum(['stream', 'all']), 'stream').describe(
-    '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
+  scope: nullishWithDefault(z.enum(['run', 'all']), 'run').describe(
+    '"run" → only threads belonging to this run; "all" → every run\'s threads.',
   ),
 });
 
@@ -216,9 +214,9 @@ const TOOL_DESCRIPTION = `Ask a question to an external AI model (ChatGPT, Gemin
 Subcommands:
   - ask  : dispatch a new question or follow up on an existing thread
   - read : return the full untruncated transcript of one inquiry thread
-  - list : enumerate inquiry threads. Defaults: status='open', scope='stream'
+  - list : enumerate inquiry threads. Defaults: status='open', scope='run'
 
-Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", thread_id}; continue independent work or end your turn, and the answer, possibly minutes or hours later, arrives as a [inquiry] continuation message on the originating stream.
+Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", thread_id}; continue independent work or end your turn, and the answer, possibly minutes or hours later, arrives as a [inquiry] continuation message on the originating run.
 
 Follow-up semantics:
   Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread: read or list to recover state instead.
@@ -238,26 +236,20 @@ export class ExternalInquiryTool extends defineTool({
   protected execute(input: InquiryInput): Promise<ToolResult> {
     // Capture the run owner before the shared Effect scheduler can yield.
     const context = tryUseRunContext();
-    const streamId = getRunContextStreamId(context);
-    const executionId = getRunContextExecutionId(context);
+    const runId = getRunContextRunId(context);
     const signal = getCurrentToolCallContext()?.signal;
     let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
 
     switch (input.command) {
       case 'ask':
         requireInteractions('inquiry', context);
-        operation = this.executeAsk(
-          input,
-          streamId,
-          executionId,
-          currentSession(),
-        );
+        operation = this.executeAsk(input, runId, currentSession());
         break;
       case 'read':
         operation = this.executeRead(input);
         break;
       case 'list':
-        operation = this.executeList(input, streamId);
+        operation = this.executeList(input, runId);
         break;
     }
     return effectRuntime().runPromise(operation, { signal });
@@ -265,16 +257,15 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeAsk(
     input: Extract<InquiryInput, { command: 'ask' }>,
-    streamId: StreamTabId | undefined,
-    executionId: ExecutionId | undefined,
+    runId: RunId | undefined,
     session: SessionHandle,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      if (!streamId) {
+      if (!runId) {
         return yield* Effect.fail(
           new ToolError(
-            'inquiry { command: "ask" } requires an active stream context.',
+            'inquiry { command: "ask" } requires an active run context.',
           ),
         );
       }
@@ -288,8 +279,7 @@ export class ExternalInquiryTool extends defineTool({
 
       const manifest = yield* records.recordOpenQuestion({
         threadId: input.thread_id ?? undefined,
-        parentStreamId: streamId,
-        parentExecutionId: executionId ?? null,
+        parentRunId: runId,
         question: input.question,
         context: questionContext,
         suggestSearch,
@@ -307,7 +297,7 @@ export class ExternalInquiryTool extends defineTool({
         suggestSearch,
         attachFiles,
         allowBypass: false,
-        streamId,
+        runId,
         sessionLinks: collectKnownSessionLinks(manifest),
         transcript: inquiryRecordToTranscript(manifest),
       };
@@ -366,15 +356,15 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeList(
     input: Extract<InquiryInput, { command: 'list' }>,
-    streamId: StreamTabId | undefined,
+    runId: RunId | undefined,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      if (input.scope === 'stream' && !streamId) {
+      if (input.scope === 'run' && !runId) {
         return yield* Effect.fail(
           new ToolError(
-            'inquiry { command: "list", scope: "stream" } requires an active stream context. ' +
-              'Use scope: "all" to list across streams.',
+            'inquiry { command: "list", scope: "run" } requires an active run context. ' +
+              'Use scope: "all" to list across runs.',
           ),
         );
       }
@@ -382,7 +372,7 @@ export class ExternalInquiryTool extends defineTool({
       const summaries = yield* records.listThreadsByStatus({
         status: input.status,
         scope: input.scope,
-        streamId,
+        runId,
       });
       return buildListOutput(summaries, input.status, input.scope);
     });

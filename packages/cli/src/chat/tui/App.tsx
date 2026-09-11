@@ -19,10 +19,10 @@ import {
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
-import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
+import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
   appDraftDiscardActive,
   approvalVisibleForSelection,
@@ -44,22 +44,19 @@ import { WorkflowPopup } from './panes/WorkflowPopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import {
-  currentApproval,
-  promoteApprovalsForStream,
-} from './state/approvalQueue';
+import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from './input/activeDraft';
 import {
-  isWorkflowScriptStream,
-  presentStream,
+  isWorkflowScriptRun,
+  presentRun,
   resolveChildListTarget,
 } from './state/childControls';
 import {
-  selectedStreamId as selectedStreamIdSignal,
-  rootStreamId as rootStreamIdSignal,
+  selectedRunId as selectedRunIdSignal,
+  rootRunId as rootRunIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
   closeForegroundReader,
@@ -74,7 +71,7 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRows,
-  sessionListStreamIds,
+  sessionListRunIds,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
@@ -83,10 +80,10 @@ import {
 } from './state/childListSelection';
 import {
   currentView,
-  killableExecutionId,
+  killableRunId,
   sessionView,
-  streamLabelOf,
-  streamViewOf,
+  runLabelOf,
+  runViewOf,
   focusedChildAcceptsFollowUps,
   runningChildCount,
 } from './state/sessionView';
@@ -101,25 +98,25 @@ interface InputEventEmitterLike {
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
-// away instead of leaving it queued behind other streams' items. The visible
+// away instead of leaving it queued behind other runs' items. The visible
 // list-root row also owns session-wide (stream-less) approvals.
-function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
+function focusRunAndPromoteApprovals(runId: RunId): void {
   const view = currentView();
-  if (presentStream(streamId) === 'workflowPopup') {
-    promoteApprovalsForStream(streamId, {
-      includeStreamIds: new Set(streamViewOf(view, streamId)?.childIds ?? []),
+  if (presentRun(runId) === 'workflowPopup') {
+    promoteApprovalsForRun(runId, {
+      includeRunIds: new Set(runViewOf(view, runId)?.childIds ?? []),
     });
     return;
   }
-  promoteApprovalsForStream(streamId);
+  promoteApprovalsForRun(runId);
 }
 
 /** Labels for child executions whose label differs from the id. */
-function executionLabelsOf(view: SessionView): ExecutionLabels {
+function runLabelsOf(view: SessionView): RunLabels {
   const labels = new Map<string, string>();
-  for (const stream of view.streams.values()) {
-    if (stream.parentId !== null && stream.label !== stream.executionId) {
-      labels.set(stream.executionId, stream.label);
+  for (const stream of view.runs.values()) {
+    if (stream.parentId !== null && stream.label !== stream.id) {
+      labels.set(stream.id, stream.label);
     }
   }
   return labels;
@@ -131,18 +128,18 @@ export interface AppProps {
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
   ) => void;
-  readonly onKillExecution: (executionId: string) => void;
+  readonly onKillRun: (runId: RunId) => void;
   /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl: (
-    executionId: string,
+    runId: RunId,
     action: WorkflowControlAction,
   ) => void;
   /** Whether bare Escape may stop the identified focused stream. */
-  readonly canInterruptStream: (streamId: StreamTabId) => boolean;
+  readonly canInterruptRun: (runId: RunId) => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
   /** Stop only the focused stream captured by bare Escape. */
-  readonly onInterruptStream: (streamId: StreamTabId) => void;
+  readonly onInterruptRun: (runId: RunId) => void;
   readonly onStaticTranscriptChange?: () => void;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
    *  policy. Required: the App owns draft discard, never process lifecycle. */
@@ -158,8 +155,8 @@ export function App(props: AppProps): React.JSX.Element {
   const pending = useSignal(currentApproval);
   // The selection and the reader arrive already resolved against the view
   // (their signals own that rule), so render derives from settled values.
-  const activeStreamId = useSignal(selectedStreamIdSignal);
-  const rootStreamId = useSignal(rootStreamIdSignal);
+  const activeRunId = useSignal(selectedRunIdSignal);
+  const rootRunId = useSignal(rootRunIdSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
@@ -172,23 +169,20 @@ export function App(props: AppProps): React.JSX.Element {
     reduceChildListSelection,
     INITIAL_CHILD_LIST_SELECTION,
   );
-  const childListActiveStreamRef = useRef(activeStreamId);
+  const childListActiveRunRef = useRef(activeRunId);
   const childListFocused = childListSelection.focused;
   const selectedChildValue = childListSelection.selectedValue;
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
-  const activeStream = streamViewOf(view, activeStreamId);
-  const activeParentId = activeStream?.parentId ?? undefined;
-  const subagentExecutionLabels = useMemo(
-    () => executionLabelsOf(view),
-    [view],
-  );
+  const activeRun = runViewOf(view, activeRunId);
+  const activeParentId = activeRun?.parentId ?? undefined;
+  const subagentRunLabels = useMemo(() => runLabelsOf(view), [view]);
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
-    selectedStreamId: activeStreamId,
+    selectedRunId: activeRunId,
     view,
   });
-  const childListTarget = resolveChildListTarget(view, activeStreamId);
+  const childListTarget = resolveChildListTarget(view, activeRunId);
   const stdin = useStdin();
   // One owner of "a foreground surface is up": the surface kind itself.
   // `undefined` is exactly the no-surface case (every reader target carries a
@@ -203,11 +197,11 @@ export function App(props: AppProps): React.JSX.Element {
   });
   const foregroundOpen = foregroundKind !== undefined;
   const childInputHidden =
-    activeStream !== undefined &&
-    activeStream.parentId !== null &&
-    !focusedChildAcceptsFollowUps(activeStream);
-  const unavailableDetail = activeStream?.readOnly
-    ? (activeStream.statusDetail ?? activeStream.statusLabel)
+    activeRun !== undefined &&
+    activeRun.parentId !== null &&
+    !focusedChildAcceptsFollowUps(activeRun);
+  const unavailableDetail = activeRun?.readOnly
+    ? (activeRun.statusDetail ?? activeRun.statusLabel)
     : undefined;
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
@@ -221,8 +215,8 @@ export function App(props: AppProps): React.JSX.Element {
     !appInputDisabled && !slashPaletteOpen && !reverseSearchOpen;
   const escapeInterruptState: EscapeInterruptState = {
     shortcutsActive: focusShortcutsActive,
-    canInterruptStream: props.canInterruptStream,
-    onInterruptStream: props.onInterruptStream,
+    canInterruptRun: props.canInterruptRun,
+    onInterruptRun: props.onInterruptRun,
   };
   const escapeInterruptStateRef = useRef(escapeInterruptState);
   useLayoutEffect(() => {
@@ -253,17 +247,15 @@ export function App(props: AppProps): React.JSX.Element {
     return () => emitter.off('input', onInput);
   }, [inputDisabled, stdin]);
 
-  const sessions = useSignal(sessionListStreamIds);
+  const sessions = useSignal(sessionListRunIds);
   const sessionRows = useSignal(sessionListRows);
   const childRunningCount = runningChildCount(
     view,
-    streamViewOf(view, childListTarget),
+    runViewOf(view, childListTarget),
   );
-  const workflowPopupStreamId =
-    foregroundReader?.kind === 'workflow'
-      ? foregroundReader.streamId
-      : undefined;
-  const workflowPopupRoot = streamViewOf(view, workflowPopupStreamId);
+  const workflowPopupRunId =
+    foregroundReader?.kind === 'workflow' ? foregroundReader.runId : undefined;
+  const workflowPopupRoot = runViewOf(view, workflowPopupRunId);
   const workflowPopupModel = workflowPopupRoot?.transcript.run ?? undefined;
   const workflowPopup = useSignal(workflowPopupViewSignal);
   const pendingApprovalsForRows = useMemo(
@@ -272,29 +264,28 @@ export function App(props: AppProps): React.JSX.Element {
   );
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
-  const selectedChild = streamViewOf(view, selectedChildValue);
-  const selectedChildKillable =
-    killableExecutionId(selectedChild) !== undefined;
+  const selectedChild = runViewOf(view, selectedChildValue);
+  const selectedChildKillable = killableRunId(selectedChild) !== undefined;
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
-      activeStreamId,
+      activeRunId,
       values: childListValues,
     });
-  }, [activeStreamId, childListValues]);
+  }, [activeRunId, childListValues]);
   // Stream focus can also move through lifecycle completion or a numeric
   // accelerator. Align the selected row before the changed frame is painted;
   // ordinary row reconciliation still preserves manual list selection.
   useLayoutEffect(() => {
-    if (childListActiveStreamRef.current === activeStreamId) return;
-    childListActiveStreamRef.current = activeStreamId;
-    if (!activeStreamId) return;
+    if (childListActiveRunRef.current === activeRunId) return;
+    childListActiveRunRef.current = activeRunId;
+    if (!activeRunId) return;
     dispatchChildListSelection({
-      kind: 'syncActiveStream',
-      streamId: activeStreamId,
+      kind: 'syncActiveRun',
+      runId: activeRunId,
       values: childListValues,
     });
-  }, [activeStreamId, childListValues]);
+  }, [activeRunId, childListValues]);
   useEffect(() => {
     if (!childListAvailable && childListFocused) {
       dispatchChildListSelection({ kind: 'blur' });
@@ -309,13 +300,13 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
-  const focusSession = (streamId: StreamTabId): void => {
-    dispatchChildListSelection({ kind: 'focusStream', streamId });
-    const stream = view.streams.get(streamId)!;
+  const focusSession = (runId: RunId): void => {
+    dispatchChildListSelection({ kind: 'focusRun', runId });
+    const stream = view.runs.get(runId)!;
     if (stream.group === 'interrupted' && stream.resumeEligible) {
-      props.onSubmit(`/resume ${stream.executionId}`);
+      props.onSubmit(`/resume ${stream.id}`);
     } else {
-      focusStreamAndPromoteApprovals(streamId);
+      focusRunAndPromoteApprovals(runId);
     }
   };
   const approvalKind =
@@ -357,24 +348,22 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null;
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
-        const stream = streamViewOf(view, foregroundReader.streamId);
-        const label = stream
-          ? streamLabelOf(stream)
-          : foregroundReader.streamId;
+        const stream = runViewOf(view, foregroundReader.runId);
+        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
         return (
           <TranscriptReader
             availableRows={availableRows}
-            executionLabels={subagentExecutionLabels}
+            runLabels={subagentRunLabels}
             onClose={() => {
               // A workflow's log is only ever opened from its popup (a
               // workflow is never a viewport), so closing it goes back there.
-              if (isWorkflowScriptStream(view, foregroundReader.streamId)) {
-                openWorkflowPopup(foregroundReader.streamId);
+              if (isWorkflowScriptRun(view, foregroundReader.runId)) {
+                openWorkflowPopup(foregroundReader.runId);
               } else {
                 closeForegroundReader();
               }
             }}
-            streamId={foregroundReader.streamId}
+            runId={foregroundReader.runId}
             title={`Transcript: ${label}`}
           />
         );
@@ -391,32 +380,30 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             model={workflowPopupModel}
             onClose={closeForegroundReader}
-            onFocusStream={(streamId) => {
+            onFocusRun={(runId) => {
               closeForegroundReader();
-              focusStreamAndPromoteApprovals(streamId);
+              focusRunAndPromoteApprovals(runId);
             }}
-            onKillExecution={props.onKillExecution}
+            onKillRun={props.onKillRun}
             onOpenTranscript={openTranscriptReader}
             onViewChange={updateWorkflowPopupView}
             onWorkflowControl={props.onWorkflowControl}
             pendingApprovals={pendingApprovalsForRows}
-            streamId={foregroundReader.streamId}
+            runId={foregroundReader.runId}
             view={workflowPopup}
           />
         );
       }
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
-        const stream = streamViewOf(view, foregroundReader.streamId);
-        const label = stream
-          ? streamLabelOf(stream)
-          : foregroundReader.streamId;
+        const stream = runViewOf(view, foregroundReader.runId);
+        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
         return (
           <WorkPlanReader
             availableRows={availableRows}
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}
-            streamId={foregroundReader.streamId}
+            runId={foregroundReader.runId}
             title={`Work plan: ${label}`}
           />
         );
@@ -428,8 +415,8 @@ export function App(props: AppProps): React.JSX.Element {
 
   const pendingEscapeInterrupt = useRef<
     | {
-        readonly parentStreamId: StreamTabId | undefined;
-        readonly streamId: StreamTabId;
+        readonly parentRunId: RunId | undefined;
+        readonly runId: RunId;
         readonly timer: ReturnType<typeof setTimeout>;
       }
     | undefined
@@ -450,9 +437,9 @@ export function App(props: AppProps): React.JSX.Element {
   const handleMetaShortcut = (value: string): boolean => {
     const digit = digitFromMetaShortcut(value);
     if (digit !== undefined) {
-      const target = sessionListStreamIds.get()[digit - 1];
+      const target = sessionListRunIds.get()[digit - 1];
       if (!target) return false;
-      focusStreamAndPromoteApprovals(target);
+      focusRunAndPromoteApprovals(target);
       return true;
     }
     return false;
@@ -461,66 +448,63 @@ export function App(props: AppProps): React.JSX.Element {
   const appOwnsEscape = (): boolean =>
     escapeInterruptStateRef.current.shortcutsActive;
 
-  const parentIdOf = (streamId: StreamTabId): StreamTabId | undefined =>
-    streamViewOf(currentView(), streamId)?.parentId ?? undefined;
-  const bareEscapeActive = (streamId: StreamTabId): boolean => {
+  const parentIdOf = (runId: RunId): RunId | undefined =>
+    runViewOf(currentView(), runId)?.parentId ?? undefined;
+  const bareEscapeActive = (runId: RunId): boolean => {
     const state = escapeInterruptStateRef.current;
     return (
       appOwnsEscape() &&
-      (parentIdOf(streamId) !== undefined || state.canInterruptStream(streamId))
+      (parentIdOf(runId) !== undefined || state.canInterruptRun(runId))
     );
   };
 
-  const handleBareEscape = (streamId: StreamTabId): boolean => {
-    if (
-      selectedStreamIdSignal.get() !== streamId ||
-      !bareEscapeActive(streamId)
-    ) {
+  const handleBareEscape = (runId: RunId): boolean => {
+    if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
       return false;
     }
-    const parentId = parentIdOf(streamId);
+    const parentId = parentIdOf(runId);
     if (parentId !== undefined) {
-      focusStreamAndPromoteApprovals(parentId);
+      focusRunAndPromoteApprovals(parentId);
       return true;
     }
-    // `bareEscapeActive` already proved `canInterruptStream(streamId)` for a
-    // parentless stream: `parentStream` never stores an undefined value, so
+    // `bareEscapeActive` already proved `canInterruptRun(runId)` for a
+    // parentless stream: `parentRun` never stores an undefined value, so
     // once `.get()` returned undefined the `has` disjunct is false too.
-    escapeInterruptStateRef.current.onInterruptStream(streamId);
+    escapeInterruptStateRef.current.onInterruptRun(runId);
     return true;
   };
 
   const handlePendingBareEscape = (
-    streamId: StreamTabId,
-    parentStreamId: StreamTabId | undefined,
+    runId: RunId,
+    parentRunId: RunId | undefined,
   ): boolean => {
-    if (parentIdOf(streamId) !== parentStreamId) return false;
-    return handleBareEscape(streamId);
+    if (parentIdOf(runId) !== parentRunId) return false;
+    return handleBareEscape(runId);
   };
 
-  const scheduleBareEscape = (streamId: StreamTabId) => {
+  const scheduleBareEscape = (runId: RunId) => {
     clearPendingEscapeInterrupt();
-    const parentStreamId = parentIdOf(streamId);
+    const parentRunId = parentIdOf(runId);
     const timer = setTimeout(() => {
       pendingEscapeInterrupt.current = undefined;
-      handlePendingBareEscape(streamId, parentStreamId);
+      handlePendingBareEscape(runId, parentRunId);
     }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
-    pendingEscapeInterrupt.current = { parentStreamId, streamId, timer };
+    pendingEscapeInterrupt.current = { parentRunId, runId, timer };
   };
 
   // Shared tail of both bare-Escape trigger sites below: defer through the
   // meta-chord disambiguation window when one may be in flight, otherwise
   // handle the escape immediately.
-  const deferOrHandleBareEscape = (streamId: StreamTabId): void => {
+  const deferOrHandleBareEscape = (runId: RunId): void => {
     if (
       shouldDeferEscapeInterruptForMetaChord({
         shortcutModifierLabel: defaultShortcutModifierLabel(),
-        streamFocusAvailable: sessions.length > 0,
+        runFocusAvailable: sessions.length > 0,
       })
     ) {
-      scheduleBareEscape(streamId);
+      scheduleBareEscape(runId);
     } else {
-      handleBareEscape(streamId);
+      handleBareEscape(runId);
     }
   };
 
@@ -533,20 +517,20 @@ export function App(props: AppProps): React.JSX.Element {
     if (pendingEscape !== undefined) {
       clearPendingEscapeInterrupt();
       if (isEscapeInput(input, key)) {
-        const previousStreamId = selectedStreamIdSignal.get();
+        const previousRunId = selectedRunIdSignal.get();
         const handledPendingEscape = handlePendingBareEscape(
-          pendingEscape.streamId,
-          pendingEscape.parentStreamId,
+          pendingEscape.runId,
+          pendingEscape.parentRunId,
         );
-        const currentStreamId = selectedStreamIdSignal.get();
+        const currentRunId = selectedRunIdSignal.get();
         if (
-          currentStreamId === undefined ||
-          (handledPendingEscape && currentStreamId === previousStreamId) ||
-          !bareEscapeActive(currentStreamId)
+          currentRunId === undefined ||
+          (handledPendingEscape && currentRunId === previousRunId) ||
+          !bareEscapeActive(currentRunId)
         ) {
           return;
         }
-        deferOrHandleBareEscape(currentStreamId);
+        deferOrHandleBareEscape(currentRunId);
         return;
       }
       const arrowInput =
@@ -555,8 +539,8 @@ export function App(props: AppProps): React.JSX.Element {
         if (appOwnsEscape() && handleMetaShortcut(input)) return;
         const inputWasDisabled = inputDisabled;
         const handled = handlePendingBareEscape(
-          pendingEscape.streamId,
-          pendingEscape.parentStreamId,
+          pendingEscape.runId,
+          pendingEscape.parentRunId,
         );
         const printableInput =
           input.length > 0 &&
@@ -612,7 +596,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (!focusShortcutsActive) return;
 
     if (key.ctrl && input.toLowerCase() === 't') {
-      if (activeStreamId) openTranscriptReader(activeStreamId);
+      if (activeRunId) openTranscriptReader(activeRunId);
       return;
     }
 
@@ -633,10 +617,10 @@ export function App(props: AppProps): React.JSX.Element {
     // root run's existing interruption behavior.
     if (
       isEscapeInput(input, key) &&
-      activeStreamId !== undefined &&
-      bareEscapeActive(activeStreamId)
+      activeRunId !== undefined &&
+      bareEscapeActive(activeRunId)
     ) {
-      deferOrHandleBareEscape(activeStreamId);
+      deferOrHandleBareEscape(activeRunId);
     }
   });
 
@@ -684,32 +668,30 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
-              streamFocusAvailable={sessions.length > 0}
-              transcriptAvailable={
-                (activeStream?.transcript.rows.length ?? 0) > 0
-              }
+              runFocusAvailable={sessions.length > 0}
+              transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
             />
           </>
         )}
         renderForegroundSurface={renderForegroundSurface}
         rows={rows}
         snapshot={{
-          activeStreamId,
+          activeRunId,
           foregroundMaxRows,
           foregroundKind,
           parentId: activeParentId,
           reverseSearchOpen,
-          rootStreamId,
+          rootRunId,
           slashPaletteOpen,
           childListFocused,
           sessionRows,
           selectedChildValue,
-          subagentExecutionLabels,
+          subagentRunLabels,
           pendingApprovals: pendingApprovalsForRows,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
-        onKillExecution={props.onKillExecution}
+        onKillRun={props.onKillRun}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

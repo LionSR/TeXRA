@@ -17,7 +17,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { AgentCategory } from '@shared/schemas';
 import { testModelCell } from '../modelCellTestUtils';
@@ -41,8 +41,7 @@ export const testModelInfo = {
 };
 
 interface TestLaunchContextInit {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
+  runId: RunId;
   /** Session owning the run; defaults to the ambient default session. */
   session?: SessionHandle;
   agent?: string;
@@ -57,8 +56,7 @@ interface TestLaunchContextInit {
  * without a real model handler or flow.
  */
 export function createTestLaunchContext({
-  executionId,
-  streamId,
+  runId,
   session = defaultSession(),
   agent = 'assistant',
   category = AgentCategory.ToolUse,
@@ -81,9 +79,7 @@ export function createTestLaunchContext({
     setting,
     prompt: AgentPromptSchema.parse({}),
     runScope: createRunScope({
-      streamId,
-      executionId,
-      agentName: config.agent,
+      runId,
       session,
       signal: abortController.signal,
     }),
@@ -94,7 +90,7 @@ export function createTestLaunchContext({
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelCell,
-      { logger, executionId, runStageId: undefined, streamId },
+      { logger, runId, runStageId: undefined },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelCell,

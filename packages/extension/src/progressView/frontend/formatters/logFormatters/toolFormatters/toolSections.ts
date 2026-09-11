@@ -75,7 +75,7 @@ function renderFileSection(section: ToolFileSection): TemplateResult {
         section.label,
         buildMemoryPathDisplay(section.path),
       );
-    case 'execution':
+    case 'run':
       return buildToolUseSection(
         section.label,
         buildExecutionsPathDisplay(section.path),
@@ -155,7 +155,7 @@ function renderToolSection(
       // prettier-ignore
       const note = section.note ? html` <span class="file-source">(<bdi dir="auto">${section.note}</bdi>)</span>` : nothing;
       // prettier-ignore
-      return buildToolUseSection(section.label, html`<code class="execution-id" dir="ltr">${section.value}</code>${note}`);
+      return buildToolUseSection(section.label, html`<code class="run-id" dir="ltr">${section.value}</code>${note}`);
     }
     case 'file':
       return renderFileSection(section);

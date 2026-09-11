@@ -7,7 +7,7 @@ import {
 } from './terminalCleanup';
 
 interface CliPromptOptions {
-  /** Real streams Ink mounts onto. They are passed in rather than read here so
+  /** Real runs Ink mounts onto. They are passed in rather than read here so
    *  the choice of stream stays in the caller, at the CLI boundary. */
   readonly stdout: NodeJS.WriteStream;
   readonly stderr: NodeJS.WriteStream;

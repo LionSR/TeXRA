@@ -2,14 +2,14 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { ExecutionId, RunStorageFileLocation } from '@shared/schemas';
+import type { RunId, RunStorageFileLocation } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
 } from '@utils/files/runStorageFs';
 
-import { getExecutionRecords } from './ExecutionKVStore';
+import { getRunRecords } from './RunKVStore';
 
 /**
  * Resolve a declared output of a completed direct child run. The absolute path
@@ -18,7 +18,7 @@ import { getExecutionRecords } from './ExecutionKVStore';
  */
 export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
-    parentExecutionId: ExecutionId,
+    parentRunId: RunId,
     absolutePath: string,
     session: SessionHandle,
   ): Effect.fn.Return<RunStorageFileLocation | undefined, Error> {
@@ -29,15 +29,15 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const store = getExecutionRecords(session, reference.executionId);
+    const store = getRunRecords(session, reference.runId);
     const [meta, resultMeta] = yield* Effect.all([
       store.readMeta(),
       store.readResultMeta(),
     ]);
-    if (meta?.parentExecutionId !== parentExecutionId) {
+    if (meta?.parentRunId !== parentRunId) {
       return yield* Effect.fail(
         new Error(
-          `Execution ${reference.executionId} is not a direct child of ${parentExecutionId}.`,
+          `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
         ),
       );
     }
@@ -48,7 +48,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     ) {
       return yield* Effect.fail(
         new Error(
-          `Execution ${reference.executionId} has no completed workflow output manifest.`,
+          `Run ${reference.runId} has no completed workflow output manifest.`,
         ),
       );
     }
@@ -61,7 +61,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     if (!declared) {
       return yield* Effect.fail(
         new Error(
-          `${reference.relativePath} is not a declared output of execution ${reference.executionId}.`,
+          `${reference.relativePath} is not a declared output of run ${reference.runId}.`,
         ),
       );
     }
@@ -69,7 +69,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     const entry = yield* Effect.tryPromise({
       try: () =>
         runInSession(session, () =>
-          inspectRunStorageEntry(reference.executionId, reference.relativePath),
+          inspectRunStorageEntry(reference.runId, reference.relativePath),
         ),
       catch: ensureError,
     });
@@ -81,7 +81,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       case 'missing':
         return yield* Effect.fail(
           new Error(
-            `Declared output ${reference.relativePath} is missing from execution ${reference.executionId}.`,
+            `Declared output ${reference.relativePath} is missing from run ${reference.runId}.`,
           ),
         );
       case 'invalid':

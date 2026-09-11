@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -15,14 +15,7 @@ import {
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import {
-  getRunContextExecutionId,
-  getRunContextWorkingDirectory,
-} from '@agent/runtime/RunContext';
-import {
-  BASH_CHILD_STREAM_PREFIX,
-  getStreamTabId,
-} from '@agent/runtime/streamTab';
+import { getRunContextWorkingDirectory } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -39,12 +32,11 @@ import {
   AgentCategory,
   ToolError,
   type ExecResult,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireLiveRun } from '@tools/contextHelpers';
 import {
   formatBashDelivery,
   formatBashError,
@@ -55,7 +47,7 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { formatDuration, generateExecutionId } from '@utils/core';
+import { formatDuration, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -64,10 +56,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
-import {
-  childStreamDescription,
-  createChildStream,
-} from './delegation/childStream';
+import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
 
@@ -234,7 +223,7 @@ const BashInputSchema = z.strictObject({
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
   run_in_background: nullishWithDefault(z.boolean(), false).describe(
-    'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
+    'Run command in background. Returns immediately with run ID and a background task tab. Result delivered as follow-up when complete.',
   ),
 });
 
@@ -249,13 +238,13 @@ type BashInput = z.infer<typeof BashInputSchema>;
  * finalization — is the loop's, exactly as it is for every other child type.
  */
 function createBackgroundBashStrategy(params: {
-  executionId: ExecutionId;
+  runId: RunId;
   command: string;
   timeoutMs: number;
   cwd: string | undefined;
   logger: AgentTrace;
 }): ChildRunStrategy<ExecResult> {
-  const { executionId, command, logger } = params;
+  const { runId, command, logger } = params;
   // Whitespace normalization is off here: a background log is delivered
   // verbatim, and its head/tail budgets are its own (see the constants above)
   // rather than the foreground tool-result ones.
@@ -290,7 +279,7 @@ function createBackgroundBashStrategy(params: {
   let startedAt = Date.now();
   const delivery = (result: ExecResult, wallTimeMs: number): string =>
     formatBashDelivery(
-      executionId,
+      runId,
       command,
       wallTimeMs,
       result,
@@ -303,7 +292,7 @@ function createBackgroundBashStrategy(params: {
     // A background shell is the one child type that owns a live OS process and
     // whose tab is ephemeral, and the one whose result survives its own kill.
     ownsBackgroundProcess: true,
-    autoCloseChildStream: true,
+    autoCloseChildRun: true,
     deliverAfterInterrupt: true,
 
     launch: (_ports, signal) =>
@@ -347,7 +336,7 @@ function createBackgroundBashStrategy(params: {
     formatError: (turn, err) =>
       turn
         ? delivery(turn, Date.now() - startedAt)
-        : formatBashError(executionId, command, err),
+        : formatBashError(runId, command, err),
 
     buildResultMeta: (turn, _isError, wallTimeMs) =>
       Effect.sync(() =>
@@ -413,23 +402,19 @@ export class BashTool extends defineTool({
       return buildBashApprovalRejectedResult(input.command, approval);
     }
 
-    // Signal execution starting (triggers in-progress log after approval)
-    callContext?.hooks?.onExecutionReady?.();
+    // Signal run starting (triggers in-progress log after approval)
+    callContext?.hooks?.onRunReady?.();
 
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     if (input.run_in_background) {
-      const { streamId } = requireRunStream(
-        'bash run_in_background',
-        runContext,
-      );
+      const { runId } = requireLiveRun('bash run_in_background', runContext);
       return effectRuntime().runPromise(
         this.executeBackground(
           currentSession(),
           input.command,
           timeoutMs,
-          streamId,
-          getRunContextExecutionId(runContext),
+          runId,
           cwd,
         ),
       );
@@ -511,17 +496,13 @@ export class BashTool extends defineTool({
       session: SessionHandle,
       command: string,
       timeoutMs: number,
-      parentStreamId: StreamTabId,
-      parentExecutionId: ExecutionId | undefined,
+      parentRunId: RunId,
       cwd?: string,
     ) {
       return yield* Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
-          const executionId = generateExecutionId();
+          const runId = generateRunId();
           const preview = previewLabel(command);
-          const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
-            executionId,
-          });
 
           const syntheticConfig = AgentConfigSchema.parse({
             agent: 'bash',
@@ -529,40 +510,35 @@ export class BashTool extends defineTool({
             agentCategory: AgentCategory.ToolUse,
           });
 
-          // The durable record states only what a shell command has: no execution
+          // The durable record states only what a shell command has: no run
           // mode, no model. The synthetic AgentConfig above feeds the ephemeral
           // live wire only.
-          yield* registerExecution(
+          yield* registerRun(
             session,
-            executionId,
+            runId,
             { name: 'bash', instruction: command },
             'bash',
             {
-              streamId: childStreamId,
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parentExecutionId,
-              parentStreamId,
-              background: true,
+              parentRunId: parentRunId,
               category: AgentCategory.ToolUse,
-              description: childStreamDescription(command),
+              description: childRunDescription(command),
             },
           );
 
           yield* startDetachedChildRunLoop({
             session,
-            executionId,
-            parentStreamId,
-            childStreamId,
+            runId,
+            parentRunId,
             agentName: 'bash',
             // A background shell is an external process on no model budget, like
             // the agent-CLI children (see the child-run concurrency budget note).
             budgeted: false,
-            createChildStream: () =>
+            createChildRun: () =>
               restore(Effect.void).pipe(
                 Effect.andThen(
-                  createChildStream(session, executionId, parentStreamId, {
-                    streamPrefix: BASH_CHILD_STREAM_PREFIX,
+                  createChildRun(session, runId, parentRunId, {
                     run: { kind: 'process', tool: 'bash' },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     description: command,
@@ -570,21 +546,21 @@ export class BashTool extends defineTool({
                   }),
                 ),
               ),
-            buildLaunch: (childStream) =>
+            buildLaunch: (childRun) =>
               Effect.sync(() => {
                 return {
                   strategy: createBackgroundBashStrategy({
-                    executionId,
+                    runId,
                     command,
                     timeoutMs,
                     cwd,
-                    logger: childStream.logger,
+                    logger: childRun.logger,
                   }),
                   // Nobody awaits this run: own late loop failures here as trace
                   // diagnostics, since the loop already owns its one user-facing
                   // result delivery.
                   onLoopFailed: (error: unknown): void => {
-                    childStream.logger.error(
+                    childRun.logger.error(
                       'Background command run loop failed after launch',
                       { data: error },
                     );
@@ -596,11 +572,10 @@ export class BashTool extends defineTool({
           return executed(
             [
               `Command launched in background.`,
-              `Execution ID: ${executionId}`,
-              `Stream tab: ${childStreamId}`,
+              `Run ID: ${runId}`,
               'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
-              `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
-              `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
+              `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
+              `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
             ].join('\n'),
             `Launched background: ${preview}`,
           );

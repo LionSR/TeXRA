@@ -5,17 +5,17 @@ import {
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
 } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { filterNotNullish } from '@utils/core';
 
 export interface WorkflowRunContextInput {
   /** Only the run-identifying fields this summary prints. */
-  stream: {
+  run: {
     /** Canonical display name of the run, already resolved from its identity. */
     readonly label: string;
     readonly model?: string;
     readonly modelLabel?: string;
-    readonly executionId?: string;
+    readonly runId?: string;
     readonly description?: string;
   };
   files: ReadonlyRoundIndexed<OutputFileInfo>;
@@ -40,15 +40,15 @@ export function formatWorkflowRunContext(
   const hasFailures = failures.some(([, rows]) => rows.length > 0);
   if (!hasOutputs && !hasFailures) return '';
 
-  const { stream } = input;
+  const { run } = input;
   // `label` already is the identity display name; callers never pass a raw id.
-  const agent = stream.label;
-  const model = stream.modelLabel ?? stream.model;
+  const agent = run.label;
+  const model = run.modelLabel ?? run.model;
 
   const lines: (string | undefined)[] = [
     `Workflow run: ${model ? `${agent} (${model})` : agent}`,
-    stream.executionId ? `Execution: ${stream.executionId}` : undefined,
-    stream.description ? `Goal: ${stream.description}` : undefined,
+    run.runId ? `Run: ${run.runId}` : undefined,
+    run.description ? `Goal: ${run.description}` : undefined,
   ];
 
   if (hasOutputs) {

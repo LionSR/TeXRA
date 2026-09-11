@@ -8,7 +8,7 @@ import {
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
-import { STREAM_PHASE } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 
 import type { ToolUseServices } from '../ToolUseServices';
@@ -34,8 +34,11 @@ export class ToolUseWaitNode extends BaseNode<
   }
 
   override async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { session, isSubagent, runScope, toolPolicy } = this.services;
-    const { streamId, session: ownerSession, signal } = runScope;
+    const { session, parentRunId, runScope, toolPolicy } = this.services;
+    // A run with a parent is a child: it takes the WAITING-suspend
+    // delivery path instead of blocking in-flow for a follow-up.
+    const isChild = parentRunId !== undefined;
+    const { runId, session: ownerSession, signal } = runScope;
     const { stopAfterCycle } = toolPolicy;
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
@@ -53,7 +56,7 @@ export class ToolUseWaitNode extends BaseNode<
     // Stopping here would drop that user input on the floor — and skip the
     // `post` clear of `lastError`/`userCancelledRetry` that consuming it
     // performs, which is what makes the error recovered rather than terminal.
-    if (prepRes.afterError && isSubagent && !hasDrainedFollowUps) {
+    if (prepRes.afterError && isChild && !hasDrainedFollowUps) {
       return { kind: 'stop' };
     }
 
@@ -65,8 +68,8 @@ export class ToolUseWaitNode extends BaseNode<
     // The goalPaused event makes the pause user-visible: a silent stop
     // mid-objective reads as a hang.
     if (prepRes.afterError && !hasDrainedFollowUps) {
-      await this.pauseActiveGoal(streamId);
-    } else if (!isSubagent) {
+      await this.pauseActiveGoal(runId);
+    } else if (!isChild) {
       // Root-only notification: fires every cycle (not just a genuine
       // block) so a host can project each round's response as it happens —
       // e.g. the CLI syncing its terminal transcript live. Distinct from
@@ -97,8 +100,8 @@ export class ToolUseWaitNode extends BaseNode<
     // here. The child-run loop formats and delivers this cycle's turn facts
     // after suspension, then owns the next queue wait. This keeps every
     // ordinary suspension symmetric and leaves one delivery site.
-    if (isSubagent) {
-      ownerSession.status.transitionToWaiting(streamId, 'wait');
+    if (isChild) {
+      ownerSession.status.transitionToWaiting(runId, 'wait');
       await ownerSession.settlePublications();
       return { kind: 'waiting' };
     }
@@ -109,7 +112,7 @@ export class ToolUseWaitNode extends BaseNode<
     // post-build re-check of `hasQueuedFollowUp` lets user input that arrived
     // during the build win the race.
     if (!prepRes.afterError && !session.hasQueuedFollowUp()) {
-      const followUp = await maybeBuildGoalContinuation(streamId);
+      const followUp = await maybeBuildGoalContinuation(runId);
       if (followUp && !session.hasQueuedFollowUp()) {
         return {
           kind: 'continue',
@@ -120,7 +123,7 @@ export class ToolUseWaitNode extends BaseNode<
     }
 
     if (!session.hasQueuedFollowUp()) {
-      ownerSession.status.transitionToWaiting(streamId, 'wait');
+      ownerSession.status.transitionToWaiting(runId, 'wait');
       await ownerSession.settlePublications();
     }
 
@@ -155,7 +158,7 @@ export class ToolUseWaitNode extends BaseNode<
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     const { logger, runScope } = this.services;
-    const { streamId, session } = runScope;
+    const { runId, session } = runScope;
 
     if (execRes.kind === 'waiting') {
       return FlowTransition.WAITING;
@@ -165,7 +168,7 @@ export class ToolUseWaitNode extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+    session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
     await session.settlePublications();
 
     // Synthesized continuations don't come from the user queue, so they
@@ -187,7 +190,7 @@ export class ToolUseWaitNode extends BaseNode<
       );
     } catch (error) {
       if (prepRes.afterError) {
-        await this.pauseActiveGoal(streamId);
+        await this.pauseActiveGoal(runId);
       }
       throw error;
     }
@@ -202,19 +205,19 @@ export class ToolUseWaitNode extends BaseNode<
     return FlowTransition.CONTINUE;
   }
 
-  private async pauseActiveGoal(streamId: string): Promise<void> {
-    const goal = GoalStore.getForStream(streamId);
+  private async pauseActiveGoal(runId: RunId): Promise<void> {
+    const goal = GoalStore.getForRun(runId);
     if (goal?.status !== 'active') {
       return;
     }
 
-    await GoalStore.setStatus(streamId, 'paused');
+    await GoalStore.setStatus(runId, 'paused');
     // Route the bypass mutation through the session this flow already owns
     // (`runScope.session`) rather than `currentSession()`, so the goal-pause
     // path stays drivable without an ambient RunContext/ALS frame.
-    await setGoalSessionAutoApproval(streamId, false, {
+    await setGoalSessionAutoApproval(runId, false, {
       session: this.services.runScope.session,
     });
-    emitRunFact(this.services.logger, 'goalPaused', { streamId });
+    emitRunFact(this.services.logger, 'goalPaused', { runId });
   }
 }

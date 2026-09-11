@@ -64,7 +64,7 @@ export class OutputNode extends BaseNode<
     // stats all see the same base locations (see snapshotResolution).
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
-      this.services.fileService.executionId,
+      this.services.fileService.runId,
     );
 
     let mapping: RoundFileMapping | undefined;
@@ -112,7 +112,7 @@ export class OutputNode extends BaseNode<
               fileService: this.services.fileService,
               outputState,
               logger,
-              streamId: this.services.runScope.streamId,
+              runId: this.services.runScope.runId,
             },
             currentRound,
           );
@@ -197,7 +197,7 @@ export class OutputNode extends BaseNode<
   ): Promise<string | undefined> {
     const { logger, outputState, runScope, getRejectOnCompileFailure } =
       this.services;
-    const { streamId } = runScope;
+    const { runId } = runScope;
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
@@ -205,13 +205,13 @@ export class OutputNode extends BaseNode<
 
     // Emit output files event
     emitRunFact(logger, 'addOutputFiles', {
-      streamId,
+      runId,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
     if (execRes.emitCompileFailures) {
       emitRunFact(logger, 'updateCompileFailures', {
-        streamId,
+        runId,
         filesByRound: { [currentRound]: compileFailures },
       });
     }

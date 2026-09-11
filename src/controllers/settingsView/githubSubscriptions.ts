@@ -1,4 +1,5 @@
 // Local imports - GitHub subscriptions
+import type { RunId } from '@shared/schemas';
 import {
   issueSubscriptionRegistry,
   prSubscriptionRegistry,
@@ -6,7 +7,7 @@ import {
 } from '@tools/github/subscriptionBindings';
 
 interface GitHubSubscriptionOwner {
-  readonly streamId: string;
+  readonly runId: RunId;
   readonly label: string;
 }
 
@@ -17,17 +18,17 @@ interface GitHubSubscriptionEntry {
 
 /** Builds the shared PR, issue, and repository subscription presentation. */
 export function listGitHubSubscriptionEntries(
-  getStreamLabel: (streamId: string) => string | undefined,
+  getRunLabel: (runId: RunId) => string | undefined,
 ): GitHubSubscriptionEntry[] {
   function toEntry(binding: {
     key: string;
-    streamIds: readonly string[];
+    runIds: readonly RunId[];
   }): GitHubSubscriptionEntry {
     return {
       key: binding.key,
-      owners: binding.streamIds.map((streamId) => ({
-        streamId,
-        label: getStreamLabel(streamId) ?? streamId,
+      owners: binding.runIds.map((runId) => ({
+        runId,
+        label: getRunLabel(runId) ?? runId,
       })),
     };
   }

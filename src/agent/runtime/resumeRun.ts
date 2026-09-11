@@ -5,7 +5,7 @@ import { Effect, Result } from 'effect';
  * it: the extension toolbar, the desktop bridge, the CLI `/resume` command and
  * `texra resume`, and the implicit follow-up wake. It resolves persisted
  * state, claims the stream's follow-up recovery lease, and launches the run
- * as a generation on its execution lane (`resumeToolUseFromResumeData` for
+ * as a generation on its run lane (`resumeToolUseFromResumeData` for
  * tool-use, the host's workflow launcher for workflows). The native child
  * loop keeps the unlaned `resumeToolUseTurn`: it already holds the lane.
  */
@@ -15,16 +15,12 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import {
-  lookupStreamExecutionId,
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import {
-  ExecutionLeaseActiveError,
-  inspectExecutionLease,
-} from '@agent/storage/executionLease';
-import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
+import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
+import { getRunRecords } from '@agent/storage/RunKVStore';
 import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
@@ -32,12 +28,11 @@ import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
-  type ExecutionId,
-  type StreamTabId,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunId,
 } from '@shared/schemas';
-import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
+import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -128,7 +123,7 @@ export interface ResumeRunOptions extends Pick<
    */
   readonly executeWorkflow: (
     config: AgentConfig,
-    executionId: ExecutionId,
+    runId: RunId,
     modelHandlerCompatibilityKey:
       ModelHandlerCompatibilityKey | null | undefined,
   ) => Promise<void>;
@@ -136,38 +131,27 @@ export interface ResumeRunOptions extends Pick<
 
 /**
  * Resume a stream through the single host entry path. Recovery is claimed
- * when the program starts, before the stream-to-execution index performs I/O.
+ * when the program starts, before the stream-to-run index performs I/O.
  */
-export const resumeStream = Effect.fn('resumeStream')(function* (
-  streamId: StreamTabId,
+export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
+  runId: RunId,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error> {
   const session = options.session ?? defaultSession();
   if (
     options.isCancellationRequested?.() === true ||
-    session.executions.isActiveOrResuming(streamId)
+    session.runs.isActiveOrResuming(runId)
   )
     return REFUSED;
   const recovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
-    : session.followUps.claimRecovery(streamId, true);
-  if (!recovery || recovery.streamId !== streamId) {
+    : session.followUps.claimRecovery(runId, true);
+  if (!recovery || recovery.runId !== runId) {
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
-    Effect.onError(() =>
-      Effect.sync(() =>
-        releaseUnstartedRecovery(session, recovery, options.recovery == null),
-      ),
-    ),
-  );
-  if (!executionId) {
-    releaseUnstartedRecovery(session, recovery, options.recovery == null);
-    return REFUSED;
-  }
   return yield* resumeRunWithRecoveryProvenance(
-    executionId,
+    runId,
     { ...options, session, recovery },
     options.recovery == null,
   );
@@ -203,17 +187,17 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 // The existing host cancellation predicate controls the Promise-based launch.
 // Keep its queue owner until that launch and its cleanup have settled.
 export const resumeRun = Effect.fn('resumeRun')(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   options: ResumeRunOptions,
 ) {
-  return yield* resumeRunWithRecoveryProvenance(executionId, options, false);
+  return yield* resumeRunWithRecoveryProvenance(runId, options, false);
 }, Effect.uninterruptible);
 
 /** Resume preparation is one ordered program; checkpoint interpretation is unchanged. */
 const resumeRunWithRecoveryProvenance = Effect.fn(
   'resumeRunWithRecoveryProvenance',
 )(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error> {
@@ -226,21 +210,20 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     if (suppliedRecovery)
       releaseUnstartedRecovery(session, suppliedRecovery, provisional);
   };
-  const store = getExecutionRecords(session, executionId);
+  const store = getRunRecords(session, runId);
   const [config, meta] = yield* Effect.all([
     store.readConfig(),
     store.readMeta(),
   ]).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
-  const streamId = meta?.streamId;
-  if (!config || !streamId) {
+  if (!config || !meta) {
     abandonSupplied();
     return REFUSED;
   }
-  if (suppliedRecovery && suppliedRecovery.streamId !== streamId) {
+  if (suppliedRecovery && suppliedRecovery.runId !== runId) {
     abandonSupplied(false);
     return REFUSED;
   }
-  if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
+  if (cancelled() || session.runs.isActiveOrResuming(runId)) {
     abandonSupplied();
     return REFUSED;
   }
@@ -249,7 +232,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   if (config.agentCategory === AgentCategory.ToolUse) {
     queueLease = options.recovery
       ? session.followUps.useRecovery(options.recovery)
-      : session.followUps.claimRecovery(streamId, true);
+      : session.followUps.claimRecovery(runId, true);
   }
   if (config.agentCategory === AgentCategory.ToolUse && !queueLease)
     return REFUSED;
@@ -258,40 +241,27 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
   };
   const retrieved = yield* Effect.result(
-    Effect.gen(function* () {
-      const snapshots = session.snapshots;
-      if (snapshots.getRunMetadata(streamId).executionId === undefined)
-        yield* snapshots.preload([streamId]);
-      return yield* retrieveSessionResumeData(
-        streamId,
-        executionId,
-        config,
-        session,
-        {
-          parentStreamId: snapshots.getParentStreamId(streamId),
-        },
-      );
-    }),
+    retrieveSessionResumeData(runId, config, session),
   );
   if (Result.isFailure(retrieved)) {
     releaseQueue();
     if (!namesUnusableCheckpoint(retrieved.failure))
       return yield* Effect.fail(retrieved.failure);
     log.warn(
-      `Refusing to resume ${executionId}: its checkpoint holds no resumable state: ${toErrorMessage(retrieved.failure)}`,
+      `Refusing to resume ${runId}: its checkpoint holds no resumable state: ${toErrorMessage(retrieved.failure)}`,
       { data: retrieved.failure },
     );
     return { failed: 'unusable_checkpoint' };
   }
   const resume = retrieved.success;
-  if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
+  if (cancelled() || session.runs.isActiveOrResuming(runId)) {
     releaseQueue();
     return REFUSED;
   }
   if (!resume) {
     releaseQueue();
-    const classification = yield* classifyRun(executionId, session);
-    const failed = recordRunRefusal(streamId, session, classification);
+    const classification = yield* classifyRun(runId, session);
+    const failed = recordRunRefusal(runId, session, classification);
     if (
       classification.kind === 'held_elsewhere' ||
       classification.kind === 'owned_here'
@@ -300,10 +270,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     const unusable =
       classification.kind === 'unclassified'
         ? classification.fault === 'checkpoint-malformed'
-        : yield* checkpointExists(executionId, session);
+        : yield* checkpointExists(runId, session);
     if (!unusable) return { failed };
     log.warn(
-      `Refusing to resume ${executionId}: its checkpoint holds no resumable state.`,
+      `Refusing to resume ${runId}: its checkpoint holds no resumable state.`,
     );
     return { failed: 'unusable_checkpoint' };
   }
@@ -311,17 +281,14 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   const lease =
     willLaunch && options.onResumeResolved
       ? yield* Effect.tryPromise({
-          try: () => inspectExecutionLease(executionId),
+          try: () => inspectRunLease(runId),
           catch: ensureError,
         }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
-  session.status.clearHold(streamId, { discardRetainedPhase: true });
+  session.status.clearHold(runId, { discardRetainedPhase: true });
   if (lease?.status === 'held') {
     releaseQueue();
-    session.status.markUnavailable(
-      streamId,
-      streamHeldMessage(lease.owner.pid),
-    );
+    session.status.markUnavailable(runId, runHeldMessage(lease.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
@@ -330,7 +297,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       try: async () => onResumeResolved(),
       catch: ensureError,
     }).pipe(Effect.onError(() => Effect.sync(releaseQueue)));
-    if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
+    if (cancelled() || session.runs.isActiveOrResuming(runId)) {
       releaseQueue();
       return REFUSED;
     }
@@ -344,14 +311,14 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
         try: () =>
           options.executeWorkflow(
             resume.agentConfig,
-            resume.executionId,
+            resume.runId,
             resume.modelHandlerCompatibilityKey,
           ),
         catch: ensureError,
       }),
     );
     if (Result.isFailure(launched)) {
-      const refused = refusalFor(launched.failure, session, streamId);
+      const refused = refusalFor(launched.failure, session, runId);
       if (refused) return refused;
       return yield* Effect.fail(launched.failure);
     }
@@ -369,7 +336,7 @@ function releaseUnstartedRecovery(
   const current = session.followUps.useRecovery(recovery);
   if (!current) return;
   if (provisional && session.followUps.queue(current).isEmpty()) {
-    session.followUps.terminalize(current.streamId);
+    session.followUps.terminalize(current.runId);
     return;
   }
   session.followUps.release(current, 'recoverable');
@@ -388,13 +355,10 @@ function releaseUnstartedRecovery(
 function refusalFor(
   error: unknown,
   session: SessionHandle,
-  streamId: StreamTabId,
+  runId: RunId,
 ): ResumeRunResult | undefined {
-  if (error instanceof ExecutionLeaseActiveError) {
-    session.status.markUnavailable(
-      streamId,
-      streamHeldMessage(error.owner.pid),
-    );
+  if (error instanceof RunLeaseActiveError) {
+    session.status.markUnavailable(runId, runHeldMessage(error.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {
@@ -416,19 +380,16 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error> {
-  const { streamId } = resume;
-  const streamStatus = session.status;
+  const runId = resume.runId;
+  const runStatus = session.status;
   const followUpsQueue = session.followUps;
 
-  if (
-    session.executions.getHandle(resume.executionId)
-      ?.suspendedTerminationStarted
-  ) {
+  if (session.runs.getHandle(resume.runId)?.suspendedTerminationStarted) {
     followUpsQueue.release(queueLease, 'recoverable');
     return REFUSED;
   }
-  streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-    substate: STREAM_SUBSTATE.RESUMING,
+  runStatus.transition(runId, RUN_PHASE.RUNNING, 'resume', {
+    substate: RUN_SUBSTATE.RESUMING,
   });
 
   const seed = options.extraFollowUps ?? [];
@@ -440,8 +401,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     session.publish([
       {
         type: 'updateQueuedFollowUps',
-        aggregateId: qualifyAggregateId('stream', streamId),
-        messages: session.followUps.getAll(streamId),
+        aggregateId: qualifyAggregateId('run', runId),
+        messages: session.followUps.getAll(runId),
       },
     ]);
   };
@@ -476,7 +437,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         onApprovalPolicyDenial: options.onApprovalPolicyDenial,
         runtimeUnavailableTools: options.runtimeUnavailableTools,
-        parentStreamId: resume.parentStreamId,
         onFollowUpConsumed: () => {
           followUps = [];
         },
@@ -513,9 +473,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         if (
           cancelledAtFlowAttachment ||
           followUpsRestored ||
-          streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
+          runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING
         ) {
-          streamStatus.transitionToWaiting(streamId, 'wait');
+          runStatus.transitionToWaiting(runId, 'wait');
         }
         followUpsQueue.release(
           queueLease,
@@ -527,7 +487,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     ),
   );
   if (Result.isFailure(resumed)) {
-    const refusal = refusalFor(resumed.failure, session, streamId);
+    const refusal = refusalFor(resumed.failure, session, runId);
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }

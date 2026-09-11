@@ -193,10 +193,10 @@ export function handOffCliShutdownSignalHandlers(): void {
  * The platform port above forwards to it; outside a chat there is no host
  * that can resume, so the port answers `false`.
  */
-let cliResumeHandler: AgentResumePort['tryResumeStream'] | undefined;
+let cliResumeHandler: AgentResumePort['tryResumeRun'] | undefined;
 
 export function setCliAgentResumeHandler(
-  handler: AgentResumePort['tryResumeStream'],
+  handler: AgentResumePort['tryResumeRun'],
 ): () => void {
   cliResumeHandler = handler;
   return () => {
@@ -323,8 +323,8 @@ export async function initCliPlatform(
       secrets: getCliSecrets(context.storageRoot),
       lifecycle,
       agentResume: {
-        tryResumeStream: async (streamId, recovery) =>
-          (await cliResumeHandler?.(streamId, recovery)) ?? false,
+        tryResumeRun: async (runId, recovery) =>
+          (await cliResumeHandler?.(runId, recovery)) ?? false,
       },
       agentDirectories,
       toolAvailability: {
@@ -405,7 +405,7 @@ export async function initCliPlatform(
       afterFlushArtifacts: [
         () => effectRuntime().runPromise(UsageLogService.dispose()),
       ],
-      afterExecutionSettlement: [
+      afterRunSettlement: [
         () => teardownDefaultSession(),
         () => flushNdjsonStdout(),
         () => disposeProcessRuntime(),

@@ -11,17 +11,13 @@ import {
 import { subscribeToSignalChanges } from '@shared/signals';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import {
-  rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
-} from './state/cliState';
+import { claimedRunId, rootRunId, rootRunPending } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
 import {
-  anyStreamRunning,
+  anyRunRunning,
   sessionView,
-  streamPhaseOf,
-  streamViewOf,
+  runPhaseOf,
+  runViewOf,
 } from './state/sessionView';
 import { chatTuiCanStopActiveRun } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
@@ -69,14 +65,14 @@ function writeTerminalTitle(title: string): void {
 function currentTerminalTitleState(): SessionTitleState {
   const view = sessionView().get();
   if (attentionRequests(view).length > 0) return 'approval';
-  const pendingRootStreamId = rootRunStreamId.get();
+  const runId = claimedRunId.get();
   if (
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
-      streamId: pendingRootStreamId,
-      status: streamPhaseOf(streamViewOf(view, pendingRootStreamId)),
+      runId,
+      status: runPhaseOf(runViewOf(view, runId)),
     }) ||
-    anyStreamRunning(view, rootStreamId.get())
+    anyRunRunning(view, rootRunId.get())
   ) {
     return 'running';
   }
@@ -138,7 +134,7 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [sessionView(), rootRunPending, rootRunStreamId, rootStreamId],
+    [sessionView(), claimedRunId, rootRunPending, rootRunId],
     synchronize,
   );
   synchronize();

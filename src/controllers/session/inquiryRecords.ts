@@ -82,8 +82,8 @@ function inquiryOperations(
   /**
    * Append a new open question to a thread. Creates the thread when no
    * thread_id is passed (or the existing thread is unknown). Updates the
-   * thread's `parentStreamId` and `parentExecutionId` to the caller;
-   * continuations always flow back to the most-recent asker.
+   * thread's `parentRunId` to the caller; continuations always flow back
+   * to the most-recent asker.
    *
    * Behavior depends on the current status of the addressed thread:
    *   - new thread        → create with status='open'
@@ -121,8 +121,7 @@ function inquiryOperations(
       const timestamp = new Date().toISOString();
       const baseManifest: InquiryThreadRecord = existing ?? {
         threadId,
-        parentStreamId: params.parentStreamId,
-        parentExecutionId: params.parentExecutionId,
+        parentRunId: params.parentRunId,
         status: 'open',
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -146,8 +145,7 @@ function inquiryOperations(
 
       const nextManifest: InquiryThreadRecord = {
         ...baseManifest,
-        parentStreamId: params.parentStreamId,
-        parentExecutionId: params.parentExecutionId,
+        parentRunId: params.parentRunId,
         status: 'open',
         updatedAt: timestamp,
         turns: [...baseManifest.turns, turn],
@@ -257,7 +255,7 @@ function inquiryOperations(
     const lastTurn = manifest.turns.at(-1);
     return {
       threadId: manifest.threadId,
-      parentStreamId: manifest.parentStreamId,
+      parentRunId: manifest.parentRunId,
       status: manifest.status,
       lastQuestionPreview: (lastTurn?.question ?? '').slice(
         0,
@@ -287,9 +285,9 @@ function inquiryOperations(
         const filtered = all.filter((m) => {
           if (params.status !== 'any' && m.status !== params.status)
             return false;
-          if (params.scope === 'stream') {
-            if (!params.streamId) return false;
-            if (m.parentStreamId !== params.streamId) return false;
+          if (params.scope === 'run') {
+            if (!params.runId) return false;
+            if (m.parentRunId !== params.runId) return false;
           }
           return true;
         });

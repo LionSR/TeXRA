@@ -4,15 +4,15 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
 import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
-import { activeStreamId, resetCliState } from '@cli/chat/tui/state/cliState';
+import { activeRunId, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
   type CompileFailure,
   LOG_LEVELS,
   type OutputFileInfo,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
-  type StreamTabId,
+  RUN_PHASE,
+  type RunId,
   type TaskGroup,
 } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
@@ -22,12 +22,12 @@ import {
 } from '@test/support/transcriptRowFixtures';
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-const STREAM_ID = 'workflow#details' as StreamTabId;
+const STREAM_ID = 'workflow#details' as RunId;
 
 const COMPILE_FAILURE: CompileFailure = {
   round: 0,
@@ -59,7 +59,7 @@ function completedRound(
     total,
     startTime,
     endTime,
-    status: STREAM_PHASE.COMPLETED,
+    status: RUN_PHASE.COMPLETED,
   };
 }
 
@@ -96,7 +96,7 @@ describe('selectWorkflowRunDetailLines', () => {
             kind: 'run',
             startTime: 1_000,
             endTime: 10_000,
-            status: STREAM_PHASE.COMPLETED,
+            status: RUN_PHASE.COMPLETED,
           },
           completedRound(0, 2, 2_000, 9_200),
         ],
@@ -169,7 +169,7 @@ describe('selectWorkflowRunDetailLines', () => {
             level: LOG_LEVELS.INFO,
             timestamp: 0,
             text: 'r3',
-            data: { status: STREAM_PHASE.RUNNING, kind: 'round', index: 3 },
+            data: { status: RUN_PHASE.RUNNING, kind: 'round', index: 3 },
           },
         ]),
         outputFilesByRound: {},
@@ -196,7 +196,7 @@ describe('selectWorkflowRunDetailLines', () => {
             index: 0,
             startTime: 0,
             endTime: 1_000,
-            status: STREAM_PHASE.COMPLETED,
+            status: RUN_PHASE.COMPLETED,
           },
         ],
         outputFilesByRound: {},
@@ -227,7 +227,7 @@ describe('selectWorkflowRunDetailLines', () => {
             level: LOG_LEVELS.INFO,
             timestamp: 0,
             text: 'Round 3',
-            data: { status: STREAM_PHASE.COMPLETED, endTime: 1_000, kind },
+            data: { status: RUN_PHASE.COMPLETED, endTime: 1_000, kind },
           },
         ]),
         outputFilesByRound: {},
@@ -246,10 +246,10 @@ describe('selectWorkflowRunDetailLines', () => {
     // A live (not yet settled) log row: the fold's settled prefix stays at 0.
     seedView(
       viewWith([
-        makeStreamView({
+        makeRunView({
           id: STREAM_ID,
           category: AgentCategory.Workflow,
-          status: STREAM_PHASE.RUNNING,
+          status: RUN_PHASE.RUNNING,
           transcript: {
             rows: [textRowFixture('live', 'log', 'live workflow log')],
             taskGroups: [
@@ -260,7 +260,7 @@ describe('selectWorkflowRunDetailLines', () => {
                 index: 0,
                 total: 4,
                 startTime: 0,
-                status: STREAM_PHASE.RUNNING,
+                status: RUN_PHASE.RUNNING,
               },
             ],
             settledRows: 0,
@@ -269,7 +269,7 @@ describe('selectWorkflowRunDetailLines', () => {
         }),
       ]),
     );
-    activeStreamId.set(STREAM_ID);
+    activeRunId.set(STREAM_ID);
     const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(ConversationPane, {

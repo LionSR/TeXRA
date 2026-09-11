@@ -31,7 +31,7 @@ import {
   ExistenceReconciliationSchema,
   FoldEventSchema,
   LocalRuntimeStateSchema,
-  StreamTabIdSchema,
+  RunIdSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
   type FoldInput,
@@ -83,10 +83,10 @@ export type EventsFrame = z.infer<typeof EventsFrameSchema>;
  *  message stays in the host log under `ref`, the request id, and never
  *  crosses to a renderer (C3). */
 const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
-  z.object({ _tag: z.literal('NotOwner'), streamId: StreamTabIdSchema }),
+  z.object({ _tag: z.literal('NotOwner'), runId: RunIdSchema }),
   z.object({
     _tag: z.literal('Unavailable'),
-    streamId: StreamTabIdSchema,
+    runId: RunIdSchema,
     reason: z.string(),
   }),
   z.object({ _tag: z.literal('Cancelled') }),
@@ -131,7 +131,7 @@ const SurfaceActionMessageSchema = z.object({
   session: SessionKeySchema,
   action: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('selectNew') }),
-    z.object({ kind: z.literal('select'), streamId: StreamTabIdSchema }),
+    z.object({ kind: z.literal('select'), runId: RunIdSchema }),
     z.object({ kind: z.literal('toggleDrawer') }),
     /** The run accelerator: the composer's Send for the surface's resolved
      *  selection, a follow-up to the selected stream or a launch (PRD 12.4). */

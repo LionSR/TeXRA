@@ -12,21 +12,21 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   isPlainAgentIdentity,
-  STREAM_PHASE,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import {
   emptySessionView,
   type SessionView,
-  type StreamView,
+  type RunView,
 } from '@shared/session/sessionView';
-import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
-} from '@shared/streams/streamStatus';
-import { streamStatusCopy } from '@shared/streams/streamStatusDisplay';
+} from '@shared/runs/runStatus';
+import { runStatusCopy } from '@shared/runs/runStatusDisplay';
 
 let unbind: (() => void) | undefined;
 
@@ -44,22 +44,22 @@ export function seedView(view: SessionView): void {
   sessionView().set(view);
 }
 
-type StreamViewOverrides = Partial<Omit<StreamView, 'category'>> & {
+type RunViewOverrides = Partial<Omit<RunView, 'category'>> & {
   readonly id: string;
-  readonly category?: StreamView['category'];
+  readonly category?: RunView['category'];
 };
 
 /** One stream as the fold would state it; every field explicit. The label,
  *  tone, and group follow the status the way the fold derives them. */
-export function makeStreamView(over: StreamViewOverrides): StreamView {
-  const id = over.id as StreamTabId;
-  const status = over.status ?? STREAM_PHASE.RUNNING;
-  const copy = streamStatusCopy(status, {
+export function makeRunView(over: RunViewOverrides): RunView {
+  const id = over.id as RunId;
+  const status = over.status ?? RUN_PHASE.RUNNING;
+  const copy = runStatusCopy(status, {
     substate: over.substate ?? undefined,
   });
   const common = {
     id,
-    executionId: `${over.id}-exec`,
+    runId: `${over.id}-exec`,
     identity: { kind: 'agent' as const, agent: 'agent' },
     isRemote: false,
     ownerId: null,
@@ -115,7 +115,7 @@ export function makeStreamView(over: StreamViewOverrides): StreamView {
       compileFailures: {},
       ...rest,
       id,
-    } as StreamView;
+    } as RunView;
   }
   return {
     ...common,
@@ -128,24 +128,24 @@ export function makeStreamView(over: StreamViewOverrides): StreamView {
     compileFailures: {},
     ...rest,
     id,
-  } as StreamView;
+  } as RunView;
 }
 
 /**
- * A view over the given streams: `order` lists the roots in the order
+ * A view over the given runs: `order` lists the roots in the order
  * given, each parent's `childIds` are completed from the children's
  * `parentId` when the caller did not state them (in the fold's
- * `streamOrdering`: newest `createdAt` first, ties by id), and every
+ * `runOrdering`: newest `createdAt` first, ties by id), and every
  * stream's `rollup` counts its descendants the way the fold does.
  */
 export function viewWith(
-  streams: readonly StreamView[],
-  over: Partial<Omit<SessionView, 'streams' | 'order'>> = {},
+  runs: readonly RunView[],
+  over: Partial<Omit<SessionView, 'runs' | 'order'>> = {},
 ): SessionView {
-  const byId = new Map<StreamTabId, StreamView>();
-  for (const stream of streams) byId.set(stream.id, stream);
-  const completed = new Set<StreamTabId>();
-  for (const stream of streams) {
+  const byId = new Map<RunId, RunView>();
+  for (const stream of runs) byId.set(stream.id, stream);
+  const completed = new Set<RunId>();
+  for (const stream of runs) {
     if (stream.parentId === null) continue;
     const parent = byId.get(stream.parentId);
     if (parent && !parent.childIds.includes(stream.id)) {
@@ -156,7 +156,7 @@ export function viewWith(
       });
     }
   }
-  const orderingKey = (id: StreamTabId) => ({
+  const orderingKey = (id: RunId) => ({
     name: id,
     creationTimestamp: byId.get(id)?.createdAt ?? 0,
   });
@@ -171,7 +171,7 @@ export function viewWith(
     });
   }
   const rollupOf = (
-    stream: StreamView,
+    stream: RunView,
   ): { total: number; running: number; finished: number } => {
     const rollup = { total: 0, running: 0, finished: 0 };
     for (const childId of stream.childIds) {
@@ -193,7 +193,7 @@ export function viewWith(
   return {
     ...emptySessionView('test'),
     ...over,
-    streams: byId,
-    order: streams.filter((s) => s.parentId === null).map((s) => s.id),
+    runs: byId,
+    order: runs.filter((s) => s.parentId === null).map((s) => s.id),
   };
 }

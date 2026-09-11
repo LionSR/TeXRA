@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
+import { INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -14,11 +14,9 @@ function result(over: Partial<ResultEvent>): ResultEvent {
   return {
     type: 'result',
     outcome: 'failed',
-    executionId: 'a00101',
-    streamId: 'stream',
+    runId: 'a00101' as RunId,
     agentName: 'assistant',
     category: 'toolUse',
-    isSubagent: false,
     ...over,
   };
 }
@@ -29,6 +27,7 @@ function result(over: Partial<ResultEvent>): ResultEvent {
  */
 async function toastsFor(
   event: ResultEvent,
+  parent: RunId | null = null,
 ): Promise<{ event: string; payload: unknown }[]> {
   const session = createTestSession();
   const emitted: { event: string; payload: unknown }[] = [];
@@ -42,8 +41,9 @@ async function toastsFor(
     session.onResult(() => resolve()),
   );
   try {
-    publishTestRunStart(session, event.streamId, event.executionId);
-    session.publishRunEvent(event.streamId, event);
+    if (parent !== null) publishTestRunStart(session, parent);
+    publishTestRunStart(session, event.runId, { parent });
+    session.publishRunEvent(event.runId, event);
     await committed;
   } finally {
     detachToast();
@@ -110,10 +110,11 @@ describe('terminal result presentation', () => {
     expect(message).toContain('reduce attached files');
   });
 
-  it('shows no toast for subagent runs, aborts, or success', async () => {
+  it('shows no toast for child runs, aborts, or success', async () => {
     expect(
       await toastsFor(
-        result({ isSubagent: true, error: { kind: 'unexpected' } }),
+        result({ error: { kind: 'unexpected' } }),
+        'a00100' as RunId,
       ),
     ).toEqual([]);
     expect(

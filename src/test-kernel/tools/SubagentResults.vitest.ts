@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -63,7 +63,7 @@ describe('formatChildRunDelivery', () => {
     const xml = formatChildRunDelivery(
       {
         tag: 'codex-result',
-        executionId: 'exec-1',
+        runId: 'exec-1',
         prompt: 'do the thing',
         attributes: [{ name: 'thread-id', value: 'th-42' }],
       },
@@ -88,7 +88,7 @@ describe('formatChildRunDelivery', () => {
     const xml = formatChildRunDelivery(
       {
         tag: 'claude-agent-result',
-        executionId: 'exec-2',
+        runId: 'exec-2',
         prompt: 'summarize',
         attributes: [{ name: 'session-id', value: 'sess-7' }],
       },
@@ -115,7 +115,7 @@ describe('formatChildRunDelivery', () => {
     const xml = formatChildRunDelivery(
       {
         tag: 'codex-result',
-        executionId: 'exec-3',
+        runId: 'exec-3',
         prompt: 'p',
         attributes: [{ name: 'thread-id', value: null }],
       },
@@ -133,7 +133,7 @@ describe('formatChildRunDelivery', () => {
 
   it('falls back to "(no response)" for an empty response', () => {
     const xml = formatChildRunDelivery(
-      { tag: 'codex-result', executionId: 'e', prompt: 'p' },
+      { tag: 'codex-result', runId: 'e', prompt: 'p' },
       { wallTime: seconds(500), response: '' },
     );
     expect(xml).toContain('<response>(no response)</response>');
@@ -144,7 +144,7 @@ describe('formatChildRunDelivery', () => {
     const xml = formatChildRunDelivery(
       {
         tag: 'codex-result',
-        executionId: 'a&b"<c',
+        runId: 'a&b"<c',
         prompt: `${longPrompt}<&"`,
         attributes: [{ name: 'thread-id', value: '<id&"' }],
       },
@@ -163,7 +163,7 @@ describe('formatChildRunDelivery', () => {
 describe('formatChildRunError', () => {
   it('renders the error shape, escaping attrs and the message body', () => {
     const xml = formatChildRunError(
-      { tag: 'codex-error', executionId: 'exec-1', prompt: 'why did it fail?' },
+      { tag: 'codex-error', runId: 'exec-1', prompt: 'why did it fail?' },
       { message: toErrorMessage(new Error('boom <&>')) },
     );
     expect(xml).toBe(
@@ -178,7 +178,7 @@ describe('formatChildRunError', () => {
 
   it('uses the provided tag and stringifies non-Error values', () => {
     const xml = formatChildRunError(
-      { tag: 'claude-agent-error', executionId: 'e', prompt: 'p' },
+      { tag: 'claude-agent-error', runId: 'e', prompt: 'p' },
       { message: toErrorMessage('plain') },
     );
     expect(xml).toBe(
@@ -203,7 +203,7 @@ describe('formatSubagentDelivery', () => {
         files: ['/ws/paper.tex'],
       }),
       {
-        executionId: 'abc123',
+        runId: 'abc123' as RunId,
         memoryMisses: [
           { path: '/memories/missing.md', reason: 'Path is missing' },
         ],
@@ -236,7 +236,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('reviewer', result, {
-      executionId: 'abc123',
+      runId: 'abc123' as RunId,
     });
 
     expect(delivery).toContain(
@@ -251,7 +251,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('reviewer', result, {
-      executionId: 'abc123',
+      runId: 'abc123' as RunId,
       memoryMisses: [
         {
           path: '/memories/missing.md',
@@ -283,7 +283,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('polish', result, {
-      executionId: 'abc123',
+      runId: 'abc123' as RunId,
     });
 
     expect(delivery).toContain(
@@ -300,7 +300,7 @@ describe('formatSubagentDelivery', () => {
   it('omits the diffs-unavailable element on clean deliveries', () => {
     expect(
       formatSubagentDelivery('polish', workflowResult(), {
-        executionId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).not.toContain('diffs-unavailable');
   });
@@ -308,12 +308,12 @@ describe('formatSubagentDelivery', () => {
   it('emits canonical failed and cancelled statuses for orchestrators', () => {
     expect(
       formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED), {
-        executionId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).toContain('status="failed"');
     expect(
       formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED), {
-        executionId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).toContain('status="cancelled"');
   });

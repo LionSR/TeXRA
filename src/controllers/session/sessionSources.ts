@@ -7,10 +7,10 @@
  * - `LocalRuntimeSource`: what this process knows that the events cannot
  *   say: its own owner id, the owners whose runs it may not touch (alive or
  *   unprovable, written by the liveness prober in `sessionLayer.ts`), and
- *   the streams whose run state it could not read (written by
- *   `StreamStatusMachine` through the session).
+ *   the runs whose run state it could not read (written by
+ *   `RunStatusMachine` through the session).
  * - `TextChunkSource`: the in-flight text per streaming row, keyed
- *   `${streamId}/${rowId}`; the ordered input reader derives suffixes from
+ *   `${runId}/${rowId}`; the ordered input reader derives suffixes from
  *   successive chunk tails after reading the events committed before them.
  * - `TranscriptSubscriptions`: the aggregates some surface holds a
  *   transcript subscription on, the union of one set per port.
@@ -55,7 +55,7 @@ export interface InflightTextChunk {
   readonly length: number;
 }
 
-/** The `${streamId}/${rowId}` key of one streaming row's current chunk tail. */
+/** The `${runId}/${rowId}` key of one streaming row's current chunk tail. */
 export type InflightText = ReadonlyMap<string, InflightTextChunk>;
 
 export class TextChunkSource extends Context.Service<

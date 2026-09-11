@@ -6,7 +6,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityStatus,
-} from '@shared/streams/compactionActivityProjection';
+} from '@shared/runs/compactionActivityProjection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';

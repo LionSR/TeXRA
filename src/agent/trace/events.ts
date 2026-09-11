@@ -15,17 +15,16 @@ import type {
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
+  ExtendedTokenUsageStats,
   GoalPausedPayload,
-  ExecutionId,
+  RunId,
   RunIdentity,
   RunOutcome,
   SessionEventDraft,
-  StreamTabId,
   UserFollowUpSupport,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
-  UpdateStreamUsagePayload,
   UpdateTodosPayload,
   WorkflowCallProgress,
   WorkflowPlanMarker,
@@ -85,8 +84,7 @@ export interface StageStartEvent extends StageStamp {
 /** Mutable persisted run config changed after run.start, e.g. model switch. */
 interface RunConfigEvent extends StageStamp {
   readonly type: 'run.config';
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly runId: RunId;
   readonly config: AgentConfig;
 }
 
@@ -124,7 +122,7 @@ interface ToolEndEvent extends StageStamp {
 
 /**
  * Correlatable workflow-script call state. The same `logId` is emitted as a
- * call moves from its declared plan through execution to a terminal state.
+ * call moves from its declared plan through run to a terminal state.
  */
 interface WorkflowCallEvent extends StageStamp {
   readonly type: 'workflow.call';
@@ -147,10 +145,17 @@ interface ActiveSkillsEvent extends StageStamp {
   readonly skills: readonly RawAcceptedSkill[];
 }
 
+/** One turn's token usage, keyed by the run it belongs to: the trace's own
+ *  run, or a child whose spend a parent's usage map keys by that child's id. */
+export interface UsageReport {
+  readonly runId: RunId;
+  readonly usage: ExtendedTokenUsageStats;
+}
+
 /** Token-usage report. */
 interface UsageEvent extends StageStamp {
   readonly type: 'usage';
-  readonly payload: UpdateStreamUsagePayload;
+  readonly payload: UsageReport;
   /** False when this usage report should not create a transcript stats row. */
   readonly recordTranscript?: boolean;
 }
@@ -164,7 +169,7 @@ interface UsageEvent extends StageStamp {
 export type StatusEvent = Omit<
   Extract<SessionEventDraft, { type: 'status' }>,
   'aggregateId'
-> & { readonly streamId: StreamTabId };
+> & { readonly runId: RunId };
 
 /** UI progress counters for a run, projected by hosts but not transcript logs. */
 interface ConversationProgressEvent extends StageStamp {

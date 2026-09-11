@@ -3,9 +3,9 @@ import stripAnsi from 'strip-ansi';
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { redactSecrets } from '@logger/redaction';
-import { type StreamPhase } from '@shared/schemas';
+import { type RunPhase } from '@shared/schemas';
 import { type TranscriptRow, type TranscriptRowKind } from '@shared/transcript';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/runs/runStatus';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
@@ -180,7 +180,7 @@ function isFinalizedTranscriptRow(index: number, settledRows: number): boolean {
 function userPromptAwaitsLiveContinuation(
   rows: readonly TranscriptRow[],
   index: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
 ): boolean {
   const row = rows[index];
   if (
@@ -249,7 +249,7 @@ function inSettlementOrder<
 export function orderedStaticTranscriptEntries(
   entries: readonly TranscriptRow[],
   settledRows: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
 ): readonly TranscriptRow[] {
   const candidates: Array<{
     entry: TranscriptRow;
@@ -281,7 +281,7 @@ export function orderedStaticTranscriptEntries(
 export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
   settledRows: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
 ): TranscriptRow[] {
   const showLiveAssistant = isActivePhase(status);
   const pending: TranscriptRow[] = [];
@@ -321,7 +321,7 @@ export interface StaticTranscriptScanCursor {
    *  extensions without rescanning the whole history. */
   readonly lastScannedEntry: TranscriptRow | undefined;
   /** Stream phase at scan time; a phase change forces a rescan of the tail. */
-  readonly status: StreamPhase | undefined;
+  readonly status: RunPhase | undefined;
   /** Order key of the last row this cursor's scans appended to scrollback.
    *  A later suffix that sorts before it cannot be appended in place. */
   readonly lastAppendedKey: readonly [number, number] | undefined;
@@ -338,7 +338,7 @@ interface StaticTranscriptScanResult {
 function makeStaticTranscriptScanCursor(
   entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
   lastAppendedKey: readonly [number, number] | undefined,
 ): StaticTranscriptScanCursor {
   return {
@@ -362,7 +362,7 @@ function makeStaticTranscriptScanCursor(
 export function incrementalStaticTranscriptEntries(
   entries: readonly TranscriptRow[] | undefined,
   settledRows: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
   previous: StaticTranscriptScanCursor | undefined,
 ): StaticTranscriptScanResult {
   const source = entries ?? EMPTY_TRANSCRIPT_ENTRIES;

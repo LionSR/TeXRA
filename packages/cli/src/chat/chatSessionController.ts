@@ -7,7 +7,7 @@ import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { ExecutionLeaseActiveError, getExecutionRecords } from '@agent/storage';
+import { RunLeaseActiveError, getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -49,17 +49,16 @@ import type { RecoveryContinuation } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
-  type ExecutionId,
-  type StreamTabId,
+  RUN_PHASE,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { StreamSnapshotStore } from '@transcript';
-import { generateExecutionId, throwAggregated } from '@utils/core';
+import { RunSnapshotStore } from '@transcript';
+import { generateRunId, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -67,9 +66,9 @@ import {
   type SlashCommandContext,
 } from './tui/commands/handlers/slashContext';
 import {
-  activeStreamId as activeStreamIdSignal,
-  focusStream,
-  rootStreamId,
+  activeRunId as activeRunIdSignal,
+  focusRun,
+  rootRunId,
   patchSessionMeta,
   requestDraftRestore,
   sessionMeta as sessionMetaSignal,
@@ -81,7 +80,7 @@ import {
 } from './tui/state/sessionRunState';
 import {
   currentView,
-  streamViewOf,
+  runViewOf,
   focusedChildAcceptsFollowUps,
 } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
@@ -92,7 +91,7 @@ import {
   appendLocalUserTranscript,
   clearLocalTranscript,
   describeRequestError,
-  moveLocalTranscriptToStream,
+  moveLocalTranscriptToRun,
 } from './tui/state/transcript';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
@@ -106,19 +105,19 @@ type InterruptedFollowUpAdmission =
   | { readonly kind: 'not_interrupted' }
   | {
       readonly kind: 'accepted';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly completion: Promise<boolean>;
     };
 
 interface InterruptedContinuationBatch {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly followUps: InterruptedFollowUp[];
   completion: Promise<boolean>;
   superseded: boolean;
 }
 
 interface SupersededInterruptedRecovery {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly followUps: readonly InterruptedFollowUp[];
 }
 
@@ -162,19 +161,19 @@ export interface ChatSessionController {
   startRootRun(config: AgentConfigPayload): void;
 
   /**
-   * Resume a suspended tool-use session by execution id.
+   * Resume a suspended tool-use session by run id.
    *
    * Fire-and-forget from the Ink perspective, the returned promise settles
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: ExecutionId): Promise<void>;
+  resume(id: RunId): Promise<void>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
 
-  /** Stop one user-focused stream while preserving other agent streams. */
-  stopStream(streamId: StreamTabId): void;
+  /** Stop one user-focused stream while preserving other agent runs. */
+  stopRun(runId: RunId): void;
 
   /**
    * Atomically admit a message into an interrupted root conversation.
@@ -192,10 +191,7 @@ export interface ChatSessionController {
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
    */
-  tryResumeStream(
-    streamId: StreamTabId,
-    recovery?: RecoveryContinuation,
-  ): Promise<boolean>;
+  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
   /**
    * The composer's submit path (PRD 10.1): a slash command, the first
    * instruction of a fresh root run, a message into an interrupted root, or
@@ -230,7 +226,7 @@ export interface ChatSessionControllerInit {
   readonly followUpQueue: PQueue;
 
   /** Per-stream sidecar persistence store. */
-  readonly snapshotStore: StreamSnapshotStore;
+  readonly snapshotStore: RunSnapshotStore;
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly initialModelSource: RunModelDecisionReason;
@@ -302,28 +298,20 @@ export function createChatSessionController(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
 
-  /** The stream of `executionId`, from the first view level that holds it. */
-  const rootStreamOf = (
-    executionId: string | undefined,
-  ): Promise<StreamTabId | undefined> =>
-    executionId === undefined
+  /** `runId` once the fold holds it, from the first view level that does. */
+  const awaitRunFolded = (
+    runId: RunId | undefined,
+  ): Promise<RunId | undefined> =>
+    runId === undefined
       ? Promise.resolve(undefined)
       : effectRuntime().runPromise(
           Stream.concat(
             Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
             SubscriptionRef.changes(runtimeSession.view),
           ).pipe(
-            Stream.map(
-              (view) =>
-                [...view.streams.values()].find(
-                  (stream) =>
-                    stream.parentId === null &&
-                    stream.executionId === executionId,
-                )?.id,
-            ),
-            Stream.filter((id): id is StreamTabId => id !== undefined),
+            Stream.filter((view) => view.runs.has(runId)),
             Stream.runHead,
-            Effect.map(Option.getOrUndefined),
+            Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
           ),
         );
 
@@ -360,7 +348,7 @@ export function createChatSessionController(
 
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
-    const streamId = session.interruptedStreamId;
+    const runId = session.interruptedRunId;
     const followUps = [
       ...pendingInterruptedFollowUps,
       ...(interruptedContinuation?.followUps ?? []),
@@ -370,16 +358,16 @@ export function createChatSessionController(
       interruptedContinuation.superseded = true;
       interruptedContinuation = undefined;
     }
-    session.interruptedStreamId = undefined;
-    return streamId ? { streamId, followUps } : undefined;
+    session.interruptedRunId = undefined;
+    return runId ? { runId, followUps } : undefined;
   };
 
   const restoreInterruptedRecovery = (
     recovery: SupersededInterruptedRecovery | undefined,
   ): void => {
-    const streamId = session.interruptedStreamId ?? recovery?.streamId;
-    if (!streamId) return;
-    session.interruptedStreamId = streamId;
+    const runId = session.interruptedRunId ?? recovery?.runId;
+    if (!runId) return;
+    session.interruptedRunId = runId;
     pendingInterruptedFollowUps = [
       ...(recovery?.followUps ?? []),
       ...pendingInterruptedFollowUps,
@@ -444,15 +432,19 @@ export function createChatSessionController(
 
   const interruptActiveRun = (): void => {
     runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
-    if (!session.streamId) return;
-    session.interruptedStreamId = session.streamId;
+    // The run id is known from the mint, but a stop can only land on a run
+    // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
+    // asked in the launch gap.
+    const runId = session.runId;
+    if (!runId || !runViewOf(currentView(), runId)) return;
+    session.interruptedRunId = runId;
     // Ctrl-C is a configured stop surface: the user stopped the root run, so
     // the detach-on-stop toggle decides whether active subagents survive it.
-    // `stopStream` below is the other gesture and answers deliberately
+    // `stopRun` below is the other gesture and answers deliberately
     // differently.
     void request({
-      kind: 'stream.stop',
-      streamId: session.streamId,
+      kind: 'run.stop',
+      runId,
       detachActiveChildren: detachSubagentsOnStop(),
     });
   };
@@ -471,7 +463,7 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (error instanceof ExecutionLeaseActiveError) {
+    if (error instanceof RunLeaseActiveError) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;
@@ -495,9 +487,9 @@ export function createChatSessionController(
     onApprovalPolicyDenial: () =>
       warnApprovalDenied(sessionContext, 'Tool or edit approval'),
     runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-    executeWorkflow: async (_config, executionId) => {
+    executeWorkflow: async (_config, runId) => {
       throw new Error(
-        `Execution ${executionId} is a workflow; resume it with \`texra resume ${executionId}\`.`,
+        `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`,
       );
     },
   });
@@ -524,17 +516,17 @@ export function createChatSessionController(
 
   // Build the runtime host shared by start and resume. Root completion marks
   // the root row complete and detaches its terminal-result presenter
-  // immediately. Host interactions remain attached until every execution that
+  // immediately. Host interactions remain attached until every run that
   // inherited this runtime host settles, so detached children retain a visible,
   // answerable approval path without keeping the completed root turn pending.
   // The runtime owns that "still inherited" fact (see
-  // `ExecutionRegistry.interactionOwnership`); this host only claims its root
+  // `RunRegistry.interactionOwnership`); this host only claims its root
   // run and reacts to the release.
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
     readonly approvalsUnavailable: boolean;
-    readonly ownExecution: (executionId: ExecutionId) => void;
+    readonly ownRun: (runId: RunId) => void;
     readonly finalize: () => void;
   } => {
     const presentationHost = createCliRuntimeHost(sessionContext);
@@ -551,7 +543,7 @@ export function createChatSessionController(
       resultToastAttached = false;
       detachResultToast();
     };
-    const ownership = runtimeSession.executions.interactionOwnership.open(
+    const ownership = runtimeSession.runs.interactionOwnership.open(
       (): void => {
         liveOwnerships.delete(ownership);
         detachResultToastOnce();
@@ -566,7 +558,7 @@ export function createChatSessionController(
         sessionContext,
         runtimeSession.approvalPolicy,
       ),
-      ownExecution: (executionId): void => ownership.claim(executionId),
+      ownRun: (runId): void => ownership.claim(runId),
       finalize: (): void => {
         // The root terminal result is published before its run promise
         // settles. Children retain `isSubagent: true` and never produce a
@@ -587,11 +579,10 @@ export function createChatSessionController(
     void supersedeInterruptedRecovery();
     const sessionContext = getSessionContext();
     adoptRunConfig(config);
-    const { approvalsUnavailable, ownExecution, finalize } =
+    const { approvalsUnavailable, ownRun, finalize } =
       setupRunHost(sessionContext);
-    const executionId = generateExecutionId();
-    ownExecution(executionId);
-    session.executionId = executionId;
+    const runId = generateRunId();
+    ownRun(runId);
 
     const {
       promise: claimedRunPromise,
@@ -599,15 +590,17 @@ export function createChatSessionController(
       reject: rejectRunPromise,
     } = pDefer<void>();
     // Native launch may resolve its stream on this turn. Claim first so
-    // marking the run pending cannot erase that stream or a reentrant stop.
+    // marking the run pending cannot erase the claimed run or a reentrant
+    // stop.
     session.markRunPending(claimedRunPromise);
+    session.runId = runId;
     void effectRuntime()
       .runPromise(
         recoverRun(
           Effect.try(() => AgentConfigSchema.parse(config)).pipe(
             Effect.flatMap((registeredConfig) =>
               runAgent(
-                { kind: 'fresh', config: registeredConfig, executionId },
+                { kind: 'fresh', config: registeredConfig, runId },
                 {
                   session: runtimeSession,
                   enforceCategory: true,
@@ -616,28 +609,27 @@ export function createChatSessionController(
                     warnApprovalDenied(sessionContext, 'Tool or edit approval'),
                   runtimeUnavailableTools:
                     getDefaultUnavailableToolNames('cli'),
-                  onStreamResolved: (resolvedStreamId) => {
-                    // Each chat round mints a fresh root StreamTabId (new
-                    // executionId), so bash/tool-edit/super-YOLO bypass, which is
+                  onRunResolved: (resolvedRunId) => {
+                    // Each chat round mints a fresh root run id, so
+                    // bash/tool-edit/super-YOLO bypass, which is
                     // keyed per stream, would otherwise reset every round even
                     // though the user is continuing the same conversation. Link the
                     // new round's stream to the previous one so bypass resolution
-                    // (see `registerStreamParent`) falls through to whatever the
+                    // (see `registerRunParent`) falls through to whatever the
                     // prior round had, unless this round sets its own explicit value.
-                    const previousRootStreamId = rootStreamId.get();
+                    const previousRootRunId = rootRunId.get();
                     if (
-                      previousRootStreamId &&
-                      previousRootStreamId !== resolvedStreamId
+                      previousRootRunId &&
+                      previousRootRunId !== resolvedRunId
                     ) {
-                      runtimeSession.approvals.registerStreamParent(
-                        resolvedStreamId,
-                        previousRootStreamId,
+                      runtimeSession.approvals.registerRunParent(
+                        resolvedRunId,
+                        previousRootRunId,
                       );
                     }
-                    session.streamId = resolvedStreamId;
-                    rootStreamId.set(resolvedStreamId);
-                    moveLocalTranscriptToStream(resolvedStreamId);
-                    focusStream(resolvedStreamId);
+                    rootRunId.set(resolvedRunId);
+                    moveLocalTranscriptToRun(resolvedRunId);
+                    focusRun(resolvedRunId);
                     if (session.stopRequested) interruptActiveRun();
                   },
                 },
@@ -659,11 +651,11 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  const resume = async (id: ExecutionId): Promise<void> => {
+  const resume = async (id: RunId): Promise<void> => {
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below, see tryClaimRootRunSlot. This fuses the
     // availability check and the claim into one atomic step so a concurrent
-    // tryResumeStream() (or another resume()) can never observe this call
+    // tryResumeRun() (or another resume()) can never observe this call
     // suspended between "checked available" and "claimed", and race in to
     // claim the same slot out from under it.
     const {
@@ -682,15 +674,14 @@ export function createChatSessionController(
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
     const attemptResume = Effect.gen(function* () {
-      // The durable record names the stream (FK stamped at registration) and
-      // the config the TUI adopts before the run. Workflow runs resume
-      // headless through `texra resume`, not inside a chat.
-      const store = getExecutionRecords(runtimeSession, id);
+      // The durable record carries the config the TUI adopts before the run.
+      // Workflow runs resume headless through `texra resume`, not inside a
+      // chat.
+      const store = getRunRecords(runtimeSession, id);
       const [config, meta] = yield* Effect.all([
         store.readConfig(),
         store.readMeta(),
       ]);
-      const streamId = meta?.streamId;
       // Refusal tail every early exit below shares: put back what the
       // synchronous prologue superseded, surface the reason, settle the slot.
       const refuseResume = (reason: string): void => {
@@ -699,27 +690,27 @@ export function createChatSessionController(
         session.markRunCompleted();
         resolveRunPromise();
       };
-      if (!config || !streamId) {
-        refuseResume(`Execution not found: ${id}`);
+      if (!config || !meta) {
+        refuseResume(`Run not found: ${id}`);
         return;
       }
       if (config.agentCategory !== AgentCategory.ToolUse) {
         refuseResume(
-          `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
+          `Run ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
         );
         return;
       }
 
-      recovery = runtimeSession.followUps.claimRecovery(streamId, true);
+      recovery = runtimeSession.followUps.claimRecovery(id, true);
       if (!recovery) {
         refuseResume(describeFollowUpFailure('not_resumable'));
         return;
       }
 
       const sessionContext = getSessionContext();
-      const { approvalsUnavailable, ownExecution, finalize } =
+      const { approvalsUnavailable, ownRun, finalize } =
         setupRunHost(sessionContext);
-      ownExecution(id);
+      ownRun(id);
 
       // Adopting the resumed stream is the mutation a refusal must not cost.
       // A history row is advertised from its checkpoint file alone (one
@@ -730,20 +721,19 @@ export function createChatSessionController(
       // during the awaits below lands as `session.stopRequested` and is
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
-      const adoptResumedStream = async (): Promise<void> => {
+      const adoptResumedRun = async (): Promise<void> => {
         await setCliHelperModel(config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
-        session.streamId = streamId;
-        session.executionId = id;
-        rootStreamId.set(streamId);
+        session.runId = id;
+        rootRunId.set(id);
         // The session held no stream until the line above: `markRunPending`,
         // inside the synchronous slot claim at the top of `resume`, dropped
         // the pre-resume one, so a Ctrl-C in the window before adoption could
         // not fabricate an interrupted marker on a stream this resume is
         // leaving behind. It also found nothing to interrupt, so re-read the
-        // request here, the way `startRootRun`'s `onStreamResolved` does -
+        // request here, the way `startRootRun`'s `onRunResolved` does -
         // and let it land on the run the user asked to continue. `resumeRun`
         // re-reads `isCancellationRequested` once this hook returns, so the
         // stop still refuses the launch; this only decides which stream it
@@ -752,14 +742,14 @@ export function createChatSessionController(
 
         await effectRuntime().runPromise(
           runtimeSession.transcripts
-            .ensureLoaded(streamId)
-            .pipe(Effect.andThen(snapshotStore.load([streamId]))),
+            .ensureLoaded(id)
+            .pipe(Effect.andThen(snapshotStore.load([id]))),
         );
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
         // subscribes the stream's aggregate and renders `transcript.rows`.
-        focusStream(streamId);
+        focusRun(id);
       };
 
       // The seeded batch stays this call's until the stream queue takes it
@@ -777,7 +767,7 @@ export function createChatSessionController(
               ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
               recovery,
               extraFollowUps: supersededRecovery?.followUps,
-              onResumeResolved: adoptResumedStream,
+              onResumeResolved: adoptResumedRun,
               onFollowUpQueueReady: () => {
                 followUpQueueReady = true;
               },
@@ -832,13 +822,13 @@ export function createChatSessionController(
    */
   const settleResumedTurn = (outcome: TurnOutcome): void => {
     session.runExitCode = runOutcomeExitCode(outcome);
-    if (outcome !== STREAM_PHASE.WAITING) {
+    if (outcome !== RUN_PHASE.WAITING) {
       notify('agentFinished');
     }
   };
 
-  const tryResumeStream = (
-    streamId: StreamTabId,
+  const tryResumeRun = (
+    runId: RunId,
     options: AutoResumeOptions = {},
   ): Promise<boolean> => {
     // Do not let a recovery wake claim the slot after the interrupted root
@@ -871,7 +861,7 @@ export function createChatSessionController(
       const attempt = Effect.gen(function* () {
         recovery = options.recovery
           ? runtimeSession.followUps.useRecovery(options.recovery)
-          : runtimeSession.followUps.claimRecovery(streamId, true);
+          : runtimeSession.followUps.claimRecovery(runId, true);
         if (!recovery) return false;
         // Transfer accepted input before hydration yields. A waiting admission
         // must see the new queue owner before it can attempt a second resume.
@@ -881,44 +871,36 @@ export function createChatSessionController(
             .queue(recovery)
             .restore(previous?.followUps ?? []);
           if (previous?.followUps.length)
-            runtimeSession.followUps.notifySent(recovery.streamId);
+            runtimeSession.followUps.notifySent(recovery.runId);
         }
 
-        yield* snapshotStore.preload([streamId]);
-        const runMetadata = snapshotStore.getRunMetadata(streamId);
-        const executionId = runMetadata.executionId;
-        if (!executionId) return false;
-
-        const config = yield* getExecutionRecords(
-          runtimeSession,
-          executionId,
-        ).readConfig();
+        yield* snapshotStore.preload([runId]);
+        const config = yield* getRunRecords(runtimeSession, runId).readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
-        const parentStreamId = snapshotStore.getParentStreamId(streamId);
+        const parentRunId = snapshotStore.getParentRunId(runId);
 
         const sessionContext = getSessionContext();
         adoptRunConfig(config, 'history');
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;
-        const { approvalsUnavailable, ownExecution } = runHost;
-        ownExecution(executionId);
-        session.streamId = streamId;
-        session.executionId = executionId;
-        if (!parentStreamId) {
-          rootStreamId.set(streamId);
+        const { approvalsUnavailable, ownRun } = runHost;
+        ownRun(runId);
+        session.runId = runId;
+        if (!parentRunId) {
+          rootRunId.set(runId);
         }
         // A follow-up wake may target a stream the user /clear-ed;
         // resuming it un-retires it (the empty patch drops the retired mark),
-        // matching the explicit resume path, or focusStream would refuse
+        // matching the explicit resume path, or focusRun would refuse
         // and the resumed run would stay invisible.
-        focusStream(streamId);
+        focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
         yield* hostPort(() => setCliHelperModel(config.model));
         recoveryHandedOff = true;
-        const result = yield* resumeRun(executionId, {
+        const result = yield* resumeRun(runId, {
           ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
           recovery,
           extraFollowUps: options.extraFollowUps,
@@ -965,17 +947,17 @@ export function createChatSessionController(
       interruptedContinuation.followUps.push(followUp);
       return {
         kind: 'accepted',
-        streamId: interruptedContinuation.streamId,
+        runId: interruptedContinuation.runId,
         completion: interruptedContinuation.completion,
       };
     }
 
-    if (!session.interruptedStreamId) {
+    if (!session.interruptedRunId) {
       return { kind: 'not_interrupted' };
     }
 
     const batch: InterruptedContinuationBatch = {
-      streamId: session.interruptedStreamId,
+      runId: session.interruptedRunId,
       followUps: [...pendingInterruptedFollowUps, followUp],
       completion: Promise.resolve(false),
       superseded: false,
@@ -992,18 +974,18 @@ export function createChatSessionController(
       if (batch.superseded) return true;
       let followUpQueueReady = false;
       try {
-        const resumed = await tryResumeStream(batch.streamId, {
+        const resumed = await tryResumeRun(batch.runId, {
           extraFollowUps: batch.followUps,
           onFollowUpQueueReady: () => {
             followUpQueueReady = true;
-            session.interruptedStreamId = undefined;
+            session.interruptedRunId = undefined;
             if (interruptedContinuation === batch) {
               interruptedContinuation = undefined;
             }
           },
         });
         if (!resumed && !batch.superseded && !followUpQueueReady) {
-          session.interruptedStreamId = batch.streamId;
+          session.interruptedRunId = batch.runId;
           pendingInterruptedFollowUps.push(...batch.followUps);
         }
         return resumed;
@@ -1016,7 +998,7 @@ export function createChatSessionController(
     interruptedContinuation = batch;
     return {
       kind: 'accepted',
-      streamId: batch.streamId,
+      runId: batch.runId,
       completion: batch.completion,
     };
   };
@@ -1030,16 +1012,16 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
-  const stopStream = (streamId: StreamTabId): void => {
+  const stopRun = (runId: RunId): void => {
     runtimeSession.interactions.cancel({
-      streamId,
+      runId,
       cause: 'Run interrupted.',
     });
-    if (streamId === session.streamId) {
+    if (runId === session.runId) {
       requestStop();
-      session.interruptedStreamId = streamId;
+      session.interruptedRunId = runId;
     }
-    void request({ kind: 'stream.stop', streamId, detachActiveChildren: true });
+    void request({ kind: 'run.stop', runId, detachActiveChildren: true });
   };
 
   const startSession = async (
@@ -1048,7 +1030,6 @@ export function createChatSessionController(
     displayInstruction?: string,
   ): Promise<boolean> => {
     followUpQueue.clear();
-    session.executionId = undefined;
     let started = false;
     const pendingStart = effectRuntime().runPromise(
       recoverRun(
@@ -1111,14 +1092,14 @@ export function createChatSessionController(
     | { readonly kind: 'none' }
     | {
         readonly kind: 'accept' | 'reject';
-        readonly streamId: StreamTabId;
+        readonly runId: RunId;
       } => {
-    const streamId = activeStreamIdSignal.get();
-    const stream = streamViewOf(currentView(), streamId);
+    const runId = activeRunIdSignal.get();
+    const stream = runViewOf(currentView(), runId);
     if (!stream || stream.parentId === null) return { kind: 'none' };
     return {
       kind: focusedChildAcceptsFollowUps(stream) ? 'accept' : 'reject',
-      streamId: stream.id,
+      runId: stream.id,
     };
   };
 
@@ -1131,12 +1112,12 @@ export function createChatSessionController(
     if (focusedChild.kind === 'reject') {
       appendLocalAssistantTranscript(
         FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-        focusedChild.streamId,
+        focusedChild.runId,
       );
       return;
     }
     const childFollowUpTarget =
-      focusedChild.kind === 'accept' ? focusedChild.streamId : undefined;
+      focusedChild.kind === 'accept' ? focusedChild.runId : undefined;
     const prepared = takePendingSkillActivations(pendingSkillActivations, line);
     const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
     const restoreReservedSkillActivations = (): void => {
@@ -1160,7 +1141,7 @@ export function createChatSessionController(
         restoreReservedSkillActivations();
         appendLocalAssistantTranscript(
           'The interrupted conversation could not be restored. Use /resume to retry it, or /clear to start a new conversation.',
-          interruptedAdmission.streamId,
+          interruptedAdmission.runId,
         );
         return;
       }
@@ -1178,11 +1159,11 @@ export function createChatSessionController(
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
       try {
-        // The fold states when the pending run's stream exists: the first
-        // view level holding the stream of the execution this controller
-        // minted, unless the run settles first.
+        // The fold states when the pending run exists: the first view level
+        // holding the run this controller minted, unless the run settles
+        // first.
         followUpTarget ??= await Promise.race([
-          rootStreamOf(session.executionId),
+          awaitRunFolded(session.runId),
           session.runPromise?.then(() => undefined),
         ]);
         if (session.stopRequested) {
@@ -1201,7 +1182,7 @@ export function createChatSessionController(
           runtimeSession.requests
             .request({
               kind: 'followUp.send',
-              streamId: followUpTarget,
+              runId: followUpTarget,
               text: prepared.instruction,
               displayText: prepared.displayInstruction,
               mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
@@ -1238,7 +1219,7 @@ export function createChatSessionController(
             `${outcome.refused ?? describeFollowUpFailureReason('not_resumable')} The message has been restored to the input.`,
             { ttlMs: Infinity },
           );
-          if (followUpTarget === session.streamId) {
+          if (followUpTarget === session.runId) {
             session.stopRequested = true;
           } else {
             appendLocalAssistantTranscript(
@@ -1277,13 +1258,13 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
-    stopStream,
+    stopRun,
     admitInterruptedFollowUp,
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();
     },
-    tryResumeStream: (streamId, recovery) =>
-      tryResumeStream(streamId, recovery ? { recovery } : {}),
+    tryResumeRun: (runId, recovery) =>
+      tryResumeRun(runId, recovery ? { recovery } : {}),
     submit,
     activateSkill,
     clearPendingSkills: () => {

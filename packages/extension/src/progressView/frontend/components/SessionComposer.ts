@@ -25,10 +25,10 @@ import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { SessionType, StreamTabId } from '@shared/schemas';
+import type { SessionType, RunId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
   canSendFollowUp,
   EMPTY_DRAFT,
@@ -343,7 +343,7 @@ export class SessionComposer extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   /** The stream a follow-up goes to; null is the expanded launch state. */
-  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) stream: RunView | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
   @state() private announcement = '';
@@ -366,7 +366,7 @@ export class SessionComposer extends LitElement {
     return launch ? launch.instruction[launch.sessionType] : '';
   }
 
-  private get recordingTarget(): string {
+  private get recordingTarget(): RunId | 'launch' {
     return this.stream?.id ?? 'launch';
   }
 
@@ -392,7 +392,7 @@ export class SessionComposer extends LitElement {
       this.dispatchEvent(
         SessionUiEvents.surface({
           kind: 'draft',
-          streamId: stream.id,
+          runId: stream.id,
           patch: { text, images },
         }),
       );
@@ -499,26 +499,26 @@ export class SessionComposer extends LitElement {
     });
   };
 
-  private replyToParent(parentId: StreamTabId): void {
+  private replyToParent(parentId: RunId): void {
     const stream = this.stream;
     if (!stream) return;
     const draft = this.draft;
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'draft',
-        streamId: parentId,
+        runId: parentId,
         patch: draft,
       }),
     );
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'draft',
-        streamId: stream.id,
+        runId: stream.id,
         patch: EMPTY_DRAFT,
       }),
     );
     this.dispatchEvent(
-      SessionUiEvents.surface({ kind: 'select', streamId: parentId }),
+      SessionUiEvents.surface({ kind: 'select', runId: parentId }),
     );
   }
 
@@ -759,9 +759,9 @@ export class SessionComposer extends LitElement {
     `;
   }
 
-  private renderRouting(stream: StreamView): TemplateResult {
+  private renderRouting(stream: RunView): TemplateResult {
     const parent = stream.parentId
-      ? this.view?.streams.get(stream.parentId)
+      ? this.view?.runs.get(stream.parentId)
       : undefined;
     // The link moves the draft to the parent, or the line states that the
     // parent takes no replies (a workflow-script run has no chat).

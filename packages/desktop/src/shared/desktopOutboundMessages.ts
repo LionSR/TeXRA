@@ -1,5 +1,5 @@
 // Main → renderer pushes for the desktop-only surfaces: editor file I/O,
-// terminal streams, browser state, the diff/pdf/prompt overlays, shell
+// terminal runs, browser state, the diff/pdf/prompt overlays, shell
 // navigation, logs, and onboarding.
 //
 // This union adds no new wire shape — it composes the per-surface schemas so

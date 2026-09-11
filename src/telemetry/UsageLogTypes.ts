@@ -13,6 +13,9 @@ const UsageLogMetadataSchema = z.object({
   agentCategory: z.enum(AgentCategory).optional(),
   /** Canonical route used to account for API-key/subscription usage. */
   usageRoute: UsageRouteSchema.optional(),
+  /** Wire key of the usage-log edge function (`supabase/functions/log-usage`), which
+   * stores it as `stream_id`; the value is the run id. External contract, versioned
+   * with the edge function, not with the run vocabulary. */
   streamId: z.string().optional(),
 });
 

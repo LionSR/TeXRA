@@ -1,12 +1,12 @@
 /**
  * Workflow scripts — the host-neutral orchestration surface consumed by
- * delegation tools, execution cleanup, runtime control, and their tests.
+ * delegation tools, run cleanup, runtime control, and their tests.
  *
  * Production consumers import `@agent/workflowScript`; modules within this
  * directory keep direct imports so the barrel cannot create internal cycles.
  * `sandbox.ts` is deliberately excluded: it is an engine implementation seam,
  * and only the engine module plus its focused kernel suite may import it.
- * `isWorkflowScriptCheckpointKvKey` is also excluded: low-level execution-KV
+ * `isWorkflowScriptCheckpointKvKey` is also excluded: low-level run-KV
  * cleanup imports that leaf predicate directly so listing history does not
  * evaluate the QuickJS engine and embedded Wasm graph through this barrel.
  */

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { StreamTabId } from './identifiers';
+import type { RunId } from './identifiers';
 
 export const TODO_STATUS = {
   PENDING: 'pending',
@@ -19,7 +19,7 @@ export const TodoItemSchema = z.strictObject({
   activeForm: z
     .string()
     .min(1)
-    .describe('Present continuous form for display during execution'),
+    .describe('Present continuous form for display during run'),
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
@@ -29,6 +29,6 @@ export type TodoItem = z.infer<typeof TodoItemSchema>;
  * schema would own no boundary (same rule as `UpdatePlanPayload` in `plan.ts`).
  */
 export interface UpdateTodosPayload {
-  streamId: StreamTabId;
+  runId: RunId;
   todos: TodoItem[];
 }

@@ -12,11 +12,7 @@ import {
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowRunActionsController';
-import type {
-  OutputFileInfo,
-  RoundIndexed,
-  StreamTabId,
-} from '@shared/schemas';
+import type { OutputFileInfo, RoundIndexed, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
 export function createAgentConfig(
@@ -51,7 +47,7 @@ type RunStorageLocationOverrides = {
   kind: 'runStorage';
   absolutePath?: string;
   relativePath?: string;
-  executionId?: string;
+  runId?: RunId;
 };
 
 type ExternalLocationOverrides = {
@@ -85,7 +81,7 @@ function createOutputFileLocation(
       kind: 'runStorage',
       absolutePath: overrides.absolutePath ?? '/tmp/exec/answer.tex',
       relativePath: overrides.relativePath ?? 'answer.tex',
-      executionId: overrides.executionId ?? 'exec-old',
+      runId: overrides.runId ?? ('exec-old' as RunId),
     };
   }
 
@@ -111,14 +107,12 @@ export function createOutputFile(
 }
 
 export interface ProgressWorkflowRunActionsHarnessOptions {
-  executionIds?: Map<StreamTabId, string>;
-  outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
-  knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
+  outputs?: Map<RunId, RoundIndexed<OutputFileInfo>>;
+  knownWorkspaceOutputs?: Map<RunId, Set<string>>;
 }
 
 export interface ProgressWorkflowRunActionsHarness {
   controller: ProgressWorkflowRunActionsController;
-  metadataReads: StreamTabId[];
   diffs: WorkflowDiffRequest[];
   fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -129,7 +123,6 @@ export interface ProgressWorkflowRunActionsHarness {
 export function createProgressWorkflowRunActionsHarness(
   options: ProgressWorkflowRunActionsHarnessOptions = {},
 ): ProgressWorkflowRunActionsHarness {
-  const metadataReads: StreamTabId[] = [];
   const diffs: WorkflowDiffRequest[] = [];
   const fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -139,12 +132,9 @@ export function createProgressWorkflowRunActionsHarness(
   return {
     controller: new ProgressWorkflowRunActionsController({
       state: {
-        getRunMetadata: (stream) => {
-          metadataReads.push(stream);
-          return {
-            executionId: options.executionIds?.get(stream),
-          };
-        },
+        // The controller takes its config from the caller; the run id is the
+        // stream itself, so the metadata slice carries nothing it reads.
+        getRunMetadata: () => ({}),
         getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},
         getKnownWorkspaceOutputPaths: (stream) =>
           new Set(options.knownWorkspaceOutputs?.get(stream) ?? []),
@@ -156,7 +146,6 @@ export function createProgressWorkflowRunActionsHarness(
         fileOperations.push({ operation, request });
       },
     }),
-    metadataReads,
     diffs,
     fileOperations,
   };

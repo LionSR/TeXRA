@@ -70,7 +70,7 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
               deliver({
                 kind: 'surface.action',
                 session: TRACE_SESSION,
-                action: { kind: 'select', streamId: loaded.streamId },
+                action: { kind: 'select', runId: loaded.runId },
               });
             },
             // The entry renders the load failure; a subscribe with no

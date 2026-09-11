@@ -30,11 +30,11 @@ export function subscribeStatusBarSessionEvents({
         // The runtime publishes the in-flight status before usage for a
         // round; usage for a stream not in flight cannot change the projected
         // total, so stale async events skip the refresh.
-        if (
-          event.type === 'usage' &&
-          session.status.isInFlight(aggregateTarget(event.aggregateId).id)
-        ) {
-          onUsageChanged();
+        if (event.type === 'usage') {
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind === 'run' && session.status.isInFlight(target.id)) {
+            onUsageChanged();
+          }
         }
       }),
     ),

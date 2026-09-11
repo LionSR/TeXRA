@@ -16,12 +16,12 @@ import {
   DocumentFileTypeSchema,
   GettingStartedActionSchema,
   SessionTypeSchema,
-  StreamTabIdSchema,
+  RunIdSchema,
 } from '@shared/schemas';
 
 import { LaunchSurfaceSchema } from './surface';
 
-const streamScoped = { streamId: StreamTabIdSchema };
+const streamScoped = { runId: RunIdSchema };
 
 export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -34,7 +34,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('exportTranscript'), ...streamScoped }),
   z.object({ kind: z.literal('restoreIntoLauncher'), ...streamScoped }),
   /** Relaunch a settled run: a workflow through the host's launcher with
-   *  its execution id, a tool-use run through the resume port. */
+   *  its run id, a tool-use run through the resume port. */
   z.object({ kind: z.literal('resume'), ...streamScoped }),
   /** A fresh run from a settled run's setup. */
   z.object({ kind: z.literal('runNew'), ...streamScoped }),
@@ -76,7 +76,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     action: z.discriminatedUnion('kind', [
       z.object({
         kind: z.literal('start'),
-        target: z.union([StreamTabIdSchema, z.literal('launch')]),
+        target: z.union([RunIdSchema, z.literal('launch')]),
       }),
       z.object({ kind: z.literal('stop') }),
     ]),

@@ -71,7 +71,7 @@ describe('channel trace adapters', () => {
     const stage = trace.openStage('stage');
     expect(() => stage.end()).not.toThrow();
 
-    const stream = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const stream = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     stream.append('chunk');
     expect(stream.finalize()).toBe('');
   });

@@ -54,7 +54,7 @@ vi.mock('@agent/index/agentRegistry', () => {
 const { getDelegationAgent, getDelegationAgents } =
   await import('@tools/delegation/delegationAvailability');
 
-describe('execution-scoped delegation agents', () => {
+describe('run-scoped delegation agents', () => {
   beforeEach(() => {
     mocks.context = {
       kind: 'launch',

@@ -9,11 +9,11 @@ export interface RunTrace {
 /**
  * Open a run's trace and own the caller's transcript residency lease.
  *
- * The trace gets no diagnostic-channel subscriber, so the run needs no stream
- * id here: its log events reach the durable transcript through
+ * The trace gets no diagnostic-channel subscriber, so the run needs no run id
+ * here: its log events reach the durable transcript through
  * `SessionHandle.attachRunTrace`, which every host renders. A per-run output
- * channel would duplicate them into a surface keyed by an opaque stream id,
- * created and disposed once per execution.
+ * channel would duplicate them into a surface keyed by an opaque run id,
+ * created and disposed once per run.
  */
 export function createRunTrace(residency?: {
   readonly close: () => void;

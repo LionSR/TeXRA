@@ -1,5 +1,5 @@
 /**
- * Shared formatters for rendering a stored execution conversation
+ * Shared formatters for rendering a stored run conversation
  * from archived stream data as text.
  *
  * A stored conversation is the `{role, content}` array

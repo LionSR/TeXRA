@@ -33,7 +33,7 @@ export interface CliSessionStatusInput {
   /** Skill names in effect for the focused tool-use stream, newest snapshot. */
   readonly activeSkills: readonly string[];
   readonly queuedFollowUpMessages: readonly string[];
-  /** Root execution id, when a run has started. Surfaces the resume command
+  /** Root run id, when a run has started. Surfaces the resume command
    *  mid-session instead of only in the exit hint. */
   readonly sessionId?: string;
   readonly commandName?: string;

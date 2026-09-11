@@ -2,11 +2,10 @@ import { z } from 'zod';
 
 import {
   WorkflowCallIdentitySchema,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type WorkflowCallIdentity,
   type WorkflowControlAction,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
   type WorkflowScriptFiles,
 } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
@@ -244,15 +243,15 @@ export type WorkflowAgentCallOptions = z.infer<
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number: ordering only, never identity. */
   index: number;
-  /** Stable logical call identity within the workflow execution snapshot. */
+  /** Stable logical call identity within the workflow run snapshot. */
   progressId: WorkflowScriptProgressId;
-  /** Stable hash of the prompt and normalized execution-affecting options. */
+  /** Stable hash of the prompt and normalized run-affecting options. */
   key: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**
    * Fires when the run is aborted (wall-clock timeout). Runners should
-   * cancel the underlying agent execution so timed-out workflows stop
+   * cancel the underlying agent run so timed-out workflows stop
    * consuming model quota instead of finishing in the background.
    */
   signal: AbortSignal;
@@ -272,19 +271,14 @@ export interface WorkflowAgentInvocation {
 export interface WorkflowAttemptFacts {
   /**
    * The child model the runner resolved, stamped onto the call and its
-   * latest attempt in the execution snapshot for progress UIs.
+   * latest attempt in the run snapshot for progress UIs.
    */
   readonly model?: string;
   /** The resolved agent the host selected. */
   readonly agent?: string;
-  /** The physical child execution selected for this attempt. */
-  readonly childExecutionId?: ExecutionId;
-  /**
-   * The live child stream, once the host has resolved its agent, model, and
-   * execution identity. Progress renderers use it as the task card's
-   * navigation target.
-   */
-  readonly childStreamId?: StreamTabId;
+  /** The physical child run selected for this attempt: the task card's
+   *  navigation target once the host has resolved it. */
+  readonly childRunId?: RunId;
   /** Cost available on the child result. */
   readonly costUsd?: number;
   /**
@@ -298,7 +292,7 @@ export interface WorkflowAttemptFacts {
 
 /**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
- * production host wires this to the in-band subagent execution path so the
+ * production host wires this to the in-band subagent run path so the
  * engine receives the typed AgentFinalResult envelope, never the XML
  * follow-up delivery string.
  */
@@ -323,9 +317,9 @@ export interface WorkflowJournalEntry {
 type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 
 /**
- * The facts the canonical execution snapshot cannot carry. Everything else a
+ * The facts the canonical run snapshot cannot carry. Everything else a
  * progress projection needs — plan, phases, per-call status, stream identity,
- * model, cost, timing, errors — lives on {@link WorkflowExecutionSnapshot}
+ * model, cost, timing, errors — lives on {@link WorkflowRunSnapshot}
  * and arrives through {@link WorkflowScriptRunOptions.onTransition}; the
  * event stream no longer restates it (that dual-stamping is exactly the sync
  * tax A7 retired). `log` remains an event because a script's `log()` line is
@@ -334,7 +328,7 @@ type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 export type WorkflowScriptEvent = { type: 'log'; message: string };
 
 /**
- * Guest-visible result of a call cancelled via `control(childExecutionId,
+ * Guest-visible result of a call cancelled via `control(childRunId,
  * 'skip')`: a first-class sentinel distinct from a failed call's `null`, so a
  * script (or host) can tell "deliberately skipped" apart from "runner failed".
  * Skipped calls are never journaled, so a later resume re-runs them.
@@ -343,17 +337,17 @@ export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
 
 /**
  * Per-call control handle for an in-flight run, handed to the host once via
- * {@link WorkflowScriptRunOptions.onControl}. It is keyed by the execution id
+ * {@link WorkflowScriptRunOptions.onControl}. It is keyed by the run id
  * of the child the attempt actually runs under — the same identity the host
  * uses for focus and kill, reported by the runner through
- * {@link WorkflowAttemptFacts.childExecutionId} — and answers whether that
+ * {@link WorkflowAttemptFacts.childRunId} — and answers whether that
  * child was in flight: true when the action took, false when the id belongs
  * to no live attempt of this run, so a host can tell a settled call from an
  * acted one. Control actions are control-plane only: they never touch the
  * journal, checkpoint, or per-call resume identity.
  */
 export type WorkflowScriptControl = (
-  childExecutionId: ExecutionId,
+  childRunId: RunId,
   action: WorkflowControlAction,
 ) => boolean;
 
@@ -368,12 +362,12 @@ export interface WorkflowScriptRunOptions {
   /**
    * Host-owned fingerprint for external file dependencies referenced by one
    * agent() call. Required when the call carries file options: the engine
-   * includes the opaque value in both journal and child execution identity.
+   * includes the opaque value in both journal and child run identity.
    */
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
   ) => Promise<string>;
-  /** Parent cancellation signal; aborts guest execution and active agents. */
+  /** Parent cancellation signal; aborts guest run and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. The host passes the session's
    *  child-run budget; 4 is the library fallback. */
@@ -381,7 +375,7 @@ export interface WorkflowScriptRunOptions {
   /** Journal from a prior run; matching keys replay regardless of call position. */
   journal?: WorkflowJournalEntry[];
   /** Recovery snapshot from the prior attempt, re-published after reconciliation. */
-  initialSnapshot?: WorkflowExecutionSnapshot;
+  initialSnapshot?: WorkflowRunSnapshot;
   /**
    * Durable checkpoint hook for a successfully validated live call. The
    * engine awaits it before the result becomes visible to the script, so a
@@ -402,7 +396,7 @@ export interface WorkflowScriptRunOptions {
    * snapshot after a transition, with writes coalesced under backpressure —
    * intermediate states may be skipped, the latest always lands.
    */
-  onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => void | Promise<void>;
+  onSnapshot?: (snapshot: WorkflowRunSnapshot) => void | Promise<void>;
   /**
    * Synchronous per-transition observer for live projections: fires on every
    * state transition, never coalesced, with the LIVE snapshot reference —
@@ -410,7 +404,7 @@ export interface WorkflowScriptRunOptions {
    * propagates into the engine and aborts the run, so consumers guard their
    * own folds.
    */
-  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
+  onTransition?: (snapshot: WorkflowRunSnapshot) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script
@@ -428,6 +422,6 @@ export interface WorkflowScriptRunResult {
   result: unknown;
   /** Completed calls in index order, for resume. Failed calls are omitted. */
   journal: WorkflowJournalEntry[];
-  /** Final canonical execution snapshot. */
-  snapshot: WorkflowExecutionSnapshot;
+  /** Final canonical run snapshot. */
+  snapshot: WorkflowRunSnapshot;
 }

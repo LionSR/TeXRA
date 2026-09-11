@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import {
@@ -27,13 +27,13 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { generateRunId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
@@ -62,16 +62,13 @@ function createModelCell(): RunReflectionFlowInput['modelCell'] {
 }
 
 async function runPersistedReflectionFlow(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  runId: RunId,
   logger: RunReflectionFlowInput['logger'] = noopTrace,
   options: { rounds?: number; aborted?: boolean } = {},
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createProcessSession();
   const runScope = createRunScope({
-    streamId,
-    executionId,
-    agentName: CONFIG.agent,
+    runId,
     session,
     signal:
       options.aborted === false
@@ -104,17 +101,13 @@ async function runPersistedReflectionFlow(
   }
 }
 
-function recoveryCase(
-  name: string,
-  options: { rounds?: number; aborted?: boolean } = {},
-) {
-  const executionId = `reflection-flow-${name}` as ExecutionId;
-  const streamId = `workflow@gpt54#reflection-flow-${name}` as StreamTabId;
+function recoveryCase(options: { rounds?: number; aborted?: boolean } = {}) {
+  const runId = generateRunId();
   return {
-    key: flowKey(executionId),
-    run: () =>
-      runPersistedReflectionFlow(executionId, streamId, noopTrace, options),
-    store: getExecutionStore(executionId),
+    runId,
+    key: flowKey(runId),
+    run: () => runPersistedReflectionFlow(runId, noopTrace, options),
+    store: getRunStore(runId),
   };
 }
 
@@ -130,7 +123,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('creates fresh shared state when the flow record is absent', async () => {
-    const { key, run, store } = recoveryCase('absent');
+    const { key, run, store } = recoveryCase();
 
     const result = await run();
 
@@ -144,7 +137,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('propagates a persistence read failure without deleting the flow record', async () => {
-    const { run, store } = recoveryCase('read-failure');
+    const { run, store } = recoveryCase();
     const readFailure = new Error('flow storage unavailable');
     vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
     const deleteSpy = vi.spyOn(store, 'delete');
@@ -158,7 +151,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('reports workspace preparation failure even when validation prevents output extraction', async () => {
-    const { key, store } = recoveryCase('preparation-failure');
+    const { key, runId, store } = recoveryCase();
     await store.write(key, flowRecord({ currentRound: 'zero' }));
     const preparationFailure = new Error('workspace unavailable');
     vi.spyOn(
@@ -168,11 +161,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
     const logger = { ...noopTrace, warn: vi.fn() };
 
     await expect(
-      runPersistedReflectionFlow(
-        'reflection-flow-preparation-failure' as ExecutionId,
-        'workflow@gpt54#reflection-flow-preparation-failure' as StreamTabId,
-        logger,
-      ),
+      runPersistedReflectionFlow(runId, logger),
     ).rejects.toMatchObject({
       name: PersistedFlowStateError.name,
       reason: 'invalid-shared',
@@ -215,8 +204,8 @@ describe('runReflectionFlow persisted-state recovery', () => {
         schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
       },
     },
-  ])('rejects and preserves $name', async ({ name, reason, stored }) => {
-    const { key, run, store } = recoveryCase(name.replaceAll(' ', '-'));
+  ])('rejects and preserves $name', async ({ reason, stored }) => {
+    const { key, run, store } = recoveryCase();
     await store.write(key, stored);
     const deleteSpy = vi.spyOn(store, 'delete');
 
@@ -230,7 +219,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('rejects and preserves a retired workspace snapshot', async () => {
-    const { key, run, store } = recoveryCase('legacy-workspace');
+    const { key, run, store } = recoveryCase();
     const todo = {
       content: 'Preserve legacy workflow state',
       status: 'in_progress' as const,
@@ -275,7 +264,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('promotes context-only legacy rejection and fails at the same cap', async () => {
-    const { key, run, store } = recoveryCase('legacy-context-same-cap', {
+    const { key, run, store } = recoveryCase({
       aborted: false,
     });
     await store.write(
@@ -299,7 +288,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('preserves a genuine runtime error even with legacy rejection evidence', async () => {
-    const { key, run, store } = recoveryCase('legacy-context-provider-error', {
+    const { key, run, store } = recoveryCase({
       aborted: false,
     });
     const providerError = {
@@ -329,7 +318,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('normalizes context-only legacy rejection when the cap is raised', async () => {
-    const { key, run, store } = recoveryCase('legacy-context-only-raised-cap', {
+    const { key, run, store } = recoveryCase({
       rounds: 2,
     });
     await store.write(
@@ -360,7 +349,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
         [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
       },
     });
-    const { key, run, store } = recoveryCase('legacy-context-only-disabled', {
+    const { key, run, store } = recoveryCase({
       aborted: false,
     });
     await store.write(
@@ -385,7 +374,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
   });
 
   it('clears a persisted cancellation latch when resuming a workflow', async () => {
-    const { key, run, store } = recoveryCase('cancelled-latch');
+    const { key, run, store } = recoveryCase();
     const shared = reflectionFlowShared({
       totalRounds: 1,
       context: null,

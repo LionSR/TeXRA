@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
+import { generateRunId } from '@utils/core';
 
-const STREAM_ID = 'stream:goal-cont' as StreamTabId;
+const RUN_ID = generateRunId();
 
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
@@ -48,15 +48,15 @@ describe('maybeBuildGoalContinuation', () => {
   });
 
   afterEach(async () => {
-    await GoalStore.forget(STREAM_ID);
+    await GoalStore.forget(RUN_ID);
   });
 
   it('returns a rendered prompt when an active goal is present', async () => {
     await GoalStore.start(
-      STREAM_ID,
+      RUN_ID,
       'Complete the refactor until pnpm test passes',
     );
-    const out = await maybeBuildGoalContinuation(STREAM_ID);
+    const out = await maybeBuildGoalContinuation(RUN_ID);
     expect(out).toMatch(/<goal_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
     expect(out).toContain('Autonomous objective active');
@@ -72,8 +72,8 @@ describe('maybeBuildGoalContinuation', () => {
     // as template syntax (no injection, no `{{ 1 + 1 }}` evaluating to `2`).
     const objective =
       'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
-    await GoalStore.start(STREAM_ID, objective);
-    const out = await maybeBuildGoalContinuation(STREAM_ID);
+    await GoalStore.start(RUN_ID, objective);
+    const out = await maybeBuildGoalContinuation(RUN_ID);
     expect(out).toContain(objective);
   });
 
@@ -87,12 +87,12 @@ describe('maybeBuildGoalContinuation', () => {
     try {
       vi.setSystemTime(startedAt);
       await GoalStore.start(
-        STREAM_ID,
+        RUN_ID,
         'Keep solving the hard problem until verification is complete.',
       );
 
       vi.setSystemTime(afterTwoHours);
-      const out = await maybeBuildGoalContinuation(STREAM_ID);
+      const out = await maybeBuildGoalContinuation(RUN_ID);
 
       expect(out).toContain('<goal_context>');
       expect(out).toContain(
@@ -105,34 +105,34 @@ describe('maybeBuildGoalContinuation', () => {
   });
 
   it('returns null when the feature flag is off (with an active goal present)', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
+    await GoalStore.start(RUN_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
     // goal is still on disk. Otherwise the test passes trivially.
     (workspaceRoots().config as FakeConfigProvider).set(
       GOAL_FEATURE_FLAG_KEY,
       false,
     );
-    const out = await maybeBuildGoalContinuation(STREAM_ID);
+    const out = await maybeBuildGoalContinuation(RUN_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.
-    expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
+    expect(GoalStore.getForRun(RUN_ID)?.status).toBe('active');
   });
 
   it('returns null when no goal exists for the stream', async () => {
-    await expect(maybeBuildGoalContinuation(STREAM_ID)).resolves.toBeNull();
+    await expect(maybeBuildGoalContinuation(RUN_ID)).resolves.toBeNull();
   });
 
   it('returns null when the goal is paused', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
-    await GoalStore.setStatus(STREAM_ID, 'paused');
+    await GoalStore.start(RUN_ID, 'objective');
+    await GoalStore.setStatus(RUN_ID, 'paused');
 
-    await expect(maybeBuildGoalContinuation(STREAM_ID)).resolves.toBeNull();
+    await expect(maybeBuildGoalContinuation(RUN_ID)).resolves.toBeNull();
   });
 
   it('is a pure read — leaves the record untouched', async () => {
-    const before = await GoalStore.start(STREAM_ID, 'objective');
-    await maybeBuildGoalContinuation(STREAM_ID);
-    const after = GoalStore.getForStream(STREAM_ID);
+    const before = await GoalStore.start(RUN_ID, 'objective');
+    await maybeBuildGoalContinuation(RUN_ID);
+    const after = GoalStore.getForRun(RUN_ID);
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.
     expect(after?.status).toBe('active');

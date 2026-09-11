@@ -28,7 +28,7 @@ export type {
   Session,
   SessionView,
   StartInput,
-  StreamView,
+  RunView,
   TranscriptView,
 } from './effect/sessions.js';
 
@@ -48,9 +48,8 @@ export type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 export type { ITool } from '@agent/core/tools/ToolTypes';
 export type {
   AggregateId,
-  ExecutionId,
+  RunId,
   SessionCloseReport,
-  StreamTabId,
   TranscriptSubscription,
 } from '@shared/schemas';
 export type { RequestError } from '@shared/session/requestErrors';

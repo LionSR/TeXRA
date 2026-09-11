@@ -1,20 +1,18 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
   aggregateId,
-  EXECUTION_STATUS,
+  CLI_RUN_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
@@ -51,17 +49,15 @@ function trace(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
-    executionId: 'abcdef',
-    streamId: 'stream-1',
+    runId: 'abcdef',
     config: config(),
     meta: {
       schemaVersion: 1,
       timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      streamId: 'stream-1',
     },
     entries: [],
-    snapshot: { streamId: 'stream-1' },
+    snapshot: { runId: 'abcdef' },
     ...overrides,
   };
 }
@@ -73,55 +69,51 @@ function expectTraceRejected(payload: unknown): void {
 describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
-  it.live('accepts a real trace document produced by assembleTrace', () =>
-    Effect.gen(function* () {
-      const executionId = 'abc12345' as ExecutionId;
-      const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+  it('accepts a real trace document produced by assembleTrace', async () => {
+    const runId = 'abc12345' as RunId;
+    const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
 
-      const streamId = getStreamTabId('review', { executionId });
-      const session = createTestSession();
-      publishTestRunStart(session, streamId, executionId);
-      yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(
-        executionConfig,
-      );
-      session.publish([
-        {
-          type: 'log',
-          aggregateId: aggregateId('stream', streamId),
-          message: 'hello',
-          level: LOG_LEVELS.INFO,
-          messageType: MESSAGE_TYPES.DEFAULT,
-        },
-        {
-          type: 'status',
-          aggregateId: aggregateId('stream', streamId),
-          phase: 'completed',
-          cause: 'lifecycle',
-        },
-      ]);
-      yield* Effect.promise(() => session.settlePublications());
-      const result = yield* assembleTrace(executionId, session);
-      session.dispose();
-      expect(result.status).toBe('ok');
-      if (result.status !== 'ok') return;
+    const session = createTestSession();
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(runConfigRecord),
+    );
+    session.publish([
+      {
+        type: 'log',
+        aggregateId: aggregateId('run', runId),
+        message: 'hello',
+        level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.DEFAULT,
+      },
+      {
+        type: 'status',
+        aggregateId: aggregateId('run', runId),
+        phase: 'completed',
+        cause: 'lifecycle',
+      },
+    ]);
+    await session.settlePublications();
+    const result = await Effect.runPromise(assembleTrace(runId, session));
+    session.dispose();
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
 
-      const parsed = TraceDataSchema.safeParse(result.trace);
-      expect(parsed.success).toBe(true);
-      if (!parsed.success) return;
-      expect(parsed.data.executionId).toBe(executionId);
-      expect(parsed.data.streamId).toBe(streamId);
-      expect(parsed.data.meta?.outcome).toBe('completed');
-      expect(parsed.data.entries).toHaveLength(1);
+    const parsed = TraceDataSchema.safeParse(result.trace);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.runId).toBe(runId);
+    expect(parsed.data.meta?.outcome).toBe('completed');
+    expect(parsed.data.entries).toHaveLength(1);
 
-      // parseTraceData must accept the same real document without throwing.
-      expect(() => parseTraceData(result.trace)).not.toThrow();
-    }),
-  );
+    // parseTraceData must accept the same real document without throwing.
+    expect(() => parseTraceData(result.trace)).not.toThrow();
+  });
 
   it('rejects a trace missing required top-level fields', () => {
     // config, meta, entries and snapshot all missing.
-    expectTraceRejected({ executionId: 'abcdef', streamId: 'stream-1' });
+    expectTraceRejected({ runId: 'abcdef' });
   });
 
   it('applies source config defaults to legacy traces', () => {
@@ -139,14 +131,13 @@ describe('trace-viewer TraceDataSchema', () => {
     });
   });
 
-  it('normalizes legacy execution metadata', () => {
+  it('normalizes legacy run metadata', () => {
     const parsed = TraceDataSchema.parse(
       trace({
         meta: {
           timestamp: '2026-07-05T00:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
-          streamId: 'stream-1',
-          terminalStatus: EXECUTION_STATUS.ERROR,
+          terminalStatus: CLI_RUN_STATUS.ERROR,
           delegationDepth: 2,
         },
       }),
@@ -171,7 +162,7 @@ describe('trace-viewer TraceDataSchema', () => {
     const incompatible = trace({
       snapshot: {
         schemaVersion: 999,
-        streamId: 'stream-1',
+        runId: 'abcdef',
         outputFilesByRound: {},
         missingOutputsByRound: {},
         compileFailuresByRound: {},
@@ -222,7 +213,7 @@ describe('trace-viewer TraceDataSchema', () => {
     const parsed = parseTraceData(
       trace({
         snapshot: {
-          streamId: 'stream-1',
+          runId: 'abcdef',
           activeSubagents: [],
           activeProcesses: [],
           processes: [],

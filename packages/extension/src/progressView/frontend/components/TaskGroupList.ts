@@ -13,8 +13,8 @@ import {
   GettingStartedActionSchema,
   type GettingStartedAction,
   type RunOutcome,
-  type StreamLifecycleStatus,
-  type StreamTabId,
+  type RunLifecycleStatus,
+  type RunId,
   type TaskGroup,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -30,17 +30,17 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
+import { isInFlightPhase } from '@shared/runs/runStatus';
+import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
   formatRoundStageLabel,
-  formatStreamStatusLabel,
-} from '@shared/streams/streamStatusDisplay';
+  formatRunStatusLabel,
+} from '@shared/runs/runStatusDisplay';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
-import { compareBySeqNo } from '@shared/streams/streamOrdering';
+import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -176,14 +176,14 @@ export class TaskGroupList extends LitElement {
   }
 
   /** The stream these rows belong to; every group toggle names it. */
-  @property({ attribute: false }) streamId: StreamTabId | null = null;
+  @property({ attribute: false }) runId: RunId | null = null;
 
-  /** Whether there are any streams in the current filter (controls placeholder) */
-  @property({ attribute: false }) hasStreams = false;
+  /** Whether there are any runs in the current filter (controls placeholder) */
+  @property({ attribute: false }) hasRuns = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) streamStatus:
-    StreamLifecycleStatus | undefined = undefined;
+  @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
+    undefined;
 
   /** The fold's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
@@ -215,7 +215,7 @@ export class TaskGroupList extends LitElement {
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
 
-  /** xterm renderer for terminal-mode streams; owns its own viewport. */
+  /** xterm renderer for terminal-mode runs; owns its own viewport. */
   @query('terminal-output')
   private terminalOutput?: TerminalOutput;
 
@@ -236,7 +236,7 @@ export class TaskGroupList extends LitElement {
   /** Public method to scroll to bottom - called by parent LogList */
   scrollToBottom(): void {
     if (this.terminal) {
-      // xterm owns the viewport for terminal streams. LogList calls this on a
+      // xterm owns the viewport for terminal runs. LogList calls this on a
       // tab switch, which is also the first moment this tree is unhidden and
       // can measure itself — every fit attempted while hidden was skipped.
       this.terminalOutput?.refitIfVisible();
@@ -250,7 +250,7 @@ export class TaskGroupList extends LitElement {
 
   /** Scroll to bottom only when sticky (user hasn't scrolled away). */
   scrollToBottomIfSticky(): void {
-    // Terminal streams: the terminal keeps its own viewport pinned unless the
+    // Terminal runs: the terminal keeps its own viewport pinned unless the
     // user scrolled away inside it, and the outer container never overflows,
     // so there is nothing here to follow.
     if (this.terminal) return;
@@ -397,7 +397,7 @@ export class TaskGroupList extends LitElement {
     dispatchGroupToggle(
       this,
       event,
-      this.streamId,
+      this.runId,
       details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length),
     );
   }
@@ -427,7 +427,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatStreamStatusLabel(status),
+          label: formatRunStatusLabel(status),
         })}
       </span>
       <bdi class="group-title">${title}</bdi>
@@ -545,8 +545,8 @@ export class TaskGroupList extends LitElement {
   }
 
   private renderLogContent(): TemplateResult {
-    // Show placeholder only when there are no streams in the current filter
-    if (!this.hasStreams) {
+    // Show placeholder only when there are no runs in the current filter
+    if (!this.hasRuns) {
       return renderEmptyState({
         icon: 'terminal',
         title: 'No runs yet',
@@ -561,11 +561,11 @@ export class TaskGroupList extends LitElement {
       });
     }
 
-    // Pre-output placeholder, including terminal-mode (process-agent) streams:
+    // Pre-output placeholder, including terminal-mode (process-agent) runs:
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Run is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
-      const active = isInFlightPhase(this.streamStatus);
+      const active = isInFlightPhase(this.runStatus);
       return html`
         <div class="log-placeholder">
           ${
@@ -583,7 +583,7 @@ export class TaskGroupList extends LitElement {
 
     // Interleave ungrouped rows (user input, follow-ups, errors) with run
     // groups chronologically so the conversation reads top-to-bottom. Large
-    // streams render a recent window first; older timeline entries remain in
+    // runs render a recent window first; older timeline entries remain in
     // memory and can be revealed from the top control.
     const visibleTimeline = this.visibleTimelineEntries();
     const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;

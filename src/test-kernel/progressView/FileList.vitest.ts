@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { FileList } from '@progressView/frontend/components/FileList';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 
 // Local file imports
@@ -41,7 +41,7 @@ describe('file-list keyboard activation', () => {
 
   it('opens file paths on Space without hijacking native action buttons', async () => {
     const element = await mountComponent<FileList>('file-list', {
-      streamId: 'stream-a',
+      runId: 'run-a' as RunId,
       filesByRound: { '1': [outputFile()] },
     });
     const actions: HostRequest[] = [];

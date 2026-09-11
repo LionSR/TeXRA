@@ -1,21 +1,17 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { noopTrace, TraceEmitter } from '@agent/trace';
-import type { FinalizeExecutionResult } from '@agent/storage/executionLifecycle';
+import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
 import {
-  acquireResumedExecutionLease,
-  inspectExecutionLease,
-  releaseOwnedExecutionLease,
-} from '@agent/storage/executionLease';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  AgentExecutionHandle,
-  type AgentRunHandle,
-} from '@agent/runtime/ExecutionHandle';
+  acquireResumedRunLease,
+  inspectRunLease,
+  releaseOwnedRunLease,
+} from '@agent/storage/runLease';
+import { RunStatusMachine } from '@agent/runtime/RunStatusService';
+import { RunHandle, type AgentRunHandle } from '@agent/runtime/RunHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -31,21 +27,22 @@ import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
+  RUN_PHASE,
+  RUN_SUBSTATE,
   agentKey,
   AgentCategory,
 } from '@shared/schemas';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/support/streamStatusTestUtils';
+  clearRunStatusForTest,
+  seedRunStatusForTest,
+} from '@test/support/runStatusTestUtils';
+import { generateRunId } from '@utils/core';
 
 import {
   eventsOfType,
@@ -63,7 +60,7 @@ const storageMocks = vi.hoisted(() => ({
       input: {
         outcome: RunOutcome;
       },
-    ): Effect.Effect<FinalizeExecutionResult> =>
+    ): Effect.Effect<FinalizeRunResult> =>
       Effect.succeed({
         ok: true,
         outcome: input.outcome,
@@ -75,13 +72,11 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-// AgentRunLifecycle deep-imports finalizeRun from executionLifecycle
+// AgentRunLifecycle deep-imports finalizeRun from runLifecycle
 // (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
 // recursion through a dual mock.
-vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@agent/storage/executionLifecycle')
-  >()),
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   finalizeRun: storageMocks.finalizeRun,
 }));
 vi.mock('@agent/storage', () => ({
@@ -116,58 +111,44 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
 let lifecycleFixtureCounter = 0;
 
 function lifecycleFixture(
-  slug: string,
   agent = 'test-agent',
   category: AgentCategory = AgentCategory.ToolUse,
 ): {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
-  streamStatus: StreamStatusMachine;
+  runId: RunId;
+  runStatus: RunStatusMachine;
   ctx: AgentLaunchContext;
 } {
-  const executionId =
-    `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
-  const streamId = `stream-${slug}` as StreamTabId;
+  const runId =
+    `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   return {
-    executionId,
-    streamId,
-    streamStatus: defaultSession().status,
-    ctx: createTestLaunchContext({ executionId, streamId, agent, category }),
+    runId,
+    runStatus: defaultSession().status,
+    ctx: createTestLaunchContext({ runId, agent, category }),
   };
 }
 
-function toolUseResult(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  outcome: RunOutcome,
-): ToolUseFlowResult {
-  return { category: 'toolUse', outcome, executionId, streamId };
+/** The launching run a subagent fixture names as its parent edge. */
+const PARENT_RUN_ID = 'aa0001' as RunId;
+
+function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseFlowResult {
+  return { category: 'toolUse', outcome, runId };
 }
 
-function workflowResult(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  outcome: RunOutcome,
-): WorkflowFlowResult {
+function workflowResult(runId: RunId, outcome: RunOutcome): WorkflowFlowResult {
   return {
     category: 'workflow',
     outcome,
-    executionId,
-    streamId,
+    runId,
     outputs: [],
     compileFailures: [],
   };
 }
 
-function waitingResult(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): WaitingToolUseFlowResult {
+function waitingResult(runId: RunId): WaitingToolUseFlowResult {
   return {
     category: 'toolUse',
-    outcome: STREAM_PHASE.WAITING,
-    executionId,
-    streamId,
+    outcome: RUN_PHASE.WAITING,
+    runId,
   };
 }
 
@@ -179,11 +160,11 @@ function waitingResult(
  * which is the point: the handle's own suspension is what makes a stop tear
  * the run down, so no phase seeding is needed to reach that path.
  */
-function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
-  const handle = defaultSession().executions.getHandle(executionId);
-  expect(handle).toBeInstanceOf(AgentExecutionHandle);
-  if (!(handle instanceof AgentExecutionHandle)) {
-    throw new Error('Expected a suspended agent execution handle.');
+function takeWaitingHandle(runId: RunId): RunHandle {
+  const handle = defaultSession().runs.getHandle(runId);
+  expect(handle).toBeInstanceOf(RunHandle);
+  if (!(handle instanceof RunHandle)) {
+    throw new Error('Expected a suspended agent run handle.');
   }
   return handle;
 }
@@ -206,16 +187,13 @@ function parkNextFinalize(): { started: () => boolean; release: () => void } {
 }
 
 /** Publish the run and open stage that a suspended teardown must close. */
-function seedOpenRunGroup(
-  ctx: AgentLaunchContext,
-  streamId: StreamTabId,
-): string {
+function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
   const parentStageId = ctx.parentStage.id;
   if (!parentStageId)
     throw new Error('The fixture parent stage must carry an id.');
   const session = ctx.runScope.session;
-  publishTestRunStart(session, streamId, ctx.runScope.executionId);
-  session.publishRunEvent(streamId, {
+  publishTestRunStart(session, runId);
+  session.publishRunEvent(runId, {
     type: 'stage.start',
     id: parentStageId,
     label: 'run',
@@ -228,94 +206,79 @@ describe('runFlowWithLifecycle', () => {
   // The run's category reaches the handle and the terminal `result` through
   // the one descriptor the lifecycle builds, so a workflow run reports
   // `workflow` on both without either side re-deriving the string.
-  it.effect(
-    'reports the config agent category on the handle and terminal result',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => initLifecycleTestPlatform(true));
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-workflow-category',
-          'polish',
-          AgentCategory.Workflow,
-        );
-        let terminalResult: AgentRunHandle['result'] | undefined;
+  it('reports the config agent category on the handle and terminal result', async () => {
+    await initLifecycleTestPlatform(true);
+    const { runId, runStatus, ctx } = lifecycleFixture(
+      'polish',
+      AgentCategory.Workflow,
+    );
+    let terminalResult: AgentRunHandle['result'] | undefined;
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () =>
-              workflowResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-            {
-              onRun: async (handle) => {
-                expect(handle.category).toBe('workflow');
-                terminalResult = handle.result;
-              },
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => workflowResult(runId, RUN_OUTCOME.COMPLETED),
+          {
+            onRun: async (handle) => {
+              expect(handle.category).toBe('workflow');
+              terminalResult = handle.result;
             },
-          );
+          },
+        ),
+      );
 
-          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          expect(yield* terminalResult!).toMatchObject({
-            category: 'workflow',
-            agentName: 'polish',
-          });
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
+        category: 'workflow',
+        agentName: 'polish',
+      });
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-  it.effect(
-    'stops the Lean servers attributed to a run when the run ends',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => initLifecycleTestPlatform(true));
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-lean-server-stop',
-        );
-        const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+  it('stops the Lean servers attributed to a run when the run ends', async () => {
+    await initLifecycleTestPlatform(true);
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () =>
-              toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-            { onRunEnd: stopSessionsForRun },
-          );
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+          { onRunEnd: stopSessionsForRun },
+        ),
+      );
 
-          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-  it.effect(
-    'does not stop the Lean servers when a tool-use run parks at WAITING',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-lean-server-stop-waiting',
-        );
-        const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+  it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => waitingResult(executionId, streamId),
-            { onRunEnd: stopSessionsForRun },
-          );
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          onRunEnd: stopSessionsForRun,
+        }),
+      );
 
-          // WAITING is a suspension, not a terminal run end: the server must
-          // survive the parked run so a resume reuses it instead of paying a cold
-          // spawn.
-          expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-          expect(stopSessionsForRun).not.toHaveBeenCalled();
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      // WAITING is a suspension, not a terminal run end: the server must
+      // survive the parked run so a resume reuses it instead of paying a cold
+      // spawn.
+      expect(result.outcome).toBe(RUN_PHASE.WAITING);
+      expect(stopSessionsForRun).not.toHaveBeenCalled();
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
@@ -323,324 +286,276 @@ describe('runFlowWithLifecycle', () => {
     {
       label:
         'does not complete first-run onboarding for qualified setup sessions',
-      slug: 'setup-agent',
       agent: agentKey('builtInToolUse', SETUP_AGENT_NAME),
       expectedDone: false,
     },
     {
       label: 'completes first-run onboarding for non-setup completed sessions',
-      slug: 'non-setup-agent',
       agent: 'assistant',
       expectedDone: true,
     },
   ] as const;
 
-  for (const { label, slug, agent, expectedDone } of onboardingCases) {
-    it.effect(label, () =>
-      Effect.gen(function* () {
-        const fake = yield* Effect.promise(() =>
-          initLifecycleTestPlatform(false),
-        );
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          `lifecycle-${slug}`,
-          agent,
+  for (const { label, agent, expectedDone } of onboardingCases) {
+    it(label, async () => {
+      const fake = await initLifecycleTestPlatform(false);
+      const { runId, runStatus, ctx } = lifecycleFixture(agent);
+
+      try {
+        await Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () =>
+            toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+          ),
         );
 
-        try {
-          yield* runFlowWithLifecycle(ctx, async () =>
-            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-          );
-
-          expect(
-            fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-          ).toBe(expectedDone);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-    );
+        expect(
+          fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+        ).toBe(expectedDone);
+      } finally {
+        clearRunStatusForTest(runStatus, runId);
+      }
+    });
   }
 
-  it.effect('persists terminal state before updating onboarding state', () =>
-    Effect.gen(function* () {
-      const fake = yield* Effect.promise(() =>
-        initLifecycleTestPlatform(false),
-      );
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'terminal-before-onboarding',
-        'assistant',
-      );
-      const updateOnboarding = vi.spyOn(fake.globalState, 'update');
+  it('persists terminal state before updating onboarding state', async () => {
+    const fake = await initLifecycleTestPlatform(false);
+    const { runId, runStatus, ctx } = lifecycleFixture('assistant');
+    const updateOnboarding = vi.spyOn(fake.globalState, 'update');
 
-      try {
-        yield* runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        );
-
-        expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
-        expect(updateOnboarding).toHaveBeenCalledWith(
-          GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-          true,
-        );
-        expect(
-          storageMocks.finalizeRun.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          updateOnboarding.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-      } finally {
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
-
-  it.effect('finalizes the status machine owned by the run session', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'lifecycle-status-owner',
+    try {
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+        ),
       );
 
-      try {
-        // The lifecycle owns the whole transition (RUNNING on entry, terminal
-        // on exit) against the run session's one status machine.
-        expect(streamStatus).toBe(ctx.runScope.session.status);
-        yield* runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        );
-
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      } finally {
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
-
-  it.effect('projects run config before the RUNNING status projection', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'lifecycle-run-config-before-running',
+      expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
+      expect(updateOnboarding).toHaveBeenCalledWith(
+        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+        true,
       );
-      publishTestRunStart(ctx.runScope.session, streamId, executionId);
-      const trace = new TraceEmitter();
-      const detachTrace = ctx.runScope.session.attachRunTrace(trace, streamId);
-      // One plane in commit order: run.config and the status fact both land
-      // on it, so the ordering assertion reads one log.
-      const recorded = recordSessionEvents(ctx.runScope.session);
-      ctx.logger = trace;
-      ctx.disposeTrace = detachTrace;
+      expect(storageMocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
+        updateOnboarding.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-      try {
-        yield* runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        );
+  it('finalizes the status machine owned by the run session', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
-        const runConfigIndex = (yield* Effect.promise(() =>
-          recorded.read(),
-        )).findIndex((event) => event.type === 'run.config');
-        const runningIndex = (yield* Effect.promise(() =>
-          recorded.read(),
-        )).findIndex(
-          (event) =>
-            event.type === 'status' &&
-            event.aggregateId === qualifyAggregateId('stream', streamId) &&
-            event.phase === STREAM_PHASE.RUNNING,
-        );
-
-        expect(runConfigIndex).toBeGreaterThanOrEqual(0);
-        expect(runningIndex).toBeGreaterThanOrEqual(0);
-        expect(runConfigIndex).toBeLessThan(runningIndex);
-      } finally {
-        detachTrace();
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
-
-  it.effect(
-    'admits run start from a stale terminal phase via resume semantics',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-stale-terminal-start',
-        );
-
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.FAILED,
-          });
-
-          yield* runFlowWithLifecycle(ctx, async () => {
-            expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-            return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-          });
-
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
-
-  it.effect('clears a stale resuming substate when a resumed run starts', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'lifecycle-resuming-substate-start',
+    try {
+      // The lifecycle owns the whole transition (RUNNING on entry, terminal
+      // on exit) against the run session's one status machine.
+      expect(runStatus).toBe(ctx.runScope.session.status);
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+        ),
       );
 
-      try {
-        seedStreamStatusForTest(streamStatus, streamId, {
-          phase: STREAM_PHASE.RUNNING,
-          substate: STREAM_SUBSTATE.RESUMING,
-        });
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-        yield* runFlowWithLifecycle(ctx, async () => {
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-          expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-          return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-        });
+  it('projects run config before the RUNNING status projection', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    publishTestRunStart(ctx.runScope.session, runId);
+    const trace = new TraceEmitter();
+    const detachTrace = ctx.runScope.session.attachRunTrace(trace, runId);
+    // One plane in commit order: run.config and the status fact both land
+    // on it, so the ordering assertion reads one log.
+    const recorded = recordSessionEvents(ctx.runScope.session);
+    ctx.logger = trace;
+    ctx.disposeTrace = detachTrace;
 
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      } finally {
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
-
-  it.effect(
-    'does not emit a status event when starting an already-running stream with no substate',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-steady-running-no-substate',
-        );
-
-        const recorded = recordSessionEvents(ctx.runScope.session);
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.RUNNING,
-          });
-
-          yield* runFlowWithLifecycle(ctx, async () => {
-            expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-            expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-            expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
-            return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-          });
-
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
-
-  it.effect('delivers subagent aborts through the terminal callback', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'lifecycle-subagent-abort',
+    try {
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+        ),
       );
-      ctx.attachedMemoryMisses = [
-        { path: '/memories/missing.md', reason: 'not found' },
-      ];
-      const onError = vi.fn();
 
-      try {
-        const result = yield* runFlowWithLifecycle(
+      const runConfigIndex = (await recorded.read()).findIndex(
+        (event) => event.type === 'run.config',
+      );
+      const runningIndex = (await recorded.read()).findIndex(
+        (event) =>
+          event.type === 'status' &&
+          event.aggregateId === qualifyAggregateId('run', runId) &&
+          event.phase === RUN_PHASE.RUNNING,
+      );
+
+      expect(runConfigIndex).toBeGreaterThanOrEqual(0);
+      expect(runningIndex).toBeGreaterThanOrEqual(0);
+      expect(runConfigIndex).toBeLessThan(runningIndex);
+    } finally {
+      detachTrace();
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('admits run start from a stale terminal phase via resume semantics', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.FAILED,
+      });
+
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
+
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('clears a stale resuming substate when a resumed run starts', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
+        substate: RUN_SUBSTATE.RESUMING,
+      });
+
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+          expect(runStatus.getSubstate(runId)).toBeUndefined();
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
+
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('does not emit a status event when starting an already-running stream with no substate', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+
+    const recorded = recordSessionEvents(ctx.runScope.session);
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
+      });
+
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+          expect(runStatus.getSubstate(runId)).toBeUndefined();
+          expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
+
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('delivers subagent aborts through the terminal callback', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    ctx.attachedMemoryMisses = [
+      { path: '/memories/missing.md', reason: 'not found' },
+    ];
+    const onError = vi.fn();
+
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
           ctx,
           async () => {
             throw new DOMException('Request aborted', 'AbortError');
           },
-          { isSubagent: true, onError },
-        );
+          { parentRunId: PARENT_RUN_ID, onError },
+        ),
+      );
 
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-        expect(onError).toHaveBeenCalledOnce();
-        expect(onError.mock.calls[0][1]).toEqual(result);
-      } finally {
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][1]).toEqual(result);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-  it.effect(
-    'keeps subagent errors registered until terminal delivery runs',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-subagent-error-registered',
-        );
-        const onError = vi.fn(() => {
-          expect(
-            defaultSession().executions.getHandle(executionId),
-          ).toBeDefined();
-        });
+  it('keeps subagent errors registered until terminal delivery runs', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const onError = vi.fn(() => {
+      expect(defaultSession().runs.getHandle(runId)).toBeDefined();
+    });
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => {
-              throw new Error('subagent failed');
-            },
-            { isSubagent: true, onError },
-          );
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('subagent failed');
+          },
+          { parentRunId: PARENT_RUN_ID, onError },
+        ),
+      );
 
-          expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-          expect(onError).toHaveBeenCalledOnce();
-          expect(
-            defaultSession().executions.getHandle(executionId),
-          ).toBeUndefined();
-        } finally {
-          defaultSession().executions.untrack(executionId);
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+    } finally {
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
-  it.effect(
-    'keeps native subagent WAITING results registered and nonterminal',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-subagent-waiting',
-        );
-        const onError = vi.fn();
-        yield* Effect.promise(() => acquireResumedExecutionLease(executionId));
+  it('keeps native subagent WAITING results registered and nonterminal', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const onError = vi.fn();
+    await acquireResumedRunLease(runId);
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => {
-              expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-              expect(
-                streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
-              ).toBe(true);
-              return waitingResult(executionId, streamId);
-            },
-            { isSubagent: true, onError },
-          );
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
+              true,
+            );
+            return waitingResult(runId);
+          },
+          { parentRunId: PARENT_RUN_ID, onError },
+        ),
+      );
 
-          expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-          expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-          expect(onError).not.toHaveBeenCalled();
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-          expect(
-            defaultSession().executions.getHandle(executionId),
-          ).toBeDefined();
-          expect(
-            yield* Effect.promise(() => inspectExecutionLease(executionId)),
-          ).toMatchObject({
-            status: 'owned',
-          });
-        } finally {
-          yield* Effect.promise(() => releaseOwnedExecutionLease(executionId));
-          defaultSession().executions.untrack(executionId);
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_PHASE.WAITING);
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
+      expect(defaultSession().runs.getHandle(runId)).toBeDefined();
+      await expect(inspectRunLease(runId)).resolves.toMatchObject({
+        status: 'owned',
+      });
+    } finally {
+      await releaseOwnedRunLease(runId);
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   it('does not let a stop abandon a run that completes without suspending', async () => {
     // The window a stop could once fall into: the run has returned, its live
@@ -648,23 +563,20 @@ describe('runFlowWithLifecycle', () => {
     // persist await with the handle still tracked. Only the WAITING branch
     // parks a handle, so there is no suspension for the stop to find and
     // nothing the exit has to remember to clear.
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-completed-not-suspended',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const parked = parkNextFinalize();
 
     try {
       const running = Effect.runPromise(
         runFlowWithLifecycle(
           ctx,
-          async () =>
-            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-          { isSubagent: true },
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+          { parentRunId: PARENT_RUN_ID },
         ),
       );
       await vi.waitFor(() => expect(parked.started()).toBe(true));
 
-      const stop = defaultSession().executions.kill(executionId);
+      const stop = defaultSession().runs.kill(runId);
 
       expect(stop.accepted).toBe(false);
 
@@ -673,152 +585,135 @@ describe('runFlowWithLifecycle', () => {
       parked.release();
       const result = await running;
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      expect(
-        defaultSession().executions.getHandle(executionId),
-      ).toBeUndefined();
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      defaultSession().executions.untrack(executionId);
-      clearStreamStatusForTest(streamStatus, streamId);
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
-  it.effect('carries workflowPhase on the first child roster emission', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-        'lifecycle-workflow-phase',
-      );
-      const parentStreamId = 'parent-lifecycle-workflow-phase' as StreamTabId;
-      const rosters = recordChildRosters(ctx.runScope.session.executions);
-      // `track()` emits the roster synchronously, so onRun — which fires after
-      // tracking — is structurally too late to stamp a display field.
-      let rosterEmissionsBeforeOnRun = -1;
+  it('carries workflowPhase on the first child roster emission', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const parentRunId = generateRunId();
+    const rosters = recordChildRosters(ctx.runScope.session.runs);
+    // `track()` emits the roster synchronously, so onRun — which fires after
+    // tracking — is structurally too late to stamp a display field.
+    let rosterEmissionsBeforeOnRun = -1;
 
-      try {
-        yield* runFlowWithLifecycle(
+    try {
+      await Effect.runPromise(
+        runFlowWithLifecycle(
           ctx,
-          async () =>
-            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
           {
-            isSubagent: true,
-            parentStreamId,
+            parentRunId,
             workflowPhase: 'Reduce',
             onRun: async () => {
               rosterEmissionsBeforeOnRun = rosters.rosters.length;
             },
           },
-        );
-
-        const [firstRoster] = rosters.rosters;
-        expect(firstRoster?.items).toEqual([
-          expect.objectContaining({
-            executionId,
-            childStreamId: streamId,
-            workflowPhase: 'Reduce',
-          }),
-        ]);
-        expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
-      } finally {
-        defaultSession().executions.untrack(executionId);
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    }),
-  );
-
-  it.effect('carries a stop requested by onRun on the run signal', () =>
-    Effect.gen(function* () {
-      const { executionId, streamId, ctx } = lifecycleFixture(
-        'lifecycle-early-stop',
+        ),
       );
 
-      const result = yield* runFlowWithLifecycle(
+      const [firstRoster] = rosters.rosters;
+      expect(firstRoster?.items).toEqual([
+        expect.objectContaining({
+          childRunId: runId,
+          workflowPhase: 'Reduce',
+        }),
+      ]);
+      expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
+    } finally {
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('carries a stop requested by onRun on the run signal', async () => {
+    const { runId, ctx } = lifecycleFixture();
+
+    const result = await Effect.runPromise(
+      runFlowWithLifecycle(
         ctx,
         async () => {
-          expect(defaultSession().status.get(streamId)).toBe(
-            STREAM_PHASE.CANCELLED,
-          );
+          expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
           // linkAbortSignals has separate pre-aborted replay coverage; this
           // lifecycle test proves the signal already carries the early stop.
           expect(ctx.runScope.signal.aborted).toBe(true);
-          return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
+          return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
         },
         {
           onRun: async () => {
-            const stop = defaultSession().executions.kill(executionId);
+            const stop = defaultSession().runs.kill(runId);
             expect(stop.accepted).toBe(true);
             await Effect.runPromise(stop.settlement);
           },
         },
-      );
+      ),
+    );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    }),
-  );
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+  });
 
   // The stream is reused across runs, so a run that never claims it inherits
   // whatever the last one left. A stop landing in the track()-to-start window
   // is refused by the phase table while that leftover is terminal, so without
   // the start-time claim this run would adopt the previous run's COMPLETED as
   // its own verdict and drop its abort facts.
-  it.effect(
-    'does not adopt a previous run terminal phase when a stop lands before start',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-stale-phase-early-stop',
-        );
-        let terminalResult: AgentRunHandle['result'] | undefined;
+  it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    let terminalResult: AgentRunHandle['result'] | undefined;
 
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.COMPLETED,
-          });
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.COMPLETED,
+      });
 
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async (handle) => {
-              expect(ctx.runScope.signal.aborted).toBe(true);
-              throw new DOMException('Request aborted', 'AbortError');
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async (handle) => {
+            expect(ctx.runScope.signal.aborted).toBe(true);
+            throw new DOMException('Request aborted', 'AbortError');
+          },
+          {
+            onRun: async (handle) => {
+              terminalResult = handle.result;
+              const stop = defaultSession().runs.kill(runId);
+              expect(stop.accepted).toBe(true);
+              await Effect.runPromise(stop.settlement);
             },
-            {
-              onRun: async (handle) => {
-                terminalResult = handle.result;
-                const stop = defaultSession().executions.kill(executionId);
-                expect(stop.accepted).toBe(true);
-                await Effect.runPromise(stop.settlement);
-              },
-            },
-          );
+          },
+        ),
+      );
 
-          expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
-            expect.objectContaining({
-              outcome: RUN_OUTCOME.CANCELLED,
-              flowRecord: 'preserve',
-            }),
-          );
-          expect(yield* terminalResult!).toMatchObject({
-            outcome: RUN_OUTCOME.CANCELLED,
-            error: { kind: 'abort' },
-          });
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
+        expect.objectContaining({
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+        }),
+      );
+      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: { kind: 'abort' },
+      });
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   // The claim above is a repair for an inherited phase, not a second start: a
   // stop that already reads CANCELLED on the stream is this run's outcome too,
   // so a run that never ran must not publish a RUNNING blip on the way out.
   it('publishes no RUNNING blip when the stop that beat run start already cancelled the stream', async () => {
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-early-stop-no-blip',
-    );
-    publishTestRunStart(ctx.runScope.session, streamId, executionId);
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    publishTestRunStart(ctx.runScope.session, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', runId),
     });
 
     try {
@@ -830,7 +725,7 @@ describe('runFlowWithLifecycle', () => {
           },
           {
             onRun: async () => {
-              const stop = defaultSession().executions.kill(executionId);
+              const stop = defaultSession().runs.kill(runId);
               expect(stop.accepted).toBe(true);
               await Effect.runPromise(stop.settlement);
             },
@@ -844,95 +739,85 @@ describe('runFlowWithLifecycle', () => {
         eventsOfType(await recorded.read(), 'status').map(
           (event) => event.phase,
         ),
-      ).toEqual([STREAM_PHASE.CANCELLED]);
+      ).toEqual([RUN_PHASE.CANCELLED]);
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   // Outcome and flow-record disposition are one decision: a run the phase says
   // was interrupted keeps the record that makes it resumable, even when its own
   // report reached completion first.
-  it.effect(
-    'keeps the flow record of a stopped run whose report says completed',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-stop-during-completion',
-        );
+  it('keeps the flow record of a stopped run whose report says completed', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
-        try {
-          const result = yield* runFlowWithLifecycle(ctx, async () => {
-            const stop = defaultSession().executions.kill(executionId);
-            expect(stop.accepted).toBe(true);
-            await Effect.runPromise(stop.settlement);
-            expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-            return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-          });
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          const stop = defaultSession().runs.kill(runId);
+          expect(stop.accepted).toBe(true);
+          await Effect.runPromise(stop.settlement);
+          expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
 
-          // The caller receives the same verdict persistence carries: the stop
-          // won on the stream, so the flow's COMPLETED report is relabeled.
-          expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-            defaultSession(),
-            expect.objectContaining({
-              outcome: RUN_OUTCOME.CANCELLED,
-              flowRecord: 'preserve',
-            }),
-          );
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      // The caller receives the same verdict persistence carries: the stop
+      // won on the stream, so the flow's COMPLETED report is relabeled.
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+        defaultSession(),
+        expect.objectContaining({
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+        }),
+      );
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   // The parent's delivery is a projection of the same terminal fact as the
   // persisted history, so a stopped child never arrives formatted as a failure.
-  it.effect(
-    'delivers a stopped subagent as cancelled when its flow reports a failure',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-subagent-stop-then-failure',
-        );
-        const onError = vi.fn();
+  it('delivers a stopped subagent as cancelled when its flow reports a failure', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const onError = vi.fn();
 
-        try {
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => {
-              const stop = defaultSession().executions.kill(executionId);
-              expect(stop.accepted).toBe(true);
-              await Effect.runPromise(stop.settlement);
-              throw new Error('child exited with code 143');
-            },
-            { isSubagent: true, onError },
-          );
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            const stop = defaultSession().runs.kill(runId);
+            expect(stop.accepted).toBe(true);
+            await Effect.runPromise(stop.settlement);
+            throw new Error('child exited with code 143');
+          },
+          { parentRunId: PARENT_RUN_ID, onError },
+        ),
+      );
 
-          expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
-            expect.objectContaining({
-              outcome: RUN_OUTCOME.CANCELLED,
-            }),
-          );
-          expect(onError).toHaveBeenCalledOnce();
-          expect(onError.mock.calls[0][1]).toEqual(result);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
+        expect.objectContaining({
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      );
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][1]).toEqual(result);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
-    const { executionId, streamId, ctx } = lifecycleFixture(
-      'lifecycle-subagent-waiting-kill',
-    );
-    const parentStageId = seedOpenRunGroup(ctx, streamId);
+    const { runId, ctx } = lifecycleFixture();
+    const parentStageId = seedOpenRunGroup(ctx, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', runId),
     });
     const followUpsTerminalize = vi.spyOn(
       ctx.runScope.session.followUps,
@@ -941,31 +826,29 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => waitingResult(executionId, streamId),
-          { isSubagent: true },
-        ),
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          parentRunId: PARENT_RUN_ID,
+        }),
       );
 
-      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
+      expect(result.outcome).toBe(RUN_PHASE.WAITING);
+      expect(defaultSession().runs.getHandle(runId)).toBeDefined();
       expect(followUpsTerminalize).not.toHaveBeenCalled();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       // The fixture's ctx.logger is noopTrace, and the run handle carries it
       // as its trace channel.
       const traceEmit = vi.spyOn(noopTrace, 'emit');
 
-      const waitingHandle = takeWaitingHandle(executionId);
+      const waitingHandle = takeWaitingHandle(runId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
       // session — by the time a native subagent suspends at WAITING (not
       // reproduced by this fake runner, but true in production — see
-      // runToolUseFlow.ts). With no interrupt target left, `executions.kill()`
+      // runToolUseFlow.ts). With no interrupt target left, `runs.kill()`
       // falls back to the teardown the WAITING branch parked and tears the
-      // execution down.
-      const stop = defaultSession().executions.kill(executionId);
+      // run down.
+      const stop = defaultSession().runs.kill(runId);
       expect(stop.accepted).toBe(true);
       await Effect.runPromise(stop.settlement);
       await Effect.runPromise(waitingHandle.result);
@@ -977,23 +860,19 @@ describe('runFlowWithLifecycle', () => {
         expect.objectContaining({
           type: 'result',
           outcome: 'cancelled',
-          executionId,
+          runId,
         }),
       );
       traceEmit.mockRestore();
 
-      expect(
-        defaultSession().executions.getHandle(executionId),
-      ).toBeUndefined();
-      expect(defaultSession().status.get(streamId)).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
-      expect(followUpsTerminalize).toHaveBeenCalledWith(streamId);
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
       await vi.waitFor(() =>
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
           defaultSession(),
           {
-            executionId,
+            runId,
             outcome: RUN_OUTCOME.CANCELLED,
             // Killing a WAITING subagent leaves the checkpoint that makes it
             // resumable (#11315).
@@ -1011,17 +890,15 @@ describe('runFlowWithLifecycle', () => {
         }),
       );
     } finally {
-      defaultSession().executions.untrack(executionId);
-      clearStreamStatusForTest(defaultSession().status, streamId);
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(defaultSession().status, runId);
     }
   });
 
   it('runs run-end cleanup when waiting stage publication fails', async () => {
-    const { executionId, streamId, ctx } = lifecycleFixture(
-      'lifecycle-waiting-transcript-failure-run-end',
-    );
-    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    seedOpenRunGroup(ctx, streamId);
+    const { runId, ctx } = lifecycleFixture();
+    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
+    seedOpenRunGroup(ctx, runId);
     await ctx.runScope.session.settlePublications();
     vi.spyOn(ctx.runScope.session, 'settlePublications').mockRejectedValueOnce(
       new Error('stage publication failed'),
@@ -1029,169 +906,139 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => waitingResult(executionId, streamId),
-          { onRunEnd: stopSessionsForRun },
-        ),
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          onRunEnd: stopSessionsForRun,
+        }),
       );
-      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      const waitingHandle = takeWaitingHandle(executionId);
+      expect(result.outcome).toBe(RUN_PHASE.WAITING);
+      const waitingHandle = takeWaitingHandle(runId);
 
-      const stop = defaultSession().executions.kill(executionId);
+      const stop = defaultSession().runs.kill(runId);
 
       expect(stop.accepted).toBe(true);
 
       await Effect.runPromise(stop.settlement);
       await Effect.runPromise(waitingHandle.result);
 
-      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
+      expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
     } finally {
-      defaultSession().executions.untrack(executionId);
-      clearStreamStatusForTest(defaultSession().status, streamId);
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(defaultSession().status, runId);
     }
   });
 
-  it.effect(
-    'projects returned outcomes to terminal status, stage end, and stream status',
-    () =>
-      Effect.gen(function* () {
-        const cases = [
-          {
-            outcome: RUN_OUTCOME.COMPLETED,
-            stream: STREAM_PHASE.COMPLETED,
-          },
-          {
-            outcome: RUN_OUTCOME.CANCELLED,
-            stream: STREAM_PHASE.CANCELLED,
-          },
-          {
-            outcome: RUN_OUTCOME.FAILED,
-            stream: STREAM_PHASE.FAILED,
-          },
-        ] as const;
+  it('projects returned outcomes to terminal status, stage end, and stream status', async () => {
+    const cases = [
+      {
+        outcome: RUN_OUTCOME.COMPLETED,
+        stream: RUN_PHASE.COMPLETED,
+      },
+      {
+        outcome: RUN_OUTCOME.CANCELLED,
+        stream: RUN_PHASE.CANCELLED,
+      },
+      {
+        outcome: RUN_OUTCOME.FAILED,
+        stream: RUN_PHASE.FAILED,
+      },
+    ] as const;
 
-        for (const expected of cases) {
-          const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-            `outcome-${expected.outcome}`,
-          );
-          const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    for (const expected of cases) {
+      const { runId, runStatus, ctx } = lifecycleFixture();
+      const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-          try {
-            const result = yield* runFlowWithLifecycle(ctx, async () =>
-              toolUseResult(executionId, streamId, expected.outcome),
-            );
-
-            expect(result.outcome).toBe(expected.outcome);
-            expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-              defaultSession(),
-              {
-                executionId,
-                outcome: expected.outcome,
-                flowRecord:
-                  expected.outcome === RUN_OUTCOME.COMPLETED
-                    ? 'delete'
-                    : 'preserve',
-              },
-            );
-            expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
-            expect(streamStatus.get(streamId)).toBe(expected.stream);
-          } finally {
-            clearStreamStatusForTest(streamStatus, streamId);
-          }
-        }
-      }),
-  );
-
-  it.effect(
-    'finalizes an outcome-only failure without fabricating provider error facts',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'outcome-only-failure',
+      try {
+        const result = await Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () =>
+            toolUseResult(runId, expected.outcome),
+          ),
         );
-        const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-        const emit = vi.spyOn(ctx.logger, 'emit');
-        const onError = vi.fn();
 
-        try {
-          const carriedResult = toolUseResult(
-            executionId,
-            streamId,
-            RUN_OUTCOME.FAILED,
-          );
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => carriedResult,
-            {
-              isSubagent: true,
-              onError,
-            },
-          );
-
-          expect(result).toEqual(carriedResult);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
-            {
-              executionId,
-              outcome: RUN_OUTCOME.FAILED,
-              flowRecord: 'preserve',
-            },
-          );
-          expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-          const resultEvent = emit.mock.calls
-            .map(([event]) => event)
-            .find((event) => event.type === 'result');
-          expect(resultEvent).toMatchObject({
-            type: 'result',
-            outcome: RUN_OUTCOME.FAILED,
-          });
-          expect(resultEvent).not.toHaveProperty('error');
-          expect(onError).not.toHaveBeenCalled();
-        } finally {
-          emit.mockRestore();
-          defaultSession().executions.untrack(executionId);
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
-
-  it.effect(
-    'projects a thrown abort as cancelled on its own stage outcome',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'outcome-thrown-abort',
+        expect(result.outcome).toBe(expected.outcome);
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          defaultSession(),
+          {
+            runId,
+            outcome: expected.outcome,
+            flowRecord:
+              expected.outcome === RUN_OUTCOME.COMPLETED
+                ? 'delete'
+                : 'preserve',
+          },
         );
-        const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+        expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
+        expect(runStatus.get(runId)).toBe(expected.stream);
+      } finally {
+        clearRunStatusForTest(runStatus, runId);
+      }
+    }
+  });
 
-        try {
-          const result = yield* runFlowWithLifecycle(ctx, async () => {
-            throw new DOMException('Request aborted', 'AbortError');
-          });
+  it('finalizes an outcome-only failure without fabricating provider error facts', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    const emit = vi.spyOn(ctx.logger, 'emit');
+    const onError = vi.fn();
 
-          expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
-            {
-              executionId,
-              outcome: RUN_OUTCOME.CANCELLED,
-              flowRecord: 'preserve',
-            },
-          );
-          expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+    try {
+      const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => carriedResult, {
+          parentRunId: PARENT_RUN_ID,
+          onError,
+        }),
+      );
+
+      expect(result).toEqual(carriedResult);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.FAILED,
+        flowRecord: 'preserve',
+      });
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
+      const resultEvent = emit.mock.calls
+        .map(([event]) => event)
+        .find((event) => event.type === 'result');
+      expect(resultEvent).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+      });
+      expect(resultEvent).not.toHaveProperty('error');
+      expect(onError).not.toHaveBeenCalled();
+    } finally {
+      emit.mockRestore();
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
+
+  it('projects a thrown abort as cancelled on its own stage outcome', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+
+    try {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new DOMException('Request aborted', 'AbortError');
+        }),
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        flowRecord: 'preserve',
+      });
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   it('projects an unexpected throw as failed', async () => {
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'outcome-thrown-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
     try {
@@ -1204,87 +1051,74 @@ describe('runFlowWithLifecycle', () => {
       ).rejects.toThrow('model exploded');
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        executionId,
+        runId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('terminalizes a waiting stream when the lifecycle catch path fails', async () => {
-    const { streamId, streamStatus, ctx } = lifecycleFixture(
-      'outcome-waiting-thrown-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, async () => {
-            expect(
-              streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
-            ).toBe(true);
+            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
+              true,
+            );
             throw new Error('wait node failed');
           }),
         ),
       ).rejects.toThrow('wait node failed');
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
-  it.effect(
-    'passes flow-carried terminal results to subagent error delivery',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-          'lifecycle-subagent-flow-error',
-        );
-        const carriedResult = {
-          category: 'toolUse' as const,
-          outcome: RUN_OUTCOME.FAILED,
-          executionId,
-          streamId,
-          totalCostUsd: 0.73,
-          error: { message: 'subagent failed', userRetryable: false },
-        };
-        const onError = vi.fn();
+  it('passes flow-carried terminal results to subagent error delivery', async () => {
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    const carriedResult = {
+      category: 'toolUse' as const,
+      outcome: RUN_OUTCOME.FAILED,
+      runId,
+      totalCostUsd: 0.73,
+      error: { message: 'subagent failed', userRetryable: false },
+    };
+    const onError = vi.fn();
 
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.RUNNING,
-          });
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
+      });
 
-          const result = yield* runFlowWithLifecycle(
-            ctx,
-            async () => carriedResult,
-            {
-              isSubagent: true,
-              onError,
-            },
-          );
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => carriedResult, {
+          parentRunId: PARENT_RUN_ID,
+          onError,
+        }),
+      );
 
-          expect(result).toEqual(carriedResult);
-          expect(onError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'subagent failed' }),
-            carriedResult,
-          );
-        } finally {
-          defaultSession().executions.untrack(executionId);
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(result).toEqual(carriedResult);
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'subagent failed' }),
+        carriedResult,
+      );
+    } finally {
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   it('publishes the structured error facts a flow carried out on its result', async () => {
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-carried-flow-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     const emit = vi.spyOn(ctx.logger, 'emit');
 
@@ -1294,8 +1128,7 @@ describe('runFlowWithLifecycle', () => {
           runFlowWithLifecycle(ctx, async () => ({
             category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
-            executionId,
-            streamId,
+            runId,
             response: 'partial answer',
             error: {
               message: 'provider exploded',
@@ -1309,12 +1142,12 @@ describe('runFlowWithLifecycle', () => {
       // A carried failure is exactly as loud as a thrown one: same terminal
       // status, same stage outcome, same classified error on the result event.
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        executionId,
+        runId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
       expect(emit).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'result',
@@ -1328,15 +1161,13 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       emit.mockRestore();
-      defaultSession().executions.untrack(executionId);
-      clearStreamStatusForTest(streamStatus, streamId);
+      defaultSession().runs.untrack(runId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('classifies a carried missing-api-key failure through the canonical discriminant', async () => {
-    const { executionId, streamId, ctx } = lifecycleFixture(
-      'lifecycle-carried-missing-key',
-    );
+    const { runId, ctx } = lifecycleFixture();
     const emit = vi.spyOn(ctx.logger, 'emit');
 
     try {
@@ -1345,8 +1176,7 @@ describe('runFlowWithLifecycle', () => {
           runFlowWithLifecycle(ctx, async () => ({
             category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
-            executionId,
-            streamId,
+            runId,
             response: '',
             // The retry-state flatten drops the Error and its Symbol marker;
             // the canonical classification keeps the kind reachable here.
@@ -1368,37 +1198,37 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       emit.mockRestore();
-      defaultSession().executions.untrack(executionId);
+      defaultSession().runs.untrack(runId);
     }
   });
 });
 
 /** The handle, status machine, and untrack spy every finalize test drives. */
-function finalizeFixture(slug: string): {
-  executionId: string;
-  streamId: StreamTabId;
-  streamStatus: StreamStatusMachine;
-  handle: ReturnType<typeof testExecutionHandle>;
-  untrack: Mock<(executionId: string) => void>;
+function finalizeFixture(): {
+  runId: RunId;
+  runStatus: RunStatusMachine;
+  handle: ReturnType<typeof testRunHandle>;
+  untrack: Mock<(runId: RunId) => void>;
 } {
-  const executionId = `exec-${slug}`;
-  const streamId = `stream-${slug}` as StreamTabId;
+  const runId =
+    `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   return {
-    executionId,
-    streamId,
-    streamStatus: new StreamStatusMachine(
+    runId,
+    runStatus: new RunStatusMachine(
       () => {},
       () => {},
     ),
-    handle: testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
+    handle: testRunHandle({
+      runId,
+      parent: PARENT_RUN_ID,
       agent: 'test-agent',
       trace: noopTrace,
     }),
-    untrack: vi.fn<(executionId: string) => void>(),
+    untrack: vi.fn<(runId: RunId) => void>(),
   };
 }
+
+let finalizeFixtureCounter = 0;
 
 describe('finalizeRunTerminal', () => {
   // The exactly-once guard must be an atomic, synchronous claim — not a
@@ -1407,24 +1237,22 @@ describe('finalizeRunTerminal', () => {
   // handle) would otherwise both pass the check before the first settles and
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
-    const { executionId, streamId, streamStatus, handle, untrack } =
-      finalizeFixture('finalize-race');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     const traceEmit = vi.spyOn(noopTrace, 'emit');
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
     const parked = parkNextFinalize();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
       const params = {
         session: defaultSession(),
         handle,
-        executions: { untrack },
-        streamStatus,
+        runs: { untrack },
+        runStatus,
         outcome: RUN_OUTCOME.COMPLETED,
-        isSubagent: false,
         trace: noopTrace,
         persistence: { kind: 'finalize', flowRecord: 'delete' },
       } as const;
@@ -1442,8 +1270,7 @@ describe('finalizeRunTerminal', () => {
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
+          runId,
         },
       });
       expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
@@ -1458,16 +1285,15 @@ describe('finalizeRunTerminal', () => {
       await expect(Effect.runPromise(handle.result)).resolves.toBe(
         event?.event,
       );
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
     } finally {
       traceEmit.mockRestore();
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('flushes display artifacts before publishing and untracking', async () => {
-    const { executionId, streamId, streamStatus, handle, untrack } =
-      finalizeFixture('finalize-artifact-order');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     let releaseFlush: (() => void) | undefined;
     const flushArtifacts = vi.fn(
       () =>
@@ -1481,17 +1307,16 @@ describe('finalizeRunTerminal', () => {
     });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
       });
       const finalization = Effect.runPromise(
         finalizeRunTerminal({
           session: defaultSession(),
           handle,
-          executions: { untrack },
-          streamStatus,
+          runs: { untrack },
+          runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
-          isSubagent: false,
           trace: noopTrace,
           persistence: { kind: 'skip' },
           flushArtifacts,
@@ -1506,167 +1331,155 @@ describe('finalizeRunTerminal', () => {
       await finalization;
 
       expect(resultSettled).toBe(true);
-      expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+      expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
     } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
+      clearRunStatusForTest(runStatus, runId);
     }
   });
 
-  it.effect(
-    'settles and untracks once while reporting terminal metadata failure',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, handle, untrack } =
-          finalizeFixture('finalize-metadata-failure');
-        const durabilityError = new Error('metadata disk write failed');
-        storageMocks.finalizeRun.mockReturnValueOnce(
-          Effect.succeed({
-            ok: false,
+  it('settles and untracks once while reporting terminal metadata failure', async () => {
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const durabilityError = new Error('metadata disk write failed');
+    storageMocks.finalizeRun.mockReturnValueOnce(
+      Effect.succeed({
+        ok: false,
+        outcomePersisted: false,
+        error: durabilityError,
+      }),
+    );
+
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.RUNNING,
+      });
+
+      const event = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          runs: { untrack },
+          runStatus,
+          outcome: RUN_OUTCOME.FAILED,
+          trace: noopTrace,
+          persistence: { kind: 'finalize', flowRecord: 'preserve' },
+        }),
+      );
+
+      expect(event).toMatchObject({
+        event: {
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          runId,
+        },
+      });
+      await expect(Effect.runPromise(handle.result)).resolves.toBe(
+        event?.event,
+      );
+      expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
+      expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+        'Failed to finalize durable run state',
+        {
+          data: {
+            agentIdentifier: 'test-agent',
+            runId,
             outcomePersisted: false,
             error: durabilityError,
-          }),
-        );
-
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.RUNNING,
-          });
-
-          const event = yield* finalizeRunTerminal({
-            session: defaultSession(),
-            handle,
-            executions: { untrack },
-            streamStatus,
-            outcome: RUN_OUTCOME.FAILED,
-            isSubagent: false,
-            trace: noopTrace,
-            persistence: { kind: 'finalize', flowRecord: 'preserve' },
-          });
-
-          expect(event).toMatchObject({
-            event: {
-              type: 'result',
-              outcome: RUN_OUTCOME.FAILED,
-              executionId,
-            },
-          });
-          expect(yield* handle.result).toBe(event?.event);
-          expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-          expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-            'Failed to finalize durable execution state',
-            {
-              data: {
-                agentIdentifier: 'test-agent',
-                executionId,
-                outcomePersisted: false,
-                error: durabilityError,
-              },
-            },
-          );
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+          },
+        },
+      );
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   // The stream phase is the single owner of a run's terminal outcome. A
   // stop/kill transitions the phase behind the run's back, and the run it
   // killed then reports its own non-zero exit as a failure — so the phase, not
   // the report, has to decide, and no caller may cross-check it for itself.
-  it.effect(
-    'resolves the terminal outcome from an already-cancelled stream phase',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, handle, untrack } =
-          finalizeFixture('finalize-stopped');
-        const stage = { end: vi.fn() };
+  it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const stage = { end: vi.fn() };
 
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.CANCELLED,
-          });
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.CANCELLED,
+      });
 
-          const finalized = yield* finalizeRunTerminal({
-            session: defaultSession(),
-            handle,
-            executions: { untrack },
-            streamStatus,
-            outcome: RUN_OUTCOME.FAILED,
-            error: { kind: 'unexpected', message: 'exited with code 143' },
-            isSubagent: false,
-            stage,
-            trace: noopTrace,
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
-          });
+      const finalized = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          runs: { untrack },
+          runStatus,
+          outcome: RUN_OUTCOME.FAILED,
+          error: { kind: 'unexpected', message: 'exited with code 143' },
+          stage,
+          trace: noopTrace,
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
+        }),
+      );
 
-          expect(finalized?.event).toMatchObject({
-            type: 'result',
-            outcome: RUN_OUTCOME.CANCELLED,
-            executionId,
-            streamId,
-          });
-          // Error facts classified for a failure that the phase says never
-          // happened must not ride the cancelled result.
-          expect(finalized?.event.error).toBeUndefined();
-          expect(yield* handle.result).toBe(finalized?.event);
-          expect(stage.end).toHaveBeenCalledExactlyOnceWith(
-            RUN_OUTCOME.CANCELLED,
-          );
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            defaultSession(),
-            expect.objectContaining({
-              outcome: RUN_OUTCOME.CANCELLED,
-            }),
-          );
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-          // The resolution is what keeps the terminal transition from being
-          // refused, so nothing is left to warn about.
-          expect(channelTraceMocks.warn).not.toHaveBeenCalled();
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(finalized?.event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+        runId,
+      });
+      // Error facts classified for a failure that the phase says never
+      // happened must not ride the cancelled result.
+      expect(finalized?.event.error).toBeUndefined();
+      await expect(Effect.runPromise(handle.result)).resolves.toBe(
+        finalized?.event,
+      );
+      expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
+        expect.objectContaining({
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      );
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      // The resolution is what keeps the terminal transition from being
+      // refused, so nothing is left to warn about.
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 
   // The same ownership rule in the other direction: a phase that already
   // published FAILED is a terminal fact a later stop cannot rewrite, so a
   // caller reporting `cancelled` does not get to relabel it.
-  it.effect(
-    'keeps an already-failed stream phase over a later cancelled report',
-    () =>
-      Effect.gen(function* () {
-        const { executionId, streamId, streamStatus, handle, untrack } =
-          finalizeFixture('finalize-failed-then-stopped');
+  it('keeps an already-failed stream phase over a later cancelled report', async () => {
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
 
-        try {
-          seedStreamStatusForTest(streamStatus, streamId, {
-            phase: STREAM_PHASE.FAILED,
-          });
+    try {
+      seedRunStatusForTest(runStatus, runId, {
+        phase: RUN_PHASE.FAILED,
+      });
 
-          const finalized = yield* finalizeRunTerminal({
-            session: defaultSession(),
-            handle,
-            executions: { untrack },
-            streamStatus,
-            outcome: RUN_OUTCOME.CANCELLED,
-            isSubagent: false,
-            trace: noopTrace,
-            persistence: { kind: 'skip' },
-          });
+      const finalized = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          runs: { untrack },
+          runStatus,
+          outcome: RUN_OUTCOME.CANCELLED,
+          trace: noopTrace,
+          persistence: { kind: 'skip' },
+        }),
+      );
 
-          expect(finalized?.event).toMatchObject({
-            type: 'result',
-            outcome: RUN_OUTCOME.FAILED,
-            executionId,
-            streamId,
-          });
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-          expect(channelTraceMocks.warn).not.toHaveBeenCalled();
-        } finally {
-          clearStreamStatusForTest(streamStatus, streamId);
-        }
-      }),
-  );
+      expect(finalized?.event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        runId,
+      });
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+    } finally {
+      clearRunStatusForTest(runStatus, runId);
+    }
+  });
 });

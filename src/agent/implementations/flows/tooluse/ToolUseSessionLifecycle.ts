@@ -7,7 +7,7 @@ import type {
   FollowUpQueueBatch,
 } from '@agent/followUp/FollowUpQueue';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
@@ -16,10 +16,10 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   private waitCancelled = false;
 
   constructor(
-    private readonly streamTabId: StreamTabId,
+    private readonly runId: RunId,
     private readonly queue: ToolUseFollowUpQueue,
   ) {
-    const lease = queue.claimLive(streamTabId, 'flow');
+    const lease = queue.claimLive(runId, 'flow');
     if (lease) {
       this.lease = lease;
       this.followUps = queue.queue(lease);
@@ -27,10 +27,10 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     }
     // A native child loop owns continuation across all of its turns. Its inner
     // one-cycle flow uses that queue without becoming a second consumer.
-    const childQueue = queue.externallyOwnedQueue(streamTabId);
+    const childQueue = queue.externallyOwnedQueue(runId);
     if (!childQueue) {
       throw new Error(
-        `Follow-up continuation already has an owner for stream ${streamTabId}.`,
+        `Follow-up continuation already has an owner for run ${runId}.`,
       );
     }
     this.followUps = childQueue;

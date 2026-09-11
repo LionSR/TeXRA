@@ -1,6 +1,6 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
-import { TODO_STATUS, type StreamTabId, type TodoItem } from '@shared/schemas';
+import { TODO_STATUS, type RunId, type TodoItem } from '@shared/schemas';
 import { clamp } from '@utils/core';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
@@ -193,31 +193,31 @@ export function staticTranscriptRowBudget({
 
 export interface StaticScrollbackTarget {
   readonly ownerKey: string;
-  readonly streamId: StreamTabId | undefined;
+  readonly runId: RunId | undefined;
 }
 
 export function staticScrollbackTarget({
-  activeStreamId,
-  rootStreamId,
+  activeRunId,
+  rootRunId,
   scopedTranscript = false,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly activeRunId: RunId | undefined;
+  readonly rootRunId: RunId | undefined;
   readonly scopedTranscript?: boolean;
 }): StaticScrollbackTarget {
   if (scopedTranscript) {
     return {
-      ownerKey: activeStreamId ? `stream:${activeStreamId}` : 'scoped:none',
-      streamId: activeStreamId,
+      ownerKey: activeRunId ? `stream:${activeRunId}` : 'scoped:none',
+      runId: activeRunId,
     };
   }
   // Before a root run resolves, local helper output and harness-built root
-  // streams still need static scrollback. The root owner key is deliberately
-  // stable across the later rootStreamId resolution so Ink's append-only
+  // runs still need static scrollback. The root owner key is deliberately
+  // stable across the later rootRunId resolution so Ink's append-only
   // <Static> cache does not remount and reprint pre-run root entries.
   return {
     ownerKey: 'root',
-    streamId: rootStreamId ?? activeStreamId,
+    runId: rootRunId ?? activeRunId,
   };
 }
 

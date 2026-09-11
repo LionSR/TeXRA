@@ -69,7 +69,7 @@ describe('ReportReviewIssueTool', () => {
     });
   });
 
-  it('streams each finding to the sink immediately and unchanged', async () => {
+  it('runs each finding to the sink immediately and unchanged', async () => {
     const { sink, tool } = useAcceptingSink();
     const first = { ...REPORT, endLine: 7 };
     const second = {

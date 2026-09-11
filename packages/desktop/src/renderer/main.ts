@@ -212,12 +212,12 @@ const railProjects = (): RailProject[] =>
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
-/** The active project's streams in rail order, for the palette. */
-const activeStreams = () => {
+/** The active project's runs in rail order, for the palette. */
+const activeRuns = () => {
   const active = activeRailProject(railProjects());
   if (!active) return [];
   return active.view.order.flatMap((id) => {
-    const stream = active.view.streams.get(id);
+    const stream = active.view.runs.get(id);
     return stream ? [stream] : [];
   });
 };
@@ -384,8 +384,8 @@ applyTheme();
 
 const environmentPopover = createEnvironmentPopover({
   getWorkbenchTabs: () => shellState().workbenchTabs,
-  getChildStreamCount: () =>
-    activeStreams().reduce((total, stream) => total + stream.rollup.total, 0),
+  getChildRunCount: () =>
+    activeRuns().reduce((total, stream) => total + stream.rollup.total, 0),
   postMessage: (command, payload) =>
     postMessage(command, { ...payload, session: shell.active }),
 });
@@ -395,7 +395,7 @@ function taskConversationTemplate(): TemplateResult {
   const projects = railProjects();
   const activeProject = activeRailProject(projects);
   // The sidebar is the only home for the rail's per-stream pending-approval
-  // badge (StreamTabs.ts). Collapsing it removes that cue entirely, so a
+  // badge (RunTabs.ts). Collapsing it removes that cue entirely, so a
   // call held at the approval gate — often on a workflow's child stream, not
   // the one on screen — can stall with zero visible affordance (#11511).
   // Surface the same signal on the toggle that reopens the rail.
@@ -763,7 +763,7 @@ let sidebarRevealedForApprovalIds = new Set<string>();
 function revealSidebarForOffScreenApproval(): void {
   const active = activeRailProject(railProjects());
   const offScreen = (active?.view.approvals ?? [])
-    .filter((approval) => approval.streamId !== active?.surface.selected)
+    .filter((approval) => approval.runId !== active?.surface.selected)
     .map((approval) => approval.requestId);
   if (offScreen.length === 0) {
     sidebarRevealedForApprovalIds = new Set();

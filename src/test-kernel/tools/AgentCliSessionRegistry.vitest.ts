@@ -4,12 +4,12 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RunId } from '@shared/schemas';
 import {
-  testExecutionHandle,
-  testExecutionRegistry,
-} from '@test/support/executionHandleFixtures';
+  testRunHandle,
+  testRunRegistry,
+} from '@test/support/runHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
@@ -17,12 +17,9 @@ describe('AgentCliSessionRegistry', () => {
     'atomically claims a session id and wakes waiters when it becomes active',
     () =>
       Effect.gen(function* () {
-        const executions = testExecutionRegistry();
-        const registry = new AgentCliSessionRegistry(executions);
-        const entry = {
-          childStreamId: 'child-a' as StreamTabId,
-          executionId: 'execution-a' as ExecutionId,
-        };
+        const runs = testRunRegistry();
+        const registry = new AgentCliSessionRegistry(runs);
+        const entry = { runId: 'run-a' as RunId };
 
         try {
           const releaseInitialClaim = registry.claim('session-a');
@@ -53,7 +50,7 @@ describe('AgentCliSessionRegistry', () => {
           releaseNextClaim?.();
         } finally {
           registry.release('session-a');
-          executions.dispose();
+          runs.dispose();
         }
       }),
   );
@@ -62,8 +59,8 @@ describe('AgentCliSessionRegistry', () => {
     'releases pending waiters and permits a new claim after cleanup',
     () =>
       Effect.gen(function* () {
-        const executions = testExecutionRegistry();
-        const registry = new AgentCliSessionRegistry(executions);
+        const runs = testRunRegistry();
+        const registry = new AgentCliSessionRegistry(runs);
 
         try {
           const releaseClaim = registry.claim('session-a');
@@ -81,105 +78,82 @@ describe('AgentCliSessionRegistry', () => {
           releaseNextClaim?.();
           expect(yield* registry.waitForActive('session-a')).toBeUndefined();
         } finally {
-          executions.dispose();
+          runs.dispose();
         }
       }),
   );
 
-  it('releases every active alias owned by one execution', () => {
-    const executions = testExecutionRegistry();
-    const registry = new AgentCliSessionRegistry(executions);
-    const executionA = 'execution-a' as ExecutionId;
-    const executionB = 'execution-b' as ExecutionId;
-    const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
-      childStreamId,
-      executionId,
-    });
+  it('releases every active alias owned by one run', () => {
+    const runs = testRunRegistry();
+    const registry = new AgentCliSessionRegistry(runs);
+    const runA = 'run-a' as RunId;
+    const runB = 'run-b' as RunId;
+    const entry = (runId: RunId) => ({ runId });
     const releasePending = registry.claim('pending-session');
 
     try {
-      registry.register(
-        'session-a',
-        entry(executionA, 'child-a' as StreamTabId),
-      );
-      registry.register(
-        'session-a-alias',
-        entry(executionA, 'child-a' as StreamTabId),
-      );
-      registry.register(
-        'session-b',
-        entry(executionB, 'child-b' as StreamTabId),
-      );
+      registry.register('session-a', entry(runA));
+      registry.register('session-a-alias', entry(runA));
+      registry.register('session-b', entry(runB));
 
-      registry.releaseByExecutionId(executionA);
+      registry.releaseByRunId(runA);
 
       expect(registry.lookup('session-a')).toBeUndefined();
       expect(registry.lookup('session-a-alias')).toBeUndefined();
-      expect(registry.lookup('session-b')?.executionId).toBe(executionB);
+      expect(registry.lookup('session-b')?.runId).toBe(runB);
       expect(registry.claim('pending-session')).toBeUndefined();
     } finally {
       releasePending?.();
-      registry.releaseByExecutionId(executionB);
-      executions.dispose();
+      registry.releaseByRunId(runB);
+      runs.dispose();
     }
   });
 
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
-    const executionId = 'execution-in-flight' as ExecutionId;
+    const runId = 'run-in-flight' as RunId;
     const interrupt = vi.fn();
     const registry = new AgentCliSessionRegistry({
-      getAgentHandleByStream: () => ({ interrupt }),
-    } as unknown as ExecutionRegistry);
+      getHandle: () => ({ interrupt }),
+    } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 
-    registry.trackInFlight({
-      childStreamId: 'child-in-flight' as StreamTabId,
-      executionId,
-    });
+    registry.trackInFlight({ runId });
 
     expect(registry.lookup('reserved-session')).toBeUndefined();
     registry.interruptAll();
     expect(interrupt).toHaveBeenCalledOnce();
 
-    registry.releaseByExecutionId(executionId);
+    registry.releaseByRunId(runId);
     registry.interruptAll();
     expect(interrupt).toHaveBeenCalledOnce();
     releaseClaim?.();
   });
 
-  it('interrupts each child through the session execution registry', () => {
-    const executions = testExecutionRegistry();
-    const registry = new AgentCliSessionRegistry(executions);
+  it('interrupts each child through the session run registry', () => {
+    const runs = testRunRegistry();
+    const registry = new AgentCliSessionRegistry(runs);
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 
-    const handleA = testExecutionHandle({
-      executionId: 'execution-a',
-      parentStreamId: 'parent-a' as StreamTabId,
-      childStreamId: 'child-a' as StreamTabId,
+    const handleA = testRunHandle({
+      runId: 'run-a' as RunId,
+      parent: 'parent-a' as RunId,
       agent: 'codex',
     });
     handleA.attachInterruptHandler({ interrupt: interruptA });
-    executions.track(handleA);
-    const handleB = testExecutionHandle({
-      executionId: 'execution-b',
-      parentStreamId: 'parent-b' as StreamTabId,
-      childStreamId: 'child-b' as StreamTabId,
+    runs.track(handleA);
+    const handleB = testRunHandle({
+      runId: 'run-b' as RunId,
+      parent: 'parent-b' as RunId,
       agent: 'claude',
     });
     handleB.attachInterruptHandler({ interrupt: interruptB });
-    executions.track(handleB);
+    runs.track(handleB);
 
     try {
       registry.claim('pending-session');
-      registry.register('session-a', {
-        childStreamId: 'child-a' as StreamTabId,
-        executionId: 'execution-a' as ExecutionId,
-      });
-      registry.register('session-b', {
-        childStreamId: 'child-b' as StreamTabId,
-        executionId: 'execution-b' as ExecutionId,
-      });
+      registry.register('session-a', { runId: 'run-a' as RunId });
+      registry.register('session-b', { runId: 'run-b' as RunId });
 
       registry.interruptAll();
 
@@ -187,7 +161,7 @@ describe('AgentCliSessionRegistry', () => {
       expect(interruptB).toHaveBeenCalledOnce();
     } finally {
       registry.release('pending-session');
-      executions.dispose();
+      runs.dispose();
     }
   });
 });

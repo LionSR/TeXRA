@@ -73,7 +73,7 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   ModelCompactionThresholdPercentSchema,
 } from '@shared/schemas';
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { isObject } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -271,7 +271,7 @@ export abstract class ModelHandler<
     // sites are genuine `AgentTrace`-typed fallbacks plus log-only callers
     // (singletons, per-instance defaults, inline one-offs) still being
     // narrowed under #10595. Unlike those, this default is exercised through
-    // `createThinkingStream`/`createOutputStream` (`this.logger.openStream(...)`)
+    // `createThinkingStream`/`createOutputStream` (`this.logger.openRun(...)`)
     // before `setLogger` swaps in the real per-run trace in some paths, so it
     // needs the full `TraceEmitter`, not a log-only closure.
     this.logger = new TraceEmitter();
@@ -393,7 +393,7 @@ export abstract class ModelHandler<
    * call site degrades to first-chunk timing instead of a false indicator.
    */
   protected createThinkingStream(options?: { atPhaseSignal?: boolean }) {
-    return this.logger.openStream(MESSAGE_TYPES.THINKING, {
+    return this.logger.openRun(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
       deferStart: !options?.atPhaseSignal,
     });
@@ -406,7 +406,7 @@ export abstract class ModelHandler<
    * log the output separately instead of streaming it.
    */
   protected createOutputStream(options?: { atPhaseSignal?: boolean }) {
-    return this.logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+    return this.logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
       deferStart: !options?.atPhaseSignal,
       phaseOnly: !this.outputStreaming,
@@ -427,7 +427,7 @@ export abstract class ModelHandler<
    * (`finalize` is idempotent) instead of falling back to the raw streamed
    * chunks via the error path (#10372).
    */
-  protected finalizeProgressStreams(
+  protected finalizeProgressRuns(
     thinking: StreamHandle,
     output: StreamHandle,
     response: Resp,
@@ -445,7 +445,7 @@ export abstract class ModelHandler<
    * partial output). `finalize` is idempotent, so this is safe even after a
    * partial finalize already ran.
    */
-  protected finalizeProgressStreamsOnError(
+  protected finalizeProgressRunsOnError(
     thinking: StreamHandle | undefined,
     output: StreamHandle | undefined,
   ): void {

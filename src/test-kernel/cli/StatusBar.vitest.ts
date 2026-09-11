@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildStatusBarDisplay,
-  statusBarStreamTarget,
+  statusBarRunTarget,
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
@@ -12,14 +12,10 @@ import {
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
-import {
-  STREAM_PHASE,
-  type StreamTabId,
-  STREAM_LIFECYCLE_READY,
-} from '@shared/schemas';
-import { streamStatusCopy } from '@shared/streams/streamStatusDisplay';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
-import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
+import { RUN_PHASE, type RunId, RUN_LIFECYCLE_READY } from '@shared/schemas';
+import { runStatusCopy } from '@shared/runs/runStatusDisplay';
+import type { SessionView, RunView } from '@shared/session/sessionView';
+import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 // The bar renders the short access-route label.
 const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('api-key');
@@ -52,9 +48,8 @@ function statusInput(
   const { foreground, childList, shortcuts, turn, ...rest } = overrides;
 
   return {
-    status: STREAM_PHASE.WAITING,
-    statusLabel: streamStatusCopy(rest.status ?? STREAM_PHASE.WAITING)
-      .statusLabel,
+    status: RUN_PHASE.WAITING,
+    statusLabel: runStatusCopy(rest.status ?? RUN_PHASE.WAITING).statusLabel,
     transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
@@ -72,7 +67,7 @@ function statusInput(
     shortcuts: {
       chatInputAvailable: true,
       childNavigationAvailable: false,
-      streamFocusAvailable: false,
+      runFocusAvailable: false,
       modifierLabel: 'Alt',
       ...shortcuts,
     },
@@ -82,7 +77,7 @@ function statusInput(
 // Recurring shortcut bundles for the stream-navigation row.
 const STREAM_NAV_SHORTCUTS = {
   childNavigationAvailable: true,
-  streamFocusAvailable: true,
+  runFocusAvailable: true,
 } as const;
 const TRANSCRIPT_SHORTCUTS = {
   ...STREAM_NAV_SHORTCUTS,
@@ -190,7 +185,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps queued follow-up counts in the durable left status segments', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         queuedFollowUpMessages: ['Keep the proof under one page.'],
       }),
     );
@@ -254,7 +249,7 @@ describe('CLI StatusBar display model', () => {
   it('names the focused nested session and its workflow phase', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        isChildStream: true,
+        isChildRun: true,
         location: { context: 'Survey (1/1)', label: 'Agent runtime' },
         width: 80,
       }),
@@ -386,7 +381,7 @@ describe('CLI StatusBar display model', () => {
         shortcuts: {
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
-          streamFocusAvailable: true,
+          runFocusAvailable: true,
         },
       }),
     );
@@ -553,7 +548,7 @@ describe('CLI StatusBar display model', () => {
   it('does not advertise deleted picker shortcuts', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
         modelAccess: 'api-key',
         ctrlCAction: 'stop',
@@ -570,7 +565,7 @@ describe('CLI StatusBar display model', () => {
   it('does not advertise composer controls when chat input is unavailable', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         ctrlCAction: 'stop root',
         shortcuts: {
           agentSelectionAvailable: true,
@@ -590,7 +585,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps child navigation grouped with stream focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
         subagents: 1,
         modelAccess: 'api-key',
@@ -609,10 +604,10 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('does not advertise in-pane paging for focused child streams', () => {
+  it('does not advertise in-pane paging for focused child runs', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         subagents: 1,
         modelAccess: 'api-key',
         ctrlCAction: 'stop root',
@@ -640,7 +635,7 @@ describe('CLI StatusBar display model', () => {
   it('shows live running signals and approval depth', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
@@ -679,7 +674,7 @@ describe('CLI StatusBar display model', () => {
   it('shows the planned round total when the workflow declares one', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         stage: { kind: 'round', index: 1, total: 3 },
       }),
     );
@@ -693,7 +688,7 @@ describe('CLI StatusBar display model', () => {
   it('carries a workflow-script phase in the same stage slot', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
       }),
     );
@@ -707,7 +702,7 @@ describe('CLI StatusBar display model', () => {
   it('prefixes the running label with the current spin frame', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { runningFrame: '/' },
       }),
     );
@@ -718,7 +713,7 @@ describe('CLI StatusBar display model', () => {
   it('omits the spin prefix outside active phases', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.WAITING,
+        status: RUN_PHASE.WAITING,
         turn: { runningFrame: '/' },
       }),
     );
@@ -732,7 +727,7 @@ describe('CLI StatusBar display model', () => {
     // again. The handler stamps what it used; the bar renders that verbatim.
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         usage: heavyUsage('chatgpt-subscription'),
         contextState: {
           inputTokens: 187_000,
@@ -748,7 +743,7 @@ describe('CLI StatusBar display model', () => {
   it('shows a bare token count until the handler reports a window', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         usage: heavyUsage('chatgpt-subscription'),
       }),
     );
@@ -795,7 +790,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps critical controls visible in narrow subagent sessions', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
@@ -812,7 +807,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps the child list shortcut when the footer is narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
@@ -828,7 +823,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps child navigation discoverable below the combined footer width', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
@@ -844,7 +839,7 @@ describe('CLI StatusBar display model', () => {
   it('uses the Ctrl-C-only fallback when even compact child navigation cannot fit', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         subagents: 3,
         ctrlCAction: 'stop',
         width: 13,
@@ -858,7 +853,7 @@ describe('CLI StatusBar display model', () => {
   it('drops low-priority status details before narrow footers lose separators', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
         subagents: 3,
         ctrlCAction: 'stop',
@@ -883,7 +878,7 @@ describe('CLI StatusBar display model', () => {
   it('drops elapsed and access mode rather than overflowing the row', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
         ctrlCAction: 'stop',
         width: 16,
@@ -899,7 +894,7 @@ describe('CLI StatusBar display model', () => {
   it('drops the queued count segment before durable status on narrow bars', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
         queuedFollowUpMessages: ['Keep the proof under one page.'],
         approvalDepth: 3,
@@ -917,10 +912,10 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('labels the root as active while a child stream has focus', () => {
-    // `statusBarStreamTarget` resolves the 'stop root' action itself (see its
+    // `statusBarRunTarget` resolves the 'stop root' action itself (see its
     // table below); this covers the footer it produces.
     const baseDisplayInput = statusInput({
-      status: STREAM_PHASE.CANCELLED,
+      status: RUN_PHASE.CANCELLED,
       ctrlCAction: 'stop root',
       shortcuts: STREAM_NAV_SHORTCUTS,
     });
@@ -936,7 +931,7 @@ describe('CLI StatusBar display model', () => {
 
     const liveChildDisplay = buildStatusBarDisplay({
       ...baseDisplayInput,
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
     });
     expect(leftTexts(liveChildDisplay)).not.toContain('root active');
 
@@ -949,14 +944,14 @@ describe('CLI StatusBar display model', () => {
 
   it('shows the idle wording for a focused WAITING child and root alike', () => {
     const rootDisplay = buildStatusBarDisplay(
-      statusInput({ status: STREAM_PHASE.WAITING, isChildStream: false }),
+      statusInput({ status: RUN_PHASE.WAITING, isChildRun: false }),
     );
     expect(leftTexts(rootDisplay)).toContain('Idle');
 
     const childDisplay = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.WAITING,
-        isChildStream: true,
+        status: RUN_PHASE.WAITING,
+        isChildRun: true,
         ctrlCAction: 'stop root',
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
@@ -965,203 +960,203 @@ describe('CLI StatusBar display model', () => {
   });
 
   it.each([
-    [STREAM_PHASE.FAILED, 'Error'],
-    [STREAM_PHASE.CANCELLED, 'Stopped'],
+    [RUN_PHASE.FAILED, 'Error'],
+    [RUN_PHASE.CANCELLED, 'Stopped'],
   ] as const)(
     'uses the canonical %s label for a focused child',
     (status, label) => {
       const display = buildStatusBarDisplay(
-        statusInput({ status, isChildStream: true }),
+        statusInput({ status, isChildRun: true }),
       );
 
       expect(leftTexts(display)).toContain(label);
     },
   );
 
-  // `statusBarStreamTarget` resolves three coupled outputs from one input: the
+  // `statusBarRunTarget` resolves three coupled outputs from one input: the
   // Ctrl-C action, which slice the footer renders, and whether that displayed
   // slice belongs to a child stream. Every case asserts all three, and asserts
   // `displaySlice` by identity so the live-ancestor fallback stays
   // distinguishable from a structurally equal slice.
-  describe('statusBarStreamTarget', () => {
+  describe('statusBarRunTarget', () => {
     // Lifecycle phase is the fold's: a fixture states each stream's status
     // and the target reads the view it is given.
-    type Status = StreamView['status'];
-    const rootView = (status: Status): StreamView =>
-      makeStreamView({ id: 'root', status });
-    const childView = (status: Status): StreamView =>
-      makeStreamView({
-        id: 'child',
+    type Status = RunView['status'];
+    const rootView = (status: Status): RunView =>
+      makeRunView({ id: 'root' as RunId, status });
+    const childView = (status: Status): RunView =>
+      makeRunView({
+        id: 'child' as RunId,
         status,
-        parentId: 'root' as StreamTabId,
-        ancestors: [{ id: 'root' as StreamTabId, label: 'root' }],
+        parentId: 'root' as RunId,
+        ancestors: [{ id: 'root' as RunId, label: 'root' }],
       });
-    const grandchildView = (status: Status): StreamView =>
-      makeStreamView({
-        id: 'grandchild',
+    const grandchildView = (status: Status): RunView =>
+      makeRunView({
+        id: 'grandchild' as RunId,
         status,
-        parentId: 'child' as StreamTabId,
+        parentId: 'child' as RunId,
         ancestors: [
-          { id: 'root' as StreamTabId, label: 'root' },
-          { id: 'child' as StreamTabId, label: 'child' },
+          { id: 'root' as RunId, label: 'root' },
+          { id: 'child' as RunId, label: 'child' },
         ],
       });
     const treeOf = (
-      ...streams: readonly StreamView[]
-    ): { view: SessionView; ownedStreamIds: readonly StreamTabId[] } => ({
-      view: viewWith(streams),
-      ownedStreamIds: streams.map((stream) => stream.id),
+      ...runs: readonly RunView[]
+    ): { view: SessionView; ownedRunIds: readonly RunId[] } => ({
+      view: viewWith(runs),
+      ownedRunIds: runs.map((stream) => stream.id),
     });
 
     const liveRootTree = treeOf(
-      rootView(STREAM_PHASE.RUNNING),
-      childView(STREAM_PHASE.CANCELLED),
-      grandchildView(STREAM_PHASE.CANCELLED),
+      rootView(RUN_PHASE.RUNNING),
+      childView(RUN_PHASE.CANCELLED),
+      grandchildView(RUN_PHASE.CANCELLED),
     );
     const liveRootWaitingChild = treeOf(
-      rootView(STREAM_PHASE.RUNNING),
-      childView(STREAM_PHASE.WAITING),
+      rootView(RUN_PHASE.RUNNING),
+      childView(RUN_PHASE.WAITING),
     );
-    const waitingChildOnly = treeOf(childView(STREAM_PHASE.WAITING));
+    const waitingChildOnly = treeOf(childView(RUN_PHASE.WAITING));
     const stoppedTree = treeOf(
-      rootView(STREAM_PHASE.CANCELLED),
-      childView(STREAM_PHASE.CANCELLED),
+      rootView(RUN_PHASE.CANCELLED),
+      childView(RUN_PHASE.CANCELLED),
     );
-    const pendingRoot = treeOf(rootView(STREAM_LIFECYCLE_READY));
-    const waitingRoot = treeOf(rootView(STREAM_PHASE.WAITING));
+    const pendingRoot = treeOf(rootView(RUN_LIFECYCLE_READY));
+    const waitingRoot = treeOf(rootView(RUN_PHASE.WAITING));
     const empty = treeOf();
 
     const cases: ReadonlyArray<{
       readonly name: string;
-      readonly input: Parameters<typeof statusBarStreamTarget>[0];
+      readonly input: Parameters<typeof statusBarRunTarget>[0];
       readonly ctrlCAction: ReturnType<
-        typeof statusBarStreamTarget
+        typeof statusBarRunTarget
       >['ctrlCAction'];
-      readonly displayStreamId: string | undefined;
-      readonly isChildStream: boolean;
+      readonly displayRunId: string | undefined;
+      readonly isChildRun: boolean;
     }> = [
       {
         name: 'focused waiting child with nothing pending or live to stop',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as RunId,
           canStopActiveRun: true,
           ...waitingChildOnly,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'child',
-        isChildStream: true,
+        displayRunId: 'child',
+        isChildRun: true,
       },
       {
         name: 'focused root that is not in the view and has no live ancestor',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           ...waitingChildOnly,
         },
         ctrlCAction: 'exit',
-        displayStreamId: undefined,
-        isChildStream: false,
+        displayRunId: undefined,
+        isChildRun: false,
       },
       {
         name: 'focused live root without stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         name: 'focused live root with stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
         ctrlCAction: 'stop',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         name: 'focused stopped child without stop capability',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as RunId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'child',
-        isChildStream: true,
+        displayRunId: 'child',
+        isChildRun: true,
       },
       {
         name: 'focused stopped child with stop capability',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as RunId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
         ctrlCAction: 'stop root',
-        displayStreamId: 'child',
-        isChildStream: true,
+        displayRunId: 'child',
+        isChildRun: true,
       },
       {
         name: 'focused waiting child while the root is still live',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as RunId,
           canStopActiveRun: false,
           ...liveRootWaitingChild,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'child',
-        isChildStream: true,
+        displayRunId: 'child',
+        isChildRun: true,
       },
       {
         name: 'focused stopped grandchild without stop capability',
         input: {
-          activeStreamId: 'grandchild' as StreamTabId,
+          activeRunId: 'grandchild' as RunId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'grandchild',
-        isChildStream: true,
+        displayRunId: 'grandchild',
+        isChildRun: true,
       },
       {
         name: 'focused stopped grandchild with stop capability',
         input: {
-          activeStreamId: 'grandchild' as StreamTabId,
+          activeRunId: 'grandchild' as RunId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
         ctrlCAction: 'stop root',
-        displayStreamId: 'grandchild',
-        isChildStream: true,
+        displayRunId: 'grandchild',
+        isChildRun: true,
       },
       {
         name: 'no focused stream and no pending run to stop',
         input: {
-          activeStreamId: undefined,
+          activeRunId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: false,
           ...empty,
         },
         ctrlCAction: 'exit',
-        displayStreamId: undefined,
-        isChildStream: false,
+        displayRunId: undefined,
+        isChildRun: false,
       },
       {
         name: 'no focused stream but a pending run that has no stream yet',
         input: {
-          activeStreamId: undefined,
+          activeRunId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...empty,
         },
         ctrlCAction: 'stop',
-        displayStreamId: undefined,
-        isChildStream: false,
+        displayRunId: undefined,
+        isChildRun: false,
       },
       {
         // No phase means no live producer for that stream, and no pending run
@@ -1169,13 +1164,13 @@ describe('CLI StatusBar display model', () => {
         // offer to stop a run that is not there.
         name: 'focused root whose stream has no phase and no pending run',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           ...pendingRoot,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         // The pending-run capability covers the whole launch window,
@@ -1183,68 +1178,68 @@ describe('CLI StatusBar display model', () => {
         // does not; never an absent phase read as live.
         name: 'focused phaseless root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...pendingRoot,
         },
         ctrlCAction: 'stop',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         name: 'focused waiting root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...waitingRoot,
         },
         ctrlCAction: 'stop',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         name: 'focused waiting root without stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: false,
           ...waitingRoot,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         // A stale host callback must not leave the footer advertising stop
         // after the visible stream tree has already become terminal.
         name: 'stale stop capability over a fully terminal root',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as RunId,
           canStopActiveRun: true,
           ...stoppedTree,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'root',
-        isChildStream: false,
+        displayRunId: 'root',
+        isChildRun: false,
       },
       {
         name: 'stale stop capability over a fully terminal child',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as RunId,
           canStopActiveRun: true,
           ...stoppedTree,
         },
         ctrlCAction: 'exit',
-        displayStreamId: 'child',
-        isChildStream: true,
+        displayRunId: 'child',
+        isChildRun: true,
       },
     ];
     it.each(cases)('$name', ({ input, ...expected }) => {
-      const target = statusBarStreamTarget(input);
+      const target = statusBarRunTarget(input);
       expect(target.ctrlCAction).toBe(expected.ctrlCAction);
-      expect(target.displayStreamId).toBe(expected.displayStreamId);
-      expect(target.isChildStream).toBe(expected.isChildStream);
+      expect(target.displayRunId).toBe(expected.displayRunId);
+      expect(target.isChildRun).toBe(expected.isChildRun);
     });
   });
 
@@ -1257,7 +1252,7 @@ describe('CLI StatusBar display model', () => {
   it('hides inactive global bindings while a foreground panel owns input', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         subagents: 2,
         approvalDepth: 1,
         ctrlCAction: 'stop',
@@ -1275,7 +1270,7 @@ describe('CLI StatusBar display model', () => {
   it('labels foreground user questions as questions instead of approvals', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         approvalDepth: 1,
         approvalKind: 'question',
         foreground: { escapeAction: 'skip', inputActive: true },
@@ -1290,7 +1285,7 @@ describe('CLI StatusBar display model', () => {
   it('shows cancel for non-question approval foregrounds', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         approvalDepth: 1,
         foreground: { escapeAction: 'cancel', inputActive: true },
       }),
@@ -1302,7 +1297,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         subagents: 3,
         ctrlCAction: 'stop',
         width: 40,
@@ -1317,7 +1312,7 @@ describe('CLI StatusBar display model', () => {
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         subagents: 3,
         ctrlCAction: 'stop',
         width: 15,
@@ -1331,7 +1326,7 @@ describe('CLI StatusBar display model', () => {
 
   it('shows a live elapsed segment only while running', () => {
     const runningInput = statusInput({
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       turn: { elapsedMs: 110_000 },
     });
     const running = buildStatusBarDisplay(runningInput);
@@ -1410,7 +1405,7 @@ describe('CLI StatusBar display model', () => {
   it('preserves distinct agent-task, bash, and edit bypass badges', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         bypass: { bash: true, superYolo: true, toolEdit: true },
       }),
     );
@@ -1440,7 +1435,7 @@ describe('CLI StatusBar display model', () => {
   it('shows the resume command while exit confirmation is armed', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
       }),
     );
@@ -1459,7 +1454,7 @@ describe('CLI StatusBar display model', () => {
   it('uses the provided command name in the armed-exit resume command', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
         commandName: 'texra-local',
       }),
@@ -1473,7 +1468,7 @@ describe('CLI StatusBar display model', () => {
   it('warns that queued follow-ups are discarded while exit is armed', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
@@ -1513,7 +1508,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps compact run liveness visible beside transient notices', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { runningFrame: '/', elapsedMs: 45_000 },
         transientNotice: UNKNOWN_COMMAND_NOTICE,
         width: 20,
@@ -1526,7 +1521,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps thinking status visible during transient notices', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         turn: { runningFrame: '/', elapsedMs: 45_000, thinkingActive: true },
         transientNotice: UNKNOWN_COMMAND_NOTICE,
       }),
@@ -1564,7 +1559,7 @@ describe('CLI StatusBar display model', () => {
   ])('$name', ({ width, bypass, expected }) => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         bypass,
         turn: { runningFrame: '/', elapsedMs: 45_000 },
         transientNotice: {
@@ -1582,7 +1577,7 @@ describe('CLI StatusBar display model', () => {
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
     const input = statusInput({
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       contextState: {
         inputTokens: 80_000,
         contextWindow: 1_000_000,
@@ -1605,7 +1600,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps the exit confirmation visible in very narrow footers', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
         width: 29,
       }),

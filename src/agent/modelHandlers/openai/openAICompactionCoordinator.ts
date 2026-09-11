@@ -10,7 +10,7 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { clamp } from '@utils/core';
 
 // Local file imports
@@ -383,7 +383,7 @@ export class OpenAICompactionCoordinator {
    * already shared by the Chat Completions, OpenRouter-native, and Google
    * Interactions handlers.
    *
-   * The summarization call always streams: this path only ever runs under a
+   * The summarization call always runs: this path only ever runs under a
    * profile that also forces `streaming: 'forced'` (see
    * `getStreamingConfig`), and a non-streaming request would receive an SSE
    * body it can't parse.

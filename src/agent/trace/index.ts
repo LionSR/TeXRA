@@ -2,7 +2,7 @@
  * AgentTrace — agent-general SDK surface for agent runs.
  *
  * One discriminated-event channel per run. Subscribers attach with
- * `subscribe()`. Plain `debug/info/warn/error`, stages, streams, and the
+ * `subscribe()`. Plain `debug/info/warn/error`, stages, runs, and the
  * domain helpers are sugar over `emit()`.
  *
  * TeXRA-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain

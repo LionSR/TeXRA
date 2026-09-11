@@ -113,7 +113,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
   GET_GOAL_LIST: 'getGoalList',
-  REVEAL_GOAL_STREAM: 'revealGoalStream',
+  REVEAL_GOAL_RUN: 'revealGoalRun',
 } as const;
 
 // Settings view specific commands (combines Memory and Profile views)
@@ -131,7 +131,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
-  // Stable outbound name for the broader execution-permissions-and-safety
+  // Stable outbound name for the broader run-permissions-and-safety
   // snapshot (bash approval, coding-agent controls, and tool path protection).
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
   UPDATE_SKILLS_SETTINGS: 'updateSkillsSettings',

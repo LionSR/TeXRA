@@ -37,7 +37,7 @@ const processTerminalInputAllowedFiles = new Set([
 const processOutputAllowedFiles = new Set([
   'packages/cli/src/bin/texra.ts',
   'packages/cli/src/runtime/logSinks.ts',
-  // Ink mounts onto real `process.stdout`/`process.stderr` streams; the rest
+  // Ink mounts onto real `process.stdout`/`process.stderr` runs; the rest
   // of the TUI must keep going through logSinks.
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',

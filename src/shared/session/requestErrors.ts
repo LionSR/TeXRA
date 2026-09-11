@@ -4,22 +4,22 @@
  * requests adds its `Invalid` arm and the wire shape with it (8.4). A request
  * naming a stream the runtime no longer has is `Unavailable`, never a
  * defect: with two surfaces on one session, one can act from a view that has
- * not yet folded the other's `stream.removed`, and a defect would bypass the
+ * not yet folded the other's `run.removed`, and a defect would bypass the
  * response path and leave the sender's latch pending forever.
  */
 import { Data } from 'effect';
 
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 /** Another live owner holds the run this request would act on. */
 export class NotOwner extends Data.TaggedError('NotOwner')<{
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
 }> {}
 
 /** The stream, request, or run the request names is gone or not in a state
  *  that can take it. */
 export class Unavailable extends Data.TaggedError('Unavailable')<{
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly reason: string;
 }> {}
 

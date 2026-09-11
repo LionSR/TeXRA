@@ -1,15 +1,15 @@
 /**
- * The generated (non-KV) files under an execution's storage directory.
+ * The generated (non-KV) files under a run's storage directory.
  *
  * One walk, two renderings: the agent-facing `/executions/{id}/files` listing
  * in `ExecutionsTool` and the CLI's history detail view both need "what did
  * this run produce", and previously each walked the directory itself. The two
  * walks agreed on depth and on the internal-metadata predicate
- * (`executionKvFiles.isKVFile`, deliberately shared) but disagreed on order,
+ * (`runKvFiles.isKVFile`, deliberately shared) but disagreed on order,
  * on stat/readDir failure policy, and on whether a KV-*named directory* was
  * descended into — so the same run listed differently depending on who asked.
  *
- * This module lives beside `executionKvFiles` rather than under
+ * This module lives beside `runKvFiles` rather than under
  * `@agent/storage` on purpose: the predicate reaches into
  * `@agent/workflowScript` and `@tools/delegation`, and `src/tools` consumes
  * `agent/core`, not the reverse.
@@ -24,7 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { byStringProp } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since the input is a storage-relative path produced by the
@@ -34,7 +34,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/runStorageFs';
 import { StorageFS } from '@utils/files/storageFS';
 
-import { isKVFile } from './executionKvFiles';
+import { isKVFile } from './runKvFiles';
 
 const log = createLog('runGeneratedFiles');
 
@@ -59,11 +59,11 @@ export interface RunGeneratedFile {
  */
 export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   function* (
-    executionId: ExecutionId,
+    runId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<RunGeneratedFile[], unknown> {
     const runDir = yield* hostPort(() =>
-      runInSession(session, () => findExistingRunStoragePath(executionId)),
+      runInSession(session, () => findExistingRunStoragePath(runId)),
     );
     if (!runDir) return [];
     const files = yield* walkRunStorage(

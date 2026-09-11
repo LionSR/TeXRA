@@ -3,9 +3,8 @@ import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
-  ExecutionId,
+  RunId,
   ExtendedTokenUsageStats,
-  StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -65,16 +64,14 @@ interface UsageMonitorModelInfo {
  * never a whole run context:
  *
  * - logger: For error logging and the single `usage` trace event
- * - executionId: Keys the per-stream usage map (immutable)
- * - runStageId: The run stage this execution opened, used only to stamp the
+ * - runId: The run whose usage this is; keys its usage map (immutable)
+ * - runStageId: The run stage this run opened, used only to stamp the
  *   trace event when usage is logged outside an ambient stage
- * - streamId: For backend logging
  */
 interface UsageMonitorContext {
   logger: AgentTrace;
-  executionId: ExecutionId;
+  runId: RunId;
   runStageId: string | undefined;
-  streamId: StreamTabId;
 }
 
 /** Label for the run flavor named in this monitor's diagnostics. */
@@ -115,7 +112,7 @@ export class UsageMonitor {
   }
 
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
-    const { logger, executionId, runStageId, streamId } = this.context;
+    const { logger, runId, runStageId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
@@ -179,11 +176,7 @@ export class UsageMonitor {
 
       // One typed trace event feeds both transcript and progress projections.
       logger.usage(
-        {
-          streamId,
-          storageKey: executionId,
-          usage: payload,
-        },
+        { runId, usage: payload },
         {
           recordTranscript: agentCategory === AgentCategory.Workflow,
           // The ambient stage's AsyncLocalStorage scope stamps its structural
@@ -264,7 +257,7 @@ export class UsageMonitor {
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usage.usageRoute,
-        streamId: this.context.streamId,
+        streamId: this.context.runId,
       });
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {

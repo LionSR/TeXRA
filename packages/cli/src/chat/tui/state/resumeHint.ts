@@ -5,27 +5,23 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
   sumUsageStats,
-  type StreamTabId,
+  type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { usageCostLabel } from '@shared/copy/modelAccess';
-import {
-  descendantStreams,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
-import { cumulativeUsageOf, streamViewOf } from './sessionView';
+import { cumulativeUsageOf, runViewOf } from './sessionView';
 
 export interface ResumeTarget {
-  readonly executionId: string;
+  readonly runId: string;
   readonly label: string;
   readonly isRoot: boolean;
 }
 
 interface ResumeTargetsInput {
   readonly view: SessionView;
-  readonly rootStreamId: StreamTabId | undefined;
-  readonly rootExecutionId: string | undefined;
+  readonly rootRunId: RunId | undefined;
 }
 
 export interface ResumeCommandOptions {
@@ -42,7 +38,7 @@ const DEFAULT_RESUME_COMMAND_NAME = 'texra';
 
 export function formatResumeCommand(
   commandName: string | undefined,
-  executionId: string,
+  runId: string,
   options: ResumeCommandOptions = {},
 ): string {
   const cwd = options.cwd;
@@ -62,19 +58,19 @@ export function formatResumeCommand(
   const sourceFlags = (options.skillSourcePaths ?? [])
     .map((source) => ` --source ${quote([source])}`)
     .join('');
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
+  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
 /** The session's metered usage: the root run and every descendant. */
 export function collectResumeUsage(
   view: SessionView,
-  rootStreamId: StreamTabId | undefined,
+  rootRunId: RunId | undefined,
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
-  for (const streamId of descendantStreams(view, rootStreamId, {
+  for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: true,
   })) {
-    const usage = cumulativeUsageOf(streamViewOf(view, streamId));
+    const usage = cumulativeUsageOf(runViewOf(view, runId));
     if (usage) usages.push(usage);
   }
   const total = sumUsageStats(usages);
@@ -104,27 +100,18 @@ function formatResumeUsage(
 
 export function collectResumeTargets({
   view,
-  rootStreamId,
-  rootExecutionId,
+  rootRunId,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
-  const seen = new Set<string>();
-  if (rootExecutionId) {
-    targets.push({ executionId: rootExecutionId, label: 'main', isRoot: true });
-    seen.add(rootExecutionId);
+  if (rootRunId) {
+    targets.push({ runId: rootRunId, label: 'main', isRoot: true });
   }
-  for (const streamId of descendantStreams(view, rootStreamId, {
+  for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: false,
   })) {
-    const stream = streamViewOf(view, streamId);
-    if (!stream || seen.has(stream.executionId)) continue;
-    if (!stream.resumeEligible) continue;
-    seen.add(stream.executionId);
-    targets.push({
-      executionId: stream.executionId,
-      label: stream.label,
-      isRoot: false,
-    });
+    const run = runViewOf(view, runId);
+    if (!run?.resumeEligible) continue;
+    targets.push({ runId: run.id, label: run.label, isRoot: false });
   }
   return targets;
 }
@@ -143,7 +130,7 @@ export function formatResumeHint(
     lines.push(
       `  ${formatResumeCommand(
         commandName,
-        target.executionId,
+        target.runId,
         commandOptions,
       )}  (${target.label})`,
     );

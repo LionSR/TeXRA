@@ -2,7 +2,7 @@
  * Session description generation.
  *
  * When a run starts, generates a short AI summary describing what it aims to
- * accomplish. The description is persisted on the execution metadata and
+ * accomplish. The description is persisted on the run metadata and
  * pushed to the progress view so that the stream tab, history view, and
  * future agents can quickly understand each session.
  */
@@ -15,11 +15,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import {
-  aggregateId as qualifyAggregateId,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -89,7 +85,7 @@ export function getDisplayedInstruction(
 /**
  * Generate and persist a session description from the user's instruction.
  *
- * Started concurrently at the beginning of a run and joined before execution
+ * Started concurrently at the beginning of a run and joined before run
  * ownership is released. Never throws.
  *
  * Every category qualifies. Workflow runs were excluded while "session" meant
@@ -97,12 +93,11 @@ export function getDisplayedInstruction(
  * the rows a workflow script's `agent()` calls create, and the ones a reader
  * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
- * On success, persists the description to execution metadata and emits
- * an `updateStreamDescription` event so the progress view can display it.
+ * On success, persists the description to run metadata and emits
+ * an `updateRunDescription` event so the progress view can display it.
  */
 export async function generateSessionDescription(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  runId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
@@ -137,18 +132,18 @@ export async function generateSessionDescription(
 
     session.publish([
       {
-        type: 'execution.description',
-        aggregateId: qualifyAggregateId('execution', executionId),
+        type: 'run.description',
+        aggregateId: qualifyAggregateId('run', runId),
         description,
       },
       {
-        type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        type: 'updateRunDescription',
+        aggregateId: qualifyAggregateId('run', runId),
         description,
       },
     ]);
     await session.settlePublications();
-    log.info(`Generated session description for ${executionId}`);
+    log.info(`Generated session description for ${runId}`);
   } catch (err) {
     warnWithoutRejecting(
       `Failed to generate session description: ${getSdkErrorMessage(err)}`,

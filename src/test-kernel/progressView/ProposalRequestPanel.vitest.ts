@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -19,7 +20,7 @@ function createPermission(): ProposalRequestPanel['permission'] {
     kind: 'proposal',
     data: {
       requestId: 'proposal-1',
-      streamId: 'stream-a',
+      runId: 'run-a' as RunId,
       agentCategory: AgentCategory.Workflow,
       agent: 'writer',
       agentSource: null,
@@ -90,14 +91,14 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       kind: 'policy.set',
       change: {
         field: 'bypass',
-        streamId: 'stream-a',
+        runId: 'run-a',
         bypass: 'superYolo',
         enabled: true,
       },
     };
     const approve = {
       kind: 'decision.proposal',
-      streamId: 'stream-a',
+      runId: 'run-a',
       approvalId: 'proposal-1',
       decision: { action: 'approve', model: null, agent: null },
     };

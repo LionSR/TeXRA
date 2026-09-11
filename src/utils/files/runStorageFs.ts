@@ -12,8 +12,8 @@ import {
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import {
-  ExecutionIdSchema,
-  type ExecutionId,
+  RunIdSchema,
+  type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -27,16 +27,16 @@ import { StorageFS } from './storageFS';
 export const CHANNEL = 'taskRunStorage';
 const log = createLog(CHANNEL);
 
-export function getRunDir(id: ExecutionId): string {
+export function getRunDir(id: RunId): string {
   return StorageFS.fullPath(resolveRunStoragePath(id));
 }
 
 export function getOriginalSnapshotPath(
-  executionId: ExecutionId,
+  runId: RunId,
   workspaceRelativePath: string,
 ): string {
   return StorageFS.fullPath(
-    resolveRunOriginalSnapshotPath(executionId, workspaceRelativePath),
+    resolveRunOriginalSnapshotPath(runId, workspaceRelativePath),
   );
 }
 
@@ -47,7 +47,7 @@ export async function findExistingRunStoragePath(
   return (await StorageFS.exists(storagePath)) ? storagePath : undefined;
 }
 
-export async function findRunDir(id: ExecutionId): Promise<string | undefined> {
+export async function findRunDir(id: RunId): Promise<string | undefined> {
   const rel = await findExistingRunStoragePath(id);
   return rel ? StorageFS.fullPath(rel) : undefined;
 }
@@ -71,11 +71,11 @@ async function storageEntryType(target: string): Promise<number | undefined> {
 }
 
 /**
- * Inspect one execution-relative run-storage entry without following a
+ * Inspect one run-relative run-storage entry without following a
  * workspace-mirror symlink.
  */
 export async function inspectRunStorageEntry(
-  executionId: ExecutionId,
+  runId: RunId,
   relativePath: string,
 ): Promise<RunStorageEntryInspection> {
   const posixPath = relativePath.replaceAll('\\', '/');
@@ -94,12 +94,12 @@ export async function inspectRunStorageEntry(
   }
   const normalizedPath = path.posix.normalize(posixPath);
 
-  const root = resolveRunStoragePath(executionId);
-  const entry = resolveRunStoragePath(executionId, normalizedPath);
+  const root = resolveRunStoragePath(runId);
+  const entry = resolveRunStoragePath(runId, normalizedPath);
   const ancestors = [root];
   for (const [index] of pathSegments.slice(0, -1).entries()) {
     ancestors.push(
-      resolveRunStoragePath(executionId, ...pathSegments.slice(0, index + 1)),
+      resolveRunStoragePath(runId, ...pathSegments.slice(0, index + 1)),
     );
   }
   for (const ancestor of ancestors) {
@@ -126,24 +126,20 @@ export async function inspectRunStorageEntry(
   if (isFile(type)) {
     return {
       kind: 'file',
-      location: createRunStorageLocation(
-        absolutePath,
-        normalizedPath,
-        executionId,
-      ),
+      location: createRunStorageLocation(absolutePath, normalizedPath, runId),
     };
   }
   if (isDirectory(type)) return { kind: 'directory', absolutePath };
   return { kind: 'unsupported', absolutePath };
 }
 
-export async function ensureRunDir(id: ExecutionId): Promise<void> {
+export async function ensureRunDir(id: RunId): Promise<void> {
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   await StorageFS.ensureDir(resolveRunStoragePath(id));
 }
 
 export function getRunStorageAbsolutePath(
-  id: ExecutionId,
+  id: RunId,
   workspaceRelative: string,
 ): string {
   return StorageFS.fullPath(resolveRunStoragePath(id, workspaceRelative));
@@ -151,18 +147,18 @@ export function getRunStorageAbsolutePath(
 
 export function runStorageLocationFromAbsolutePath(
   absolutePath: string,
-  executionId: ExecutionId,
+  runId: RunId,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
   const relativePath = resolveRunStorageRelativePath(
     absolutePath,
-    getRunDir(executionId),
+    getRunDir(runId),
   );
   if (!relativePath) return undefined;
-  return createRunStorageLocation(absolutePath, relativePath, executionId);
+  return createRunStorageLocation(absolutePath, relativePath, runId);
 }
 
-/** Recover execution identity from an absolute run-storage path. */
+/** Recover run identity from an absolute run-storage path. */
 export function runStorageLocationFromAnyAbsolutePath(
   absolutePath: string,
 ): RunStorageFileLocation | undefined {
@@ -172,14 +168,14 @@ export function runStorageLocationFromAnyAbsolutePath(
   const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
   if (!runRelativePath) return undefined;
 
-  const [rawExecutionId, ...entrySegments] = getPathSegments(runRelativePath);
-  const executionId = ExecutionIdSchema.safeParse(rawExecutionId);
-  if (!executionId.success || entrySegments.length === 0) return undefined;
+  const [rawRunId, ...entrySegments] = getPathSegments(runRelativePath);
+  const runId = RunIdSchema.safeParse(rawRunId);
+  if (!runId.success || entrySegments.length === 0) return undefined;
 
   return createRunStorageLocation(
     path.resolve(root, runRelativePath),
     entrySegments.join('/'),
-    executionId.data,
+    runId.data,
   );
 }
 
@@ -243,7 +239,7 @@ export async function createSymlink(
 /**
  * Workspace-relative directories that should never be moved into run storage.
  *
- * History folders contain prior execution data that is managed separately,
+ * History folders contain prior run data that is managed separately,
  * so keep them in place even when task-run isolation is enabled.
  */
 const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);

@@ -38,7 +38,7 @@ import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
-  STREAM_PHASE,
+  RUN_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
@@ -178,7 +178,7 @@ export class ModelInvocationNode<
    * The run's abort signal. When it fires, the retry loop skips the remaining
    * retries and goes straight to `execFallback()`, so a cancelled run makes no
    * further provider calls. `_exec` reassigns it from the run scope on every
-   * execution, so it needs no reset on clone.
+   * run, so it needs no reset on clone.
    */
   signal?: AbortSignal;
 
@@ -277,9 +277,8 @@ export class ModelInvocationNode<
         event,
         operationId: lifecycle.operationId,
         operation: this._config.operationName,
-        executionId: runScope.executionId,
-        streamId: runScope.streamId,
-        agentName: runScope.agentName,
+        runId: runScope.runId,
+        agentName: this.services.config.agent,
         model: this.services.config.model,
         credentialRoute: modelCell.route,
         attemptOrdinal: lifecycle.attemptOrdinal,
@@ -508,9 +507,9 @@ export class ModelInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const {
       logger,
-      runScope: { session, streamId },
+      runScope: { session, runId },
     } = this.services;
-    const streamStatus = session.status;
+    const runStatus = session.status;
     const operationName = this._config.operationName;
     const formatted = normalizeProviderError(error);
 
@@ -527,7 +526,7 @@ export class ModelInvocationNode<
 
     logErrorData(logger, `${operationName} failed`, formatted);
 
-    streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait');
+    runStatus.transition(runId, RUN_PHASE.WAITING, 'wait');
     logger.debug('Waiting for manual retry', {
       data: formatted.message ?? 'unknown error',
     });
@@ -554,7 +553,7 @@ export class ModelInvocationNode<
     const result = await session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
-        streamId,
+        runId,
         operation: operationName,
         model: failedModel.modelId,
         errorMessage: formatted.message,
@@ -585,7 +584,7 @@ export class ModelInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+      runStatus.transition(runId, RUN_PHASE.RUNNING, 'resume');
       return {
         shouldRetry: true,
         userCancelled: false,
@@ -606,12 +605,12 @@ export class ModelInvocationNode<
         logger,
         result.reason ?? 'Retry denied (no human input available)',
       );
-      streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+      runStatus.transition(runId, RUN_PHASE.RUNNING, 'resume');
       return { shouldRetry: false, userCancelled: false };
     }
 
     logProgressStatus(logger, 'Retry cancelled by user');
-    streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
+    runStatus.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
     return { shouldRetry: false, userCancelled: true };
   }
 
@@ -760,7 +759,7 @@ export class ModelInvocationNode<
     if (successRes.updatedMessages != null) {
       replaceMessagesInPlace(shared.messages, successRes.updatedMessages);
 
-      // After compaction, inject active execution context so the agent knows
+      // After compaction, inject active run context so the agent knows
       // about running subagents/background processes it launched pre-compaction.
       if (this._config.getPostCompactionContext) {
         const context = this._config.getPostCompactionContext(this.services);

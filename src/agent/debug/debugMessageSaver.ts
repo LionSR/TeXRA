@@ -1,6 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
@@ -10,7 +10,7 @@ import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 interface DebugContext {
   logger: AgentTrace;
   modelName?: string;
-  executionId?: ExecutionId;
+  runId?: RunId;
   /** Remote agents skip saving to avoid leaking prompts. */
   isRemote?: boolean;
 }
@@ -46,7 +46,7 @@ export async function maybeSaveDebugObject({
   if (!getConfig<boolean>('texra.debug.saveModelIO') || context.isRemote)
     return;
 
-  const { logger, modelName, executionId } = context;
+  const { logger, modelName, runId } = context;
   const { baseName = objectType, continuationCount } = fileOptions;
 
   const cont = continuationCount ? `_cont${continuationCount}` : '';
@@ -56,12 +56,12 @@ export async function maybeSaveDebugObject({
   const debugFileName = `${baseName}${modelPart}${cont}.json`;
 
   try {
-    const filePath = executionId
-      ? resolveRunStoragePath(executionId, debugFileName)
+    const filePath = runId
+      ? resolveRunStoragePath(runId, debugFileName)
       : debugFileName;
-    const fs = executionId ? StorageFS : WorkspaceFS;
+    const fs = runId ? StorageFS : WorkspaceFS;
 
-    if (executionId) await ensureRunDir(executionId);
+    if (runId) await ensureRunDir(runId);
     await fs.write(filePath, JSON.stringify(object, null, 2));
 
     const debugFilePath = fs.fullPath(filePath);

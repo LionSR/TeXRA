@@ -27,7 +27,7 @@ vi.mock('@transcript', async (importActual) => ({
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -35,17 +35,17 @@ import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
-  withExecutionRunContext,
+  withLaunchRunContext,
   type AgentLaunchContext,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
+  RUN_PHASE,
+  RUN_SUBSTATE,
   AgentCategory,
-  type ExecutionId,
+  type RunId,
 } from '@shared/schemas';
 import {
   createTestSession,
@@ -69,7 +69,7 @@ const buildAgentLaunchContext = (
     ),
   );
 
-const EXECUTION_ID = 'a00101' as ExecutionId;
+const EXECUTION_ID = 'a00101' as RunId;
 
 /** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
@@ -79,7 +79,7 @@ async function launchWithMissingAgent(
   await expect(
     buildAgentLaunchContext({
       config: AgentConfigSchema.parse({ agent, model: '' }),
-      executionId: EXECUTION_ID,
+      runId: EXECUTION_ID,
       session,
     }),
   ).rejects.toThrow('Could not find agent');
@@ -100,7 +100,7 @@ async function triggerQueuedMissingAgentFailure(
       agent: '__queued_missing_agent_for_launch_context_test__',
       model: '',
     }),
-    executionId: EXECUTION_ID,
+    runId: EXECUTION_ID,
     session,
   }).catch((error: unknown) => {
     thrown = error;
@@ -246,7 +246,7 @@ describe('AgentLaunchContext', () => {
     try {
       await buildAgentLaunchContext({
         config: AgentConfigSchema.parse({ agent: '', model: '' }),
-        executionId: EXECUTION_ID,
+        runId: EXECUTION_ID,
         session,
       }).catch((error: unknown) => {
         thrown = error;
@@ -312,7 +312,7 @@ describe('AgentLaunchContext', () => {
             agent: 'chat',
             model: '__unregistered_model_for_launch_context_test__',
           }),
-          executionId: EXECUTION_ID,
+          runId: EXECUTION_ID,
           session,
         }),
       ).rejects.toThrow('is not registered');
@@ -334,11 +334,9 @@ describe('AgentLaunchContext', () => {
 
   it('projects model changes into the active run context', async () => {
     const session = {} as SessionHandle;
-    const executionId = 'launch-context-execution';
+    const runId = 'launch-context-run' as RunId;
     const runScope = createRunScope({
-      streamId: 'launch-context-stream',
-      executionId,
-      agentName: 'chat',
+      runId,
       session,
       signal: new AbortController().signal,
     });
@@ -354,12 +352,12 @@ describe('AgentLaunchContext', () => {
         stopAfterCycle: true,
       }),
       config: {
-        agent: runScope.agentName,
+        agent: 'chat',
         model: 'deepseekT',
       },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(ctx, { onApprovalPolicyDenial }, async () => {
+    await withLaunchRunContext(ctx, { onApprovalPolicyDenial }, async () => {
       const context = tryUseRunContext()!;
       expect(context.model).toBe('deepseekT');
       expect(context.kind).toBe('launch');
@@ -367,7 +365,7 @@ describe('AgentLaunchContext', () => {
         throw new Error('expected launch context');
       }
       expect(context.runScope).toBe(runScope);
-      // `withExecutionRunContext` projects `ctx.toolPolicy` into the ambient
+      // `withLaunchRunContext` projects `ctx.toolPolicy` into the ambient
       // RunContext; the only explicit option left is `onApprovalPolicyDenial`.
       expect(context.approvalPromptsUnavailable).toBe(true);
       expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
@@ -385,9 +383,7 @@ describe('AgentLaunchContext', () => {
   it('projects an empty tool policy as absent ambient fields', async () => {
     const session = {} as SessionHandle;
     const runScope = createRunScope({
-      streamId: 'launch-context-defaults',
-      executionId: 'launch-context-defaults-execution',
-      agentName: 'chat',
+      runId: 'launch-context-defaults' as RunId,
       session,
       signal: new AbortController().signal,
     });
@@ -397,10 +393,10 @@ describe('AgentLaunchContext', () => {
       logger: noopTrace,
       modelCell,
       toolPolicy: createToolPolicy(),
-      config: { agent: runScope.agentName, model: 'deepseekT' },
+      config: { agent: 'chat', model: 'deepseekT' },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(ctx, {}, async () => {
+    await withLaunchRunContext(ctx, {}, async () => {
       const context = tryUseRunContext()!;
       if (context.kind !== 'launch') {
         throw new Error('expected launch context');
@@ -442,32 +438,33 @@ describe('AgentLaunchContext', () => {
     });
     try {
       await Effect.runPromise(
-        registerExecution(session, EXECUTION_ID, config, 'chat', {
-          streamId: `chat#${EXECUTION_ID}`,
+        registerRun(session, EXECUTION_ID, config, 'chat', {
           identity: { kind: 'agent', agent: 'chat' },
         }),
       );
       const context = await buildAgentLaunchContext({
         config,
-        executionId: EXECUTION_ID,
+        runId: EXECUTION_ID,
         session,
         modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
       });
       try {
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
-          'execution.launchLabel',
-          'execution.config',
+          'run.launchLabel',
+          'run.record',
           'run.activate',
           'status',
         ]);
         expect(
           (await recording.read()).slice(0, 3).map((event) => event.type),
         ).toEqual(['run.start', 'run.activate', 'status']);
+        // One aggregate, one counter: the status is the fifth durable row of
+        // the creation batch.
         expect((await recording.read())[2]).toMatchObject({
-          seq: 3,
-          phase: STREAM_PHASE.RUNNING,
-          substate: STREAM_SUBSTATE.STARTING,
+          seq: 5,
+          phase: RUN_PHASE.RUNNING,
+          substate: RUN_SUBSTATE.STARTING,
           runStartedAt: expect.any(Number),
         });
       } finally {
@@ -495,7 +492,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
-    publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
+    publishTestRunStart(session, EXECUTION_ID);
     const terminalEvents = recordSessionEvents(session);
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
@@ -536,9 +533,9 @@ describe('AgentLaunchContext', () => {
             agentCategory: AgentCategory.ToolUse,
             delegationAgentScope,
           }),
-          executionId: EXECUTION_ID,
+          runId: EXECUTION_ID,
           session,
-          streamTabIdOverride: 'late-assembly-stream',
+          resumed: true,
           suppressErrorNotification: true,
           modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
         }),
@@ -552,12 +549,10 @@ describe('AgentLaunchContext', () => {
       );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(handler.dispose).toHaveBeenCalledOnce();
-      expect(session.status.get('late-assembly-stream')).toBe(
-        STREAM_PHASE.FAILED,
-      );
+      expect(session.status.get(EXECUTION_ID)).toBe(RUN_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
-        expect.objectContaining({ type: 'status', phase: STREAM_PHASE.FAILED }),
+        expect.objectContaining({ type: 'status', phase: RUN_PHASE.FAILED }),
       );
       expect(rawDispose).toHaveBeenCalledOnce();
       // Terminal compensation is committed before the trace is detached.

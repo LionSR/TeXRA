@@ -10,12 +10,12 @@ useLitComponentTestDom(
 interface LogListTestHooks {
   handleKeyEvent(event: Event): void;
   activateLinkFromEvent(event: Event): boolean;
-  streamCache: {
+  runCache: {
     readonly size: number;
-    has(streamId: string): boolean;
+    has(runId: string): boolean;
     rkeys(): Generator<string, void, unknown>;
   };
-  getOrCreateEntry(streamId: string): unknown;
+  getOrCreateEntry(runId: string): unknown;
 }
 
 function setupEnterKeyOnLink(): {
@@ -78,28 +78,28 @@ describe('log-list stream cache', () => {
     const reusedEntry = hooks.getOrCreateEntry('stream-1');
 
     expect(reusedEntry).toBe(originalEntry);
-    expect([...hooks.streamCache.rkeys()]).toEqual(['stream-2', 'stream-1']);
+    expect([...hooks.runCache.rkeys()]).toEqual(['stream-2', 'stream-1']);
   });
 
   it('evicts the least-recently used stream at the five-entry bound', () => {
     const hooks = createCacheHooks();
 
-    for (const streamId of [
+    for (const runId of [
       'stream-1',
       'stream-2',
       'stream-3',
       'stream-4',
       'stream-5',
     ]) {
-      hooks.getOrCreateEntry(streamId);
+      hooks.getOrCreateEntry(runId);
     }
 
     hooks.getOrCreateEntry('stream-6');
 
-    expect(hooks.streamCache.size).toBe(5);
-    expect(hooks.streamCache.has('stream-1')).toBe(false);
-    expect(hooks.streamCache.has('stream-2')).toBe(true);
-    expect([...hooks.streamCache.rkeys()]).toEqual([
+    expect(hooks.runCache.size).toBe(5);
+    expect(hooks.runCache.has('stream-1')).toBe(false);
+    expect(hooks.runCache.has('stream-2')).toBe(true);
+    expect([...hooks.runCache.rkeys()]).toEqual([
       'stream-2',
       'stream-3',
       'stream-4',

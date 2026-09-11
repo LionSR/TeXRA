@@ -53,8 +53,7 @@ import {
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-  ExecutionId,
-  StreamTabId,
+  RunId,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
@@ -77,7 +76,7 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { type ChildStream } from './delegation/childStream';
+import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
@@ -181,7 +180,7 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 }
 
 // ============================================================================
-// Stream tab helpers
+// Tool log helpers
 // ============================================================================
 
 type ClaudeToolLogRef = ToolUseCardRef & {
@@ -407,9 +406,9 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 
 function startClaudeAgentLoop(params: {
   session: SessionHandle;
-  childStream: ChildStream;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  childRun: ChildRun;
+  parentRunId: RunId;
+  runId: RunId;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -429,8 +428,8 @@ function startClaudeAgentLoop(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
 }): Effect.Effect<void, Error> {
-  const { childStream, parentStreamId, executionId, initialPrompt } = params;
-  const { logger } = childStream;
+  const { childRun, parentRunId, runId, initialPrompt } = params;
+  const { logger } = childRun;
 
   // The SDK needs the prior session id to resume the same conversation across
   // turns; it's threaded forward from each turn's result. Seeded from
@@ -443,9 +442,9 @@ function startClaudeAgentLoop(params: {
 
   return startAgentCliLoop({
     session: params.session,
-    childStream,
-    parentStreamId,
-    executionId,
+    childRun,
+    parentRunId,
+    runId,
     agentName: CLAUDE_AGENT_NAME,
     stageLabel: 'Claude Code session',
     initialPrompt,
@@ -487,7 +486,7 @@ function startClaudeAgentLoop(params: {
       formatChildRunDelivery(
         {
           tag: DELIVERY_TAG.claudeAgentResult,
-          executionId,
+          runId,
           prompt: lastPrompt,
           attributes: [{ name: 'session-id', value: turn.sessionId || null }],
         },
@@ -500,7 +499,7 @@ function startClaudeAgentLoop(params: {
       ),
     formatError: (turn, err, lastPrompt) =>
       formatChildRunError(
-        { tag: DELIVERY_TAG.claudeAgentError, executionId, prompt: lastPrompt },
+        { tag: DELIVERY_TAG.claudeAgentError, runId, prompt: lastPrompt },
         {
           lines: turn ? claudeCostLines(turn) : undefined,
           message: toErrorMessage(
@@ -524,7 +523,7 @@ export class ClaudeAgentTool extends defineTool({
     'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
-    'Always async: returns immediately with an execution ID; each turn is delivered back as a follow-up message (including the session_id). ' +
+    'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
     'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
@@ -587,8 +586,7 @@ export class ClaudeAgentTool extends defineTool({
           permissionMode,
           model,
           effort,
-          context.parentStreamId,
-          context.parentExecutionId,
+          context.parentRunId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
@@ -604,8 +602,7 @@ const launchClaudeAgentSession = Effect.fn(
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
   effort: ClaudeAgentEffort,
-  parentStreamId: StreamTabId,
-  parentExecutionId: ExecutionId | undefined,
+  parentRunId: RunId,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
@@ -634,19 +631,17 @@ const launchClaudeAgentSession = Effect.fn(
 
   return yield* launchAgentCliSession({
     session,
-    parentStreamId,
-    parentExecutionId,
+    parentRunId,
     agentName: CLAUDE_AGENT_NAME,
-    streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
     config: agentConfig,
-    registerFailedMessage: 'Failed to register Claude Code CLI execution.',
-    startLoop: ({ childStream, executionId }) =>
+    registerFailedMessage: 'Failed to register Claude Code CLI run.',
+    startLoop: ({ childRun, runId }) =>
       startClaudeAgentLoop({
         session,
-        childStream,
-        parentStreamId,
-        executionId,
+        childRun,
+        parentRunId,
+        runId,
         initialPrompt: input.prompt,
         model,
         permissionMode,

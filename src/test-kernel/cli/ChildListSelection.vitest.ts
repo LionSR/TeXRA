@@ -5,20 +5,20 @@ import {
   reduceChildListSelection,
   type ChildListSelectionState,
 } from '@cli/chat/tui/state/childListSelection';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
-const main = 'main' as StreamTabId;
-const strategy = 'strategy' as StreamTabId;
-const analysis = 'analysis' as StreamTabId;
+const main = 'main' as RunId;
+const strategy = 'strategy' as RunId;
+const analysis = 'analysis' as RunId;
 
 function reconcileSelection(
   state: ChildListSelectionState,
-  values: readonly StreamTabId[],
-  activeStreamId: StreamTabId | undefined,
+  values: readonly RunId[],
+  activeRunId: RunId | undefined,
 ): ChildListSelectionState {
   return reduceChildListSelection(state, {
     kind: 'reconcile',
-    activeStreamId,
+    activeRunId,
     values,
   });
 }
@@ -59,8 +59,8 @@ describe('CLI child list selection', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategy },
       {
-        kind: 'syncActiveStream',
-        streamId: main,
+        kind: 'syncActiveRun',
+        runId: main,
         values: [main, strategy],
       },
     );
@@ -77,8 +77,8 @@ describe('CLI child list selection', () => {
       selectedValue: main,
     };
     const state = reduceChildListSelection(hidden, {
-      kind: 'syncActiveStream',
-      streamId: main,
+      kind: 'syncActiveRun',
+      runId: main,
       values: [main, strategy],
     });
 
@@ -89,8 +89,8 @@ describe('CLI child list selection', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategy },
       {
-        kind: 'syncActiveStream',
-        streamId: main,
+        kind: 'syncActiveRun',
+        runId: main,
         values: [analysis],
       },
     );
@@ -105,7 +105,7 @@ describe('CLI child list selection', () => {
     let state = reconcileSelection(
       {
         focused: true,
-        selectedValue: 'gone' as StreamTabId,
+        selectedValue: 'gone' as RunId,
       },
       [analysis, main],
       main,
@@ -137,7 +137,7 @@ describe('CLI child list selection', () => {
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: analysis },
-      { kind: 'focusStream', streamId: strategy },
+      { kind: 'focusRun', runId: strategy },
     );
     expect(state).toEqual({
       focused: false,

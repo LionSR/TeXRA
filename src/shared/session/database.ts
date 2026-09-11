@@ -11,7 +11,7 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   CommitOrdinal,
-  ExecutionId,
+  RunId,
   OwnerId,
   SessionEvent,
   SessionEventDraft,
@@ -112,12 +112,13 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
-    /** Private metadata projection of one execution and its declared parent. */
-    readonly readExecutionRecords: (
+    /** The latest listing row of each type on one open run: its private
+     *  records beside its creation, status and tombstone. */
+    readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** Direct child creation edges and their labels from one captured prefix. */
-    readonly readExecutionChildren: (
+    readonly readRunChildren: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** Bounded current CLI input rows, ordered oldest first. */
@@ -166,7 +167,7 @@ export class Database extends Context.Service<
     /** C9: recheck the owning tree, acquire its claims, append the tombstone
      *  and close all dependents in one transaction after liveness proofs.
      *  The recorded start identifies the lifetime admitted by the caller. */
-    readonly removeStream: (
+    readonly removeRun: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
@@ -174,15 +175,13 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: claim a closed root, clean its recorded executions, then cascade
+    /** C9: claim a closed root, clean its recorded runs, then cascade
      *  only if the same tombstone and claim still hold. Cleanup failure keeps
      *  the deletion record. The callback runs outside the SQLite transaction. */
     readonly collectDeletion: (
       id: AggregateId,
       tombstoneCommit: CommitOrdinal,
-      cleanup: (
-        executionIds: readonly ExecutionId[],
-      ) => Effect.Effect<void, Error>,
+      cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
     ) => Effect.Effect<void, Error>;
     /** Clear only this process's claims, in one transaction. */
     readonly releaseClaims: (

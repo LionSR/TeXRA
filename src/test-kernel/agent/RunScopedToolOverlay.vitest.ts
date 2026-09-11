@@ -11,11 +11,7 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import {
-  AgentCategory,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from './modelCellTestUtils';
@@ -78,13 +74,10 @@ describe('run-scoped tool overlay', () => {
   setupPlatform({ workspacePath: process.cwd() });
 
   it('adds two injected tools and submit_output to the model-facing list', async () => {
-    const executionId = '9329abcd' as ExecutionId;
-    const streamId = `chat#${executionId}` as StreamTabId;
+    const runId = '9329abcd' as RunId;
     const session = createTestSession();
     const runScope = createRunScope({
-      executionId,
-      streamId,
-      agentName: 'chat',
+      runId,
       session,
       signal: new AbortController().signal,
     });
@@ -113,7 +106,7 @@ describe('run-scoped tool overlay', () => {
             onModelChanged: () => {},
             interrupt: () => {},
             onRoundFinalized: () => {},
-            isSubagent: true,
+            parentRunId: 'parent0' as RunId,
             tools: [tool('first'), tool('second')],
           },
           new MapToolRegistry({ first: tool('first') }),
@@ -140,13 +133,10 @@ describe('run-scoped tool overlay', () => {
   });
 
   it('filters approval-gated and runtime-unavailable declared tools without a run context', async () => {
-    const executionId = '9329abce' as ExecutionId;
-    const streamId = `chat#${executionId}` as StreamTabId;
+    const runId = '9329abce' as RunId;
     const session = createTestSession();
     const runScope = createRunScope({
-      executionId,
-      streamId,
-      agentName: 'chat',
+      runId,
       session,
       signal: new AbortController().signal,
     });
@@ -187,7 +177,7 @@ describe('run-scoped tool overlay', () => {
           onModelChanged: () => {},
           interrupt: () => {},
           onRoundFinalized: () => {},
-          isSubagent: true,
+          parentRunId: 'parent0' as RunId,
         },
         new MapToolRegistry({
           bash: approvalGatedTool('bash'),

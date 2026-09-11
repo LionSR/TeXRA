@@ -1,4 +1,4 @@
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import type {
@@ -127,7 +127,7 @@ export async function runReflectionFlow(
     userVarChannels,
     runScope,
   } = input;
-  const { streamId, executionId } = runScope;
+  const { runId } = runScope;
   const getRejectOnCompileFailure = () =>
     readPlatformSetting<boolean>(
       WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
@@ -141,7 +141,7 @@ export async function runReflectionFlow(
 
   let shared: ReflectionFlowShared | undefined;
 
-  const fileService = new TaskRunFileService(executionId);
+  const fileService = new TaskRunFileService(runId);
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     modelCell.handler,
   );
@@ -151,17 +151,12 @@ export async function runReflectionFlow(
   ).map((file) => fileService.locateSource(file));
 
   const outputState = createOutputState();
-  const xmlManager = new XmlOutputManager(
-    config,
-    logger,
-    fileService,
-    streamId,
-  );
+  const xmlManager = new XmlOutputManager(config, logger, fileService, runId);
   const diffManager = new LatexDiffManager(
     setting.isRewrite,
     () => getOutputFilesByRound(outputState),
     logger,
-    streamId,
+    runId,
     fileService,
   );
 
@@ -213,9 +208,9 @@ export async function runReflectionFlow(
       );
     });
 
-  const kv = getExecutionStore(executionId);
+  const kv = getRunStore(runId);
 
-  const flowRecord = await readPersistedFlowRecord(kv, executionId);
+  const flowRecord = await readPersistedFlowRecord(kv, runId);
 
   if (flowRecord) {
     // Validate the freshly-read persisted record before it enters the live
@@ -223,7 +218,7 @@ export async function runReflectionFlow(
     // canonical schema.
     const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!validated.success) {
-      throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+      throw new PersistedFlowStateError(runId, 'invalid-shared', {
         cause: validated.error,
       });
     }

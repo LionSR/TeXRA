@@ -8,9 +8,9 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
+import type { RunRequest } from '@agent/core/state/runRequests';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -31,12 +31,11 @@ import {
   AgentCategory,
   ExhaustionReasonSchema,
   isPlainAgentIdentity,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected, Unavailable } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -54,8 +53,8 @@ const log = createLog('HostRunActions');
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /** Launch or resume a run; the host's own launcher reaches `runAgent`. */
-  runExecutionRequest(
-    request: ExecutionRequest,
+  runAgentRequest(
+    request: RunRequest,
     options?: {
       preferHelperModel?: boolean;
       copilotRouteOverride?: 'direct';
@@ -70,25 +69,23 @@ export interface HostRunActionPorts {
 }
 
 interface HostRunActions {
-  resume(streamId: StreamTabId): Effect.Effect<void, Error>;
-  runNew(streamId: StreamTabId): Effect.Effect<void, Error>;
-  runCompileFixer(streamId: StreamTabId): Effect.Effect<void, Error>;
-  readConfig(
-    streamId: StreamTabId,
-  ): Effect.Effect<AgentConfig | undefined, Error>;
+  resume(runId: RunId): Effect.Effect<void, Error>;
+  runNew(runId: RunId): Effect.Effect<void, Error>;
+  runCompileFixer(runId: RunId): Effect.Effect<void, Error>;
+  readConfig(runId: RunId): Effect.Effect<AgentConfig | undefined, Error>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
   ): Effect.Effect<void, unknown>;
   /** The launcher's form of a settled run's saved setup. */
-  restoreState(streamId: StreamTabId): Effect.Effect<AgentConfig, Error>;
+  restoreState(runId: RunId): Effect.Effect<AgentConfig, Error>;
   /** The hydrated stream state used by the workflow controllers. */
   readonly snapshotPort: ProgressFollowUpState & {
-    getKnownWorkspaceOutputPaths(streamId: StreamTabId): Set<string>;
+    getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
   restoreProposal(proposal: unknown): AgentConfig;
-  sendFollowUp(streamId: StreamTabId, text: string): Effect.Effect<void>;
+  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export function createHostRunActions(
@@ -98,51 +95,36 @@ export function createHostRunActions(
   const { snapshots } = session;
   const view = () => SubscriptionRef.getUnsafe(session.view);
 
-  const getRunMetadata = (streamId: StreamTabId): RunMetadata => {
-    const metadata = snapshots.getRunMetadata(streamId);
-    return {
-      ...metadata,
-      executionId:
-        metadata.executionId ?? view().streams.get(streamId)?.executionId,
-    };
-  };
-
   const snapshotPort = {
-    getRunMetadata,
-    getOutputFiles: (streamId: StreamTabId) =>
-      snapshots.getOutputFiles(streamId),
-    getCompileFailures: (streamId: StreamTabId) =>
-      snapshots.getCompileFailures(streamId),
-    getKnownWorkspaceOutputPaths: (streamId: StreamTabId) =>
-      snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
+    getRunMetadata: (runId: RunId) => snapshots.getRunMetadata(runId),
+    getOutputFiles: (runId: RunId) => snapshots.getOutputFiles(runId),
+    getCompileFailures: (runId: RunId) => snapshots.getCompileFailures(runId),
+    getKnownWorkspaceOutputPaths: (runId: RunId) =>
+      snapshots.getKnownFilePaths(runId, { workspaceOnly: true }),
   };
 
   const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
-    streamId: StreamTabId,
+    runId: RunId,
   ) {
-    yield* snapshots.preload([streamId]);
-    const { executionId } = getRunMetadata(streamId);
-    return executionId
-      ? ((yield* getExecutionRecords(session, executionId).readConfig()) ??
-          undefined)
-      : undefined;
+    yield* snapshots.preload([runId]);
+    return (yield* getRunRecords(session, runId).readConfig()) ?? undefined;
   });
 
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
   const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
-    streamId: StreamTabId,
+    runId: RunId,
     action: string,
   ) {
-    if (!view().streams.has(streamId)) {
+    if (!view().runs.has(runId)) {
       return yield* Effect.fail(
         new Unavailable({
-          streamId,
+          runId,
           reason: 'The stream is no longer open.',
         }),
       );
     }
-    yield* snapshots.preload([streamId]);
-    const metadata = getRunMetadata(streamId);
+    yield* snapshots.preload([runId]);
+    const metadata = snapshots.getRunMetadata(runId);
     if (!isPlainAgentIdentity(metadata.identity)) {
       return yield* Effect.fail(
         new Rejected({
@@ -150,9 +132,7 @@ export function createHostRunActions(
         }),
       );
     }
-    const config = metadata.executionId
-      ? yield* getExecutionRecords(session, metadata.executionId).readConfig()
-      : null;
+    const config = yield* getRunRecords(session, runId).readConfig();
     if (!config) {
       return yield* Effect.fail(
         new Rejected({
@@ -163,16 +143,16 @@ export function createHostRunActions(
     return { ...metadata, config };
   });
 
-  const isRetryPending = (streamId: StreamTabId, requestId: string) =>
+  const isRetryPending = (runId: RunId, requestId: string) =>
     view().approvals.some(
       (approval) =>
-        approval.streamId === streamId &&
+        approval.runId === runId &&
         approval.requestId === requestId &&
         approval.payload.kind === 'retry',
     );
 
   const settleRetry = (
-    streamId: StreamTabId,
+    runId: RunId,
     requestId: string,
     decision:
       | { action: 'retry'; credentials: 'configured' | 'personal' }
@@ -184,7 +164,7 @@ export function createHostRunActions(
     session.requests
       .request({
         kind: 'decision.retry',
-        streamId,
+        runId,
         approvalId: requestId,
         decision,
       })
@@ -200,8 +180,8 @@ export function createHostRunActions(
     hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
     promptForApiKey: (provider) => ports.promptForApiKey(provider),
     isRetryPending,
-    triggerRetry: (streamId, requestId) =>
-      settleRetry(streamId, requestId, {
+    triggerRetry: (runId, requestId) =>
+      settleRetry(runId, requestId, {
         action: 'retry',
         credentials: 'personal',
       }),
@@ -226,8 +206,8 @@ export function createHostRunActions(
    *  cancelled in its favor. */
   const copilotFallback = Effect.fn('HostRunActions.copilotFallback')(
     function* (request: Extract<HostRequest, { kind: 'useOwnApiKey' }>) {
-      const { streamId, requestId } = request;
-      if (!isRetryPending(streamId, requestId)) return;
+      const { runId, requestId } = request;
+      if (!isRetryPending(runId, requestId)) return;
       const chooseAnotherModel =
         'Choose another model and start the agent again.';
       const modelsChanged =
@@ -261,7 +241,7 @@ export function createHostRunActions(
         provider: fallback.provider,
         exhaustionReason,
       });
-      if (!prepared || !isRetryPending(streamId, requestId)) return;
+      if (!prepared || !isRetryPending(runId, requestId)) return;
       const currentFallback = getRuntimeModelDirectFallback(
         request.model,
         getUseOpenRouter(),
@@ -276,7 +256,7 @@ export function createHostRunActions(
           provider: fallback.provider,
           exhaustionReason,
         });
-        if (!prepared || !isRetryPending(streamId, requestId)) return;
+        if (!prepared || !isRetryPending(runId, requestId)) return;
         const finalFallback = getRuntimeModelDirectFallback(
           request.model,
           getUseOpenRouter(),
@@ -286,7 +266,7 @@ export function createHostRunActions(
           return;
         }
       }
-      const config = yield* readConfig(streamId);
+      const config = yield* readConfig(runId);
       if (!config) {
         yield* hostPort(() =>
           ports.showInfo(
@@ -298,7 +278,7 @@ export function createHostRunActions(
       const model = fallback.model;
       const started = yield* apiKeyRetry.runCopilotFallbackWithRouting(
         {
-          stream: streamId,
+          stream: runId,
           requestId,
           provider: fallback.provider,
           model,
@@ -307,7 +287,7 @@ export function createHostRunActions(
         },
         (copilotRouteOverride) =>
           Effect.suspend(() => {
-            if (!isRetryPending(streamId, requestId)) {
+            if (!isRetryPending(runId, requestId)) {
               return Effect.succeed(false);
             }
             // Start acknowledges ownership of the replacement run. Settlement
@@ -316,7 +296,7 @@ export function createHostRunActions(
               () =>
                 new Promise<boolean>((resolve, reject) => {
                   void ports
-                    .runExecutionRequest(
+                    .runAgentRequest(
                       { config: { ...config, model } },
                       { copilotRouteOverride, onRun: () => resolve(true) },
                     )
@@ -326,7 +306,7 @@ export function createHostRunActions(
           }),
       );
       if (!started) return;
-      yield* settleRetry(streamId, requestId, { action: 'cancel' });
+      yield* settleRetry(runId, requestId, { action: 'cancel' });
     },
   );
 
@@ -344,10 +324,10 @@ export function createHostRunActions(
       }
       return parsed.data;
     },
-    sendFollowUp(streamId, text) {
+    sendFollowUp(runId, text) {
       return submitProgressFollowUp({
         session,
-        streamId,
+        runId,
         input: { text },
         // Programmatic file feedback has no composer to acknowledge.
         acknowledge: () => {},
@@ -356,51 +336,44 @@ export function createHostRunActions(
     },
     /**
      * Resume the run behind a stream: a workflow relaunches through the
-     * host's launcher with its execution id; a tool-use run carries
+     * host's launcher with its run id; a tool-use run carries
      * canonical session state, so it goes through the resume port that
      * restores it instead of starting a fresh run.
      */
-    resume: Effect.fn('HostRunActions.resume')(function* (streamId) {
-      const { config, executionId } = yield* nativeAgentRun(
-        streamId,
-        'resumed',
-      );
+    resume: Effect.fn('HostRunActions.resume')(function* (runId) {
+      const { config } = yield* nativeAgentRun(runId, 'resumed');
       if (config.agentCategory !== AgentCategory.Workflow) {
         yield* Effect.tryPromise({
-          try: () => platform().agentResume.tryResumeStream(streamId),
+          try: () => platform().agentResume.tryResumeRun(runId),
           catch: ensureError,
         });
         return;
       }
       yield* Effect.tryPromise({
-        try: () =>
-          ports.runExecutionRequest({
-            config,
-            ...(executionId && { executionId }),
-          }),
+        try: () => ports.runAgentRequest({ config, runId }),
         catch: ensureError,
       });
     }),
-    runNew: Effect.fn('HostRunActions.runNew')(function* (streamId) {
-      const { config } = yield* nativeAgentRun(streamId, 're-run');
+    runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
+      const { config } = yield* nativeAgentRun(runId, 're-run');
       yield* Effect.tryPromise({
-        try: () => ports.runExecutionRequest({ config }),
+        try: () => ports.runAgentRequest({ config }),
         catch: ensureError,
       });
     }),
     readConfig,
-    runCompileFixer: Effect.fn(function* (streamId) {
-      if (!view().streams.has(streamId)) {
+    runCompileFixer: Effect.fn(function* (runId) {
+      if (!view().runs.has(runId)) {
         return yield* Effect.fail(
           new Unavailable({
-            streamId,
+            runId,
             reason: 'The stream is no longer open.',
           }),
         );
       }
-      const config = yield* readConfig(streamId);
+      const config = yield* readConfig(runId);
       const plan = yield* Effect.tryPromise({
-        try: () => followUp.planCompileFixerForStream(streamId, config),
+        try: () => followUp.planCompileFixerForRun(runId, config),
         catch: ensureError,
       });
       if (plan.kind === 'warning') {
@@ -416,7 +389,7 @@ export function createHostRunActions(
       } else {
         yield* Effect.tryPromise({
           try: () =>
-            ports.runExecutionRequest(plan.request, {
+            ports.runAgentRequest(plan.request, {
               preferHelperModel: true,
             }),
           catch: ensureError,
@@ -432,7 +405,7 @@ export function createHostRunActions(
           ? request.provider
           : undefined;
       return apiKeyRetry.useOwnApiKey({
-        stream: request.streamId,
+        stream: request.runId,
         requestId: request.requestId,
         model: request.model ?? undefined,
         provider,
@@ -440,12 +413,10 @@ export function createHostRunActions(
         kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure ?? undefined,
       });
     },
-    restoreState: Effect.fn('HostRunActions.restoreState')(
-      function* (streamId) {
-        const { config } = yield* nativeAgentRun(streamId, 'restored');
-        return config;
-      },
-    ),
+    restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
+      const { config } = yield* nativeAgentRun(runId, 'restored');
+      return config;
+    }),
   };
 }
 

@@ -11,7 +11,7 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
 } from '@shared/schemas';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
+import { deriveRunOutcome } from '@shared/runs/runStatus';
 
 import { createToolUseRoundFlow } from '../ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '../toolUseRound/roundShared';
@@ -55,15 +55,15 @@ export class ToolUseCycleNode extends BaseNode<
   override async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { runScope } = this.services;
     const modelHandler = this.services.modelCell.handler;
-    const { streamId } = runScope;
+    const { runId } = runScope;
 
     if (prepRes.shouldSkipCycle) {
       const { todos, plan } = prepRes.workspaceState.workPlan;
       if (todos.length) {
-        emitRunFact(this.services.logger, 'updateTodos', { streamId, todos });
+        emitRunFact(this.services.logger, 'updateTodos', { runId, todos });
       }
       if (plan) {
-        emitRunFact(this.services.logger, 'updatePlan', { streamId, plan });
+        emitRunFact(this.services.logger, 'updatePlan', { runId, plan });
       }
       return { outcome: 'skipped' };
     }
@@ -106,11 +106,11 @@ export class ToolUseCycleNode extends BaseNode<
     const { onProgress } = this.services;
     prepRes.workspaceState.workPlan.setOnUpdate({
       onTodosUpdate: (todos) => {
-        emitRunFact(this.services.logger, 'updateTodos', { streamId, todos });
+        emitRunFact(this.services.logger, 'updateTodos', { runId, todos });
         onProgress?.({ kind: 'todos', todos });
       },
       onPlanUpdate: (plan) => {
-        emitRunFact(this.services.logger, 'updatePlan', { streamId, plan });
+        emitRunFact(this.services.logger, 'updatePlan', { runId, plan });
         onProgress?.({ kind: 'plan', plan });
       },
     });

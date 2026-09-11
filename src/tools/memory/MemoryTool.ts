@@ -7,8 +7,8 @@ import { z } from 'zod';
 
 // Local imports
 import {
-  getRunContextAgentName,
-  getRunContextExecutionId,
+  getRunContextRunId,
+  getRunContextSession,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
@@ -294,11 +294,14 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     ) =>
       Effect.suspend(() => {
         const ctx = tryUseRunContext();
-        const meta = createMeta(
-          getRunContextAgentName(ctx),
-          getRunContextExecutionId(ctx),
-          existingMeta,
-        );
+        const runId = getRunContextRunId(ctx);
+        // The run's name is the handle's, derived from its identity; a bare
+        // context (a one-shot tool environment) has no run and no name.
+        const agentName =
+          runId === undefined
+            ? undefined
+            : getRunContextSession(ctx)?.runs.getHandle(runId)?.agentName;
+        const meta = createMeta(agentName, runId, existingMeta);
         return Effect.tryPromise({
           try: () =>
             StorageFS.writeAtomic(resolvedPath, buildFile(content, meta)),

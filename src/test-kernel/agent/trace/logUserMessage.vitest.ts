@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logUserMessage, type AgentTrace } from '@agent/trace';
-import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type RunId,
+  type StreamLogEntry,
+} from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -15,7 +19,10 @@ describe('logUserMessage', () => {
 
   beforeEach(() => {
     store = new StreamLog();
-    const runTrace = createTestRunTrace('TestUserMessageLogger', store);
+    const runTrace = createTestRunTrace(
+      'TestUserMessageLogger' as RunId,
+      store,
+    );
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });

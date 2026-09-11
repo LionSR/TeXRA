@@ -1,4 +1,4 @@
-// Test harness: seed the session fold with synthetic streams and rows, render
+// Test harness: seed the session fold with synthetic runs and rows, render
 // <App /> to the real terminal. Every fixture is published through the
 // runtime session (`SessionHandle.publish`, the transcript store, the
 // interaction port), so the TUI under test renders the same `SessionView` a
@@ -52,18 +52,18 @@ import {
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_USE_STATUS,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  RunIdSchema,
   type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
+  type RunId,
   type UserQuestionPermission,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
@@ -72,7 +72,7 @@ import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
 import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import {
   StreamLog,
   type StreamLogAppendInput,
@@ -90,7 +90,7 @@ import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -112,10 +112,10 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  activeStreamId as activeStreamIdSignal,
+  activeRunId as activeRunIdSignal,
+  claimedRunId,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  rootRunId,
   resetCliState,
   sessionMeta,
   setCliSessionModelOverride,
@@ -127,7 +127,7 @@ import {
   focusedChildAcceptsFollowUps,
   runningChildCount,
   sessionView,
-  streamViewOf,
+  runViewOf,
 } from '../src/chat/tui/state/sessionView';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
@@ -141,7 +141,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
-  resolveLocalTranscriptStreamId,
+  resolveLocalTranscriptRunId,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
@@ -172,10 +172,9 @@ import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
-const STREAM_ID = 'harness-stream-1';
+const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
 const HARNESS_MODEL = 'harness-model';
-const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
-  'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
+const RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
@@ -415,7 +414,7 @@ const harnessRuntimeSession = initializeDefaultSession({
 });
 harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
-  STREAM_ID,
+  HARNESS_RUN_ID,
   'flow',
 )!;
 const harnessFollowUpQueue =
@@ -453,12 +452,12 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
 
 // Models the production boundary: `listCliHistoryEntries` already applies
-// `isUserVisibleExecution`, so menu builders only ever see user-started rows.
+// `isUserVisibleRun`, so menu builders only ever see user-started rows.
 const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
   SHOW_ORCHESTRATION_HISTORY
     ? [
         {
-          id: 'cccccccccccc' as ExecutionId,
+          id: RunIdSchema.parse('cccccccccccc'),
           timestamp: '2026-06-06T00:02:00Z',
           agent: 'orchestrator',
           model: HARNESS_MODEL,
@@ -629,12 +628,12 @@ function publish(...drafts: SessionEventDraft[]): void {
 }
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
-// stream's transcript tier the way `runChat` does.
+// run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(session().view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
-    const ids = [...currentView().streams.keys()];
+    const ids = [...currentView().runs.keys()];
     const key = ids.join('\0');
     if (key === subscribed) return;
     subscribed = key;
@@ -661,53 +660,49 @@ HARNESS_DISPOSERS.push(
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
-const harnessStreams = new Set<StreamTabId>();
-const harnessLogs = new Map<StreamTabId, StreamLog>();
+const harnessRuns = new Set<RunId>();
+const harnessLogs = new Map<RunId, StreamLog>();
 
-/** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
+/** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
  *  an agent runs on (a child's scrollback header waits for it). */
-function seedStream(
-  streamId: StreamTabId,
+function seedRun(
+  runId: RunId,
   options: {
     readonly category?: AgentCategory;
     readonly identity?: NonNullable<
       Extract<SessionEventDraft, { type: 'run.start' }>['identity']
     >;
-    readonly parentStreamId?: StreamTabId;
-    readonly executionId?: string;
+    readonly parentRunId?: RunId;
+    /** The agent name for a default (agent) identity; a run id names nothing. */
+    readonly agent?: string;
     readonly userFollowUpSupport?: Extract<
       SessionEventDraft,
       { type: 'run.start' }
     >['userFollowUpSupport'];
   } = {},
 ): void {
-  if (harnessStreams.has(streamId)) return;
-  harnessStreams.add(streamId);
-  const executionId = (options.executionId ??
-    generateExecutionId()) as ExecutionId;
+  if (harnessRuns.has(runId)) return;
+  harnessRuns.add(runId);
   const identity = options.identity ?? {
     kind: 'agent' as const,
-    agent: streamId.split('#')[0] ?? streamId,
+    agent: options.agent ?? 'harness-agent',
   };
   publish({
     type: 'run.start',
-    aggregateId: qualifyAggregateId('stream', streamId),
-    executionId,
+    aggregateId: qualifyAggregateId('run', runId),
     identity,
     category: options.category ?? AgentCategory.ToolUse,
     isRemote: false,
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    ...(options.parentStreamId === undefined
-      ? {}
-      : { parentStreamId: options.parentStreamId }),
+    parent:
+      options.parentRunId === undefined ? null : { id: options.parentRunId },
   });
   if (identity.kind === 'agent') {
     publish({
       type: 'run.config',
-      aggregateId: qualifyAggregateId('stream', streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', runId),
       config: AgentConfigFieldsSchema.parse({
         agent: identity.agent,
         agentCategory: options.category ?? AgentCategory.ToolUse,
@@ -717,69 +712,65 @@ function seedStream(
   }
 }
 
-/** Place a stream in a phase: the status fact every renderer folds. */
-function seedPhase(
-  streamId: StreamTabId,
-  phase: StreamPhase,
-  runStartedAt?: number,
-): void {
-  seedStream(streamId);
+/** Place a run in a phase: the status fact every renderer folds. */
+function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
+  seedRun(runId);
   publish({
     type: 'status',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    aggregateId: qualifyAggregateId('run', runId),
     phase,
     cause: 'harness',
     ...(runStartedAt !== undefined ? { runStartedAt } : {}),
   });
 }
 
-function seedDescription(streamId: StreamTabId, description: string): void {
+function seedDescription(runId: RunId, description: string): void {
   publish({
-    type: 'updateStreamDescription',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    type: 'updateRunDescription',
+    aggregateId: qualifyAggregateId('run', runId),
     description,
   });
 }
 
-function removeStream(streamId: StreamTabId): void {
+function removeRun(runId: RunId): void {
   publish({
-    type: 'stream.removed',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    type: 'run.removed',
+    aggregateId: qualifyAggregateId('run', runId),
   });
-  harnessStreams.delete(streamId);
+  harnessRuns.delete(runId);
 }
 
 /** Publish complete fixture rows on the event plane. */
 function seedRows(
-  streamId: StreamTabId,
+  runId: RunId,
   entries: readonly StreamLogAppendInput[],
 ): void {
-  seedStream(streamId);
-  let log = harnessLogs.get(streamId);
+  seedRun(runId);
+  let log = harnessLogs.get(runId);
   if (!log) {
     log = new StreamLog();
-    harnessLogs.set(streamId, log);
+    harnessLogs.set(runId, log);
   }
   publish(
     ...entries.map((entry) => ({
       type: 'transcript.entry' as const,
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', runId),
       entry: log.appendSettled(entry),
     })),
   );
 }
 
-/** Every stream under `rootId`, the root first. */
-function descendantsOf(rootId: StreamTabId): StreamTabId[] {
+/** Every run under `rootId`, the root first. */
+function descendantsOf(rootId: RunId): RunId[] {
   const view = currentView();
-  const out: StreamTabId[] = [];
+  const out: RunId[] = [];
   const pending = [rootId];
   while (pending.length > 0) {
     const id = pending.shift()!;
-    const stream = view.streams.get(id);
-    if (!stream) continue;
+    const run = view.runs.get(id);
+    if (!run) continue;
     out.push(id);
-    pending.push(...stream.childIds);
+    pending.push(...run.childIds);
   }
   return out;
 }
@@ -944,7 +935,7 @@ function seedLiveToolOnlyTranscript(): void {
       },
     });
   }
-  seedRows(STREAM_ID, entries);
+  seedRows(HARNESS_RUN_ID, entries);
 }
 
 function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
@@ -998,7 +989,7 @@ function seedSubagentFollowupTranscript(): void {
       text: `<orchestrator-followup>${text}</orchestrator-followup>`,
     });
   }
-  seedRows(STREAM_ID, entries);
+  seedRows(HARNESS_RUN_ID, entries);
 }
 
 function makeChildEntries(
@@ -1036,7 +1027,7 @@ function makeEditApprovalRequest() {
       originalContent: [...context, 'Old acknowledgment.'].join('\n'),
       proposedContent: [...context, 'Revised acknowledgment.'].join('\n'),
       sourceTool: 'edit_file',
-      streamId: STREAM_ID,
+      runId: HARNESS_RUN_ID,
     };
   }
 
@@ -1063,7 +1054,7 @@ function makeEditApprovalRequest() {
       '\\end{document}',
     ].join('\n'),
     sourceTool: 'harness',
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
   };
 }
 
@@ -1074,16 +1065,16 @@ function makeBashApprovalPayload(index = 1) {
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
     allowBypass: true,
-    streamId: SHOW_WORKFLOW_RUNNING
-      ? RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID
-      : STREAM_ID,
+    runId: SHOW_WORKFLOW_RUNNING
+      ? RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID
+      : HARNESS_RUN_ID,
   };
 }
 
 function makeRetryApprovalPayload(): RetryPermission {
   return {
     requestId: `harness-retry-${nanoid()}`,
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     operation: 'Model request',
     model: HARNESS_MODEL,
     errorMessage: RETRY_APPROVAL_CHATGPT
@@ -1107,7 +1098,7 @@ function makeRetryApprovalPayload(): RetryPermission {
 function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
     requestId: 'harness-plan-approval',
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
       objective: PLAN_APPROVAL_OBJECTIVE,
@@ -1118,7 +1109,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
 function makeAgentProposalPayload() {
   return {
     requestId: 'harness-agent-proposal',
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     agentCategory: AgentCategory.ToolUse,
     agent: 'review',
     model: 'deepseekT',
@@ -1131,7 +1122,7 @@ function makeAgentProposalPayload() {
 function makeUserQuestionPayload(): UserQuestionPermission {
   return {
     requestId: 'harness-user-question',
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     allowBypass: false,
     context: USER_QUESTION_CONTEXT,
     questions: [
@@ -1240,8 +1231,8 @@ async function appendHarnessPlanDecision(
   result: PlanApprovalResult,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
-    seedPhase(STREAM_ID, STREAM_PHASE.RUNNING);
+    await GoalStore.start(HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE);
+    seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1251,14 +1242,14 @@ async function appendHarnessPlanDecision(
 }
 
 // Queued follow-ups or active (non-idle) todos simulate an in-flight run;
-// idle todos instead park the stream in a waiting state.
+// idle todos instead park the run in a waiting state.
 const HARNESS_RUN_ACTIVE =
   QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
 const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
 
-function harnessInitialStreamStatus(): StreamPhase | undefined {
-  if (HARNESS_RUN_ACTIVE) return STREAM_PHASE.RUNNING;
-  if (HARNESS_RUN_IDLE) return STREAM_PHASE.WAITING;
+function harnessInitialRunStatus(): RunPhase | undefined {
+  if (HARNESS_RUN_ACTIVE) return RUN_PHASE.RUNNING;
+  if (HARNESS_RUN_IDLE) return RUN_PHASE.WAITING;
   return undefined;
 }
 
@@ -1280,21 +1271,21 @@ sessionMeta.set({
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
-seedStream(STREAM_ID);
-activeStreamIdSignal.set(STREAM_ID);
-rootStreamId.set(STREAM_ID);
-seedRows(STREAM_ID, harnessInitialEntries());
+seedRun(HARNESS_RUN_ID);
+activeRunIdSignal.set(HARNESS_RUN_ID);
+rootRunId.set(HARNESS_RUN_ID);
+seedRows(HARNESS_RUN_ID, harnessInitialEntries());
 if (QUEUED_FOLLOW_UPS.length > 0) {
   publish({
     type: 'updateQueuedFollowUps',
-    aggregateId: qualifyAggregateId('stream', STREAM_ID),
+    aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     messages: QUEUED_FOLLOW_UPS,
   });
 }
-const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
+const HARNESS_INITIAL_STREAM_STATUS = harnessInitialRunStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
   seedPhase(
-    STREAM_ID,
+    HARNESS_RUN_ID,
     HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
     HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : undefined,
@@ -1310,30 +1301,24 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 async function seedRunningWorkflow(): Promise<void> {
-  const executionId = 'aaaa0002f10e' as ExecutionId;
-  const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
-  const firstAgentStreamId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
-  const secondAgentStreamId =
-    'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
-  seedStream(childStreamId, {
+  const childRunId = RunIdSchema.parse('aaaa0002f10e');
+  const firstAgentRunId = RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID;
+  const secondAgentRunId = RunIdSchema.parse('aaaa000bf10e');
+  seedRun(childRunId, {
     category: AgentCategory.Workflow,
     identity: {
       kind: 'multiAgentWorkflow',
       workflowName: 'live-workflow-validation',
     },
-    executionId,
-    parentStreamId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
-  seedPhase(childStreamId, STREAM_PHASE.RUNNING);
+  seedPhase(childRunId, RUN_PHASE.RUNNING);
   const residency = await effectRuntime().runPromise(
-    session().transcripts.acquireRunResidency(childStreamId, executionId),
+    session().transcripts.acquireRunResidency(childRunId),
   );
   const runTrace = createRunTrace(residency);
-  const detachRunTrace = session().attachRunTrace(
-    runTrace.trace,
-    childStreamId,
-  );
+  const detachRunTrace = session().attachRunTrace(runTrace.trace, childRunId);
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1356,7 +1341,7 @@ async function seedRunningWorkflow(): Promise<void> {
       label: 'Proofread paper A',
       phase: 'Proofread',
       status: 'running',
-      childStreamId: firstAgentStreamId,
+      childRunId: firstAgentRunId,
     },
     stageId: phaseStage.id,
   });
@@ -1368,22 +1353,18 @@ async function seedRunningWorkflow(): Promise<void> {
       label: 'Proofread paper B',
       phase: 'Proofread',
       status: 'running',
-      childStreamId: secondAgentStreamId,
+      childRunId: secondAgentRunId,
     },
     stageId: phaseStage.id,
   });
-  for (const [agentStreamId, agentExecutionId] of [
-    [firstAgentStreamId, 'aaaa0008f10e'],
-    [secondAgentStreamId, 'aaaa0009f10e'],
-  ] as const) {
-    seedStream(agentStreamId, {
+  for (const agentRunId of [firstAgentRunId, secondAgentRunId]) {
+    seedRun(agentRunId, {
       category: AgentCategory.Workflow,
       identity: { kind: 'agent', agent: 'correct' },
-      executionId: agentExecutionId,
-      parentStreamId: childStreamId,
+      parentRunId: childRunId,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
-    seedPhase(agentStreamId, STREAM_PHASE.RUNNING);
+    seedPhase(agentRunId, RUN_PHASE.RUNNING);
   }
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
@@ -1394,110 +1375,103 @@ async function seedRunningWorkflow(): Promise<void> {
 }
 
 function seedRunningProcessChild(): void {
-  const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
-  seedStream(childStreamId, {
+  const childRunId = RunIdSchema.parse('aaaa0003f10e');
+  seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
-    executionId: 'aaaa0003f10e',
-    parentStreamId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
-  seedDescription(childStreamId, 'sleep 30');
-  seedPhase(childStreamId, STREAM_PHASE.RUNNING);
-  activeStreamIdSignal.set(childStreamId);
+  seedDescription(childRunId, 'sleep 30');
+  seedPhase(childRunId, RUN_PHASE.RUNNING);
+  activeRunIdSignal.set(childRunId);
 }
 
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
-    executionId: 'aaaa0004f10e',
+    runId: RunIdSchema.parse('aaaa0004f10e'),
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
-    childStreamId: 'harness-nested-local-checker-stream',
-    status: STREAM_PHASE.RUNNING,
+    status: RUN_PHASE.RUNNING,
     startedAt: nestedStartedAt,
   };
-  const childStreams = [
+  const childRuns = [
     {
-      executionId: 'aaaa0005f10e',
+      runId: RunIdSchema.parse('aaaa0005f10e'),
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
-      childStreamId: 'harness-child-strategy-stream',
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       startedAt,
     },
     {
-      executionId: 'aaaa0006f10e',
+      runId: RunIdSchema.parse('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
-      childStreamId: 'harness-child-lean-stream',
-      status: STREAM_PHASE.WAITING,
+      status: RUN_PHASE.WAITING,
       startedAt: startedAt - 123_000,
     },
     {
-      executionId: 'aaaa0007f10e',
+      runId: RunIdSchema.parse('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
-      childStreamId: 'harness-child-review-stream',
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       startedAt: startedAt + 12_000,
     },
   ].map((child) =>
     child.agentName === FAILED_CHILD_AGENT
       ? {
           ...child,
-          status: STREAM_PHASE.FAILED,
+          status: RUN_PHASE.FAILED,
           startedAt: undefined,
         }
       : child,
   );
   seedPhase(
-    STREAM_ID,
-    STREAM_PHASE.RUNNING,
+    HARNESS_RUN_ID,
+    RUN_PHASE.RUNNING,
     // One run window across every later active phase: a scenario that
     // already seeded an initial RUNNING keeps that backdated start.
-    streamViewOf(currentView(), STREAM_ID)?.runStartedAt ?? startedAt,
+    runViewOf(currentView(), HARNESS_RUN_ID)?.runStartedAt ?? startedAt,
   );
-  for (const child of childStreams) {
-    const streamId = child.childStreamId as StreamTabId;
-    seedStream(streamId, {
+  for (const child of childRuns) {
+    const runId = child.runId;
+    seedRun(runId, {
       identity: child.identity,
-      executionId: child.executionId,
-      parentStreamId: STREAM_ID,
+      parentRunId: HARNESS_RUN_ID,
     });
-    seedDescription(streamId, `${child.agentName} sub-workflow`);
-    seedRows(streamId, makeChildEntries(child.agentName, child.executionId));
+    seedDescription(runId, `${child.agentName} sub-workflow`);
+    seedRows(runId, makeChildEntries(child.agentName, child.runId));
     // One child carries usage so scenarios pin the row metadata column's
     // generated-token figure (`↓40k`).
     if (child.agentName === 'reviewer') {
       publish({
         type: 'usage',
-        aggregateId: qualifyAggregateId('stream', streamId),
-        storageKey: child.executionId as ExecutionId,
+        aggregateId: qualifyAggregateId('run', runId),
+        runId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
     if (child.status !== undefined) {
       seedPhase(
-        streamId,
+        runId,
         child.status,
-        child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
+        child.status === RUN_PHASE.RUNNING ? child.startedAt : undefined,
       );
     }
   }
   if (SHOW_NESTED_CHILDREN) {
-    const nestedStreamId = nestedStrategyChild.childStreamId as StreamTabId;
-    seedStream(nestedStreamId, {
+    const nestedRunId = nestedStrategyChild.runId;
+    seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      executionId: nestedStrategyChild.executionId,
-      parentStreamId: 'harness-child-strategy-stream' as StreamTabId,
+      parentRunId: RunIdSchema.parse('aaaa0005f10e'),
     });
-    seedDescription(nestedStreamId, 'localChecker nested proof check');
+    seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(
-      nestedStreamId,
+      nestedRunId,
       makeChildEntries('localChecker', 'nested proof check'),
     );
-    seedPhase(nestedStreamId, STREAM_PHASE.RUNNING, nestedStartedAt);
+    seedPhase(nestedRunId, RUN_PHASE.RUNNING, nestedStartedAt);
   }
 }
 
@@ -1535,12 +1509,12 @@ if (SHOW_TODOS) {
   publish(
     {
       type: 'updateTodos',
-      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
       todos: [...workPlan.todos],
     },
     {
       type: 'updatePlan',
-      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
       plan: workPlan.plan,
     },
   );
@@ -1571,7 +1545,7 @@ if (SHOW_EDIT_APPROVAL) {
 }
 
 // The running workflow exists before its agent asks below: a request names
-// a stream the fold already holds, the way a real run's does.
+// a run the fold already holds, the way a real run's does.
 if (SHOW_WORKFLOW_RUNNING) {
   await seedRunningWorkflow();
 }
@@ -1579,9 +1553,9 @@ if (SHOW_WORKFLOW_RUNNING) {
 if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
-    const streamId = permission.streamId as StreamTabId;
+    const runId = permission.runId;
     return session().interactions.requestBashApproval({
-      streamId,
+      runId,
       command: permission.command,
       permission,
     });
@@ -1608,8 +1582,8 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeStreamId = activeStreamIdSignal.get();
-      if (activeStreamId === undefined || activeStreamId === STREAM_ID) {
+      const activeRunId = activeRunIdSignal.get();
+      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
       }
@@ -1644,7 +1618,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
     question: EXTERNAL_INQUIRY_QUESTION,
     threadId: EXTERNAL_INQUIRY_THREAD_ID,
     allowBypass: false,
-    streamId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     sessionLinks: null,
     transcript: null,
   });
@@ -1652,7 +1626,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
     type: 'inquiryThreadUpdated',
     aggregateId: qualifyAggregateId('inquiry', EXTERNAL_INQUIRY_THREAD_ID),
     threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    parentStreamId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     status: 'open',
     lastQuestionPreview: EXTERNAL_INQUIRY_QUESTION.slice(0, 80),
     lastActivityIso: new Date().toISOString(),
@@ -1696,52 +1670,52 @@ function markHarnessInterrupted(): void {
   canInterrupt = false;
   rootRunPending.set(false);
   session().interactions.cancel({ cause: 'Session interrupted.' });
-  appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
-  for (const streamId of descendantsOf(STREAM_ID)) {
-    const stream = streamViewOf(currentView(), streamId);
-    if (stream && isInFlightPhase(stream.status)) {
-      seedPhase(streamId, STREAM_PHASE.CANCELLED);
+  appendHarnessAssistantTranscript(
+    'Harness interrupt requested.',
+    HARNESS_RUN_ID,
+  );
+  for (const runId of descendantsOf(HARNESS_RUN_ID)) {
+    const run = runViewOf(currentView(), runId);
+    if (run && isInFlightPhase(run.status)) {
+      seedPhase(runId, RUN_PHASE.CANCELLED);
     }
   }
 }
 
-function markHarnessStreamInterrupted(streamId: StreamTabId): void {
-  session().interactions.cancel({ streamId, cause: 'Run interrupted.' });
-  if (streamId === STREAM_ID) {
+function markHarnessRunInterrupted(runId: RunId): void {
+  session().interactions.cancel({ runId, cause: 'Run interrupted.' });
+  if (runId === HARNESS_RUN_ID) {
     canInterrupt = false;
     rootRunPending.set(false);
   }
   appendHarnessAssistantTranscript(
-    `Harness focused interrupt requested for ${streamId}.`,
-    streamId,
+    `Harness focused interrupt requested for ${runId}.`,
+    runId,
   );
-  seedPhase(streamId, STREAM_PHASE.CANCELLED);
+  seedPhase(runId, RUN_PHASE.CANCELLED);
 }
 
-function appendHarnessAssistantTranscript(
-  text: string,
-  streamId?: StreamTabId,
-): void {
-  appendHarnessTranscript('assistant', text, streamId);
+function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
+  appendHarnessTranscript('assistant', text, runId);
 }
 
 function appendHarnessTranscript(
   role: 'assistant' | 'error' | 'user',
   text: string,
-  explicitStreamId?: StreamTabId,
+  explicitRunId?: RunId,
 ): void {
   const view = currentView();
-  const streamId =
-    explicitStreamId ??
-    resolveLocalTranscriptStreamId({
-      activeStreamId: activeStreamIdSignal.get(),
-      fallbackStreamId: STREAM_ID,
-      parentOf: (id) => streamViewOf(view, id)?.parentId ?? undefined,
-      rootStreamId: rootStreamId.get(),
+  const runId =
+    explicitRunId ??
+    resolveLocalTranscriptRunId({
+      activeRunId: activeRunIdSignal.get(),
+      fallbackRunId: HARNESS_RUN_ID,
+      parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
+      rootRunId: rootRunId.get(),
     });
   switch (role) {
     case 'assistant':
-      appendLocalAssistantTranscript(text, streamId);
+      appendLocalAssistantTranscript(text, runId);
       return;
     case 'user':
       appendLocalUserTranscript(text);
@@ -1781,27 +1755,24 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessExecutionStopped(executionId: string): void {
-  const view = currentView();
-  const child = [...view.streams.values()].find(
-    (stream) => stream.executionId === executionId,
-  );
+function markHarnessRunStopped(runId: RunId): void {
+  const child = currentView().runs.get(runId);
   if (!child) return;
   appendHarnessAssistantTranscript(
-    `Harness kill requested for ${executionId}.`,
-    STREAM_ID,
+    `Harness kill requested for ${runId}.`,
+    HARNESS_RUN_ID,
   );
   appendHarnessAssistantTranscript(
     'Harness kill requested for this sub-workflow.',
     child.id,
   );
-  seedPhase(child.id, STREAM_PHASE.CANCELLED);
+  seedPhase(child.id, RUN_PHASE.CANCELLED);
 }
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
-  const focused = streamViewOf(view, activeStreamIdSignal.get());
+  const focused = runViewOf(view, activeRunIdSignal.get());
   if (focused && focused.parentId !== null) {
     if (!focusedChildAcceptsFollowUps(focused)) {
       appendHarnessAssistantTranscript(
@@ -1819,24 +1790,24 @@ function handleHarnessSubmit(line: string): void {
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
   const view = currentView();
-  const streamId = activeStreamIdSignal.get() ?? STREAM_ID;
-  const stream = streamViewOf(view, streamId);
+  const runId = activeRunIdSignal.get() ?? HARNESS_RUN_ID;
+  const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: cumulativeUsageOf(stream)?.usageRoute,
+        usageRoute: cumulativeUsageOf(run)?.usageRoute,
       }),
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
-      approvalBypasses: view.policy.get(streamId)?.bypasses,
-      statusLabel: stream?.statusLabel,
-      activeChildSessions: runningChildCount(view, stream),
-      goal: GoalStore.getForStream(streamId),
+      approvalBypasses: view.policy.get(runId)?.bypasses,
+      statusLabel: run?.statusLabel,
+      activeChildSessions: runningChildCount(view, run),
+      goal: GoalStore.getForRun(runId),
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
-      queuedFollowUpMessages: view.queuedFollowUps.get(streamId) ?? [],
+      queuedFollowUpMessages: view.queuedFollowUps.get(runId) ?? [],
     }),
   );
 }
@@ -1845,12 +1816,12 @@ function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   session().interactions.cancel({ cause: 'Session interrupted.' });
   harnessFollowUpQueue.drainItems();
-  void GoalStore.forget(STREAM_ID);
-  for (const streamId of [...currentView().streams.keys()]) {
-    removeStream(streamId);
+  void GoalStore.forget(HARNESS_RUN_ID);
+  for (const runId of [...currentView().runs.keys()]) {
+    removeRun(runId);
   }
   resetCliState(meta);
-  activeStreamIdSignal.set(STREAM_ID);
+  activeRunIdSignal.set(HARNESS_RUN_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
   // outside Ink, then notify the erase epoch so the transcript rebuilds
   // after the reset state commits and repaints the session header.
@@ -1970,10 +1941,10 @@ registerBuiltinSlashCommands({
   },
 });
 // Mirror the real publisher's run facts: an interruptible harness run is a
-// pending root-run claim on the harness stream, so the status bar derives
+// pending root-run claim on the harness run, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.
 rootRunPending.set(canInterrupt);
-rootRunStreamId.set(canInterrupt ? STREAM_ID : undefined);
+claimedRunId.set(canInterrupt ? HARNESS_RUN_ID : undefined);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -1990,14 +1961,14 @@ function renderHarnessApp(): React.JSX.Element {
   return (
     <App
       onSubmit={handleHarnessSubmit}
-      onKillExecution={markHarnessExecutionStopped}
+      onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}
-      canInterruptStream={(streamId) =>
-        isInFlightPhase(streamViewOf(currentView(), streamId)?.status)
+      canInterruptRun={(runId) =>
+        isInFlightPhase(runViewOf(currentView(), runId)?.status)
       }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptStream={markHarnessStreamInterrupted}
+      onInterruptRun={markHarnessRunInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
@@ -2008,37 +1979,36 @@ function renderHarnessApp(): React.JSX.Element {
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
-  const waiting = 'waiting#eeeeeeeeeeee' as StreamTabId;
-  const interrupted = 'interrupted#ffffffffffff' as StreamTabId;
-  const nested = 'nested#111111111111' as StreamTabId;
+  const waiting = RunIdSchema.parse('eeeeeeeeeeee');
+  const interrupted = RunIdSchema.parse('ffffffffffff');
+  const nested = RunIdSchema.parse('111111111111');
   log.emit(PROCESS, 10_000_000, {
     type: 'status',
-    phase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.RUNNING,
     cause: 'harness',
   });
-  for (const [id, owner, parentStreamId] of [
-    [waiting, OWNER, undefined],
-    [interrupted, OTHER_OWNER, undefined],
-    [nested, OTHER_OWNER, waiting],
+  for (const [id, agent, owner, parent] of [
+    [waiting, 'waiting', OWNER, null],
+    [interrupted, 'interrupted', OTHER_OWNER, null],
+    [nested, 'nested', OTHER_OWNER, { id: waiting, startCommit: 1 }],
   ] as const) {
     log.emit(
       id,
       10_000_000,
       {
         type: 'run.start',
-        executionId: id.split('#')[1]!,
-        identity: { kind: 'agent', agent: id.split('#')[0]! },
+        identity: { kind: 'agent', agent },
         category: AgentCategory.ToolUse,
         isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        ...(parentStreamId ? { parentStreamId } : {}),
+        parent,
       },
       owner,
     );
     log.emit(
       id,
       10_000_000,
-      { type: 'status', phase: STREAM_PHASE.RUNNING, cause: 'harness' },
+      { type: 'status', phase: RUN_PHASE.RUNNING, cause: 'harness' },
       owner,
     );
   }
@@ -2049,7 +2019,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       kind: 'bash',
       data: {
         requestId: 'tree-approval',
-        streamId: waiting,
+        runId: waiting,
         command: 'ls',
         allowBypass: true,
       },
@@ -2062,8 +2032,8 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   ]);
   const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(ref));
-  rootStreamId.set(PROCESS);
-  activeStreamIdSignal.set(PROCESS);
+  rootRunId.set(PROCESS);
+  activeRunIdSignal.set(PROCESS);
 }
 
 const ink = render(renderHarnessApp(), {

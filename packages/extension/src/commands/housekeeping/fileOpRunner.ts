@@ -1,7 +1,7 @@
 // Local imports
 import {
   mergeRunDirAndWorkspaceResult,
-  type ExecutionId,
+  type RunId,
   type FileOpResult,
 } from '@shared/schemas';
 
@@ -23,7 +23,7 @@ interface FileOpActions {
     inputFiles: string[],
   ) => Promise<FileOpResult>;
   readonly runRunDir: (
-    executionId: ExecutionId,
+    runId: RunId,
     agent: string,
     model: string,
     inputFile: string,
@@ -34,28 +34,28 @@ interface FileOpActions {
 /**
  * Shared toolbar orchestration for the housekeeping file operations: run the
  * workspace op (multiple or single by `outputFiles` count), merge the runDir
- * leg when an `executionId` is present, then surface the result.
+ * leg when an `runId` is present, then surface the result.
  */
 export async function runFileOp(
   config: FileOpConfig,
   actions: FileOpActions,
 ): Promise<void> {
-  const { agent, model, inputFile, outputFiles, executionId } = config;
+  const { agent, model, inputFile, outputFiles, runId } = config;
 
   const runWorkspaceOp = (): Promise<FileOpResult> =>
     outputFiles.length > 0
       ? actions.runMultiple(model, inputFile, agent, outputFiles)
       : actions.runSingle(model, inputFile, agent);
 
-  // Toolbar-driven invocations pass an executionId: run the runDir leg AND the
+  // Toolbar-driven invocations pass an runId: run the runDir leg AND the
   // workspace sweep. The workspace sweep is a no-op for new runs (their outputs
   // live only inside the runDir), but it catches legacy runs whose outputs
   // still sit beside the source — keying solely off the runDir result leaves
   // those real artifacts behind.
   let result: FileOpResult;
-  if (executionId) {
+  if (runId) {
     const runDirResult = await actions.runRunDir(
-      executionId,
+      runId,
       agent,
       model,
       inputFile,

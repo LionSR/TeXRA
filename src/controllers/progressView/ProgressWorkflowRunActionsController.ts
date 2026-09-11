@@ -4,11 +4,11 @@ import { createLog } from '@logger/logUtils';
 import type {
   OutputFileInfo,
   ReadonlyRoundIndexed,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './runOutputs';
 
 const log = createLog('ProgressWorkflowRunActions');
 
@@ -18,8 +18,7 @@ export interface WorkflowDiffRequest {
   inputFile: string;
   outputFiles: string[];
   outputFilesActive: boolean;
-  streamId: StreamTabId;
-  runId?: string;
+  runId: RunId;
   outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
 
@@ -30,11 +29,11 @@ export interface WorkflowFileOperationRequest {
   model: string;
   inputFile: string;
   outputFiles: string[];
-  executionId?: string;
+  runId: RunId;
 }
 
-interface ProgressWorkflowRunActionsState extends StreamOutputsSource {
-  getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
+interface ProgressWorkflowRunActionsState extends RunOutputsSource {
+  getKnownWorkspaceOutputPaths(stream: RunId): Set<string>;
 }
 
 interface ProgressWorkflowRunActionsControllerDeps {
@@ -52,71 +51,61 @@ export class ProgressWorkflowRunActionsController {
   ) {}
 
   async diffStream(
-    stream: StreamTabId,
+    stream: RunId,
     config: AgentConfig | undefined,
   ): Promise<void> {
-    await this.withWorkflowConfig(
-      stream,
-      config,
-      async (config, executionId) => {
-        // Round keys are non-negative integers by construction (enforced by
-        // the shared RoundKeySchema at every write into the snapshot store's
-        // accumulator, see `@shared/schemas/roundIndexed.ts`), so this record
-        // already enumerates ascending per the ES2015+ integer-key spec rule;
-        // runLatexdiffForExecution consumes `outputsByRound` in that order
-        // without needing an explicit sort here.
-        // Frozen at click time. `getOutputFiles` returns the store's live
-        // record, and this request crosses an interactive quick pick
-        // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
-        // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a round
-        // mid-prompt would otherwise widen the diff scope under the user.
-        const runOutputs = this.deps.state.getOutputFiles(stream);
-        const outputsByRound = Object.keys(runOutputs).length
-          ? cloneRoundIndexed(runOutputs)
-          : undefined;
+    await this.withWorkflowConfig(stream, config, async (config) => {
+      // Round keys are non-negative integers by construction (enforced by
+      // the shared RoundKeySchema at every write into the snapshot store's
+      // accumulator, see `@shared/schemas/roundIndexed.ts`), so this record
+      // already enumerates ascending per the ES2015+ integer-key spec rule;
+      // runLatexdiffForRun consumes `outputsByRound` in that order
+      // without needing an explicit sort here.
+      // Frozen at click time. `getOutputFiles` returns the store's live
+      // record, and this request crosses an interactive quick pick
+      // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
+      // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a round
+      // mid-prompt would otherwise widen the diff scope under the user.
+      const runOutputs = this.deps.state.getOutputFiles(stream);
+      const outputsByRound = Object.keys(runOutputs).length
+        ? cloneRoundIndexed(runOutputs)
+        : undefined;
 
-        await this.deps.runDiff({
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles[0] ?? '',
-          outputFiles: config.outputFiles,
-          outputFilesActive: config.outputFiles.length > 0,
-          streamId: stream,
-          runId: executionId,
-          outputsByRound,
-        });
-      },
-    );
+      await this.deps.runDiff({
+        agent: config.agent,
+        model: config.model,
+        inputFile: config.inputFiles[0] ?? '',
+        outputFiles: config.outputFiles,
+        outputFilesActive: config.outputFiles.length > 0,
+        runId: stream,
+        outputsByRound,
+      });
+    });
   }
 
   async runFileOperation(
-    stream: StreamTabId,
+    stream: RunId,
     operation: WorkflowFileOperation,
     config: AgentConfig | undefined,
   ): Promise<void> {
-    await this.withWorkflowConfig(
-      stream,
-      config,
-      async (config, executionId) => {
-        const outputFiles = this.resolveOutputFiles(stream, config);
+    await this.withWorkflowConfig(stream, config, async (config) => {
+      const outputFiles = this.resolveOutputFiles(stream, config);
 
-        await this.deps.runFileOperation(operation, {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles[0] ?? '',
-          outputFiles,
-          ...(executionId && { executionId }),
-        });
-      },
-    );
+      await this.deps.runFileOperation(operation, {
+        agent: config.agent,
+        model: config.model,
+        inputFile: config.inputFiles[0] ?? '',
+        outputFiles,
+        runId: stream,
+      });
+    });
   }
 
   private async withWorkflowConfig(
-    stream: StreamTabId,
+    stream: RunId,
     config: AgentConfig | undefined,
-    action: (config: AgentConfig, executionId?: string) => Promise<void>,
+    action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
-    const { executionId } = this.deps.state.getRunMetadata(stream);
     if (!config) {
       // This controller holds no messaging port, so the refusal is at least
       // recorded rather than dropped: the toolbar action does nothing.
@@ -127,13 +116,10 @@ export class ProgressWorkflowRunActionsController {
     }
     if (config.agentCategory !== AgentCategory.Workflow) return;
 
-    await action(config, executionId);
+    await action(config);
   }
 
-  private resolveOutputFiles(
-    stream: StreamTabId,
-    config: AgentConfig,
-  ): string[] {
+  private resolveOutputFiles(stream: RunId, config: AgentConfig): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);
     return unique([...config.outputFiles, ...generatedPaths].filter(Boolean));
   }

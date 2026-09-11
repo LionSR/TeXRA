@@ -6,7 +6,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { platform } from '@platform/platform';
 import {
   fileLocationDisplayPath,
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
@@ -17,7 +17,7 @@ import { hasExtension } from '@utils/core/pathCore';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;
-  executionId: ExecutionId;
+  runId: RunId;
   round: number;
   displayName: string;
   source: FileLocation;
@@ -105,6 +105,6 @@ export async function publishCompiledPdfArtifact(
   return createRunStorageLocation(
     latestAbsolutePath,
     latestRelativePath,
-    options.executionId,
+    options.runId,
   );
 }

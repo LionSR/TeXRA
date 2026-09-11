@@ -80,7 +80,7 @@ export type ValidationErrorDiagnostics = z.infer<
  * Render Zod issues as a single `; `-joined, human-readable string
  * (`path.to.field: message; <root>: message`). Shared by the salvage parsers
  * that must loudly surface malformed persisted entries (roundIndexed,
- * StreamSnapshotStore) without coupling them to the structured
+ * RunSnapshotStore) without coupling them to the structured
  * {@link formatZodIssuesForDiagnostics} output. Keeps the `<root>` fallback
  * and `; ` separator defined once.
  */
@@ -120,7 +120,7 @@ export function formatZodIssuesForDiagnostics(
 // ============================================================================
 
 /**
- * Schema for tool execution results.
+ * Schema for tool run results.
  * Every field a tool wants surfaced to the model must be declared below —
  * there is no catchall, so an undeclared field is silently stripped rather
  * than reaching `formatToolResultAsText`.
@@ -146,12 +146,12 @@ const ExecutedToolResultSchema = z.object({
   status: z.literal('executed'),
   /** Detailed output from the tool */
   output: z.string().optional(),
-  /** Brief summary of the tool execution result */
+  /** Brief summary of the tool run result */
   summary: z.string().optional(),
   /** End the current model turn after this successful tool result is paired. */
   endTurn: z.boolean().optional(),
   error: z.undefined().optional(),
-  /** Records of edits made during tool execution */
+  /** Records of edits made during tool run */
   edits: z.array(EditRecordSchema).optional(),
   /** File attachments (may contain binary data) */
   files: z.array(ToolFileAttachmentSchema).optional(),
@@ -160,7 +160,7 @@ const ExecutedToolResultSchema = z.object({
 
 const ErrorToolResultSchema = z.object({
   status: z.literal('error'),
-  /** Error message if tool execution failed */
+  /** Error message if tool run failed */
   error: z.string().min(1),
   /** Brief summary for human-facing logs */
   summary: z.string().optional(),

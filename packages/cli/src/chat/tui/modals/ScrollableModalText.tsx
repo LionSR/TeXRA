@@ -73,7 +73,7 @@ export function modalTextDisplayLines({
   /** The caller already wrapped `text` to `width`. Re-running wrap-ansi over
    *  content that already fits costs a full grapheme-segmentation pass per
    *  render for identical output — worth skipping for a large body that
-   *  refreshes as a run streams. */
+   *  refreshes as a run runs. */
   readonly preWrapped?: boolean;
   readonly text: string;
   /** Strip leading whitespace on wrap continuations (prose bodies only —

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 
@@ -25,7 +25,7 @@ export function isGoalInFlight(
 
 /**
  * Canonical goal-state shape: status/objective only exist while a goal is
- * active. This is the one definition of that union — `streamState.ts` and the
+ * active. This is the one definition of that union — `runState.ts` and the
  * progress-view projection (`projectionShape.ts`) parse it directly, so the
  * shape has exactly one place to drift. The progress-view wire flattens it
  * per message arm (see `outbound.ts`'s GOAL_ACTIVE_UPDATED).
@@ -42,7 +42,7 @@ export type GoalState = z.infer<typeof GoalStateSchema>;
 
 export const GoalSchema = z.object({
   goalId: z.string().min(1),
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
   objective: z.string().min(1),
   status: GoalStatusSchema,
   createdAt: z.iso.datetime(),

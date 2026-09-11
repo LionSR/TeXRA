@@ -6,6 +6,7 @@ import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { DisposableStore } from '@platform/disposable';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import type { RunId } from '@shared/schemas';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -58,7 +59,7 @@ describe('chat TUI session exit controller', () => {
 
   it('prints an artifact flush failure during signal teardown despite quiet logging', async () => {
     const session = new TuiSession();
-    session.executionId = 'exec-flush-warning';
+    session.runId = 'exec-flush-warning' as RunId;
     session.runExitCode = CliExitCode.Success;
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
       return undefined as never;

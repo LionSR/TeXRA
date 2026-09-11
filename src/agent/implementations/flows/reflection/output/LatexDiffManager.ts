@@ -8,7 +8,7 @@ import { platform } from '@platform/platform';
 import {
   fileLocationDisplayPath,
   type DiffResult,
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   MESSAGE_TYPES,
   type OutputFileInfo,
@@ -34,7 +34,7 @@ import type { RoundFileEntry, RoundFileMapping } from './types';
 interface DiffOutputDirectory {
   absolutePath: string;
   relativePath: string;
-  executionId: ExecutionId;
+  runId: RunId;
 }
 
 type SingleDiffOutcome = {
@@ -49,10 +49,10 @@ export class LatexDiffManager {
     private readonly isRewrite: boolean,
     private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
     private readonly logger: AgentTrace,
-    private readonly streamId: string,
+    private readonly runId: RunId,
     private readonly fileService: TaskRunFileService,
   ) {
-    this.latexdiffService = new LaTeXdiffService(streamId);
+    this.latexdiffService = new LaTeXdiffService(runId);
   }
 
   private async getWorkingDirectory(location: FileLocation): Promise<string> {
@@ -135,7 +135,7 @@ export class LatexDiffManager {
       const diffDirectory: DiffOutputDirectory = {
         absolutePath: path.join(this.fileService.runDirectory, relativePath),
         relativePath,
-        executionId: this.fileService.executionId,
+        runId: this.fileService.runId,
       };
 
       const outputByPath = new Map(
@@ -387,7 +387,7 @@ export class LatexDiffManager {
     const diffLocation = createRunStorageLocation(
       path.join(diffDirectory.absolutePath, diffFileName),
       path.join(diffDirectory.relativePath, diffFileName),
-      diffDirectory.executionId,
+      diffDirectory.runId,
     );
 
     const buildDir = path.join(
@@ -411,7 +411,7 @@ export class LatexDiffManager {
         path.dirname(referenceLocation.absolutePath),
     ].filter((dir): dir is string => dir !== null);
     const compiled = await compileLatex2Pdf(diffLocation, {
-      channel: this.streamId,
+      channel: this.runId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
       extraInputDirs,
@@ -433,11 +433,11 @@ export class LatexDiffManager {
       return { diffLocation, artifact: null };
     }
 
-    const { executionId, runDirectory } = this.fileService;
+    const { runId, runDirectory } = this.fileService;
     try {
       const artifact = await publishCompiledPdfArtifact({
         runDirectory,
-        executionId,
+        runId,
         round,
         displayName: path.basename(diffLocation.absolutePath),
         source: sourceLocation,

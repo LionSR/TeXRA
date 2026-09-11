@@ -70,7 +70,7 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
 function toolUseRow(
   id: string,
   data: unknown,
-  executionLabels?: Map<string, string>,
+  runLabels?: Map<string, string>,
 ): ToolRow {
   const entry = StreamLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -82,10 +82,7 @@ function toolUseRow(
     messageType: 'toolUse',
     data,
   });
-  return projectTranscriptRow(
-    entry,
-    executionLabels ? { executionLabels } : {},
-  ) as ToolRow;
+  return projectTranscriptRow(entry, runLabels ? { runLabels } : {}) as ToolRow;
 }
 
 /** Renders an `executions` tool call with subagent labels and returns the title. */

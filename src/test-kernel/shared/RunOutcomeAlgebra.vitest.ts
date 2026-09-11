@@ -3,23 +3,23 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
-  EXECUTION_STATUS,
+  CLI_RUN_STATUS,
   RUN_OUTCOME,
-  STREAM_PHASE,
-  StreamPhaseSchema,
+  RUN_PHASE,
+  RunPhaseSchema,
   type RunOutcome,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import {
-  canTransitionStreamPhase,
+  canTransitionRunPhase,
   deriveRunOutcome,
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-  runOutcomeToExecutionStatus,
-  STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
-} from '@shared/streams/streamStatus';
+  runOutcomeToCliRunStatus,
+  RUN_TRANSITION_CAUSE,
+  type RunTransitionCause,
+} from '@shared/runs/runStatus';
 
 describe('run outcome algebra', () => {
   it.each([
@@ -42,72 +42,70 @@ describe('run outcome algebra', () => {
     },
   );
 
-  it('projects each outcome into the injective legacy execution vocabulary', () => {
-    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.COMPLETED)).toBe(
-      EXECUTION_STATUS.COMPLETED,
+  it('projects each outcome into the injective legacy run vocabulary', () => {
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.COMPLETED)).toBe(
+      CLI_RUN_STATUS.COMPLETED,
     );
     // A user stop persists 'interrupted' and ends the transcript group
     // neutral — cancelled is a sibling of failed, never folded into it.
-    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.CANCELLED)).toBe(
-      EXECUTION_STATUS.INTERRUPTED,
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.CANCELLED)).toBe(
+      CLI_RUN_STATUS.INTERRUPTED,
     );
-    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.FAILED)).toBe(
-      EXECUTION_STATUS.ERROR,
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.FAILED)).toBe(
+      CLI_RUN_STATUS.ERROR,
     );
   });
 
   it('fails loudly on an out-of-vocabulary outcome', () => {
-    expect(() => runOutcomeToExecutionStatus('bogus' as RunOutcome)).toThrow(
+    expect(() => runOutcomeToCliRunStatus('bogus' as RunOutcome)).toThrow(
       'Unhandled run outcome: bogus',
     );
   });
 });
 
 describe('stream phase transition table', () => {
-  const phases = StreamPhaseSchema.options;
-  const causes = Object.values(
-    STREAM_TRANSITION_CAUSE,
-  ) as StreamTransitionCause[];
+  const phases = RunPhaseSchema.options;
+  const causes = Object.values(RUN_TRANSITION_CAUSE) as RunTransitionCause[];
 
-  type CauseRow = Record<StreamTransitionCause, readonly StreamPhase[]>;
+  type CauseRow = Record<RunTransitionCause, readonly RunPhase[]>;
 
   const NO_TRANSITIONS = Object.fromEntries(
-    causes.map((cause): [StreamTransitionCause, readonly StreamPhase[]] => [
+    causes.map((cause): [RunTransitionCause, readonly RunPhase[]] => [
       cause,
       [],
     ]),
   ) as CauseRow;
   const RESUME_ONLY: CauseRow = {
     ...NO_TRANSITIONS,
-    [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
+    [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
   };
 
-  const allowed: Record<StreamPhase, CauseRow> = {
-    [STREAM_PHASE.RUNNING]: {
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [
-        STREAM_PHASE.COMPLETED,
-        STREAM_PHASE.CANCELLED,
-        STREAM_PHASE.FAILED,
+  const allowed: Record<RunPhase, CauseRow> = {
+    [RUN_PHASE.RUNNING]: {
+      [RUN_TRANSITION_CAUSE.LIFECYCLE]: [
+        RUN_PHASE.COMPLETED,
+        RUN_PHASE.CANCELLED,
+        RUN_PHASE.FAILED,
       ],
-      [STREAM_TRANSITION_CAUSE.WAIT]: [STREAM_PHASE.WAITING],
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      [RUN_TRANSITION_CAUSE.WAIT]: [RUN_PHASE.WAITING],
+      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
+      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
     },
-    [STREAM_PHASE.WAITING]: {
+    [RUN_PHASE.WAITING]: {
       ...NO_TRANSITIONS,
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
+      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
     },
-    [STREAM_PHASE.COMPLETED]: RESUME_ONLY,
-    [STREAM_PHASE.CANCELLED]: RESUME_ONLY,
-    [STREAM_PHASE.FAILED]: RESUME_ONLY,
+    [RUN_PHASE.COMPLETED]: RESUME_ONLY,
+    [RUN_PHASE.CANCELLED]: RESUME_ONLY,
+    [RUN_PHASE.FAILED]: RESUME_ONLY,
   };
 
   it('is exhaustive over every phase, cause, and destination phase', () => {
     for (const from of phases) {
       for (const cause of causes) {
         for (const to of phases) {
-          expect(canTransitionStreamPhase(from, to, cause)).toBe(
+          expect(canTransitionRunPhase(from, to, cause)).toBe(
             allowed[from][cause].includes(to),
           );
         }
@@ -118,14 +116,14 @@ describe('stream phase transition table', () => {
   it('admits only named start causes from idle', () => {
     const fromIdle: CauseRow = {
       ...NO_TRANSITIONS,
-      [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
-      [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
+      [RUN_TRANSITION_CAUSE.LIFECYCLE]: [RUN_PHASE.RUNNING],
+      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
+      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
     };
 
     for (const cause of causes) {
       for (const to of phases) {
-        expect(canTransitionStreamPhase(undefined, to, cause)).toBe(
+        expect(canTransitionRunPhase(undefined, to, cause)).toBe(
           fromIdle[cause].includes(to),
         );
       }
@@ -140,10 +138,10 @@ describe('stream phase transition table', () => {
 // exhaustively over the phase vocabulary rather than by example.
 describe('stream phase membership predicates', () => {
   const membership: Record<
-    StreamPhase,
+    RunPhase,
     { active: boolean; inFlight: boolean; terminalOutcome: boolean }
   > = {
-    [STREAM_PHASE.RUNNING]: {
+    [RUN_PHASE.RUNNING]: {
       active: true,
       inFlight: true,
       terminalOutcome: false,
@@ -151,22 +149,22 @@ describe('stream phase membership predicates', () => {
     // WAITING is the deliberate oddball the old trait table also made
     // visible: the cycle ended, but a follow-up appends to the same stream,
     // so it is not acquirable and not a terminal outcome either.
-    [STREAM_PHASE.WAITING]: {
+    [RUN_PHASE.WAITING]: {
       active: false,
       inFlight: true,
       terminalOutcome: false,
     },
-    [STREAM_PHASE.COMPLETED]: {
+    [RUN_PHASE.COMPLETED]: {
       active: false,
       inFlight: false,
       terminalOutcome: true,
     },
-    [STREAM_PHASE.CANCELLED]: {
+    [RUN_PHASE.CANCELLED]: {
       active: false,
       inFlight: false,
       terminalOutcome: true,
     },
-    [STREAM_PHASE.FAILED]: {
+    [RUN_PHASE.FAILED]: {
       active: false,
       inFlight: false,
       terminalOutcome: true,
@@ -174,7 +172,7 @@ describe('stream phase membership predicates', () => {
   };
 
   it('classifies every phase, and treats absence as no-run-yet', () => {
-    for (const phase of StreamPhaseSchema.options) {
+    for (const phase of RunPhaseSchema.options) {
       expect(isActivePhase(phase)).toBe(membership[phase].active);
       expect(isInFlightPhase(phase)).toBe(membership[phase].inFlight);
       expect(isTerminalOutcomePhase(phase)).toBe(
@@ -188,7 +186,7 @@ describe('stream phase membership predicates', () => {
   });
 
   it('makes every terminal outcome phase a RunOutcome', () => {
-    const terminalPhases = StreamPhaseSchema.options.filter(
+    const terminalPhases = RunPhaseSchema.options.filter(
       isTerminalOutcomePhase,
     );
     expect(new Set<string>(terminalPhases)).toEqual(

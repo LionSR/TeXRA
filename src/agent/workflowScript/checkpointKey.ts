@@ -4,7 +4,7 @@ const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
 
 /**
  * Named checkpoint identity: `meta.name` plus the default agent under one
- * parent execution owns one durable journal. A retry after a timeout or
+ * parent run owns one durable journal. A retry after a timeout or
  * interruption resumes that journal even when the model rewrites the script
  * (models rarely reproduce source byte-for-byte); safety lives in the journal
  * itself, whose entries replay only on a matching prompt/options hash key —
@@ -15,7 +15,7 @@ const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
 export function deriveWorkflowScriptCheckpointId(identity: {
   readonly name: string;
   readonly defaultAgent: string;
-  readonly parentExecutionId: string;
+  readonly parentRunId: string;
 }): string {
   // Key order is part of the persisted identity: keep it alphabetical, the
   // order the original stable-stringify derivation produced.
@@ -23,13 +23,13 @@ export function deriveWorkflowScriptCheckpointId(identity: {
     JSON.stringify({
       defaultAgent: identity.defaultAgent,
       name: identity.name,
-      parentExecutionId: identity.parentExecutionId,
+      parentRunId: identity.parentRunId,
     }),
     32,
   );
 }
 
-/** Build the execution-KV key owned by one workflow invocation. */
+/** Build the run-KV key owned by one workflow invocation. */
 export function workflowScriptCheckpointKvKey(checkpointId: string): string {
   // JSON.stringify preserves lone UTF-16 surrogates as escapes, unlike direct
   // UTF-8 encoding, which would conflate them with the replacement character.
@@ -37,7 +37,7 @@ export function workflowScriptCheckpointKvKey(checkpointId: string): string {
   return `${WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX}${digest}`;
 }
 
-/** True when an execution-KV key is a workflow-script checkpoint. */
+/** True when a run-KV key is a workflow-script checkpoint. */
 export function isWorkflowScriptCheckpointKvKey(key: string): boolean {
   return key.startsWith(WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX);
 }

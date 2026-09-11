@@ -13,9 +13,9 @@ import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
 import {
-  validateExecutionRequest,
-  type ExecutionRequest,
-} from '@agent/core/state/executionRequests';
+  validateRunRequest,
+  type RunRequest,
+} from '@agent/core/state/runRequests';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
@@ -34,10 +34,10 @@ import {
   normalizeMainViewFileExtension,
   planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
-  exportStreamTranscript,
+  exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
@@ -62,14 +62,10 @@ import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
   type MultipleDocumentFileType,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-} from '@shared/session/requestErrors';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -164,11 +160,11 @@ export function createExtensionHostRequests(
   );
 
   /** Validate an agent request and run it through the one launch command. */
-  async function runExecutionRequest(
-    request: ExecutionRequest,
-    runOptions: Parameters<HostRunActionPorts['runExecutionRequest']>[1] = {},
+  async function runAgentRequest(
+    request: RunRequest,
+    runOptions: Parameters<HostRunActionPorts['runAgentRequest']>[1] = {},
   ): Promise<void> {
-    const validation = validateExecutionRequest(request);
+    const validation = validateRunRequest(request);
     if (!validation.valid) {
       log.error(validation.message);
       throw new Rejected({ reason: validation.message });
@@ -181,7 +177,7 @@ export function createExtensionHostRequests(
 
   const runActions = createHostRunActions({
     session,
-    runExecutionRequest,
+    runAgentRequest,
     loadModelOptions: () => computeModelOptionsData(),
     promptForApiKey: async (provider) => {
       await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
@@ -227,8 +223,8 @@ export function createExtensionHostRequests(
         });
       },
     },
-    sendFollowUp: (streamId, text) =>
-      effectRuntime().runPromise(runActions.sendFollowUp(streamId, text)),
+    sendFollowUp: (runId, text) =>
+      effectRuntime().runPromise(runActions.sendFollowUp(runId, text)),
   });
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
@@ -260,17 +256,9 @@ export function createExtensionHostRequests(
     await vscode.window.showTextDocument(document, { preview: false });
   }
 
-  async function exportTranscript(streamId: StreamTabId): Promise<void> {
-    const executionId =
-      runActions.snapshotPort.getRunMetadata(streamId).executionId;
-    if (!executionId) {
-      throw new Unavailable({
-        streamId,
-        reason: 'This run has no transcript to export.',
-      });
-    }
+  async function exportTranscript(runId: RunId): Promise<void> {
     await effectRuntime().runPromise(
-      exportStreamTranscript(executionId, {
+      exportRunTranscript(runId, {
         pickFormat: async () =>
           (
             await vscode.window.showQuickPick(
@@ -648,32 +636,32 @@ export function createExtensionHostRequests(
       }
       case 'openTaskStorage':
         await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+          session.snapshots.preload([request.runId]),
         );
-        await workflowFileActions.openTaskStorage(request.streamId);
+        await workflowFileActions.openTaskStorage(request.runId);
         return done;
       case 'exportTranscript':
-        await exportTranscript(request.streamId);
+        await exportTranscript(request.runId);
         return done;
       case 'restoreIntoLauncher':
         await restoreIntoLauncher(
           await effectRuntime().runPromise(
-            runActions.restoreState(request.streamId),
+            runActions.restoreState(request.runId),
           ),
         );
         return done;
       case 'resume':
-        await effectRuntime().runPromise(runActions.resume(request.streamId));
+        await effectRuntime().runPromise(runActions.resume(request.runId));
         return done;
       case 'runNew':
-        await effectRuntime().runPromise(runActions.runNew(request.streamId));
+        await effectRuntime().runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
         await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+          session.snapshots.preload([request.runId]),
         );
         await effectRuntime().runPromise(
-          runActions.runCompileFixer(request.streamId),
+          runActions.runCompileFixer(request.runId),
         );
         return done;
       case 'useOwnApiKey':
@@ -681,18 +669,18 @@ export function createExtensionHostRequests(
         return done;
       case 'latexdiff': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
-        await workflowRunActions.diffStream(request.streamId, config);
+        await workflowRunActions.diffStream(request.runId, config);
         return done;
       }
       case 'pack':
       case 'clean': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
         await workflowRunActions.runFileOperation(
-          request.streamId,
+          request.runId,
           request.kind,
           config,
         );
@@ -778,7 +766,7 @@ export function createExtensionHostRequests(
         return done;
       case 'fileAction': {
         const config = await effectRuntime().runPromise(
-          runActions.readConfig(request.streamId),
+          runActions.readConfig(request.runId),
         );
         await workflowFileActions.handle(request, config);
         return done;

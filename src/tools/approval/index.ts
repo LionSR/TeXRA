@@ -12,8 +12,8 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { StreamApprovalBypass } from '@agent/runtime/streamApprovalQueue';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunApprovalBypass } from '@agent/runtime/runApprovalQueue';
+import type { RunId } from '@shared/schemas';
 
 /**
  * Per-stream bypass state for agent delegation proposals, owned by the
@@ -27,7 +27,7 @@ import type { StreamTabId } from '@shared/schemas';
  */
 export function proposalApprovals(
   session: SessionHandle = currentSession(),
-): StreamApprovalBypass {
+): RunApprovalBypass {
   return session.approvals.proposal;
 }
 
@@ -39,35 +39,35 @@ export function proposalApprovals(
  * should do the same — and should keep following the parent when either
  * bypass is toggled *after* the child stream already started, since this
  * registers live ancestry links rather than copying the parent's values once
- * at child creation (see `registerStreamParent`). Each bypass kind keeps its
+ * at child creation (see `registerRunParent`). Each bypass kind keeps its
  * own value, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
  * respected: a parent with AUTO-BASH but edits still gated propagates only
- * bash, and fresh streams default to gated either way. Delegation-proposal
+ * bash, and fresh runs default to gated either way. Delegation-proposal
  * bypass is inherited as well, so complete delegated-task approval remains
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
  */
 export function configureDelegatedChildApprovals(
-  childStreamId: StreamTabId,
-  parentStreamId?: StreamTabId,
+  childRunId: RunId,
+  parentRunId?: RunId,
   policy: 'inherit' | 'auto-approved' = 'inherit',
   session: SessionHandle = currentSession(),
 ): void {
-  if (parentStreamId) {
-    session.approvals.registerStreamParent(childStreamId, parentStreamId);
+  if (parentRunId) {
+    session.approvals.registerRunParent(childRunId, parentRunId);
   }
   // The child's `run.start` is published by the time this runs, so the
   // write is not pre-activation setup: it notifies the host and publishes
   // the child's `approval.policy` like any other bypass change.
   if (policy === 'auto-approved') {
-    session.approvals.toolEdit.bypass.setBypass(childStreamId, true);
+    session.approvals.toolEdit.bypass.setBypass(childRunId, true);
   }
 }
 
 /**
  * Release all agent resources held for a deleted stream: approval state AND
  * the follow-up queue. Cancels pending host interactions;
- * `forgetStreamAncestry` clears the stream's ancestry edges and its explicit
+ * `forgetRunAncestry` clears the stream's ancestry edges and its explicit
  * bypass values; `followUps.terminalize` drops the queue. These always need to
  * be cleared together when a stream is removed, so this is the single function
  * hosts should call.
@@ -75,14 +75,14 @@ export function configureDelegatedChildApprovals(
  * Host-specific teardown (webview state, backup files, goal store, etc.)
  * remains the caller's responsibility after this returns.
  */
-export function releaseStreamResources(
-  streamId: StreamTabId,
+export function releaseRunResources(
+  runId: RunId,
   session: SessionHandle = defaultSession(),
 ): void {
   session.interactions.cancel({
-    streamId,
+    runId,
     cause: 'Stream resources released.',
   });
-  session.approvals.forgetStreamAncestry(streamId);
-  session.followUps.terminalize(streamId);
+  session.approvals.forgetRunAncestry(runId);
+  session.followUps.terminalize(runId);
 }

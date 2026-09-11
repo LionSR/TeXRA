@@ -10,6 +10,7 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   MESSAGE_TYPES,
+  type RunId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -229,9 +230,9 @@ describe('runtime skills', () => {
 
     const trace = new TraceEmitter();
     const store = new StreamLog();
-    const streamId = 'stream:bounded-skills';
+    const runId = 'bounded-skills' as RunId;
 
-    attachTestTranscriptFold(trace, streamId, store);
+    attachTestTranscriptFold(trace, runId, store);
 
     expect(() =>
       trace.emit({ type: 'skills.snapshot', skills: result.skills }),

@@ -8,7 +8,7 @@ import { Effect, type Context } from 'effect';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { isPathWithin } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -16,7 +16,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 const log = createLog('DeletionCleanup');
 
 /**
- * Remove each execution's run directory under the storage root it was
+ * Remove each run's run directory under the storage root it was
  * admitted against.
  *
  * Both the storage root and its runs directory are resolved with `realpath`,
@@ -33,10 +33,7 @@ const log = createLog('DeletionCleanup');
  * and the removal is no longer detected. TeXRA 1.0's file-ownership design
  * owns that remaining contract (#12139).
  */
-const removeExecutionDirectories = (
-  storage: string,
-  executionIds: readonly ExecutionId[],
-) =>
+const removeRunDirectories = (storage: string, runIds: readonly RunId[]) =>
   Effect.tryPromise({
     try: async () => {
       const runs = path.join(
@@ -50,8 +47,8 @@ const removeExecutionDirectories = (
           `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
         );
       }
-      for (const executionId of executionIds) {
-        const target = path.join(runs, executionId);
+      for (const runId of runIds) {
+        const target = path.join(runs, runId);
         if (!isPathWithin(runs, target)) {
           log.warn(
             `Refusing to remove ${target}: outside the admitted storage root`,
@@ -78,10 +75,10 @@ export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
   ) {
     const listing = yield* database.readListing();
     for (const event of listing) {
-      if (event.type !== 'stream.removed') continue;
+      if (event.type !== 'run.removed') continue;
       yield* database
         .collectDeletion(event.aggregateId, event.commit, (ids) =>
-          removeExecutionDirectories(storage, ids),
+          removeRunDirectories(storage, ids),
         )
         .pipe(
           Effect.catch((error) =>

@@ -24,8 +24,8 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 const MemoryFileMetaSchema = z.object({
   /** Agent name that last modified this file. */
   modifiedBy: z.string().min(1),
-  /** Execution ID of the run that last modified this file. */
-  executionId: z.string().optional(),
+  /** Run ID of the run that last modified this file. */
+  runId: z.string().optional(),
   /** ISO 8601 timestamp of last modification. */
   modifiedAt: z.string(),
   /**
@@ -84,7 +84,7 @@ function buildFrontmatter(meta: MemoryFileMeta): string {
   const fields: Record<string, string | boolean> = {
     modifiedBy: meta.modifiedBy,
   };
-  if (meta.executionId) fields.executionId = meta.executionId;
+  if (meta.runId) fields.runId = meta.runId;
   fields.modifiedAt = meta.modifiedAt;
   if (meta.pinned) fields.pinned = true;
 
@@ -106,18 +106,18 @@ export function buildFile(
 }
 
 /**
- * Create a fresh MemoryFileMeta for the current agent / execution.
+ * Create a fresh MemoryFileMeta for the current agent / run.
  * Returns null when agentName is not available (attribution skipped).
  */
 export function createMeta(
   agentName: string | undefined,
-  executionId: string | undefined,
+  runId: string | undefined,
   existingMeta?: MemoryFileMeta | null,
 ): MemoryFileMeta | null {
   if (!agentName) return null;
   return {
     modifiedBy: agentName,
-    executionId,
+    runId,
     modifiedAt: new Date().toISOString(),
     pinned: existingMeta?.pinned,
   };
@@ -145,9 +145,7 @@ export function setPinnedMeta(
 
 // ── Display ────────────────────────────────────────────────────────
 
-/** Format attribution for display: "agentName (executionId)" or just "agentName". */
+/** Format attribution for display: "agentName (runId)" or just "agentName". */
 export function formatAttribution(meta: MemoryFileMeta): string {
-  return meta.executionId
-    ? `${meta.modifiedBy} (${meta.executionId})`
-    : meta.modifiedBy;
+  return meta.runId ? `${meta.modifiedBy} (${meta.runId})` : meta.modifiedBy;
 }

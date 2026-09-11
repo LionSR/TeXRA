@@ -8,11 +8,7 @@ import {
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
-import {
-  AgentCategory,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local file imports
@@ -29,13 +25,12 @@ type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
-  const executionId = 'usage-last-totals' as ExecutionId;
-  const streamId = 'stream:usage-last-totals' as StreamTabId;
+  const runId = 'usage-last-totals' as RunId;
   const recorded = recordTraceEvents(logger);
   const modelCell = testModelCell({ ...testModelInfo, dispose: vi.fn() });
   const monitor = new UsageMonitor(
     modelCell,
-    { logger, executionId, runStageId: undefined, streamId },
+    { logger, runId, runStageId: undefined },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {

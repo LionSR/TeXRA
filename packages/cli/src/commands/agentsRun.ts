@@ -28,8 +28,11 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { executeCliToolUseConfig } from '../runtime/runExecution';
-import { toolUseResultText } from '../runtime/terminalStatus';
+import { executeCliToolUseConfig } from '../runtime/executeCli';
+import {
+  cliRunResultPayload,
+  toolUseResultText,
+} from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -95,20 +98,21 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
           agentCategory: AgentCategory.ToolUse,
         };
 
-        const execution = yield* executeCliToolUseConfig(config, runContext, {
+        const run = yield* executeCliToolUseConfig(config, runContext, {
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
           categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
         });
-        if (!execution.ok) return execution.exitCode;
+        if (!run.ok) return run.exitCode;
 
+        const payload = cliRunResultPayload(run.result);
         emitCliResult(runContext, {
-          json: execution.result,
-          ndjson: { kind: 'agent-result', result: execution.result },
-          text: toolUseResultText(execution.result),
+          json: payload,
+          ndjson: { kind: 'agent-result', result: payload },
+          text: toolUseResultText(run.result),
         });
 
-        return execution.exitCode;
+        return run.exitCode;
       }),
   );
 });

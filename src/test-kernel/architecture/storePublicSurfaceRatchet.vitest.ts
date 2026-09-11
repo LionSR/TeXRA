@@ -26,7 +26,7 @@ const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
 const STORES = {
   StreamLogStore: 'src/transcript/StreamLogStore.ts',
-  StreamSnapshotStore: 'src/transcript/StreamSnapshotStore.ts',
+  RunSnapshotStore: 'src/transcript/RunSnapshotStore.ts',
 } as const;
 
 type StoreName = keyof typeof STORES;

@@ -6,7 +6,7 @@
  *
  * Resume strategies differ by agent type:
  * - Tool-use: Canonical shared state plus resume identity
- * - Workflow: agentConfig + executionId + transcript-format key
+ * - Workflow: agentConfig + runId + transcript-format key
  */
 
 import { Effect } from 'effect';
@@ -24,7 +24,7 @@ import {
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -35,40 +35,34 @@ export interface ToolUseResumeData {
   readonly type: 'toolUse';
   readonly shared: PreparedShared;
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-  readonly parentStreamId?: StreamTabId;
+  readonly runId: RunId;
 }
 
-/** Workflow session resume data: flow reads full state via executionId. */
+/** Workflow session resume data: flow reads full state via runId. */
 interface WorkflowResumeData {
   readonly type: 'workflow';
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
+  readonly runId: RunId;
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
 type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-interface SessionResumeRetrievalOptions {
-  readonly parentStreamId?: StreamTabId | undefined;
-}
-
 /** Agent-type label used in resume-retrieval warnings and error messages. */
 type ResumeAgentLabel = 'tool-use' | 'workflow';
 
 /**
- * Probe resumability for an execution: returns the persisted flow record when
+ * Probe resumability for a run: returns the persisted flow record when
  * resumable, `null` when there is nothing to resume, and throws when the
  * resume storage itself is unreadable (re-wrapped by the caller's catch).
  */
 const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
   function* (
-    executionId: ExecutionId,
+    runId: RunId,
     agentType: ResumeAgentLabel,
     session: SessionHandle,
   ): Effect.fn.Return<FlowRecord | null, Error> {
-    const resumability = yield* deriveResumability(executionId, session);
+    const resumability = yield* deriveResumability(runId, session);
     if (resumability.kind === 'checkpoint') return resumability.flowRecord;
     // Unreadable storage is a failure to report, never "nothing to resume":
     // the caller's catch re-wraps it so hosts can word the difference. A record
@@ -79,15 +73,15 @@ const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
     if (resumability.kind === 'unreadable') {
       if (resumability.fault === 'checkpoint-malformed') {
         return yield* Effect.fail(
-          new PersistedFlowStateError(executionId, 'unsupported-record'),
+          new PersistedFlowStateError(runId, 'unsupported-record'),
         );
       }
       return yield* Effect.fail(
         new Error(`Unable to read resume storage: ${resumability.cause}`),
       );
     }
-    logger.warn('Execution is not resumable', {
-      data: { agentType, executionId },
+    logger.warn('Run is not resumable', {
+      data: { agentType, runId },
     });
     return null;
   },
@@ -100,11 +94,11 @@ const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
  */
 function resumeRetrievalError(
   agentType: ResumeAgentLabel,
-  streamId: StreamTabId,
+  runId: RunId,
   error: unknown,
 ): Error {
   return new Error(
-    `Failed to retrieve ${agentType} resume data for stream: ${streamId}`,
+    `Failed to retrieve ${agentType} resume data for run: ${runId}`,
     { cause: error },
   );
 }
@@ -114,11 +108,10 @@ function resumeRetrievalError(
  *
  * Returns appropriate resume data based on task type:
  * - Tool-use: Canonical shared state with launch metadata
- * - Workflow: agentConfig, executionId, and transcript-format key
+ * - Workflow: agentConfig, runId, and transcript-format key
  *
- * @param streamId - Stream tab ID used for logging and resume identity
- * @param executionId - The execution ID for the stream
- * @param agentConfig - The run config for the execution
+ * @param runId - The run id
+ * @param agentConfig - The run config for the run
  * @returns The resume data, or `null` when there is no resumable session
  *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
  *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
@@ -126,32 +119,19 @@ function resumeRetrievalError(
  */
 export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    runId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
-    options: SessionResumeRetrievalOptions = {},
   ): Effect.fn.Return<SessionResumeData | null, Error> {
     if (agentConfig.agentCategory === AgentCategory.ToolUse) {
-      return yield* retrieveToolUseResumeData(
-        streamId,
-        executionId,
-        agentConfig,
-        session,
-        options,
-      );
+      return yield* retrieveToolUseResumeData(runId, agentConfig, session);
     }
 
     if (agentConfig.agentCategory === AgentCategory.Workflow) {
-      return yield* retrieveWorkflowResumeData(
-        streamId,
-        executionId,
-        agentConfig,
-        session,
-      );
+      return yield* retrieveWorkflowResumeData(runId, agentConfig, session);
     }
 
-    logger.warn(`Unknown agent config type for stream: ${streamId}`);
+    logger.warn(`Unknown agent config type for run: ${runId}`);
     return null;
   },
 );
@@ -161,19 +141,17 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
  */
 const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    runId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
-    options: SessionResumeRetrievalOptions,
   ): Effect.fn.Return<ToolUseResumeData | null, Error> {
     const flowRecord = yield* probeResumableFlowRecord(
-      executionId,
+      runId,
       'tool-use',
       session,
     ).pipe(
       Effect.mapError((error) =>
-        resumeRetrievalError('tool-use', streamId, error),
+        resumeRetrievalError('tool-use', runId, error),
       ),
     );
     return yield* Effect.try({
@@ -182,20 +160,15 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
 
         const parsedShared = parseToolUseShared(flowRecord.shared);
         if (!parsedShared.success) {
-          logger.warn(
-            `Invalid flow record structure for execution: ${executionId}`,
-            {
-              data: { error: parsedShared.error },
-            },
-          );
+          logger.warn(`Invalid flow record structure for run: ${runId}`, {
+            data: { error: parsedShared.error },
+          });
           return null;
         }
 
         const { stateSlices } = parsedShared.data;
         if (stateSlices === null) {
-          logger.warn(
-            `Invalid flow record structure for execution: ${executionId}`,
-          );
+          logger.warn(`Invalid flow record structure for run: ${runId}`);
           return null;
         }
 
@@ -214,19 +187,15 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
           }),
         };
 
-        logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
+        logger.debug(`Retrieved tool-use resume data for run: ${runId}`);
         return {
           type: 'toolUse',
           shared,
-          executionId,
-          streamId,
-          ...(options.parentStreamId !== undefined && {
-            parentStreamId: options.parentStreamId,
-          }),
+          runId,
           agentConfig: currentConfig,
         };
       },
-      catch: (error) => resumeRetrievalError('tool-use', streamId, error),
+      catch: (error) => resumeRetrievalError('tool-use', runId, error),
     });
   },
 );
@@ -234,22 +203,21 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
 /**
  * Retrieve resume data for a workflow session.
  * Verifies flow record exists before returning resume data.
- * Workflow flows read full persisted state via executionId during resume.
+ * Workflow flows read full persisted state via runId during resume.
  */
 const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    runId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<WorkflowResumeData | null, Error> {
     const flowRecord = yield* probeResumableFlowRecord(
-      executionId,
+      runId,
       'workflow',
       session,
     ).pipe(
       Effect.mapError((error) =>
-        resumeRetrievalError('workflow', streamId, error),
+        resumeRetrievalError('workflow', runId, error),
       ),
     );
     return yield* Effect.try({
@@ -260,15 +228,13 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
           flowRecord.shared,
         );
         if (!parseResult.success) {
-          logger.warn(
-            `Invalid workflow flow record for execution: ${executionId}`,
-          );
+          logger.warn(`Invalid workflow flow record for run: ${runId}`);
           return null;
         }
 
-        logger.debug('Retrieved workflow resume data for stream', {
+        logger.debug('Retrieved workflow resume data for run', {
           data: {
-            streamId,
+            runId,
             currentRound: parseResult.data.currentRound,
             totalRounds: parseResult.data.totalRounds,
           },
@@ -278,11 +244,11 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
         return {
           type: 'workflow',
           agentConfig,
-          executionId,
+          runId,
           modelHandlerCompatibilityKey,
         };
       },
-      catch: (error) => resumeRetrievalError('workflow', streamId, error),
+      catch: (error) => resumeRetrievalError('workflow', runId, error),
     });
   },
 );

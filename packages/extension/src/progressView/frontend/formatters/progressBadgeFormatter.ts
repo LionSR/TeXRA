@@ -1,15 +1,15 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress, StreamStage } from '@shared/schemas';
-import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
+import type { ConversationProgress, RunStage } from '@shared/schemas';
+import { formatStageLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
  * Render progress badge with the stage slot and tool call count.
- * Used by StreamHeader.
+ * Used by RunHeader.
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
-  stage: StreamStage | undefined,
+  stage: RunStage | undefined,
 ): TemplateResult | typeof nothing {
   const stageLabel = formatStageLabel(stage);
   const tools = progress?.toolCallCount ?? 0;
@@ -31,7 +31,7 @@ export function renderProgressBadgeContent(
 
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
-  stage: StreamStage | undefined,
+  stage: RunStage | undefined,
 ): string | undefined {
   const parts: string[] = [];
   const stageTitle = stageBadgeTitle(stage);
@@ -45,7 +45,7 @@ export function getProgressBadgeTitle(
 }
 
 /** Spelled-out counterpart of the compact stage label. */
-function stageBadgeTitle(stage: StreamStage | undefined): string | undefined {
+function stageBadgeTitle(stage: RunStage | undefined): string | undefined {
   if (stage === undefined) return undefined;
   if (stage.kind === 'phase') {
     if (stage.index === undefined) return `Phase: ${stage.label}`;

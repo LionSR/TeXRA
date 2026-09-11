@@ -47,8 +47,11 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/runExecution';
-import { toolUseResultText } from '../runtime/terminalStatus';
+import { executeCliToolUseConfig } from '../runtime/executeCli';
+import {
+  cliRunResultPayload,
+  toolUseResultText,
+} from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface MultiAgentRunInit {
@@ -235,12 +238,12 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
           ]),
         };
 
-        const execution = yield* executeCliToolUseConfig(config, runContext, {
+        const run = yield* executeCliToolUseConfig(config, runContext, {
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
-          categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+          categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use run.`,
         });
-        if (!execution.ok) return execution.exitCode;
+        if (!run.ok) return run.exitCode;
 
         const payload = {
           preset: {
@@ -249,15 +252,15 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
             source: plan.preset.source,
           },
           rootAgent: rootAgent.name,
-          result: execution.result,
+          result: cliRunResultPayload(run.result),
         };
         emitCliResult(runContext, {
           json: payload,
           ndjson: { kind: 'multi-agent-result', ...payload },
-          text: toolUseResultText(execution.result),
+          text: toolUseResultText(run.result),
         });
 
-        return execution.exitCode;
+        return run.exitCode;
       }),
   );
 });

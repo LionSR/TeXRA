@@ -8,23 +8,24 @@
 import {
   aggregateId as qualifyAggregateId,
   referencedAggregates,
+  RunIdSchema,
   AgentCategory,
   AgentConfigFieldsSchema,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type RunIdentity,
   type DisplaySessionEvent,
   type DisplaySessionEventDraft,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
 } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { TraceDocument } from '@transcript';
 
 /**
@@ -63,10 +64,10 @@ function findRootStageId(
  * reached one. `meta.outcome` is the one terminal fact the document
  * carries; failing that, the persisted transcript's last terminal root group
  * row decides, then the snapshot status. Every one of those is a canonical
- * `StreamPhase`. A trace with no terminal fact folds as interrupted: an
+ * `RunPhase`. A trace with no terminal fact folds as interrupted: an
  * exported file has no producer that could still be running it.
  */
-function traceOutcome(trace: TraceDocument): StreamPhase | null {
+function traceOutcome(trace: TraceDocument): RunPhase | null {
   if (trace.meta.outcome) return trace.meta.outcome;
   const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {
@@ -96,7 +97,7 @@ export function traceDisplayName(trace: TraceDocument): string {
 
 /** The listing facts of the run, in publish order, without envelopes. */
 function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
-  const { snapshot, executionId } = trace;
+  const { snapshot, runId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
   const identity = trace.meta.identity;
@@ -110,21 +111,19 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   const bodies: DisplaySessionEventDraft[] = [
     {
       type: 'run.start',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', runId),
       identity,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       category,
       isRemote: false,
       worktree: null,
-      parentStreamId: null,
+      parent: null,
     },
   ];
   if (agentConfig) {
     bodies.push({
       type: 'run.config',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', runId),
       config: agentConfig,
     });
   } else if ('name' in trace.config) {
@@ -134,8 +133,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
     const processConfig = trace.config;
     bodies.push({
       type: 'run.config',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', runId),
       config: AgentConfigFieldsSchema.parse({
         agentCategory: AgentCategory.ToolUse,
         agent: processConfig.name,
@@ -151,23 +149,23 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   }
   if (trace.meta.description) {
     bodies.push({
-      type: 'updateStreamDescription',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      type: 'updateRunDescription',
+      aggregateId: qualifyAggregateId('run', trace.runId),
       description: trace.meta.description,
     });
   }
   if (snapshot.conversationProgress) {
     bodies.push({
       type: 'conversation.progress',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      aggregateId: qualifyAggregateId('run', trace.runId),
       progress: snapshot.conversationProgress,
     });
   }
-  for (const [storageKey, usage] of Object.entries(snapshot.runUsage)) {
+  for (const [usageRunId, usage] of Object.entries(snapshot.runUsage)) {
     bodies.push({
       type: 'usage',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      storageKey,
+      aggregateId: qualifyAggregateId('run', runId),
+      runId: RunIdSchema.parse(usageRunId),
       usage,
     });
   }
@@ -175,17 +173,17 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
     bodies.push(
       {
         type: 'addOutputFiles',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         filesByRound: snapshot.outputFilesByRound,
       },
       {
         type: 'updateMissingOutputs',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         filesByRound: snapshot.missingOutputsByRound,
       },
       {
         type: 'updateCompileFailures',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         filesByRound: snapshot.compileFailuresByRound,
       },
     );
@@ -193,12 +191,12 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
     bodies.push(
       {
         type: 'updateTodos',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         todos: snapshot.todos,
       },
       {
         type: 'updatePlan',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         plan: snapshot.plan,
       },
     );
@@ -208,7 +206,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
     bodies.push(
       {
         type: 'status',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', trace.runId),
         phase: outcome,
         previousPhase: null,
         cause: 'trace',
@@ -217,11 +215,9 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       },
       {
         type: 'result',
-        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        aggregateId: qualifyAggregateId('run', runId),
         outcome,
-        executionId,
         category,
-        isSubagent: false,
         agentName: runIdentityDisplayName(identity),
       },
     );
@@ -259,7 +255,7 @@ function traceEvents(trace: TraceDocument): {
   const transcript = trace.entries.map((entry) =>
     stamp({
       type: 'transcript.entry',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      aggregateId: qualifyAggregateId('run', trace.runId),
       entry,
     }),
   );
@@ -275,7 +271,7 @@ function traceEvents(trace: TraceDocument): {
 function traceHost(trace: TraceDocument): HostSnapshot {
   const name = traceDisplayName(trace);
   return emptyHostSnapshot({
-    key: trace.streamId,
+    key: trace.runId,
     name,
     initials: name.slice(0, 2).toUpperCase(),
     subtitle: 'Exported trace',
@@ -295,8 +291,7 @@ export function traceFrame(
 ): EventsFrame {
   const { listing, transcript } = traceEvents(trace);
   const named = subscribe.aggregates.some(
-    (aggregate) =>
-      aggregate.id === qualifyAggregateId('stream', trace.streamId),
+    (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
   );
   const checkedAggregateIds = [
     ...new Set(listing.flatMap(referencedAggregates)),

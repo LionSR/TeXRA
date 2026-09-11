@@ -68,18 +68,18 @@ interface DiscoveryStreams {
  * outlier; we degrade to "no advanced features" rather than block startup.
  */
 export async function discoverTerminalCapabilities(
-  streams: DiscoveryStreams,
+  runs: DiscoveryStreams,
 ): Promise<TerminalCapabilities> {
-  if (!streams.stdin.isTTY || !streams.stdout.isTTY) {
+  if (!runs.stdin.isTTY || !runs.stdout.isTTY) {
     terminalCapabilities.set(NONE);
     return NONE;
   }
 
   const queryString = Object.values(QUERIES).join('') + DA1_SENTINEL;
 
-  const wasRaw = streams.stdin.isRaw;
-  streams.stdin.setRawMode?.(true);
-  streams.stdin.resume();
+  const wasRaw = runs.stdin.isRaw;
+  runs.stdin.setRawMode?.(true);
+  runs.stdin.resume();
 
   const result = await new Promise<string>((resolve) => {
     let buffer = '';
@@ -102,13 +102,13 @@ export async function discoverTerminalCapabilities(
     const timer = setTimeout(onTimeout, 250);
     const cleanup = (): void => {
       clearTimeout(timer);
-      streams.stdin.off('data', onData);
+      runs.stdin.off('data', onData);
     };
-    streams.stdin.on('data', onData);
-    streams.stdout.write(queryString);
+    runs.stdin.on('data', onData);
+    runs.stdout.write(queryString);
   });
 
-  if (!wasRaw) streams.stdin.setRawMode?.(false);
+  if (!wasRaw) runs.stdin.setRawMode?.(false);
 
   const caps: TerminalCapabilities = {
     kittyKeyboard: RESPONSE_MARKERS.kittyKeyboard.test(result),

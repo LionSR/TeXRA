@@ -23,7 +23,7 @@ const CliOutputFieldsSchema = z.object({
   /** Relative artifacts expected under {@link CliOutputFieldsSchema.outputDirectory}. */
   expectedOutputFiles: z.array(z.string()).nullish(),
   /**
-   * Team preset id this execution was launched from (`texra multi-agent run
+   * Team preset id this run was launched from (`texra multi-agent run
    * <preset>` in the CLI; the main-view launcher also sets it for team runs so
    * resume retains team identity). Used so a team run — whose root is an
    * orchestrator agent — is not inferred as the default agent for a plain
@@ -57,7 +57,7 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
   /** CLI-only fields, absent for extension/desktop-launched runs. */
   cli: CliOutputFieldsSchema.nullish(),
-  /** Execution-scoped delegation roster used by team runs and their children. */
+  /** Run-scoped delegation roster used by team runs and their children. */
   delegationAgentScope: AgentDelegationScopeSchema.nullish(),
 });
 

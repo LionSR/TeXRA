@@ -1,4 +1,4 @@
-import { goalElapsedMs, type StreamTabId } from '@shared/schemas';
+import { goalElapsedMs, type RunId } from '@shared/schemas';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
@@ -22,12 +22,12 @@ import { getContinuationTemplate } from '../runtime/bundledPrompts';
  * after it.
  */
 export async function maybeBuildGoalContinuation(
-  streamId: StreamTabId,
+  runId: RunId,
 ): Promise<string | null> {
   // Read the store first — it is bootstrap-tolerant (returns null before
   // platform init), so the flag check below (which needs `platform()`) is only
   // reached when an active record actually exists on disk.
-  const goal = GoalStore.getForStream(streamId);
+  const goal = GoalStore.getForRun(runId);
   if (!goal || goal.status !== 'active') return null;
 
   if (!isGoalEnabled()) return null;

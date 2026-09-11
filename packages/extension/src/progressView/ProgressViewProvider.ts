@@ -68,7 +68,7 @@ import {
   AgentCategory,
   type OnboardingFunnelState,
   type SessionType,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import type {
@@ -90,7 +90,7 @@ const RECENT_COMMIT_LIMIT = 20;
 
 const log = createLog('ProgressViewProvider');
 
-export type ProgressStreamRevealResult = 'revealed' | 'missing';
+export type ProgressRunRevealResult = 'revealed' | 'missing';
 
 /** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
@@ -585,29 +585,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (this.sidebarShowsProgress()) return;
     const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
     if (newest !== undefined) {
-      this.surfaceAction({ kind: 'select', streamId: newest });
+      this.surfaceAction({ kind: 'select', runId: newest });
     }
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onStreamResolved` callback): the launching surface selects it. */
-  public presentLaunchedStream(streamId: StreamTabId): void {
-    this.surfaceAction({ kind: 'select', streamId });
+   *  `onRunResolved` callback): the launching surface selects it. */
+  public presentLaunchedRun(runId: RunId): void {
+    this.surfaceAction({ kind: 'select', runId });
   }
 
-  public async revealStream(
-    streamId: StreamTabId,
-  ): Promise<ProgressStreamRevealResult> {
+  public async revealRun(runId: RunId): Promise<ProgressRunRevealResult> {
     const view = SubscriptionRef.getUnsafe(this.session.view);
-    if (!view.streams.has(streamId)) return 'missing';
+    if (!view.runs.has(runId)) return 'missing';
     await this.showProgressView();
-    this.surfaceAction({ kind: 'select', streamId });
+    this.surfaceAction({ kind: 'select', runId });
     return 'revealed';
   }
 
-  public streamLabel(streamId: StreamTabId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.session.view).streams.get(streamId)
-      ?.label;
+  public runLabel(runId: RunId): string | undefined {
+    return SubscriptionRef.getUnsafe(this.session.view).runs.get(runId)?.label;
   }
 
   public async popOutToEditor(): Promise<void> {

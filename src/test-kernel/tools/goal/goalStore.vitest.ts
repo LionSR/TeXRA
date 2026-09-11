@@ -13,7 +13,8 @@ import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
-  type StreamTabId,
+  RunIdSchema,
+  type RunId,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
@@ -23,11 +24,13 @@ import {
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore, goalStateChanges } from '@tools/goal';
 
-const STREAM_A = 'stream:forget-a' as StreamTabId;
-const STREAM_B = 'stream:forget-b' as StreamTabId;
-const SUBSCRIPTION_STREAM = 'stream:goal-state-subscription' as StreamTabId;
-const CONCURRENT_STREAM_A = 'stream:concurrent-goal-a' as StreamTabId;
-const CONCURRENT_STREAM_B = 'stream:concurrent-goal-b' as StreamTabId;
+const RUN_A = RunIdSchema.parse('fa0000000a0a');
+const RUN_B = RunIdSchema.parse('fa0000000b0b');
+const SUBSCRIPTION_RUN = RunIdSchema.parse('5b5c00000001');
+const CONCURRENT_RUN_A = RunIdSchema.parse('c0cca000000a');
+const CONCURRENT_RUN_B = RunIdSchema.parse('c0cca000000b');
+const SAME_SESSION_RUN = RunIdSchema.parse('5a3e00000001');
+const OTHER_SESSION_RUN = RunIdSchema.parse('01e300000001');
 
 class BlockingFirstIndexWriteState implements StateStore {
   private readonly values = new Map<string, unknown>();
@@ -132,44 +135,44 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   setupPlatform();
 
   afterEach(async () => {
-    await GoalStore.forget(STREAM_A);
-    await GoalStore.forget(STREAM_B);
+    await GoalStore.forget(RUN_A);
+    await GoalStore.forget(RUN_B);
   });
 
   it('removes the per-stream record and clears the index entry', async () => {
-    await GoalStore.start(STREAM_A, 'objective a');
-    await GoalStore.start(STREAM_B, 'objective b');
+    await GoalStore.start(RUN_A, 'objective a');
+    await GoalStore.start(RUN_B, 'objective b');
     expect(
       GoalStore.list()
-        .map((o) => o.streamId)
+        .map((o) => o.runId)
         .sort(),
-    ).toEqual([STREAM_A, STREAM_B].sort());
+    ).toEqual([RUN_A, RUN_B].sort());
 
-    await GoalStore.forget(STREAM_A);
+    await GoalStore.forget(RUN_A);
 
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
-    expect(GoalStore.list().map((o) => o.streamId)).toEqual([STREAM_B]);
+    expect(GoalStore.getForRun(RUN_A)).toBeNull();
+    expect(GoalStore.list().map((o) => o.runId)).toEqual([RUN_B]);
   });
 
   it('is idempotent — forgetting an unknown stream is a no-op', async () => {
-    await expect(GoalStore.forget(STREAM_A)).resolves.toBeUndefined();
+    await expect(GoalStore.forget(RUN_A)).resolves.toBeUndefined();
   });
 
-  it('lets the same streamId start a fresh goal after forget', async () => {
-    await GoalStore.start(STREAM_A, 'objective one');
-    await GoalStore.forget(STREAM_A);
-    const next = await GoalStore.start(STREAM_A, 'objective two');
+  it('lets the same runId start a fresh goal after forget', async () => {
+    await GoalStore.start(RUN_A, 'objective one');
+    await GoalStore.forget(RUN_A);
+    const next = await GoalStore.start(RUN_A, 'objective two');
     expect(next.objective).toBe('objective two');
     expect(next.status).toBe('active');
   });
 
   it('treats only absent goal records as no goal', async () => {
     const state = workspaceRoots().workspaceState;
-    const key = `goals:byStream:${STREAM_A}`;
+    const key = `goals:byRun:${RUN_A}`;
 
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    expect(GoalStore.getForRun(RUN_A)).toBeNull();
     await state.update(key, null);
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    expect(GoalStore.getForRun(RUN_A)).toBeNull();
   });
 
   it('routes explicit-session forget notifications only to the passed session', async () => {
@@ -177,15 +180,15 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const explicitSession = createTestSession({
       roots: paperRoots('explicit'),
     });
-    publishTestRunStart(runSession, STREAM_A);
-    publishTestRunStart(explicitSession, STREAM_A);
+    publishTestRunStart(runSession, RUN_A);
+    publishTestRunStart(explicitSession, RUN_A);
     const run = collectGoalChanges(runSession);
     const explicit = collectGoalChanges(explicitSession);
     const fallback = collectGoalChanges(defaultSession());
 
     try {
       await inSession(runSession, () =>
-        GoalStore.start(STREAM_A, 'objective one'),
+        GoalStore.start(RUN_A, 'objective one'),
       );
       await runSession.settlePublications();
       run.clear();
@@ -193,12 +196,12 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       fallback.clear();
 
       await inSession(runSession, () =>
-        GoalStore.forget(STREAM_A, explicitSession),
+        GoalStore.forget(RUN_A, explicitSession),
       );
       await explicitSession.settlePublications();
 
       expect(run.seen).toEqual([]);
-      expect(explicit.seen).toEqual([{ streamId: STREAM_A }]);
+      expect(explicit.seen).toEqual([{ runId: RUN_A }]);
       expect(fallback.seen).toEqual([]);
     } finally {
       run.detach();
@@ -211,47 +214,47 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
 
   it('surfaces an unparseable blob but still lets explicit cleanup remove it', async () => {
     const state = workspaceRoots().workspaceState;
-    await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
-    expect(() => GoalStore.getForStream(STREAM_A)).toThrow(
-      `Failed to parse persisted goal for stream "${STREAM_A}"`,
+    await state.update(`goals:byRun:${RUN_A}`, { goalId: 'not-valid' });
+    expect(() => GoalStore.getForRun(RUN_A)).toThrow(
+      `Failed to parse persisted goal for run "${RUN_A}"`,
     );
 
-    await GoalStore.forget(STREAM_A);
+    await GoalStore.forget(RUN_A);
 
-    expect(state.get(`goals:byStream:${STREAM_A}`)).toBeUndefined();
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    expect(state.get(`goals:byRun:${RUN_A}`)).toBeUndefined();
+    expect(GoalStore.getForRun(RUN_A)).toBeNull();
   });
 
   it('does not overwrite an unparseable record when starting a goal', async () => {
     const state = workspaceRoots().workspaceState;
     const malformed = { goalId: 'not-valid' };
-    const key = `goals:byStream:${STREAM_A}`;
+    const key = `goals:byRun:${RUN_A}`;
     await state.update(key, malformed);
 
-    await expect(GoalStore.start(STREAM_A, 'replacement')).rejects.toThrow();
+    await expect(GoalStore.start(RUN_A, 'replacement')).rejects.toThrow();
     expect(state.get(key)).toEqual(malformed);
   });
 
   it('identifies the malformed stream when listing goals', async () => {
     const state = workspaceRoots().workspaceState;
-    await state.update('goals:index', [STREAM_A]);
-    await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
+    await state.update('goals:index', [RUN_A]);
+    await state.update(`goals:byRun:${RUN_A}`, { goalId: 'not-valid' });
 
     expect(() => GoalStore.list()).toThrow(
-      `Failed to parse persisted goal for stream "${STREAM_A}"`,
+      `Failed to parse persisted goal for run "${RUN_A}"`,
     );
   });
 
   it('forgetMany clears records and unparseable blobs', async () => {
     const state = workspaceRoots().workspaceState;
-    await GoalStore.start(STREAM_A, 'objective a');
-    await state.update(`goals:byStream:${STREAM_B}`, { goalId: 'garbage' });
+    await GoalStore.start(RUN_A, 'objective a');
+    await state.update(`goals:byRun:${RUN_B}`, { goalId: 'garbage' });
 
-    await GoalStore.forgetMany([STREAM_A, STREAM_B]);
+    await GoalStore.forgetMany([RUN_A, RUN_B]);
 
     expect(GoalStore.list()).toEqual([]);
-    expect(state.get(`goals:byStream:${STREAM_B}`)).toBeUndefined();
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    expect(state.get(`goals:byRun:${RUN_B}`)).toBeUndefined();
+    expect(GoalStore.getForRun(RUN_A)).toBeNull();
   });
 });
 
@@ -262,29 +265,29 @@ describe('goalStateChanges', () => {
     // Two papers: a session's plane is its workspace root's.
     const sessionA = createTestSession({ roots: paperRoots('a') });
     const sessionB = createTestSession({ roots: paperRoots('b') });
-    publishTestRunStart(sessionA, 'same-session');
-    publishTestRunStart(sessionB, 'other-session');
+    publishTestRunStart(sessionA, SAME_SESSION_RUN);
+    publishTestRunStart(sessionB, OTHER_SESSION_RUN);
     const { seen, detach } = collectGoalChanges(sessionA);
 
     try {
       sessionB.publish([
         {
           type: 'goalStateChanged',
-          aggregateId: qualifyAggregateId('stream', 'other-session'),
+          aggregateId: qualifyAggregateId('run', OTHER_SESSION_RUN),
           state: { active: false },
         },
       ]);
       sessionA.publish([
         {
-          type: 'updateStreamDescription',
-          aggregateId: qualifyAggregateId('stream', 'same-session'),
+          type: 'updateRunDescription',
+          aggregateId: qualifyAggregateId('run', SAME_SESSION_RUN),
           description: 'not a goal change',
         },
       ]);
       sessionA.publish([
         {
           type: 'goalStateChanged',
-          aggregateId: qualifyAggregateId('stream', 'same-session'),
+          aggregateId: qualifyAggregateId('run', SAME_SESSION_RUN),
           state: { active: false },
         },
       ]);
@@ -293,9 +296,9 @@ describe('goalStateChanges', () => {
         sessionB.settlePublications(),
       ]);
 
-      expect(seen).toEqual([{ streamId: 'same-session' }]);
+      expect(seen).toEqual([{ runId: SAME_SESSION_RUN }]);
       await withRunContext(createRunContext({ session: sessionA }), () =>
-        GoalStore.start('same-session', 'Determine the boundary conditions.'),
+        GoalStore.start(SAME_SESSION_RUN, 'Determine the boundary conditions.'),
       );
       await sessionA.settlePublications();
       const removed = effectRuntime().runPromise(
@@ -303,7 +306,7 @@ describe('goalStateChanges', () => {
           goalStateChanges(sessionA).pipe(
             Stream.map((change) =>
               withRunContext(createRunContext({ session: sessionA }), () =>
-                GoalStore.getForStream(change.streamId),
+                GoalStore.getForRun(change.runId),
               ),
             ),
           ),
@@ -311,8 +314,8 @@ describe('goalStateChanges', () => {
       );
       sessionA.publish([
         {
-          type: 'stream.removed',
-          aggregateId: qualifyAggregateId('stream', 'same-session'),
+          type: 'run.removed',
+          aggregateId: qualifyAggregateId('run', SAME_SESSION_RUN),
         },
       ]);
       expect(await removed).toMatchObject({ _tag: 'Some', value: null });
@@ -326,26 +329,26 @@ describe('goalStateChanges', () => {
   it('routes start, status, and edit notifications through the current run session only', async () => {
     const runSession = createTestSession({ roots: paperRoots('run') });
     const otherSession = createTestSession({ roots: paperRoots('other') });
-    publishTestRunStart(runSession, SUBSCRIPTION_STREAM);
+    publishTestRunStart(runSession, SUBSCRIPTION_RUN);
     const run = collectGoalChanges(runSession);
     const other = collectGoalChanges(otherSession);
     const fallback = collectGoalChanges(defaultSession());
 
     try {
       await inSession(runSession, async () => {
-        await GoalStore.start(SUBSCRIPTION_STREAM, 'prove the estimate');
-        await GoalStore.setStatus(SUBSCRIPTION_STREAM, 'paused');
+        await GoalStore.start(SUBSCRIPTION_RUN, 'prove the estimate');
+        await GoalStore.setStatus(SUBSCRIPTION_RUN, 'paused');
         await GoalStore.editObjective(
-          SUBSCRIPTION_STREAM,
+          SUBSCRIPTION_RUN,
           'prove the sharp estimate',
         );
       });
       await runSession.settlePublications();
 
       expect(run.seen).toEqual([
-        { streamId: SUBSCRIPTION_STREAM },
-        { streamId: SUBSCRIPTION_STREAM },
-        { streamId: SUBSCRIPTION_STREAM },
+        { runId: SUBSCRIPTION_RUN },
+        { runId: SUBSCRIPTION_RUN },
+        { runId: SUBSCRIPTION_RUN },
       ]);
       expect(other.seen).toEqual([]);
       expect(fallback.seen).toEqual([]);
@@ -364,10 +367,10 @@ describe('GoalStore index concurrency', () => {
     const state = new BlockingFirstIndexWriteState();
     await installPlatform({}, { workspaceState: state });
 
-    const firstStart = GoalStore.start(CONCURRENT_STREAM_A, 'objective a');
+    const firstStart = GoalStore.start(CONCURRENT_RUN_A, 'objective a');
     await state.waitForBlockedIndexWrite();
 
-    const secondStart = GoalStore.start(CONCURRENT_STREAM_B, 'objective b');
+    const secondStart = GoalStore.start(CONCURRENT_RUN_B, 'objective b');
     await Promise.resolve();
 
     state.releaseBlockedIndexWrite();
@@ -375,11 +378,11 @@ describe('GoalStore index concurrency', () => {
 
     expect(
       GoalStore.list()
-        .map((goal) => goal.streamId)
+        .map((goal) => goal.runId)
         .toSorted(),
-    ).toEqual([CONCURRENT_STREAM_A, CONCURRENT_STREAM_B].toSorted());
-    expect(state.get<StreamTabId[]>('goals:index', []).toSorted()).toEqual(
-      [CONCURRENT_STREAM_A, CONCURRENT_STREAM_B].toSorted(),
+    ).toEqual([CONCURRENT_RUN_A, CONCURRENT_RUN_B].toSorted());
+    expect(state.get<RunId[]>('goals:index', []).toSorted()).toEqual(
+      [CONCURRENT_RUN_A, CONCURRENT_RUN_B].toSorted(),
     );
   });
 });

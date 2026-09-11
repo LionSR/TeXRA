@@ -1,6 +1,6 @@
 // Local imports
 import { logSdkError } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { Action } from '@agent/node';
 import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
@@ -28,14 +28,18 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import { aggregateId } from '@shared/schemas';
-import type { RetryErrorInfo, SubagentProgressUpdate } from '@shared/schemas';
+import type {
+  RetryErrorInfo,
+  RunId,
+  SubagentProgressUpdate,
+} from '@shared/schemas';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
   type RunOutcome,
   AgentCategory,
 } from '@shared/schemas';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
+import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildOverlayToolRegistry,
@@ -62,7 +66,7 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
-  /** Canonical shared state loaded after the execution lease is acquired. */
+  /** Canonical shared state loaded after the run lease is acquired. */
   resume?: Readonly<{ shared: PreparedShared }>;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
@@ -73,12 +77,14 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
    */
   takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
-  /** When true, the subagent prompt variant is used and every completed model
-   *  cycle suspends at WAITING (see `ToolUseWaitNode`) instead of blocking
-   *  in-flow for the next follow-up. A resumed flow may first consume
+  /** The launching run when this run is a delegated child. When set, the
+   *  subagent prompt variant is used and every completed model cycle suspends
+   *  at WAITING (see `ToolUseWaitNode`) instead of blocking in-flow for the
+   *  next follow-up. The flow and its services carry the parent edge itself,
+   *  not a derived boolean. A resumed flow may first consume
    *  `drainedFollowUps`; the child-run loop still owns delivery and every later
    *  turn boundary. */
-  isSubagent?: boolean;
+  parentRunId?: RunId;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
@@ -100,7 +106,7 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
 }
 
 interface RunToolUseFlowResult {
-  outcome: RunOutcome | typeof STREAM_PHASE.WAITING;
+  outcome: RunOutcome | typeof RUN_PHASE.WAITING;
   response?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
   files?: string[];
@@ -166,12 +172,12 @@ export async function runToolUseFlow(
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, runScope, toolPolicy } = input;
-  const { streamId, executionId, session: runSession, signal } = runScope;
+  const { runId, session: runSession, signal } = runScope;
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
-    streamId,
+    runId,
     runSession.followUps,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
@@ -232,7 +238,7 @@ export async function runToolUseFlow(
     ? buildOverlayToolRegistry(baseRegistry, overlayTools)
     : baseRegistry;
 
-  const kv = getExecutionStore(executionId);
+  const kv = getRunStore(runId);
 
   const services: ToolUseServices = {
     ...input,
@@ -245,7 +251,7 @@ export async function runToolUseFlow(
     onCycleResponse: (cycleResponse) => {
       response = cycleResponse;
     },
-    fileService: new TaskRunFileService(executionId),
+    fileService: new TaskRunFileService(runId),
   };
   let activePersistedFlow: ToolUsePersistedFlow | undefined;
 
@@ -328,8 +334,8 @@ export async function runToolUseFlow(
       await persistModelSwitch(model);
       runSession.publish([
         {
-          type: 'execution.config',
-          aggregateId: aggregateId('execution', executionId),
+          type: 'run.record',
+          aggregateId: aggregateId('run', runId),
           record: nextAgentConfig,
         },
       ]);
@@ -345,8 +351,7 @@ export async function runToolUseFlow(
     input.onModelChanged(model);
     logger.emit({
       type: 'run.config',
-      streamId,
-      executionId,
+      runId,
       config: nextAgentConfig,
     });
   };
@@ -367,7 +372,7 @@ export async function runToolUseFlow(
     },
     interrupt(): void {
       input.interrupt();
-      runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
+      runSession.interactions.cancel({ runId, cause: 'Run interrupted.' });
       sessionLifecycle.interrupt(inStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
@@ -453,14 +458,14 @@ export async function runToolUseFlow(
 
     if (input.resume) {
       // `resumeToolUseFromResumeData` reads the record only after it owns the
-      // execution lease (acquire-then-read), so `input.resume.shared` is the
+      // run lease (acquire-then-read), so `input.resume.shared` is the
       // authoritative persisted snapshot with no unleased window left to
       // double-check. PersistedFlow's own schema-checked read below is the
       // single disk read for the resumed state.
       logger.debug('Resuming tool-use flow from persistence');
     } else {
       persistenceRecoveryPending = true;
-      const flowRecord = await readPersistedFlowRecord(kv, executionId);
+      const flowRecord = await readPersistedFlowRecord(kv, runId);
       persistedFlowRecordExists = flowRecord != null;
       // Cancellation can also arrive while the recovery read is pending. Do
       // not start a repair write after that handoff.
@@ -471,11 +476,11 @@ export async function runToolUseFlow(
       if (flowRecord) {
         const parsed = parseToolUseShared(flowRecord.shared);
         if (!parsed.success) {
-          throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+          throw new PersistedFlowStateError(runId, 'invalid-shared', {
             cause: parsed.error,
           });
         }
-        throw new PersistedFlowStateError(executionId, 'unexpected-record');
+        throw new PersistedFlowStateError(runId, 'unexpected-record');
       }
       // Cleanup may delete a terminal flow record only after absence was
       // confirmed.
@@ -501,7 +506,7 @@ export async function runToolUseFlow(
       const pf = new ToolUsePersistedFlow(
         prepareNode,
         kv,
-        executionId,
+        runId,
         ToolUseRunSharedSchema,
       );
       activePersistedFlow = pf;
@@ -512,8 +517,8 @@ export async function runToolUseFlow(
         if (currentTouchedFiles.length) {
           runSession.publish([
             {
-              type: 'execution.workspaceFiles',
-              aggregateId: aggregateId('execution', executionId),
+              type: 'run.workspaceFiles',
+              aggregateId: aggregateId('run', runId),
               paths: currentTouchedFiles,
             },
           ]);
@@ -559,14 +564,14 @@ export async function runToolUseFlow(
 
     // `FlowTransition.WAITING` is only ever produced by `ToolUseWaitNode`
     // suspending a subagent cycle (see its doc comment) — no further gating
-    // needed here; the wait node's own `isSubagent`/`stopAfterCycle` check is
+    // needed here; the wait node's own `parentRunId`/`stopAfterCycle` check is
     // the single source of truth for whether a suspension is legitimate.
     // A recorded `lastError` still outranks it: a run that failed is terminal,
     // and reporting it as suspended would park a failure instead of surfacing
     // it (the wait node stops rather than suspends after an error, so this is
     // a guard on the ordering, not a live branch).
     if (finalAction === FlowTransition.WAITING && !shared.lastError) {
-      outcome = STREAM_PHASE.WAITING;
+      outcome = RUN_PHASE.WAITING;
     } else {
       // A follow-up wait that ended without a batch means the queue was
       // cancelled or disposed under the parked flow, not that the turn
@@ -626,7 +631,7 @@ export async function runToolUseFlow(
     } else if (persistenceRecoveryPending) {
       preservationReason =
         'Flow record preserved after persistence recovery failure';
-    } else if (outcome === STREAM_PHASE.WAITING) {
+    } else if (outcome === RUN_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
     } else if (signal.aborted && !flowRunStarted && persistedFlowRecordExists) {
       // Startup cancellation can happen before this invocation owns or starts
@@ -643,7 +648,7 @@ export async function runToolUseFlow(
       // Setup can fail before `persistenceRecoveryPending` is armed --
       // `liveAttachment.attach()` and `takePendingFollowUps()` both run ahead
       // of the existing-record guard. A non-resume launch reusing an
-      // executionId that already has a checkpoint would otherwise fall through
+      // runId that already has a checkpoint would otherwise fall through
       // to `'delete'` and destroy a record this run never owned (#11313).
       // Preserving is safe in the ordinary case too: a genuinely fresh launch
       // has no record, so this is a no-op rather than a leak. Scoped to a
@@ -681,8 +686,7 @@ export async function runToolUseFlow(
     // whose child loop retains the sole consumer lease across turns.
     attemptTeardown('releasing the follow-up queue', () =>
       sessionLifecycle.release(
-        preserveFollowUpQueue ||
-          runSession.executions.hasActiveChildren(streamId)
+        preserveFollowUpQueue || runSession.runs.hasActiveChildren(runId)
           ? 'recoverable'
           : 'terminal',
       ),

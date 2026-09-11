@@ -83,7 +83,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 // The launch's stream selection is the progress view's own; this suite
 // checks routing, so the provider graph stays out of it.
 vi.mock('@progressView/progressNavigation', () => ({
-  presentLaunchedProgressStream: vi.fn(),
+  presentLaunchedProgressRun: vi.fn(),
 }));
 
 vi.mock('@frontend/secretManager', () => ({
@@ -93,7 +93,7 @@ vi.mock('@frontend/secretManager', () => ({
   },
 }));
 
-// The guard's sole touchpoint is `defaultSession().executions.getAgentHandles()`
+// The guard's sole touchpoint is `defaultSession().runs.getAgentHandles()`
 // — a full stub replacement (not `importOriginal`) keeps this suite's
 // isolation: the real module eagerly binds a `createLog` logger at import
 // time (`SessionHandle.ts`) and later calls `debug`/`warn` on it, while this
@@ -103,7 +103,7 @@ vi.mock('@frontend/secretManager', () => ({
 // SessionHandle) touches this module's other exports.
 vi.mock('@agent/runtime/SessionHandle', () => ({
   defaultSession: () => ({
-    executions: { getAgentHandles: () => agentHandles() },
+    runs: { getAgentHandles: () => agentHandles() },
   }),
 }));
 

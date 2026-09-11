@@ -4,26 +4,22 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - runtime
 import {
   createRunContext,
-  getRunContextAgentName,
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextSession,
-  getRunContextStreamId,
   getRunContextWorkingDirectory,
   tryUseRunContext,
   withRunContext,
 } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { testModelCell } from '../modelCellTestUtils';
 
 describe('RunContext', () => {
   it('reads the current model through the run model cell', () => {
     const runScope = createRunScope({
-      streamId: 'live-model-stream' as StreamTabId,
-      executionId: 'live-model-execution' as ExecutionId,
-      agentName: 'test-agent',
+      runId: 'live-model-run' as RunId,
       session: {} as SessionHandle,
       signal: new AbortController().signal,
     });
@@ -44,7 +40,7 @@ describe('RunContext', () => {
 
   it('reads a bare context model from its one-shot cell', () => {
     const context = createRunContext({
-      streamId: 'bare-model-stream' as StreamTabId,
+      runId: 'bare-model-run' as RunId,
       modelCell: Object.freeze({ modelId: 'gpt54' }),
     });
 
@@ -54,9 +50,7 @@ describe('RunContext', () => {
 
   it('preserves the exact run scope on launch contexts', () => {
     const runScope = createRunScope({
-      streamId: 'scoped-stream' as StreamTabId,
-      executionId: 'scoped-execution' as ExecutionId,
-      agentName: 'scoped-agent',
+      runId: 'scoped-run' as RunId,
       workingDirectory: '/tmp/scoped-worktree',
       session: {} as SessionHandle,
       signal: new AbortController().signal,
@@ -72,14 +66,10 @@ describe('RunContext', () => {
       throw new Error('expected launch context');
     }
     expect(context.runScope).toBe(runScope);
-    expect('streamId' in context).toBe(false);
-    expect('executionId' in context).toBe(false);
-    expect('agentName' in context).toBe(false);
+    expect('runId' in context).toBe(false);
     expect('workingDirectory' in context).toBe(false);
     expect('session' in context).toBe(false);
-    expect(getRunContextStreamId(context)).toBe(runScope.streamId);
-    expect(getRunContextExecutionId(context)).toBe(runScope.executionId);
-    expect(getRunContextAgentName(context)).toBe(runScope.agentName);
+    expect(getRunContextRunId(context)).toBe(runScope.runId);
     expect(getRunContextWorkingDirectory(context)).toBe(
       runScope.workingDirectory,
     );

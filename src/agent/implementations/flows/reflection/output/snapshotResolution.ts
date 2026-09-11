@@ -8,7 +8,7 @@
  * canonical "before" content for accurate stats.
  */
 
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { getOriginalSnapshotPath } from '@utils/files/runStorageFs';
@@ -17,20 +17,17 @@ import { getOriginalSnapshotPath } from '@utils/files/runStorageFs';
  *  Non-workspace files and missing snapshots pass through unchanged. */
 export async function resolveBaseFilesForDiff(
   baseFiles: FileLocation[],
-  executionId: ExecutionId,
+  runId: RunId,
 ): Promise<FileLocation[]> {
   return Promise.all(
     baseFiles.map(async (loc) => {
       if (loc.kind !== 'workspace') return loc;
-      const snapshotAbsolute = getOriginalSnapshotPath(
-        executionId,
-        loc.relativePath,
-      );
+      const snapshotAbsolute = getOriginalSnapshotPath(runId, loc.relativePath);
       if (!(await AbsoluteFS.isFile(snapshotAbsolute))) return loc;
       return createRunStorageLocation(
         snapshotAbsolute,
         loc.relativePath,
-        executionId,
+        runId,
       );
     }),
   );

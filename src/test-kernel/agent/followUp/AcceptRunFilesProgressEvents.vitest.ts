@@ -16,7 +16,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
@@ -35,8 +35,7 @@ let testApprovalHandler:
   | undefined;
 let detachHostInteractions = (): void => {};
 
-const executionId = 'abcdef' as ExecutionId;
-const streamId = 'stream:accept-run-files' as StreamTabId;
+const runId = 'abcdef' as RunId;
 const workspacePath = '/workspace';
 const storagePath = '/storage';
 
@@ -68,12 +67,12 @@ function setRunStorageEntries(
   entries: Readonly<Record<string, number>> = {},
 ): void {
   const types = new Map<string, number>([
-    [`executions/${executionId}`, FileType.Directory],
+    [`executions/${runId}`, FileType.Directory],
     ...Object.entries(entries),
   ]);
   for (const entry of Object.keys(entries)) {
     let parent = path.posix.dirname(entry);
-    while (parent !== '.' && parent !== `executions/${executionId}`) {
+    while (parent !== '.' && parent !== `executions/${runId}`) {
       types.set(parent, FileType.Directory);
       parent = path.posix.dirname(parent);
     }
@@ -101,9 +100,9 @@ function runAccept(
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
-  return withRunContext(createRunContext({ streamId, executionId }), () =>
+  return withRunContext(createRunContext({ runId }), () =>
     withToolFileInteractionContext({ tracker }, () =>
-      tool.call({ execution_id: executionId, files }),
+      tool.call({ execution_id: runId, files }),
     ),
   );
 }
@@ -132,7 +131,7 @@ describe('accept_run_files progress events', () => {
     await installTestPlatform();
     defaultSession().approvals.clearAll();
     defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
-    // Shared by every test below that stubs the execution/workspace paths;
+    // Shared by every test below that stubs the run/workspace paths;
     // the test that doesn't need it (missing runtime host) fails before
     // reaching either function.
     vi.spyOn(StorageFS, 'fullPath').mockImplementation(
@@ -161,7 +160,7 @@ describe('accept_run_files progress events', () => {
     const { written, dispose } = recordWrittenFiles();
 
     setRunStorageEntries({
-      [`executions/${executionId}/output.tex`]: FileType.File,
+      [`executions/${runId}/output.tex`]: FileType.File,
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
@@ -184,7 +183,7 @@ describe('accept_run_files progress events', () => {
     const tool = new AcceptRunFilesTool();
 
     setRunStorageEntries({
-      [`executions/${executionId}/output.tex`]: FileType.File,
+      [`executions/${runId}/output.tex`]: FileType.File,
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
@@ -209,7 +208,7 @@ describe('accept_run_files progress events', () => {
     const tool = new AcceptRunFilesTool();
 
     setRunStorageEntries({
-      [`executions/${executionId}/output.tex`]: FileType.File,
+      [`executions/${runId}/output.tex`]: FileType.File,
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
@@ -229,8 +228,8 @@ describe('accept_run_files progress events', () => {
     const tool = new AcceptRunFilesTool();
 
     setRunStorageEntries({
-      [`executions/${executionId}/first.tex`]: FileType.File,
-      [`executions/${executionId}/second.tex`]: FileType.File,
+      [`executions/${runId}/first.tex`]: FileType.File,
+      [`executions/${runId}/second.tex`]: FileType.File,
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
@@ -258,14 +257,14 @@ describe('accept_run_files progress events', () => {
     const { written, dispose } = recordWrittenFiles();
 
     setRunStorageEntries({
-      [`executions/${executionId}/output.tex`]: FileType.File,
+      [`executions/${runId}/output.tex`]: FileType.File,
     });
     const write = stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
     testApprovalHandler = acceptAll;
 
     const result = await tool.call({
-      execution_id: executionId,
+      execution_id: runId,
       files: [{ path: 'output.tex', original: 'paper.tex' }],
     });
 
@@ -279,7 +278,7 @@ describe('accept_run_files progress events', () => {
     const tool = new AcceptRunFilesTool();
     let approvalOriginal = '';
     let approvalProposed = '';
-    const snapshotPath = `${storagePath}/executions/${executionId}/original/draft.tex`;
+    const snapshotPath = `${storagePath}/executions/${runId}/original/draft.tex`;
 
     setRunStorageEntries();
     const write = stubWorkspaceFiles(true, 'new content');
@@ -341,7 +340,7 @@ describe('accept_run_files progress events', () => {
     let approvals = 0;
 
     setRunStorageEntries({
-      [`executions/${executionId}/r1/Draft/appendices.tex`]:
+      [`executions/${runId}/r1/Draft/appendices.tex`]:
         FileType.SymbolicLink | FileType.File,
     });
     const write = stubWorkspaceFiles(true, '');

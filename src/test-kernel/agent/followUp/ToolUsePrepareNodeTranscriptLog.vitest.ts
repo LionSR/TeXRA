@@ -15,9 +15,8 @@ function buildServices(
 ): ToolUseServices {
   return {
     config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
-    runScope: testRunScope('test-stream'),
+    runScope: testRunScope('test-run'),
     fileService: {} as never,
-    isSubagent: false,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     modelCell: testModelCell({
       consumeInsertedAttachmentKinds: vi.fn(() => []),
@@ -114,7 +113,7 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
       {
         resolvedToolNames,
         hasDelegationTools: hasDelegationTool(resolvedToolNames),
-        isSubagent: services.isSubagent,
+        isSubagent: services.parentRunId !== undefined,
       },
     );
 

@@ -61,7 +61,7 @@ describe('NdjsonStdoutSink', () => {
     sink.writeRecord({
       kind: 'progress',
       event: 'updateStreamStatus',
-      payload: { streamId: 'stream-1', status: 'working' },
+      payload: { runId: 'stream-1', status: 'working' },
     });
     emit('drain');
     await sink.flush();

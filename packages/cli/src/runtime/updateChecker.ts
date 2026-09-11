@@ -264,7 +264,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const ambient = readCliAmbientState();
   if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return;
   if (ambient.isCi) return;
-  // Require all three standard streams to be a TTY. stdout matters even though
+  // Require all three standard runs to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
   // `texra chat > out` is an interactive-mode usage error the command rejects
   // later, and we must not prompt for (or run) a self-update before it does.

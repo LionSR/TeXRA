@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type {
   InquiryThreadId,
   InquiryThreadSummary,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 
-const STREAM = 'stream:test' as StreamTabId;
+const STREAM = 'stream:test' as RunId;
 const THREAD: InquiryThreadId = 'ei_aabbccdd0011' as InquiryThreadId;
 const OTHER_THREAD: InquiryThreadId = 'ei_ffff00001122' as InquiryThreadId;
 
@@ -16,7 +16,7 @@ function makeSummary(
 ): InquiryThreadSummary {
   return {
     threadId: OTHER_THREAD,
-    parentStreamId: STREAM,
+    parentRunId: STREAM,
     status: 'open',
     lastQuestionPreview: 'Prove Lemma 3.2 from manuscript',
     lastActivityIso: '2026-08-06T11:48:00.000Z',

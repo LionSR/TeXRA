@@ -14,6 +14,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
 import type { QuotaFallbackRuntime } from '@model/quotaFallbackRoutes';
 import type { QuotaFallbackRoute } from '@shared/quotaFallbackRoutes';
+import type { RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const PROVIDERS = [
@@ -179,7 +180,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-a',
+          stream: 'stream-a' as RunId,
           requestId: 'retry-a',
           provider: 'anthropic',
           exhaustionReason: 'upstream-credit',
@@ -200,7 +201,7 @@ describe('ProgressApiKeyRetryController', () => {
       });
 
       yield* harness.controller.useOwnApiKey({
-        stream: 'stream-a',
+        stream: 'stream-a' as RunId,
         requestId: 'retry-a',
         provider: 'anthropic',
         exhaustionReason: 'upstream-credit',
@@ -221,7 +222,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-a',
+          stream: 'stream-a' as RunId,
           requestId: 'retry:stale',
           provider: 'anthropic',
           exhaustionReason: 'copilot-subscription',
@@ -243,7 +244,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-b',
+          stream: 'stream-b' as RunId,
           requestId: 'retry-b',
           exhaustionReason: 'upstream-credit',
         });
@@ -263,7 +264,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-race',
+          stream: 'stream-race' as RunId,
           requestId: 'retry-race',
           provider: 'openai',
           exhaustionReason: 'chatgpt-subscription',
@@ -283,7 +284,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-d',
+          stream: 'stream-d' as RunId,
           requestId: 'retry-d',
           provider: 'openai',
           exhaustionReason: 'chatgpt-subscription',
@@ -306,7 +307,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-grok',
+          stream: 'stream-grok' as RunId,
           requestId: 'retry-grok',
           provider: 'xai',
           exhaustionReason: 'xai-subscription',
@@ -325,7 +326,7 @@ describe('ProgressApiKeyRetryController', () => {
         const harness = createHarness({ keys: {} });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-e',
+          stream: 'stream-e' as RunId,
           requestId: 'retry-e',
           provider: 'openai',
           exhaustionReason: 'chatgpt-subscription',
@@ -347,7 +348,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-glm',
+          stream: 'stream-glm' as RunId,
           requestId: 'retry-glm',
           provider: 'glm',
           exhaustionReason: 'glm-coding-plan',
@@ -369,7 +370,7 @@ describe('ProgressApiKeyRetryController', () => {
       });
 
       yield* harness.controller.useOwnApiKey({
-        stream: 'stream-glm2',
+        stream: 'stream-glm2' as RunId,
         requestId: 'retry-glm2',
         provider: 'glm',
         exhaustionReason: 'glm-coding-plan',
@@ -398,7 +399,7 @@ describe('ProgressApiKeyRetryController', () => {
 
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
-            stream: 'stream-a',
+            stream: 'stream-a' as RunId,
             requestId: 'retry-a',
             provider: 'anthropic',
             exhaustionReason: 'copilot-subscription',
@@ -421,7 +422,7 @@ describe('ProgressApiKeyRetryController', () => {
 
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
-            stream: 'stream-a',
+            stream: 'stream-a' as RunId,
             requestId: 'retry-a',
             exhaustionReason: 'copilot-subscription',
             chatGptSubscriptionEligible: true,
@@ -442,7 +443,7 @@ describe('ProgressApiKeyRetryController', () => {
 
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
-            stream: 'stream-a',
+            stream: 'stream-a' as RunId,
             requestId: 'retry-a',
             exhaustionReason: 'copilot-subscription',
             chatGptSubscriptionEligible: true,
@@ -479,7 +480,7 @@ describe('ProgressApiKeyRetryController', () => {
         expect(prefersCopilotRoute('sonnet46')).toBe(true);
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
-            stream: 'stream-a',
+            stream: 'stream-a' as RunId,
             requestId: 'retry-a',
             model: 'sonnet46',
             exhaustionReason: 'copilot-subscription',
@@ -508,7 +509,7 @@ describe('ProgressApiKeyRetryController', () => {
         const retryFailure = new Error('retry launch failed');
         const restoreFailure = new Error('restore failed');
         const request = {
-          stream: 'stream-a',
+          stream: 'stream-a' as RunId,
           requestId: 'retry-a',
           provider: 'openai',
           exhaustionReason: 'chatgpt-subscription',
@@ -566,7 +567,7 @@ describe('ProgressApiKeyRetryController', () => {
 
         const first = yield* Effect.forkChild(
           harness.controller.useOwnApiKey({
-            stream: 'stream-a',
+            stream: 'stream-a' as RunId,
             requestId: 'retry-a',
             provider: 'openai',
             exhaustionReason: 'chatgpt-subscription',
@@ -579,7 +580,7 @@ describe('ProgressApiKeyRetryController', () => {
         );
         const second = yield* Effect.forkChild(
           harness.controller.useOwnApiKey({
-            stream: 'stream-b',
+            stream: 'stream-b' as RunId,
             requestId: 'retry-b',
             provider: 'openai',
             exhaustionReason: 'chatgpt-subscription',
@@ -611,7 +612,7 @@ describe('ProgressApiKeyRetryController', () => {
       const harness = createHarness({ keys: { openai: 'stored-openai' } });
 
       yield* harness.controller.useOwnApiKey({
-        stream: 'stream-kimi-exclusive',
+        stream: 'stream-kimi-exclusive' as RunId,
         requestId: 'retry-kimi-exclusive',
         model: 'kimiCoding',
         exhaustionReason: 'kimi-code-subscription',
@@ -638,7 +639,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-stale-queue',
+          stream: 'stream-stale-queue' as RunId,
           requestId: 'retry-stale-queue',
           provider: 'openai',
           exhaustionReason: 'chatgpt-subscription',
@@ -663,7 +664,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-kimi-credit',
+          stream: 'stream-kimi-credit' as RunId,
           requestId: 'retry-kimi-credit',
           model: 'kimiCoding',
           provider: 'moonshot',
@@ -695,7 +696,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-kimi-dual',
+          stream: 'stream-kimi-dual' as RunId,
           requestId: 'retry-kimi-dual',
           model: 'kimi3',
           provider: 'moonshot',
@@ -731,7 +732,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* harness.controller.useOwnApiKey({
-          stream: 'stream-kimi-moonshot',
+          stream: 'stream-kimi-moonshot' as RunId,
           requestId: 'retry-kimi-moonshot',
           model: 'kimi3',
           provider: 'moonshot',
@@ -765,7 +766,7 @@ describe('ProgressApiKeyRetryController', () => {
         const holder = yield* Effect.forkChild(
           harness.controller.runCopilotFallbackWithRouting(
             {
-              stream: 'stream-holder',
+              stream: 'stream-holder' as RunId,
               requestId: 'retry-holder',
               exhaustionReason: 'copilot-subscription',
             },
@@ -782,7 +783,7 @@ describe('ProgressApiKeyRetryController', () => {
         const stale = yield* Effect.forkChild(
           harness.controller.runCopilotFallbackWithRouting(
             {
-              stream: 'stream-stale',
+              stream: 'stream-stale' as RunId,
               requestId: 'retry-stale',
               exhaustionReason: 'copilot-subscription',
             },

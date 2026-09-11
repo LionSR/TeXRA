@@ -4,15 +4,15 @@ import stableStringify from 'safe-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {
-  ExecutionId,
+  RunId,
   WorkflowCallIdentity,
   WorkflowControlAction,
-  WorkflowExecutionSnapshot,
+  WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   WORKFLOW_CALL_KIND,
   WORKFLOW_CALL_STATUS,
-  WORKFLOW_EXECUTION_LIFECYCLE,
+  WORKFLOW_RUN_LIFECYCLE,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
 import { isNonEmptyString, onAbort } from '@utils/core';
@@ -21,7 +21,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
-import { WorkflowExecutionState } from './workflowExecutionState';
+import { WorkflowRunState } from './workflowRunState';
 import {
   WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
@@ -34,7 +34,7 @@ import {
 } from './types';
 
 /**
- * Stable execution identity for one agent() call. Current keys exclude
+ * Stable run identity for one agent() call. Current keys exclude
  * display-only labels and phases, so editing a declarative task plan does not
  * invalidate otherwise identical completed work. A prior entry with a
  * matching key replays its cached result wherever the call now sits in the
@@ -46,13 +46,13 @@ function journalKey(
   options: WorkflowAgentCallOptions,
   dependencyFingerprint?: string,
 ): string {
-  const executionOptions: WorkflowAgentCallOptions = { ...options };
-  delete executionOptions.label;
-  delete executionOptions.phase;
+  const runOptions: WorkflowAgentCallOptions = { ...options };
+  delete runOptions.label;
+  delete runOptions.phase;
   // Typed binding so safe-stable-stringify resolves to its string-returning
   // overload; an object input never yields undefined.
   const source: object = {
-    options: executionOptions,
+    options: runOptions,
     prompt,
     dependencyFingerprint,
   };
@@ -217,7 +217,7 @@ class JournalCommitFence {
 class CoalescedSnapshotWriter {
   readonly #write: WorkflowScriptRunOptions['onSnapshot'];
   readonly #onFailure: (failure: WorkflowRunAbortError) => void;
-  #pending: WorkflowExecutionSnapshot | undefined;
+  #pending: WorkflowRunSnapshot | undefined;
   #running: Promise<void> | undefined;
   #failure: WorkflowRunAbortError | undefined;
 
@@ -229,7 +229,7 @@ class CoalescedSnapshotWriter {
     this.#onFailure = onFailure;
   }
 
-  publish(snapshot: WorkflowExecutionSnapshot): void {
+  publish(snapshot: WorkflowRunSnapshot): void {
     if (!this.#write || this.#failure !== undefined) return;
     this.#pending = snapshot;
     this.#running ??= this.#drain();
@@ -265,7 +265,7 @@ class CoalescedSnapshotWriter {
       }
     } catch (cause) {
       const failure = new WorkflowRunAbortError(
-        `Failed to persist workflow execution snapshot: ${toErrorMessage(cause)}`,
+        `Failed to persist workflow run snapshot: ${toErrorMessage(cause)}`,
         { kind: 'checkpoint', cause },
       );
       this.#failure = failure;
@@ -285,9 +285,9 @@ class CoalescedSnapshotWriter {
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
  * call is bounded by one shared p-queue concurrency limit and journaled for
- * resume (same prompt/execution options → cached result, at any position).
+ * resume (same prompt/run options → cached result, at any position).
  *
- * On wall-clock timeout the sandbox preempts guest execution, fires the run's
+ * On wall-clock timeout the sandbox preempts guest run, fires the run's
  * AbortSignal (passed to every runAgent invocation), and refuses new calls.
  */
 export async function runWorkflowScript(
@@ -343,7 +343,7 @@ export async function runWorkflowScript(
         cause: error,
       }),
     );
-  // Live child execution id → the in-flight attempt that launched it, linked
+  // Live child run id → the in-flight attempt that launched it, linked
   // to runAbort (a run abort cascades to every entry; a per-call abort leaves
   // the others running). The runner reports the id it actually launched
   // (attempt-specific after a durable retry), so a host targets exactly the
@@ -352,7 +352,7 @@ export async function runWorkflowScript(
   // attempt a retry starts, and the attempt reads its own requested action
   // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
-  const inFlightCalls = new Map<ExecutionId, InFlightAgentCall>();
+  const inFlightCalls = new Map<RunId, InFlightAgentCall>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -372,7 +372,7 @@ export async function runWorkflowScript(
     options.onSnapshot,
     failRun,
   );
-  const executionState = new WorkflowExecutionState({
+  const workflowRunState = new WorkflowRunState({
     phases: plannedPhases,
     tasks: plannedTasks,
     initialSnapshot: options.initialSnapshot,
@@ -387,10 +387,10 @@ export async function runWorkflowScript(
   await snapshotWriter.flush();
   snapshotWriter.throwIfFailed();
 
-  const control: WorkflowScriptControl = (childExecutionId, action) => {
+  const control: WorkflowScriptControl = (childRunId, action) => {
     // False when the id belongs to no live attempt of this run (already
     // settled, or never registered): the caller hears that nothing acted.
-    const call = inFlightCalls.get(childExecutionId);
+    const call = inFlightCalls.get(childRunId);
     if (!call) return false;
     call.action = action;
     call.controller.abort(
@@ -483,13 +483,13 @@ export async function runWorkflowScript(
       callOptions.label = plannedTask.label;
       callOptions.phase = plannedTask.phase;
     } else {
-      callOptions.phase ??= executionState.currentPhase;
+      callOptions.phase ??= workflowRunState.currentPhase;
     }
 
     const primaryFile =
       callOptions.inputFiles?.[0] ?? callOptions.contextFiles?.[0];
     const role = callOptions.agentName ?? 'Agent';
-    // One derivation for the execution snapshot and its live projection, so
+    // One derivation for the run snapshot and its live projection, so
     // the label a host shows live is the label the durable record keeps:
     // declared > explicit > file-derived > prompt excerpt > role + position.
     const promptExcerpt = prompt
@@ -556,11 +556,11 @@ export async function runWorkflowScript(
     try {
       if (
         callOptions.phase !== undefined &&
-        executionState.currentPhaseIndex === -1
+        workflowRunState.currentPhaseIndex === -1
       ) {
-        executionState.enterStage(callOptions.phase);
+        workflowRunState.enterStage(callOptions.phase);
       }
-      executionState.issueCall(
+      workflowRunState.issueCall(
         {
           id: progressId,
           label,
@@ -587,7 +587,7 @@ export async function runWorkflowScript(
     if (issuedCallKeys.has(key)) {
       throw failRun(
         new WorkflowRunAbortError(
-          'Repeated agent() calls with the same prompt and execution options require distinct non-empty "id" options for restart-safe identity.',
+          'Repeated agent() calls with the same prompt and run options require distinct non-empty "id" options for restart-safe identity.',
           { kind: 'contract' },
         ),
       );
@@ -628,7 +628,7 @@ export async function runWorkflowScript(
       error: unknown,
       status: WorkflowFailedCallStatus = WORKFLOW_CALL_STATUS.FAILED,
     ): void => {
-      executionState.settleCall(
+      workflowRunState.settleCall(
         progressId,
         status === WORKFLOW_CALL_STATUS.CANCELLED
           ? { status }
@@ -675,15 +675,15 @@ export async function runWorkflowScript(
       );
       const entry = { index, key, result: normalizedResult };
       journal.set(index, entry);
-      executionState.settleCall(progressId, {
+      workflowRunState.settleCall(progressId, {
         status: WORKFLOW_CALL_STATUS.CACHED,
       });
       onJournalEntryConsumed?.(entry);
       return payload;
     }
-    // The execution snapshot solely owns the queued fact (QUEUED status); no
+    // The run snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.
-    executionState.queueCall(progressId, { model: callOptions.model });
+    workflowRunState.queueCall(progressId, { model: callOptions.model });
 
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
@@ -717,7 +717,7 @@ export async function runWorkflowScript(
               ),
             );
           }
-          executionState.beginAttempt(progressId);
+          workflowRunState.beginAttempt(progressId);
           const launch = () => {
             callController.signal.throwIfAborted();
             return runAgent({
@@ -729,7 +729,7 @@ export async function runWorkflowScript(
               signal: callController.signal,
               report: ({ agent, recovered, ...attemptFacts }) => {
                 if (
-                  attemptFacts.childExecutionId !== undefined &&
+                  attemptFacts.childRunId !== undefined &&
                   recovered !== true
                 ) {
                   // The identity a host targets skip/retry by, stamped where
@@ -737,15 +737,15 @@ export async function runWorkflowScript(
                   // out: their result is already authoritative, so a stale
                   // skip/retry must not be able to discard or re-run it
                   // during the recovery path's async metadata reads.
-                  inFlightCalls.set(attemptFacts.childExecutionId, call);
+                  inFlightCalls.set(attemptFacts.childRunId, call);
                 }
                 if (
                   Object.values(attemptFacts).some((fact) => fact !== undefined)
                 ) {
-                  executionState.reportAttempt(progressId, attemptFacts);
+                  workflowRunState.reportAttempt(progressId, attemptFacts);
                 }
                 if (agent !== undefined) {
-                  executionState.updateCall(progressId, { agent });
+                  workflowRunState.updateCall(progressId, { agent });
                 }
               },
             });
@@ -769,25 +769,25 @@ export async function runWorkflowScript(
         // This attempt's child ids are dead the moment it settles: a retry
         // launches under a fresh id, and a stale one must no-op. Deleting
         // during for...of is spec-safe for Map iterators.
-        for (const [childExecutionId, inFlight] of inFlightCalls) {
-          if (inFlight === call) inFlightCalls.delete(childExecutionId);
+        for (const [childRunId, inFlight] of inFlightCalls) {
+          if (inFlight === call) inFlightCalls.delete(childRunId);
         }
       }
 
       // The terminal drain may have timed out while this runner ignored its
       // abort signal. Do not let that late settlement mutate sealed state or
       // append a journal entry after the terminal snapshot was persisted.
-      if (!executionState.settleAttempt(progressId)) return undefined;
+      if (!workflowRunState.settleAttempt(progressId)) return undefined;
 
       // Control action wins over whatever the (possibly signal-ignoring) runner
       // did: a deliberate skip/retry discards this attempt's outcome.
       const action = call.action;
       if (action === 'retry') {
-        executionState.queueCall(progressId, { model: callOptions.model });
+        workflowRunState.queueCall(progressId, { model: callOptions.model });
         continue;
       }
       if (action === 'skip') {
-        executionState.settleCall(progressId, {
+        workflowRunState.settleCall(progressId, {
           status: WORKFLOW_CALL_STATUS.SKIPPED,
         });
         // First-class SKIPPED value, not journaled — a resume re-runs it.
@@ -845,7 +845,7 @@ export async function runWorkflowScript(
           // not rewrite the call to failed and leave the snapshot
           // contradicting the journal.
           callSettled = true;
-          executionState.settleCall(progressId, {
+          workflowRunState.settleCall(progressId, {
             status: WORKFLOW_CALL_STATUS.COMPLETED,
           });
           onJournalEntryConsumed?.(entry);
@@ -898,7 +898,7 @@ export async function runWorkflowScript(
                 String(args[0]),
               );
               try {
-                executionState.enterStage(nextPhase);
+                workflowRunState.enterStage(nextPhase);
               } catch (error) {
                 throw contractFault(error);
               }
@@ -967,16 +967,16 @@ export async function runWorkflowScript(
     const succeeded =
       scriptFailure === undefined && firstFatalFault === undefined;
     let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
-      WORKFLOW_EXECUTION_LIFECYCLE.FAILED;
+      WORKFLOW_RUN_LIFECYCLE.FAILED;
     if (succeeded) {
-      terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.COMPLETED;
+      terminalLifecycle = WORKFLOW_RUN_LIFECYCLE.COMPLETED;
     } else if (firstFatalFault === undefined && options.signal?.aborted) {
-      terminalLifecycle = WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED;
+      terminalLifecycle = WORKFLOW_RUN_LIFECYCLE.CANCELLED;
     }
     const terminalError = firstFatalFault ?? scriptFailure?.error;
     // Neither call below can throw, so this block never masks the outcome the
     // caller must see.
-    executionState.finish(
+    workflowRunState.finish(
       terminalLifecycle,
       terminalError === undefined ? undefined : toErrorMessage(terminalError),
     );
@@ -995,7 +995,7 @@ export async function runWorkflowScript(
   return {
     result,
     journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
-    snapshot: executionState.snapshot(),
+    snapshot: workflowRunState.snapshot(),
   };
 }
 

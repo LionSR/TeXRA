@@ -17,15 +17,16 @@ import {
   type Goal,
   type GoalState,
   type GoalStatus,
-  type StreamTabId,
+  type RunId,
+  type AggregateTarget,
 } from '@shared/schemas';
 import { filterNotNull, unique, hexId12, KeyedMutex } from '@utils/core';
 
-const STREAM_KEY_PREFIX = 'goals:byStream:';
+const RUN_KEY_PREFIX = 'goals:byRun:';
 const INDEX_KEY = 'goals:index';
-// Stream index growth is user-driven (one entry per stream that ever had
-// a Goal). `forget()` removes entries; callers that delete a stream
-// without calling `forget()` leave dangling entries until next manual cleanup.
+// Index growth is user-driven (one entry per run that ever had a Goal).
+// `forget()` removes entries; callers that delete a run without calling
+// `forget()` leave dangling entries until next manual cleanup.
 // Single logical resource (the index), so KeyedMutex (utils/core/keyedMutex.ts)
 // is used with one constant key rather than a bare Mutex — the same
 // primitive most other module-level locks in the codebase already use.
@@ -33,11 +34,11 @@ const indexMutex = new KeyedMutex<'index'>();
 
 /** One goal mutation as observed on a session's event plane. */
 export interface GoalStateChange {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
 }
 
-function streamKey(streamId: StreamTabId): string {
-  return `${STREAM_KEY_PREFIX}${streamId}`;
+function runKey(runId: RunId): string {
+  return `${RUN_KEY_PREFIX}${runId}`;
 }
 
 function nowIso(): string {
@@ -55,7 +56,7 @@ function goalStateOf(goal: Goal | null): GoalState {
 // now absent) — passing it in place of a fresh readRaw() avoids a redundant
 // storage round trip and a narrow re-read race against a concurrent writer.
 function emitGoalStateChanged(
-  streamId: StreamTabId,
+  runId: RunId,
   current: Goal | null,
   session?: SessionHandle,
 ): void {
@@ -68,26 +69,26 @@ function emitGoalStateChanged(
   target.publish([
     {
       type: 'goalStateChanged',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', runId),
       state: goalStateOf(current),
     },
   ]);
 }
 
-function readRaw(streamId: StreamTabId): Goal | null {
+function readRaw(runId: RunId): Goal | null {
   // tryWorkspaceRoots is bootstrap-tolerant: read-only paths called before
-  // the roots are installed (e.g. early-stream syncs in some tests) return
+  // the roots are installed (e.g. early-run syncs in some tests) return
   // null rather than throwing. Write paths still use workspaceRoots() which
   // does throw, surfacing the misuse.
   const state = tryWorkspaceRoots()?.workspaceState;
   if (!state) return null;
-  const key = streamKey(streamId);
+  const key = runKey(runId);
   const raw = state.get<unknown>(key);
   if (raw == null) return null;
   const parsed = GoalSchema.safeParse(raw);
   if (!parsed.success) {
     throw new Error(
-      `Failed to parse persisted goal for stream "${streamId}" at storage key "${key}".`,
+      `Failed to parse persisted goal for run "${runId}" at storage key "${key}".`,
       { cause: parsed.error },
     );
   }
@@ -95,15 +96,15 @@ function readRaw(streamId: StreamTabId): Goal | null {
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
-  await workspaceRoots().workspaceState.update(streamKey(goal.streamId), goal);
+  await workspaceRoots().workspaceState.update(runKey(goal.runId), goal);
 }
 
-function readIndex(): StreamTabId[] {
+function readIndex(): RunId[] {
   const state = tryWorkspaceRoots()?.workspaceState;
   if (!state) return [];
   const raw = state.get<unknown>(INDEX_KEY);
   const entries = Array.isArray(raw)
-    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
+    ? raw.filter((v): v is RunId => typeof v === 'string')
     : [];
   // Dedupe defensively — a corrupt or hand-edited workspaceState could
   // contain duplicate entries, which would otherwise surface as duplicate
@@ -111,9 +112,9 @@ function readIndex(): StreamTabId[] {
   return unique(entries);
 }
 
-async function addToIndex(streamId: StreamTabId): Promise<void> {
+async function addToIndex(runId: RunId): Promise<void> {
   await mutateIndex((index) =>
-    index.includes(streamId) ? index : [...index, streamId],
+    index.includes(runId) ? index : [...index, runId],
   );
 }
 
@@ -123,9 +124,7 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
  * equality — all current callers (`addToIndex` and `removeRecords`' inline
  * callback) already follow this contract.
  */
-async function mutateIndex(
-  mutate: (index: StreamTabId[]) => StreamTabId[],
-): Promise<void> {
+async function mutateIndex(mutate: (index: RunId[]) => RunId[]): Promise<void> {
   await indexMutex.runExclusive('index', async () => {
     const state = workspaceRoots().workspaceState;
     const index = readIndex();
@@ -141,18 +140,18 @@ async function mutateIndex(
  * calls `mutate`, persists, broadcasts, and returns the result.
  */
 async function update(
-  streamId: StreamTabId,
+  runId: RunId,
   mutate: (goal: Goal) => Goal,
   // Callers that already read the record (setStatus) pass it in to skip a
   // second read-and-parse of the same workspaceState key.
   existing?: Goal,
 ): Promise<Goal | null> {
-  const goal = existing ?? readRaw(streamId);
+  const goal = existing ?? readRaw(runId);
   if (!goal) return null;
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
   // In-run: the active run's session (ALS), falling back to the default session.
-  emitGoalStateChanged(streamId, final);
+  emitGoalStateChanged(runId, final);
   return final;
 }
 
@@ -188,22 +187,25 @@ export function goalStateChanges(
   return session.folded(session.now()).pipe(
     Stream.filter(
       (event) =>
-        event.type === 'goalStateChanged' || event.type === 'stream.removed',
+        event.type === 'goalStateChanged' || event.type === 'run.removed',
     ),
-    Stream.map((event) => ({
-      streamId: aggregateTarget(event.aggregateId).id,
-    })),
+    Stream.map((event) => aggregateTarget(event.aggregateId)),
+    Stream.filter(
+      (target): target is Extract<AggregateTarget, { kind: 'run' }> =>
+        target.kind === 'run',
+    ),
+    Stream.map((target) => ({ runId: target.id })),
   );
 }
 
 export const GoalStore = Object.freeze({
   /**
-   * Get the goal for a stream, or null when none exists.
+   * Get the goal for a run, or null when none exists.
    *
    * @throws When a present saved record does not match {@link GoalSchema}.
    */
-  getForStream(streamId: StreamTabId): Goal | null {
-    return readRaw(streamId);
+  getForRun(runId: RunId): Goal | null {
+    return readRaw(runId);
   },
 
   /** Get all goals (for the GoalTab cross-conversation list). */
@@ -214,29 +216,29 @@ export const GoalStore = Object.freeze({
   },
 
   /**
-   * Create a new active goal for the stream. Throws if one already exists
+   * Create a new active goal for the run. Throws if one already exists
    * (active or paused). Finishing one (forget) and starting another is normal.
    */
-  async start(streamId: StreamTabId, objective: string): Promise<Goal> {
+  async start(runId: RunId, objective: string): Promise<Goal> {
     const trimmed = requireNonEmpty(objective, 'objective');
-    const existing = readRaw(streamId);
+    const existing = readRaw(runId);
     if (existing && isGoalInFlight(existing)) {
       throw new Error(
-        `A goal is already in progress for this stream (status: ${existing.status}). ` +
+        `A goal is already in progress for this run (status: ${existing.status}). ` +
           `Abandon or complete it before starting a new one.`,
       );
     }
     const now = nowIso();
     const goal: Goal = {
       goalId: `goal_${hexId12()}`,
-      streamId,
+      runId,
       objective: trimmed,
       status: 'active',
       createdAt: now,
       updatedAt: now,
     };
-    await Promise.all([writeRaw(goal), addToIndex(streamId)]);
-    emitGoalStateChanged(streamId, goal);
+    await Promise.all([writeRaw(goal), addToIndex(runId)]);
+    emitGoalStateChanged(runId, goal);
     return goal;
   },
 
@@ -246,11 +248,8 @@ export const GoalStore = Object.freeze({
    * is not in ALLOWED_TRANSITIONS (only active<->paused are legal; finishing
    * is `forget()`).
    */
-  async setStatus(
-    streamId: StreamTabId,
-    nextStatus: GoalStatus,
-  ): Promise<Goal | null> {
-    const current = readRaw(streamId);
+  async setStatus(runId: RunId, nextStatus: GoalStatus): Promise<Goal | null> {
+    const current = readRaw(runId);
     if (!current) return null;
     if (current.status === nextStatus) return current;
     if (!ALLOWED_TRANSITIONS[current.status].includes(nextStatus)) {
@@ -258,11 +257,7 @@ export const GoalStore = Object.freeze({
         `Illegal goal transition: ${current.status} → ${nextStatus}.`,
       );
     }
-    return update(
-      streamId,
-      (goal) => ({ ...goal, status: nextStatus }),
-      current,
-    );
+    return update(runId, (goal) => ({ ...goal, status: nextStatus }), current);
   },
 
   /**
@@ -270,56 +265,51 @@ export const GoalStore = Object.freeze({
    * already in flight — re-targeting an active loop is preferable to
    * silently leaving it pointed at a stale objective.
    */
-  async editObjective(
-    streamId: StreamTabId,
-    newObjective: string,
-  ): Promise<Goal> {
+  async editObjective(runId: RunId, newObjective: string): Promise<Goal> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
-    const updated = await update(streamId, (goal) => ({
+    const updated = await update(runId, (goal) => ({
       ...goal,
       objective: trimmed,
     }));
     if (!updated) {
-      throw new Error('No goal found for this stream.');
+      throw new Error('No goal found for this run.');
     }
     return updated;
   },
 
   /** Drop the record (used on complete, abandon, or conversation delete). */
-  async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
+  async forget(runId: RunId, session?: SessionHandle): Promise<void> {
     // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
     // pass their owning session for non-default windows.
-    await GoalStore.forgetMany([streamId], session);
+    await GoalStore.forgetMany([runId], session);
   },
 
   /**
-   * Bulk variant for callers that need to forget many streams at once
-   * (e.g. delete-all-streams). Per-stream record deletes run in parallel
+   * Bulk variant for callers that need to forget many runs at once
+   * (e.g. delete-all-runs). Per-run record deletes run in parallel
    * — independent keys — but the index update is a single read-filter-
    * write so concurrent `forget()` calls don't race on it.
    */
   async forgetMany(
-    streamIds: readonly StreamTabId[],
+    runIds: readonly RunId[],
     session?: SessionHandle,
   ): Promise<void> {
-    const toRemove = await GoalStore.removeRecords(streamIds);
+    const toRemove = await GoalStore.removeRecords(runIds);
     for (const id of toRemove) emitGoalStateChanged(id, null, session);
   },
 
   /** Remove stored records; the caller owns notification of the state change. */
-  async removeRecords(
-    streamIds: readonly StreamTabId[],
-  ): Promise<readonly StreamTabId[]> {
+  async removeRecords(runIds: readonly RunId[]): Promise<readonly RunId[]> {
     const state = workspaceRoots().workspaceState;
     // Gate on raw key presence, not parse success, so explicit cleanup can
     // still remove an invalid record without first reading it.
-    const toRemove = streamIds.filter(
-      (id) => state.get<unknown>(streamKey(id)) != null,
+    const toRemove = runIds.filter(
+      (id) => state.get<unknown>(runKey(id)) != null,
     );
     if (toRemove.length === 0) return [];
     const dropped = new Set(toRemove);
     await Promise.all([
-      ...toRemove.map((id) => state.update(streamKey(id), undefined)),
+      ...toRemove.map((id) => state.update(runKey(id), undefined)),
       mutateIndex((index) => {
         const next = index.filter((id) => !dropped.has(id));
         return next.length === index.length ? index : next;

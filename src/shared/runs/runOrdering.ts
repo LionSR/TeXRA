@@ -1,0 +1,48 @@
+/** Ordering helpers shared by stream tabs and transcript rows. */
+
+/** The two fields tab order depends on, so name-only sorts can reuse this rule. */
+type RunOrderingFields = {
+  readonly name: string;
+  readonly creationTimestamp: number;
+};
+
+/** Sort by newest creation time first, breaking ties alphabetically by name. */
+export function compareByNewestCreationTime(
+  a: RunOrderingFields,
+  b: RunOrderingFields,
+): number {
+  return (
+    b.creationTimestamp - a.creationTimestamp || a.name.localeCompare(b.name)
+  );
+}
+
+/**
+ * Compare transcript rows by their wire append sequence (`seqNo`), falling
+ * back to a wall-clock key when either row predates sequence tracking.
+ *
+ * Live rows (both carrying a usable positive `seqNo`) sort by that sequence —
+ * immune to clock skew and timestamp ties — with the fallback key as the
+ * tie-break. Archived/compat rows, or a mix of row generations, keep the
+ * caller's fallback chronology. `seqNoOf` and `fallbackTimeOf` let the same
+ * rule serve message rows (`timestamp`) and group rows (`startTime`).
+ */
+export function compareBySeqNo<T>(
+  a: T,
+  b: T,
+  seqNoOf: (item: T) => number | undefined,
+  fallbackTimeOf: (item: T) => number,
+): number {
+  const aSeq = usableSequence(seqNoOf(a));
+  const bSeq = usableSequence(seqNoOf(b));
+  if (aSeq !== undefined && bSeq !== undefined) {
+    return aSeq - bSeq || fallbackTimeOf(a) - fallbackTimeOf(b);
+  }
+  return fallbackTimeOf(a) - fallbackTimeOf(b);
+}
+
+/** A `seqNo` only orders rows when it is a positive safe integer. */
+export function usableSequence(seqNo: number | undefined): number | undefined {
+  return seqNo !== undefined && Number.isSafeInteger(seqNo) && seqNo > 0
+    ? seqNo
+    : undefined;
+}

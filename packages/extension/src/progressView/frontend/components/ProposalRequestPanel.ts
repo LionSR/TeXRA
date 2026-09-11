@@ -31,7 +31,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { workflowRunModel } from '@shared/streams/workflowRunModel';
+import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
@@ -109,7 +109,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   // Proposals carry a stronger approval action than the edit/bash bypass.
   // Enabling canApproveAllDelegatedWork surfaces it on the Approve menu and
   // maps the shared `a` accelerator to it (the base owns both). A proposal
-  // always has a streamId.
+  // always has a runId.
   protected override get canApproveAllDelegatedWork(): boolean {
     return true;
   }
@@ -253,7 +253,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       taskGroups: [],
       rows: [],
       plan: workflow,
-      streamPhase: undefined,
+      runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
     });

@@ -95,7 +95,7 @@ describe('probeOutputPath', () => {
       expectedMessage: '--output-dir cannot be created: /missing/output.tex',
     },
   ])(
-    'reports mkdir ENOENT before execution for $flagLabel',
+    'reports mkdir ENOENT before run for $flagLabel',
     async ({ flagLabel, expectedDirectory, expectedMessage }) => {
       const mkdirVisited: string[] = [];
       await expect(
@@ -127,7 +127,7 @@ describe('probeOutputPath', () => {
 });
 
 describe('dangling output symlinks', () => {
-  it('keeps a dangling --output symlink writable and rejects a dangling --output-dir before execution', async (context) => {
+  it('keeps a dangling --output symlink writable and rejects a dangling --output-dir before run', async (context) => {
     const root = await makeTempDir('texra-cli-dangling-output-', tempDirs);
     const fileReferent = join(root, 'absent.tex');
     const fileLink = join(root, 'file-link.tex');

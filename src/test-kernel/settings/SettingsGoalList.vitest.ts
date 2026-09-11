@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
@@ -24,8 +24,8 @@ vi.mock('vscode', async (importOriginal) => {
   };
 });
 
-const STREAM_ID = 'stream:settings-goal-list' as StreamTabId;
-const GOAL_KEY = `goals:byStream:${STREAM_ID}`;
+const RUN_ID = 'a5e77105' as RunId;
+const GOAL_KEY = `goals:byRun:${RUN_ID}`;
 
 /**
  * The real constructor wires channel/viewName and the history watcher from
@@ -65,7 +65,7 @@ describe('settings goal list', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('posts valid goals unchanged', async () => {
-    const goal = await GoalStore.start(STREAM_ID, 'Finish the settings fix.');
+    const goal = await GoalStore.start(RUN_ID, 'Finish the settings fix.');
     const webview = createWebview();
 
     await createHandler().sendGoalList(webview);
@@ -79,14 +79,14 @@ describe('settings goal list', () => {
   it('reports a malformed goal without posting a fallback list', async () => {
     const { platform } = await import('@platform/platform');
     const malformed = { goalId: 'not-valid' };
-    await workspaceRoots().workspaceState.update('goals:index', [STREAM_ID]);
+    await workspaceRoots().workspaceState.update('goals:index', [RUN_ID]);
     await workspaceRoots().workspaceState.update(GOAL_KEY, malformed);
     const webview = createWebview();
 
     await expectSendGoalListFailure(
       webview,
       expect.stringContaining(
-        `Failed to load goals: Failed to parse persisted goal for stream "${STREAM_ID}"`,
+        `Failed to load goals: Failed to parse persisted goal for run "${RUN_ID}"`,
       ),
     );
 

@@ -35,7 +35,7 @@ import {
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { prepareMainViewRunLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
@@ -52,6 +52,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
+  RunIdSchema,
   type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';
@@ -79,7 +80,7 @@ import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
-import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { createDesktopAgentRun } from './desktopAgentRun.js';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
 import {
@@ -164,7 +165,7 @@ import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
@@ -251,7 +252,7 @@ function findDesktopMainDir(startDir: string): string {
 }
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
-// (codicons/KaTeX). Keep script execution locked to app files while allowing
+// (codicons/KaTeX). Keep script run locked to app files while allowing
 // those renderer primitives.
 const PRODUCTION_CSP = [
   "default-src 'self'",
@@ -372,7 +373,7 @@ function createWindow(options: {
   // `installDesktopHostBridge.postToRenderer` is itself a no-op when
   // `webContents.isDestroyed()`. Without checking that here too, callers would
   // falsely report success and skip their external-viewer fallback. Shared by
-  // the prompt controller, preview host, agent-execution wiring, and the
+  // the prompt controller, preview host, agent-run wiring, and the
   // pty/browser-view workspace IPC below; the diff host keeps its own narrower
   // check (no `webContents.isDestroyed()`), so it is not folded in.
   const postToRendererIfAlive = (message: unknown): boolean => {
@@ -703,7 +704,7 @@ function createWindow(options: {
   /**
    * Await a host promise the caller has already started, reporting rather than
    * raising its failure: a dialog that could not be shown must not fail the
-   * execution behind it.
+   * run behind it.
    */
   const awaitOrReport = (started: Promise<void>): Promise<void> =>
     effectRuntime().runPromise(
@@ -720,7 +721,7 @@ function createWindow(options: {
     },
     postToRenderer: postToRendererIfAlive,
   });
-  const agentExecutionHost: DesktopAgentExecutionHost = {
+  const agentRunHost: DesktopAgentRunHost = {
     openPath: previewHost.openPath,
     openBuildDisplay: previewHost.openBuildDisplay,
     openDiff: desktopDiffHost.openDiff,
@@ -729,7 +730,7 @@ function createWindow(options: {
     chooseTeamAvailability: (unavailableNames) =>
       presentTeamAvailabilityPrompt(teamAvailabilityPrompt(unavailableNames)),
     signInForRemoteAgentCatalog,
-    // Presentation failures are reported, never raised: an execution must not
+    // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
     showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
@@ -787,7 +788,7 @@ function createWindow(options: {
     /** This window's port on the project's bridge. */
     readonly port: AttachedPort;
     readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
-    readonly execution: ReturnType<typeof createDesktopAgentExecution>;
+    readonly run: ReturnType<typeof createDesktopAgentRun>;
     readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
     readonly browserViews: ReturnType<typeof createDesktopBrowserViews>;
     dispose(): void;
@@ -817,8 +818,8 @@ function createWindow(options: {
     });
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
-    const execution = createDesktopAgentExecution({
-      host: agentExecutionHost,
+    const run = createDesktopAgentRun({
+      host: agentRunHost,
       toolEditPreview: {
         openPath: requestPreviewHost.openPath,
         openBuildDisplay: requestPreviewHost.openBuildDisplay,
@@ -827,19 +828,18 @@ function createWindow(options: {
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
-      onLaunched: (streamId) =>
-        bridge.surfaceAction({ kind: 'select', streamId }),
+      onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
     });
     const hostRequests = createDesktopHostRequests({
       session: project.session,
       draftRequests: hostDraftRequests,
       host: {
-        ...agentExecutionHost,
+        ...agentRunHost,
         openPath: requestPreviewHost.openPath,
         openBuildDisplay: requestPreviewHost.openBuildDisplay,
         openDiff: requestDiffHost.openDiff,
       },
-      execution,
+      run,
       files,
       snapshot,
       workspacePath: project.root,
@@ -868,7 +868,7 @@ function createWindow(options: {
       bridge,
       port,
       snapshot,
-      execution,
+      run,
       workspace,
       browserViews,
       dispose() {
@@ -876,7 +876,7 @@ function createWindow(options: {
         workspace.dispose();
         bridge.dispose();
         hostRequests.dispose();
-        execution.dispose();
+        run.dispose();
       },
     };
   };
@@ -934,20 +934,27 @@ function createWindow(options: {
       confirmDialog({ message, confirmLabel }),
     openPath: previewHost.openPath,
     // Selection is the surface's: a settings jump asks the shown project's
-    // surface to select the stream, and reports a stream the view no longer
-    // holds as missing.
-    revealStream: async (streamId) => {
+    // surface to select the run, and reports a run the view no longer holds
+    // as missing. The settings wire carries the id as a plain string, so it
+    // is parsed here, at the view boundary: a string that is not a run id
+    // names no run the view could hold.
+    revealRun: async (rawRunId) => {
       const binding = activeBinding();
       if (!binding) return 'unavailable';
+      const runId = RunIdSchema.safeParse(rawRunId);
+      if (!runId.success) return 'missing';
       const view = SubscriptionRef.getUnsafe(binding.project.session.view);
-      if (!view.streams.has(streamId)) return 'missing';
-      binding.bridge.surfaceAction({ kind: 'select', streamId });
+      if (!view.runs.has(runId.data)) return 'missing';
+      binding.bridge.surfaceAction({ kind: 'select', runId: runId.data });
       return 'revealed';
     },
-    getStreamLabel: (streamId) =>
-      SubscriptionRef.getUnsafe(activeProject().session.view).streams.get(
-        streamId,
-      )?.label,
+    getRunLabel: (rawRunId) => {
+      const runId = RunIdSchema.safeParse(rawRunId);
+      if (!runId.success) return undefined;
+      return SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(
+        runId.data,
+      )?.label;
+    },
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
     // Not previewHost.openExternal: that one shows an error dialog and
@@ -1273,9 +1280,9 @@ function createWindow(options: {
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
               await effectRuntime().runPromise(loadAgents());
               await runInSession(binding.project.session, async () =>
-                binding.execution.runValidated(
+                binding.run.runValidated(
                   await effectRuntime().runPromise(
-                    prepareMainViewExecutionLaunch(message, agentExecutionHost),
+                    prepareMainViewRunLaunch(message, agentRunHost),
                   ),
                 ),
               );
@@ -1633,7 +1640,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
         afterFlushArtifacts: [() => removeExternalDiffPatchDirs()],
-        afterExecutionSettlement: [
+        afterRunSettlement: [
           () => processResources.dispose(),
           // Last: every project's session has released its graph above.
           () => disposeProcessRuntime(),

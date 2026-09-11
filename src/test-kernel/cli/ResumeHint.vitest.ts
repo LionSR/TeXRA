@@ -10,31 +10,25 @@ import {
 } from '@cli/chat/tui/state/resumeHint';
 import {
   AgentCategory,
-  type StreamTabId,
+  type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import type { StreamView } from '@shared/session/sessionView';
-import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
+import type { RunView } from '@shared/session/sessionView';
+import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
-const ROOT = 'main@m#root' as StreamTabId;
+const ROOT = 'root' as RunId;
 
-function root(usage?: TokenUsageStats): StreamView {
-  return makeStreamView({
+function root(usage?: TokenUsageStats): RunView {
+  return makeRunView({
     id: ROOT,
-    executionId: 'root',
     label: 'main',
     usage: usage ? { 'root-usage': usage } : {},
   });
 }
 
 /** A child of the root, as the fold states it. */
-function child(
-  over: Partial<StreamView> & {
-    readonly id: string;
-    readonly executionId: string;
-  },
-): StreamView {
-  return makeStreamView({
+function child(over: Partial<RunView> & { readonly id: string }): RunView {
+  return makeRunView({
     parentId: ROOT,
     ancestors: [{ id: ROOT, label: 'main' }],
     ...over,
@@ -43,8 +37,8 @@ function child(
 
 /** Root plus one subagent: the shared fixture for multi-line hint cases. */
 const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
-  { executionId: 'root', label: 'main', isRoot: true },
-  { executionId: 'rev', label: 'reviewer', isRoot: false },
+  { runId: 'root', label: 'main', isRoot: true },
+  { runId: 'rev', label: 'reviewer', isRoot: false },
 ];
 
 describe('collectResumeTargets', () => {
@@ -52,19 +46,17 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view: viewWith([root()]),
-        rootStreamId: ROOT,
-        rootExecutionId: 'root',
+        rootRunId: ROOT,
       }),
-    ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
   });
 
   it('lists running and finished plain tool-use subagents', () => {
     const view = viewWith([
       root(),
-      child({ id: 'reviewer@m#rev', executionId: 'rev', label: 'reviewer' }),
+      child({ id: 'rev' as RunId, label: 'reviewer' }),
       child({
-        id: 'builder@m#flow',
-        executionId: 'flow',
+        id: 'flow' as RunId,
         label: 'builder',
         category: AgentCategory.Workflow,
       }),
@@ -72,8 +64,7 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view,
-        rootStreamId: ROOT,
-        rootExecutionId: 'root',
+        rootRunId: ROOT,
       }),
     ).toEqual(TWO_RESUME_TARGETS);
   });
@@ -82,8 +73,7 @@ describe('collectResumeTargets', () => {
     const view = viewWith([
       root(),
       child({
-        id: 'bash@tool#sh',
-        executionId: 'sh',
+        id: 'sh' as RunId,
         label: 'bash',
         identity: { kind: 'process', tool: 'bash' },
       }),
@@ -91,18 +81,16 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view,
-        rootStreamId: ROOT,
-        rootExecutionId: 'root',
+        rootRunId: ROOT,
       }),
-    ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
   });
 
-  it('returns nothing when there is no root execution yet', () => {
+  it('returns nothing when there is no root run yet', () => {
     expect(
       collectResumeTargets({
         view: viewWith([]),
-        rootStreamId: undefined,
-        rootExecutionId: undefined,
+        rootRunId: undefined,
       }),
     ).toEqual([]);
   });
@@ -234,7 +222,7 @@ describe('formatResumeHint', () => {
 
   it('prepends token usage when available', () => {
     expect(
-      formatResumeHint([{ executionId: 'root', label: 'main', isRoot: true }], {
+      formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {
         inputTokens: 186_189_742,
         outputTokens: 11_042_600,
         cost: 0,
@@ -274,15 +262,12 @@ describe('formatResumeHint', () => {
     'includes the $usageRoute session cost in the full hint',
     ({ usageRoute, cost, expected }) => {
       expect(
-        formatResumeHint(
-          [{ executionId: 'root', label: 'main', isRoot: true }],
-          {
-            inputTokens: 100,
-            outputTokens: 20,
-            cost,
-            usageRoute,
-          } satisfies TokenUsageStats,
-        ),
+        formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {
+          inputTokens: 100,
+          outputTokens: 20,
+          cost,
+          usageRoute,
+        } satisfies TokenUsageStats),
       ).toBe(
         [
           'Token usage: total=120 input=100 output=20',
@@ -309,8 +294,7 @@ describe('collectResumeUsage', () => {
         cacheReadInputTokens: 7,
       }),
       child({
-        id: 'review@m#rev',
-        executionId: 'rev',
+        id: 'rev' as RunId,
         usage: {
           'rev-usage': {
             inputTokens: 40,

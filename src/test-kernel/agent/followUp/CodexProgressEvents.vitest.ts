@@ -8,15 +8,9 @@ import {
   CODEX_THREAD_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StreamTabId,
-  TodoItem,
-  TokenUsageStats,
-} from '@shared/schemas';
+import type { RunId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local file imports
@@ -27,8 +21,7 @@ import type {
   ThreadEvent,
 } from '@openai/codex-sdk';
 
-const streamId = 'stream:codex-child' as StreamTabId;
-const executionId = 'exec:codex-child' as ExecutionId;
+const runId = 'run:codex-child' as RunId;
 
 const todos: TodoItem[] = [
   {
@@ -37,12 +30,6 @@ const todos: TodoItem[] = [
     activeForm: 'Routing Codex progress through the runtime host',
   },
 ];
-
-const usage: TokenUsageStats = {
-  inputTokens: 10,
-  outputTokens: 5,
-  cost: 0,
-};
 
 async function* streamEvents(
   events: ThreadEvent[],
@@ -56,7 +43,7 @@ async function createLogger(): Promise<{
 }> {
   const store = new StreamLog();
 
-  return { store, logger: createTestRunTrace(streamId, store).trace };
+  return { store, logger: createTestRunTrace(runId, store).trace };
 }
 
 function turnCompleted(inputTokens: number, outputTokens: number): ThreadEvent {
@@ -86,28 +73,16 @@ function toolLogs(store: StreamLog): Record<string, unknown>[] {
 }
 
 describe('codex progress events', () => {
-  it('publishes todos and usage as run facts', () => {
+  it('publishes todos as run facts', () => {
     const trace = new TraceEmitter();
     const recorded = recordTraceEvents(trace);
 
-    publishCodexTodos(streamId, todos, trace);
-    publishAgentCliStreamUsage(streamId, executionId, usage, trace);
+    publishCodexTodos(runId, todos, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
-        streamId,
+        runId,
         todos,
-      },
-    ]);
-    expect(traceEventsOfType(recorded.events, 'usage')).toMatchObject([
-      {
-        payload: {
-          streamId,
-          // Usage is keyed by storage key alone; an agent-CLI child's is its
-          // execution id.
-          storageKey: executionId,
-          usage,
-        },
       },
     ]);
   });
@@ -149,7 +124,7 @@ describe('codex progress events', () => {
     const result = await runStreamedTurn(
       thread,
       'Build the project',
-      streamId,
+      runId,
       logger,
     );
 
@@ -179,12 +154,7 @@ describe('codex progress events', () => {
       turnCompleted(5, 2),
     ]);
 
-    const result = await runStreamedTurn(
-      thread,
-      'Do the thing',
-      streamId,
-      logger,
-    );
+    const result = await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     expect(result.finalResponse).toBe('Done.');
 
@@ -220,7 +190,7 @@ describe('codex progress events', () => {
     ]);
 
     await expect(
-      runStreamedTurn(thread, 'Do the thing', streamId, logger),
+      runStreamedTurn(thread, 'Do the thing', runId, logger),
     ).rejects.toThrow('boom');
 
     const turnEntry = findTurnEntry(store);
@@ -237,7 +207,7 @@ describe('codex progress events', () => {
     // No turn.completed / turn.failed — the loop exits with the card open.
     const thread = threadOf([{ type: 'turn.started' }]);
 
-    await runStreamedTurn(thread, 'Do the thing', streamId, logger);
+    await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     const turnEntry = findTurnEntry(store);
     // Even without an error message the card is marked as an error so the

@@ -282,7 +282,7 @@ function mergeMissingStreamedOutputItems(
  * (the pending background-response id + poll/resume choreography), and
  * {@link OpenAICompactionCoordinator} (the compaction cache + trigger/recovery
  * policy) — and none of them is thread-safe. Each handler instance (and the
- * collaborators it owns) must be used by a single agent execution at a time.
+ * collaborators it owns) must be used by a single agent run at a time.
  * Do not share instances across concurrent invocations.
  */
 export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
@@ -384,7 +384,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   /**
    * Check if background mode is active for this handler.
    * Background mode is enabled when this handler supports it, the config
-   * toggle is on, and this model/agent is eligible for background execution.
+   * toggle is on, and this model/agent is eligible for background run.
    *
    * Single source of truth for the background-mode decision: the request path
    * (`createResponseImpl`), `getStreamingConfig`, and `storesResponsesServerSide`
@@ -987,11 +987,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     ) {
       if (this.getOpenAIResponseCapabilities()?.backgroundMode === 'disabled') {
         this.logger.debug(
-          'Background mode toggle is enabled but the active provider profile disables background execution. Proceeding without background mode.',
+          'Background mode toggle is enabled but the active provider profile disables background run. Proceeding without background mode.',
         );
       } else {
         this.logger.debug(
-          'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
+          'Background mode toggle is enabled but this handler does not support background run. Proceeding without background mode.',
         );
       }
     } else if (streamingToggleEnabled && useBackgroundResponses) {
@@ -1043,7 +1043,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       if (wasManualRequest) {
         // Requested compactions come from the manual command, the live-count
         // threshold, or the overflow recovery — each already logged its
-        // trigger; this line records the execution.
+        // trigger; this line records the run.
         logProgressStatus(
           this.logger,
           `Compacting conversation (requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
@@ -1112,7 +1112,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       reasoningEffort = 'low';
     }
     // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
-    // and select pro execution via `reasoning.mode` on the request.
+    // and select pro run via `reasoning.mode` on the request.
     const reasoningMode = this.capabilities.reasoningMode;
     const reasoning: Reasoning | undefined =
       reasoningEffort || reasoningMode
@@ -1251,7 +1251,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       compactedMessages,
     };
 
-    // Wrap execution in a try/catch so the error handler can recover from an
+    // Wrap run in a try/catch so the error handler can recover from an
     // invalid/expired previous_response_id or a context-window overflow.
     try {
       // WebSocket transport: persistent connection for lower-latency tool-use loops
@@ -1613,7 +1613,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       processor.streamedText,
     );
 
-    // Finalize streams after background polling so the final text
+    // Finalize runs after background polling so the final text
     // reflects the completed response, not the pre-poll snapshot.
     processor.finalize(response);
 
@@ -1633,7 +1633,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     signal: AbortSignal | undefined,
     ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    // Hoisted so the catch can finalize the progress streams on a mid-stream
+    // Hoisted so the catch can finalize the progress runs on a mid-stream
     // failure (otherwise the progress view hangs in a loading state) and read
     // back the partial text.
     let processor: ResponseStreamProcessor | undefined;
@@ -1730,7 +1730,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
 
       return this.finalizeResponse(response, ctx);
     } catch (error) {
-      // Recovery above was unavailable or failed. Close any progress streams
+      // Recovery above was unavailable or failed. Close any progress runs
       // and retain partial output before the error reaches retry handling.
       processor?.abort();
       attachPartialText(

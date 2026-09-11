@@ -11,7 +11,7 @@ import {
   quotaFallbackRuntimes,
   type QuotaFallbackRuntime,
 } from '@model/quotaFallbackRoutes';
-import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
+import type { ExhaustionReason, RunId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
   isKimiCodeSubscriptionRetryBlocked,
@@ -23,7 +23,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const log = createLog('ProgressApiKeyRetryController');
 
 interface ProgressApiKeyRetryRequest {
-  stream: StreamTabId;
+  stream: RunId;
   requestId: string;
   provider?: ApiProvider;
   /** Canonical base model the fallback run will launch with, when known. */
@@ -46,9 +46,9 @@ export interface ProgressApiKeyRetryControllerDeps {
   /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
    *  shared runtime catalog. Tests inject a local table. */
   quotaFallbackRuntimes?: readonly QuotaFallbackRuntime[];
-  isRetryPending(stream: StreamTabId, requestId: string): boolean;
+  isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(
-    stream: StreamTabId,
+    stream: RunId,
     requestId: string,
   ): Effect.Effect<boolean, unknown>;
 }
@@ -62,7 +62,7 @@ export interface ProgressApiKeyRetryControllerDeps {
  */
 export class ProgressApiKeyRetryController {
   /** One permit: a routing commit holds it from its pending re-check through
-   *  the retry launch, so two streams cannot interleave their switches. */
+   *  the retry launch, so two runs cannot interleave their switches. */
   private readonly routingLane = Semaphore.makeUnsafe(1);
 
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}

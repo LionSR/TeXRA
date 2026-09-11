@@ -5,32 +5,32 @@
  */
 
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { STREAM_PHASE } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 
 /**
- * Single-pass check: should the wait endpoint skip blocking on this execution?
+ * Single-pass check: should the wait endpoint skip blocking on this run?
  *
  * Returns true when:
- * - The handle is gone (execution already untracked / completed), OR
- * - The stream left the canonical in-flight phases, OR
- * - The execution is a *tool-use subagent* in WAITING (job done, result
+ * - The handle is gone (run already untracked / completed), OR
+ * - The run left the canonical in-flight phases, OR
+ * - The run is a *tool-use subagent* in WAITING (job done, result
  *   already delivered by the child-run loop's per-turn delivery — see
  *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
  *   retry/user action and should keep blocking.
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
-export function shouldSkipWait(executionId: string): boolean {
+export function shouldSkipWait(runId: RunId): boolean {
   const session = currentSession();
-  const handle = session.executions.getHandle(executionId);
+  const handle = session.runs.getHandle(runId);
   if (!handle) return true;
 
-  const { status } = session.executions.getStatus(handle);
+  const { status } = session.runs.getStatus(handle);
   if (!isInFlightPhase(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
@@ -39,15 +39,15 @@ export function shouldSkipWait(executionId: string): boolean {
   // technically active so we don't skip — avoids misreporting it as done.
   // Non-subagent WAITING = human input needed, keep blocking.
   return (
-    status === STREAM_PHASE.WAITING &&
+    status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
-    handle.isChildExecution
+    handle.isChild
   );
 }
 
 /**
- * Listen for follow-up messages on the current stream and call `onFollowUp`
+ * Listen for follow-up messages on the current run and call `onFollowUp`
  * when one arrives. This lets users break out of a blocking
  * `executions wait` by sending a follow-up message.
  *
@@ -59,10 +59,10 @@ export function shouldSkipWait(executionId: string): boolean {
  */
 export function listenForFollowUp(onFollowUp: () => void): () => void {
   const context = tryUseRunContext();
-  const streamId = getRunContextStreamId(context);
-  if (!streamId) return () => {};
+  const runId = getRunContextRunId(context);
+  if (!runId) return () => {};
 
-  return currentSession().followUps.onSent((sentStreamId) => {
-    if (sentStreamId === streamId) onFollowUp();
+  return currentSession().followUps.onSent((sentRunId) => {
+    if (sentRunId === runId) onFollowUp();
   });
 }

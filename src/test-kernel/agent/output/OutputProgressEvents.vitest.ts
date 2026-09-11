@@ -19,7 +19,7 @@ import type {
   CompileResult,
   FileLocation,
   OutputFileInfo,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -46,13 +46,13 @@ function createAgentLocation(path: string): AgentFileLocation {
 
 /**
  * Minimal OutputDependencies for the output-extraction tests: the code under
- * test reads only `baseFiles`, `logger`, and `runScope.streamId`.
+ * test reads only `baseFiles`, `logger`, and `runScope.runId`.
  */
 function processorDeps(logger: AgentTrace): OutputDependencies {
   return {
     baseFiles: [],
     logger,
-    runScope: { streamId: 'stream:processor' },
+    runScope: { runId: 'stream:processor' },
   } as unknown as OutputDependencies;
 }
 
@@ -90,7 +90,7 @@ function createCompileFailureFixture() {
 }
 
 function createOutputNode(
-  streamId: string,
+  runId: string,
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
@@ -99,15 +99,15 @@ function createOutputNode(
   getRejectOnCompileFailure = () => rejectOnCompileFailure,
 ): OutputNode {
   return new OutputNode().setServices({
-    streamId,
-    runScope: testRunScope(streamId, { interactions: host, signal }),
+    runId,
+    runScope: testRunScope(runId, { interactions: host, signal }),
     logger,
     outputState,
     getRejectOnCompileFailure,
   } as unknown as ReflectionServices);
 }
 
-function createRecordedRuntime(streamId: string) {
+function createRecordedRuntime(runId: string) {
   const { events: hostEvents, host } = createRecordingHost();
   const logger = new TraceEmitter();
   const recorded = recordTraceEvents(logger);
@@ -134,7 +134,7 @@ function runOutputPost(
 }
 
 function compileContextCase(
-  streamId: string,
+  runId: string,
   signal?: AbortSignal,
   rejectOnCompileFailure = true,
 ): {
@@ -145,7 +145,7 @@ function compileContextCase(
   const { host } = createRecordingHost();
   return {
     outputNode: createOutputNode(
-      streamId,
+      runId,
       host,
       noopTrace,
       createOutputState(),
@@ -209,7 +209,7 @@ describe('output progress events', () => {
       expect(transition).toBe('default');
       expect(traceEventsOfType(events, 'addOutputFiles')).toMatchObject([
         {
-          streamId: 'stream:output-node',
+          runId: 'stream:output-node',
           filesByRound: { 2: [fileInfo] },
         },
       ]);
@@ -231,15 +231,15 @@ describe('output progress events', () => {
   it.each([
     {
       name: 'stores compile failure context for the next reflection round',
-      streamId: 'stream:compile-context',
+      runId: 'stream:compile-context',
       rejectOnCompileFailure: true,
     },
     {
       name: 'honors disabled compile-failure repair context setting',
-      streamId: 'stream:compile-context-disabled',
+      runId: 'stream:compile-context-disabled',
       rejectOnCompileFailure: false,
     },
-  ])('$name', async ({ streamId, rejectOnCompileFailure }) => {
+  ])('$name', async ({ runId, rejectOnCompileFailure }) => {
     await installPlatform({
       workspaceState: {
         [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]:
@@ -247,7 +247,7 @@ describe('output progress events', () => {
       },
     });
     const { outputNode, fixture, shared } = compileContextCase(
-      streamId,
+      runId,
       undefined,
       rejectOnCompileFailure,
     );
@@ -464,7 +464,7 @@ describe('output progress events', () => {
 
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          streamId: 'stream:processor',
+          runId: 'stream:processor',
           filesByRound: { [round]: [] },
         },
       ]);
@@ -508,7 +508,7 @@ describe('output progress events', () => {
       // The missing-output signal is still emitted alongside the warning.
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          streamId: 'stream:processor',
+          runId: 'stream:processor',
           filesByRound: { 5: [] },
         },
       ]);

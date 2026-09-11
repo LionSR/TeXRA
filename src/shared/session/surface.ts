@@ -19,14 +19,14 @@ import {
   SessionTypeSchema,
   ToolConfigFieldsSchema,
   UIFileFieldsSchema,
-  StreamTabIdSchema,
+  RunIdSchema,
   type InquiryDraft,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
-import type { SessionView, StreamView } from './sessionView';
+import type { SessionView, RunView } from './sessionView';
 
 /** The new-task composer's selections, separate from host-derived state. */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
@@ -106,27 +106,27 @@ export interface Surface {
    * A preference, not a pointer: read it through `resolveSelected`. `null`
    * is the New-task state and resolves to itself.
    */
-  readonly selected: StreamTabId | null;
-  readonly drafts: ReadonlyMap<StreamTabId, Draft>;
+  readonly selected: RunId | null;
+  readonly drafts: ReadonlyMap<RunId, Draft>;
   /** Foreground polish operations, keyed by stream id or `launch:<mode>`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission. Never persisted. */
-  readonly sending: ReadonlySet<StreamTabId>;
+  readonly sending: ReadonlySet<RunId>;
   /** The error the runtime answered this surface's last request on a stream
    *  with, until the next request on that stream. Never persisted. */
-  readonly rejected: ReadonlyMap<StreamTabId, SurfaceRefusal>;
+  readonly rejected: ReadonlyMap<RunId, SurfaceRefusal>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
   /** The user's expansion choice per stream in the tree, absent until they
    *  make one; `forceExpanded` outranks it. */
-  readonly expanded: ReadonlyMap<StreamTabId, boolean>;
+  readonly expanded: ReadonlyMap<RunId, boolean>;
   /** Task groups and workflow row groups inside a transcript, per stream. */
-  readonly groups: ReadonlyMap<StreamTabId, ReadonlyMap<string, boolean>>;
+  readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
   /** Never persisted. */
   readonly focusedRow: string | null;
   /** Run-board tab strip; resolved at read like `selected`. */
-  readonly phase: ReadonlyMap<StreamTabId, string>;
+  readonly phase: ReadonlyMap<RunId, string>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -150,14 +150,14 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
  * failing key and resets that session's whole record to these defaults.
  */
 export const PersistedSurfaceSchema = z.object({
-  selected: StreamTabIdSchema.nullable().prefault(null),
+  selected: RunIdSchema.nullable().prefault(null),
   launch: LaunchSurfaceSchema.prefault({}),
   /** Text only; image bytes are not persisted. */
-  drafts: entries(StreamTabIdSchema, z.string()),
+  drafts: entries(RunIdSchema, z.string()),
   inquiryDrafts: entries(z.string(), InquiryDraftSchema),
-  expanded: entries(StreamTabIdSchema, z.boolean()),
-  groups: entries(StreamTabIdSchema, entries(z.string(), z.boolean())),
-  phase: entries(StreamTabIdSchema, z.string()),
+  expanded: entries(RunIdSchema, z.boolean()),
+  groups: entries(RunIdSchema, entries(z.string(), z.boolean())),
+  phase: entries(RunIdSchema, z.string()),
   drawerOpen: z.boolean().prefault(false),
   storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
@@ -218,11 +218,11 @@ export function persistSurface(surface: Surface): PersistedSurface {
 }
 
 function retain<V>(
-  map: ReadonlyMap<StreamTabId, V>,
+  map: ReadonlyMap<RunId, V>,
   view: SessionView,
-): ReadonlyMap<StreamTabId, V> {
-  if ([...map.keys()].every((id) => view.streams.has(id))) return map;
-  return new Map([...map].filter(([id]) => view.streams.has(id)));
+): ReadonlyMap<RunId, V> {
+  if ([...map.keys()].every((id) => view.runs.has(id))) return map;
+  return new Map([...map].filter(([id]) => view.runs.has(id)));
 }
 
 /**
@@ -231,17 +231,17 @@ function retain<V>(
  * means a non-map field (`search`, `drawerOpen`) is refused at the list
  * itself, not several lines later at the read.
  */
-type StreamKeyedMapField = {
-  [K in keyof Surface]: Surface[K] extends ReadonlyMap<StreamTabId, unknown>
+type RunKeyedMapField = {
+  [K in keyof Surface]: Surface[K] extends ReadonlyMap<RunId, unknown>
     ? K
     : never;
 }[keyof Surface];
 
 /**
  * The single list `pruneSurface` reads: the per-stream maps it retains over.
- * `StreamKeyedMapField` refuses any entry that is not a stream-keyed map, so a
+ * `RunKeyedMapField` refuses any entry that is not a stream-keyed map, so a
  * typo or a non-map field fails here at the list. It does not enforce the
- * reverse — the type system cannot, since `StreamTabId` is `string` and so a
+ * reverse — the type system cannot, since `RunId` is `string` and so a
  * stream-keyed map is indistinguishable from any other string-keyed one — so a
  * new per-stream field added to `Surface` but left off this list still keeps a
  * deleted stream's entry forever, and adding such a field means adding it here.
@@ -255,7 +255,7 @@ const PER_STREAM_MAPS = [
   'groups',
   'phase',
   'rejected',
-] as const satisfies readonly StreamKeyedMapField[];
+] as const satisfies readonly RunKeyedMapField[];
 
 /**
  * Every per-stream map drops its entry when that stream leaves the view
@@ -269,10 +269,10 @@ export function pruneSurface(surface: Surface, view: SessionView): Surface {
   // map keeps its field's element type; the maps are read through the common
   // read-only supertype and the once-narrowed patch is cast back at the end.
   const patch: Partial<
-    Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<StreamTabId, unknown>>
+    Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
   > = {};
   for (const key of PER_STREAM_MAPS) {
-    const current: ReadonlyMap<StreamTabId, unknown> = surface[key];
+    const current: ReadonlyMap<RunId, unknown> = surface[key];
     const next = retain(current, view);
     if (next !== current) patch[key] = next;
   }
@@ -318,10 +318,10 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
 export function resolveSelected(
   view: SessionView,
   surface: Surface,
-): StreamTabId | null {
+): RunId | null {
   const { selected } = surface;
   if (selected === null) return null;
-  if (view.streams.has(selected)) return selected;
+  if (view.runs.has(selected)) return selected;
   return view.order.at(0) ?? null;
 }
 
@@ -332,7 +332,7 @@ export function resolveSelected(
  * on take none; otherwise a run still going or waiting takes one, as does a
  * conversation that has not started (`ready` with nothing written yet).
  */
-export function acceptsFollowUp(stream: StreamView): boolean {
+export function acceptsFollowUp(stream: RunView): boolean {
   if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
   if (stream.group === 'running' || stream.group === 'waiting') return true;
   return stream.status === 'ready' && stream.lastTimestamp === null;
@@ -347,7 +347,7 @@ export function acceptsFollowUp(stream: StreamView): boolean {
  * draft sends nothing, and a pasted image the host has not stored yet is
  * not ready to name.
  */
-export function canSendFollowUp(stream: StreamView, draft: Draft): boolean {
+export function canSendFollowUp(stream: RunView, draft: Draft): boolean {
   if (!acceptsFollowUp(stream)) return false;
   if (draft.images.some((image) => image.path === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
@@ -360,10 +360,10 @@ export function canSendFollowUp(stream: StreamView, draft: Draft): boolean {
  */
 export function resolvePhase(
   surface: Surface,
-  streamId: StreamTabId,
+  runId: RunId,
   phases: readonly { readonly key: string; readonly opened: boolean }[],
 ): string | null {
-  const chosen = surface.phase.get(streamId);
+  const chosen = surface.phase.get(runId);
   if (chosen !== undefined && phases.some((phase) => phase.key === chosen)) {
     return chosen;
   }
@@ -377,7 +377,7 @@ export function resolvePhase(
  * also the host-initiated arms of `surface.action` (PRD 8.5).
  */
 export type SurfaceAction =
-  | { readonly kind: 'select'; readonly streamId: StreamTabId | null }
+  | { readonly kind: 'select'; readonly runId: RunId | null }
   | { readonly kind: 'selectNew' }
   | { readonly kind: 'dismissRequestError' }
   | { readonly kind: 'toggleDrawer' }
@@ -386,7 +386,7 @@ export type SurfaceAction =
   | { readonly kind: 'search'; readonly value: string }
   | {
       readonly kind: 'draft';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly patch: Partial<Draft>;
     }
   | { readonly kind: 'launch'; readonly patch: LaunchPatch }
@@ -397,19 +397,19 @@ export type SurfaceAction =
     }
   | {
       readonly kind: 'expand';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly expanded: boolean;
     }
   | {
       readonly kind: 'group';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly key: string;
       readonly expanded: boolean;
     }
   | { readonly kind: 'focusRow'; readonly rowId: string | null }
   | {
       readonly kind: 'phase';
-      readonly streamId: StreamTabId;
+      readonly runId: RunId;
       readonly phase: string;
     }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
@@ -430,7 +430,7 @@ export function applySurfaceAction(
     case 'dismissRequestError':
       return { ...surface, requestError: null };
     case 'select':
-      return { ...surface, selected: action.streamId, drawerOpen: false };
+      return { ...surface, selected: action.runId, drawerOpen: false };
     case 'selectNew':
       return { ...surface, selected: null, drawerOpen: false };
     case 'toggleDrawer':
@@ -446,8 +446,8 @@ export function applySurfaceAction(
     case 'draft':
       return {
         ...surface,
-        drafts: withEntry(surface.drafts, action.streamId, {
-          ...(surface.drafts.get(action.streamId) ?? EMPTY_DRAFT),
+        drafts: withEntry(surface.drafts, action.runId, {
+          ...(surface.drafts.get(action.runId) ?? EMPTY_DRAFT),
           ...action.patch,
         }),
       };
@@ -481,16 +481,16 @@ export function applySurfaceAction(
     case 'expand':
       return {
         ...surface,
-        expanded: withEntry(surface.expanded, action.streamId, action.expanded),
+        expanded: withEntry(surface.expanded, action.runId, action.expanded),
       };
     case 'group':
       return {
         ...surface,
         groups: withEntry(
           surface.groups,
-          action.streamId,
+          action.runId,
           withEntry(
-            surface.groups.get(action.streamId) ?? new Map<string, boolean>(),
+            surface.groups.get(action.runId) ?? new Map<string, boolean>(),
             action.key,
             action.expanded,
           ),
@@ -501,7 +501,7 @@ export function applySurfaceAction(
     case 'phase':
       return {
         ...surface,
-        phase: withEntry(surface.phase, action.streamId, action.phase),
+        phase: withEntry(surface.phase, action.runId, action.phase),
       };
     case 'workbench':
       return { ...surface, workbench: action.layout };

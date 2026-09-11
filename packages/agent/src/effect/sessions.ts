@@ -57,20 +57,19 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type SessionCloseReport,
-  type StreamTabId,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView as RuntimeSessionView,
-  type StreamView as RuntimeStreamView,
+  type RunView as RuntimeRunView,
   type TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -102,7 +101,7 @@ type ReadonlyDeep<T> = T extends (...args: never[]) => unknown
 /** One published level of the session's fold: an immutable value. */
 export type SessionView = ReadonlyDeep<RuntimeSessionView>;
 /** One stream of the {@link SessionView}. */
-export type StreamView = ReadonlyDeep<RuntimeStreamView>;
+export type RunView = ReadonlyDeep<RuntimeRunView>;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
 
@@ -116,10 +115,9 @@ export interface StartInput {
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
-  /** The run's execution id, minted here and handed to the launcher, so it
+  /** The run's id, minted here and handed to the launcher, so it
    *  identifies the run before its first model call. */
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   /**
    * The run's own outcome first: on failure the fold's fate never replaces
    * it; on success this waits for the level holding the durable outcome.
@@ -323,9 +321,9 @@ function start(
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
     const config = yield* admitInput(input);
-    const executionId = generateExecutionId();
+    const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
-    const admitted = yield* Deferred.make<StreamTabId, RunFailure>();
+    const admitted = yield* Deferred.make<void, RunFailure>();
     let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
@@ -368,7 +366,7 @@ function start(
     // with a `Run` built that reaches no one.
     const interruptLaunch = ():
       Pick<RuntimeAgentRunHandle, 'interrupt'> | undefined => {
-      const current = handle ?? session.executions.getHandle(executionId);
+      const current = handle ?? session.runs.getHandle(runId);
       current?.interrupt();
       return current;
     };
@@ -377,24 +375,24 @@ function start(
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           runValidatedAgent(
-            { kind: 'fresh', config, executionId },
+            { kind: 'fresh', config, runId },
             {
               approvalPromptsUnavailable: true,
               onRun: (live) => {
                 handle = live;
               },
-              onStreamResolved: (streamId, runTrace) => {
+              onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
                     log.warn(
-                      `Run ${executionId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
+                      `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
                     );
                     release();
                     return;
                   }
                   Queue.offerUnsafe(trace, event);
                 });
-                Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
+                Deferred.doneUnsafe(admitted, Effect.void);
               },
               session,
               stopAfterCycle: true,
@@ -410,16 +408,16 @@ function start(
           { startImmediately: true },
         );
         spawned.push(runFiber);
-        const streamId = yield* restore(Deferred.await(admitted));
+        yield* restore(Deferred.await(admitted));
         const view = session.viewChanges.pipe(
           // The level replays on subscribe, and the fold lands the run's
           // `run.start` asynchronously, so a replayed level can predate the
           // run.
-          Stream.dropWhile((level) => !level.streams.has(streamId)),
+          Stream.dropWhile((level) => !level.runs.has(runId)),
           // The view is the end condition: the first level holding the
           // run's durable outcome is the last element.
           Stream.takeUntil(
-            (level) => level.streams.get(streamId)?.durableOutcome != null,
+            (level) => level.runs.get(runId)?.durableOutcome != null,
           ),
         );
         // The transcript tier folds only for subscribed aggregates, on a
@@ -427,9 +425,9 @@ function start(
         // view gains them. The port is never cleared, by choice: the run's
         // rows stay resident for the life of the package session, as a
         // TUI's do.
-        const port = `sdk/${streamId}`;
+        const port = `sdk/${runId}`;
         let subscribed = '';
-        const interest = (ids: readonly StreamTabId[]): Effect.Effect<void> =>
+        const interest = (ids: readonly RunId[]): Effect.Effect<void> =>
           Effect.suspend(() => {
             const key = ids.join('\0');
             if (key === subscribed) return Effect.void;
@@ -437,12 +435,12 @@ function start(
             return session.subscriptions.set(
               port,
               ids.map((id) => ({
-                id: qualifyAggregateId('stream', id),
+                id: qualifyAggregateId('run', id),
                 fromSeq: 0,
               })),
             );
           });
-        yield* interest([streamId]);
+        yield* interest([runId]);
         // The package owns this drain: the descendants join the
         // subscription as the view gains them, and the run's `result` waits
         // for its final fold even when nobody reads `view`, and fails if
@@ -451,9 +449,7 @@ function start(
           Stream.runDrain(
             view.pipe(
               Stream.tap((level) =>
-                interest(
-                  descendantStreams(level, streamId, { includeRoot: true }),
-                ),
+                interest(descendantRuns(level, runId, { includeRoot: true })),
               ),
             ),
           ),
@@ -461,8 +457,7 @@ function start(
         );
         spawned.push(drain);
         return {
-          executionId,
-          streamId,
+          runId,
           result: Fiber.join(runFiber).pipe(
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
           ),

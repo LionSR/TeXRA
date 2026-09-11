@@ -12,13 +12,13 @@ import {
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
-import { ExecutionIdSchema } from '@shared/schemas';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
+import { RunIdSchema } from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
 
 /**
- * The "wrapped" launch shape — `{ config, executionId?, ... }` — as opposed to
+ * The "wrapped" launch shape — `{ config, runId?, ... }` — as opposed to
  * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
  * comment). `config` is validated separately against `AgentConfigSchema`, so
  * it stays `z.unknown()` here. `onRun` is a live callback, not serializable
@@ -26,7 +26,7 @@ const log = createLog('ExecuteCommand');
  */
 const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
-  executionId: ExecutionIdSchema.optional(),
+  runId: RunIdSchema.optional(),
   preferHelperModel: z.boolean().optional(),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
   copilotRouteOverride: z.literal('direct').optional(),
@@ -36,8 +36,8 @@ const WrappedExecuteInputSchema = z.object({
  * Execute an agent with the given configuration.
  *
  * Supports two modes:
- * - Fresh execution: Pass raw config or { config } - creates new executionId
- * - Resume workflow: Pass { config, executionId } - reuses executionId to resume
+ * - Fresh run: Pass raw config or { config } - creates new runId
+ * - Resume workflow: Pass { config, runId } - reuses runId to resume
  *
  * Tool-use sessions resume through `tryResumeFromResumeData` instead.
  */
@@ -52,8 +52,8 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       ? (input as { onRun?: () => void }).onRun
       : undefined;
 
-    const request = wrapped?.executionId
-      ? ({ kind: 'resume', config, executionId: wrapped.executionId } as const)
+    const request = wrapped?.runId
+      ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
       : ({ kind: 'fresh', config } as const);
     await effectRuntime().runPromise(
       runAgent(request, {
@@ -66,7 +66,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
         copilotRouteOverride: wrapped?.copilotRouteOverride,
         onRun,
-        onStreamResolved: presentLaunchedProgressStream,
+        onRunResolved: presentLaunchedProgressRun,
       }),
     );
   } catch (error) {

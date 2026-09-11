@@ -12,7 +12,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { fileLocationDisplayPath, type ExecutionId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
@@ -90,9 +90,9 @@ describe('shared text-diff caller fixtures', () => {
       '/workspace/original.tex': 'one\ntwo\nthree\n',
       '/workspace/out/section/paper.tex': 'one\nTWO\nthree\nfour\n',
     });
-    const executionId = 'abcdef' as ExecutionId;
+    const runId = 'abcdef' as RunId;
 
-    const result = await computeAndWriteWorkflowDiffs(executionId, [
+    const result = await computeAndWriteWorkflowDiffs(runId, [
       {
         round: 0,
         relativePath: 'section/paper.tex',
@@ -110,7 +110,7 @@ describe('shared text-diff caller fixtures', () => {
     });
     await expect(
       AbsoluteFS.read(
-        path.join(getRunDir(executionId), 'diffs/section_paper.tex.diff'),
+        path.join(getRunDir(runId), 'diffs/section_paper.tex.diff'),
       ),
     ).resolves.toBe('@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n three\n+four');
   });

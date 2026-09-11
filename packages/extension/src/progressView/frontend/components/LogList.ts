@@ -15,17 +15,17 @@ import { repeat } from 'lit/directives/repeat.js';
 import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@shared/wa/spinner';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import type { StreamView } from '@shared/session/sessionView';
+import type { RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
 import type { TaskGroupList } from './TaskGroupList';
 
-interface CachedStream {
-  stream: StreamView;
+interface CachedRun {
+  stream: RunView;
   ref: Ref<TaskGroupList>;
 }
 
@@ -33,14 +33,14 @@ interface CachedStream {
 export class LogList extends LitElement {
   static override styles = [designTokens, ...logStyles];
 
-  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) stream: RunView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
 
   private static readonly MAX_CACHED_STREAMS = 5;
-  private readonly streamCache = new LRUCache<StreamTabId, CachedStream>({
+  private readonly runCache = new LRUCache<RunId, CachedRun>({
     max: LogList.MAX_CACHED_STREAMS,
   });
-  private activeStreamId: StreamTabId | null = null;
+  private activeRunId: RunId | null = null;
   private shouldScrollToBottom = false;
 
   override connectedCallback(): void {
@@ -57,13 +57,13 @@ export class LogList extends LitElement {
 
   protected override willUpdate(): void {
     const stream = this.stream;
-    const streamId = stream?.id ?? null;
-    if (streamId !== this.activeStreamId) {
-      this.activeStreamId = streamId;
+    const runId = stream?.id ?? null;
+    if (runId !== this.activeRunId) {
+      this.activeRunId = runId;
       this.shouldScrollToBottom = true;
     }
     if (!stream) {
-      if (this.streamCache.size > 0) this.streamCache.clear();
+      if (this.runCache.size > 0) this.runCache.clear();
       return;
     }
     this.getOrCreateEntry(stream.id).stream = stream;
@@ -75,14 +75,14 @@ export class LogList extends LitElement {
         role="log"
         aria-label="Run activity"
         aria-relevant="additions"
-        .hasStreams=${false}
-        .streamStatus=${undefined}
+        .hasRuns=${false}
+        .runStatus=${undefined}
         .durableOutcome=${null}
         .isToolUse=${false}
       ></task-group-list>`;
     }
     return html`${repeat(
-      this.streamCache.rentries() as Iterable<[StreamTabId, CachedStream]>,
+      this.runCache.rentries() as Iterable<[RunId, CachedRun]>,
       ([id]) => id,
       ([id, data]) => {
         const stream = data.stream;
@@ -93,11 +93,11 @@ export class LogList extends LitElement {
             role=${terminal ? nothing : 'log'}
             aria-label=${terminal ? nothing : `Activity for ${stream.label}`}
             aria-relevant=${terminal ? nothing : 'additions'}
-            ?hidden=${id !== this.activeStreamId}
-            .streamId=${id}
+            ?hidden=${id !== this.activeRunId}
+            .runId=${id}
             .transcript=${stream.transcript}
-            .hasStreams=${true}
-            .streamStatus=${stream.status}
+            .hasRuns=${true}
+            .runStatus=${stream.status}
             .durableOutcome=${stream.durableOutcome}
             .isToolUse=${stream.category === 'toolUse'}
             .expanded=${this.surface?.groups.get(id)}
@@ -109,8 +109,8 @@ export class LogList extends LitElement {
   }
 
   override updated(): void {
-    const activeEl = this.activeStreamId
-      ? this.streamCache.get(this.activeStreamId)?.ref.value
+    const activeEl = this.activeRunId
+      ? this.runCache.get(this.activeRunId)?.ref.value
       : undefined;
     if (this.shouldScrollToBottom) {
       this.shouldScrollToBottom = false;
@@ -125,14 +125,14 @@ export class LogList extends LitElement {
     }
   }
 
-  private getOrCreateEntry(streamId: StreamTabId): CachedStream {
-    const entry = this.streamCache.get(streamId);
+  private getOrCreateEntry(runId: RunId): CachedRun {
+    const entry = this.runCache.get(runId);
     if (entry) return entry;
-    const created: CachedStream = {
+    const created: CachedRun = {
       stream: this.stream!,
       ref: createRef<TaskGroupList>(),
     };
-    this.streamCache.set(streamId, created);
+    this.runCache.set(runId, created);
     return created;
   }
 

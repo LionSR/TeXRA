@@ -1,20 +1,19 @@
 import { Deferred, Effect } from 'effect';
 
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunHandle } from '@agent/runtime/RunHandle';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RunId } from '@shared/schemas';
 
 /**
- * What the registry tracks about one live agent-CLI session: the child run's
- * identity and its follow-up address. Live handles are resolved on demand
- * through the session's own {@link ExecutionRegistry}, injected once at
+ * What the registry tracks about one live agent-CLI session: its follow-up
+ * address. Live handles are resolved on demand
+ * through the session's own {@link RunRegistry}, injected once at
  * construction — entries carry no registry pointer of their own, so an entry
  * can never point across sessions. Provider specifics (codex thread, claude
  * model/permission mode/…) stay with the provider's own loop closure.
  */
 export interface AgentCliSessionEntry {
-  childStreamId: StreamTabId;
-  executionId: ExecutionId;
+  runId: RunId;
 }
 
 type AgentCliSessionState =
@@ -35,9 +34,9 @@ function settleReservation(
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
-  private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
+  private readonly inFlight = new Map<RunId, AgentCliSessionEntry>();
 
-  constructor(private readonly executions: ExecutionRegistry) {}
+  constructor(private readonly runs: RunRegistry) {}
 
   /**
    * Atomically reserve an unowned SDK session id. Returns a release handle
@@ -72,7 +71,7 @@ export class AgentCliSessionRegistry {
 
   /** Track a launched loop before its SDK session id is safe to publish. */
   trackInFlight(entry: AgentCliSessionEntry): void {
-    this.inFlight.set(entry.executionId, entry);
+    this.inFlight.set(entry.runId, entry);
   }
 
   lookup(sessionId: string): AgentCliSessionEntry | undefined {
@@ -81,15 +80,13 @@ export class AgentCliSessionRegistry {
   }
 
   /**
-   * Live handle for an entry, resolved through the one execution registry
+   * Live handle for an entry, resolved through the one run registry
    * this session's agent-CLI children run under. Ownership and follow-up
    * checks read the live handle rather than a stored pointer, so a detached
    * or re-parented child answers with its current state.
    */
-  getHandle(
-    entry: AgentCliSessionEntry | undefined,
-  ): AgentExecutionHandle | undefined {
-    return entry && this.executions.getHandle(entry.executionId);
+  getHandle(entry: AgentCliSessionEntry | undefined): RunHandle | undefined {
+    return entry && this.runs.getHandle(entry.runId);
   }
 
   /** Wait for a reserved id to become active, or for its owner to release it. */
@@ -110,11 +107,11 @@ export class AgentCliSessionRegistry {
     settleReservation(state, undefined);
   }
 
-  /** Release every alias and in-flight handle owned by one child execution. */
-  releaseByExecutionId(executionId: ExecutionId): void {
-    this.inFlight.delete(executionId);
+  /** Release every alias and in-flight handle owned by one child run. */
+  releaseByRunId(runId: RunId): void {
+    this.inFlight.delete(runId);
     for (const [sessionId, state] of this.sessions) {
-      if (state.kind === 'active' && state.entry.executionId === executionId) {
+      if (state.kind === 'active' && state.entry.runId === runId) {
         this.sessions.delete(sessionId);
       }
     }
@@ -126,14 +123,12 @@ export class AgentCliSessionRegistry {
    * to one session's own agent-CLI children.
    */
   interruptAll(): void {
-    const interrupted = new Set<ExecutionId>();
+    const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
-      if (interrupted.has(entry.executionId)) return;
-      const handle = this.executions.getAgentHandleByStream(
-        entry.childStreamId,
-      );
+      if (interrupted.has(entry.runId)) return;
+      const handle = this.runs.getHandle(entry.runId);
       if (!handle) return;
-      interrupted.add(entry.executionId);
+      interrupted.add(entry.runId);
       handle.interrupt();
     };
 

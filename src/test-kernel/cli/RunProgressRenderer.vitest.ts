@@ -20,25 +20,24 @@ import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
   aggregateId as qualifyAggregateId,
-  STREAM_PHASE,
+  RUN_PHASE,
   type ActiveChildInfo,
   type ConversationProgress,
-  type ExecutionId,
+  type RunId,
   type InstructionAction,
   type RoundStage,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
+import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -131,10 +130,10 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
 // they do in production: as the session view the fold publishes, so each
 // helper states the stream fields the fold would state and settles the ref.
 type TestRunProgressRenderer = RunProgressRenderer & {
-  readonly streams: Map<StreamTabId, StreamView>;
-  set(streamId: string, over: Partial<StreamView>): Promise<void>;
+  readonly runs: Map<RunId, RunView>;
+  set(runId: string, over: Partial<RunView>): Promise<void>;
   setMany(
-    entries: ReadonlyArray<readonly [string, Partial<StreamView>]>,
+    entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void>;
   detach(): void;
 };
@@ -147,42 +146,41 @@ async function settle(): Promise<void> {
   }
 }
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
-  const streams = new Map<StreamTabId, StreamView>();
+  const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
   const detach = renderer.attach({ view: ref });
   const setMany = async (
-    entries: ReadonlyArray<readonly [string, Partial<StreamView>]>,
+    entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
-    for (const [streamId, over] of entries) {
-      const id = streamId as StreamTabId;
-      const current = streams.get(id);
-      streams.set(
+    for (const [runId, over] of entries) {
+      const id = runId as RunId;
+      const current = runs.get(id);
+      runs.set(
         id,
-        makeStreamView({
+        makeRunView({
           // The label, tone, and group follow the merged status.
           ...(current
             ? (({ statusLabel, tone, group, ...rest }) => rest)(current)
             : { createdAt: (createdAt += 1) }),
           ...over,
           id,
-        } as Parameters<typeof makeStreamView>[0]) as StreamView,
+        } as Parameters<typeof makeRunView>[0]) as RunView,
       );
     }
     await Effect.runPromise(
-      SubscriptionRef.set(ref, viewWith([...streams.values()])),
+      SubscriptionRef.set(ref, viewWith([...runs.values()])),
     );
     await settle();
   };
   return Object.assign(renderer, {
-    streams,
-    set: (streamId: string, over: Partial<StreamView>) =>
-      setMany([[streamId, over]]),
+    runs,
+    set: (runId: string, over: Partial<RunView>) => setMany([[runId, over]]),
     setMany,
     detach,
   });
 }
 type RunConfigOverrides = {
-  streamId?: string;
+  runId?: string;
   agent?: string;
   agentCategory?: AgentCategory;
   inputFiles?: string[];
@@ -191,8 +189,7 @@ function subagentChild(
   overrides: Partial<ActiveChildInfo> = {},
 ): ActiveChildInfo {
   return {
-    executionId: 'child-1',
-    childStreamId: 'child-stream',
+    childRunId: 'child-stream' as RunId,
     agentName: 'review',
     identity: { kind: 'agent', agent: 'review' },
     status: 'running',
@@ -208,30 +205,30 @@ async function handleRunConfig(
   overrides: RunConfigOverrides = {},
 ): Promise<void> {
   const agent = overrides.agent ?? 'polish';
-  await renderer.set(overrides.streamId ?? 'stream-1', {
+  await renderer.set(overrides.runId ?? 'stream-1', {
     identity: { kind: 'agent', agent },
     label: agent,
     category: overrides.agentCategory ?? AgentCategory.Workflow,
     inputFiles: overrides.inputFiles ?? ['paper.tex'],
-    status: STREAM_PHASE.RUNNING,
-  } as Partial<StreamView>);
+    status: RUN_PHASE.RUNNING,
+  } as Partial<RunView>);
 }
 /** Input-less root run the heartbeat and live-line cases below all start from. */
 async function handleOrchestratorRootRun(
   renderer: TestRunProgressRenderer,
 ): Promise<void> {
   await handleRunConfig(renderer, {
-    streamId: 'root-stream',
+    runId: 'root-stream',
     agent: 'orchestrator',
     inputFiles: [],
   });
 }
 async function handleRoundStage(
   renderer: TestRunProgressRenderer,
-  streamId: string,
+  runId: string,
   roundStage: RoundStage,
 ): Promise<void> {
-  await renderer.set(streamId, {
+  await renderer.set(runId, {
     stage: {
       kind: 'round',
       index: roundStage.index,
@@ -241,55 +238,54 @@ async function handleRoundStage(
 }
 async function handleConversationProgress(
   renderer: TestRunProgressRenderer,
-  streamId: string,
+  runId: string,
   progress: ConversationProgress,
 ): Promise<void> {
-  await renderer.set(streamId, { conversationProgress: progress });
+  await renderer.set(runId, { conversationProgress: progress });
 }
-async function handleStreamStatus(
+async function handleRunStatus(
   renderer: TestRunProgressRenderer,
-  streamId: string,
-  status: StreamPhase,
+  runId: string,
+  status: RunPhase,
 ): Promise<void> {
-  await renderer.set(streamId, { status });
+  await renderer.set(runId, { status });
 }
-async function handleStreamDescription(
+async function handleRunDescription(
   renderer: TestRunProgressRenderer,
-  streamId: string,
+  runId: string,
   description: string,
 ): Promise<void> {
-  await renderer.set(streamId, { description });
+  await renderer.set(runId, { description });
 }
 /** The parent's roster as the fold states it, in one view: each named
  *  child is a live child stream, and a child that left the roster has
  *  finished. An unnamed entry has no stream to show. */
 async function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
-  parentStreamId: string,
+  parentRunId: string,
   children: readonly ActiveChildInfo[],
 ): Promise<void> {
-  const parent = parentStreamId as StreamTabId;
+  const parent = parentRunId as RunId;
   const named = children.filter((child) => child.agentName);
-  const listed = new Set(named.map((child) => child.childStreamId));
-  const entries: Array<readonly [string, Partial<StreamView>]> = [];
-  for (const [id, stream] of renderer.streams) {
+  const listed = new Set(named.map((child) => child.childRunId));
+  const entries: Array<readonly [string, Partial<RunView>]> = [];
+  for (const [id, stream] of renderer.runs) {
     if (stream.parentId === parent && !listed.has(id)) {
-      entries.push([id, { status: STREAM_PHASE.COMPLETED }]);
+      entries.push([id, { status: RUN_PHASE.COMPLETED }]);
     }
   }
   for (const child of named) {
     entries.push([
-      child.childStreamId,
+      child.childRunId,
       {
         parentId: parent,
         ancestors: [{ id: parent, label: parent }],
-        executionId: child.executionId,
         label: child.agentName,
         identity: child.identity,
         status:
           child.status === 'running'
-            ? STREAM_PHASE.RUNNING
-            : (child.status ?? STREAM_PHASE.WAITING),
+            ? RUN_PHASE.RUNNING
+            : (child.status ?? RUN_PHASE.WAITING),
       },
     ]);
   }
@@ -301,29 +297,25 @@ async function publishRun(
   session: SessionHandle,
   overrides: RunConfigOverrides = {},
 ): Promise<void> {
-  const streamId = (overrides.streamId ?? 'stream-1') as StreamTabId;
+  const runId = (overrides.runId ?? 'e5e5e5') as RunId;
   const agent = overrides.agent ?? 'polish';
-  const executionId = 'e00101' as ExecutionId;
   session.publish([
     {
       type: 'run.start',
-      aggregateId: qualifyAggregateId('stream', streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: overrides.agentCategory ?? AgentCategory.Workflow,
       isRemote: false,
       worktree: null,
-      parentStreamId: null,
-      background: false,
+      parent: null,
       approvalPolicy: null,
       checkpointId: null,
     },
   ]);
-  session.publishRunEvent(streamId, {
+  session.publishRunEvent(runId, {
     type: 'run.config',
-    streamId,
-    executionId,
+    runId,
     config: AgentConfigSchema.parse({
       agent,
       agentCategory: overrides.agentCategory ?? AgentCategory.Workflow,
@@ -347,9 +339,9 @@ async function publishRun(
   });
   session.publishStatus({
     type: 'status',
-    streamId,
-    phase: STREAM_PHASE.RUNNING,
-    cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    runId,
+    phase: RUN_PHASE.RUNNING,
+    cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
   });
   await settle();
 }
@@ -501,7 +493,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1s');
     expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 2s');
 
-    await handleStreamStatus(renderer, 'stream-1', STREAM_PHASE.CANCELLED);
+    await handleRunStatus(renderer, 'stream-1', RUN_PHASE.CANCELLED);
     expect(timers.clearCount).toBe(1);
   });
 
@@ -571,7 +563,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleRunConfig(renderer);
-    await handleStreamDescription(renderer, 'stream-1', 'drafting');
+    await handleRunDescription(renderer, 'stream-1', 'drafting');
     await handleActiveSubagents(renderer, 'stream-1', [subagentChild()]);
 
     expect(output.text).toBe(
@@ -584,14 +576,14 @@ describe('CLI run progress renderer', () => {
   it('renders the live line from direct session and run facts', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
-    const streamId = 'stream-1';
+    const runId = 'stream-1';
 
-    await handleRunConfig(renderer, { streamId });
-    await handleConversationProgress(renderer, streamId, { toolCallCount: 3 });
-    await handleRoundStage(renderer, streamId, { index: 0, total: 2 });
-    await handleStreamDescription(renderer, streamId, 'drafting');
-    await handleActiveSubagents(renderer, streamId, [subagentChild()]);
-    await handleStreamStatus(renderer, streamId, STREAM_PHASE.COMPLETED);
+    await handleRunConfig(renderer, { runId });
+    await handleConversationProgress(renderer, runId, { toolCallCount: 3 });
+    await handleRoundStage(renderer, runId, { index: 0, total: 2 });
+    await handleRunDescription(renderer, runId, 'drafting');
+    await handleActiveSubagents(renderer, runId, [subagentChild()]);
+    await handleRunStatus(renderer, runId, RUN_PHASE.COMPLETED);
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
@@ -603,21 +595,21 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('keeps the root run visible when child streams update progress', async () => {
+  it('keeps the root run visible when child runs update progress', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
 
     await handleRunConfig(renderer, {
-      streamId: 'root-stream',
+      runId: 'root-stream',
       agent: 'coordinator',
       inputFiles: ['main.tex'],
     });
     await handleRunConfig(renderer, {
-      streamId: 'child-stream',
+      runId: 'child-stream',
       agent: 'reviewer',
       inputFiles: ['chapter.tex'],
     });
-    await handleStreamDescription(
+    await handleRunDescription(
       renderer,
       'child-stream',
       'reviewing chapter.tex',
@@ -625,19 +617,17 @@ describe('CLI run progress renderer', () => {
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({ agentName: 'reviewer' }),
       subagentChild({
-        executionId: 'child-2',
-        childStreamId: 'child-stream-2',
+        childRunId: 'child-stream-2' as RunId,
         agentName: 'compiler',
       }),
       subagentChild({
-        executionId: 'child-3',
-        childStreamId: 'child-stream-3',
+        childRunId: 'child-stream-3' as RunId,
         agentName: 'proofreader',
       }),
     ]);
 
     // The newest child leads the summary: `childIds` is the fold's
-    // `streamOrdering` (newest creation first).
+    // `runOrdering` (newest creation first).
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
         'coordinator main.tex · subagents: proofreader +2 · 0s\n',
@@ -667,7 +657,7 @@ describe('CLI run progress renderer', () => {
       '\r\x1b[2Korchestrator · subagent: review · 2s',
     );
 
-    await handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
+    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.CANCELLED);
     expect(timers.clearCount).toBe(1);
   });
 
@@ -695,7 +685,7 @@ describe('CLI run progress renderer', () => {
     });
     await handleRoundStage(renderer, 'root-stream', { index: 1 });
     await handleRunConfig(renderer, {
-      streamId: 'child-stream',
+      runId: 'child-stream',
       agent: 'reviewer',
       inputFiles: ['chapter.tex'],
     });
@@ -713,10 +703,9 @@ describe('CLI run progress renderer', () => {
 
     await handleRunConfig(renderer);
     await handleActiveSubagents(renderer, 'stream-1', [
-      subagentChild({ childStreamId: 'child-stream-1', agentName: '' }),
+      subagentChild({ childRunId: 'child-stream-1' as RunId, agentName: '' }),
       subagentChild({
-        executionId: 'child-2',
-        childStreamId: 'child-stream-2',
+        childRunId: 'child-stream-2' as RunId,
       }),
     ]);
 
@@ -730,7 +719,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(
+    await handleRunDescription(
       renderer,
       'child-stream',
       'Check multiplier\nsigns\tand \x1b[2Jresonance counterexamples',
@@ -749,7 +738,7 @@ describe('CLI run progress renderer', () => {
 
     await handleOrchestratorRootRun(renderer);
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleStreamDescription(
+    await handleRunDescription(
       renderer,
       'child-stream',
       'Verify by constraint elimination and energy balance',
@@ -767,7 +756,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(
+    await handleRunDescription(
       renderer,
       'child-stream',
       'Run PASSWORD="correct horse" now',
@@ -785,14 +774,10 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(
-      renderer,
-      'child-stream',
-      'Current review task',
-    );
+    await handleRunDescription(renderer, 'child-stream', 'Current review task');
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
-    await handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.RUNNING);
+    await handleRunStatus(renderer, 'child-stream', RUN_PHASE.WAITING);
+    await handleRunStatus(renderer, 'child-stream', RUN_PHASE.RUNNING);
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
@@ -805,25 +790,16 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(
-      renderer,
-      'waiting-child',
-      'Idle review task',
-    );
-    await handleStreamDescription(
-      renderer,
-      'running-child',
-      'Active review task',
-    );
+    await handleRunDescription(renderer, 'waiting-child', 'Idle review task');
+    await handleRunDescription(renderer, 'running-child', 'Active review task');
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        childStreamId: 'waiting-child',
-        status: STREAM_PHASE.WAITING,
+        childRunId: 'waiting-child' as RunId,
+        status: RUN_PHASE.WAITING,
       }),
       subagentChild({
-        executionId: 'child-2',
-        childStreamId: 'running-child',
-        status: STREAM_PHASE.RUNNING,
+        childRunId: 'running-child' as RunId,
+        status: RUN_PHASE.RUNNING,
       }),
     ]);
 
@@ -838,7 +814,7 @@ describe('CLI run progress renderer', () => {
     const renderer = ansiRenderer(output, { getColumns: () => 80 });
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
+    await handleRunDescription(renderer, 'child-stream', 'A'.repeat(100));
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
     const renderedLines = output.text.split('\r\x1b[2K').filter(Boolean);
@@ -855,7 +831,7 @@ describe('CLI run progress renderer', () => {
     const renderer = ansiRenderer(output, { getColumns: () => columns });
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
+    await handleRunDescription(renderer, 'child-stream', 'A'.repeat(100));
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
     columns = 60;
@@ -873,14 +849,10 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(
-      renderer,
-      'child-stream',
-      'Current review task',
-    );
+    await handleRunDescription(renderer, 'child-stream', 'Current review task');
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     await handleRunConfig(renderer, {
-      streamId: 'child-stream',
+      runId: 'child-stream',
       agent: 'review',
     });
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
@@ -902,8 +874,8 @@ describe('CLI run progress renderer', () => {
     await handleOrchestratorRootRun(renderer);
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     now = 11000;
-    await handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.COMPLETED);
-    await handleStreamDescription(
+    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.COMPLETED);
+    await handleRunDescription(
       renderer,
       'root-stream',
       'Running Mathematician multi-agent preset',
@@ -914,8 +886,7 @@ describe('CLI run progress renderer', () => {
     });
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        executionId: 'child-2',
-        childStreamId: 'late-child-stream',
+        childRunId: 'late-child-stream' as RunId,
         agentName: 'late-review',
       }),
     ]);
@@ -932,7 +903,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
+    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.CANCELLED);
 
     expect(output.text).toBe(
       'orchestrator · 0s\norchestrator · Stopped · 0s\n',
@@ -944,10 +915,10 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamDescription(renderer, 'child-stream', 'Late review task');
+    await handleRunDescription(renderer, 'child-stream', 'Late review task');
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
-    await handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.CANCELLED);
+    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.CANCELLED);
+    await handleRunStatus(renderer, 'child-stream', RUN_PHASE.CANCELLED);
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
@@ -961,16 +932,15 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
     await handleOrchestratorRootRun(renderer);
-    await handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.FAILED);
-    // Post-terminal activity must not un-freeze the renderer (STREAM_PHASE.FAILED
+    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.FAILED);
+    // Post-terminal activity must not un-freeze the renderer (RUN_PHASE.FAILED
     // must be recognized as a terminal outcome phase, same as COMPLETED/CANCELLED).
     await handleConversationProgress(renderer, 'root-stream', {
       toolCallCount: 9,
     });
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        executionId: 'child-2',
-        childStreamId: 'late-child-stream',
+        childRunId: 'late-child-stream' as RunId,
         agentName: 'late-review',
       }),
     ]);
@@ -1017,7 +987,7 @@ describe('CLI run progress renderer', () => {
       // The session's graph is fresh: let its fold subscribe before the
       // facts land, so each fact paints as its own level.
       await settle();
-      await publishRun(session, { streamId: 'gate-stream' });
+      await publishRun(session, { runId: 'a1a1a1' });
       detach();
       await host.close();
     });
@@ -1037,15 +1007,15 @@ describe('CLI run progress renderer', () => {
         }),
       );
       const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { streamId: 'status-line-stream' });
+      await publishRun(session, { runId: 'b2b2b2' });
       await session.settlePublications();
       // Status travels only as a session fact (run-scope status is no longer
       // representable), so exactly one line renders for the transition.
       session.publishStatus({
         type: 'status',
-        streamId: 'status-line-stream' as StreamTabId,
-        phase: STREAM_PHASE.COMPLETED,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        runId: 'b2b2b2' as RunId,
+        phase: RUN_PHASE.COMPLETED,
+        cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
       });
       await session.settlePublications();
 
@@ -1069,7 +1039,7 @@ describe('CLI run progress renderer', () => {
       );
 
       const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { streamId: 'prompt-stream' });
+      await publishRun(session, { runId: 'c3c3c3' });
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
       detach();
@@ -1092,7 +1062,7 @@ describe('CLI run progress renderer', () => {
           }),
         );
         const detach = host.attachRunProgressRenderer(session);
-        await publishRun(session, { streamId: 'json-stream' });
+        await publishRun(session, { runId: 'd4d4d4' });
         detach();
         await host.close();
       });
@@ -1186,12 +1156,12 @@ describe('CLI run progress renderer', () => {
       // The roster is the registry's, not the log's: the projection hears
       // it through `onChildActivity`, so the case plays the listener.
       let roster:
-        | ((parentStreamId: StreamTabId, items: ActiveChildInfo[]) => void)
-        | undefined;
+        ((parentRunId: RunId, items: ActiveChildInfo[]) => void) | undefined;
       const detach = attachCliSessionProgressProjection({
         events: session.events,
         now: () => session.now(),
-        executions: {
+        view: session.view,
+        runs: {
           onChildActivity: (listener) => {
             roster = listener;
             return () => {
@@ -1200,10 +1170,9 @@ describe('CLI run progress renderer', () => {
           },
         },
       });
-      roster?.('parent-stream' as StreamTabId, [
+      roster?.('parent-stream' as RunId, [
         {
-          executionId: 'child-execution',
-          childStreamId: 'child-stream',
+          childRunId: 'child-stream' as RunId,
           agentName: 'review',
           identity: { kind: 'agent' as const, agent: 'review' },
           status: 'running',
@@ -1219,13 +1188,15 @@ describe('CLI run progress renderer', () => {
       expect.objectContaining({
         kind: 'progress',
         event: 'updateActiveSubagents',
-        // The frozen public row shape: `kind` discriminant, no `identity`.
+        // The frozen public row shape: `kind` discriminant, no `identity`,
+        // and the 0.40 wire keys (`parentStreamId`, `executionId`,
+        // `childStreamId`).
         payload: {
           parentStreamId: 'parent-stream',
           children: [
             {
               kind: 'subagent',
-              executionId: 'child-execution',
+              executionId: 'child-stream',
               agentName: 'review',
               status: 'running',
               childStreamId: 'child-stream',
@@ -1243,17 +1214,17 @@ describe('CLI run progress renderer', () => {
       );
 
       host.emitApprovalBypassState({
-        streamId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'bash',
         bypassActive: true,
       });
       host.emitApprovalBypassState({
-        streamId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'toolEdit',
         bypassActive: false,
       });
       host.emitApprovalBypassState({
-        streamId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'superYolo',
         bypassActive: true,
       });
@@ -1267,17 +1238,17 @@ describe('CLI run progress renderer', () => {
       expect.objectContaining({
         kind: 'progress',
         event: 'updateBashApprovalBypassState',
-        payload: { streamId: 'stream-1', bypassActive: true },
+        payload: { runId: 'stream-1', bypassActive: true },
       }),
       expect.objectContaining({
         kind: 'progress',
         event: 'updateToolEditApprovalBypassState',
-        payload: { streamId: 'stream-1', bypassActive: false },
+        payload: { runId: 'stream-1', bypassActive: false },
       }),
       expect.objectContaining({
         kind: 'progress',
         event: 'updateSuperYoloBypassState',
-        payload: { streamId: 'stream-1', bypassActive: true },
+        payload: { runId: 'stream-1', bypassActive: true },
       }),
     ]);
   });

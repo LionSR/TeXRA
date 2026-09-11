@@ -14,7 +14,7 @@ import { Cause, Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
-import { listExecutions } from '@agent/storage';
+import { listRuns } from '@agent/storage';
 import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
@@ -149,7 +149,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       catch: ensureError,
     });
     // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
-    // with execution history never enters State 0/1. Credential presence alone
+    // with run history never enters State 0/1. Credential presence alone
     // does not prove this is an upgrader: fresh installs can inherit env keys.
     // One-shot and best-effort: if a credential appears after a previous skip,
     // the stale skip is cleared below so a later sign-out re-enters State 0.
@@ -166,7 +166,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
           try: () => initializeCliTranscriptSession(),
           catch: ensureError,
         }).pipe(
-          Effect.flatMap((session) => listExecutions(session)),
+          Effect.flatMap((session) => listRuns(session)),
           Effect.map((entries) => entries.length > 0),
           Effect.catch((error) =>
             Effect.sync(() => {

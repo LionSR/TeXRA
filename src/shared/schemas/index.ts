@@ -35,12 +35,12 @@ export * from './agentPresets';
 export * from './toolResult';
 
 // Layer 2: Depends on layer 1 only
-export * from './stream';
+export * from './run';
 export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 export * from './workflowCallProgress';
-export * from './workflowExecutionSnapshot';
+export * from './workflowRunSnapshot';
 export * from './workflowScriptDelivery';
 
 export {
@@ -50,7 +50,7 @@ export {
   type AgentFinalResult,
   type ResultDiffSummary,
   type ResultMeta,
-} from './executionRecords';
+} from './runRecords';
 
 // Layer 3: Depends on layer 2
 export * from './log';
@@ -82,8 +82,8 @@ export * from './settingsViewMessages';
 export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
-export * from './streamState';
-export * from './streamSnapshot';
+export * from './runState';
+export * from './runSnapshot';
 export * from './sessionEvent';
 export * from './traceEvent';
 

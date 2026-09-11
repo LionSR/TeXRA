@@ -16,16 +16,16 @@ import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
-import { sessionView, streamViewOf } from '../state/sessionView';
+import { sessionView, runViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
@@ -33,15 +33,15 @@ const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 export function TranscriptReader({
   availableRows,
-  executionLabels,
+  runLabels,
   onClose,
-  streamId,
+  runId,
   title,
 }: {
   readonly availableRows: number;
-  readonly executionLabels?: ExecutionLabels;
+  readonly runLabels?: RunLabels;
   readonly onClose: () => void;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
@@ -51,18 +51,17 @@ export function TranscriptReader({
   // new row, a patched row, a text chunk), so the transcript is the
   // identity the effect and memos below key on to stay live while the
   // reader is open.
-  const transcript =
-    streamViewOf(view, streamId)?.transcript ?? EMPTY_TRANSCRIPT;
+  const transcript = runViewOf(view, runId)?.transcript ?? EMPTY_TRANSCRIPT;
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(transcript.rows, width, executionLabels)
+    const body = transcriptToLines(transcript.rows, width, runLabels)
       .join('\n')
       .trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [executionLabels, transcript, width]);
+  }, [runLabels, transcript, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
@@ -85,7 +84,7 @@ export function TranscriptReader({
           title,
         })}
         preWrapped
-        resetKey={streamId}
+        resetKey={runId}
         scrollHint="scroll transcript"
         showScrollHints={false}
         startAtEnd

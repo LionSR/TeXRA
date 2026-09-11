@@ -163,7 +163,7 @@ function createSequentialClient(respond: (call: number) => unknown) {
   return { client, requests };
 }
 
-type StreamScript = {
+type RunScript = {
   /** Events the stream yields, in order. */
   events?: unknown[];
   /** Error the stream throws after yielding every event. */
@@ -175,7 +175,7 @@ type StreamScript = {
 };
 
 /** A client whose stream replays `events` and then throws `error` if set. */
-function createStreamClient(script: StreamScript) {
+function createStreamClient(script: RunScript) {
   return {
     responses: {
       stream: () => ({
@@ -486,7 +486,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 
   it.each([
     {
-      // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro execution is selected by
+      // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro run is selected by
       // the request's reasoning.mode, driven by the reasoningMode capability.
       name: 'sends reasoning.mode for pro-mode registry entries (GPT-5.6 Pro)',
       overrides: {
@@ -774,7 +774,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(result.response.output, [reasoningItem, functionCallItem]);
   });
 
-  it('keeps healthy streams on finalResponse after response.created', async () => {
+  it('keeps healthy runs on finalResponse after response.created', async () => {
     const handler = createStreamingHandler();
 
     let finalResponseCalls = 0;
@@ -985,7 +985,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       },
     });
 
-    let streamCalls = 0;
+    let runCalls = 0;
     let tokenCountCalls = 0;
     const retrieveCalls: Array<{ id: string; params: unknown }> = [];
     const client = withSdkOptions({
@@ -997,7 +997,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           },
         },
         stream: () => {
-          streamCalls += 1;
+          runCalls += 1;
           return createUnhandledEventStream('resp-retrieve-retry');
         },
         retrieve: async (id: string, params: unknown) => {
@@ -1028,7 +1028,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
 
     assert.equal(result.response.id, 'resp-retrieve-retry');
-    assert.equal(streamCalls, 1);
+    assert.equal(runCalls, 1);
     assert.equal(tokenCountCalls, 1);
     assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.deepEqual(retrieveCalls, [
@@ -1051,7 +1051,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
     installImmediatePoller(handler);
 
-    let streamCalls = 0;
+    let runCalls = 0;
     const retrieveCalls: Array<{ id: string; params: unknown }> = [];
     const pendingResponse = {
       ...createResponse('resp-poll-retry', { input_tokens: 12 }),
@@ -1063,7 +1063,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const client = {
       responses: {
         stream: () => {
-          streamCalls += 1;
+          runCalls += 1;
           return createUnhandledEventStream('resp-poll-retry');
         },
         retrieve: async (id: string, params: unknown) => {
@@ -1093,7 +1093,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
 
     assert.equal(result.response.id, 'resp-poll-retry');
-    assert.equal(streamCalls, 1);
+    assert.equal(runCalls, 1);
     assert.deepEqual(retrieveCalls, [
       {
         id: 'resp-poll-retry',

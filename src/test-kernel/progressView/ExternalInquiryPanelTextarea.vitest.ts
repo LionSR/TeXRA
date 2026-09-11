@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
-import type { ExternalInquiryPermission } from '@shared/schemas';
+import type { ExternalInquiryPermission, RunId } from '@shared/schemas';
 import type { SurfaceAction } from '@shared/session/surface';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
@@ -24,7 +24,7 @@ function createPermission(
     data: {
       requestId: 'inquiry-1',
       allowBypass: false,
-      streamId: 'stream-1',
+      runId: 'run-1' as RunId,
       threadId: 'ei_000000000000',
       question: 'What is the answer?',
       ...overrides,
@@ -124,7 +124,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     expect(actions).toEqual([
       {
         kind: 'externalInquiry.submit',
-        streamId: 'stream-1',
+        runId: 'run-1',
         threadId: 'ei_000000000000',
         turnIndex: 1,
         answer: 'the answer',

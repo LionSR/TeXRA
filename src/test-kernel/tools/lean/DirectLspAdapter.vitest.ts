@@ -57,7 +57,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   createDirectLspLeanAdapter,
   type DirectLspLeanAdapterOptions,
@@ -150,7 +150,7 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
-const NO_RUN: ExecutionId | undefined = undefined;
+const NO_RUN: RunId | undefined = undefined;
 const IDLE_HOUR = Duration.hours(1);
 
 let tempRoot: string;
@@ -756,7 +756,7 @@ describe('createDirectLspLeanAdapter', () => {
         // `T | Promise<T>` covers its async users; this callback is
         // synchronous, so the cast only narrows that union back.
         const program = withRunContext(
-          createRunContext({ executionId: run('e00001') }),
+          createRunContext({ runId: run('e00001') }),
           () => adapter.fetchDiagnosticsForFile(filePath),
         ) as ReturnType<(typeof adapter)['fetchDiagnosticsForFile']>;
         yield* program;
@@ -852,8 +852,8 @@ describe('createDirectLspLeanAdapter', () => {
   );
 });
 
-function run(executionId: string): ExecutionId {
-  return executionId as ExecutionId;
+function run(runId: string): RunId {
+  return runId as RunId;
 }
 
 function makeLakeProject(

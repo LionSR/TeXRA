@@ -1,9 +1,9 @@
 // The workflow popup: one phase at a time, attention first, volume collapsed.
 //
 // A workflow-script run is never a viewport you stand in — its transcript is
-// chrome about other streams. This foreground surface (the same mechanics as
+// chrome about other runs. This foreground surface (the same mechanics as
 // the Ctrl-T reader: row-budgeted, Esc restores the parent untouched) paints
-// the shared run model (`@shared/streams/workflowRunModel`): the run's phases
+// the shared run model (`@shared/runs/workflowRunModel`): the run's phases
 // as tabs and the selected phase's rows — calls that need a decision, then
 // calls worth watching, then counted groups that open in place. Every fold is
 // the model's; this file only decides how a row looks in a terminal.
@@ -28,7 +28,7 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   runIdentityDisplayName,
-  type StreamTabId,
+  type RunId,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
   type WorkflowControlAction,
@@ -49,7 +49,7 @@ import {
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
   type WorkflowRunModel,
-} from '@shared/streams/workflowRunModel';
+} from '@shared/runs/workflowRunModel';
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
@@ -59,9 +59,9 @@ import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
 import { type WorkflowPopupView } from '../state/cliState';
 import {
   cumulativeUsageOf,
-  killableExecutionId,
+  killableRunId,
   sessionView,
-  streamViewOf,
+  runViewOf,
 } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 
@@ -223,7 +223,7 @@ function GroupRow({
 interface WorkflowPopupProps {
   readonly availableRows: number;
   /** The workflow-script stream the popup looks into. */
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly model: WorkflowRunModel;
   readonly view: WorkflowPopupView;
   readonly pendingApprovals: ReadonlyMap<
@@ -231,13 +231,13 @@ interface WorkflowPopupProps {
     readonly PendingApprovalKind[]
   >;
   readonly onClose: () => void;
-  readonly onFocusStream: (streamId: StreamTabId) => void;
-  readonly onKillExecution: (executionId: string) => void;
+  readonly onFocusRun: (runId: RunId) => void;
+  readonly onKillRun: (runId: RunId) => void;
   readonly onWorkflowControl: (
-    executionId: string,
+    runId: RunId,
     action: WorkflowControlAction,
   ) => void;
-  readonly onOpenTranscript: (streamId: StreamTabId) => void;
+  readonly onOpenTranscript: (runId: RunId) => void;
   readonly onViewChange: (patch: Partial<WorkflowPopupView>) => void;
 }
 
@@ -245,18 +245,18 @@ export function WorkflowPopup({
   availableRows,
   model,
   onClose,
-  onFocusStream,
-  onKillExecution,
+  onFocusRun,
+  onKillRun,
   onOpenTranscript,
   onViewChange,
   onWorkflowControl,
   pendingApprovals,
-  streamId,
+  runId,
   view,
 }: WorkflowPopupProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const sessionState = useSignal(sessionView());
-  const stream = streamViewOf(sessionState, streamId);
+  const stream = runViewOf(sessionState, runId);
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
@@ -267,16 +267,14 @@ export function WorkflowPopup({
   const phase = phases[phaseIndex];
   // The cards whose child run needs the user, its own approval or a
   // descendant's: the fold's `approval` aggregate, read off the child
-  // streams this host holds, as the board reads it.
+  // runs this host holds, as the board reads it.
   const waitingOf = (candidate: WorkflowPhaseModel): ReadonlySet<string> =>
     new Set(
       candidate.tasks
         .filter((task) => {
-          const childId = model.childStreamOf.get(task.id);
+          const childId = model.childRunOf.get(task.id);
           const child =
-            childId === undefined
-              ? undefined
-              : sessionState.streams.get(childId);
+            childId === undefined ? undefined : sessionState.runs.get(childId);
           return child !== undefined && child.approval !== 'none';
         })
         .map((task) => task.id),
@@ -310,13 +308,10 @@ export function WorkflowPopup({
 
   // The model names the card's child stream; whether that stream exists in
   // this host is the host's question.
-  const childStreamOf = (
-    row: WorkflowTaskRowModel,
-  ): StreamTabId | undefined => {
-    const childStreamId = model.childStreamOf.get(row.id);
-    return childStreamId !== undefined &&
-      sessionState.streams.has(childStreamId)
-      ? childStreamId
+  const childRunOf = (row: WorkflowTaskRowModel): RunId | undefined => {
+    const childRunId = model.childRunOf.get(row.id);
+    return childRunId !== undefined && sessionState.runs.has(childRunId)
+      ? childRunId
       : undefined;
   };
   const runStartedAt = stream?.runStartedAt ?? undefined;
@@ -340,18 +335,18 @@ export function WorkflowPopup({
 
   const selectedTask =
     selectedRow?.kind === 'task' ? selectedRow.row : undefined;
-  const selectedChildStreamId = selectedTask
-    ? childStreamOf(selectedTask)
+  const selectedChildRunId = selectedTask
+    ? childRunOf(selectedTask)
     : undefined;
-  const selectedChildStream = streamViewOf(sessionState, selectedChildStreamId);
-  const selectedExecutionId = killableExecutionId(selectedChildStream);
+  const selectedChildRun = runViewOf(sessionState, selectedChildRunId);
+  const selectedRunId = killableRunId(selectedChildRun);
   // A workflow-script grandchild `agent()` call is the only skip/retry-able
   // row: a native agent run (an external CLI tool's child is driven by that
   // tool and would no-op) whose parent is the workflow run — one identity
   // hop, which excludes the run stream itself.
-  const selectedChildIdentity = selectedChildStream?.identity;
+  const selectedChildIdentity = selectedChildRun?.identity;
   const controllable =
-    selectedExecutionId !== undefined &&
+    selectedRunId !== undefined &&
     selectedChildIdentity?.kind === 'agent' &&
     selectedChildIdentity.tool === undefined &&
     identity?.kind === 'multiAgentWorkflow';
@@ -368,9 +363,7 @@ export function WorkflowPopup({
           { key: 'r', action: 'retry' },
         ]
       : []),
-    ...(selectedExecutionId !== undefined
-      ? [{ key: 'x', action: 'kill' }]
-      : []),
+    ...(selectedRunId !== undefined ? [{ key: 'x', action: 'kill' }] : []),
     { key: 'Ctrl-T', action: 'log' },
     { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
   ];
@@ -422,7 +415,7 @@ export function WorkflowPopup({
       return;
     }
     if (key.ctrl && input.toLowerCase() === 't') {
-      onOpenTranscript(streamId);
+      onOpenTranscript(runId);
       return;
     }
     if (key.ctrl || key.meta) return;
@@ -468,16 +461,12 @@ export function WorkflowPopup({
       }
       return;
     }
-    if (
-      (input === 's' || input === 'r') &&
-      controllable &&
-      selectedExecutionId
-    ) {
-      onWorkflowControl(selectedExecutionId, input === 's' ? 'skip' : 'retry');
+    if ((input === 's' || input === 'r') && controllable && selectedRunId) {
+      onWorkflowControl(selectedRunId, input === 's' ? 'skip' : 'retry');
       return;
     }
-    if ((input === 'x' || input === 'k') && selectedExecutionId) {
-      onKillExecution(selectedExecutionId);
+    if ((input === 'x' || input === 'k') && selectedRunId) {
+      onKillRun(selectedRunId);
     }
   });
 
@@ -494,7 +483,7 @@ export function WorkflowPopup({
     if (!row) return null;
     switch (row.kind) {
       case 'task': {
-        const childStreamId = childStreamOf(row.row);
+        const childRunId = childRunOf(row.row);
         return (
           <TaskRow
             focused={state.focused}
@@ -502,9 +491,9 @@ export function WorkflowPopup({
             nowMs={nowMs}
             row={row.row}
             pendingKinds={
-              childStreamId === undefined
+              childRunId === undefined
                 ? undefined
-                : pendingApprovals.get(childStreamId)
+                : pendingApprovals.get(childRunId)
             }
           />
         );
@@ -519,8 +508,8 @@ export function WorkflowPopup({
     const row: WorkflowPhaseRow | undefined = rowByKey.get(key);
     if (!row) return;
     if (row.kind === 'task') {
-      const childStreamId = childStreamOf(row.row);
-      if (childStreamId !== undefined) onFocusStream(childStreamId);
+      const childRunId = childRunOf(row.row);
+      if (childRunId !== undefined) onFocusRun(childRunId);
       return;
     }
     if (row.kind === 'group') {

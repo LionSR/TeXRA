@@ -11,7 +11,7 @@ import {
   agentProposalCategoryLabel,
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import type { AgentProposalPermission } from '@shared/schemas';
+import type { AgentProposalPermission, RunId } from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
@@ -71,7 +71,7 @@ describe('CLI agent proposal approval layout', () => {
   it('budgets a compact multi-agent workflow summary and saved script path', () => {
     const payload = {
       requestId: 'proposal-1',
-      streamId: 'stream-1',
+      runId: 'run-1' as RunId,
       agent: 'reviewer',
       agentCategory: AgentCategory.Workflow,
       instruction: 'Review in parallel',

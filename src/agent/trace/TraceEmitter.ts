@@ -13,11 +13,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { createLog } from '@logger/logUtils';
-import {
-  RUN_OUTCOME,
-  type RunOutcome,
-  type UpdateStreamUsagePayload,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -27,6 +23,7 @@ import type {
   ContextStateData,
   StreamKind,
   ToolStatus,
+  UsageReport,
 } from './events';
 import type {
   AgentTrace,
@@ -142,10 +139,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(
-    payload: UpdateStreamUsagePayload,
-    options: UsageEmitOptions = {},
-  ): void {
+  usage(payload: UsageReport, options: UsageEmitOptions = {}): void {
     this.emit({
       type: 'usage',
       payload,
@@ -235,7 +229,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
+  openRun(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
     const id = options.id ?? generateShortId();
     const phaseOnly = options.phaseOnly === true;
 
@@ -345,7 +339,7 @@ class StreamHandleImpl implements StreamHandle {
     private readonly phaseOnly: boolean,
     /**
      * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
-     * once started — eager streams are constructed already started. A deferred
+     * once started — eager runs are constructed already started. A deferred
      * stream finalized without content emits no events at all, while a
      * finalize that carries text emits the start/end pair so reasoning that
      * only arrives in the final response still lands as a single entry.
