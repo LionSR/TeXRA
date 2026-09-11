@@ -5,6 +5,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -63,10 +64,9 @@ const PROJECT_COMMAND_GROUP_INDEX = [...PROJECT_COMMAND_GROUPS]
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
-  command: z
-    .enum(['list', 'count'])
-    .prefault('list')
-    .describe('Use "list" for full messages or "count" for summary only'),
+  command: nullishWithDefault(z.enum(['list', 'count']), 'list').describe(
+    'Use "list" for full messages or "count" for summary only',
+  ),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
 });
@@ -109,11 +109,9 @@ const LeanInspectInputSchema = z.strictObject({
   /** 1-indexed line number */
   line: z.int().min(1).describe('Line number (1-indexed)'),
   /** 1-indexed column number */
-  column: z
-    .int()
-    .min(1)
-    .prefault(1)
-    .describe('Column number (1-indexed, default: 1)'),
+  column: nullishWithDefault(z.int().min(1), 1).describe(
+    'Column number (1-indexed, default: 1)',
+  ),
 });
 
 type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;

@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -15,10 +16,8 @@ import {
   git,
   isGitRepo,
   localBranchExists,
-  parseGitHubSlug,
   remoteUrl,
   repoRoot,
-  type GitHubSlug,
 } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';

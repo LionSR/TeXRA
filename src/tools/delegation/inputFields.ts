@@ -25,6 +25,7 @@ import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/runStorageFs';
 import { StorageFS } from '@utils/files/storageFS';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -46,9 +47,7 @@ const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
  * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
  * handles read failures gracefully, avoiding a TOCTOU race.
  */
-export const memoriesField = z
-  .array(z.string())
-  .prefault([])
+export const memoriesField = nullishWithDefault(z.array(z.string()), [])
   .describe(
     'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
   )
@@ -86,16 +85,12 @@ export const WorkflowAgentInputSchema = z.strictObject({
     .describe(
       'Files the agent rewrites. List every file you want it to touch. The agent emits one revised <document> per entry.',
     ),
-  contextFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe(
-      'Read-only context the agent should see but not modify: guidance, examples, related papers, bibliographies (.bib), style/macro definitions (.sty/.cls). Explain each one in the instruction.',
-    ),
-  mediaFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Images, figures, PDFs, or audio files the agent should view.'),
+  contextFiles: nullishWithDefault(z.array(z.string()), []).describe(
+    'Read-only context the agent should see but not modify: guidance, examples, related papers, bibliographies (.bib), style/macro definitions (.sty/.cls). Explain each one in the instruction.',
+  ),
+  mediaFiles: nullishWithDefault(z.array(z.string()), []).describe(
+    'Images, figures, PDFs, or audio files the agent should view.',
+  ),
   extractFigures: z
     .boolean()
     .nullish()
@@ -108,12 +103,9 @@ export const WorkflowAgentInputSchema = z.strictObject({
     .describe(
       'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
     ),
-  outputFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe(
-      'Output file paths. Must be a subset of input files. Never create new files or change format. Leave empty for default suffix-based outputs.',
-    ),
+  outputFiles: nullishWithDefault(z.array(z.string()), []).describe(
+    'Output file paths. Must be a subset of input files. Never create new files or change format. Leave empty for default suffix-based outputs.',
+  ),
   memories: memoriesField,
 });
 
