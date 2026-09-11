@@ -26,7 +26,7 @@ import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
 } from './TeamAvailabilityPreflight';
-import { resolvePresetAgents, teamHostedNamesForPreflight } from './TeamRoster';
+import { resolvePresetAgents } from './TeamRoster';
 
 type TeamPresetSource = 'built-in' | 'custom';
 
@@ -137,9 +137,9 @@ export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
 
 /** TeXRA-hosted definitions missing from this plan, independent of models. */
 export function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
-  const missing = missingMemberNames(plan);
-  const hosted = teamHostedNamesForPreflight(plan.preset, missing);
-  return missing.filter((name) => hosted.has(name));
+  return missingMemberNames(plan).filter((name) =>
+    plan.preset.texraHostedAgents.includes(name),
+  );
 }
 
 export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
@@ -332,10 +332,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
     const preflight = yield* preflightTeamAvailability({
       initial: refreshed.value,
       unresolvedNames: teamTexraHostedMissingNames,
-      texraHostedNames: teamHostedNamesForPreflight(
-        preset,
-        missingMemberNames(refreshed.value),
-      ),
+      texraHostedNames: new Set(preset.texraHostedAgents),
       canAccessRemoteCatalog: args.canAccessRemoteCatalog,
       providedChoice: args.providedChoice,
       choose: args.choose,

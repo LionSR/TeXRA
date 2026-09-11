@@ -77,22 +77,6 @@ export type ValidationErrorDiagnostics = z.infer<
 >;
 
 /**
- * Render Zod issues as a single `; `-joined, human-readable string
- * (`path.to.field: message; <root>: message`). Shared by the salvage parsers
- * that must loudly surface malformed persisted entries (roundIndexed,
- * RunSnapshotStore) without coupling them to the structured
- * {@link formatZodIssuesForDiagnostics} output. Keeps the `<root>` fallback
- * and `; ` separator defined once.
- */
-export function formatZodIssuesMessage(
-  issues: readonly { path: readonly PropertyKey[]; message: string }[],
-): string {
-  return issues
-    .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
-    .join('; ');
-}
-
-/**
  * Format Zod issues into structured diagnostics for model consumption.
  * `expected`/`received` only exist on certain ZodIssue subtypes (e.g.
  * invalid_type), so we cast to access them.

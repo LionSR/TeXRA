@@ -24,7 +24,6 @@ import {
 } from '@agent/index/agentRegistry';
 import {
   resolveTeamRoster,
-  teamHostedNamesForPreflight,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
@@ -150,7 +149,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 
   const { preset } = result;
   const { keys, unresolvedNames } = result.resolution;
-  const texraHostedNames = teamHostedNamesForPreflight(preset, unresolvedNames);
+  const texraHostedNames = new Set(preset.texraHostedAgents);
 
   // `keys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the roster stores the team

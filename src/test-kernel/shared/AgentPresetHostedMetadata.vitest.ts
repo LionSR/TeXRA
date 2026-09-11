@@ -14,7 +14,7 @@ describe('agent preset hosted-definition metadata', () => {
         ...preset.agents.toolUse,
       ]);
       expect(
-        (preset.texraHostedAgents ?? []).filter((name) => !roster.has(name)),
+        preset.texraHostedAgents.filter((name) => !roster.has(name)),
         `${preset.id} has hosted metadata outside its roster`,
       ).toEqual([]);
     }
@@ -63,6 +63,7 @@ describe('parseAgentModePresets', () => {
         workflow: ['polish'],
         toolUse: ['assistant'],
       },
+      texraHostedAgents: [],
     };
   }
 

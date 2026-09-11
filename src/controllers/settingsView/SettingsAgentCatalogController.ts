@@ -119,6 +119,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       description: '',
       icon: 'bookmark',
       agents: { workflow: [], toolUse: toolUseAgents },
+      texraHostedAgents: [],
       source: 'custom',
     };
     const catalogAgents = this.deps.state.getAgents('toolUse');

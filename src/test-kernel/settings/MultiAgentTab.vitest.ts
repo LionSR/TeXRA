@@ -34,6 +34,7 @@ const CUSTOM_PRESET: AgentModePreset = {
     workflow: ['polish'],
     toolUse: ['assistant'],
   },
+  texraHostedAgents: [],
 };
 
 /**

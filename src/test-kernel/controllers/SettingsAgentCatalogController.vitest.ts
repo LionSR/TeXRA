@@ -175,6 +175,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: ['writer'],
         toolUse: ['review', 'missing'],
       },
+      texraHostedAgents: [],
     };
     const { controller, enabled, committedTeams } = createController({
       customPresets: [persistedPreset],
@@ -312,6 +313,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: [],
         toolUse: ['teamLead', 'orchestrator'],
       },
+      texraHostedAgents: [],
     };
     const { controller } = createController({
       agents: {
@@ -351,6 +353,7 @@ describe('SettingsAgentCatalogController', () => {
             workflow: [],
             toolUse: ['review'],
           },
+          texraHostedAgents: [],
         },
       ],
     });
@@ -365,6 +368,7 @@ describe('SettingsAgentCatalogController', () => {
           workflow: [],
           toolUse: ['review'],
         },
+        texraHostedAgents: [],
       },
     ]);
   });
@@ -419,6 +423,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: [],
         toolUse: [],
       },
+      texraHostedAgents: [],
     };
     const state = createController({ customPresets: [preset] });
 
@@ -440,6 +445,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: [],
         toolUse: [],
       },
+      texraHostedAgents: [],
     };
     const state = createController({
       customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],

@@ -4,10 +4,9 @@ import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
 } from '@common/teams/TeamAvailabilityPreflight';
-import {
-  teamHostedNamesForPreflight,
-  type TeamRosterCatalog,
-  type TeamRosterResolution,
+import type {
+  TeamRosterCatalog,
+  TeamRosterResolution,
 } from '@common/teams/TeamRoster';
 import type { AgentModePreset } from '@shared/schemas';
 
@@ -63,10 +62,7 @@ export function applyTeamRosterWithPreflight(
     const preflight = yield* preflightTeamAvailability<ResolvedTeam>({
       initial,
       unresolvedNames: (value) => value.resolution.unresolvedNames,
-      texraHostedNames: teamHostedNamesForPreflight(
-        initial.preset,
-        initial.resolution.unresolvedNames,
-      ),
+      texraHostedNames: new Set(initial.preset.texraHostedAgents),
       canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
       providedChoice: deps.providedChoice,
       choose: (names) => deps.choose(initial.preset, names),

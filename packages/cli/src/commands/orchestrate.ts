@@ -9,7 +9,6 @@ import {
   canLaunchTeam,
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
-import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
@@ -272,10 +271,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           preflightTeamAvailability({
             initial: initialPlan,
             unresolvedNames: teamTexraHostedMissingNames,
-            texraHostedNames: teamHostedNamesForPreflight(initialPlan.preset, [
-              ...initialPlan.missingAgents.workflow,
-              ...initialPlan.missingAgents.toolUse,
-            ]),
+            texraHostedNames: new Set(initialPlan.preset.texraHostedAgents),
             remoteCatalogRefreshAttempted:
               presetPlanSet.remoteCatalogRefreshAttempted,
             canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
