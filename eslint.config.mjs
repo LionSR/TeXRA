@@ -18,7 +18,11 @@ const ALIAS_ENTRIES = loadAliasEntries(__dirname).toSorted(
 );
 
 const INTERNAL_ALIAS_NAMES = [
-  ...new Set(ALIAS_ENTRIES.map(({ alias }) => alias)),
+  ...new Set(
+    ALIAS_ENTRIES.map(({ alias }) => alias).filter((alias) =>
+      alias.startsWith('@'),
+    ),
+  ),
 ].toSorted();
 
 const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
