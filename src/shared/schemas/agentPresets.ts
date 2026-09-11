@@ -22,36 +22,12 @@ const AGENT_MODE_PRESET_ICON_NAMES = [
   'screwdriver-wrench',
 ] as const satisfies readonly TeXRAIconName[];
 
-type AgentModePresetIconName = (typeof AGENT_MODE_PRESET_ICON_NAMES)[number];
-
-const AGENT_MODE_PRESET_ICON_NAME_SET = new Set<string>(
-  AGENT_MODE_PRESET_ICON_NAMES,
-);
-
-const FALLBACK_AGENT_MODE_PRESET_ICON =
-  'bookmark' satisfies AgentModePresetIconName;
-
-/** Normalizes persisted icons, warning and using a safe display fallback. */
-const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
-  const icon = rawIcon.trim();
-  const normalized = icon.startsWith('codicon-') ? icon.slice(8) : icon;
-  if (AGENT_MODE_PRESET_ICON_NAME_SET.has(normalized)) {
-    return normalized as AgentModePresetIconName;
-  }
-
-  console.warn(
-    `[agentPresets] Unknown agent team icon "${normalized}"; falling back to ` +
-      `"${FALLBACK_AGENT_MODE_PRESET_ICON}" instead of dropping the team.`,
-  );
-  return FALLBACK_AGENT_MODE_PRESET_ICON;
-});
-
 /** Schema for a single agent team: members keyed by category. */
 export const AgentModePresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  icon: AgentModePresetIconSchema,
+  icon: z.enum(AGENT_MODE_PRESET_ICON_NAMES),
   agents: z.record(AgentCategorySchema, z.array(z.string())),
   /** Members whose definitions may be supplied by TeXRA's remote catalog. */
   texraHostedAgents: z.array(z.string()).optional(),

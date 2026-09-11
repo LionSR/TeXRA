@@ -19,30 +19,17 @@ describe('createFileMapping', () => {
   it('resolves a basename collision to the first source file', () => {
     const firstSource = externalLocation('/workspace/chapters/results.tex');
     const secondSource = externalLocation('/workspace/appendix/results.tex');
-    const target = externalLocation('/run/results_r2.tex');
+    const target = externalLocation('/run/r1/results.tex');
 
     const mapping = createFileMapping(
       [firstSource, secondSource],
       [target],
       'basename',
-      true,
     );
 
     expect([...mapping.entries()]).toEqual([
       [firstSource.absolutePath, target],
     ]);
-  });
-
-  it('matches generated files across round suffixes only when round-aware', () => {
-    const previousRound = externalLocation('/run/results_r1.tex');
-    const currentRound = externalLocation('/run/results_r2.tex');
-
-    expect(
-      createFileMapping([previousRound], [currentRound], 'basename'),
-    ).toEqual(new Map());
-    expect(
-      createFileMapping([previousRound], [currentRound], 'basename', true),
-    ).toEqual(new Map([[previousRound.absolutePath, currentRound]]));
   });
 });
 

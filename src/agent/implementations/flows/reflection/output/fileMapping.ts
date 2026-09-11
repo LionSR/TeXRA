@@ -14,14 +14,12 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
  * @param sourceFiles The source file locations
  * @param targetFiles The target file locations
  * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
- * @param roundAware Ignore round numbers in filenames when true
  * @returns Map from source path to target FileLocation
  */
 export function createFileMapping(
   sourceFiles: FileLocation[],
   targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
-  roundAware = false,
 ): Map<string, FileLocation> {
   const fileMapping = new Map<string, FileLocation>();
 
@@ -29,11 +27,8 @@ export function createFileMapping(
     return fileMapping;
   }
 
-  const normalizeName = roundAware
-    ? (name: string) => name.split('_r')[0]
-    : (name: string) => name;
   const baseNameOf = (filePath: string): string =>
-    normalizeName(path.parse(path.basename(filePath)).name);
+    path.parse(path.basename(filePath)).name;
 
   // Source names do not depend on the target, so derive them once up front.
   const sources = sourceFiles.map((sourceFile) => {

@@ -52,4 +52,43 @@ describe('workflow output lineage mapping', () => {
     expect(chapter2Entry?.origin).toBe(chapter2);
     expect(chapter2Entry?.base).toBe(chapter2);
   });
+
+  it('pairs previous-round outputs by exact basename even when names contain "_r"', () => {
+    const report = runStorageFile('inputs/my_report.tex');
+    const results = runStorageFile('inputs/my_results.tex');
+    const prevReport = runStorageFile('r0/my_report.tex');
+    const prevResults = runStorageFile('r0/my_results.tex');
+    const currReport = runStorageFile('r1/my_report.tex');
+    const currResults = runStorageFile('r1/my_results.tex');
+    const output = (
+      source: string,
+      round: number,
+      location: typeof report,
+    ) => ({
+      source,
+      round,
+      location,
+      lineage: null,
+      diff: null,
+    });
+
+    const state = createOutputState();
+    ensureRoundData(state, 0).outputs = [
+      output('inputs/my_report.tex', 0, prevReport),
+      output('inputs/my_results.tex', 0, prevResults),
+    ];
+    ensureRoundData(state, 1).outputs = [
+      output('inputs/my_report.tex', 1, currReport),
+      output('inputs/my_results.tex', 1, currResults),
+    ];
+
+    const mapping = traceFileLineage(state, [report, results], 1);
+
+    expect(mapping.get(fileLocationDisplayPath(currReport))?.prev).toBe(
+      prevReport,
+    );
+    expect(mapping.get(fileLocationDisplayPath(currResults))?.prev).toBe(
+      prevResults,
+    );
+  });
 });

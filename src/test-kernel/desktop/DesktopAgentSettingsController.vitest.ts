@@ -361,7 +361,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       id: 'custom-team',
       name: 'Custom Team',
       description: 'test',
-      icon: 'codicon-bookmark',
+      icon: 'bookmark',
       agents: { workflow: ['correct'], toolUse: ['review'] },
     });
   }

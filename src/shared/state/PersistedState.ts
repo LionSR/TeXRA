@@ -40,38 +40,23 @@ export function createWebviewStorage(hostBridge: {
 }
 
 /**
- * Unified state persistence with Zod schema validation.
+ * Renderer UI state persisted under one key of a `StateStore`, validated by a
+ * Zod schema. Two renderers use it: the Progress-View surfaces over
+ * `createWebviewStorage(hostBridge)`, and the desktop shell's collapsed-group
+ * set over localStorage.
  *
- * Takes the platform `StateStore` port directly; only the implementation differs:
- * - Backend: the host's own store → workspace-scoped, persists across sessions
- * - Frontend: `createWebviewStorage(hostBridge)` → webview-scoped, transient UI state
- *
- * Schemas should use .prefault() for fields to provide defaults — never
- * .catch(), which would swallow invalid stored data before this class's loud
- * warn-and-reset path can see it. If storage returns undefined or invalid
- * data, falls back to schema defaults.
- *
- * @example
- * // Backend (user preferences - persist across sessions)
- * const prefs = new PersistedState(
- *   workspaceRoots().workspaceState,
- *   WorkspaceStateKey.AGENT_ROSTER_SELECTION,
- *   z.object({ filter: z.string().prefault('all') }),
- * );
+ * Every schema field must carry a `.prefault()` — the constructor resolves
+ * defaults with `schema.parse({})` and throws when they are incomplete. Never
+ * `.catch()`, which would swallow invalid stored data before the loud
+ * warn-and-reset path can see it.
  *
  * @example
- * // Frontend (UI state - transient, fast)
  * const ui = new PersistedState(
  *   createWebviewStorage(hostBridge),
  *   'toggleStates',
  *   z.object({ expanded: z.array(z.string()).prefault([]) }),
  * );
- *
- * @example
- * // Both use identical API
- * prefs.get('filter');        // Get single field
- * prefs.getState();           // Get all state
- * prefs.update({ filter: 'active' }); // Partial update
+ * ui.setState({ expanded: [...ui.getState().expanded, id] });
  */
 export class PersistedState<T extends Record<string, unknown>> {
   private state: T;
@@ -87,17 +72,16 @@ export class PersistedState<T extends Record<string, unknown>> {
   private load(): T {
     const stored = this.storage.get(this.key);
     if (stored === undefined) {
-      return this.resolveDefaults();
+      return this.schema.parse({});
     }
     const result = this.schema.safeParse(stored);
     if (result.success) {
       return result.data;
     }
-    // Fall back to schema defaults so a schema whose defaults don't cover every
-    // field can't throw out of a caller's constructor — a stale or malformed
-    // PersistedState key must never block webview activation or extension
-    // startup. Also persist the reset so the bad value is replaced and the next
-    // load doesn't keep hitting this path.
+    // Reset invalid stored data to the schema defaults — a stale or malformed
+    // key must never block renderer startup — and persist the reset so the
+    // next load doesn't keep hitting this path. The schema itself must default
+    // every field: `parse({})` throws at construction when it doesn't.
     console.warn(
       `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
       {
@@ -105,7 +89,7 @@ export class PersistedState<T extends Record<string, unknown>> {
         issues: summarizeIssues(result.error),
       },
     );
-    const defaults = this.resolveDefaults();
+    const defaults = this.schema.parse({});
     this.persist(defaults);
     return defaults;
   }
@@ -127,52 +111,14 @@ export class PersistedState<T extends Record<string, unknown>> {
     );
   }
 
-  /**
-   * Resolve the schema's default state by parsing an empty object. Returns the
-   * parsed defaults, or an empty object (with a warning) when the schema's
-   * defaults don't cover every field.
-   */
-  private resolveDefaults(): T {
-    const defaultResult = this.schema.safeParse({});
-    if (defaultResult.success) {
-      return defaultResult.data;
-    }
-    console.warn(
-      `[PersistedState] No schema defaults for ${this.key}; using empty object.`,
-      { issues: summarizeIssues(defaultResult.error) },
-    );
-    return {} as T;
-  }
-
   /** Get current state (shallow copy) */
   getState(): T {
     return { ...this.state };
   }
 
-  /** Get a single field */
-  get<K extends keyof T>(field: K): T[K] {
-    return this.state[field];
-  }
-
   /** Replace entire state */
   setState(state: T): void {
     this.state = { ...state };
-    this.persist(this.state);
-  }
-
-  /** Reload current state from the backing storage. */
-  reload(): void {
-    this.state = this.load();
-  }
-
-  /** Partial update (merge) */
-  update(partial: Partial<T>): void {
-    this.setState({ ...this.state, ...partial });
-  }
-
-  /** Reset to schema defaults */
-  reset(): void {
-    this.state = this.resolveDefaults();
     this.persist(this.state);
   }
 }

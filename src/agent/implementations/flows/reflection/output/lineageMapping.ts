@@ -103,19 +103,19 @@ export function traceFileLineage(
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
   // 'contains' matches base filenames that appear as substrings of output names
-  // (e.g. "paper" matches "paper_r1"), which handles round-suffixed rewrite outputs.
+  // (e.g. "paper" matches "paper_revised"), for outputs whose names the model chose.
   const baseToOutput = invertMapping(
     createFileMapping(baseFiles, currentLocations, 'contains'),
     baseFiles,
   );
 
   const prevLocations = prevOutputs.map((entry) => entry.location);
-  // 'basename' with roundAware=true strips round suffixes before comparing, so
-  // "paper_r1" and "paper_r2" are treated as the same file across rounds.
+  // Each round writes `r{round}/<source basename>`, so a file keeps its exact
+  // basename across rounds and pairs with its previous-round self by equality.
   // createFileMapping already returns an empty map when there are no
   // previous-round outputs to pair with.
   const prevToOutput = invertMapping(
-    createFileMapping(prevLocations, currentLocations, 'basename', true),
+    createFileMapping(prevLocations, currentLocations, 'basename'),
     prevLocations,
   );
 

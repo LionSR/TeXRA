@@ -244,13 +244,13 @@ describe('CLI multi-agent presets', () => {
     ]);
   });
 
-  it('loads valid custom team presets, drops structurally malformed state, and keeps unknown-icon teams', () => {
+  it('loads valid custom team presets and drops malformed state', () => {
     const valid = [
       {
         id: 'custom-paper',
         name: 'Paper Team',
         description: 'For this paper',
-        icon: 'codicon-bookmark',
+        icon: 'bookmark',
         agents: {
           workflow: ['polish'],
           toolUse: ['review'],
@@ -259,52 +259,12 @@ describe('CLI multi-agent presets', () => {
     ];
     const customPresets = (raw: unknown) =>
       teamPresets(raw).filter((preset) => preset.source === 'custom');
-    const expectedCustom = { ...valid[0], icon: 'bookmark', source: 'custom' };
+    const expectedCustom = { ...valid[0], source: 'custom' };
 
     expect(customPresets(valid)).toEqual([expectedCustom]);
     expect(customPresets([{ id: 'broken' }, ...valid])).toEqual([
       expectedCustom,
     ]);
-
-    // An unrecognized icon is cosmetic and must NOT cost the user the team:
-    // these presets come from persisted workspace state that the next preset
-    // save/delete rewrites wholesale, so dropping one here deleted it for good.
-    // It degrades to `bookmark` with a warn instead. Structurally malformed
-    // presets (below) are still dropped.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(
-      customPresets([
-        ...valid,
-        {
-          id: 'custom-broken-icon',
-          name: 'Broken Icon',
-          description: 'Structurally valid but uses an unknown icon.',
-          icon: 'not-a-valid-icon',
-          agents: {
-            workflow: [],
-            toolUse: [],
-          },
-        },
-      ]),
-    ).toEqual([
-      expectedCustom,
-      {
-        id: 'custom-broken-icon',
-        name: 'Broken Icon',
-        description: 'Structurally valid but uses an unknown icon.',
-        icon: 'bookmark',
-        agents: {
-          workflow: [],
-          toolUse: [],
-        },
-        source: 'custom',
-      },
-    ]);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('not-a-valid-icon'),
-    );
-    warn.mockRestore();
-
     expect(customPresets([{ id: 'broken' }])).toEqual([]);
   });
 

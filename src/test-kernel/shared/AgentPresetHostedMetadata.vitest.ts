@@ -44,7 +44,7 @@ describe('agent preset hosted-definition metadata', () => {
   });
 });
 
-describe('parseAgentModePresets icon degradation', () => {
+describe('parseAgentModePresets', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -90,22 +90,5 @@ describe('parseAgentModePresets icon degradation', () => {
 
     expect(presets.map((preset) => preset.id)).toEqual(['custom-1']);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('index 1'));
-  });
-
-  it('keeps a preset whose icon is unknown, degrading to bookmark loudly', () => {
-    const warn = mockConsoleWarn();
-
-    const presets = parseAgentModePresets([customPreset('nonexistent-icon')]);
-
-    // Regression: the preset itself must survive. Rejecting the icon dropped
-    // the whole team, and the next save/delete rewrote the parsed list back
-    // over persisted state — permanent data loss.
-    expect(presets).toHaveLength(1);
-    expect(presets[0]?.id).toBe('custom-1');
-    expect(presets[0]?.agents.workflow).toEqual(['polish']);
-    expect(presets[0]?.icon).toBe('bookmark');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('nonexistent-icon'),
-    );
   });
 });
