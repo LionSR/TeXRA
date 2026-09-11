@@ -189,8 +189,11 @@ describe('parseGitHubSlug', () => {
     expect(parseGitHubSlug(url)).toEqual(expected);
   });
 
-  it('rejects remotes outside GitHub', () => {
-    expect(parseGitHubSlug('https://gitlab.com/owner/repo.git')).toBeNull();
+  it.each([
+    'https://gitlab.com/owner/repo.git',
+    'https://gitlab.com/group/github.com/owner/repo.git',
+  ])('rejects %s, which is not a GitHub remote', (url) => {
+    expect(parseGitHubSlug(url)).toBeNull();
   });
 });
 

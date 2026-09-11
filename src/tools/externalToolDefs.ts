@@ -425,17 +425,11 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   },
   {
     id: 'lean4',
-    tools: [
-      'lean_diagnostics',
-      'lean_file',
-      'lean_project',
-      'lean_inspect',
-      'lean_loogle',
-    ],
+    tools: ['lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect'],
     name: 'Lean 4 Proof Assistant',
     category: 'lean',
     description:
-      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files. Active language servers are listed below.',
+      'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',
     installGuide:
       'TeXRA can drive Lean 4 in two ways:\n\n' +
       '  • VS Code build: uses the "lean4" extension\n' +

@@ -16,7 +16,7 @@ export function parseGitHubSlug(url: string): GitHubSlug | null {
     .replace(/\/+$/, '')
     .replace(/\.git$/, '');
   const match = cleaned.match(
-    /(?:^|[/@])(?:www\.)?github\.com[/:]([^/]+)\/([^/]+)$/,
+    /^(?:https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/|git@github\.com:|ssh:\/\/(?:[^@/]+@)?github\.com(?::\d+)?\/)([^/]+)\/([^/]+)$/,
   );
   if (!match) return null;
   const [, owner, repo] = match;
