@@ -24,15 +24,11 @@ import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
-  appDraftDiscardActive,
   approvalVisibleForSelection,
-  digitFromMetaShortcut,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
   foregroundEscapeAction,
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
-  groupPendingApprovalsByRow,
-  shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
@@ -56,7 +52,6 @@ import {
 } from './state/childControls';
 import {
   selectedRunId as selectedRunIdSignal,
-  rootRunId as rootRunIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
   closeForegroundReader,
@@ -70,7 +65,6 @@ import {
   workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
-  sessionListRows,
   sessionListRunIds,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
@@ -98,8 +92,7 @@ interface InputEventEmitterLike {
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
-// away instead of leaving it queued behind other runs' items. The visible
-// list-root row also owns session-wide (stream-less) approvals.
+// away instead of leaving it queued behind other runs' items.
 function focusRunAndPromoteApprovals(runId: RunId): void {
   const view = currentView();
   if (presentRun(runId) === 'workflowPopup') {
@@ -156,7 +149,6 @@ export function App(props: AppProps): React.JSX.Element {
   // The selection and the reader arrive already resolved against the view
   // (their signals own that rule), so render derives from settled values.
   const activeRunId = useSignal(selectedRunIdSignal);
-  const rootRunId = useSignal(rootRunIdSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
@@ -175,7 +167,6 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
-  const activeParentId = activeRun?.parentId ?? undefined;
   const subagentRunLabels = useMemo(() => runLabelsOf(view), [view]);
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
@@ -248,7 +239,6 @@ export function App(props: AppProps): React.JSX.Element {
   }, [inputDisabled, stdin]);
 
   const sessions = useSignal(sessionListRunIds);
-  const sessionRows = useSignal(sessionListRows);
   const childRunningCount = runningChildCount(
     view,
     runViewOf(view, childListTarget),
@@ -258,10 +248,6 @@ export function App(props: AppProps): React.JSX.Element {
   const workflowPopupRoot = runViewOf(view, workflowPopupRunId);
   const workflowPopupModel = workflowPopupRoot?.transcript.run ?? undefined;
   const workflowPopup = useSignal(workflowPopupViewSignal);
-  const pendingApprovalsForRows = useMemo(
-    () => groupPendingApprovalsByRow(view.approvals),
-    [view.approvals],
-  );
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
@@ -392,7 +378,6 @@ export function App(props: AppProps): React.JSX.Element {
             onOpenTranscript={openTranscriptReader}
             onViewChange={updateWorkflowPopupView}
             onWorkflowControl={props.onWorkflowControl}
-            pendingApprovals={pendingApprovalsForRows}
             runId={foregroundReader.runId}
             view={workflowPopup}
           />
@@ -439,14 +424,11 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
 
   const handleMetaShortcut = (value: string): boolean => {
-    const digit = digitFromMetaShortcut(value);
-    if (digit !== undefined) {
-      const target = sessionListRunIds.get()[digit - 1];
-      if (!target) return false;
-      focusRunAndPromoteApprovals(target);
-      return true;
-    }
-    return false;
+    if (!/^[1-9]$/.test(value)) return false;
+    const target = sessionListRunIds.get()[Number(value) - 1];
+    if (!target) return false;
+    focusRunAndPromoteApprovals(target);
+    return true;
   };
 
   const appOwnsEscape = (): boolean =>
@@ -498,14 +480,12 @@ export function App(props: AppProps): React.JSX.Element {
 
   // Shared tail of both bare-Escape trigger sites below: defer through the
   // meta-chord disambiguation window when one may be in flight, otherwise
-  // handle the escape immediately.
+  // handle the escape immediately. Bare Esc must give a numbered stream-focus
+  // chord a chance to resolve while that binding is on screen; `Alt`-chord
+  // platforms are unaffected, since their Esc+key sequences arrive as one
+  // burst, resolved synchronously by `metaChordInput`.
   const deferOrHandleBareEscape = (runId: RunId): void => {
-    if (
-      shouldDeferEscapeInterruptForMetaChord({
-        shortcutModifierLabel: defaultShortcutModifierLabel(),
-        runFocusAvailable: sessions.length > 0,
-      })
-    ) {
+    if (defaultShortcutModifierLabel() === 'Esc' && sessions.length > 0) {
       scheduleBareEscape(runId);
     } else {
       handleBareEscape(runId);
@@ -568,13 +548,13 @@ export function App(props: AppProps): React.JSX.Element {
         formProgress?.cancel();
       } else {
         triggerAppCtrlC({
+          // A background draft never consumes Ctrl+C: only the composer the
+          // keyboard is on discards.
           discardDraft: () =>
             activeDraftRegistry.discard() ||
-            (appDraftDiscardActive({
-              inputDisabled,
-              reverseSearchOpen,
-              childListFocused,
-            }) &&
+            (!inputDisabled &&
+              !reverseSearchOpen &&
+              !childListFocused &&
               (inputBarRef.current?.discardDraft() ?? false)),
           onCtrlC: props.onCtrlC,
         });
@@ -680,18 +660,11 @@ export function App(props: AppProps): React.JSX.Element {
         renderForegroundSurface={renderForegroundSurface}
         rows={rows}
         snapshot={{
-          activeRunId,
           foregroundMaxRows,
           foregroundKind,
-          parentId: activeParentId,
-          reverseSearchOpen,
-          rootRunId,
-          slashPaletteOpen,
           childListFocused,
-          sessionRows,
           selectedChildValue,
           subagentRunLabels,
-          pendingApprovals: pendingApprovalsForRows,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}

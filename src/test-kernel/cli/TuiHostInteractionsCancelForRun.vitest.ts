@@ -85,8 +85,7 @@ function port(): SessionHostInteractions {
         const first = args[0] as { runId?: string | null } | undefined;
         if (
           (typeof key === 'string' && key.startsWith('request')) ||
-          key === 'askUserQuestion' ||
-          key === 'openExternalInquiry'
+          key === 'askUserQuestion'
         ) {
           ensureRun(first?.runId);
         }

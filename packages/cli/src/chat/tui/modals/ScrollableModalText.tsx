@@ -101,42 +101,6 @@ export function modalTextDisplayLines({
   });
 }
 
-/** How far the text can scroll within `maxRows` — see useScrollableOffset. */
-export function modalTextMaxScrollOffset({
-  maxRows,
-  totalLines,
-}: {
-  readonly maxRows: number;
-  readonly totalLines: number;
-}): number {
-  return compactAwareMaxScrollOffset({
-    maxDisplayLines: maxRows,
-    totalLines,
-  });
-}
-
-export function boundedModalTextLines({
-  hiddenNoun,
-  lines,
-  maxRows,
-  scrollOffset = 0,
-  width,
-}: {
-  readonly hiddenNoun?: string;
-  readonly lines: readonly ModalTextDisplayLine[];
-  readonly maxRows: number;
-  readonly scrollOffset?: number;
-  readonly width: number;
-}): ModalTextDisplayLine[] {
-  return boundedScrollableLines({
-    hiddenNoun,
-    lines,
-    maxDisplayLines: maxRows,
-    scrollOffset,
-    width,
-  });
-}
-
 interface ScrollableModalTextProps {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
@@ -213,8 +177,8 @@ export function ScrollableModalText(
       width,
     ],
   );
-  const maxScrollOffset = modalTextMaxScrollOffset({
-    maxRows,
+  const maxScrollOffset = compactAwareMaxScrollOffset({
+    maxDisplayLines: maxRows,
     totalLines: lines.length,
   });
   const { scrollOffset, scrollable } = useScrollableOffset({
@@ -227,10 +191,10 @@ export function ScrollableModalText(
     }),
   });
   const compactLayout = maxRows <= COMPACT_SCROLLABLE_CONTENT_ROWS;
-  const displayLines = boundedModalTextLines({
+  const displayLines = boundedScrollableLines({
     hiddenNoun,
     lines,
-    maxRows,
+    maxDisplayLines: maxRows,
     scrollOffset,
     width,
   });

@@ -58,7 +58,6 @@ function statusKindForApproval(
   kind: PendingApprovalKind,
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
-    case 'externalInquiry':
     case 'userQuestion':
       return 'question';
     case 'bash':
@@ -210,7 +209,6 @@ interface StatusBarShortcutsInput {
   readonly childNavigationAvailable?: boolean;
   /** True when Alt/Esc-1..9 has at least one stream target. */
   readonly runFocusAvailable?: boolean;
-  readonly modifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
@@ -661,7 +659,6 @@ function statusBarBindingsText(
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     runFocusAvailable = false,
-    modifierLabel = defaultShortcutModifierLabel(),
     shiftEnterNewline = false,
     transcriptAvailable = false,
   }: StatusBarShortcutsInput,
@@ -676,7 +673,7 @@ function statusBarBindingsText(
     : undefined;
   const runFocus = runFocusAvailable
     ? keyHintText({
-        key: metaChordLabel(modifierLabel, '1..9'),
+        key: metaChordLabel(defaultShortcutModifierLabel(), '1..9'),
         action: 'focus',
       })
     : undefined;
@@ -863,8 +860,8 @@ interface StatusBarRunTarget {
 }
 
 /**
- * Which stream the status bar describes: the active stream when the view
- * holds it, else its nearest live ancestor; and what Ctrl-C does there.
+ * Which stream the status bar describes (the active stream when the view
+ * holds it), and what Ctrl-C does there.
  */
 export function statusBarRunTarget({
   activeRunId,
@@ -883,14 +880,9 @@ export function statusBarRunTarget({
   const active = runViewOf(view, activeRunId);
   const isLive = (runId: RunId): boolean =>
     isActivePhase(runPhaseOf(runViewOf(view, runId)));
-  // Root first in the view; the nearest live ancestor wins.
-  const liveAncestor = (active?.ancestors ?? [])
-    .toReversed()
-    .find((ancestor) => isLive(ancestor.id));
   const hasLiveRun = ownedRunIds.some(isLive);
   const canStopVisibleRun =
     canStopActiveRun && (canStopPendingRun || hasLiveRun);
-  const displayRunId = active ? active.id : liveAncestor?.id;
   let ctrlCAction: CtrlCAction;
   if (!canStopVisibleRun) {
     ctrlCAction = 'exit';
@@ -899,10 +891,8 @@ export function statusBarRunTarget({
   }
   return {
     ctrlCAction,
-    displayRunId,
-    isChildRun:
-      displayRunId !== undefined &&
-      runViewOf(view, displayRunId)?.parentId != null,
+    displayRunId: active?.id,
+    isChildRun: active?.parentId != null,
   };
 }
 

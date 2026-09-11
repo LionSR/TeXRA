@@ -1,4 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+
+// The bindings read the host's modifier label; tests pin its platform.
+const shortcutPlatform = vi.hoisted(() => ({
+  current: 'linux' as NodeJS.Platform,
+}));
+vi.mock('@cli/runtime/shortcutLabels', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@cli/runtime/shortcutLabels')>();
+  return {
+    ...actual,
+    defaultShortcutModifierLabel: () =>
+      actual.defaultShortcutModifierLabel(shortcutPlatform.current),
+  };
+});
 
 import {
   buildStatusBarDisplay,
@@ -6,7 +20,6 @@ import {
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
@@ -68,7 +81,6 @@ function statusInput(
       chatInputAvailable: true,
       childNavigationAvailable: false,
       runFocusAvailable: false,
-      modifierLabel: 'Alt',
       ...shortcuts,
     },
   };
@@ -502,16 +514,16 @@ describe('CLI StatusBar display model', () => {
         subagents: 1,
         modelAccess: 'api-key',
         ctrlCAction: 'stop',
-        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
     expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).toContain('Option-1..9 focus');
+    expect(display.bindings).toContain('Alt-1..9 focus');
     expect(display.bindings.indexOf('Tab sessions')).toBeLessThan(
       display.bindings.indexOf('/status details'),
     );
-    expect(display.bindings.indexOf('Option-1..9 focus')).toBeLessThan(
+    expect(display.bindings.indexOf('Alt-1..9 focus')).toBeLessThan(
       display.bindings.indexOf('Ctrl-C stop'),
     );
   });
@@ -524,7 +536,7 @@ describe('CLI StatusBar display model', () => {
         modelAccess: 'api-key',
         ctrlCAction: 'stop root',
         width: 100,
-        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
@@ -702,7 +714,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 44,
-        shortcuts: { ...TRANSCRIPT_SHORTCUTS, modifierLabel: 'Option' },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
@@ -1503,12 +1515,15 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses portable Esc labels for meta shortcuts on macOS', () => {
+    shortcutPlatform.current = 'darwin';
+    onTestFinished(() => {
+      shortcutPlatform.current = 'linux';
+    });
     const display = buildStatusBarDisplay(
       statusInput({
         shortcuts: {
           ...STREAM_NAV_SHORTCUTS,
           parentNavigationAvailable: true,
-          modifierLabel: defaultShortcutModifierLabel('darwin'),
         },
       }),
     );
