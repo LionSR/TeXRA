@@ -95,14 +95,6 @@ export class StreamLogStore {
     });
   }
 
-  /** Explicitly memory-only transcripts for ephemeral session roots. */
-  static ephemeral(reason: string): StreamLogStore {
-    const normalized = reason.trim();
-    if (!normalized)
-      throw new Error('An ephemeral transcript store requires a reason.');
-    return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
-  }
-
   get(runId: RunId): StreamLog | undefined {
     return this.runs.get(runId)?.log;
   }

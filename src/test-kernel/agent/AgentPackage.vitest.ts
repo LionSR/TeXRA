@@ -209,7 +209,7 @@ vi.mock('@platform/workspaceRoots', () => ({
 }));
 
 vi.mock('@transcript/StreamLogStore', () => ({
-  StreamLogStore: { ephemeral: () => ({}) },
+  StreamLogStore: {},
 }));
 
 // Local imports - package API under test
