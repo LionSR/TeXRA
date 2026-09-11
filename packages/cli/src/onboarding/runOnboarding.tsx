@@ -14,8 +14,6 @@ import { Cause, Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
-import { listRuns } from '@agent/storage';
-import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
@@ -40,12 +38,10 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  backfillFirstRunDone,
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { providerDisplayName } from '@shared/constants/providers';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
   ONBOARDING_CARD_TITLE,
@@ -101,8 +97,7 @@ const credentialLog = createLog('Setup Credentials');
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
  * which at worst re-prompts. Say why in the log so a read-only home directory
- * or an unreadable history store is diagnosable rather than looking like the
- * gate's normal behavior.
+ * is diagnosable rather than looking like the gate's normal behavior.
  */
 function warnOnboardingFailure(action: string, error: unknown): void {
   logWarning(LOG_CHANNEL, `${action} failed: ${toErrorMessage(error)}`);
@@ -148,60 +143,6 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       try: () => hasUsableSetupCredential(services.secrets, credentialLog.warn),
       catch: ensureError,
     });
-    // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
-    // with run history never enters State 0/1. Credential presence alone
-    // does not prove this is an upgrader: fresh installs can inherit env keys.
-    // One-shot and best-effort: if a credential appears after a previous skip,
-    // the stale skip is cleared below so a later sign-out re-enters State 0.
-    const needsFirstRunBackfill =
-      (yield* Effect.try({
-        try: () =>
-          globalState.get<boolean | undefined>(
-            GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-          ),
-        catch: ensureError,
-      })) === undefined;
-    const hasRunHistory = needsFirstRunBackfill
-      ? yield* Effect.tryPromise({
-          try: () => initializeCliTranscriptSession(),
-          catch: ensureError,
-        }).pipe(
-          Effect.flatMap((session) => listRuns(session)),
-          Effect.map((entries) => entries.length > 0),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              warnOnboardingFailure('Run-history check', error);
-              return false;
-            }),
-          ),
-        )
-      : false;
-    // LAST_KNOWN_VERSION is stamped by desktop/extension startup and is the
-    // reliable prior-install signal shared across hosts.
-    const hasPriorInstall =
-      needsFirstRunBackfill &&
-      (yield* Effect.try({
-        try: () =>
-          globalState.get<string | undefined>(
-            GlobalStateKey.LAST_KNOWN_VERSION,
-          ),
-        catch: ensureError,
-      })) !== undefined;
-    yield* Effect.tryPromise({
-      try: () =>
-        backfillFirstRunDone(globalState, {
-          hasCredential,
-          hasPriorInstall,
-          hasRunHistory,
-        }),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() =>
-          warnOnboardingFailure('First-run backfill write', error),
-        ),
-      ),
-    );
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
     // is discarded: the CLI has no launcher agent list to steer. Clearing a

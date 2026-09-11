@@ -7,7 +7,7 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache, listRuns } from '@agent/storage';
+import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
   agentResponseTextConnector,
@@ -99,7 +99,6 @@ import {
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
@@ -567,44 +566,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       GlobalStateKey.LAST_KNOWN_VERSION,
     ),
   );
-
-  // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
-  // already have a credential or run history must never see the welcome card
-  // or the preselected setup agent, so firstRunDone is backfilled once when
-  // the flag first appears. Awaited: the main view's funnel derivation reads this flag
-  // at webview-ready, and awaiting here closes the only read-before-backfill
-  // window. One-shot in practice — once the key exists the probes are skipped.
-  if (
-    context.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE) ===
-    undefined
-  ) {
-    try {
-      const hasPriorInstall =
-        context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
-        undefined;
-      // Neither probe is masked: a failed probe must not be recorded as
-      // "false" in a one-shot key. A rejection lands in the catch below,
-      // which logs the cause and leaves the key unset so the next
-      // activation re-evaluates.
-      const [hasCredential, hasRunHistory] = await Promise.all([
-        // Same non-blank provider-key/server-side-key check used by the
-        // funnel and setup launch preflight.
-        hasAnyUsableSetupCredential(),
-        effectRuntime()
-          .runPromise(listRuns(defaultSession()))
-          .then((entries) => entries.length > 0),
-      ]);
-      await backfillFirstRunDone(context.globalState, {
-        hasCredential,
-        hasPriorInstall,
-        hasRunHistory,
-      });
-    } catch (err) {
-      log.warn(
-        `Onboarding firstRunDone backfill failed: ${toErrorMessage(err)}`,
-      );
-    }
-  }
 
   // The following startup steps touch independent state, so they run
   // concurrently to shorten activation. Within the agent branch the order

@@ -188,7 +188,7 @@ describe('desktop IPC adapters', () => {
     expect(selectSetupAgent).toHaveBeenCalled();
   });
 
-  it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
+  it('derives State 2 (done) for veterans with firstRunDone set', async () => {
     const { onboarding } = await createOnboardingHarness({
       seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
       hasCredential: () => true,
