@@ -45,7 +45,6 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     originalContent,
     proposedContent,
     sourceTool: 'write_file',
-    startLine: 'approval',
     present: ({ appliedContent }) => {
       const originalLineCount = countLines(originalContent);
       const newLineCount = countLines(appliedContent);

@@ -13,78 +13,48 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { effectRuntime } from '@platform/processRuntime';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import {
+  settingByKey,
+  settingSchemaWithoutPrefault,
+  ToolError,
+  type StateSettingEntry,
+  type ToolResult,
+} from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
 import { texraScopedConfig } from './platform';
 
 /**
- * Per-key value validators for `update_config`. Read access (`read_config`)
- * is open across all `texra.*` keys, but writes must clear a strict schema
- * so a hallucinated payload cannot, say, set `texra.git.numberOfCommitsToShow`
- * to `"yes please"` or flip a destructive toggle.
- *
- * Each entry pairs a Zod schema with a one-line summary the tool echoes back
- * to the agent (and surfaces in the description) so the assistant can
- * explain the setting before changing it.
+ * Keys `update_config` may write. Read access (`read_config`) is open across
+ * all `texra.*` keys, but writes are limited to this allowlist so a
+ * hallucinated payload cannot flip an arbitrary setting. Each key's value
+ * schema and description come from the settings catalog, so the tool
+ * validates against, and explains, exactly what every host reads. The catalog
+ * is consulted when a tool runs, never while this module loads.
  */
-const UPDATABLE_KEYS = {
-  'texra.bib.defaultPath': {
-    schema: z.string().describe('Workspace path to the default .bib file'),
-    summary:
-      'Default bibliography file used by tools that scan citations (e.g. extract_bib_entries).',
-  },
-  'texra.bib.zoteroPort': {
-    schema: z
-      .int()
-      .min(1)
-      .max(65535)
-      .describe('Local port the Zotero Better BibTeX server listens on'),
-    summary:
-      'Local port for the Zotero Better BibTeX integration. Default 23119.',
-  },
-  'texra.audio.soxPath': {
-    schema: z.string().describe('Absolute path to the sox binary'),
-    summary:
-      'Path override for the SoX audio tool (used by the audio transcription agent).',
-  },
-  'texra.latex.tikzInputDirectory': {
-    schema: z
-      .string()
-      .describe('Workspace-relative directory containing TikZ source files'),
-    summary:
-      'Where the TikZ extraction/compilation flows look for figure source files.',
-  },
-  'texra.git.numberOfCommitsToShow': {
-    schema: z
-      .int()
-      .min(1)
-      .max(1000)
-      .describe('How many recent commits to surface in the Git picker'),
-    summary:
-      'Depth of the recent-commits dropdown surfaced by the Git integration.',
-  },
-  'texra.maxImageDimension': {
-    schema: z
-      .int()
-      .min(64)
-      .max(8192)
-      .describe('Maximum pixel dimension for images sent to vision models'),
-    summary:
-      'Image dimension cap before downscaling. Lower values save tokens; higher values preserve fidelity.',
-  },
-} satisfies Record<string, { schema: z.ZodType<unknown>; summary: string }>;
+const UPDATABLE_KEY_LIST = [
+  'texra.bib.defaultPath',
+  'texra.bib.zoteroPort',
+  'texra.audio.soxPath',
+  'texra.latex.tikzInputDirectory',
+  'texra.git.numberOfCommitsToShow',
+  'texra.maxImageDimension',
+] as const;
 
-type UpdatableKey = keyof typeof UPDATABLE_KEYS;
+type UpdatableKey = (typeof UPDATABLE_KEY_LIST)[number];
 
-const UPDATABLE_KEY_LIST = Object.keys(UPDATABLE_KEYS) as UpdatableKey[];
-
-function describeAllowlist(): string {
-  return UPDATABLE_KEY_LIST.map(
-    (k) => `- \`${k}\`: ${UPDATABLE_KEYS[k].summary}`,
-  ).join('\n');
+function catalogEntry(key: UpdatableKey): StateSettingEntry {
+  const entry = settingByKey(key);
+  if (!entry) {
+    throw new Error(`update_config allowlist key ${key} is not in the catalog`);
+  }
+  return entry;
 }
+
+const ALLOWLIST_TEXT = UPDATABLE_KEY_LIST.map((key) => `- \`${key}\``).join(
+  '\n',
+);
 
 const ReadConfigInputSchema = z.strictObject({
   key: z
@@ -112,20 +82,24 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
     const value = texraScopedConfig.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    return executed(`${input.key}:\n${json}`, `Read ${input.key}`);
+    const description = settingByKey(input.key)?.description;
+    return executed(
+      `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
+      `Read ${input.key}`,
+    );
   }
 }
 
 const UpdateConfigInputSchema = z.strictObject({
   key: z
-    .enum(UPDATABLE_KEY_LIST as [UpdatableKey, ...UpdatableKey[]])
+    .enum(UPDATABLE_KEY_LIST)
     .describe(
-      `Configuration key to update. Must be on the setup allowlist:\n${describeAllowlist()}`,
+      `Configuration key to update. Must be on the setup allowlist:\n${ALLOWLIST_TEXT}`,
     ),
   value: z
     .unknown()
     .describe(
-      "New value. Type depends on the key: see the allowlist for each key's expected schema.",
+      "New value, validated against the setting's schema. Call read_config first to see what the setting controls.",
     ),
   target: z
     .enum(['user', 'workspace'])
@@ -140,12 +114,13 @@ type UpdateConfigInput = z.infer<typeof UpdateConfigInputSchema>;
 const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   input: UpdateConfigInput,
 ) {
-  const entry = UPDATABLE_KEYS[input.key];
-  const parsed = entry.schema.safeParse(input.value);
+  const entry = catalogEntry(input.key);
+  const schema = settingSchemaWithoutPrefault(entry) as z.ZodType;
+  const parsed = schema.safeParse(input.value);
   if (!parsed.success) {
     return yield* Effect.fail(
       new ToolError(
-        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.summary}`,
+        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.description ?? ''}`,
       ),
     );
   }
@@ -169,7 +144,7 @@ export class UpdateConfigTool extends defineTool({
 Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean. Explain every change clearly. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.
 
 Allowlisted keys:
-${describeAllowlist()}
+${ALLOWLIST_TEXT}
 
 Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
