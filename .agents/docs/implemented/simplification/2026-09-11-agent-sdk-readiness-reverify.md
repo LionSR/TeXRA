@@ -20,8 +20,8 @@ Status: implemented
 
 **The standing structural verdict holds: no genuinely redundant abstraction was
 found to remove, and no speculative refactor is warranted.** Four independent
-area audits this pass — agent core, model handlers, logger, and the published
-`@texra-ai/agent` surface — each re-derived the banned-pattern candidates
+area audits this pass — agent core, model handlers, logger, and the declared
+(built, not published) `@texra-ai/agent` package surface — each re-derived the banned-pattern candidates
 (pass-through wrappers, convenience barrels, one-impl interfaces, single-caller
 extractions, re-export shims) and each converged on the same finding the prior
 nine passes recorded: every layer re-checked is load-bearing, and the removals
@@ -45,14 +45,14 @@ tracked metrics either held or improved (§1, §2).
 
 ## 1. Tracked structural facts re-verify at `9e44649`
 
-| Item | Expected (`-09-09` @ `dff2602`) | `9e44649` state |
-| ---- | ------------------------------- | --------------- |
-| **Node flow engine** | 158 LoC, `BaseNode` + `Flow` only | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md. |
-| **`ModelHandler.ts` polymorphic base** | 1,954 LoC | **1,922 LoC** (`wc -l`), **−32** — a continued reduction (2,026 → 1,954 → 1,922 across the last three passes), not growth. Still a cohesive base, `abstract class ModelHandler<M,U,T,C,Resp,Media>` (`:184`). |
-| **`useHostInteractions` hook** | gone | **still gone.** `grep -rc useHostInteractions src/ packages/` returns zero live hits. |
-| **Dead logger `export`** | `OutputChannelFactoryOptions` de-exported | **still gone** (`src/logger/logUtils.ts`); no logger re-export barrel exists. |
-| **`createRunScope` survivor** | 1 production caller | **1 production caller** — definition at `src/agent/runtime/RunScope.ts:23`, sole production call at `src/agent/runtime/AgentLaunchContext.ts:503` (moved from `:552` as `main` advanced); all other call sites are `src/test-kernel/`. Still the one justified single-caller survivor (performs the `Object.freeze` the shared-mutable-literal rule requires). |
-| **SDK version + surface** | 0.41.0, `['.', './schemas', './effect', './node']` | **0.41.0**, same four entries (`packages/agent/package.json`). Surface unchanged since `-09-09`; the provider-type-leak guard (`packages/agent/scripts/validate-artifacts.mjs`) still walks each entry's declaration graph per-entry. |
+| Item                                   | Expected (`-09-09` @ `dff2602`)                    | `9e44649` state                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Node flow engine**                   | 158 LoC, `BaseNode` + `Flow` only                  | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md.                                                                                                                                                                                                         |
+| **`ModelHandler.ts` polymorphic base** | 1,954 LoC                                          | **1,922 LoC** (`wc -l`), **−32** — a continued reduction (2,026 → 1,954 → 1,922 across the last three passes), not growth. Still a cohesive base, `abstract class ModelHandler<M,U,T,C,Resp,Media>` (`:184`).                                                                                                                                                  |
+| **`useHostInteractions` hook**         | gone                                               | **still gone.** `grep -rc useHostInteractions src/ packages/` returns zero live hits.                                                                                                                                                                                                                                                                          |
+| **Dead logger `export`**               | `OutputChannelFactoryOptions` de-exported          | **still gone** (`src/logger/logUtils.ts`); no logger re-export barrel exists.                                                                                                                                                                                                                                                                                  |
+| **`createRunScope` survivor**          | 1 production caller                                | **1 production caller** — definition at `src/agent/runtime/RunScope.ts:23`, sole production call at `src/agent/runtime/AgentLaunchContext.ts:503` (moved from `:552` as `main` advanced); all other call sites are `src/test-kernel/`. Still the one justified single-caller survivor (performs the `Object.freeze` the shared-mutable-literal rule requires). |
+| **SDK version + surface**              | 0.41.0, `['.', './schemas', './effect', './node']` | **0.41.0**, same four entries (`packages/agent/package.json`). Surface unchanged since `-09-09`; the provider-type-leak guard (`packages/agent/scripts/validate-artifacts.mjs`) still walks each entry's declaration graph per-entry.                                                                                                                          |
 
 No new `export class` / `export function create*` reverses any standing fact.
 
@@ -61,12 +61,12 @@ No new `export class` / `export function create*` reverses any standing fact.
 `config/ratchets/host-agent-import-baseline.json` (distinct `@agent/*`
 deep-import specifiers per package, past the `@agent` barrel):
 
-| Package | `-09-04` | `-09-09` | `9e44649` |
-| ------- | -------- | -------- | --------- |
-| cli | 7 | 6 | **5** |
-| desktop | 5 | 5 | **4** |
-| extension | 9 | 9 | **9** |
-| agent (SDK package) | 7 | 7 | **7** |
+| Package             | `-09-04` | `-09-09` | `9e44649` |
+| ------------------- | -------- | -------- | --------- |
+| cli                 | 7        | 6        | **5**     |
+| desktop             | 5        | 5        | **4**     |
+| extension           | 9        | 9        | **9**     |
+| agent (SDK package) | 7        | 7        | **7**     |
 
 **cli 6→5 and desktop 5→4** — two more retired deep imports, the direction the
 set-based ratchet rewards; no list widened. `agent`'s 7 stays at its realistic
@@ -74,7 +74,7 @@ floor (bounded by the provider-type-leak constraint) and is, by the baseline's
 own semantics, "exactly the internal-coupling width a Tier-1 barrel must
 re-export or seal." The extension list's two non-door leaf edges persist:
 `@agent/core/state/runRequests` (renamed from `executionRequests` by the
-run-request-barrel work, #12239, but still a leaf import — see §4 CORE-1) and
+one-run-model S1 rename, #12222, but still a leaf import — see §4 CORE-1) and
 `@agent/implementations/agentCreator/agentCreatorFlow`.
 
 ## 3. The three standing deliverables — status at HEAD
@@ -88,9 +88,13 @@ current planning docs rather than re-derived here. Their status this pass:
   exists as `packages/llm`'s uniform `Model` interface
   (`packages/llm/src/turn.ts:1651` — `prepareTurn`/`streamTurn`/`generateTurn`,
   no generics, provider variance pushed into a `ModelConfigurationSchema`
-  discriminated union), with **zero production wiring** today (only
-  `src/test-kernel/llm/*` and one test consume the factories). The leanness win
-  is *completing the cutover* so `Model` replaces `ModelHandler`/`IModelHandler`
+  discriminated union). Its model factories have no production consumers yet
+  (only `src/test-kernel/llm/*` and one test use them), but the interface itself
+  is already wired: the extension's VS Code language-model adapter
+  (`packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`)
+  implements `Model` directly and is called from
+  `SettingsViewMessageHandler.ts`. The leanness win
+  is _completing the cutover_ so `Model` replaces `ModelHandler`/`IModelHandler`
   and the legacy base is deleted wholesale — not adding a bridge, which would be
   the pass-through the repo bans.
 - **(b) Surface simplification / Tier-1 manifest — the `-09-09` gap is now
@@ -104,8 +108,8 @@ current planning docs rather than re-derived here. Their status this pass:
   design-gated exclusions (`IModelHandler`, `AgentFinalResult`, a public
   interactive channel). **Caveat: it is already one rename behind code.** It was
   enumerated at `cf88d2d` and names `StreamView`, `ExecutionId`, and
-  `ExecutionIdSchema` (§3.1–3.3), but the one-run-model S-step landed in code
-  after it (#12206): the package now exports `RunView`
+  `ExecutionIdSchema` (§3.1–3.3), but the one-run-model S1 rename landed in code
+  after it (#12222): the package now exports `RunView`
   (`packages/agent/src/effect.ts:31`, `index.ts:76`,
   `effect/sessions.ts:104`), `RunId`, and `RunIdSchema`
   (`packages/agent/src/schemas.ts:38,45`; `effect.ts:51`). This is documentation
@@ -113,7 +117,11 @@ current planning docs rather than re-derived here. Their status this pass:
   manifest's own §7.5 already anticipates re-enumeration "when [the re-platform]
   lands." So the deliverable now exists as a `proposed` file; ratifying what it
   keeps or seals, and re-enumerating it onto the `RunId`/`RunView` vocabulary,
-  remain the open work.
+  remain the open work. The package README needs the same update: at
+  `9e44649`, `packages/agent/README.md:104-107` still lists `StreamView` as
+  exported, and `:136` and the Effect example at `:194-209` still use the
+  removed `Run` members `executionId`/`streamId`, so the example no longer
+  compiles.
 - **(c) Subagent split points** — unchanged owner (the SDK-architecture doc's
   subagent section, the shipped `ChildRunStrategy` SPI, and the
   execution-interaction-ownership design). The core audit's separability map
@@ -125,7 +133,7 @@ current planning docs rather than re-derived here. Their status this pass:
   `runRegistry`/`SessionHandle`/`SessionEvents`). `agentCreator`
   (`src/agent/implementations/agentCreator/agentCreatorFlow.ts:433`) stays the
   one genuine "logical agent not yet running as one," still correctly blocked on
-  a *public* interactive channel: the package hard-codes `HEADLESS_HOST`
+  a _public_ interactive channel: the package hard-codes `HEADLESS_HOST`
   (`packages/agent/src/effect/sessions.ts:206`, used `:525`) and refuses
   approval-requiring tools, so the boundary is blocked on designing that channel,
   not on un-withholding an existing one.
@@ -149,7 +157,7 @@ Carried-forward items:
   run-less logger keyed by name." The logger audit this pass reclassifies the
   standing "platform().log vs @logger" framing as **stale**: there is no
   `platform().log` port (removed; documented absent at
-  `src/platform/platform.ts:34-36`), so the tree has *one* logging spine — a
+  `src/platform/platform.ts:34-36`), so the tree has _one_ logging spine — a
   Promise producer (`logUtils.ts`) and an Effect producer (`effectLog.ts`) that
   converge on one `writeLogEntry` → sink with a single central redaction gate
   (`logSink.ts:64-71`). The only faintly-actionable item is narrowing individual
@@ -168,7 +176,7 @@ mechanical and behavior-preserving, for whenever the routine is asked to act):
   `@agent/core/state/runRequests`, while `:14` of the same file imports
   `SessionHandle` from the curated barrel `@agent/runtime` — which already
   re-exports exactly those symbols (`src/agent/runtime/index.ts:138-139`). It is
-  the *only* extension importer of that deep path. Repointing the import to
+  the _only_ extension importer of that deep path. Repointing the import to
   `@agent/runtime` removes the leaf edge entirely (extension baseline 9→8, with
   a matching removal of the now-stale specifier from
   `host-agent-import-baseline.json` that the set-based ratchet requires in the
@@ -181,7 +189,7 @@ mechanical and behavior-preserving, for whenever the routine is asked to act):
   `ProviderUsage`. Its non-test consumers are `openAIUsage.ts` and
   `modelHandlerOpenAI.ts` (both inside `modelHandlers/`) plus
   `src/agent/types/ModelHandlerContracts.ts` (also in `types/`). The file is
-  type-only and already contained (no core-flow consumer; the published
+  type-only and already contained (no core-flow consumer; the declared
   `@texra-ai/agent` surface imports `modelHandlers` zero times, so nothing leaks
   to the SDK today), but relocating `ProviderUsage` under
   `src/agent/modelHandlers/support/` — moving `ModelHandlerContracts.ts`'s
