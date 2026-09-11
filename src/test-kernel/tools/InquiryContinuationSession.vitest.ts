@@ -86,7 +86,10 @@ function captureFacts(session: SessionHandle): {
   };
 }
 
-function answeredManifest(): InquiryThreadRecord {
+function answeredManifest(
+  question = 'Check the boundary case.',
+  answer = 'Boundary case holds.',
+): InquiryThreadRecord {
   return {
     threadId: THREAD,
     parentRunId: PARENT_RUN,
@@ -98,13 +101,25 @@ function answeredManifest(): InquiryThreadRecord {
         kind: 'answered',
         turnIndex: 1,
         timestamp: '2026-06-14T08:00:00.000Z',
-        question: 'Check the boundary case.',
-        answer: 'Boundary case holds.',
+        question,
+        answer,
         answeredAt: '2026-06-14T08:01:00.000Z',
       },
     ],
   };
 }
+
+/** The continuation text the answered injector hands to the follow-up owner. */
+const deliveredContinuationText = Effect.fn('deliveredContinuationText')(
+  function* (question: string, answer: string) {
+    yield* injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(question, answer),
+      sessionStub(),
+    ).pipe(Effect.provideService(InquiryRecords, records));
+    return submitFollowUpMock.mock.calls[0]![1] as string;
+  },
+);
 
 describe('external inquiry continuation session routing', () => {
   beforeEach(() => {
@@ -228,5 +243,41 @@ describe('external inquiry continuation session routing', () => {
 
         expect(outcome).toBe('archived');
       }),
+  );
+
+  it.effect(
+    'collapses multiline markdown in the continuation to avoid rendering code blocks',
+    () =>
+      Effect.gen(function* () {
+        const text = yield* deliveredContinuationText(
+          [
+            'Please run this analysis:',
+            '',
+            '```bash',
+            'grep -rn "SameMPV₂" TNLean',
+            '```',
+          ].join('\n'),
+          ['```text', 'do subagent; not inquiry', '```'].join('\n'),
+        );
+
+        expect(text).toContain(
+          'Q: Please run this analysis: ```bash grep -rn "SameMPV₂" TNLean ```',
+        );
+        expect(text).toContain('A: ```text do subagent; not inquiry ```');
+        expect(text.split('\n').some((line) => line.startsWith('```'))).toBe(
+          false,
+        );
+      }),
+  );
+
+  it.effect('truncates long questions and answers in the continuation', () =>
+    Effect.gen(function* () {
+      const longQ = 'q'.repeat(1000);
+      const longA = 'a'.repeat(5000);
+      const text = yield* deliveredContinuationText(longQ, longA);
+
+      expect(text).toContain(`(full text available in thread ${THREAD})`);
+      expect(text.length).toBeLessThan(longQ.length + longA.length);
+    }),
   );
 });

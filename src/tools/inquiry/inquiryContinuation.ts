@@ -51,7 +51,7 @@ function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   return lines;
 }
 
-export function buildContinuationText(params: {
+function buildContinuationText(params: {
   event: 'answered' | 'dropped';
   threadId: InquiryThreadId;
   question: string;
