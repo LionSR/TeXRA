@@ -91,7 +91,8 @@ big.
   carries compat layers.
 - **Earlier local data is disposable** (1.0 direction, #9590 ruling): delete
   compat readers on sight (loud degradation), don't age-gate. Keep only
-  external-export readers and security guards.
+  external-export readers, readers for currently supported wire protocols,
+  and security guards.
 - **Build-implies-delete in the same change.** Replacing a path without
   deleting it is how +2,727 (session-runtime) and +987 (native-subagent F6)
   of scaffolding accumulated. #7158's +850 was fine ONLY because #7474

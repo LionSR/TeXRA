@@ -63,7 +63,8 @@ Things the tree won't tell you:
   ruled there are no temporary adapters), and `pure-tier-kernel-suites` (suites a source
   scan classes as host-free but which read the host through the module under
   test, so they run in the isolated `kernel` Vitest project — see AGENTS.md
-  "Test tiers"). The invariant to hold is "never widen a
+  "Test tiers"), and `store-public-surface` (the frozen public method set of
+  the run log store). The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
