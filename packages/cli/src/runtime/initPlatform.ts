@@ -2,11 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  initializeBundledPrompts,
-  teardownDefaultSession,
-  tryDefaultSession,
-} from '@agent/runtime';
+import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { hostPort } from '@common/hostPort';
@@ -405,8 +401,6 @@ export async function initCliPlatform(
     initializeCliSupabaseAuth(services.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
-
-  initializeBundledPrompts(context.resourcesPath);
 
   await effectRuntime().runPromise(
     bootstrapNodeAgentDirectories({

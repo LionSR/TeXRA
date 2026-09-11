@@ -11,7 +11,6 @@ import { clearStoreCache } from '@agent/storage';
 import {
   createAgentResponseTextConnector,
   defaultSession,
-  initializeBundledPrompts,
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
@@ -511,7 +510,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
-  initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   const workspaceState = gitRepoRoot
     ? new WorktreeStateStore(
         context.workspaceState,

@@ -1,35 +1,12 @@
 /**
- * The loader for prompt templates that ship inside a host's packaged
- * `resources/` bundle, plus the goal continuation, which is inline.
- *
- * Each host calls `initializeBundledPrompts(resourcesPath)` exactly once at
- * startup with its own resolved resources root. There is deliberately no
- * per-prompt initializer: when two existed, desktop shipped a release that
- * wired one and forgot the other, so every desktop follow-up polish failed
- * with "Polish model not initialized" (#10365).
- *
- * Polish rejects when its bundle is absent or malformed; there is no inline
- * copy to render. The CLI bundle does not ship
- * `templates/instructionPolish.yaml` (`copy-resources.mjs`), and the CLI
- * renders no polish prompt, so this costs it nothing: prompts are read
- * lazily, and a CLI polish caller would fail loudly rather than silently.
+ * The prompt templates the runtime renders itself: the goal continuation and
+ * the follow-up polish instruction. Both are inline, so they render in every
+ * host and embedder with nothing to register at startup.
  */
-
-// Node imports
-import { join } from 'node:path';
-
-// Third-party imports
-import { z } from 'zod';
-
-// Local imports
-import { Result } from 'effect';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 /**
  * The goal continuation injected at the end of an idle turn while a goal is
- * active. It lives here rather than in a bundled YAML so it always renders,
- * whether or not a host registered a resources root.
+ * active.
  */
 export const GOAL_CONTINUATION_TEMPLATE =
   [
@@ -58,69 +35,22 @@ export const GOAL_CONTINUATION_TEMPLATE =
     '</goal_context>',
   ].join('\n') + '\n';
 
-const PolishPromptsSchema = z.object({
-  prompts: z.object({ userRequest: z.string() }),
-});
-
-type PolishPrompts = z.infer<typeof PolishPromptsSchema>;
-
-let resourcesRoot: string | null = null;
-let polishPrompts: Promise<PolishPrompts> | undefined;
-
 /**
- * Point every bundled prompt at the host's packaged `resources/` root.
- *
- * Safe to call repeatedly: a later call replaces the root and drops the cache,
- * so CLI validation can re-enter platform init with a different resources path
- * in the same process.
+ * The polish instruction. The raw user text is appended after it verbatim;
+ * nothing is templated, so user text can't inject template syntax.
  */
-export function initializeBundledPrompts(resourcesPath: string): void {
-  resourcesRoot = resourcesPath;
-  polishPrompts = undefined;
-}
-
-/**
- * Read and parse one bundled prompt YAML. Throws when the file cannot be read
- * or does not match `schema`; each caller owns what that means for its prompt.
- */
-async function readPromptYaml<T>(
-  name: string,
-  filePath: string,
-  schema: z.ZodType<T>,
-): Promise<T> {
-  const content = await AbsoluteFS.read(filePath);
-  const parsed = parseYamlWith(content, schema);
-  if (Result.isFailure(parsed)) {
-    throw new Error(
-      `Failed to parse ${name} prompt YAML at ${filePath}: ${parsed.failure.message}`,
-      { cause: parsed.failure },
-    );
-  }
-  return parsed.success;
-}
-
-/** Required: no inline copy exists, so an unavailable bundle fails the call. */
-function loadPolishPrompts(): Promise<PolishPrompts> {
-  polishPrompts ??= (async () => {
-    const root = resourcesRoot;
-    if (root === null) {
-      throw new Error(
-        'Bundled prompt "polish" is unavailable: no host called initializeBundledPrompts().',
-      );
-    }
-    return readPromptYaml(
-      'polish',
-      join(root, 'templates', 'instructionPolish.yaml'),
-      PolishPromptsSchema,
-    );
-  })();
-  return polishPrompts;
-}
-
-/**
- * The polish prompt: the YAML instruction prefix followed by the raw user
- * text. Nothing is templated, so user text can't inject template syntax.
- */
-export async function renderPolishPrompt(text: string): Promise<string> {
-  return (await loadPolishPrompts()).prompts.userRequest + text;
-}
+export const POLISH_PROMPT_PREFIX =
+  [
+    'Correct any spelling errors, typos, grammatical mistakes, or punctuation ' +
+      'issues. Preserve the original meaning and tone without adding new ' +
+      'content or changing the structure unless necessary for clarity.',
+    '',
+    'Apply these formatting rules:',
+    '1. If you spot inline LaTeX formulas, ensure they are wrapped with $ symbols (e.g., $E=mc^2$)',
+    '2. If you spot XML tags, fix any unbalanced or unpaired tags',
+    '3. If you spot Markdown syntax (like headers, lists, emphasis, links), fix any incorrect syntax',
+    '',
+    'Return the corrected text wrapped in <corrected_text> XML tags.',
+    '',
+    'Text to correct:',
+  ].join('\n') + '\n';
