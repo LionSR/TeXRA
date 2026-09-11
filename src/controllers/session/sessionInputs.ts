@@ -4,6 +4,10 @@
  * then the log ordinal, and drains that finite prefix before yielding text.
  * Thus a committed run.start has reached this reader before its first chunk.
  */
+// Node imports
+import { isDeepStrictEqual } from 'node:util';
+
+// Third-party imports
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import {
@@ -69,8 +73,9 @@ export const sessionInputsLayer = Layer.effect(
             checked = new Set(
               replayExistence.claims.map(({ aggregateId }) => aggregateId),
             );
+            const initialLocal = yield* SubscriptionRef.get(local.ref);
             replay.push(
-              { _tag: 'local', local: yield* SubscriptionRef.get(local.ref) },
+              { _tag: 'local', local: initialLocal },
               { _tag: 'replay.complete', existence: replayExistence },
             );
             // Every level replays on subscribe; changes during the cold read
@@ -90,8 +95,19 @@ export const sessionInputsLayer = Layer.effect(
               { concurrency: 3 },
             );
             const tail = wakes.pipe(
+              // Wakeups carry no data: the next read captures every source's
+              // current level. Retain one pending read, not a backlog of reads
+              // of the same state after a burst of text chunks.
+              Stream.buffer({ capacity: 1, strategy: 'dropping' }),
               Stream.mapAccumEffect(
-                () => ({ cursor: anchor, text: new Map() as InflightText }),
+                () => ({
+                  cursor: anchor,
+                  text: new Map() as InflightText,
+                  local: initialLocal,
+                  // The first drain must publish the anchor: replay.complete
+                  // reconciles existence but does not advance the view cursor.
+                  existence: undefined as ExistenceReconciliation | undefined,
+                }),
                 (previous) =>
                   Effect.gen(function* () {
                     const nextText = yield* SubscriptionRef.get(text.ref);
@@ -138,10 +154,19 @@ export const sessionInputsLayer = Layer.effect(
                       };
                       inputs.push(chunk);
                     }
-                    inputs.push(
-                      { _tag: 'local', local: snapshot },
-                      { _tag: 'drained', cursor, existence },
-                    );
+                    if (!isDeepStrictEqual(previous.local, snapshot)) {
+                      inputs.push({ _tag: 'local', local: snapshot });
+                    }
+                    if (
+                      inputs.length > 0 ||
+                      rows.length > 0 ||
+                      cursor !== previous.cursor ||
+                      !isDeepStrictEqual(previous.existence, existence)
+                    ) {
+                      // Every nonempty batch needs its closing marker so the
+                      // webview decoder can release it as one complete read.
+                      inputs.push({ _tag: 'drained', cursor, existence });
+                    }
                     const batch: FoldInput[] = [
                       ...rows
                         .filter(isDisplaySessionEvent)
@@ -152,7 +177,10 @@ export const sessionInputsLayer = Layer.effect(
                         })),
                       ...inputs,
                     ];
-                    return [{ cursor, text: nextText }, [batch]] as const;
+                    return [
+                      { cursor, text: nextText, local: snapshot, existence },
+                      batch.length === 0 ? [] : [batch],
+                    ] as const;
                   }),
               ),
             );

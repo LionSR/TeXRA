@@ -328,6 +328,35 @@ afterEach(() => {
 });
 
 describe('App foreground Escape ownership', () => {
+  it('renders the latest transcript after a burst of microtask updates', async () => {
+    seedRootRun();
+    const { instance, stdout } = await renderWithInterrupt();
+    try {
+      // Successive snapshots must not trigger effects that schedule another
+      // state update after every render. Those follow-up commits exhausted
+      // React's nested-update limit during a microtask burst.
+      for (let index = 0; index < 150; index += 1) {
+        seedRun(ROOT, {
+          transcript: {
+            rows: [
+              textRowFixture(
+                'streaming',
+                'assistant',
+                `stream update ${index}`,
+              ),
+            ],
+            settledRows: 0,
+            taskGroups: [],
+            run: null,
+          },
+        });
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+      }
+      await waitFor(() => stdout.output.includes('stream update 149'));
+    } finally {
+      instance.unmount();
+    }
+  });
   it('lets a foreground information pane own Escape before child back', async () => {
     seedChildHierarchy();
     focusRun(CHILD);

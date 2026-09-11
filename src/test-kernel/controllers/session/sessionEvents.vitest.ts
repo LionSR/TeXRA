@@ -231,6 +231,54 @@ beforeAll(() => {
 });
 
 describe('session events and view', () => {
+  it.effect(
+    'does not publish unchanged views for a burst of source wakeups',
+    () =>
+      Effect.gen(function* () {
+        const view = yield* SessionViewService;
+        const text = yield* TextChunkSource;
+        const events = yield* SessionEvents;
+        yield* settle(
+          view.ref,
+          (state) => state.runs.has(RUN) && state.cursor === 1,
+        );
+        const initial = yield* SubscriptionRef.get(view.ref);
+        const observed: SessionView[] = [];
+        const finished = yield* Deferred.make<void>();
+        yield* Effect.forkScoped(
+          view.changes.pipe(
+            Stream.drop(1),
+            Stream.runForEach((state) =>
+              Effect.gen(function* () {
+                observed.push(state);
+                if (state.cursor > initial.cursor) {
+                  yield* Deferred.succeed(finished, undefined);
+                }
+              }),
+            ),
+          ),
+        );
+        yield* Effect.yieldNow;
+        // A level notification can arrive after an earlier read has already
+        // consumed its data. Repeating it must neither publish another view nor
+        // prevent the next committed event from reaching the reader.
+        const held = yield* SubscriptionRef.get(text.ref);
+        for (let index = 0; index < 150; index += 1) {
+          yield* SubscriptionRef.set(text.ref, held);
+        }
+        yield* TestClock.adjust('1 second');
+        expect(yield* SubscriptionRef.get(view.ref)).toBe(initial);
+        expect(observed).toHaveLength(0);
+        yield* events.publish([waiting]);
+        yield* Deferred.await(finished);
+        expect(observed.length).toBeGreaterThan(0);
+        expect(observed.every((state) => state.cursor > initial.cursor)).toBe(
+          true,
+        );
+        expect(observed.at(-1)?.runs.get(RUN)?.status).toBe(RUN_PHASE.WAITING);
+      }).pipe(Effect.provide(graph([runStart]))),
+  );
+
   it.effect('keeps an inquiry independent of the run it was asked under', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
