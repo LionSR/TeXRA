@@ -150,7 +150,7 @@ required.
 
 Two ways out:
 
-- `initializeDefaultSession({ transcripts: await StreamLogStore.open() })` —
+- `initializeDefaultSession({ transcriptMode: { kind: 'ephemeral', reason: 'embedded host' } })` —
   the process-default session (`src/agent/runtime/SessionHandle.ts:445-452`,
   called once; a second call throws). This is what the CLI
   (`packages/cli/src/runtime/transcriptSession.ts:45`) and the extension
@@ -207,7 +207,6 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { effectRuntime } from '@platform/processRuntime';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
-import { StreamLogStore } from '@transcript';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -227,7 +226,7 @@ installProcessRuntime(await nodeProcesses.selfIdentity()); // Step 3 needs it
 await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
 
 const session = initializeDefaultSession({
-  transcripts: await StreamLogStore.open(),
+  transcriptMode: { kind: 'ephemeral', reason: 'embedded host' },
 });
 const detachHostInteractions = session.interactions.use({
   cancel: () => {},
