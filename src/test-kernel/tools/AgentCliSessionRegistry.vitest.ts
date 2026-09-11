@@ -98,18 +98,9 @@ describe('AgentCliSessionRegistry', () => {
     const releasePending = registry.claim('pending-session');
 
     try {
-      registry.register(
-        'session-a',
-        entry(runA, 'child-a' as RunId),
-      );
-      registry.register(
-        'session-a-alias',
-        entry(runA, 'child-a' as RunId),
-      );
-      registry.register(
-        'session-b',
-        entry(runB, 'child-b' as RunId),
-      );
+      registry.register('session-a', entry(runA, 'child-a' as RunId));
+      registry.register('session-a-alias', entry(runA, 'child-a' as RunId));
+      registry.register('session-b', entry(runB, 'child-b' as RunId));
 
       registry.releaseByRunId(runA);
 

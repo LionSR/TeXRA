@@ -311,9 +311,7 @@ export const launchAgentCliSession = Effect.fn(
             },
           );
           const started = yield* Effect.exit(
-            Effect.suspend(() =>
-              params.startLoop({ childRun: stream, runId }),
-            ),
+            Effect.suspend(() => params.startLoop({ childRun: stream, runId })),
           );
           if (Exit.isFailure(started)) {
             const startError = Cause.squash(started.cause);
