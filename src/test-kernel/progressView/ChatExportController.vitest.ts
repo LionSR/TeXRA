@@ -26,7 +26,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 import { StorageFS } from '@utils/files/storageFS';
 
 const TEMPLATE =

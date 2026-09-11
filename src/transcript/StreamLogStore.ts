@@ -33,7 +33,7 @@ interface RunState {
   log?: StreamLog;
   fold?: ReturnType<typeof createTranscriptFold>;
   seq?: number;
-  pins?: Set<TranscriptResidencyLeaseReason | symbol>;
+  pins?: Set<TranscriptResidencyLeaseReason>;
   runOwner?: RunOwnership;
 }
 
@@ -73,7 +73,7 @@ export class StreamLogStore {
 
   private constructor(
     readonly mode: StreamLogStoreMode,
-    private readonly database?: TranscriptDatabase,
+    private readonly database: TranscriptDatabase,
   ) {}
 
   /** Construct the root's resident store from its indexed existence facts. */
@@ -104,32 +104,20 @@ export class StreamLogStore {
 
   /** Read a complete event prefix without changing residency. */
   readEntries(runId: RunId) {
-    return this.database === undefined
-      ? Effect.sync(() => this.get(runId)?.toJSON() ?? [])
-      : this.database
-          .readAggregate(aggregateId('run', runId), 0)
-          .pipe(
-            Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []),
-          );
+    return this.database
+      .readAggregate(aggregateId('run', runId), 0)
+      .pipe(Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []));
   }
 
   hasAuthoritativeRun(runId: RunId) {
-    return this.database === undefined
-      ? Effect.sync(() => this.has(runId))
-      : this.database
-          .readAggregate(aggregateId('run', runId), 0)
-          .pipe(
-            Effect.map(
-              (events) =>
-                events.length > 0 && events.at(-1)?.type !== 'run.removed',
-            ),
-          );
-  }
-
-  ensureRun(runId: RunId): void {
-    if (this.known.has(runId)) return;
-    this.known.add(runId);
-    this.ensureRunState(runId).log = new StreamLog();
+    return this.database
+      .readAggregate(aggregateId('run', runId), 0)
+      .pipe(
+        Effect.map(
+          (events) =>
+            events.length > 0 && events.at(-1)?.type !== 'run.removed',
+        ),
+      );
   }
 
   requestEviction(runId: RunId): void {
@@ -153,45 +141,17 @@ export class StreamLogStore {
     );
   }
 
-  ensureLoaded(
-    runId: RunId,
-    options: { retainForPresentation: true },
-  ): Effect.Effect<TranscriptResidencyLease, Error>;
-  ensureLoaded(runId: RunId): Effect.Effect<void, Error>;
-  ensureLoaded(
-    runId: RunId,
-    options?: { retainForPresentation: true },
-  ): Effect.Effect<void | TranscriptResidencyLease, Error> {
+  ensureLoaded(runId: RunId): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
-      if (!options?.retainForPresentation) {
-        this.acquireLease(runId, 'focus');
-        this.releaseRequests.delete(runId);
-        yield* this.gate.withPermit(this.loadEntries(runId));
-        return;
-      }
-      const token = Symbol(runId);
-      const state = this.ensureRunState(runId);
-      state.pins ??= new Set();
-      state.pins.add(token);
-      let closed = false;
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        const current = this.runs.get(runId);
-        if (current) this.unpin(current, token);
-        this.requestEviction(runId);
-        this.pruneRunState(runId);
-      };
-      yield* this.gate
-        .withPermit(this.loadEntries(runId))
-        .pipe(Effect.onError(() => Effect.sync(close)));
-      return { runId, close };
+      this.acquireLease(runId, 'focus');
+      this.releaseRequests.delete(runId);
+      yield* this.gate.withPermit(this.loadEntries(runId));
     });
   }
 
   private loadEntries(runId: RunId) {
     return Effect.gen({ self: this }, function* () {
-      if (this.get(runId) !== undefined || this.database === undefined) return;
+      if (this.get(runId) !== undefined) return;
       const entries = foldEntries(
         yield* this.database.readAggregate(aggregateId('run', runId), 0),
       );
@@ -234,27 +194,6 @@ export class StreamLogStore {
         // Nothing here reads the log's change buffers; drain them so they do
         // not grow with the resident log.
         state.log.drainEmission();
-      }),
-    );
-  }
-
-  /** Forget only the resident projection after committed deletion. */
-  delete(runId: RunId) {
-    return this.gate.withPermit(
-      Effect.sync(() => {
-        this.runs.delete(runId);
-        this.known.delete(runId);
-        this.releaseRequests.delete(runId);
-      }),
-    );
-  }
-
-  clear() {
-    return this.gate.withPermit(
-      Effect.sync(() => {
-        this.runs.clear();
-        this.known.clear();
-        this.releaseRequests.clear();
       }),
     );
   }
@@ -325,10 +264,7 @@ export class StreamLogStore {
     this.tryRelease(runId);
     this.pruneRunState(runId);
   }
-  private unpin(
-    state: RunState,
-    pin: TranscriptResidencyLeaseReason | symbol,
-  ): void {
+  private unpin(state: RunState, pin: TranscriptResidencyLeaseReason): void {
     state.pins?.delete(pin);
     if (state.pins?.size === 0) state.pins = undefined;
   }

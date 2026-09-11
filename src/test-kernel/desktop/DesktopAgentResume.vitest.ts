@@ -152,7 +152,6 @@ async function createResumeHarness(): Promise<{
     },
   ]);
   await session.settlePublications();
-  session.transcripts.ensureRun(runId);
   const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
   let disposed = false;
   const dispose = (): void => {
@@ -373,7 +372,10 @@ describe('desktop process resume owner', () => {
 
     const resume = harness.owner.tryResumeRun(runId);
     await retrieval.started;
-    await Effect.runPromise(harness.session.transcripts.delete(runId));
+    harness.session.publish([
+      { type: 'run.removed', aggregateId: aggregateId('run', runId) },
+    ]);
+    await harness.session.settlePublications();
     retrieval.release();
 
     await expect(resume).resolves.toBe(false);

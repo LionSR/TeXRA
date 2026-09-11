@@ -316,12 +316,11 @@ function fakeHistory(entries: readonly string[]): InputHistory {
 }
 
 beforeAll(bindTestSessionView);
-beforeEach(async () => {
+beforeEach(() => {
   resetCliState();
   seeded.clear();
   seededApprovals = [];
   syncSeededView();
-  await defaultSession().transcripts.clear();
 });
 afterEach(() => {
   clearSeededApprovals();

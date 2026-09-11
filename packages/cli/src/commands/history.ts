@@ -9,11 +9,7 @@ import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { effectRuntime } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
-import {
-  assembleTrace,
-  injectStandaloneTrace,
-  StreamLogStore,
-} from '@transcript';
+import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 

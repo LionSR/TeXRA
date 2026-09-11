@@ -20,11 +20,6 @@ const HYDRATION_SITE_ALLOWLIST = new Set([
   'src/transcript/StreamLogStore.ts',
 ]);
 
-/** Runtime sites allowed to retain transcripts for a visible reader. */
-const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
-  'src/transcript/StreamLogStore.ts',
-]);
-
 /** Files under a scan root that match `pattern` and are not allowlisted. */
 function findOffenders(pattern: RegExp, allowlist: Set<string>): string[] {
   return ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder)
@@ -50,14 +45,5 @@ describe('transcript residency lease sites', () => {
         ? undefined
         : 'Use zero-residency readEntries() for one-shot reads; extend the allowlist only for a new focus/runtime owner.',
     ).toEqual([]);
-  });
-
-  it('keeps exact presentation residency at the progress coordinator boundary', () => {
-    const offenders = findOffenders(
-      /retainForPresentation\s*:\s*true/,
-      PRESENTATION_LEASE_SITE_ALLOWLIST,
-    );
-
-    expect(offenders).toEqual([]);
   });
 });

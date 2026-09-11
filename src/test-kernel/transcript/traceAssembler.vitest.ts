@@ -28,7 +28,8 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { assembleTrace, StreamLogStore, RunSnapshotStore } from '@transcript';
+import { assembleTrace, RunSnapshotStore } from '@transcript';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const tempDirs = useTempDirs();
 let session: ReturnType<typeof createTestSession>;

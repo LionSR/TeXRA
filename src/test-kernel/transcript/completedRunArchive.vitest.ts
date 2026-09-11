@@ -81,9 +81,9 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
   readCompletedRunTodos,
-  StreamLogStore,
   RunSnapshotStore,
 } from '@transcript';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const tempDirs = useTempDirs();
 
