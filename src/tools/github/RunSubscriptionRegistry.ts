@@ -1,13 +1,13 @@
 /**
- * Registry that ties polling-source subscriptions to agent stream lifecycles.
+ * Registry that ties polling-source subscriptions to agent run lifecycles.
  * Used identically for per-PR, per-repo, and per-issue subscriptions; only
  * the polling source and key derivation differ.
  *
  * Each (runId, key) pair holds one disposable from the polling source.
  * Event callbacks submit a `live_notification` follow-up so events land in
  * the same follow-up queue user-typed messages use; the agent consumes them
- * via the normal `waitForFollowUp` mechanism. When a stream's queue is released
- * (orchestrator disposed, user deleted the stream) subscriptions owned by
+ * via the normal `waitForFollowUp` mechanism. When a run's queue is released
+ * (orchestrator disposed, user deleted the run) subscriptions owned by
  * that queue's session are auto-disposed.
  */
 
@@ -155,7 +155,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           bound.set(key, subscription);
           this.perRun.set(runId, bound);
           this.ensureReleaseHook(session);
-          this.logger.info(`Bound subscription ${key} → stream ${runId}`);
+          this.logger.info(`Bound subscription ${key} → run ${runId}`);
           this.emitBindingsChanged();
           return true;
         }),
@@ -179,7 +179,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   /**
    * Dispose every binding of `key` across all runs. Returns the number of
    * bindings removed. Lets the settings UI cancel a subscription globally
-   * without needing to know which stream owns it.
+   * without needing to know which run owns it.
    */
   unbindAll(key: string): number {
     const canonicalKey = key as K;

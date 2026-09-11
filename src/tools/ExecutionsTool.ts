@@ -727,24 +727,24 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
     function* (context: RunToolContext, runId: RunId) {
       const records = getRunRecords(context.session, runId);
-      const [resultMeta, note] = yield* Effect.all(
+      const [resultMeta, runEnd, note] = yield* Effect.all(
         [
           records.readResultMeta(),
+          records.readRunEnd(),
           turnAttributionNote(getRunStore(runId), context.session),
         ],
-        { concurrency: 2 },
+        { concurrency: 3 },
       );
       if (!resultMeta) {
         return executed(
           `No structured result recorded for ${runId} yet. It is written when the run completes.`,
         );
       }
+      const result = unwrapResultMeta(resultMeta, runEnd);
       // The note rides INSIDE the JSON: /result is the machine-readable
       // chaining endpoint, so prefixed prose would break JSON.parse
       // consumers precisely in the interrupted-turn case it describes.
-      const payload = note
-        ? { turnAttribution: note, ...unwrapResultMeta(resultMeta) }
-        : unwrapResultMeta(resultMeta);
+      const payload = note ? { turnAttribution: note, ...result } : result;
       return executed(JSON.stringify(payload, null, 2));
     },
   );

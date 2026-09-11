@@ -85,7 +85,7 @@ interface StartedLaunch {
    *  run and mints no `run.start` (decision 9). */
   readonly start: Extract<SessionEvent, { type: 'run.start' }> | undefined;
   readonly activate: Extract<SessionEvent, { type: 'run.activate' }>;
-  readonly result: Extract<SessionEvent, { type: 'result' }>;
+  readonly end: Extract<SessionEvent, { type: 'run.end' }>;
 }
 
 /**
@@ -155,13 +155,13 @@ async function captureStartedLaunch(
       'run.activate',
     );
     expect(activations).toHaveLength(1);
-    const results = eventsOfType(await recordedSession.read(), 'result');
-    expect(results).toHaveLength(1);
+    const ends = eventsOfType(await recordedSession.read(), 'run.end');
+    expect(ends).toHaveLength(1);
     return {
       session,
       start: starts[0],
       activate: activations[0],
-      result: results[0],
+      end: ends[0],
     };
   } finally {
     session.dispose();
@@ -172,7 +172,7 @@ async function captureStartedLaunch(
  * A launch that fails after `run.start` folds to failed, never to a ghost:
  * the existence fact carries the launch facts and the session's owner
  * token, and the same failure path ends the run with its terminal
- * `result` and the FAILED phase.
+ * `run.end` row and the FAILED phase.
  */
 function expectStartedThenFailed(
   launch: StartedLaunch,
@@ -195,7 +195,7 @@ function expectStartedThenFailed(
     ),
   });
   expectActivatedThenFailed(launch);
-  expect(launch.result.aggregateId).toBe(start.aggregateId);
+  expect(launch.end.aggregateId).toBe(start.aggregateId);
 }
 
 /** Every activation, fresh or resumed, carries the activation metadata the
@@ -205,7 +205,7 @@ function expectActivatedThenFailed(launch: StartedLaunch): void {
     category: AgentCategory.ToolUse,
     isRemote: false,
   });
-  expect(launch.result).toMatchObject({
+  expect(launch.end).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
     aggregateId: launch.activate.aggregateId,
   });

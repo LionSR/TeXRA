@@ -517,7 +517,6 @@ describe('cross-process run leases', () => {
       ),
       publish: () => {},
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-      publishResult: () => {},
       releaseRootRunLease: () => Effect.void,
       finalizeRun: (input) =>
         Effect.succeed({ ok: true, outcome: input.outcome }),

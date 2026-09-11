@@ -567,8 +567,8 @@ export function createChatSessionController(
       ownRun: (runId): void => ownership.claim(runId),
       finalize: (): void => {
         // The root terminal result is published before its run promise
-        // settles. Children retain `isSubagent: true` and never produce a
-        // terminal toast, so this session-wide listener has no work after the
+        // settles. Children (runs with a parent) never produce a terminal
+        // toast, so this session-wide listener has no work after the
         // root finalizes and must not overlap a later root's listener.
         detachResultToastOnce();
         session.markRunCompleted();

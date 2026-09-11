@@ -268,10 +268,13 @@ describe('CLI multi-agent run command', () => {
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
       result: {
-        category: 'toolUse',
         runId: 'exec-team',
         outcome: RUN_OUTCOME.COMPLETED,
-        response: 'The proof is correct.',
+        output: {
+          category: 'toolUse',
+          response: 'The proof is correct.',
+          files: [],
+        },
         workingDirectory: '/tmp/project',
       },
       exitCode: 0,
@@ -317,17 +320,20 @@ describe('CLI multi-agent run command', () => {
     // The 0.40 wire keeps the run id under `executionId`
     // (`cliRunResultPayload`); the internal result carries `runId`.
     expect(emission?.json.result).toEqual({
-      category: 'toolUse',
       executionId: 'exec-team',
       outcome: RUN_OUTCOME.COMPLETED,
-      response: 'The proof is correct.',
+      output: {
+        category: 'toolUse',
+        response: 'The proof is correct.',
+        files: [],
+      },
       workingDirectory: '/tmp/project',
     });
-    // `outcome` is the only terminal fact the headless JSON publishes.
+    // `outcome` is the only terminal fact the headless JSON publishes, and what
+    // the run produced rides `output`.
     expect(Object.keys(emission?.json.result ?? {})).toEqual([
-      'category',
       'outcome',
-      'response',
+      'output',
       'workingDirectory',
       'executionId',
     ]);

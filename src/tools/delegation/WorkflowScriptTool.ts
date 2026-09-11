@@ -359,8 +359,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // returns. Undefined totals are skipped (a malformed-journal failure never
         // records a spurious cost).
         const recordSubagentCost = callContext.hooks?.recordSubagentCost;
-        const recordCost = (totalCostUsd: number | undefined): void => {
-          if (totalCostUsd !== undefined) recordSubagentCost?.(totalCostUsd);
+        const recordCost = (totalCost: number | undefined): void => {
+          if (totalCost !== undefined) recordSubagentCost?.(totalCost);
         };
 
         // Same availability gate as delegate_agent/delegate_workflow: a run model

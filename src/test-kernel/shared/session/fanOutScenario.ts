@@ -9,6 +9,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   AgentConfigFieldsSchema,
+  emptyRunEndOutput,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
@@ -378,16 +379,9 @@ export function buildScenario({ proposal = false } = {}) {
     filesByRound: { 1: [] },
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'custom:lint',
-    category: AgentCategory.ToolUse,
-  });
-  log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
   // The tool's result lands the way the recorder's `update` lands it: the
   // patch merged over the stored entry, so the row keeps its id, seqNo, and
@@ -492,16 +486,9 @@ export function buildScenario({ proposal = false } = {}) {
     requestId: 'req-1',
   });
   log.emit(CHILD, T.childDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'custom:search',
-    category: AgentCategory.ToolUse,
-  });
-  log.emit(CHILD, T.childDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
   rootEntries.push(
     log.entry(ROOT, T.childDone + 1, {
@@ -521,16 +508,9 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   );
   log.emit(ROOT, T.rootDone, {
-    type: 'result',
+    type: 'run.end',
     outcome: 'completed',
-    agentName: 'review',
-    category: AgentCategory.Workflow,
-  });
-  log.emit(ROOT, T.rootDone, {
-    type: 'status',
-    phase: RUN_PHASE.COMPLETED,
-    previousPhase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
+    output: emptyRunEndOutput(AgentCategory.Workflow),
   });
 
   const events = log.events.map(tail);
@@ -1062,18 +1042,10 @@ function boardView({
       // outcome too: the row's status and the child run's phase are one
       // fact, so the tree never reads "Running" under a finished call.
       if (entry.status === 'failed' || entry.status === 'completed') {
-        const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
-          type: 'result',
-          outcome: done ? 'completed' : 'failed',
-          agentName: `custom:${entry.id}`,
-          category: AgentCategory.ToolUse,
-        });
-        log.emit(kid.id, kid.startedAt + min(2), {
-          type: 'status',
-          phase: done ? RUN_PHASE.COMPLETED : RUN_PHASE.FAILED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
+          type: 'run.end',
+          outcome: entry.status === 'completed' ? 'completed' : 'failed',
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         });
       }
     }
@@ -1094,16 +1066,9 @@ function boardView({
           });
         }
         log.emit(kid.id, closedAt - 1, {
-          type: 'result',
+          type: 'run.end',
           outcome: 'completed',
-          agentName: `custom:${entry.id}`,
-          category: AgentCategory.ToolUse,
-        });
-        log.emit(kid.id, closedAt - 1, {
-          type: 'status',
-          phase: RUN_PHASE.COMPLETED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         });
         card(
           {
@@ -1126,16 +1091,9 @@ function boardView({
       data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
     });
     log.emit(ROOT, closedAt + 2, {
-      type: 'result',
+      type: 'run.end',
       outcome,
-      agentName: 'review',
-      category: AgentCategory.Workflow,
-    });
-    log.emit(ROOT, closedAt + 2, {
-      type: 'status',
-      phase: failed ? RUN_PHASE.FAILED : RUN_PHASE.COMPLETED,
-      previousPhase: RUN_PHASE.RUNNING,
-      cause: 'lifecycle',
+      output: emptyRunEndOutput(AgentCategory.Workflow),
     });
   }
   const ids = [ROOT, ...calls.flatMap((c) => c.child?.id ?? [])];

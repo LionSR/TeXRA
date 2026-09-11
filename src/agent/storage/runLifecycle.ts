@@ -26,10 +26,14 @@ import {
   aggregateTarget,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
+  emptyRunEndOutput,
   type AggregateId,
+  type RunEnd,
+  type RunEndOutput,
   type RunId,
   type RunIdentity,
   type RunOutcome,
+  type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -38,6 +42,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunStore,
   getRunRecords,
+  runEndFromEvents,
   runMetaFromEvents,
   type ChildRecord,
 } from './RunKVStore';
@@ -67,11 +72,10 @@ export interface RegisterRunOptions {
   /** Runtime behavior declared by the launch source, not UI visibility. */
   readonly userFollowUpSupport?: UserFollowUpSupport;
   /**
-   * Display description persisted on `RunMeta.description` — the one
-   * description authority (#9590 A4). Child-stream launchers pass the
-   * delegated task label here so it is durable at birth; the later
-   * `updateRunDescription` session event is display-only and no longer
-   * writes a sidecar copy (#9590 Stage 6).
+   * The run's `run.description` row, written in the registration batch so it
+   * is durable at birth (#9590 A4): child launchers pass the delegated task
+   * label; a root run gets its AI-generated summary from
+   * `generateSessionDescription` later, as a second row of the same type.
    */
   readonly description?: string;
 }
@@ -169,18 +173,11 @@ export const registerRun = Effect.fn('registerRun')(function* (
           cause: 'lifecycle',
         });
       if (options.description !== undefined)
-        events.push(
-          {
-            type: 'run.description',
-            aggregateId: target,
-            description: options.description,
-          },
-          {
-            type: 'updateRunDescription',
-            aggregateId: target,
-            description: options.description,
-          },
-        );
+        events.push({
+          type: 'run.description',
+          aggregateId: target,
+          description: options.description,
+        });
       yield* session
         .commitRegistration(events)
         .pipe(
@@ -294,13 +291,27 @@ export interface FinalizeRunInput {
   readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
   /**
-   * Keep an outcome already on disk instead of replacing it. For a backstop
-   * finalizer that does not own the run's result — the host-exit drain, which
-   * can race the run's own driver across the same per-run meta lock —
-   * the driver's outcome is the authoritative one. Read and write happen in
-   * the same locked cycle, so "already settled" cannot go stale between them.
+   * Keep the outcome this lifecycle already wrote instead of replacing it.
+   * For a backstop finalizer that does not own the run's result — the
+   * host-exit drain, which can race the run's own driver across the same
+   * per-run meta lock — the driver's outcome is the authoritative one. Read
+   * and write happen in the same locked cycle, so "already settled" cannot go
+   * stale between them.
    */
   readonly keepExistingOutcome?: boolean;
+  /** The classified error behind a FAILED outcome, when the run has one. */
+  readonly error?: RunEnd['error'];
+  /** Usage totals at the end of the run, once a round recorded usage. */
+  readonly usage?: RunEnd['usage'];
+  /**
+   * What the run produced. Absent for a backstop that ends a run whose flow
+   * produced nothing (host exit, a stop of a parked run, a failed launch):
+   * the row then carries the empty output of the run's category. Also
+   * absent, by rule rather than omission, on the child-run path
+   * (`finalizeChildRun` in `src/tools/delegation/childRun.ts`): a child's
+   * product is its per-turn delivery to its parent, not a flow output.
+   */
+  readonly output?: RunEndOutput;
   /**
    * Where a persistence failure is reported, wrapped in one worded Error.
    * `finalizeRun` never throws; a caller with its own logging reads the
@@ -327,9 +338,12 @@ export type FinalizeRunResult =
     };
 
 /**
- * The one terminal-persistence tail: persist the run's terminal outcome,
- * then apply the requested flow-record policy. Never throws — every
- * persistence failure comes back as an `ok: false` result (and through
+ * The one terminal-persistence tail, and the one writer of the `run.end` row
+ * (one run model, section 3.3): persist the run's terminal fact, then apply
+ * the requested flow-record policy. Read and write share one locked cycle, so
+ * a run whose *current* lifecycle already ended with this outcome writes
+ * nothing; a resumed run ends again. Never throws — every persistence
+ * failure comes back as an `ok: false` result (and through
  * `report`, when given).
  */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
@@ -339,25 +353,35 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const { runId, outcome, flowRecord, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) => {
+      const target = aggregateId('run', runId);
       const meta = runMetaFromEvents(rows, runId);
       if (!meta) throw new Error(`Run metadata not found for ${runId}`);
+      const start = rows.find(
+        (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+          row.type === 'run.start' && row.aggregateId === target,
+      );
+      if (!start) throw new Error(`Run start not found for ${runId}`);
+      // "Already ended" is a fact about the run's current lifecycle, not about
+      // the aggregate (`runEndFromEvents` states the rule, and every reader
+      // shares it): a resumed run has to end again even when it ends the same
+      // way, or the fold, history and every `durableOutcome` reader keep it
+      // RUNNING for want of a terminal row.
+      const ended = runEndFromEvents(rows, runId)?.outcome;
       const persisted =
-        keepExistingOutcome === true && meta.outcome !== undefined
-          ? meta.outcome
-          : outcome;
+        keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+      if (ended === persisted) return { events: [], value: persisted };
       return {
-        events:
-          meta.outcome === persisted
-            ? []
-            : [
-                ...session.statusClosureFacts(runId, persisted),
-                {
-                  type: 'status' as const,
-                  aggregateId: aggregateId('run', runId),
-                  phase: persisted,
-                  cause: 'lifecycle',
-                },
-              ],
+        events: [
+          ...session.statusClosureFacts(runId, persisted),
+          {
+            type: 'run.end' as const,
+            aggregateId: target,
+            outcome: persisted,
+            ...(input.error !== undefined ? { error: input.error } : {}),
+            ...(input.usage !== undefined ? { usage: input.usage } : {}),
+            output: input.output ?? emptyRunEndOutput(start.category),
+          },
+        ],
         value: persisted,
       };
     }),

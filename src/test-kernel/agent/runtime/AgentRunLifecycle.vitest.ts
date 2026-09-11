@@ -130,25 +130,35 @@ function lifecycleFixture(
 /** The launching run a subagent fixture names as its parent edge. */
 const PARENT_RUN_ID = 'aa0001' as RunId;
 
+/** What a tool-use run that produced no output ends with on its `run.end`. */
+const EMPTY_TOOL_USE_OUTPUT = {
+  category: 'toolUse',
+  response: '',
+  files: [],
+} as const;
+
 function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseFlowResult {
-  return { category: 'toolUse', outcome, runId };
+  return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
 }
 
 function workflowResult(runId: RunId, outcome: RunOutcome): WorkflowFlowResult {
   return {
-    category: 'workflow',
     outcome,
     runId,
-    outputs: [],
-    compileFailures: [],
+    output: {
+      category: 'workflow',
+      outputs: [],
+      compileFailures: [],
+      diffs: [],
+    },
   };
 }
 
 function waitingResult(runId: RunId): WaitingToolUseFlowResult {
   return {
-    category: 'toolUse',
     outcome: RUN_PHASE.WAITING,
     runId,
+    output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] },
   };
 }
 
@@ -638,11 +648,21 @@ describe('runFlowWithLifecycle', () => {
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       await ctx.runScope.session.settlePublications();
-      expect(
-        eventsOfType(await recorded.read(), 'status').map(
-          (event) => event.phase,
-        ),
-      ).toEqual([RUN_PHASE.CANCELLED]);
+      // The terminal phase is `run.end`'s, so a run that never ran publishes
+      // no status row at all.
+      expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: {
+          kind: 'abort',
+          message: 'Request aborted',
+          userRetryable: false,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
+        flowRecord: 'preserve',
+      });
     } finally {
       clearRunStatusForTest(runStatus, runId);
     }
@@ -738,9 +758,6 @@ describe('runFlowWithLifecycle', () => {
       expect(defaultSession().runs.getHandle(runId)).toBeDefined();
       expect(followUpsTerminalize).not.toHaveBeenCalled();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-      // The fixture's ctx.logger is noopTrace, and the run handle carries it
-      // as its trace channel.
-      const traceEmit = vi.spyOn(noopTrace, 'emit');
 
       const waitingHandle = takeWaitingHandle(runId);
 
@@ -754,19 +771,17 @@ describe('runFlowWithLifecycle', () => {
       const stop = defaultSession().runs.kill(runId);
       expect(stop.accepted).toBe(true);
       await Effect.runPromise(stop.settlement);
-      await Effect.runPromise(waitingHandle.result);
 
-      // The bypassed runFlowWithLifecycle can't emit the terminal result, so
-      // terminateWaitingHandle must — trace subscribers would otherwise miss
-      // the stop entirely.
-      expect(traceEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'result',
-          outcome: 'cancelled',
-          runId,
-        }),
-      );
-      traceEmit.mockRestore();
+      // The bypassed runFlowWithLifecycle can't settle the terminal row, so
+      // terminateWaitingHandle must — a waiter on the handle would otherwise
+      // miss the stop entirely.
+      await expect(
+        Effect.runPromise(waitingHandle.result),
+      ).resolves.toMatchObject({
+        type: 'run.end',
+        outcome: RUN_OUTCOME.CANCELLED,
+        runId,
+      });
 
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
       expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -777,6 +792,7 @@ describe('runFlowWithLifecycle', () => {
           {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
+            output: EMPTY_TOOL_USE_OUTPUT,
             // Killing a WAITING subagent leaves the checkpoint that makes it
             // resumable (#11315).
             flowRecord: 'preserve',
@@ -863,6 +879,7 @@ describe('runFlowWithLifecycle', () => {
           {
             runId,
             outcome: expected.outcome,
+            output: EMPTY_TOOL_USE_OUTPUT,
             flowRecord:
               expected.outcome === RUN_OUTCOME.COMPLETED
                 ? 'delete'
@@ -880,7 +897,6 @@ describe('runFlowWithLifecycle', () => {
   it('finalizes an outcome-only failure without fabricating provider error facts', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    const emit = vi.spyOn(ctx.logger, 'emit');
     const onError = vi.fn();
 
     try {
@@ -893,24 +909,20 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result).toEqual(carriedResult);
+      // `run.end` is not a trace arm: the storage finalizer is its one
+      // writer, so the absent error facts are read off that input.
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         runId,
         outcome: RUN_OUTCOME.FAILED,
+        error: undefined,
+        usage: undefined,
+        output: carriedResult.output,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-      const resultEvent = emit.mock.calls
-        .map(([event]) => event)
-        .find((event) => event.type === 'result');
-      expect(resultEvent).toMatchObject({
-        type: 'result',
-        outcome: RUN_OUTCOME.FAILED,
-      });
-      expect(resultEvent).not.toHaveProperty('error');
       expect(onError).not.toHaveBeenCalled();
     } finally {
-      emit.mockRestore();
       defaultSession().runs.untrack(runId);
       clearRunStatusForTest(runStatus, runId);
     }
@@ -931,6 +943,13 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         runId,
         outcome: RUN_OUTCOME.CANCELLED,
+        error: {
+          kind: 'abort',
+          message: 'Request aborted',
+          userRetryable: false,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
@@ -956,6 +975,13 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         runId,
         outcome: RUN_OUTCOME.FAILED,
+        error: {
+          kind: 'unexpected',
+          message: 'Error executing agent test-agent: model exploded',
+          userRetryable: true,
+        },
+        usage: undefined,
+        output: EMPTY_TOOL_USE_OUTPUT,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
@@ -989,10 +1015,9 @@ describe('runFlowWithLifecycle', () => {
   it('passes flow-carried terminal results to subagent error delivery', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
     const carriedResult = {
-      category: 'toolUse' as const,
       outcome: RUN_OUTCOME.FAILED,
       runId,
-      totalCostUsd: 0.73,
+      output: { category: 'toolUse' as const, response: '', files: [] },
       error: { message: 'subagent failed', userRetryable: false },
     };
     const onError = vi.fn();
@@ -1023,16 +1048,18 @@ describe('runFlowWithLifecycle', () => {
   it('publishes the structured error facts a flow carried out on its result', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-    const emit = vi.spyOn(ctx.logger, 'emit');
 
     try {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, async () => ({
-            category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
             runId,
-            response: 'partial answer',
+            output: {
+              category: 'toolUse' as const,
+              response: 'partial answer',
+              files: [],
+            },
             error: {
               message: 'provider exploded',
               userRetryable: true,
@@ -1043,18 +1070,14 @@ describe('runFlowWithLifecycle', () => {
       ).rejects.toThrow('provider exploded');
 
       // A carried failure is exactly as loud as a thrown one: same terminal
-      // status, same stage outcome, same classified error on the result event.
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        flowRecord: 'preserve',
-      });
-      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-      expect(emit).toHaveBeenCalledWith(
+      // status, same stage outcome, same classified error on the `run.end`
+      // row the storage finalizer writes.
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
         expect.objectContaining({
-          type: 'result',
+          runId,
           outcome: RUN_OUTCOME.FAILED,
+          flowRecord: 'preserve',
           error: expect.objectContaining({
             kind: 'unexpected',
             statusCode: 503,
@@ -1062,8 +1085,9 @@ describe('runFlowWithLifecycle', () => {
           }),
         }),
       );
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
     } finally {
-      emit.mockRestore();
       defaultSession().runs.untrack(runId);
       clearRunStatusForTest(runStatus, runId);
     }
@@ -1071,16 +1095,14 @@ describe('runFlowWithLifecycle', () => {
 
   it('classifies a carried missing-api-key failure through the canonical discriminant', async () => {
     const { runId, ctx } = lifecycleFixture();
-    const emit = vi.spyOn(ctx.logger, 'emit');
 
     try {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, async () => ({
-            category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
             runId,
-            response: '',
+            output: { category: 'toolUse' as const, response: '', files: [] },
             // The retry-state flatten drops the Error and its Symbol marker;
             // the canonical classification keeps the kind reachable here.
             error: {
@@ -1092,15 +1114,14 @@ describe('runFlowWithLifecycle', () => {
         ),
       ).rejects.toThrow('Missing OpenRouter API key.');
 
-      expect(emit).toHaveBeenCalledWith(
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
         expect.objectContaining({
-          type: 'result',
           outcome: RUN_OUTCOME.FAILED,
           error: expect.objectContaining({ kind: 'missing-api-key' }),
         }),
       );
     } finally {
-      emit.mockRestore();
       defaultSession().runs.untrack(runId);
     }
   });
@@ -1141,7 +1162,6 @@ describe('finalizeRunTerminal', () => {
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
     const { runId, runStatus, handle, untrack } = finalizeFixture();
-    const traceEmit = vi.spyOn(noopTrace, 'emit');
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
     const parked = parkNextFinalize();
@@ -1156,8 +1176,7 @@ describe('finalizeRunTerminal', () => {
         runs: { untrack },
         runStatus,
         outcome: RUN_OUTCOME.COMPLETED,
-        trace: noopTrace,
-        persistence: { kind: 'finalize', flowRecord: 'delete' },
+        flowRecord: 'delete',
       } as const;
 
       const first = Effect.runPromise(finalizeRunTerminal(params));
@@ -1171,26 +1190,20 @@ describe('finalizeRunTerminal', () => {
 
       expect(event).toMatchObject({
         event: {
-          type: 'result',
+          type: 'run.end',
           outcome: RUN_OUTCOME.COMPLETED,
           runId,
         },
       });
+      // `run.end` is not a trace arm: the storage finalizer is its one
+      // writer, so writing it once is what "exactly once" means here.
       expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
-      // The stream-status transition also emits on the trace; the terminal
-      // `result` event itself must be published exactly once.
-      expect(
-        traceEmit.mock.calls.filter(
-          ([emitted]) => (emitted as { type: string }).type === 'result',
-        ),
-      ).toHaveLength(1);
       expect(untrack).toHaveBeenCalledTimes(1);
       await expect(Effect.runPromise(handle.result)).resolves.toBe(
         event?.event,
       );
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
     } finally {
-      traceEmit.mockRestore();
       clearRunStatusForTest(runStatus, runId);
     }
   });
@@ -1220,8 +1233,7 @@ describe('finalizeRunTerminal', () => {
           runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
-          trace: noopTrace,
-          persistence: { kind: 'skip' },
+          flowRecord: 'preserve',
           flushArtifacts,
         }),
       );
@@ -1264,14 +1276,13 @@ describe('finalizeRunTerminal', () => {
           runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.FAILED,
-          trace: noopTrace,
-          persistence: { kind: 'finalize', flowRecord: 'preserve' },
+          flowRecord: 'preserve',
         }),
       );
 
       expect(event).toMatchObject({
         event: {
-          type: 'result',
+          type: 'run.end',
           outcome: RUN_OUTCOME.FAILED,
           runId,
         },
@@ -1319,13 +1330,12 @@ describe('finalizeRunTerminal', () => {
           outcome: RUN_OUTCOME.FAILED,
           error: { kind: 'unexpected', message: 'exited with code 143' },
           stage,
-          trace: noopTrace,
-          persistence: { kind: 'finalize', flowRecord: 'delete' },
+          flowRecord: 'delete',
         }),
       );
 
       expect(finalized?.event).toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.CANCELLED,
         runId,
       });
@@ -1369,13 +1379,12 @@ describe('finalizeRunTerminal', () => {
           runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.CANCELLED,
-          trace: noopTrace,
-          persistence: { kind: 'skip' },
+          flowRecord: 'preserve',
         }),
       );
 
       expect(finalized?.event).toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: RUN_OUTCOME.FAILED,
         runId,
       });

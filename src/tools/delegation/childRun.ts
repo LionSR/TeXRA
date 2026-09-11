@@ -6,16 +6,13 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   finalizeRunTerminal,
-  type RunTerminalPersistence,
+  type FlowRecordRetention,
 } from '@agent/runtime/AgentRunLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import {
-  aggregateId as qualifyAggregateId,
-  RUN_OUTCOME,
-  RUN_PHASE,
-} from '@shared/schemas';
+import { RUN_OUTCOME, RUN_PHASE } from '@shared/schemas';
 import type {
   RunId,
   RunIdentity,
@@ -49,8 +46,9 @@ interface FinalizeChildRunOptions {
   error?: unknown;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /** Durable run-state action. */
-  persistence?: RunTerminalPersistence;
+  /** The flow-record policy applied beside the `run.end` row; a child with
+   *  no flow record preserves nothing and passes none. */
+  flowRecord?: FlowRecordRetention;
   /** Release completed transcript residency while preserving command history. */
   autoClose?: boolean;
 }
@@ -74,11 +72,8 @@ export interface ChildRun {
 }
 
 /**
- * Normalize a child task's raw label to the ≤80-char display description.
- * Single owner of that cap for both the durable authority write
- * (`registerRun`'s `description` → `RunMeta.description`, #9590
- * A4) and the display-only `updateRunDescription` event below, so the
- * persisted and live values can never drift.
+ * Normalize a child task's raw label to the ≤80-char description
+ * `registerRun` writes as the run's one `run.description` row (#9590 A4).
  */
 export function childRunDescription(raw: string): string {
   return truncateWithEllipsis(raw, 80);
@@ -133,16 +128,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
         runId,
         config: options.config,
       });
-      // Display-only fan-out: the durable copy is `RunMeta.description`,
-      // written by `registerRun` before this run exists (#9590 Stage 6).
-      const description = childRunDescription(options.description);
-      session.publish([
-        {
-          type: 'updateRunDescription',
-          aggregateId: qualifyAggregateId('run', runId),
-          description,
-        },
-      ]);
 
       return {
         childRunId: runId,
@@ -175,25 +160,33 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     // Roll back every fallible setup step in reverse-ish order; a cleanup
     // failure must neither mask the original error nor skip later steps. A
     // run that already published its `run.start` exists for every fold,
-    // so it ends with its terminal `result` instead of lingering as a
-    // started-but-never-run ghost; the child's result stays out of the host
-    // result plane (a child result), as every child-run result does.
+    // so it ends with its `run.end` row instead of lingering as a
+    // started-but-never-run ghost.
     const failures: unknown[] = [error];
     const cleanups: Effect.Effect<unknown, Error>[] = [
-      Effect.sync(() => {
-        if (!started) return;
-        runTrace.trace.emit({
-          type: 'result',
-          outcome: RUN_OUTCOME.FAILED,
-          runId,
-          agentName: options.config.agent,
-          category: options.config.agentCategory,
-          error: {
-            kind: classifyAgentError(error),
-            message: `Child run setup failed: ${toErrorMessage(error)}`,
-          },
-        });
-      }),
+      Effect.suspend(() =>
+        started
+          ? finalizeRun(session, {
+              runId,
+              outcome: RUN_OUTCOME.FAILED,
+              error: {
+                kind: classifyAgentError(error),
+                message: `Child run setup failed: ${toErrorMessage(error)}`,
+              },
+              flowRecord: 'preserve',
+            }).pipe(
+              Effect.flatMap((finalization) =>
+                finalization.ok
+                  ? Effect.void
+                  : Effect.fail(
+                      new Error('Failed to persist the child run failure', {
+                        cause: finalization.error,
+                      }),
+                    ),
+              ),
+            )
+          : Effect.void,
+      ),
       Effect.tryPromise({
         try: () => session.settlePublications(),
         catch: ensureError,
@@ -231,6 +224,11 @@ interface FinalizeChildRunArgs {
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
  * run phase) and the autoClose residency release. Child runs never traverse
  * the run lifecycle, so this is their only settle point.
+ *
+ * No `output` is passed, by rule rather than by omission: a child loop's
+ * product is the per-turn delivery routed to its parent (and the result
+ * manifest a strategy persists beside it), not a flow output. Its `run.end`
+ * row therefore carries the category's empty output.
  */
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
@@ -286,9 +284,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     error,
     stage: options.stage,
     flushArtifacts: () => session.flushArtifacts(),
-    // No trace emit: child-run results must stay out of `session.onResult`
-    // (host toast) consumers; the loop already presents them as follow-ups.
-    persistence: options.persistence ?? { kind: 'skip' },
+    flowRecord: options.flowRecord ?? 'preserve',
   });
   disposeTrace();
 

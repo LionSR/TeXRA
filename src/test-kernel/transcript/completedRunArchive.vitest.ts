@@ -252,11 +252,6 @@ describe('completedRunArchive facade', () => {
           description: content,
         },
         {
-          type: 'updateRunDescription',
-          aggregateId: aggregateId('run', runId),
-          description: content,
-        },
-        {
           type: 'run.config',
           aggregateId: aggregateId('run', runId),
           config,
@@ -270,9 +265,12 @@ describe('completedRunArchive facade', () => {
     );
     expect(await Effect.runPromise(records.readConfig())).toEqual(config);
     expect(await Effect.runPromise(records.readReport())).toBe(content);
-    expect((await Effect.runPromise(records.readMeta()))?.description).toBe(
-      content,
-    );
+    // The run's one `run.description` row is redacted on the way into the
+    // event table, so every reader of it — the meta fold included — sees the
+    // redacted text; the private sidecars above stay exact.
+    const meta = await Effect.runPromise(records.readMeta());
+    expect(meta?.description).not.toContain(secret);
+    expect(meta?.description).toContain('[redacted]');
     const runAgentRequest = vi.fn(async () => undefined);
     const actions = createHostRunActions({
       session: taskSession,

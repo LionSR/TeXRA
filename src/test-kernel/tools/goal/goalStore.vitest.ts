@@ -275,7 +275,7 @@ describe('goalStateChanges', () => {
       ]);
       sessionA.publish([
         {
-          type: 'updateRunDescription',
+          type: 'run.description',
           aggregateId: qualifyAggregateId('run', SAME_SESSION_RUN),
           description: 'not a goal change',
         },

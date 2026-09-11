@@ -11,7 +11,6 @@ import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
   SCRATCHPAD_TAG,
-  type RunId,
 } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -76,7 +75,6 @@ export class XmlOutputManager {
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
     private readonly fileService: TaskRunFileService,
-    private readonly runId: RunId,
   ) {}
 
   private extractMultipleDocumentsByRegex(
@@ -122,7 +120,6 @@ export class XmlOutputManager {
     );
 
     reportMissingOutputs(this.logger, {
-      runId: this.runId,
       round,
       missing,
       xmlFile: outputLocation.absolutePath,
@@ -144,7 +141,6 @@ export class XmlOutputManager {
     if (missing.length === 0) return;
 
     reportMissingOutputs(this.logger, {
-      runId: this.runId,
       round,
       missing,
       xmlFile: outputLocation.absolutePath,
@@ -210,7 +206,6 @@ export class XmlOutputManager {
       .filter((name) => !matchedNames.has(name));
     if (unmatchedFiles.length > 0) {
       reportMissingOutputs(this.logger, {
-        runId: this.runId,
         round,
         missing: unmatchedFiles,
         xmlFile: outputLocation.absolutePath,

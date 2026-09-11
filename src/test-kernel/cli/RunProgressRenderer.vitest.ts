@@ -28,6 +28,7 @@ import {
   type RoundStage,
   type RunPhase,
   AgentCategory,
+  emptyRunEndOutput,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
@@ -968,14 +969,16 @@ describe('CLI run progress renderer', () => {
       const detach = host.attachRunProgressRenderer(session);
       await publishRun(session, { runId: 'b2b2b2' });
       await session.settlePublications();
-      // Status travels only as a session fact (run-scope status is no longer
-      // representable), so exactly one line renders for the transition.
-      session.publishStatus({
-        type: 'status',
-        runId: 'b2b2b2' as RunId,
-        phase: RUN_PHASE.COMPLETED,
-        cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
-      });
+      // The terminal phase is the `run.end` row's fact and nothing else, so
+      // exactly one line renders for the transition.
+      session.publish([
+        {
+          type: 'run.end',
+          aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
+          outcome: 'completed',
+          output: emptyRunEndOutput(AgentCategory.Workflow),
+        },
+      ]);
       await session.settlePublications();
 
       detach();

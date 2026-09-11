@@ -77,13 +77,10 @@ describe('codex progress events', () => {
     const trace = new TraceEmitter();
     const recorded = recordTraceEvents(trace);
 
-    publishCodexTodos(runId, todos, trace);
+    publishCodexTodos(todos, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
-      {
-        runId,
-        todos,
-      },
+      { todos },
     ]);
   });
 

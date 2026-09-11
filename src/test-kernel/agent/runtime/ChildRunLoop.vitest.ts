@@ -875,6 +875,9 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.finalizeRun).toHaveBeenCalledWith(session, {
       runId,
       outcome: RUN_OUTCOME.CANCELLED,
+      error: undefined,
+      usage: undefined,
+      output: { category: 'toolUse', response: '', files: [] },
       flowRecord: 'preserve',
     });
   });
@@ -1183,12 +1186,14 @@ describe('childRunLoop E2E fixtures', () => {
       index,
       key,
       result: {
-        category: 'workflow',
         outcome: 'completed',
-        outputs: [],
-        compileFailures: [],
-        diffs: [],
-        cost,
+        usage: { totalCost: cost },
+        output: {
+          category: 'workflow',
+          outputs: [],
+          compileFailures: [],
+          diffs: [],
+        },
       },
     });
     const historical = entry(0, 'historical', 0.8);

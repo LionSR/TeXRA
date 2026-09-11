@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  emptyRunEndOutput,
   MESSAGE_TYPES,
   isTranscriptEvent,
   STREAM_LOG_ENTRY_TYPES,
@@ -255,6 +256,7 @@ describe('sessionFold', () => {
               e.aggregateId === qualifyAggregateId('run', ROOT) &&
               (e.type === 'transcript.entry' ||
                 e.type === 'status' ||
+                e.type === 'run.end' ||
                 isTranscriptEvent(e)),
           )
           .map((e) => e.seq),
@@ -336,33 +338,23 @@ describe('sessionFold', () => {
       interrupted: 0,
     });
 
-    // The durable outcome: for a run this process owns, the lifecycle's
-    // `result` settles it, never the terminal phase alone (a user stop
-    // publishes CANCELLED while the flow still writes its closing rows).
-    const stopped = fold(
+    // The durable outcome: for a run this process owns, the `run.end` row
+    // settles it. A user stop publishes no terminal status row of its own, so
+    // until `run.end` folds the run is still in flight.
+    expect(runView(pending, CHILD).status).toBe(RUN_PHASE.RUNNING);
+    expect(runView(pending, CHILD).durableOutcome).toBeNull();
+    const ended = fold(
       pending,
       tail(
-        scenario.log.emit(CHILD, 1850, {
-          type: 'status',
-          phase: RUN_PHASE.CANCELLED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'user',
-        }),
-      ),
-    );
-    expect(runView(stopped, CHILD).status).toBe(RUN_PHASE.CANCELLED);
-    expect(runView(stopped, CHILD).durableOutcome).toBeNull();
-    const ended = fold(
-      stopped,
-      tail(
         scenario.log.emit(CHILD, 1851, {
-          type: 'result',
-          agentName: 'custom:search',
+          type: 'run.end',
           outcome: 'cancelled',
-          category: AgentCategory.ToolUse,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         }),
       ),
     );
+    expect(runView(ended, CHILD).status).toBe(RUN_PHASE.CANCELLED);
+    expect(runView(ended, CHILD).runStartedAt).toBeNull();
     expect(runView(ended, CHILD).durableOutcome).toBe('cancelled');
     // For a run this process does not own, the terminal phase is the story.
     expect(runView(foldAll(scenario.events), CHILD).durableOutcome).toBe(
@@ -544,15 +536,14 @@ describe('sessionFold', () => {
       'Hello world',
     );
     expect(rows[1].kind === 'assistant' && rows[1].text.full).toBe('Late');
-    // A terminal status ends every live row: a later chunk reaches none.
+    // The run's end closes every live row: a later chunk reaches none.
     const done = fold(
       settled,
       tail(
         log.emit(CHILD, 1502, {
-          type: 'status',
-          phase: RUN_PHASE.COMPLETED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
+          type: 'run.end',
+          outcome: 'completed',
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         }),
       ),
     );
@@ -688,7 +679,7 @@ describe('sessionFold', () => {
       tail({
         ...stamp,
         aggregateId: qualifyAggregateId('run', ghost),
-        type: 'updateRunDescription',
+        type: 'run.description',
         description: 'boo',
       }),
       tail({

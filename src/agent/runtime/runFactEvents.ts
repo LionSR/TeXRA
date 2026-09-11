@@ -1,38 +1,30 @@
 import type { AgentEvent, AgentTrace } from '@agent/trace';
-import type {
-  AddOutputFilesPayload,
-  GoalPausedPayload,
-  RunId,
-  UpdateCompileFailuresPayload,
-  UpdateMissingOutputsPayload,
-  UpdatePlanPayload,
-  UpdateTodosPayload,
-} from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
- * Durable run facts ride the run trace as explicit `AgentEvent` arms.
- * Host/public-output compatibility adapters may still project these facts
- * outward, but producers no longer encode them through the `domain` escape
- * hatch.
+ * Durable run facts ride the run trace as explicit `AgentEvent` arms:
+ * producers no longer encode them through the `domain` escape hatch. The
+ * fact is about the trace's own run, which the aggregate names, so the
+ * payload carries no run id.
  */
-type RunFactPayloads = {
-  updateTodos: UpdateTodosPayload;
-  updatePlan: UpdatePlanPayload;
-  addOutputFiles: AddOutputFilesPayload;
-  updateMissingOutputs: UpdateMissingOutputsPayload;
-  updateCompileFailures: UpdateCompileFailuresPayload;
-  goalPaused: GoalPausedPayload;
-};
+type RunFact = Extract<
+  AgentEvent,
+  {
+    type:
+      | 'updateTodos'
+      | 'updatePlan'
+      | 'addOutputFiles'
+      | 'updateMissingOutputs'
+      | 'updateCompileFailures';
+  }
+>;
 
-type RunFactEventName = keyof RunFactPayloads;
-
-export function emitRunFact<K extends RunFactEventName>(
+export function emitRunFact<K extends RunFact['type']>(
   trace: AgentTrace,
   event: K,
-  payload: RunFactPayloads[K],
+  payload: Omit<Extract<RunFact, { type: K }>, 'type' | 'stageId'>,
 ): void {
-  trace.emit({ type: event, ...payload } as Extract<AgentEvent, { type: K }>);
+  trace.emit({ type: event, ...payload } as Extract<RunFact, { type: K }>);
 }
 
 /**
@@ -49,20 +41,18 @@ export function emitRunFact<K extends RunFactEventName>(
 export function reportMissingOutputs(
   trace: AgentTrace,
   info: {
-    runId: RunId;
     round: number;
     missing: string[];
     xmlFile: string | null;
   },
 ): void {
-  const { runId, round, missing, xmlFile } = info;
+  const { round, missing, xmlFile } = info;
   trace.domain({
     key: 'missingOutputs',
     text: `${formatResultCount(missing.length, 'output file')} missing`,
     data: { missing, xmlFile },
   });
   emitRunFact(trace, 'updateMissingOutputs', {
-    runId,
     filesByRound: { [round]: missing },
   });
 }

@@ -15,7 +15,12 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import * as logger from '@logger/logUtils';
-import { aggregateId, type RunId, type RunMeta } from '@shared/schemas';
+import {
+  aggregateId,
+  emptyRunEndOutput,
+  type RunId,
+  type RunMeta,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -79,10 +84,10 @@ async function writeMetadata(
     await Effect.runPromise(
       session.commit([
         {
-          type: 'status',
+          type: 'run.end',
           aggregateId: aggregateId('run', id),
-          phase: meta.outcome,
-          cause: 'test outcome',
+          outcome: meta.outcome,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         },
       ]),
     );
@@ -112,7 +117,7 @@ describe('run listing normalization', () => {
     session = createProcessSession();
   });
 
-  it('sees executions written by another host after an earlier listing', async () => {
+  it('sees runs written by another host after an earlier listing', async () => {
     expect(await Effect.runPromise(listRuns(session))).toEqual([]);
 
     const id = 'eee555' as RunId;

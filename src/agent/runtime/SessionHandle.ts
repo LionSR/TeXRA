@@ -278,7 +278,6 @@ export class SessionHandle {
       runStatus: status,
       publish: (events) => this.publish(events),
       approvals,
-      publishResult: (event, runId) => this.publishRunEvent(runId, event),
       finalizeRun: (input) => finalizeRun(this, input),
       releaseRootRunLease: (runId) => this.releaseRunLease(runId),
     });
@@ -459,9 +458,10 @@ export class SessionHandle {
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
 
   /**
-   * Subscribe to terminal `result` events for runs in this session. Hosts hold
-   * the session, so this is how they receive a run's outcome — per-run traces
-   * are created inside the run and are not reachable from the host otherwise.
+   * Subscribe to the `run.end` rows of this session's runs, as they commit.
+   * Hosts hold the session, so this is how they receive a run's outcome —
+   * per-run traces are created inside the run and are not reachable from the
+   * host otherwise.
    */
   onResult(listener: (event: ResultEvent) => void): () => void {
     this.resultListeners.add(listener);
@@ -483,14 +483,9 @@ export class SessionHandle {
 
   /**
    * Publish one run-scoped trace event as its durable arm (`runEventDraft`);
-   * a trace event with no arm goes nowhere. Shared by `attachRunTrace` (the
-   * live per-run trace subscription above) and by `RunRegistry`'s
-   * injected `publishResult` constructor callback, which needs the identical
-   * forwarding for a terminal event synthesized *after* the originating run's
-   * own trace has already been disposed — killing a native subagent suspended
-   * at WAITING (`terminateWaitingHandle`) settles `handle.result` and the
-   * run's own (already-torn-down) trace, but has no other way to reach this
-   * session's `onResult` subscribers.
+   * a trace event with no arm goes nowhere. Used by `attachRunTrace` (the
+   * live per-run trace subscription above) and by the few places that
+   * publish a trace fact for a run whose own trace is already gone.
    */
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
@@ -655,7 +650,7 @@ export class SessionHandle {
 
           const target = aggregateTarget(event.aggregateId);
           if (target.kind !== 'run') return;
-          if (event.type === 'result') {
+          if (event.type === 'run.end') {
             for (const listener of [...this.resultListeners]) {
               try {
                 listener({ ...event, runId: target.id });
@@ -665,7 +660,7 @@ export class SessionHandle {
             }
           }
 
-          if (event.type !== 'status') return;
+          if (event.type !== 'status' && event.type !== 'run.end') return;
           this.runs.handleStatus(target.id);
         }),
       ),

@@ -181,20 +181,25 @@ function runOutputSummary(absolutePath: string, originalPath: string) {
 function workflowRun(
   runId: string,
   overrides: Partial<
-    Pick<WorkflowRunPayload, 'outcome' | 'outputs' | 'compileFailures'>
+    Pick<WorkflowRunPayload, 'outcome'> &
+      Pick<WorkflowRunPayload['output'], 'outputs' | 'compileFailures'>
   > = {},
 ): WorkflowExecuteResult {
+  const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
   return {
     ok: true,
     runId,
     outcomePersisted: true,
     result: {
-      category: AgentCategory.Workflow,
+      outcome,
+      output: {
+        category: AgentCategory.Workflow,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        ...output,
+      },
       runId: runId as RunId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      outputs: [],
-      compileFailures: [],
-      ...overrides,
     },
   };
 }
@@ -255,25 +260,25 @@ function mockCancellationDuringOutputFinalization(
   );
 }
 
-/** The result envelope the command persists for history details. */
+/**
+ * The result envelope the command persists for history details. How the run
+ * ended is the `run.end` row's fact, so the record carries only its output.
+ */
 function expectedResultMeta(options: {
-  readonly outcome: string;
   readonly outputs: readonly unknown[];
   readonly compileFailures: readonly unknown[];
   readonly copiedOutput?: string;
   readonly copiedOutputs?: readonly string[];
 }): Record<string, unknown> {
-  const { outcome, outputs, compileFailures, ...copies } = options;
+  const { outputs, compileFailures, ...copies } = options;
   return {
     producer: 'cliWorkflow',
     ...copies,
-    result: {
+    output: {
       category: 'workflow',
-      outcome,
       outputs,
       compileFailures,
       diffs: [],
-      cost: 0,
     },
   };
 }
@@ -459,7 +464,6 @@ describe('CLI workflow run command', () => {
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
           copiedOutput: path.join(root, 'polished.tex'),
-          outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [compileFailure],
         }),
@@ -476,10 +480,8 @@ describe('CLI workflow run command', () => {
       // order `resolveWorkflowOutput` builds it, with the run id moved to the
       // frozen 0.40 wire key by `cliRunResultPayload`.
       expect(Object.keys(emission?.json ?? {})).toEqual([
-        'category',
         'outcome',
-        'outputs',
-        'compileFailures',
+        'output',
         'workingDirectory',
         'runDirectory',
         'copiedOutput',
@@ -524,7 +526,6 @@ describe('CLI workflow run command', () => {
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
           copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
-          outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [],
         }),
@@ -606,7 +607,7 @@ describe('CLI workflow run command', () => {
           ).toBe(0);
           expect(yield* records.readResultMeta()).toMatchObject({
             producer: 'cliWorkflow',
-            result: { outcome: RUN_OUTCOME.COMPLETED },
+            output: { category: 'workflow' },
           });
           const afterRelease = yield* Effect.result(
             records.writeResultMeta(
@@ -660,7 +661,6 @@ describe('CLI workflow run command', () => {
     expect(exitCode).toBe(CliExitCode.AgentError);
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expectedResultMeta({
-        outcome: RUN_OUTCOME.FAILED,
         outputs: [outputSummary],
         compileFailures: [],
       }),
@@ -688,7 +688,6 @@ describe('CLI workflow run command', () => {
       await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
-          outcome: RUN_OUTCOME.CANCELLED,
           outputs: [],
           compileFailures: [],
         }),
@@ -721,7 +720,6 @@ describe('CLI workflow run command', () => {
       await expect(fs.stat(path.join(root, 'polished.tex'))).rejects.toThrow();
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
-          outcome: RUN_OUTCOME.CANCELLED,
           outputs: [outputSummary],
           compileFailures: [],
         }),
@@ -763,7 +761,6 @@ describe('CLI workflow run command', () => {
       ).rejects.toThrow();
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
-          outcome: RUN_OUTCOME.CANCELLED,
           outputs: [outputSummary],
           compileFailures: [],
         }),
@@ -824,7 +821,7 @@ describe('CLI workflow run command', () => {
         const emission = mocks.emitCliResult.mock.calls[0]?.[1];
         expect(emission?.json).toMatchObject({
           outcome: RUN_OUTCOME.FAILED,
-          outputs: [outputSummary],
+          output: { outputs: [outputSummary] },
           runDirectory: '/tmp/runs/exec-failed-output',
         });
         expect(emission?.json).not.toHaveProperty('copiedOutput');
@@ -862,7 +859,6 @@ describe('CLI workflow run command', () => {
     expect(exitCode).toBe(CliExitCode.Interrupted);
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expectedResultMeta({
-        outcome: RUN_OUTCOME.COMPLETED,
         outputs: [],
         compileFailures: [],
       }),
@@ -938,7 +934,6 @@ describe('CLI workflow run command', () => {
         }
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
           expectedResultMeta({
-            outcome: RUN_OUTCOME.COMPLETED,
             outputs: [outputSummary],
             compileFailures: [],
           }),

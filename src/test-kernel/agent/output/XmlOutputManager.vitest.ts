@@ -72,7 +72,6 @@ function createXmlManager(
     } as unknown as AgentConfig,
     logger,
     new TaskRunFileService(RUN_ID),
-    RUN_ID,
   );
 }
 

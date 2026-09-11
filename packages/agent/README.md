@@ -81,12 +81,12 @@ surface names below (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict`
 for a second, different platform); a run that fails after entering its session
 rejects with exactly what the launch path threw.
 
-`view` is the folded session state every TeXRA host renders, so stream
+`view` is the folded session state every TeXRA host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
 re-folded from the trace. Each `for await` over it yields the current view
 first, then subsequent changes through the first view containing the run's
 durable outcome. That final view is included even when iteration starts after
-`result` settles, and the first view yielded always holds the run's stream.
+`result` settles, and the first view yielded always holds the run's row.
 `result` settles only once the final view has folded, independently of whether
 the caller reads it; if the session's fold dies first, `result` and every
 `view` iteration fail with its defect instead of waiting. A run that fails on
@@ -101,12 +101,12 @@ copy-on-touch structural sharing, so an older view stays exactly what it was
 for as long as it is held, and a branch the later level did not touch is the
 same object in both. An older view is stable to read; it is not a fold input,
 so nothing in the package folds onto anything but the latest level. The exported
-`SessionView`, `StreamView`, and
+`SessionView`, `RunView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
-process reads. The run's transcript rows (`StreamView.transcript`) are
-subscribed on its behalf, its stream and its descendants as they appear, and
-stay resident for the life of the process.
+process reads. A run is a row of `SessionView.runs`. The run's transcript rows
+(`RunView.transcript`) are subscribed on its behalf, the run itself and its
+descendants as they appear, and stay resident for the life of the process.
 
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
@@ -131,13 +131,13 @@ scope owns the composition it made.
 
 ## Run results
 
-There is exactly one result shape: `AgentFlowResult`, a union discriminated on
-`category` (`'workflow'` | `'toolUse'`). Both members carry the same run
-identity and accounting — `executionId`, `streamId`, an optional coarse
-`totalCostUsd` covering the run and its subagents, and, on a failed run, a
-structured `error`. A `workflow` result adds `outputs` and `compileFailures`; a
-`toolUse` result adds `response`, `files`, and the `structured` value of a
-`submit_output` tool. Switch on `category` before reading either half.
+There is exactly one result shape: `AgentFlowResult`, the run's `run.end`
+payload plus the `runId` it belongs to. It carries an `outcome`, an optional
+`usage`, an `output`, and, on a failed run, a structured `error`. The output is
+a union discriminated on `output.category` (`'workflow'` | `'toolUse'`): a
+`workflow` output carries `outputs` and `compileFailures`, a `toolUse` output
+carries `response` and `files`, and either carries the `structured` value of a
+`submit_output` tool. Switch on `output.category` before reading either half.
 
 `run.result` is terminal-only. Internally a tool-use flow also has a
 non-terminal `WAITING` state — the run is parked mid-session waiting on the
@@ -147,10 +147,11 @@ parked run has no outcome to report, and this surface has no interactive
 channel to un-park it (see [Current limits](#current-limits)). Watch the trace
 stream if you need to observe a run reaching that state.
 
-Two things a host sees are absent here on purpose. The normalized `cost`
-breakdown and the per-file `diffs` summary live on an internal result type used
-for persistence and host presentation; the embedding contract exposes only the
-coarse `totalCostUsd` and leaves diffing to the embedder, which already owns the
+Accounting is `usage`, present once a round recorded any: one totals record
+covering the run and its subagents, whose `usage.totalCost` is the run's cost
+and the only cost this surface states. The per-file `diffs` on a `workflow`
+output are written by the delivery that computes them after the run ended, so
+the embedding contract leaves diffing to the embedder, which already owns the
 files.
 
 ## Entry points
@@ -191,10 +192,10 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open();
   yield* Effect.forkScoped(Stream.runForEach(session.view.changes, render));
   const run = yield* session.start({ agent: 'polish', instruction });
-  yield* session.subscribe([{ id: run.streamId, fromSeq: 0 }]);
+  yield* session.subscribe([{ id: run.runId, fromSeq: 0 }]);
   yield* session.request({
     kind: 'followUp.send',
-    streamId: run.streamId,
+    runId: run.runId,
     text: 'Keep the theorem statements unchanged.',
   });
   return yield* run.result;
@@ -206,7 +207,7 @@ const program = Effect.gen(function* () {
 | `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
 | `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                   |
 | `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                          |
-| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                  |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                       |
 
 `session.view.changes` publishes the fold's levels as values: each is
 immutable, an older level stays exactly what it was for as long as it is held,
@@ -273,7 +274,7 @@ than failing quietly:
   root never displace each other's host.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
   denial with a reason instead.
-- **No resume.** `nodePlatform` reports no resumable streams; resuming a
+- **No resume.** `nodePlatform` reports no resumable runs; resuming a
   persisted tool-use session is host-side functionality today.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a
   host that needs host-provided models must supply its own.

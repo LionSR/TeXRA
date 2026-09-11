@@ -101,10 +101,13 @@ describe('CLI agents run command', () => {
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
       result: {
-        category: AgentCategory.ToolUse,
         runId: 'run-1',
         outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Correct.',
+        output: {
+          category: AgentCategory.ToolUse,
+          response: 'Correct.',
+          files: [],
+        },
         workingDirectory: '/tmp/project',
       },
       exitCode: 0,
@@ -157,18 +160,20 @@ describe('CLI agents run command', () => {
     expect(config?.instruction).toContain('Assess the proof concisely.');
     const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json).toEqual({
-      category: AgentCategory.ToolUse,
       executionId: 'run-1',
       outcome: RUN_OUTCOME.COMPLETED,
-      response: 'Correct.',
+      output: {
+        category: AgentCategory.ToolUse,
+        response: 'Correct.',
+        files: [],
+      },
       workingDirectory: '/tmp/project',
     });
-    // `outcome` is the only terminal fact the headless JSON publishes, and the
-    // run id keeps its frozen 0.40 wire key.
+    // `outcome` is the only terminal fact the headless JSON publishes, what the
+    // run produced rides `output`, and the run id keeps its frozen 0.40 wire key.
     expect(Object.keys(emission?.json ?? {})).toEqual([
-      'category',
       'outcome',
-      'response',
+      'output',
       'workingDirectory',
       'executionId',
     ]);
@@ -215,9 +220,9 @@ describe('CLI agents run command', () => {
     mocks.executeCliToolUseConfig.mockResolvedValueOnce({
       ok: true,
       result: {
-        category: AgentCategory.ToolUse,
         runId: 'run-interrupted',
         outcome: RUN_OUTCOME.CANCELLED,
+        output: { category: AgentCategory.ToolUse, response: '', files: [] },
         workingDirectory: '/tmp/project',
       },
       exitCode: CliExitCode.Interrupted,

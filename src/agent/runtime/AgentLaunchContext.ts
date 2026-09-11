@@ -11,6 +11,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getRunStore } from '@agent/storage';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   createToolPolicy,
@@ -589,14 +590,16 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
         Effect.gen(function* () {
           const err = Cause.squash(cause);
           const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
-          launchSession.publishRunEvent(runId, {
-            type: 'result',
-            outcome: RUN_OUTCOME.FAILED,
+          const finalization = yield* finalizeRun(launchSession, {
             runId,
-            agentName: config.agent,
-            category: config.agentCategory,
+            outcome: RUN_OUTCOME.FAILED,
             error: { kind: classifyAgentError(err), message },
+            flowRecord: 'preserve',
           });
+          if (!finalization.ok)
+            logger.warn('Failed to persist the launch failure', {
+              data: finalization.error,
+            });
           runStatus.transitionToTerminal(
             runId,
             RUN_PHASE.FAILED,

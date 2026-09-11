@@ -2,9 +2,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { AgentEntry } from '@agent/index';
-import type { AgentConfigPayload } from '@agent/runtime';
+import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import type { OutputFileSummary } from '@shared/schemas';
+import type {
+  OutputFileSummary,
+  WorkflowRunEndOutputSchema,
+} from '@shared/schemas';
 import {
   AgentCategory,
   finalWorkflowOutput,
@@ -25,9 +28,10 @@ import {
 } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
-import { type CliRunResult, type ExecuteAgentResult } from './terminalStatus';
+import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { Stats } from 'node:fs';
+import type { z } from 'zod';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {
@@ -139,14 +143,9 @@ export async function assertOutputFileAvailable(
   }
 }
 
-export type CliWorkflowRunResult = Extract<
-  CliRunResult,
-  { category: 'workflow' }
->;
-type WorkflowAgentResult = Extract<
-  ExecuteAgentResult,
-  { category: 'workflow' }
->;
+export type CliWorkflowRunResult = CliRunResult & {
+  readonly output: z.infer<typeof WorkflowRunEndOutputSchema>;
+};
 
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
@@ -244,7 +243,7 @@ export function expectedOutputFilesForOutputDir(
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: WorkflowAgentResult,
+  result: WorkflowFlowResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
@@ -259,7 +258,7 @@ export async function resolveWorkflowOutput(
     return baseResult;
   }
   const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
-  if (result.outputs.length === 0 && (outputFile || outputDir)) {
+  if (result.output.outputs.length === 0 && (outputFile || outputDir)) {
     if (outputDir) {
       throw new Error(
         `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`,
@@ -276,7 +275,7 @@ export async function resolveWorkflowOutput(
       (file) => getSafeDocumentRelativePath(file),
     );
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
-    for (const output of result.outputs) {
+    for (const output of result.output.outputs) {
       const relativePath = outputCopyRelativePathForExpectedOutput(
         output,
         expectedRelativePaths,
@@ -307,7 +306,7 @@ export async function resolveWorkflowOutput(
     return { ...baseResult, copiedOutputs };
   }
 
-  const finalOutput = finalWorkflowOutput(result.outputs);
+  const finalOutput = finalWorkflowOutput(result.output.outputs);
   if (!outputFile || !finalOutput) {
     return baseResult;
   }
@@ -324,7 +323,8 @@ export async function resolveWorkflowOutput(
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {
     const diagnosticPath =
-      result.runDirectory ?? finalWorkflowOutput(result.outputs)?.absolutePath;
+      result.runDirectory ??
+      finalWorkflowOutput(result.output.outputs)?.absolutePath;
     return diagnosticPath
       ? `FAILED\nRun artifacts: ${diagnosticPath}`
       : 'FAILED';
@@ -344,7 +344,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     return result.copiedOutput;
   }
 
-  const finalOutput = finalWorkflowOutput(result.outputs);
+  const finalOutput = finalWorkflowOutput(result.output.outputs);
   return (
     finalOutput?.absolutePath ??
     result.runDirectory ??

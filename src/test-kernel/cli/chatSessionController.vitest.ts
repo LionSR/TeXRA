@@ -512,10 +512,10 @@ describe('CLI terminal outcome resolution', () => {
     await expect(
       Effect.runPromise(
         readCliRunOutcomeState(mocks.defaultSession(), {
-          category: 'toolUse',
-          runId: '5d0001',
           outcome: RUN_OUTCOME.COMPLETED,
-        } as Parameters<typeof readCliRunOutcomeState>[1]),
+          output: { category: 'toolUse', response: '', files: [] },
+          runId: '5d0001' as RunId,
+        }),
       ),
     ).resolves.toEqual({
       outcome: RUN_OUTCOME.CANCELLED,
@@ -534,10 +534,10 @@ describe('CLI terminal outcome resolution', () => {
         readCliRunOutcomeState(
           mocks.defaultSession(),
           {
-            category: 'toolUse',
-            runId: 'b0f001',
             outcome: RUN_OUTCOME.COMPLETED,
-          } as Parameters<typeof readCliRunOutcomeState>[1],
+            output: { category: 'toolUse', response: '', files: [] },
+            runId: 'b0f001' as RunId,
+          },
           reportReadFailure,
         ),
       ),

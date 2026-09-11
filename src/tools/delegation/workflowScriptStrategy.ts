@@ -29,14 +29,13 @@ import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
-import { AgentFinalResultSchema } from '@shared/schemas';
 import type {
   RunId,
   WorkflowRunSnapshot,
   WorkflowScriptDeliverySummary,
   WorkflowScriptFiles,
 } from '@shared/schemas';
-import { deriveWorkflowCounts } from '@shared/schemas';
+import { deriveWorkflowCounts, RunEndSchema } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -196,7 +195,7 @@ export function createWorkflowScriptStrategy(
     taskDone = counts.completed + counts.cached;
     taskTotal = counts.total;
     for (const entry of run.journal) {
-      const parsed = AgentFinalResultSchema.safeParse(entry.result);
+      const parsed = RunEndSchema.safeParse(entry.result);
       if (!parsed.success) {
         // Presentation tolerates what accounting does not: the cost path
         // (`workflowJournalEntryCost`) throws on this same corruption because
@@ -204,13 +203,13 @@ export function createWorkflowScriptStrategy(
         // omits one entry's files is merely incomplete. Loud either way — a
         // silently short file list is how corruption goes unreported.
         summaryLog.warn(
-          `Workflow '${params.name}' journal entry ${entry.index} is not an agent final result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+          `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
           { data: parsed.error },
         );
         continue;
       }
-      if (parsed.data.category === 'workflow') {
-        for (const output of parsed.data.outputs) {
+      if (parsed.data.output.category === 'workflow') {
+        for (const output of parsed.data.output.outputs) {
           summaryFiles.set(output.relativePath, {
             path: output.relativePath,
             added: output.added,
@@ -218,7 +217,7 @@ export function createWorkflowScriptStrategy(
           });
         }
       } else {
-        for (const path of parsed.data.files) {
+        for (const path of parsed.data.output.files) {
           summaryFiles.set(path, { path, added: null, removed: null });
         }
       }

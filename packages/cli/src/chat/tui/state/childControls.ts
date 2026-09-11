@@ -56,7 +56,7 @@ export function isWorkflowScriptRun(view: SessionView, runId: RunId): boolean {
  * A workflow-script run is presented through its popup over its parent;
  * every other stream becomes the active conversation.
  */
-export function presentRun(runId: RunId): 'stream' | 'workflowPopup' {
+export function presentRun(runId: RunId): 'run' | 'workflowPopup' {
   const view = currentView();
   if (isWorkflowScriptRun(view, runId)) {
     const parentId = runViewOf(view, runId)?.parentId;
@@ -65,5 +65,5 @@ export function presentRun(runId: RunId): 'stream' | 'workflowPopup' {
     return 'workflowPopup';
   }
   focusRun(runId);
-  return 'stream';
+  return 'run';
 }

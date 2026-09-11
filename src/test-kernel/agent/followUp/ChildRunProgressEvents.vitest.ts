@@ -158,28 +158,28 @@ describe('child run progress events', () => {
       }),
     );
     expect(
-      eventsOfType(await recorded.read(), 'updateRunDescription'),
+      eventsOfType(await recorded.read(), 'run.description'),
     ).toContainEqual(
       expect.objectContaining({
         aggregateId: qualifyAggregateId('run', runId),
         description: 'Run a background bash command',
       }),
     );
-    expect(eventsOfType(await recorded.read(), 'status')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          aggregateId: qualifyAggregateId('run', runId),
-          phase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
-        }),
-        expect.objectContaining({
-          aggregateId: qualifyAggregateId('run', runId),
-          phase: RUN_PHASE.COMPLETED,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'lifecycle',
-        }),
-      ]),
-    );
+    // `status` carries the non-terminal phases only; the terminal one is
+    // `run.end`'s.
+    expect(eventsOfType(await recorded.read(), 'status')).toEqual([
+      expect.objectContaining({
+        aggregateId: qualifyAggregateId('run', runId),
+        phase: RUN_PHASE.RUNNING,
+        cause: 'lifecycle',
+      }),
+    ]);
+    expect(eventsOfType(await recorded.read(), 'run.end')).toEqual([
+      expect.objectContaining({
+        aggregateId: qualifyAggregateId('run', runId),
+        outcome: RUN_OUTCOME.COMPLETED,
+      }),
+    ]);
     expect(rosters.rosters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -299,8 +299,8 @@ describe('child run progress events', () => {
         ),
       ).not.toContain(qualifyAggregateId('run', setupRetryRunId));
       // Setup failed after the existence fact, so the started run ended
-      // with its terminal result instead of lingering as a ghost.
-      expect(eventsOfType(await recorded.read(), 'result')).toContainEqual(
+      // with its terminal row instead of lingering as a ghost.
+      expect(eventsOfType(await recorded.read(), 'run.end')).toContainEqual(
         expect.objectContaining({
           aggregateId: qualifyAggregateId('run', setupRetryRunId),
           outcome: RUN_OUTCOME.FAILED,
@@ -549,7 +549,7 @@ describe('child run progress events', () => {
           const failedHandle = handle;
           const result = yield* failedHandle.result;
           expect(result).toMatchObject({
-            type: 'result',
+            type: 'run.end',
             outcome: 'failed',
             runId: childRunId,
           });
@@ -583,14 +583,14 @@ describe('child run progress events', () => {
           (event) => event.aggregateId === qualifyAggregateId('run', loopRunId),
         )
         .map((event) => event.phase),
-    ).toEqual([RUN_PHASE.WAITING, RUN_PHASE.RUNNING, RUN_PHASE.FAILED]);
+    ).toEqual([RUN_PHASE.WAITING, RUN_PHASE.RUNNING]);
     expect(defaultSession().status.get(loopRunId)).toBe(RUN_PHASE.FAILED);
     expect(rosters.rosters.at(-1)).toMatchObject({
       parentRunId,
       items: [],
     });
     await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'result',
+      type: 'run.end',
       outcome: 'failed',
       error: {
         kind: 'unexpected',
@@ -629,7 +629,7 @@ describe('child run progress events', () => {
       ),
     ).toHaveLength(0);
     await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'result',
+      type: 'run.end',
       outcome: 'cancelled',
       runId: stoppedRunId,
     });
@@ -652,7 +652,7 @@ describe('child run progress events', () => {
 
     expect(defaultSession().status.get(failedRunId)).toBe(RUN_PHASE.FAILED);
     await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'result',
+      type: 'run.end',
       outcome: 'failed',
       runId: failedRunId,
       error: {

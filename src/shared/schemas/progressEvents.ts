@@ -6,7 +6,7 @@ import type { FileLocation } from './output';
 import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
 
 /**
- * Shared output-file, usage, goal-pause, and host-presentation payloads.
+ * Shared output-file, usage, and host-presentation payloads.
  * Session state is defined by SessionEvent; payload shapes retained only for
  * public CLI NDJSON output belong to the CLI's compatibility table.
  */
@@ -28,14 +28,6 @@ export interface UpdateCompileFailuresPayload {
   filesByRound: z.infer<
     typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
   >;
-}
-
-/**
- * An autonomous goal auto-paused after a failed cycle ended the autonomous
- * leg. Hosts surface this so a paused goal is distinguishable from a hang.
- */
-export interface GoalPausedPayload {
-  runId: RunId;
 }
 
 /**

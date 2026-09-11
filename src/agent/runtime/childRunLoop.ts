@@ -12,7 +12,7 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import { finalizeRun, getRunStore, type ResultMeta } from '@agent/storage';
+import { finalizeRun, getRunStore } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { ChildTurnRef, ChildTurnState } from '@agent/storage/RunKVStore';
@@ -24,7 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import {
   finalizeRunTerminal,
-  type RunTerminalPersistence,
+  type FlowRecordRetention,
 } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
@@ -44,6 +44,7 @@ import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
+  type ResultMeta,
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,
@@ -68,7 +69,7 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  *
  * - **Observe.** A strategy reports spend only through `recordCost`, and only
  *   as a *cumulative total for the physical run so far*, never a delta. Native
- *   subagents pass each turn's run-cumulative `totalCostUsd`
+ *   subagents pass each turn's run-cumulative `usage.totalCost`
  *   (`nativeSubagentStrategy.runNative`). The workflow-script strategy's
  *   attempt model is per-grandchild deltas, so it converts them into an
  *   invocation-cumulative total first (`createWorkflowAttemptCostTracker`) —
@@ -97,7 +98,7 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
-  recordCost(totalCostUsd: number | undefined): void;
+  recordCost(totalCost: number | undefined): void;
 }
 
 /**
@@ -132,8 +133,8 @@ interface ChildRunPort {
     error?: unknown;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
-    /** Durable run-state action. */
-    persistence?: RunTerminalPersistence;
+    /** The flow-record policy applied beside the `run.end` row. */
+    flowRecord?: FlowRecordRetention;
     /** Drop the child's tab once finalized (ephemeral process children). */
     autoClose?: boolean;
   }): Effect.Effect<void, Error>;
@@ -307,9 +308,7 @@ export interface ChildRunLoopParams<TTurn> {
    * agent-CLI callers (no cost concept today); native delegation passes its
    * captured `recordSubagentCost` closure.
    */
-  readonly recordCost?: (
-    totalCostUsd: number | undefined,
-  ) => void | Promise<void>;
+  readonly recordCost?: (totalCost: number | undefined) => void | Promise<void>;
   /**
    * Gate every turn through the session's shared child-run budget
    * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
@@ -920,9 +919,9 @@ export function startChildRunLoop<TTurn>(
           runSession,
         );
       },
-      recordCost: (totalCostUsd) => {
-        if (totalCostUsd !== undefined) {
-          bestCostUsd = Math.max(bestCostUsd ?? 0, totalCostUsd);
+      recordCost: (totalCost) => {
+        if (totalCost !== undefined) {
+          bestCostUsd = Math.max(bestCostUsd ?? 0, totalCost);
         }
       },
     };
@@ -1140,10 +1139,7 @@ export function startChildRunLoop<TTurn>(
               outcome,
               error: lastTurnErr,
               stage: sessionStage,
-              persistence: {
-                kind: 'finalize',
-                flowRecord: retainFlowRecordUnlessCompleted,
-              },
+              flowRecord: retainFlowRecordUnlessCompleted,
               ...(strategy.autoCloseChildRun === true && {
                 autoClose: true,
               }),
@@ -1166,10 +1162,7 @@ export function startChildRunLoop<TTurn>(
                       }
                     : undefined,
                 flushArtifacts: () => runSession.flushArtifacts(),
-                persistence: {
-                  kind: 'finalize',
-                  flowRecord: retainFlowRecordUnlessCompleted,
-                },
+                flowRecord: retainFlowRecordUnlessCompleted,
               });
             }
           }

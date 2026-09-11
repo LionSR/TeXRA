@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
+import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -12,11 +12,10 @@ import {
 
 function result(over: Partial<ResultEvent>): ResultEvent {
   return {
-    type: 'result',
+    type: 'run.end',
     outcome: 'failed',
     runId: 'a00101' as RunId,
-    agentName: 'assistant',
-    category: 'toolUse',
+    output: { category: 'toolUse', response: '', files: [] },
     ...over,
   };
 }
@@ -43,7 +42,8 @@ async function toastsFor(
   try {
     if (parent !== null) publishTestRunStart(session, parent);
     publishTestRunStart(session, event.runId, { parent });
-    session.publishRunEvent(event.runId, event);
+    const { runId, ...row } = event;
+    session.publish([{ ...row, aggregateId: aggregateId('run', runId) }]);
     await committed;
   } finally {
     detachToast();

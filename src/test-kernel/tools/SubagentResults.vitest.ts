@@ -2,8 +2,12 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentFinalResult } from '@shared/schemas';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunEnd,
+  type RunEndOutput,
+  type RunId,
+} from '@shared/schemas';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -18,31 +22,31 @@ import {
 } from '@tools/delegation/subagentResults';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+type ToolUseOutput = Extract<RunEndOutput, { category: 'toolUse' }>;
+type WorkflowOutput = Extract<RunEndOutput, { category: 'workflow' }>;
+
 function toolUseResult(
-  outcome: AgentFinalResult['outcome'] = RUN_OUTCOME.COMPLETED,
-  overrides: Partial<Extract<AgentFinalResult, { category: 'toolUse' }>> = {},
-): Extract<AgentFinalResult, { category: 'toolUse' }> {
+  outcome: RunEnd['outcome'] = RUN_OUTCOME.COMPLETED,
+  output: Partial<Omit<ToolUseOutput, 'category'>> = {},
+): RunEnd {
   return {
-    category: 'toolUse',
     outcome,
-    response: '',
-    files: [],
-    cost: 0,
-    ...overrides,
+    output: { category: 'toolUse', response: '', files: [], ...output },
   };
 }
 
 function workflowResult(
-  overrides: Partial<Extract<AgentFinalResult, { category: 'workflow' }>> = {},
-): Extract<AgentFinalResult, { category: 'workflow' }> {
+  output: Partial<Omit<WorkflowOutput, 'category'>> = {},
+): RunEnd {
   return {
-    category: 'workflow',
     outcome: RUN_OUTCOME.COMPLETED,
-    outputs: [],
-    compileFailures: [],
-    diffs: [],
-    cost: 0,
-    ...overrides,
+    output: {
+      category: 'workflow',
+      outputs: [],
+      compileFailures: [],
+      diffs: [],
+      ...output,
+    },
   };
 }
 

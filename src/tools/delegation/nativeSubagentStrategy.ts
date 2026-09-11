@@ -26,7 +26,7 @@
  * launching, resuming (tool-use only), and formatting its result shape.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import {
@@ -47,9 +47,9 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   RUN_SUBSTATE,
@@ -60,11 +60,11 @@ import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { onAbort, unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
-  buildSubagentFailureResultMeta,
   buildSubagentResult,
+  buildSubagentResultMeta,
   formatSubagentDelivery,
   formatSubagentError,
-  type BuiltSubagentResult,
+  type SubagentResultMeta,
 } from './subagentResults';
 
 /**
@@ -90,8 +90,6 @@ export interface AgentEngine {
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) => Effect.Effect<AgentRuntimeFlowResult, Error>;
 }
-
-const log = createLog('nativeSubagentStrategy');
 
 let agentEngine: AgentEngine | undefined;
 
@@ -175,15 +173,7 @@ function toDeliveryResult(
   runId: RunId,
 ): AgentFlowResult {
   if (!isWaitingFlowResult(turn)) return turn;
-  return {
-    category: 'toolUse',
-    outcome: RUN_OUTCOME.COMPLETED,
-    response: turn.response,
-    files: turn.files,
-    runId,
-    memoryMisses: turn.memoryMisses,
-    totalCostUsd: turn.totalCostUsd,
-  };
+  return { ...turn, outcome: RUN_OUTCOME.COMPLETED, runId };
 }
 
 /** Bind every distinct caller/turn cancellation source to one live run handle. */
@@ -217,7 +207,7 @@ export function createNativeSubagentStrategy(
   // Result construction computes and persists diffs, so every consumer of a
   // turn shares one result. Formatting remains separate: if it throws, the
   // already-built result manifest is still available for persistence.
-  let cachedBuilt: BuiltSubagentResult | undefined;
+  let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
 
   const resolveDeliveryTarget = (): RunId | undefined =>
@@ -243,7 +233,7 @@ export function createNativeSubagentStrategy(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = toDeliveryResult(result, params.runId);
-          ports.recordCost(result.totalCostUsd);
+          ports.recordCost(result.usage?.totalCost);
         }),
       ),
       Effect.ensuring(Effect.sync(() => detachAbort())),
@@ -252,7 +242,7 @@ export function createNativeSubagentStrategy(
 
   const buildResult = async (
     turn: AgentRuntimeFlowResult,
-  ): Promise<BuiltSubagentResult> => {
+  ): Promise<SubagentResultMeta> => {
     if (!cachedBuilt) {
       const result = toDeliveryResult(turn, params.runId);
       cachedBuilt = await buildSubagentResult(
@@ -320,7 +310,7 @@ export function createNativeSubagentStrategy(
           // accounting keep what the run actually spent.
           if (params.runMode === 'single-cycle' && isWaitingFlowResult(turn)) {
             lastResult = toDeliveryResult(turn, params.runId);
-            ports.recordCost(turn.totalCostUsd);
+            ports.recordCost(turn.usage?.totalCost);
             return yield* Effect.fail(
               new Error(
                 `Single-cycle subagent ${params.runId} unexpectedly suspended.`,
@@ -410,12 +400,13 @@ export function createNativeSubagentStrategy(
       if (cachedDelivery === undefined) {
         const built = await buildResult(turn);
         if (params.resultOnly) return '';
+        const delivered = toDeliveryResult(turn, params.runId);
         cachedDelivery = formatSubagentDelivery(
           params.agentName,
-          built.result,
+          { outcome: delivered.outcome, output: built.output },
           {
             runId: params.runId,
-            memoryMisses: toDeliveryResult(turn, params.runId).memoryMisses,
+            memoryMisses: delivered.memoryMisses,
             wallTimeMs: built.wallTimeMs,
             workingDirectory: params.workingDirectory,
           },
@@ -440,50 +431,26 @@ export function createNativeSubagentStrategy(
       );
     },
 
-    buildResultMeta: (turn, isError, _wallTimeMs, error) =>
+    buildResultMeta: (turn, isError) =>
       Effect.gen(function* () {
         if (isError || turn === null) {
-          // Overwrite any interim success manifest from an earlier turn so
-          // /executions/{id}/result never claims success for a failed run.
+          // Overwrite any interim success manifest from an earlier turn: the
+          // failed run's own output, or its category's empty one when the
+          // turn produced none.
           const result = turn
             ? toDeliveryResult(turn, params.runId)
             : lastResult;
-          const wallTimeMs = Date.now() - params.startedAt;
-          const failureOptions = { cause: lastErr ?? error };
-          const built = yield* Effect.exit(
-            Effect.sync(() =>
-              buildSubagentFailureResultMeta(
-                params.agentName,
-                params.definition.config.agentCategory,
-                result,
-                wallTimeMs,
-                failureOptions,
-              ),
-            ),
-          );
-          if (Exit.isSuccess(built)) return built.value;
-          // Even an unconstructable failure result must leave a durable
-          // failure manifest (with the child's real error), never a stale
-          // interim record. The category-only form cannot throw.
-          log.warn('Failed to build the full subagent failure manifest', {
-            data: {
-              runId: params.runId,
-              error: Cause.squash(built.cause),
-            },
-          });
-          return buildSubagentFailureResultMeta(
+          return buildSubagentResultMeta(
             params.agentName,
-            params.definition.config.agentCategory,
-            undefined,
-            wallTimeMs,
-            failureOptions,
+            result?.output ??
+              emptyRunEndOutput(params.definition.config.agentCategory),
+            Date.now() - params.startedAt,
           );
         }
-        const built = yield* Effect.tryPromise({
+        return yield* Effect.tryPromise({
           try: () => runInSession(params.session, () => buildResult(turn)),
           catch: ensureError,
         });
-        return built.resultMeta;
       }),
   };
 }

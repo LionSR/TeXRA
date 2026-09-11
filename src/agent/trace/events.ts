@@ -4,34 +4,29 @@
  * This is the agent-general SDK contract. Adding a new event type yields
  * an exhaustive-switch error in every subscriber until handled.
  *
+ * The vocabulary is declared once, as Zod, in
+ * `src/shared/schemas/sessionEvent.ts` (the trace arms come from
+ * `traceEvent.ts` and are spliced in there). Every arm below is that
+ * declaration minus the aggregate qualification: the aggregate is the run,
+ * and `runEventDraft` adds it back at publication. The one arm the session
+ * plane does not carry is the transient `stream.chunk` (never a session row;
+ * text travels through the session graph). The terminal `run.end` row is
+ * not a trace arm: the storage finalizer writes it once, and the in-memory
+ * `ResultEvent` below is that row named by its run.
+ *
  * Host-specific events that don't belong in the core union (TeXRA's
  * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
  * escape hatch with a host-chosen `key`.
  */
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  ResultEvent,
-  RawAcceptedSkill,
-  AddOutputFilesPayload,
-  AgentCategory,
-  ConversationProgress,
-  ExtendedTokenUsageStats,
-  GoalPausedPayload,
-  RunId,
-  RunIdentity,
-  RunOutcome,
-  SessionEventDraft,
-  UserFollowUpSupport,
-  UpdateCompileFailuresPayload,
-  UpdateMissingOutputsPayload,
-  UpdatePlanPayload,
-  UpdateTodosPayload,
-  WorkflowCallProgress,
-  WorkflowPlanMarker,
-} from '@shared/schemas';
+import type { RunId, SessionEventDraft } from '@shared/schemas';
+
+/** One session arm as the trace carries it; distributive over `T`. */
+type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
+  ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+  : never;
 
 /** Status assigned to a tool call when it completes. */
-export type ToolStatus = 'completed' | 'failed' | 'in_progress';
+export type ToolStatus = TraceArm<'tool.end'>['status'];
 
 /**
  * StreamKind identifies what a streaming message represents. Subscribers
@@ -41,201 +36,42 @@ export type ToolStatus = 'completed' | 'failed' | 'in_progress';
 export type StreamKind = string;
 
 /** Context-state snapshot emitted around context-management checkpoints. */
-export interface ContextStateData {
-  readonly inputTokens: number;
-  readonly contextWindow: number;
-}
-
-/**
- * Stage stamp attached to every event by the emit boundary. Subscribers
- * read this to nest events under the active stage in the transcript;
- * agent-general SDK consumers may ignore it.
- */
-interface StageStamp {
-  readonly stageId?: string;
-}
-
-/** Plain log line — sugar for debug/info/warn/error converges here. */
-interface LogEvent extends StageStamp {
-  readonly type: 'log';
-  readonly level: 'debug' | 'info' | 'warn' | 'error';
-  readonly message: string;
-  readonly data?: unknown;
-  /** Host-specific category (e.g. TeXRA's MessageType taxonomy). */
-  readonly messageType?: string;
-  /**
-   * If false, the renderer should treat this as a verbose/debug-only line.
-   * Defaults to true for non-debug levels.
-   */
-  readonly verbose?: boolean;
-}
-
-/** Stage opened (parent of subsequent events until matching stage.end). */
-interface StageStartEvent extends StageStamp {
-  readonly type: 'stage.start';
-  readonly id: string;
-  readonly label: string;
-  readonly parentId?: string;
-  readonly kind?: 'run' | 'round' | 'phase' | 'session';
-  readonly index?: number;
-  readonly total?: number;
-}
-
-/** Mutable persisted run config changed after run.start, e.g. model switch. */
-interface RunConfigEvent extends StageStamp {
-  readonly type: 'run.config';
-  readonly runId: RunId;
-  readonly config: AgentConfig;
-}
-
-/** Stage closed with a terminal status. */
-interface StageEndEvent extends StageStamp {
-  readonly type: 'stage.end';
-  readonly id: string;
-  readonly status: RunOutcome;
-}
-
-/** Tool call started. `logId` is the subscriber-correlatable id. */
-interface ToolStartEvent extends StageStamp {
-  readonly type: 'tool.start';
-  readonly logId: string;
-  readonly toolName: string;
-  readonly input: unknown;
-}
-
-/**
- * Patch to an open tool call, correlated by `logId`. Usually a terminal
- * update (`status: 'completed' | 'failed'`) that closes the call, but a
- * streaming tool emits repeated `tool.end` events with
- * `status: 'in_progress'` to push incremental output to the same card
- * before it finishes. Subscribers should treat the event as an
- * upsert keyed on `logId` and rely on `status` for terminality rather than
- * assuming the call is done.
- */
-interface ToolEndEvent extends StageStamp {
-  readonly type: 'tool.end';
-  readonly logId: string;
-  readonly status: ToolStatus;
-  /** Subscriber-correlatable patch payload (output, summary, etc.). */
-  readonly result?: unknown;
-}
-
-/**
- * Correlatable workflow-script call state. The same `logId` is emitted as a
- * call moves from its declared plan through run to a terminal state.
- */
-interface WorkflowCallEvent extends StageStamp {
-  readonly type: 'workflow.call';
-  readonly logId: string;
-  readonly call: WorkflowCallProgress;
-}
-
-/** The attempt's declared phases and tasks, emitted once before any of them
- *  opens — see `WorkflowPlanMarker`. */
-interface WorkflowPlanEvent extends StageStamp {
-  readonly type: 'workflow.plan';
-  readonly attemptId: string;
-  readonly phases: WorkflowPlanMarker['phases'];
-  readonly tasks: WorkflowPlanMarker['tasks'];
-}
-
-/** Exact raw skill catalog accepted for this run's initial prompt. */
-interface ActiveSkillsEvent extends StageStamp {
-  readonly type: 'skills.snapshot';
-  readonly skills: readonly RawAcceptedSkill[];
-}
+export type ContextStateData = Pick<
+  TraceArm<'context.state'>,
+  'inputTokens' | 'contextWindow'
+>;
 
 /** One turn's token usage, keyed by the run it belongs to: the trace's own
  *  run, or a child whose spend a parent's usage map keys by that child's id. */
-export interface UsageReport {
-  readonly runId: RunId;
-  readonly usage: ExtendedTokenUsageStats;
-}
-
-/** Token-usage report. */
-interface UsageEvent extends StageStamp {
-  readonly type: 'usage';
-  readonly payload: UsageReport;
-  /** False when this usage report should not create a transcript stats row. */
-  readonly recordTranscript?: boolean;
-}
+export type UsageReport = Pick<TraceArm<'usage'>, 'runId' | 'usage'>;
 
 /**
  * Stream lifecycle phase change emitted by the session-owned status machine.
  * Not an {@link AgentEvent} arm: status travels only as a canonical session
- * fact on the session's event plane (`SessionHandle.publishStatus`). The type stays here because the trace
- * package owns the event vocabulary the fact reuses.
+ * fact on the session's event plane (`SessionHandle.publishStatus`). The type
+ * stays here because the trace package owns the event vocabulary the fact
+ * reuses.
  */
-export type StatusEvent = Omit<
-  Extract<SessionEventDraft, { type: 'status' }>,
-  'aggregateId'
-> & { readonly runId: RunId };
-
-/** UI progress counters for a run, projected by hosts but not transcript logs. */
-interface ConversationProgressEvent extends StageStamp {
-  readonly type: 'conversation.progress';
-  readonly progress: ConversationProgress;
-}
-
-/** Durable TeXRA run facts carried by the run trace with fact-native names. */
-type RunFactEvent =
-  | (StageStamp &
-      UpdateTodosPayload & {
-        readonly type: 'updateTodos';
-      })
-  | (StageStamp &
-      UpdatePlanPayload & {
-        readonly type: 'updatePlan';
-      })
-  | (StageStamp &
-      AddOutputFilesPayload & {
-        readonly type: 'addOutputFiles';
-      })
-  | (StageStamp &
-      UpdateMissingOutputsPayload & {
-        readonly type: 'updateMissingOutputs';
-      })
-  | (StageStamp &
-      UpdateCompileFailuresPayload & {
-        readonly type: 'updateCompileFailures';
-      })
-  | (StageStamp &
-      GoalPausedPayload & {
-        readonly type: 'goalPaused';
-      });
-
-/** Context window utilisation snapshot. */
-interface ContextStateEvent extends StageStamp {
-  readonly type: 'context.state';
-  readonly inputTokens: number;
-  readonly contextWindow: number;
-}
+export type StatusEvent = TraceArm<'status'> & { readonly runId: RunId };
 
 /**
- * Streaming message opened — subsequent stream.chunk events append text.
- * Marks the moment the phase the stream represents actually began (emitters
- * fire it at the provider's phase signal, or at the first content chunk via
- * `StreamOptions.deferStart`), so subscribers may surface liveness — "the
- * model is thinking / responding" — from this event alone.
+ * The terminal fact as the runtime hands it to in-process consumers
+ * (`RunHandle.result`, `SessionHandle.onResult`): the `run.end` row named by
+ * its run. Not an {@link AgentEvent} arm: the row is written once by the
+ * storage finalizer (`finalizeRun`), never emitted on a trace.
  */
-interface StreamStartEvent extends StageStamp {
-  readonly type: 'stream.start';
-  readonly id: string;
-  readonly kind: StreamKind;
-}
+export type ResultEvent = TraceArm<'run.end'> & { readonly runId: RunId };
 
-/** Chunk appended to an open stream. */
-interface StreamChunkEvent extends StageStamp {
+/**
+ * Chunk appended to an open stream. Transient: `runEventDraft` returns null
+ * for it and the session graph carries the text instead, so it has no
+ * session arm to derive from.
+ */
+interface StreamChunkEvent {
   readonly type: 'stream.chunk';
   readonly id: string;
   readonly text: string;
-}
-
-/** Stream closed; finalText, when provided, replaces the buffered content. */
-interface StreamEndEvent extends StageStamp {
-  readonly type: 'stream.end';
-  readonly id: string;
-  readonly finalText?: string;
+  readonly stageId?: string;
 }
 
 /**
@@ -254,47 +90,32 @@ interface StreamEndEvent extends StageStamp {
  * updating that stream's entry to this text instead of a caller having to
  * prove the two already match.
  */
-export interface ResponseFinalizedEvent extends StageStamp {
-  readonly type: 'response.finalized';
-  readonly text: string;
-}
-
-/**
- * Host-specific escape hatch. Hosts use this for events that aren't part
- * of the agent-general union (TeXRA: `latexdiff`, `scratchpad`,
- * `filesLoaded`, `webSearch`, `webFetch`, …). Durable run facts such as
- * `updateMissingOutputs` remain explicit `RunFactEvent` arms. Keeps the union
- * clean for SDK consumers; host subscribers switch on `key`.
- */
-interface DomainEvent extends StageStamp {
-  readonly type: 'domain';
-  readonly key: string;
-  readonly data?: unknown;
-  /** Optional human-readable label rendered in the transcript. */
-  readonly text?: string;
-}
-
-/** Canonical terminal-result shape, shared with the durable boundary. */
-export type { ResultEvent } from '@shared/schemas';
+export type ResponseFinalizedEvent = TraceArm<'response.finalized'>;
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
-  | LogEvent
-  | RunConfigEvent
-  | StageStartEvent
-  | StageEndEvent
-  | ToolStartEvent
-  | ToolEndEvent
-  | WorkflowPlanEvent
-  | WorkflowCallEvent
-  | ActiveSkillsEvent
-  | UsageEvent
-  | ConversationProgressEvent
-  | RunFactEvent
-  | ContextStateEvent
-  | StreamStartEvent
-  | StreamChunkEvent
-  | StreamEndEvent
-  | ResponseFinalizedEvent
-  | DomainEvent
-  | ResultEvent;
+  | TraceArm<
+      | 'log'
+      | 'stage.start'
+      | 'stage.end'
+      | 'tool.start'
+      | 'tool.end'
+      | 'workflow.plan'
+      | 'workflow.call'
+      | 'skills.snapshot'
+      | 'usage'
+      | 'conversation.progress'
+      | 'updateTodos'
+      | 'updatePlan'
+      | 'addOutputFiles'
+      | 'updateMissingOutputs'
+      | 'updateCompileFailures'
+      | 'context.state'
+      | 'stream.start'
+      | 'stream.end'
+      | 'response.finalized'
+      | 'domain'
+    >
+  /** Mutable persisted run config changed after run.start, e.g. model switch. */
+  | (TraceArm<'run.config'> & { readonly runId: RunId })
+  | StreamChunkEvent;

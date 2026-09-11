@@ -1,12 +1,7 @@
 import { Cause, Effect } from 'effect';
 
 import type { FinalizeRunInput } from '@agent/storage';
-import {
-  logSdkError,
-  type AgentTrace,
-  type ResultEvent,
-  type StageHandle,
-} from '@agent/trace';
+import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   finalizeRun,
@@ -24,9 +19,15 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { platform } from '@platform/platform';
-import type { RetryErrorInfo, RunId, RunOutcome } from '@shared/schemas';
+import type {
+  RetryErrorInfo,
+  RunEndOutput,
+  RunId,
+  RunOutcome,
+} from '@shared/schemas';
 import {
   agentName as baseAgentName,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   toRetryErrorInfo,
@@ -93,7 +94,7 @@ type FlowRecordDisposition = FinalizeRunInput['flowRecord'];
  * resumable, or a cancelled one stripped of the record every other cancel path
  * preserves.
  */
-type FlowRecordRetention =
+export type FlowRecordRetention =
   FlowRecordDisposition | ((outcome: RunOutcome) => FlowRecordDisposition);
 
 /** Private control channel through which a flow reports its retention policy. */
@@ -101,47 +102,41 @@ export interface FlowLifecycleControl {
   setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
 }
 
-export type RunTerminalPersistence =
-  | { readonly kind: 'skip' }
-  | {
-      readonly kind: 'finalize';
-      readonly flowRecord: FlowRecordRetention;
-    };
-
 interface FinalizeRunTerminalParams {
   readonly session: SessionHandle;
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: RunHandle;
   /** Registry tracking the handle; untracked after the delivery hook runs. */
   readonly runs: Pick<RunRegistry, 'untrack'>;
-  /** Status machine owning this run's stream phase; terminalized last. */
+  /** Status machine owning this run's in-memory phase; terminalized last. */
   readonly runStatus: RunStatusMachine;
   /**
-   * The exiting run's own report. The stream phase owns the terminal fact, so
-   * this stands only while that phase is still non-terminal — see
+   * The exiting run's own report. The `run.end` row is the run's terminal
+   * fact; the in-memory run phase only supplies stop precedence, so this
+   * report stands while that phase is still non-terminal — see
    * {@link finalizeRunTerminal}.
    */
   readonly outcome: RunOutcome;
   /**
-   * Classified error facts carried on the terminal `result` event, dropped
-   * when the stream phase resolves a different outcome than `outcome`.
+   * Classified error facts carried on the `run.end` row, dropped when stop
+   * precedence resolves a different outcome than `outcome`.
    */
   readonly error?: ResultEvent['error'];
-  /** Run usage totals riding the terminal `result` event, when known. */
+  /** Run usage totals riding the `run.end` row, when known. */
   readonly usage?: ResultEvent['usage'];
-  /** Transcript stage closed with the outcome's legacy group status (guarded). */
-  readonly stage?: Pick<StageHandle, 'end'>;
   /**
-   * Emit the terminal `result` event on this trace before settling. Lifecycle
-   * runs pass their run trace so session subscribers (`onResult`, host toasts)
-   * see the outcome; presentation-only child runs (agent-CLI, background
-   * bash) omit it so their per-turn results stay out of the host result plane.
+   * What the flow produced; absent when the run ended before it did. Also
+   * absent, by rule rather than omission, on the child-run path
+   * (`finalizeChildRun` in `src/tools/delegation/childRun.ts`): a child's
+   * product is its per-turn delivery to its parent, not a flow output.
    */
-  readonly trace?: AgentTrace;
-  /** Durable run-state action owned by the storage finalizer. */
-  readonly persistence: RunTerminalPersistence;
+  readonly output?: RunEndOutput;
+  /** Transcript stage closed with the resolved outcome (guarded). */
+  readonly stage?: Pick<StageHandle, 'end'>;
+  /** The flow-record policy the storage finalizer applies beside the row. */
+  readonly flowRecord: FlowRecordRetention;
   /**
-   * Drain display sidecars before publishing the terminal result. This keeps
+   * Drain display sidecars before the `run.end` row is written. This keeps
    * a waiter that immediately opens the completed-run archive from racing the
    * final transcript or work-plan write. Failures are logged here and retried
    * by the run-ownership release boundary.
@@ -151,8 +146,8 @@ interface FinalizeRunTerminalParams {
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
    * delivery routes. Receives the resolved outcome so the payload the parent
-   * gets reports the same terminal fact as the persisted history and the
-   * `result` event. Guarded: a throwing hook cannot abort finalization.
+   * gets reports the same terminal fact as the `run.end` row. Guarded: a
+   * throwing hook cannot abort finalization.
    */
   readonly deliver?: (outcome: RunOutcome) => void | Promise<void>;
 }
@@ -163,10 +158,11 @@ interface FinalizeRunTerminalResult {
 
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
- * arms below, the agent-CLI session loop, and child stream tabs
- * (`finalizeChildRun`): outcome projection to persisted history, transcript
- * stage end, the terminal `result` event (emit + settle), the delivery hook,
- * then registry untrack + terminal stream phase — in that order. Exactly-once
+ * arms below, the agent-CLI session loop, and child runs
+ * (`finalizeChildRun`): transcript stage end, the artifact drain, the
+ * `run.end` row (through `finalizeRun`, its one writer), the in-memory
+ * result settle, the delivery hook, then registry untrack + terminal run
+ * phase — in that order. Exactly-once
  * per handle: the claim below flips synchronously in the same tick as the
  * check, so a second call (e.g. the lifecycle catch arm after the success arm
  * already finalized, or a concurrent finalize racing across this function's
@@ -179,13 +175,14 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
   const { handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
-  // The stream phase is the single owner of a run's terminal outcome, so
+  // The `run.end` row written below is the run's terminal fact; the
+  // in-memory run phase supplies the stop precedence read here, so
   // `params.outcome` is the exiting run's report rather than the verdict. A
   // stop that already landed CANCELLED outranks a child whose process then
   // exits non-zero; a turn that already published FAILED outranks a stop that
   // arrived after it. Resolving once here is what lets every projection below
-  // (persisted history, stage end, result event, terminal phase) read one
-  // value, so no caller has to cross-check the phase for itself.
+  // (stage end, the `run.end` row, terminal phase) read one value, so no
+  // caller has to cross-check the phase for itself.
   const observedPhase = params.runStatus.get(handle.runId);
   const outcome = isTerminalOutcomePhase(observedPhase)
     ? observedPhase
@@ -193,25 +190,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
   const error = outcome === params.outcome ? params.error : undefined;
-  if (params.persistence.kind === 'finalize') {
-    const { flowRecord } = params.persistence;
-    const finalization = yield* finalizeRun(params.session, {
-      runId: handle.runId,
-      outcome,
-      flowRecord:
-        typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
-    });
-    if (!finalization.ok) {
-      logger.warn('Failed to finalize durable run state', {
-        data: {
-          agentIdentifier: handle.agentName,
-          runId: handle.runId,
-          outcomePersisted: finalization.outcomePersisted,
-          error: finalization.error,
-        },
-      });
-    }
-  }
+  const output = params.output ?? emptyRunEndOutput(handle.category);
   if (params.stage) {
     const stage = params.stage;
     yield* Effect.try({
@@ -241,21 +220,39 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       ),
     );
   }
-  // Emit the terminal result BEFORE untrack so the registry's terminal
-  // listener event never precedes the result event, and settle the handle's
-  // `result` promise with the same event (F-2: per-run control handle). The
-  // event carries the classified error `kind` (when any) and the run usage
-  // totals (present once a round recorded usage, including on failures).
+  // Write the terminal row BEFORE untrack so the registry's terminal listener
+  // event never precedes it, and settle the handle's `result` promise with
+  // the same fact (F-2: per-run control handle). The row carries the
+  // classified error `kind` (when any), the run usage totals (present once a
+  // round recorded usage, including on failures), and the flow's output.
   const event: ResultEvent = {
-    type: 'result',
+    type: 'run.end',
     outcome,
     runId: handle.runId,
-    agentName: handle.agentName,
-    category: handle.category,
     ...(error ? { error } : {}),
     ...(params.usage ? { usage: params.usage } : {}),
+    output,
   };
-  params.trace?.emit(event);
+  const { flowRecord } = params;
+  const finalization = yield* finalizeRun(params.session, {
+    runId: handle.runId,
+    outcome,
+    error,
+    usage: params.usage,
+    output,
+    flowRecord:
+      typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
+  });
+  if (!finalization.ok) {
+    logger.warn('Failed to finalize durable run state', {
+      data: {
+        agentIdentifier: handle.agentName,
+        runId: handle.runId,
+        outcomePersisted: finalization.outcomePersisted,
+        error: finalization.error,
+      },
+    });
+  }
   handle.settleResult(event);
   if (params.deliver) {
     const deliver = params.deliver;
@@ -273,15 +270,15 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     );
   }
   // The run has produced its canonical terminal result. Guard the cleanup so
-  // a throw from untrack's listeners or a stream-status host emit cannot
+  // a throw from untrack's listeners or a run-status host emit cannot
   // escape past an already-settled result.
   yield* Effect.try({
     try: () => {
       params.runs.untrack(handle.runId);
       // Refused only when the phase turned terminal after the resolution above,
       // i.e. a stop that landed across this function's own awaits. The phase
-      // keeps its own value; the divergence from the published result is real
-      // and must stay loud.
+      // keeps its own value; the divergence from the written row is real and
+      // must stay loud.
       if (
         !params.runStatus.transitionToTerminal(
           handle.runId,
@@ -375,8 +372,9 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
 /**
  * The run's own flow result, relabelled with the outcome finalization resolved.
  *
- * A flow reports the exit it saw; the stream phase decides the run's terminal
- * fact. Everything the parent receives — the delivered payload and the returned
+ * A flow reports the exit it saw; stop precedence decides the run's terminal
+ * fact — a CANCELLED already recorded by a kill outranks that report, and the
+ * `run.end` row carries the verdict. Everything the parent receives — the delivered payload and the returned
  * result — has to carry that same verdict, or an orchestrator formats a failure
  * for a run whose durable record says cancelled.
  */
@@ -389,14 +387,14 @@ function withResolvedOutcome(
 }
 
 /**
- * Claim the stream for a run a stop reached before it could start.
+ * Claim the phase slot for a run a stop reached before it could start.
  *
- * The stop's own USER_STOP transition is refused while the stream still carries
+ * The stop's own USER_STOP transition is refused while the slot still carries
  * a previous run's terminal phase (`canTransitionRunPhase` requires an
  * in-flight `from`), and this run skips the RUNNING claim so the stop it is
- * carrying survives. Without this write the stream would keep the earlier run's
- * COMPLETED/FAILED, and `finalizeRunTerminal` — which reads the phase as the
- * owner of the terminal outcome — would publish and persist that stale verdict
+ * carrying survives. Without this write the slot would keep the earlier run's
+ * COMPLETED/FAILED, and `finalizeRunTerminal` — which reads the phase for stop
+ * precedence — would publish and persist that stale verdict
  * for a run that never ran a turn. Resuming first mirrors the explicit
  * RUNNING choreography `transitionToTerminal` uses to leave WAITING.
  *
@@ -453,7 +451,7 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
 
 /**
  * Wraps a flow runner with full agent run lifecycle management: run
- * registry tracking, stream-status transitions, error classification, user
+ * registry tracking, run-status transitions, error classification, user
  * notifications, and resource disposal.
  *
  * Separating this from `executeAgent` keeps the orchestrator focused on flow
@@ -533,6 +531,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const finalizeTerminal = (arm: {
       outcome: RunOutcome;
       error?: ResultEvent['error'];
+      output?: RunEndOutput;
       deliver?: (outcome: RunOutcome) => void | Promise<void>;
     }) =>
       finalizeRunTerminal({
@@ -542,16 +541,12 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         runStatus: session.status,
         usage: ctx.usageMonitor.lastTotals(),
         stage: ctx.parentStage,
-        trace: ctx.logger,
         flushArtifacts: () => session.flushArtifacts(),
-        persistence: {
-          kind: 'finalize',
-          // Tool-use flows report the exact recovery decision through the
-          // private lifecycle control. Other flows retain the historical
-          // policy, read against the outcome finalization resolves rather
-          // than this arm's report.
-          flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
-        },
+        // Tool-use flows report the exact recovery decision through the
+        // private lifecycle control. Other flows retain the historical
+        // policy, read against the outcome finalization resolves rather
+        // than this arm's report.
+        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
         ...arm,
       });
     /**
@@ -569,7 +564,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       const outcome = AGENT_ERROR_OUTCOME[kind];
       // normalizeProviderError recovers the structured shape the flow attached
       // (T2-2) when there was one, or formats a fresh one otherwise.
-      // toRetryErrorInfo strips rawErrorBody, the ResultEvent.error type omits
+      // toRetryErrorInfo strips rawErrorBody, the `run.end` error type omits
       // it (bulky, not worth persisting) and a bare object spread would silently
       // smuggle it through past the type check.
       const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
@@ -590,7 +585,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // `abort`/`disk-full` route through `formatProviderHttpError`'s
       // `terminalError()` branch, which never populates the provider/
       // credential fields, narrow to the fields it actually sets so
-      // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
+      // the `run.end` error's per-kind union stays honest (see runRecords.ts).
       // Abort still carries the SDK message for event consumers; the toast
       // mapper intentionally suppresses user-facing notifications for aborts.
       const error: NonNullable<ResultEvent['error']> =
@@ -620,11 +615,12 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // No-ops entirely when the success arm already finalized, so a
       // post-completion throw cannot double-publish a contradictory result.
       // Terminal-error toasts are not emitted here: hosts present them from the
-      // `result` event via `session.onResult` + `terminalResultToast` (the
+      // `run.end` row via `session.onResult` + `terminalResultToast` (the
       // single decision point), keeping the run-lifecycle out of host UI.
       const finalized = yield* finalizeTerminal({
         outcome,
         error,
+        output: carried?.output,
         deliver:
           subagentResult && options?.onError
             ? (resolved) =>
@@ -679,16 +675,16 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its
       // reservation commit point. Publish the run config before the RUNNING
-      // transition so the fold already carries the stream's real category when
+      // transition so the fold already carries the run's real category when
       // the transition-owned run-start side effects fire.
       ctx.logger.emit({
         type: 'run.config',
         runId,
         config: ctx.config,
       });
-      // The lifecycle owns every stream-status transition: the start claim here,
+      // The lifecycle owns every run-status transition: the start claim here,
       // terminal states in the success/error arms below. Runners must not
-      // set stream status themselves. Either branch leaves the stream carrying
+      // set run status themselves. Either branch leaves the run carrying
       // this run's own phase, which is what makes the terminal phase a verdict
       // about this run rather than whatever the last one left behind.
       if (ctx.runScope.signal.aborted) {
@@ -757,9 +753,12 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // Persist the terminal fact before any supplementary UX state. In
       // particular, a completed tool-use flow must not remain resumable while an
       // onboarding write is pending.
-      const finalized = yield* finalizeTerminal({ outcome: result.outcome });
+      const finalized = yield* finalizeTerminal({
+        outcome: result.outcome,
+        output: result.output,
+      });
       // The phase decides the verdict here exactly as in the catch arm: a stop
-      // that won on the stream must not let the caller observe COMPLETED.
+      // that won on the phase must not let the caller observe COMPLETED.
       const resolvedOutcome = finalized?.event.outcome ?? result.outcome;
 
       // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any

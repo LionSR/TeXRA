@@ -146,12 +146,8 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // Run fact helpers
 // ============================================================================
 
-export function publishCodexTodos(
-  childRunId: RunId,
-  todos: TodoItem[],
-  logger: AgentTrace,
-): void {
-  emitRunFact(logger, 'updateTodos', { runId: childRunId, todos });
+export function publishCodexTodos(todos: TodoItem[], logger: AgentTrace): void {
+  emitRunFact(logger, 'updateTodos', { todos });
 }
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
@@ -233,7 +229,7 @@ function publishCodexItemProgress(params: {
   const { item, status, childRunId, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    publishCodexTodos(childRunId, toProgressTodos(item), logger);
+    publishCodexTodos(toProgressTodos(item), logger);
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);

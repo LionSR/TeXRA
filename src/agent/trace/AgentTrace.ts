@@ -156,7 +156,7 @@ export interface AgentTrace {
   error(message: string, options?: LogOptions): void;
 
   // ─── First-class agent-general union arms ───────────────────────────
-  usage(payload: UsageReport, options?: UsageEmitOptions): void;
+  usage(report: UsageReport, options?: UsageEmitOptions): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   toolStart(
     input: { logId: string; toolName: string; input: unknown },

@@ -16,7 +16,7 @@
 import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
-import { getRunStore, getRunRecords, type ResultMeta } from '@agent/storage';
+import { getRunStore, getRunRecords } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import {
   prepareAgentDefinition,
@@ -29,11 +29,12 @@ import {
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
+  type ResultMeta,
+  type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -103,7 +104,7 @@ type InBandSubagentDeliveryOptions = InBandSubagentRunBaseOptions;
 
 interface InBandSubagentRunResult {
   readonly runId: RunId;
-  readonly result: AgentFinalResult;
+  readonly result: RunEnd;
 }
 
 interface InBandSubagentDeliveryResult extends InBandSubagentRunResult {
@@ -149,12 +150,13 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
  * Failure taxonomy at the read-back boundary:
- * - completion rejected, or no result manifest exists afterwards → the
- *   infrastructure failed before the child's terminal persistence; durable
- *   callers mark the stable attempt retryable (SubagentDurabilityError).
- * - manifest present with a failed outcome → the child itself failed; the
- *   persisted terminal error message is the thrown message.
- * - manifest present with completed/cancelled outcome → returned typed.
+ * - completion rejected, or no `run.end` row / result manifest exists
+ *   afterwards → the infrastructure failed before the child's terminal
+ *   persistence; durable callers mark the stable attempt retryable
+ *   (SubagentDurabilityError).
+ * - terminal row says failed → the child itself failed; the persisted
+ *   terminal error message is the thrown message.
+ * - terminal row says completed/cancelled → returned typed.
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
@@ -202,15 +204,20 @@ const executeInBand = Effect.fn('executeInBand')(
           settledTurn = settled;
         },
         afterArtifactsDrained: Effect.gen(function* () {
-          const settledResultMeta = settledTurn?.resultMeta;
           if (
             !stableAttempt ||
             settledTurn?.isError === true ||
-            settledResultMeta?.producer !== 'subagent' ||
-            settledResultMeta.result.outcome !== RUN_OUTCOME.COMPLETED
+            settledTurn?.resultMeta?.producer !== 'subagent'
           ) {
             return;
           }
+          // How the child ended is the `run.end` row's fact, already written
+          // by the run's own lifecycle before this drain hook runs.
+          const runEnd = yield* getRunRecords(
+            options.session,
+            runId,
+          ).readRunEnd();
+          if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) return;
           yield* commitStableSubagentAttempt(
             store,
             runId,
@@ -281,11 +288,25 @@ const executeInBand = Effect.fn('executeInBand')(
         throw failure;
       }
 
-      const result = resultMeta.result;
+      // How the child ended is the `run.end` row's fact, written by the run's
+      // own lifecycle; the manifest carries only the output as this turn's
+      // delivery enriched it. A read failure is kept apart from an absent row
+      // so the thrown error can name the I/O cause.
+      const endExit = yield* Effect.exit(
+        getRunRecords(options.session, runId).readRunEnd(),
+      );
+      const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
+      const endFailure = Exit.isFailure(endExit)
+        ? Cause.squash(endExit.cause)
+        : undefined;
+      if (endFailure !== undefined)
+        log.warn('Failed to read the terminal run fact', {
+          data: { runId, error: endFailure },
+        });
       const childFailed =
-        settledTurn.isError || result.outcome === RUN_OUTCOME.FAILED;
-      // The raw application error when the turn threw; otherwise the typed
-      // result's own structured error (the result-only contract). Read the
+        settledTurn.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
+      // The raw application error when the turn threw; otherwise the terminal
+      // row's own structured error (the result-only contract). Read the
       // settled turn's fields into consts: `settledTurn` stays assignable inside
       // the onTurnSettled callback, so a closure cannot keep the narrowing.
       const turnError = settledTurn.error;
@@ -293,7 +314,7 @@ const executeInBand = Effect.fn('executeInBand')(
       const childError = () =>
         turnError ??
         new Error(
-          result.error?.message ??
+          runEnd?.error?.message ??
             `Subagent ${runId} ended with failed outcome.`,
         );
 
@@ -378,7 +399,30 @@ const executeInBand = Effect.fn('executeInBand')(
         throw childError();
       }
 
-      return { runId, result, delivery: turnMessage };
+      if (!runEnd) {
+        // The child did not fail, so the missing terminal row is an
+        // infrastructure gap: the run's lifecycle never committed it, or the
+        // read of it failed.
+        const failure = new SubagentDurabilityError(
+          `Subagent ${runId} ended without a terminal record.`,
+          endFailure !== undefined ? { cause: endFailure } : undefined,
+        );
+        if (mode === 'required-result') {
+          return yield* throwRetryableDurabilityError(
+            runId,
+            stableAttempt,
+            failure,
+            options.session,
+          );
+        }
+        throw failure;
+      }
+
+      return {
+        runId,
+        result: { ...runEnd, output: resultMeta.output },
+        delivery: turnMessage,
+      };
     });
 
     // Post-run cancellation deliberately observes a terminal record: stable

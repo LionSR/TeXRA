@@ -801,10 +801,13 @@ describe('CLI root argument routing', () => {
         undefined,
         {
           outcome: RUN_OUTCOME.FAILED,
-          category: AgentCategory.Workflow,
+          output: {
+            category: AgentCategory.Workflow,
+            outputs: [],
+            compileFailures: [],
+            diffs: [],
+          },
           runId: 'run-without-output' as RunId,
-          outputs: [],
-          compileFailures: [],
         },
         createRunCommandCliContext(),
         { runDirectory: '/tmp/runs/run-without-output' },
@@ -812,7 +815,7 @@ describe('CLI root argument routing', () => {
     ).resolves.toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
       runDirectory: '/tmp/runs/run-without-output',
-      outputs: [],
+      output: { outputs: [] },
     });
   });
 
@@ -906,10 +909,13 @@ describe('CLI root argument routing', () => {
         undefined,
         {
           outcome: RUN_OUTCOME.COMPLETED,
-          category: AgentCategory.Workflow,
+          output: {
+            category: AgentCategory.Workflow,
+            outputs: [],
+            compileFailures: [],
+            diffs: [],
+          },
           runId: 'completed-without-output' as RunId,
-          outputs: [],
-          compileFailures: [],
         },
         createRunCommandCliContext(),
         {},
@@ -925,10 +931,13 @@ describe('CLI root argument routing', () => {
       undefined,
       {
         outcome: RUN_OUTCOME.CANCELLED,
-        category: AgentCategory.Workflow,
+        output: {
+          category: AgentCategory.Workflow,
+          outputs: [],
+          compileFailures: [],
+          diffs: [],
+        },
         runId: 'stopped-without-output' as RunId,
-        outputs: [],
-        compileFailures: [],
       },
       createRunCommandCliContext(),
       {},

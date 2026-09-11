@@ -9,6 +9,8 @@ import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -20,45 +22,42 @@ import {
 import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
-const storageMocks = vi.hoisted(() => ({
-  finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
-vi.mock('@agent/storage', () => ({
-  finalizeRun: storageMocks.finalizeRun,
-}));
-
 let counter = 0;
 
-/** Fresh logger + result collector + launch context, wired together. */
-function setupResultCase(session?: ReturnType<typeof createTestSession>): {
+/**
+ * Fresh logger + launch context, with the run's existence fact published and
+ * a collector on the session's terminal rows: the `run.end` row the storage
+ * finalizer writes is the run's one terminal fact, and `onResult` is how the
+ * runtime hands it to in-process consumers.
+ */
+function setupResultCase(session?: SessionHandle): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
   runStatus: RunStatusMachine;
 } {
   const logger = new TraceEmitter();
-  const results: ResultEvent[] = [];
-  logger.subscribe((event) => {
-    if (event.type === 'result') results.push(event);
-  });
-
   const n = counter++;
-  const ctx = createTestLaunchContext({
-    runId: `e${n.toString(16).padStart(5, '0')}` as RunId,
-    logger,
-    session,
+  const runId = `e${n.toString(16).padStart(5, '0')}` as RunId;
+  const ctx = createTestLaunchContext({ runId, logger, session });
+  const runSession = ctx.runScope.session;
+  // A caller that owns the session publishes the existence fact itself, with
+  // the parent edge it is exercising.
+  if (!session) publishTestRunStart(runSession, runId);
+  const results: ResultEvent[] = [];
+  runSession.onResult((event) => {
+    if (event.runId === runId) results.push(event);
   });
-  return { logger, results, ctx, runStatus: ctx.runScope.session.status };
+  return { logger, results, ctx, runStatus: runSession.status };
 }
 
 /** The completed tool-use result a flow returns for the given run. */
-function completedRun(ctx: AgentLaunchContext) {
+function completedRun(ctx: AgentLaunchContext): AgentFlowResult {
   return {
-    category: 'toolUse',
     outcome: RUN_OUTCOME.COMPLETED,
     runId: ctx.runScope.runId,
-  } as const;
+    output: { category: 'toolUse', response: '', files: [] },
+  };
 }
 
 /** The flow throws a model failure. */
@@ -74,7 +73,7 @@ function expectSingleResult(
 ): void {
   expect(results).toHaveLength(1);
   expect(results[0]).toMatchObject({
-    type: 'result',
+    type: 'run.end',
     runId: ctx.runScope.runId,
     ...expected,
   });
@@ -93,7 +92,7 @@ describe('terminal result event', () => {
       );
       expectSingleResult(results, ctx, {
         outcome: 'completed',
-        category: 'toolUse',
+        output: { category: 'toolUse' },
       });
       expect(results[0].error).toBeUndefined();
       // One disposal owner for the run's model handler: the cell closes
@@ -190,7 +189,7 @@ describe('terminal result event', () => {
         ),
       ).rejects.toThrow('boom');
       await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-        type: 'result',
+        type: 'run.end',
         outcome: 'failed',
       });
     } finally {
@@ -203,9 +202,9 @@ describe('terminal result event', () => {
     try {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
           outcome: RUN_OUTCOME.CANCELLED,
           runId: ctx.runScope.runId,
+          output: { category: 'toolUse', response: '', files: [] },
         })),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
@@ -262,7 +261,7 @@ describe('terminal result event', () => {
       await session.settlePublications();
       expect(onResult).toHaveBeenCalledOnce();
       expect(onResult.mock.calls[0][0]).toMatchObject({
-        type: 'result',
+        type: 'run.end',
         runId: ctx.runScope.runId,
         outcome: 'completed',
       });

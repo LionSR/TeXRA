@@ -8,6 +8,7 @@ import {
   type ActiveChildInfo,
   type DisplaySessionEvent,
   type RunId,
+  type RunPhase,
 } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/runs/stage';
 import { assertNever } from '@utils/core';
@@ -52,8 +53,10 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
 /**
  * Project one session event onto the frozen NDJSON progress-event
- * vocabulary: one event to zero or one line, and one bit of state per run,
- * the parent edge its `run.start` carried (PRD 10.3).
+ * vocabulary: one event to zero or one line, over two bits of tail-local
+ * state per run: the parent edge its `run.start` carried (PRD 10.3) and the
+ * phase it was last projected in, which the terminal line reports as the
+ * 0.40 `previousStatus`.
  *
  * `run.activate` projects to the public `setActiveStream` record, one to one
  * and byte for byte: every activation (a launch, a resume) emits one line, a
@@ -71,6 +74,7 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 function projectCliSessionEvent(
   event: DisplaySessionEvent,
   isChild: (runId: RunId) => boolean,
+  previousPhaseOf: (runId: RunId) => RunPhase | undefined,
 ): CliProjectedNdjsonProgressEvent | undefined {
   const target = aggregateTarget(event.aggregateId);
   if (target.kind !== 'run') {
@@ -120,7 +124,6 @@ function projectCliSessionEvent(
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
-    case 'result':
     case 'context.state':
     case 'log':
     case 'stage.end':
@@ -135,6 +138,25 @@ function projectCliSessionEvent(
     case 'domain':
     case 'transcript.entry':
       return undefined;
+    case 'run.end': {
+      // The 0.40 wire's terminal status line, from the one terminal row. The
+      // phase the run left is the one this tail last projected, so a consumer
+      // keying on `previousStatus` still reads the machine's `from`. The
+      // transition cause is the one thing the terminal row cannot supply:
+      // `run.end` carries an outcome, not a cause, so the line says
+      // `lifecycle` where the retired terminal `status` row said `user-stop`.
+      // That loss is part of S5's version-2 envelope, not a gap to fill here.
+      const previousStatus = previousPhaseOf(runId);
+      return {
+        event: 'updateStreamStatus',
+        payload: {
+          streamId: runId,
+          status: event.outcome,
+          cause: 'lifecycle',
+          ...(previousStatus ? { previousStatus } : {}),
+        },
+      };
+    }
     case 'status':
       return {
         event: 'updateStreamStatus',
@@ -198,8 +220,6 @@ function projectCliSessionEvent(
         event: 'updateCompileFailures',
         payload: { streamId: runId, filesByRound: event.filesByRound },
       };
-    case 'goalPaused':
-      return { event: 'goalPaused', payload: { streamId: runId } };
     case 'stage.start': {
       // The frozen public wire carries round progress only; phase progress
       // stays internal.
@@ -222,7 +242,7 @@ function projectCliSessionEvent(
       return undefined;
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: { streamId: runId } };
-    case 'updateRunDescription':
+    case 'run.description':
       return {
         event: 'updateStreamDescription',
         payload: { streamId: runId, description: event.description },
@@ -271,6 +291,11 @@ export function attachCliSessionProgressProjection(
     children.has(runId) ||
     (SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.parentId ??
       null) !== null;
+  // The phase each run was last projected in. The terminal `run.end` line
+  // carries it as the 0.40 `previousStatus` the retired terminal `status`
+  // row used to supply; the fold is not read for it, because this tail and
+  // the fold advance independently and the fold may already hold the outcome.
+  const phases = new Map<RunId, RunPhase>();
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
     writeRecord({
       kind: 'progress',
@@ -316,22 +341,32 @@ export function attachCliSessionProgressProjection(
     Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
       Effect.sync(() => {
         if (stopAt !== undefined && event.commit > stopAt) return;
-        if (event.type === 'run.start' || event.type === 'run.detach') {
-          const target = aggregateTarget(event.aggregateId);
-          if (target.kind === 'run') {
-            // The edge as this tail last saw it: `run.start` with a parent
-            // opens it, `run.detach` closes it. Without the removal a
-            // detached run that activates again would still be projected as
-            // a child.
-            if (event.type === 'run.start' && event.parent !== null) {
-              children.add(target.id);
-            } else {
-              children.delete(target.id);
-            }
+        const target = aggregateTarget(event.aggregateId);
+        if (
+          target.kind === 'run' &&
+          (event.type === 'run.start' || event.type === 'run.detach')
+        ) {
+          // The edge as this tail last saw it: `run.start` with a parent
+          // opens it, `run.detach` closes it. Without the removal a
+          // detached run that activates again would still be projected as
+          // a child.
+          if (event.type === 'run.start' && event.parent !== null) {
+            children.add(target.id);
+          } else {
+            children.delete(target.id);
           }
         }
-        const projected = projectCliSessionEvent(event, isChild);
+        const projected = projectCliSessionEvent(event, isChild, (id) =>
+          phases.get(id),
+        );
         if (projected) emitProjected(projected);
+        // After projecting, so the terminal line reads the phase the run left.
+        if (target.kind === 'run') {
+          if (event.type === 'status') phases.set(target.id, event.phase);
+          else if (event.type === 'run.end' || event.type === 'run.removed') {
+            phases.delete(target.id);
+          }
+        }
         passed(event.commit);
       }),
     ),

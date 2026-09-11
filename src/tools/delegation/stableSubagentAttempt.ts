@@ -12,8 +12,12 @@ import {
 } from '@agent/storage/runLease';
 import type { RunKVStore } from '@agent/storage/RunKVStore';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult } from '@shared/schemas';
-import { RunIdSchema, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  RunIdSchema,
+  RUN_OUTCOME,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -115,7 +119,7 @@ interface StableSubagentCallIdentity {
 
 interface StableSubagentResult {
   readonly runId: RunId;
-  readonly result: AgentFinalResult;
+  readonly result: RunEnd;
 }
 
 const log = createLog('stableSubagentAttempt');
@@ -177,6 +181,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     stableStorageOperation(session, () => readStableSubagentAttempt(store)),
     getRunRecords(session, runId).readResultMeta(),
     getRunRecords(session, runId).readMeta(),
+    getRunRecords(session, runId).readRunEnd(),
   ]).pipe(
     Effect.mapError(
       (cause) =>
@@ -186,7 +191,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
         ),
     ),
   );
-  const [keys, attempt, resultMeta, meta] = persisted;
+  const [keys, attempt, resultMeta, meta, runEnd] = persisted;
   if (keys.length === 0 && meta === null && resultMeta === null)
     return { kind: 'absent' };
   if (
@@ -274,7 +279,9 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     );
   }
   if (attempt.phase === 'retryable') return { kind: 'advance' };
-  if (resultMeta.result.outcome !== 'completed') return { kind: 'advance' };
+  // How the attempt ended is the `run.end` row's fact; the manifest carries
+  // only its output.
+  if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) return { kind: 'advance' };
   if (attempt.phase !== 'committed') {
     // A completed manifest proves only that the child turn settled. Recovery
     // additionally requires the marker written after the child artifact drain
@@ -294,7 +301,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
   });
   return {
     kind: 'recovered',
-    result: { runId, result: resultMeta.result },
+    result: { runId, result: { ...runEnd, output: resultMeta.output } },
   };
 });
 

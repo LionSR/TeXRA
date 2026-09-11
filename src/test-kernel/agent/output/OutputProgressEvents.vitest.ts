@@ -209,7 +209,6 @@ describe('output progress events', () => {
       expect(transition).toBe('default');
       expect(traceEventsOfType(events, 'addOutputFiles')).toMatchObject([
         {
-          runId: 'stream:output-node',
           filesByRound: { 2: [fileInfo] },
         },
       ]);
@@ -464,7 +463,6 @@ describe('output progress events', () => {
 
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          runId: 'stream:processor',
           filesByRound: { [round]: [] },
         },
       ]);
@@ -508,7 +506,6 @@ describe('output progress events', () => {
       // The missing-output signal is still emitted alongside the warning.
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          runId: 'stream:processor',
           filesByRound: { 5: [] },
         },
       ]);

@@ -44,12 +44,16 @@ export * from './workflowRunSnapshot';
 export * from './workflowScriptDelivery';
 
 export {
-  AgentFinalResultSchema,
+  emptyRunEndOutput,
   NonAgentRunRecordSchema,
   ResultMetaSchema,
-  type AgentFinalResult,
+  RunEndSchema,
+  ToolUseRunEndOutputSchema,
+  WorkflowRunEndOutputSchema,
   type ResultDiffSummary,
   type ResultMeta,
+  type RunEnd,
+  type RunEndOutput,
 } from './runRecords';
 
 // Layer 3: Depends on layer 2

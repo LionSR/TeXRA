@@ -159,7 +159,7 @@ export function startDetachedChildRunLoop<TTurn>(
             childRun.finalize({
               outcome: RUN_OUTCOME.FAILED,
               error,
-              persistence: { kind: 'finalize', flowRecord: 'delete' },
+              flowRecord: 'delete',
               autoClose: autoCloseOnLaunchFailure,
             }),
           );

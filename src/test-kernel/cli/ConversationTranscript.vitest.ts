@@ -1163,7 +1163,7 @@ describe('CLI conversation transcript', () => {
     }).items;
 
     expect(scrollbackTarget).toEqual({
-      ownerKey: `stream:${CHILD_STREAM}`,
+      ownerKey: `run:${CHILD_STREAM}`,
       runId: CHILD_STREAM,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);

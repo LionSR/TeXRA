@@ -101,8 +101,8 @@ return await parallel(
 - **Host-agnostic**: the engine never spawns agents itself; hosts inject a
   `runAgent` callback. The production adapter in
   `src/tools/delegation/workflowScriptAgentRunner.ts` uses the in-band
-  subagent execution path, so the engine consumes the post-flow
-  `AgentFinalResult` envelope — never the XML follow-up delivery string. It
+  subagent execution path, so the engine consumes the run's `RunEnd`
+  (`run.end` payload) — never the XML follow-up delivery string. It
   also verifies task-run inputs against persisted child lineage and result
   manifests before passing them to a later workflow step.
 - **Restart-safe checkpoints**: one strict, versioned execution-KV record per

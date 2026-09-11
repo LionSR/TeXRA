@@ -208,10 +208,10 @@ describe('tool-use progress events', () => {
 
     expect(result).toEqual({ outcome: 'skipped' });
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
-      { runId, todos: [todo] },
+      { todos: [todo] },
     ]);
     expect(traceEventsOfType(recorded.events, 'updatePlan')).toMatchObject([
-      { runId, plan },
+      { plan },
     ]);
   });
 

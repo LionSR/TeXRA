@@ -17,7 +17,13 @@ import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { acquireFreshRunLease, ownsRunLease } from '@agent/storage/runLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { RUN_OUTCOME, aggregateId, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  aggregateId,
+  emptyRunEndOutput,
+  type RunId,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -221,9 +227,9 @@ describe('session isolation', () => {
           expect(sessionB.runs.getHandle(runId)).toBeDefined();
           expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
           return {
-            category: 'toolUse',
             outcome: RUN_OUTCOME.COMPLETED,
             runId,
+            output: emptyRunEndOutput(AgentCategory.ToolUse),
           };
         }),
       );

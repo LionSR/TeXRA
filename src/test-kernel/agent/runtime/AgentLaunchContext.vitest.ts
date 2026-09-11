@@ -485,7 +485,10 @@ describe('AgentLaunchContext', () => {
       expect(session.status.get(EXECUTION_ID)).toBe(RUN_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
-        expect.objectContaining({ type: 'status', phase: RUN_PHASE.FAILED }),
+        expect.objectContaining({
+          type: 'run.end',
+          outcome: RUN_OUTCOME.FAILED,
+        }),
       );
       expect(rawDispose).toHaveBeenCalledOnce();
       // Terminal compensation is committed before the trace is detached.

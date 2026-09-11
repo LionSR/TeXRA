@@ -4,11 +4,11 @@ import { Cause, Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
+  type ResultMeta,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ResultMeta } from './resultMeta';
 
 export function persistChildRunDelivery(
   session: SessionHandle,

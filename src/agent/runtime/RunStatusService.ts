@@ -9,6 +9,7 @@ import {
   canTransitionRunPhase,
   isActivePhase,
   isInFlightPhase,
+  isTerminalOutcomePhase,
   RUN_TRANSITION_CAUSE,
   type RunTransitionCause,
 } from '@shared/runs/runStatus';
@@ -63,7 +64,8 @@ export class RunStatusMachine {
 
   /**
    * @param publishStatus Where this machine publishes canonical `status`
-   *   facts after launch. Creation batches the initial status with run.start.
+   *   facts after launch: every non-terminal transition (the terminal phase
+   *   is the `run.end` row's). Creation batches the initial status with run.start.
    *   Every consumer, including the transcript recorder (via its `handleStatus`
    *   port), reads it. The session constructs the machine with its own
    *   publisher, so a transition reaches every consumer no matter which
@@ -140,12 +142,20 @@ export class RunStatusMachine {
         ...(runStartedAt !== undefined ? { runStartedAt } : {}),
       },
     });
-    this.publishTransition(runId, to, {
-      ...options,
-      cause,
-      ...(from ? { previousPhase: from } : {}),
-      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-    });
+    // A terminal phase is the `run.end` row's fact (one run model, section
+    // 3.3), written once by `finalizeRun`. The machine records it for its
+    // in-process readers — `get`, `getRunState`, `isInFlight`,
+    // `getAllRunStates` — and publishes no second copy, so every `status` row
+    // this machine emits is non-terminal and no consumer may wait on one to
+    // close a run out: the terminal row to fold is `run.end`.
+    if (!isTerminalOutcomePhase(to)) {
+      this.publishTransition(runId, to, {
+        ...options,
+        cause,
+        ...(from ? { previousPhase: from } : {}),
+        ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+      });
+    }
     // A phase that replaces a hold also drops that hold's detail, and the
     // status fact above carries no detail of its own.
     if (overwritesHold) this.publishHoldChanged(runId);
@@ -285,6 +295,7 @@ export class RunStatusMachine {
     this.setUnreadable(runId, this.holdState(runId) ?? null);
   }
 
+  /** Emit one non-terminal `status` fact; the terminal phase never gets one. */
   private publishTransition(
     runId: RunId,
     phase: RunPhase,

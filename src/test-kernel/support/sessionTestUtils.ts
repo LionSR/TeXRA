@@ -101,21 +101,11 @@ export function attachTestTranscriptFold(
   const unsubscribe = trace.subscribe((event) => {
     if (!isTranscriptEvent(event)) return;
     seq += 1;
-    fold.record(
-      event.type === 'usage'
-        ? {
-            type: event.type,
-            ...event.payload,
-            recordTranscript: event.recordTranscript,
-            stageId: event.stageId,
-          }
-        : event,
-      {
-        at: seq,
-        id: JSON.stringify([runId, seq]),
-        debug: isDebugModeEnabled(),
-      },
-    );
+    fold.record(event, {
+      at: seq,
+      id: JSON.stringify([runId, seq]),
+      debug: isDebugModeEnabled(),
+    });
   });
   return {
     unsubscribe,

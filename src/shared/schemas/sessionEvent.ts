@@ -31,6 +31,7 @@ import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
 import {
+  RunEndSchema,
   RunRecordFieldsSchema,
   RunWorkspaceFilesSchema,
   ResultMetaSchema,
@@ -57,7 +58,7 @@ import {
   RoundKeyedOutputSidecarValueSchemas,
 } from './runState';
 import { TodoItemSchema } from './todo';
-import { ResultEventSchema, TranscriptEventSchemas } from './traceEvent';
+import { TranscriptEventSchemas } from './traceEvent';
 
 /** C5's complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
@@ -284,10 +285,11 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
 });
 
 /**
- * The durable arms every renderer folds. Run-scoped arms mirror `AgentEvent`
- * (`src/agent/trace/events.ts`); session-scoped arms mirror the session
- * facts with the payload flattened. `run.removed` is the tombstone: the
- * last row of its aggregate, final (PRD 5.2, "Existence").
+ * The durable arms every renderer folds. This is the one declaration of the
+ * run vocabulary: the trace's `AgentEvent` (`src/agent/trace/events.ts`) is
+ * derived from these arms, minus the aggregate qualification. Session-scoped
+ * arms carry the session facts with the payload flattened. `run.removed` is
+ * the tombstone: the last row of its aggregate, final (PRD 5.2, "Existence").
  */
 const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunStartDraftSchema,
@@ -313,13 +315,14 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * the edge; a run never acquires a new parent.
    */
   durable('run.detach', {}),
-  /** The run lifecycle's last word: emitted once nothing in the owning
-   *  process can still write for the run. The phase is the `status` fact's
-   *  (PRD 6, item 3); this arm says only that the lifecycle has ended. */
-  durable(
-    'result',
-    ResultEventSchema.unwrap().omit({ type: true, runId: true }).shape,
-  ),
+  /**
+   * The terminal fact (one run model, section 3.3): outcome, the classified
+   * error behind a failure, the usage totals, and what the run produced.
+   * Written once, by the storage finalizer, after the run's last transcript
+   * row; the fold derives the terminal phase from it and from nothing else.
+   */
+  durable('run.end', RunEndSchema.shape),
+  /** A non-terminal phase transition; the terminal phase is `run.end`'s. */
   durable('status', {
     phase: RunPhaseSchema,
     previousPhase: RunPhaseSchema.nullish(),
@@ -341,9 +344,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('updateCompileFailures', {
     filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
   }),
-  durable('goalPaused', {}),
   RunRemovedDraftSchema,
-  durable('updateRunDescription', { description: z.string() }),
+  /** The AI-generated summary of what the run set out to do. */
+  durable('run.description', { description: z.string() }),
   /** Goal is per run; the fact carries the state so the fold never reads
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
@@ -389,7 +392,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.record', { record: RunRecordFieldsSchema }),
   durable('run.launchLabel', { label: z.string() }),
-  durable('run.description', { description: z.string() }),
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),

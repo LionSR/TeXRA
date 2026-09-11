@@ -66,7 +66,7 @@ function apply(record: RunSnapshotRecord, event: SessionEvent): void {
     case 'run.config':
       record.metadata = { ...record.metadata, config: event.config };
       break;
-    case 'updateRunDescription':
+    case 'run.description':
       record.metadata = { ...record.metadata, description: event.description };
       break;
     case 'usage':

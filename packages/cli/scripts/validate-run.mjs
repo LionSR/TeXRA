@@ -797,7 +797,7 @@ function validateRunCommand() {
       'text run output should print the filesystem copy path when --output is used',
     );
     // The progress line prints the fold's status label from the one table in
-    // src/shared/streams/streamStatusDisplay.ts (STREAM_STATUS_LABELS).
+    // src/shared/runs/runStatusDisplay.ts (RUN_STATUS_LABELS).
     assert(
       text.stderr.includes(' · Completed ·'),
       `text run progress should end with the shared completed label\nstderr:\n${text.stderr}`,

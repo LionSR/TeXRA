@@ -1,7 +1,7 @@
 /**
  * Formatting utilities for subagent results and progress updates.
  *
- * Format helpers convert AgentFinalResult and progress updates into
+ * Format helpers convert a run's terminal facts and progress updates into
  * structured XML strings for FollowUpQueue delivery to the orchestrator.
  *
  * Design: Typed objects internally, XML formatting only at the boundary
@@ -10,20 +10,18 @@
 
 import path from 'node:path';
 
-import type { ResultMeta } from '@agent/storage';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import type {
-  AgentFlowCategory,
-  AgentFlowResult,
-} from '@agent/runtime/AgentFlowResult';
-import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import type { AgentFinalResult, ResultDiffSummary } from '@shared/schemas';
 import {
   runStorageFilePath,
-  type RunId,
   type OutputFileSummary,
+  type ResultDiffSummary,
+  type ResultMeta,
+  type RunEndOutput,
+  type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -39,7 +37,7 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 
-type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 // ============================================================================
 // Formatting helpers
@@ -139,7 +137,7 @@ function formatDeliveryPreamble(options: {
 }
 
 /**
- * Format an AgentFinalResult as a delivery message.
+ * Format a run's terminal result as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
  *
  * Diff files are accessible via /executions/{id}/files/{diffRelPath}; the
@@ -147,7 +145,7 @@ function formatDeliveryPreamble(options: {
  */
 export function formatSubagentDelivery(
   agentName: string,
-  result: AgentFinalResult,
+  result: { readonly outcome: RunOutcome; readonly output: RunEndOutput },
   options: {
     runId: RunId;
     memoryMisses?: readonly AttachedMemoryMiss[];
@@ -160,37 +158,38 @@ export function formatSubagentDelivery(
     memoryMisses: options.memoryMisses,
   });
 
-  if (result.category === 'workflow') {
-    if (result.diffsUnavailable) {
+  const { output } = result;
+  if (output.category === 'workflow') {
+    if (output.diffsUnavailable) {
       lines.push(
-        `<diffs-unavailable reason="${escapeAttr(result.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
+        `<diffs-unavailable reason="${escapeAttr(output.diffsUnavailable)}">Diff computation failed: read the output files directly to review the changes.</diffs-unavailable>`,
       );
     }
-    if (result.outputs.length > 0) {
+    if (output.outputs.length > 0) {
       const diffsByPath = new Map(
-        result.diffs.map((diff) => [diff.path, diff] as const),
+        output.diffs.map((diff) => [diff.path, diff] as const),
       );
       lines.push(
-        ...formatWorkflowOutputs(result.outputs, options.runId, diffsByPath),
+        ...formatWorkflowOutputs(output.outputs, options.runId, diffsByPath),
       );
     }
-    if (result.compileFailures.length > 0) {
+    if (output.compileFailures.length > 0) {
       lines.push('<compile-failures>');
-      for (const failure of result.compileFailures) {
+      for (const failure of output.compileFailures) {
         lines.push(
           `<failure round="${failure.round}" file="${escapeAttr(failure.displayName)}" output="${escapeAttr(failure.outputPath)}" log="${escapeAttr(failure.logPath)}" />`,
         );
       }
       lines.push('</compile-failures>');
     }
-  } else if (result.category === 'toolUse') {
-    if (result.response) {
-      lines.push('<response>', escapeText(result.response), '</response>');
+  } else if (output.category === 'toolUse') {
+    if (output.response) {
+      lines.push('<response>', escapeText(output.response), '</response>');
     }
-    if (result.files.length > 0) {
+    if (output.files.length > 0) {
       lines.push(
         '<touched-files>',
-        ...result.files.map((f) => `<file path="${escapeAttr(f)}" />`),
+        ...output.files.map((f) => `<file path="${escapeAttr(f)}" />`),
         '</touched-files>',
       );
     }
@@ -202,7 +201,7 @@ export function formatSubagentDelivery(
       runId: options.runId,
       attributes: [
         { name: 'agent', value: agentName },
-        { name: 'category', value: result.category },
+        { name: 'category', value: output.category },
         { name: 'status', value: result.outcome },
       ],
     },
@@ -272,63 +271,16 @@ export function formatFollowUpInstruction(instruction: string): string {
 /**
  * Build the structured result manifest for a finished subagent — the
  * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
- * Persisted to the run KV store so later stages (orchestrator or a
- * workflow script) can chain on outputs/diffs/outcome as data instead of
- * parsing prose.
+ * Persisted beside the run's `run.end` row so later stages (orchestrator or a
+ * workflow script) can chain on outputs and diffs as data instead of parsing
+ * prose; how the run ended is the terminal fact's to say, not this record's.
  */
 export function buildSubagentResultMeta(
   agentName: string,
-  result: AgentFinalResult,
+  output: RunEndOutput,
   wallTimeMs: number,
 ): SubagentResultMeta {
-  return { producer: 'subagent', agentName, wallTimeMs, result };
-}
-
-/**
- * Build the failure manifest written when a subagent errors. Overwrites any
- * interim success manifest persisted by an earlier turn's delivery — without
- * this, a later failure would leave /executions/{id}/result claiming success
- * while the prose report describes the error, breaking the chaining contract.
- */
-export function buildSubagentFailureResultMeta(
-  agentName: string,
-  fallbackCategory: AgentFlowCategory,
-  result: AgentFlowResult | undefined,
-  wallTimeMs: number,
-  options: {
-    /**
-     * The thrown error behind this failure, used when the flow result itself
-     * recorded no structured error — so the typed manifest always carries a
-     * failure message for its awaiting consumer.
-     */
-    readonly cause?: unknown;
-  } = {},
-): SubagentResultMeta {
-  const built = result
-    ? buildAgentFinalResult({
-        flowResult: result,
-        // A nominally completed flow that reached the error path is a failure;
-        // genuine cancelled/failed outcomes pass through unchanged.
-        outcome: result.outcome === 'completed' ? 'failed' : result.outcome,
-      })
-    : buildAgentFinalResult({
-        category: fallbackCategory,
-        outcome: 'failed',
-      });
-  const finalResult =
-    built.outcome === 'failed' &&
-    built.error === undefined &&
-    options.cause !== undefined
-      ? {
-          ...built,
-          // A thrown child failure is not a user-retry offer.
-          error: {
-            message: toErrorMessage(options.cause),
-            userRetryable: false,
-          },
-        }
-      : built;
-  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs);
+  return { producer: 'subagent', agentName, wallTimeMs, output };
 }
 
 // ============================================================================
@@ -456,17 +408,11 @@ export async function computeAndWriteWorkflowDiffs(
 // Built terminal results
 // ============================================================================
 
-export interface BuiltSubagentResult {
-  readonly result: AgentFinalResult;
-  readonly resultMeta: SubagentResultMeta;
-  readonly wallTimeMs: number;
-}
-
 /**
- * Build a subagent's typed terminal result and persistence record.
- * For workflow results, computes latexdiffs and writes them as files to the
- * run's run directory first — the delivery references diff file paths
- * so the orchestrator can read them on demand via /executions/{id}/files/.
+ * Build a subagent's persistence record. For workflow results, computes
+ * latexdiffs and writes them as files to the run's run directory first — the
+ * record and the delivery reference diff file paths so the orchestrator can
+ * read them on demand via /executions/{id}/files/.
  */
 export async function buildSubagentResult(
   runId: RunId,
@@ -475,12 +421,18 @@ export async function buildSubagentResult(
   options: {
     readonly startedAt: number;
   },
-): Promise<BuiltSubagentResult> {
+): Promise<SubagentResultMeta> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
   let diffsUnavailable: string | undefined;
-  if (result.category === 'workflow' && result.outputs.length > 0) {
+  if (
+    result.output.category === 'workflow' &&
+    result.output.outputs.length > 0
+  ) {
     try {
-      diffInfos = await computeAndWriteWorkflowDiffs(runId, result.outputs);
+      diffInfos = await computeAndWriteWorkflowDiffs(
+        runId,
+        result.output.outputs,
+      );
     } catch (err) {
       // Diff computation failure is non-fatal: deliver without diffs, but tell
       // the orchestrator to read the output files directly.
@@ -492,21 +444,20 @@ export async function buildSubagentResult(
   }
 
   const wallTimeMs = Date.now() - options.startedAt;
-  const diffs =
-    result.category === 'workflow' && diffInfos
-      ? result.outputs.flatMap((output) => {
-          const diff = diffInfos.get(output.absolutePath);
-          return diff ? [{ path: output.absolutePath, ...diff }] : [];
-        })
-      : undefined;
-  const finalResult = buildAgentFinalResult({
-    flowResult: result,
-    diffs,
-    diffsUnavailable,
-  });
-  return {
-    result: finalResult,
-    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs),
-    wallTimeMs,
-  };
+  const output: RunEndOutput =
+    result.output.category === 'workflow'
+      ? {
+          ...result.output,
+          ...(diffInfos
+            ? {
+                diffs: result.output.outputs.flatMap((file) => {
+                  const diff = diffInfos.get(file.absolutePath);
+                  return diff ? [{ path: file.absolutePath, ...diff }] : [];
+                }),
+              }
+            : {}),
+          ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
+        }
+      : result.output;
+  return buildSubagentResultMeta(agentName, output, wallTimeMs);
 }

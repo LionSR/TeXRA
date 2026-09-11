@@ -53,20 +53,23 @@ function workflowResult(
   outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
 ): WorkflowResult {
   return {
-    category: AgentCategory.Workflow,
     outcome,
+    output: {
+      category: AgentCategory.Workflow,
+      compileFailures: [],
+      diffs: [],
+      outputs: outputs.map((output) => ({
+        round: output.round ?? 1,
+        relativePath: output.relativePath,
+        absolutePath: output.absolutePath,
+        location: 'runStorage',
+        originalPath: output.originalPath ?? null,
+        added: null,
+        removed: null,
+      })),
+    },
     runId: 'workflow-output-test' as RunId,
-    compileFailures: [],
-    outputs: outputs.map((output) => ({
-      round: output.round ?? 1,
-      relativePath: output.relativePath,
-      absolutePath: output.absolutePath,
-      location: 'runStorage',
-      originalPath: output.originalPath ?? null,
-      added: null,
-      removed: null,
-    })),
-  } as WorkflowResult;
+  };
 }
 
 describe('CLI workflow output resolution', () => {

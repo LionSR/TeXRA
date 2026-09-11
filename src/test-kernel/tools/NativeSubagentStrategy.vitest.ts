@@ -16,6 +16,7 @@ import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_PHASE,
   RunIdSchema,
+  RunUsageTotalsSchema,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -120,11 +121,16 @@ function toolUseTurnResult(
   extras: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
-    category: 'toolUse',
     outcome,
     runId,
+    output: { category: 'toolUse', response: '', files: [] },
     ...extras,
   };
+}
+
+/** The run-cumulative usage totals a turn reports, keyed by its spend. */
+function turnUsage(totalCost: number): Record<string, unknown> {
+  return RunUsageTotalsSchema.parse({ totalCost });
 }
 
 /**
@@ -280,7 +286,7 @@ describe('NativeSubagentStrategy', () => {
       options.onRunResolved?.(CHILD_RUN_ID);
       options.onProgress?.(progress);
       return toolUseTurnResult('completed', params.runId, {
-        totalCostUsd: 0.17,
+        usage: turnUsage(0.17),
       });
     });
 
@@ -307,7 +313,7 @@ describe('NativeSubagentStrategy', () => {
     const recordCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce(
       toolUseTurnResult('failed', params.runId, {
-        totalCostUsd: 0.29,
+        usage: turnUsage(0.29),
         error: { message: 'provider failed', userRetryable: false },
       }),
     );
@@ -329,7 +335,8 @@ describe('NativeSubagentStrategy', () => {
       params.runId,
       expect.any(String),
       expect.objectContaining({
-        result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
+        producer: 'subagent',
+        output: expect.objectContaining({ category: 'toolUse' }),
       }),
     );
   });
@@ -360,10 +367,7 @@ describe('NativeSubagentStrategy', () => {
       expect.any(String),
       expect.objectContaining({
         producer: 'subagent',
-        result: expect.objectContaining({
-          outcome: 'failed',
-          error: expect.objectContaining({ message: 'provider failed' }),
-        }),
+        output: expect.objectContaining({ category: 'toolUse' }),
       }),
     );
   });
@@ -493,11 +497,13 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
 
     const waitingTurn = {
-      category: 'toolUse' as const,
       outcome: RUN_PHASE.WAITING,
-      response: 'The proof holds.',
-      files: ['main.tex'],
       runId: params.runId,
+      output: {
+        category: 'toolUse' as const,
+        response: 'The proof holds.',
+        files: ['main.tex'],
+      },
     };
 
     const msg = await strategy.formatDelivery(waitingTurn, 1000);
@@ -563,13 +569,7 @@ describe('NativeSubagentStrategy', () => {
     ).resolves.toMatchObject({
       producer: 'subagent',
       agentName: 'review',
-      result: {
-        category: 'toolUse',
-        outcome: 'failed',
-        response: '',
-        files: [],
-        cost: 0,
-      },
+      output: { category: 'toolUse', response: '', files: [] },
     });
   });
 
@@ -614,10 +614,9 @@ describe('NativeSubagentStrategy', () => {
       interactions,
     };
     const waitingTurn = (response: string) => ({
-      category: 'toolUse' as const,
       outcome: RUN_PHASE.WAITING,
-      response,
       runId: childRunId,
+      output: { category: 'toolUse' as const, response, files: [] },
     });
 
     mocks.executeAgent.mockImplementationOnce(
@@ -750,11 +749,14 @@ describe('NativeSubagentStrategy', () => {
     expect(strategy.stageLabel).toBe('Native workflow subagent');
 
     const completedWorkflowTurn = {
-      category: 'workflow' as const,
       outcome: 'completed' as const,
-      outputs: [],
-      compileFailures: [],
       runId: params.runId,
+      output: {
+        category: 'workflow' as const,
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+      },
     };
     // A workflow flow never produces a WAITING result, so every turn is
     // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.
@@ -765,10 +767,7 @@ describe('NativeSubagentStrategy', () => {
     ).resolves.toMatchObject({
       producer: 'subagent',
       agentName: 'review',
-      result: {
-        category: 'workflow',
-        outcome: 'failed',
-      },
+      output: { category: 'workflow' },
     });
   });
 
@@ -785,11 +784,14 @@ describe('NativeSubagentStrategy', () => {
     };
 
     mocks.executeAgent.mockResolvedValueOnce({
-      category: 'workflow',
       outcome: 'completed',
-      outputs: [],
-      compileFailures: [],
       runId: childRunId,
+      output: {
+        category: 'workflow',
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+      },
     });
 
     const strategy = createNativeSubagentStrategy(params);

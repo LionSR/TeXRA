@@ -217,8 +217,8 @@ const activeRuns = () => {
   const active = activeRailProject(railProjects());
   if (!active) return [];
   return active.view.order.flatMap((id) => {
-    const stream = active.view.runs.get(id);
-    return stream ? [stream] : [];
+    const run = active.view.runs.get(id);
+    return run ? [run] : [];
   });
 };
 const rendererPlatform = getRendererPlatform(document.defaultView);
@@ -385,7 +385,7 @@ applyTheme();
 const environmentPopover = createEnvironmentPopover({
   getWorkbenchTabs: () => shellState().workbenchTabs,
   getChildRunCount: () =>
-    activeRuns().reduce((total, stream) => total + stream.rollup.total, 0),
+    activeRuns().reduce((total, run) => total + run.rollup.total, 0),
   postMessage: (command, payload) =>
     postMessage(command, { ...payload, session: shell.active }),
 });

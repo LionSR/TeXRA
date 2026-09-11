@@ -31,7 +31,7 @@ import type { FollowUpQueueInput } from './FollowUpQueue';
  *   alone, so this is the refusal that cohort meets — never `finished`, which
  *   would claim the run ended normally.
  * - `owned_elsewhere`: another TeXRA process holds the run.
- * - `not_resumable`: the stream has no live flow here and the submission was
+ * - `not_resumable`: the run has no live flow here and the submission was
  *   refused (a terminalized queue, a disposed session, a run this process
  *   cannot classify).
  */
@@ -39,11 +39,11 @@ export type FollowUpFailureReason =
   'finished' | 'unusable_checkpoint' | 'owned_elsewhere' | 'not_resumable';
 
 /**
- * Three outcomes: the input reached a live flow, it waits in the stream's
+ * Three outcomes: the input reached a live flow, it waits in the run's
  * queue for the next turn, or it was not admitted for a worded reason. A
  * delivery the admission boundary had already accepted (#9531) is `sent`.
  * A queued input whose recovery resume did not reach the run is still
- * queued (`wake: 'failed'`): the input belongs to the stream, and an
+ * queued (`wake: 'failed'`): the input belongs to the run, and an
  * explicit Resume delivers it.
  */
 export type SubmitFollowUpResult =
@@ -65,7 +65,7 @@ interface SubmitFollowUpOptions {
   readonly mode?: 'live_notification';
   /**
    * Fires once admission is decided, before any recovery resume runs. `true`
-   * means the input now belongs to the stream (sent, queued, or already
+   * means the input now belongs to the run (sent, queued, or already
    * admitted); `false` means the caller still owns it and may re-offer it.
    */
   readonly onAdmitted?: (admitted: boolean) => void;
@@ -113,7 +113,7 @@ export function notifyFollowUpSent(
   (session ?? currentSession()).followUps.notifySent(runId);
 }
 
-/** Queue transient progress using the current stream and live queue owners. */
+/** Queue transient progress using the current run and live queue owners. */
 export function enqueueLiveFollowUp(
   runId: RunId,
   followUp: FollowUpQueueInput,
@@ -131,9 +131,9 @@ type Admission =
 
 /**
  * Route and admit one submission. Synchronous from the registry snapshot to
- * the enqueue: two submissions to one stream cannot interleave between the
+ * the enqueue: two submissions to one run cannot interleave between the
  * target lookup and the admission, which is what keeps the recovery claim
- * single-owner without a per-stream lock. A resumed model turn completes
+ * single-owner without a per-run lock. A resumed model turn completes
  * after this returns, so it cannot block later input from joining its queue.
  */
 function admitFollowUp(
@@ -156,7 +156,7 @@ function admitFollowUp(
     }
     if (submission.kind === 'queued') return { status: 'queued' };
     // The queue is the only way in. A refusal here means the session has no
-    // entry for this stream (terminalized by a stream deletion, or terminally
+    // entry for this run (terminalized by a run deletion, or terminally
     // released) or is disposed: the flow context may still be attached during
     // teardown, but the continuation boundary that owns it is gone.
     return { status: 'failed', reason: 'not_resumable' };
@@ -164,7 +164,7 @@ function admitFollowUp(
 
   if (target.kind === 'no_session') {
     logger.warn(
-      `No active session for follow-up on stream ${runId}. Status: ${target.runStatus}`,
+      `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
     );
     return { status: 'no_session' };
   }
@@ -193,18 +193,18 @@ function admitFollowUp(
 }
 
 /**
- * The one mapping from a run classification to what the user's stream shows
+ * The one mapping from a run classification to what the user's run shows
  * and what the refusal is called. Both refusal paths use it — a follow-up
  * with no live flow here, and a resume whose checkpoint read came back empty
  * — so the two cannot word or settle the same fact differently.
  *
- * A refusal the user can see again is recorded on the stream: the two
+ * A refusal the user can see again is recorded on the run: the two
  * classifications that mean "no flow here can execute this run" — another
  * process holds it, or this process holds a lease with no live run behind it
- * — become the stream's read-only detail, so the tab keeps saying why after
+ * — become the run's read-only detail, so the tab keeps saying why after
  * the toast is gone. A classification that read the run's state and found it
  * free (`finished`, `resumable`) DROPS any hold an earlier refusal left, and
- * with it the phase that hold retained: a stream whose run is readable and
+ * with it the phase that hold retained: a run that is readable and
  * unowned must neither stay read-only nor show the WAITING a failed resume
  * rolled back to, on facts that have since changed.
  *
@@ -231,7 +231,7 @@ export function recordRunRefusal(
       );
       return 'owned_elsewhere';
     case 'owned_here':
-      // A lease this process holds for a stream with no live flow context is
+      // A lease this process holds for a run with no live flow context is
       // a registry/lease disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
       session.status.markUnavailable(
@@ -251,7 +251,7 @@ export function recordRunRefusal(
 }
 
 /**
- * Word the refusal of a stream with no live flow here from the persisted
+ * Word the refusal of a run with no live flow here from the persisted
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`. Only the one run
  * the user acted on is inspected.
@@ -280,7 +280,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
-          logger.warn(`onAdmitted callback failed for stream ${runId}`, {
+          logger.warn(`onAdmitted callback failed for run ${runId}`, {
             data: { runId, error: String(error) },
           });
         }),

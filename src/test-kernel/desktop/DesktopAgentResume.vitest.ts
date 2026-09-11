@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
-import type { ResultEvent } from '@agent/trace';
 import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -21,8 +20,10 @@ import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
   AgentCategory,
   aggregateId,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
@@ -66,51 +67,47 @@ async function persistRunRecord(
   );
 }
 
-function failedResult(
-  category: ResultEvent['category'],
+function failedRunEnd(
+  category: AgentCategory,
   message: string,
-): ResultEvent {
+): SessionEventDraft {
   return {
-    type: 'result',
+    type: 'run.end',
+    aggregateId: aggregateId('run', runId),
     outcome: RUN_OUTCOME.FAILED,
-    runId,
-    agentName: 'proofreader',
-    category,
+    output: emptyRunEndOutput(category),
     error: { kind: 'unexpected', message },
   };
 }
 
-function completedResult(): ResultEvent {
+function completedRunEnd(): SessionEventDraft {
   return {
-    type: 'result',
+    type: 'run.end',
+    aggregateId: aggregateId('run', runId),
     outcome: RUN_OUTCOME.COMPLETED,
-    runId,
-    agentName: 'proofreader',
-    category: 'workflow',
+    output: emptyRunEndOutput(AgentCategory.Workflow),
   };
 }
 
 function completedRunResult(): AgentFlowResult {
   return {
     runId,
-    category: 'workflow',
     outcome: RUN_OUTCOME.COMPLETED,
-    outputs: [],
-    compileFailures: [],
+    output: emptyRunEndOutput(AgentCategory.Workflow),
   };
 }
 
 /** runAgent fails after lifecycle startup, publishing one failed result. */
 function failAfterLifecycle(
   session: SessionHandle,
-  category: ResultEvent['category'],
+  category: AgentCategory,
   message: string,
 ): void {
   runAgent.mockImplementation((_request, options) =>
     Effect.tryPromise({
       try: async () => {
         await options.onRun?.({} as never);
-        session.publishRunEvent(runId, failedResult(category, message));
+        session.publish([failedRunEnd(category, message)]);
         throw new Error(message);
       },
       catch: ensureError,
@@ -287,10 +284,9 @@ describe('desktop process resume owner', () => {
       Effect.tryPromise({
         try: async () => {
           await options?.onRun?.({} as never);
-          harness.session.publishRunEvent(
-            runId,
-            failedResult('toolUse', 'tool-use lifecycle failed'),
-          );
+          harness.session.publish([
+            failedRunEnd(AgentCategory.ToolUse, 'tool-use lifecycle failed'),
+          ]);
           throw new Error('tool-use lifecycle failed');
         },
         catch: ensureError,
@@ -311,7 +307,11 @@ describe('desktop process resume owner', () => {
   it('does not duplicate a terminal resume failure presentation', async () => {
     await mockWorkflowResume();
     const harness = await createResumeHarness();
-    failAfterLifecycle(harness.session, 'workflow', 'terminal resume failed');
+    failAfterLifecycle(
+      harness.session,
+      AgentCategory.Workflow,
+      'terminal resume failed',
+    );
 
     await expect(harness.owner.tryResumeRun(runId)).resolves.toBe(false);
     const presenter = attachResultPresenter(harness.session);
@@ -329,7 +329,7 @@ describe('desktop process resume owner', () => {
       Effect.tryPromise({
         try: async () => {
           await options.onRun?.({} as never);
-          options.session?.publishRunEvent(runId, completedResult());
+          options.session?.publish([completedRunEnd()]);
           throw new Error('final artifact flush failed');
         },
         catch: ensureError,

@@ -203,7 +203,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
       ),
     });
-    // A workflow run's `result` is the completion chime, one per process
+    // A workflow run's `run.end` is the completion chime, one per process
     // (PRD 12.4), never a renderer transition hook that every subscriber
     // would replay. A failed run does not chime.
     const sessionEvents = effectRuntime().runFork(
@@ -211,8 +211,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         Effect.sync(() => {
           this.toolEditApprovals.handleSessionEvent(event);
           if (
-            event.type === 'result' &&
-            event.category === 'workflow' &&
+            event.type === 'run.end' &&
+            event.output.category === 'workflow' &&
             event.outcome !== 'failed'
           ) {
             this.chime();

@@ -119,19 +119,22 @@ type CliRequest = Parameters<typeof executeCliRequest>[0];
 
 /** Result shape the default `runAgent` stub resolves with. */
 const COMPLETED_RUN = {
-  category: 'toolUse',
-  runId: 'exec-1',
   outcome: 'completed',
+  output: { category: 'toolUse', response: '', files: [] },
+  runId: 'exec-1',
 } as const;
 
 const COMPLETED_WORKFLOW_RUN: Parameters<
   NonNullable<RunAgentOptions['openWorkflowOutput']>
 >[0] = {
-  category: 'workflow',
-  runId: 'exec-1' as RunId,
   outcome: 'completed',
-  outputs: [],
-  compileFailures: [],
+  output: {
+    category: 'workflow',
+    outputs: [],
+    compileFailures: [],
+    diffs: [],
+  },
+  runId: 'exec-1' as RunId,
 };
 
 function baseRequest(kind: 'fresh' | 'resume' = 'fresh'): CliRequest {
@@ -488,9 +491,9 @@ describe('executeCliRequest', () => {
     mocks.runAgent.mockImplementationOnce(async () => {
       callOrder.push('runAgent');
       return {
-        category: 'toolUse',
+        outcome: 'completed',
+        output: { category: 'toolUse', response: '', files: [] },
         runId: 'exec-1',
-        status: 'completed',
       };
     });
 
@@ -676,9 +679,9 @@ describe('executeCliRequest', () => {
         ok: true,
         outcomePersisted: true,
         result: {
-          category: 'toolUse',
-          runId: 'exec-1',
           outcome: 'cancelled',
+          output: { category: 'toolUse', response: '', files: [] },
+          runId: 'exec-1',
         },
       });
       expect(mocks.finalizeRun).toHaveBeenCalledOnce();
@@ -989,9 +992,9 @@ describe('executeCliRequest', () => {
       ok: true,
       outcomePersisted: true,
       result: {
-        category: 'toolUse',
-        runId: 'exec-1',
         outcome: 'cancelled',
+        output: { category: 'toolUse', response: '', files: [] },
+        runId: 'exec-1',
       },
     });
     expect(mocks.finalizeRun).toHaveBeenCalledOnce();
@@ -1023,10 +1026,13 @@ describe('executeCliConfig', () => {
     const { AgentCategory } = await import('@shared/schemas');
     const { executeCliToolUseConfig } = await loadExecuteCli();
     mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.ToolUse,
-      runId: 'exec-1',
       outcome: 'completed',
-      response: 'Done.',
+      output: {
+        category: AgentCategory.ToolUse,
+        response: 'Done.',
+        files: [],
+      },
+      runId: 'exec-1',
     });
     mocks.readCliRunOutcomeState.mockResolvedValueOnce({
       outcome: resolvedOutcome,
@@ -1138,15 +1144,14 @@ describe('executeCliConfig', () => {
       result: {
         outcome: 'completed',
         workingDirectory: '/tmp/project',
-        response: 'Done.',
+        output: { response: 'Done.' },
       },
     });
     if (result.ok) {
       expect(Object.keys(result.result)).toEqual([
-        'category',
-        'runId',
         'outcome',
-        'response',
+        'output',
+        'runId',
         'workingDirectory',
       ]);
     }

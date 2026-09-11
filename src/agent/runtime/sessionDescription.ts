@@ -2,9 +2,8 @@
  * Session description generation.
  *
  * When a run starts, generates a short AI summary describing what it aims to
- * accomplish. The description is persisted on the run metadata and
- * pushed to the progress view so that the stream tab, history view, and
- * future agents can quickly understand each session.
+ * accomplish, published as the run's `run.description` row so the stream tab,
+ * history view, and future agents can quickly understand each session.
  */
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -93,8 +92,8 @@ export function getDisplayedInstruction(
  * the rows a workflow script's `agent()` calls create, and the ones a reader
  * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
- * On success, persists the description to run metadata and emits
- * an `updateRunDescription` event so the progress view can display it.
+ * On success, publishes the run's `run.description` row, which the meta fold
+ * and every renderer read.
  */
 export async function generateSessionDescription(
   runId: RunId,
@@ -133,11 +132,6 @@ export async function generateSessionDescription(
     session.publish([
       {
         type: 'run.description',
-        aggregateId: qualifyAggregateId('run', runId),
-        description,
-      },
-      {
-        type: 'updateRunDescription',
         aggregateId: qualifyAggregateId('run', runId),
         description,
       },

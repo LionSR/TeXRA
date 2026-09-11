@@ -47,7 +47,7 @@ describe('formatSlashCommandHelp', () => {
     expect(macKittyHelp).toContain('`Esc 1..9`');
     expect(macKittyHelp).toContain('`Shift-Enter` or `Ctrl-J`');
     expect(macKittyHelp).toContain(
-      "`Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
+      "`Ctrl-T` opens the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
     );
   });
 });
