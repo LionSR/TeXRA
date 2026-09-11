@@ -44,10 +44,7 @@ import {
   buildToolEditApprovalContent,
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
-import {
-  decideRetryApproval,
-  texraApprovalDenialMessage,
-} from '@shared/approvalPolicy';
+import { decideRetryApproval } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,

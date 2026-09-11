@@ -209,6 +209,7 @@ interface StatusBarShortcutsInput {
   readonly childNavigationAvailable?: boolean;
   /** True when Alt/Esc-1..9 has at least one stream target. */
   readonly runFocusAvailable?: boolean;
+  readonly modifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
@@ -659,6 +660,7 @@ function statusBarBindingsText(
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     runFocusAvailable = false,
+    modifierLabel = defaultShortcutModifierLabel(),
     shiftEnterNewline = false,
     transcriptAvailable = false,
   }: StatusBarShortcutsInput,
@@ -673,7 +675,7 @@ function statusBarBindingsText(
     : undefined;
   const runFocus = runFocusAvailable
     ? keyHintText({
-        key: metaChordLabel(defaultShortcutModifierLabel(), '1..9'),
+        key: metaChordLabel(modifierLabel, '1..9'),
         action: 'focus',
       })
     : undefined;

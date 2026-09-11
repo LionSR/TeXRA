@@ -1,5 +1,5 @@
 // Shared "… N previous / more rows" markers for scrollable modal bodies
-// (bash approvals, agent proposals, external inquiries), plus the shared
+// (bash approvals, agent proposals), plus the shared
 // "+N earlier, +N more" inline overflow markers for Select, where the
 // indicator sits inline with the focused row instead of on its own line.
 

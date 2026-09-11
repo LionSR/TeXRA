@@ -11,7 +11,7 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { Effect, SubscriptionRef } from 'effect';
+import { SubscriptionRef } from 'effect';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
