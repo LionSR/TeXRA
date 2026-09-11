@@ -423,29 +423,38 @@ function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
   return EMPTY_MODEL_SELECTION;
 }
 
-/** Retired models drop out here, so no startup pass sweeps persisted state. */
+/**
+ * Retired models drop out here, so no startup pass sweeps persisted state.
+ * An explicitly enabled default is also kept in `enabledExtras`, so it stays
+ * on if the curated defaults later drop it; the set de-duplicates it.
+ */
 function enabledModelsOf(selection: ModelSelection): readonly string[] {
   const disabled = new Set(selection.disabledDefaults);
   return [
-    ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
-    ...selection.enabledExtras.filter(
-      (model) => !DEFAULT_MODELS.includes(model),
-    ),
+    ...new Set([
+      ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
+      ...selection.enabledExtras,
+    ]),
   ].filter((model) => !isRetiredModel(model));
+}
+
+/**
+ * When every enabled extra has retired and every default is off, the picker
+ * would be empty with no way back out from the UI; it shows the defaults.
+ */
+function enabledOrDefaults(selection: ModelSelection): readonly string[] {
+  const enabled = enabledModelsOf(selection);
+  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
 }
 
 /**
  * The models the pickers show — the single reader of
  * `GlobalStateKey.MODEL_SELECTION` for every host.
- *
- * When every enabled extra has retired and every default is off, the picker
- * would be empty with no way back out from the UI; it shows the defaults.
  */
 export function getEnabledModels(
   state: Pick<StateStore, 'get'> = platform().globalState,
 ): readonly string[] {
-  const enabled = enabledModelsOf(readModelSelection(state));
-  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
+  return enabledOrDefaults(readModelSelection(state));
 }
 
 /**
@@ -466,12 +475,20 @@ export async function setModelEnabled(input: {
   }
 
   // Edit the list the picker shows — including the all-defaults fallback — and
-  // re-encode the delta from it, so a write never acts on a hidden state.
-  const current = getEnabledModels(state);
+  // re-encode the delta from it, so a write never acts on a hidden state. An
+  // explicit enable is recorded in `enabledExtras` even for a default, so it
+  // survives the model later leaving the curated defaults.
+  const selection = readModelSelection(state);
+  const current = enabledOrDefaults(selection);
   const others = current.filter((model) => model !== input.model);
   const toggled = input.enabled ? [...others, input.model] : others;
   const next: ModelSelection = {
-    enabledExtras: toggled.filter((model) => !DEFAULT_MODELS.includes(model)),
+    enabledExtras: [
+      ...new Set([
+        ...selection.enabledExtras.filter((model) => toggled.includes(model)),
+        ...(input.enabled ? [input.model] : []),
+      ]),
+    ],
     disabledDefaults: DEFAULT_MODELS.filter(
       (model) => !toggled.includes(model),
     ),

@@ -446,9 +446,7 @@ if (
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await platform().globalState.update(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: HARNESS_VISIBLE_MODELS.filter(
-      (model) => !DEFAULT_MODELS.includes(model),
-    ),
+    enabledExtras: HARNESS_VISIBLE_MODELS,
     disabledDefaults: DEFAULT_MODELS.filter(
       (model) => !HARNESS_VISIBLE_MODELS.includes(model),
     ),

@@ -5,6 +5,7 @@ import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
 } from '@controllers/settingsView/SettingsModelSelectionController';
+import { getEnabledModels } from '@model/computeModelOptions';
 import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
@@ -186,6 +187,20 @@ describe('SettingsModelSelectionController', () => {
       enabledExtras: [],
       disabledDefaults: [first],
     });
+
+    // Turned back on, it stays on even after the curated defaults drop it.
+    await controller.setModelEnabled({ modelName: first, enabled: true });
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      enabledExtras: [first],
+      disabledDefaults: [],
+    });
+    const defaults = DEFAULT_MODELS as string[];
+    defaults.splice(defaults.indexOf(first), 1);
+    try {
+      expect(getEnabledModels(globalState)).toContain(first);
+    } finally {
+      defaults.unshift(first);
+    }
   });
 
   it('shows the defaults when the stored selection is malformed', async () => {
