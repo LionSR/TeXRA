@@ -154,8 +154,7 @@ async function initVscodePlatform(
 ): Promise<PlatformSecrets> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
-  // The identity is the Node default `createNodePlatform` wires as
-  // `platform().processes`, read before installing: an opener that uses the
+  // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
   installProcessRuntime(

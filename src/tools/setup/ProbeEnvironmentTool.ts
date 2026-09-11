@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { tryPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { type ToolResult } from '@shared/schemas';
@@ -43,13 +42,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const homedir = safeHomedir() ?? '<unresolved>';
   const extendedPath = extendEnvPath();
   const pm = detectPackageManager();
-  // tryPlatform() picks up an installed Platform's hostEnvironment (a test
-  // fake, in suites that override it); nodeHostEnvironment is the fallback
-  // for the rare caller running before initPlatform(). Neither call grows
-  // the frozen platform() ratchet — see effect-migration-ratchet.mjs.
-  const hostInfo = (
-    tryPlatform()?.hostEnvironment ?? nodeHostEnvironment
-  ).hostInfo();
+  const hostInfo = nodeHostEnvironment.hostInfo();
   const [
     core,
     optionalTools,

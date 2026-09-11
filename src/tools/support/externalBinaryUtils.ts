@@ -22,7 +22,6 @@ import * as path from 'node:path';
 
 import which from 'which';
 
-import { tryPlatform } from '@platform/platform';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
@@ -118,13 +117,7 @@ async function resolveBinary(
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
   {
-    // tryPlatform() picks up an installed Platform's hostEnvironment (a test
-    // fake, in suites that override it); nodeHostEnvironment is the fallback
-    // for the rare caller running before initPlatform(). Neither call grows
-    // the frozen platform() ratchet — see effect-migration-ratchet.mjs.
-    const resourcesPath = (
-      tryPlatform()?.hostEnvironment ?? nodeHostEnvironment
-    ).packagedElectronResourcesPath();
+    const resourcesPath = nodeHostEnvironment.packagedElectronResourcesPath();
     if (resourcesPath != null) {
       for (const pkg of config.platformPackages) {
         const platformPkgDir = path.join(

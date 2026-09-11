@@ -29,10 +29,8 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
 import { nodeFileLocks } from './fileLocks';
-import { nodeHostEnvironment } from './nodeHostEnvironment';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
-import { nodeProcesses } from './nodeProcesses';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
@@ -54,8 +52,8 @@ import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem, file locks, process identity, and the
- * no-op tool-availability host) are filled in by the helper. The
+ * shared Node defaults (filesystem, file locks, and the no-op
+ * tool-availability host) are filled in by the helper. The
  * per-workspace services are not here: hosts build them with
  * {@link createNodeWorkspaceRoots}.
  */
@@ -142,8 +140,6 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     fs: nodeFilesystem,
     storage: services.storage,
     fileLocks: nodeFileLocks,
-    processes: nodeProcesses,
-    hostEnvironment: nodeHostEnvironment,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,

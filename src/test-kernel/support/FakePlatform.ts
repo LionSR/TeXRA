@@ -17,15 +17,12 @@ import {
   type StateStore,
   type StorageProvider,
   type AgentDirectoriesPort,
-  type ProcessesPort,
-  type HostEnvironmentPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   fileTypeFor,
   type FileTypeProbe,
@@ -510,39 +507,6 @@ export class FakeSecrets implements PlatformSecrets {
   }
 }
 
-/**
- * Scripted process identities for lease-liveness tests: a pid not scripted
- * here falls through to the real port, so a real child's identity is read
- * for real while a test can force one verdict (a different identity for pid
- * reuse, undefined for unreadable).
- */
-export class FakeProcesses implements ProcessesPort {
-  private readonly identities = new Map<number, string | undefined>();
-
-  setIdentity(pid: number, identity: string | undefined): void {
-    this.identities.set(pid, identity);
-  }
-
-  /** Drop every scripted value; every pid falls through to the real port. */
-  reset(): void {
-    this.identities.clear();
-  }
-
-  async identity(pid: number): Promise<string | undefined> {
-    if (this.identities.has(pid)) return this.identities.get(pid);
-    return nodeProcesses.identity(pid);
-  }
-
-  selfIdentity(): Promise<string | undefined> {
-    // Route through the scripted map so a test that scripts this process's
-    // pid sees the same value in the records it writes and the probes it runs.
-    if (this.identities.has(process.pid)) {
-      return Promise.resolve(this.identities.get(process.pid));
-    }
-    return nodeProcesses.selfIdentity();
-  }
-}
-
 export interface FakePlatformOptions {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
@@ -587,19 +551,6 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   builtInToolUse: async () => '/workspace/resources/tool_use_agents',
 };
 
-// Frozen: every createFakePlatform() call shares this object, so a test that
-// mutated it (rather than passing a `hostEnvironment` override) would leak
-// into later tests (AGENTS.md "Never hand out a shared mutable literal").
-const FAKE_HOST_ENVIRONMENT: HostEnvironmentPort = Object.freeze({
-  hostInfo: () => ({
-    platform: 'linux',
-    arch: 'x64',
-    osRelease: 'fake-release',
-    shell: '/bin/bash',
-  }),
-  packagedElectronResourcesPath: () => undefined,
-});
-
 export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
@@ -611,8 +562,6 @@ export function createFakePlatform(
     globalState: new FakeStateStore(options.globalState),
     fs: new FakeFileSystemProvider(options.files),
     storage: new FakeStorageProvider(options.globalStoragePath),
-    processes: new FakeProcesses(),
-    hostEnvironment: FAKE_HOST_ENVIRONMENT,
     fileLocks: {
       withFileLock: (lockPath) => withPerKeyLane(lockLanes, lockPath),
     },

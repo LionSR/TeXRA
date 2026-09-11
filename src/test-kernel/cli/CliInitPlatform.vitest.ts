@@ -122,7 +122,6 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({
     config: { get: (_key: string, def: unknown) => def },
     globalState: mocks.cliGlobalState,
-    processes: { selfIdentity: async () => 'vitest' },
   }),
 }));
 

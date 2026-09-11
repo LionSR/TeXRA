@@ -235,7 +235,6 @@ const PLATFORM = {
   globalState: { get: () => undefined, update: async () => undefined },
   roots: { storage: '/storage' },
   storage: { getGlobalStoragePath: () => '/global-storage' },
-  processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
 /** The run's trace as `onRunResolved` hands it over: the event source. */
 const TRACE = { subscribe: mocks.subscribe };
