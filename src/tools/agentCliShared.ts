@@ -104,7 +104,7 @@ export const reraiseAgentCliCallFailure = <A, R>(
  * Publish a turn's token usage to the progress UI for an agent-CLI child run.
  * Shared by the codex and claudeAgent session strategies.
  */
-export function publishAgentCliStreamUsage(
+function publishAgentCliStreamUsage(
   runId: RunId,
   usage: TokenUsageStats,
   logger: AgentTrace,

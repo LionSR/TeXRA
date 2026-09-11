@@ -8,10 +8,9 @@ import {
   CODEX_THREAD_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
-import type { RunId, TodoItem, TokenUsageStats } from '@shared/schemas';
+import type { RunId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local file imports
@@ -31,12 +30,6 @@ const todos: TodoItem[] = [
     activeForm: 'Routing Codex progress through the runtime host',
   },
 ];
-
-const usage: TokenUsageStats = {
-  inputTokens: 10,
-  outputTokens: 5,
-  cost: 0,
-};
 
 async function* streamEvents(
   events: ThreadEvent[],
@@ -80,25 +73,16 @@ function toolLogs(store: StreamLog): Record<string, unknown>[] {
 }
 
 describe('codex progress events', () => {
-  it('publishes todos and usage as run facts', () => {
+  it('publishes todos as run facts', () => {
     const trace = new TraceEmitter();
     const recorded = recordTraceEvents(trace);
 
     publishCodexTodos(runId, todos, trace);
-    publishAgentCliStreamUsage(runId, usage, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
         runId,
         todos,
-      },
-    ]);
-    expect(traceEventsOfType(recorded.events, 'usage')).toMatchObject([
-      {
-        payload: {
-          runId,
-          usage,
-        },
       },
     ]);
   });
