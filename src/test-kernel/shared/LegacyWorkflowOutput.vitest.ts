@@ -145,6 +145,35 @@ describe('filename-era workflow output grammar', () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps the source's own .bib and .bak files when packing", async () => {
+    for (const name of [
+      'paper.tex',
+      'paper.pdf',
+      'paper.bib',
+      'paper.bak1',
+      'paper.aux',
+      'paper_polish_r0_gpt-4.tex',
+    ]) {
+      await writeFile(path.join(workspacePath, name), 'fixture');
+    }
+
+    const result = await runPackSingle(
+      'gpt-4',
+      'paper.tex',
+      'custom:polish_long',
+    );
+
+    expect(result.status).toBe('success');
+    for (const kept of ['paper.bib', 'paper.bak1']) {
+      await expect(
+        access(path.join(workspacePath, kept)),
+      ).resolves.toBeUndefined();
+    }
+    await expect(
+      access(path.join(workspacePath, 'paper.aux')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('packs a flat XML round output', async () => {
     const xmlRelativePath = 'paper_polish_r0_gpt-4.xml';
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');

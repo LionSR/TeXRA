@@ -103,7 +103,21 @@ export async function runPackSingle(
       log.debug(`File operations:\n${operations.join('\n')}`);
     }
 
-    await cleanupTempFiles(inputDir, filePatterns, movedFiles, copiedFiles);
+    const packed = new Set([...movedFiles, ...copiedFiles]);
+    await cleanupTempFiles(
+      inputDir,
+      targets.filePatterns,
+      TEMP_EXTENSIONS,
+      packed,
+    );
+    // The source's own `<base>.bib` and `<base>.bak*` are the user's files,
+    // not build artifacts: only sweep the source basename's generated ones.
+    await cleanupTempFiles(
+      inputDir,
+      [baseName],
+      TEMP_EXTENSIONS.filter((ext) => ext !== '.bib' && ext !== '.bak*'),
+      packed,
+    );
 
     return { status: 'success', outputFolder: resolvedOutputFolder };
   } catch (err) {
@@ -227,15 +241,13 @@ async function moveAndCopyFiles(
 async function cleanupTempFiles(
   inputDir: string,
   filePatterns: string[],
-  movedFiles: string[],
-  copiedFiles: string[],
+  extensions: string[],
+  skip: ReadonlySet<string>,
 ): Promise<void> {
-  const skip = new Set([...movedFiles, ...copiedFiles]);
-
   for await (const file of findFilesFromPatterns(
     inputDir,
     filePatterns,
-    TEMP_EXTENSIONS,
+    extensions,
   )) {
     if (!skip.has(file)) {
       await WorkspaceFS.delete(file);
