@@ -33,7 +33,6 @@ import {
   getRunContextExecutionId,
   getRunContextStreamId,
 } from '@agent/runtime/RunContext';
-import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -106,8 +105,6 @@ import {
   shouldSkipWait,
 } from './executions/waitCoordination';
 import { workflowExecutionView } from './executions/workflowSummaryView';
-
-const log = createLog('ExecutionsTool');
 
 /**
  * Bound on the durable reads one listing page or one children block fans
