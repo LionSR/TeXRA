@@ -30,7 +30,6 @@ import type { AgentFlowResult } from './AgentFlowResult';
  */
 export interface RunAgentOptions extends Pick<
   ExecuteAgentOptions,
-  | 'suppressErrorNotification'
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
@@ -47,6 +46,11 @@ export interface RunAgentOptions extends Pick<
   readonly session: SessionHandle;
   /** Reject an explicitly supplied category that differs from the resolved definition. */
   readonly enforceCategory?: boolean;
+  /**
+   * The caller owns presentation for failures before registration; after
+   * that the run's `result` event presents.
+   */
+  suppressErrorNotification?: boolean;
   /**
    * Persist host-owned final state before the ordinary session drain. Return
    * true when the hook already drained artifacts and disposed of ownership.
@@ -95,6 +99,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     beforeLeaseRelease,
     onRunLeaseAcquired,
     preferHelperModel,
+    suppressErrorNotification,
     ...executeAgentOptions
   } = options;
   const runId = request.runId ?? generateRunId();
@@ -145,7 +150,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           session: runSession,
           enforceCategory: request.kind === 'resume' || options.enforceCategory,
           signal: launchSignal,
-          suppressErrorNotification: options.suppressErrorNotification,
+          suppressErrorNotification,
         });
         const { config } = definition;
         const userFollowUpSupport =

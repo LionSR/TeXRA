@@ -346,11 +346,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** The run's `run.start` was committed by an earlier activation (a resume). */
   resumed?: boolean;
   /**
-   * The caller owns presentation for failures before registration (read by
-   * `runAgent`'s prepare step; after that the run's `result` event presents).
-   */
-  suppressErrorNotification?: boolean;
-  /**
    * Fires with the run id once its `run.start` is published, before the run
    * begins: the run exists for every fold, so a host may select it as its
    * own surface state. The run's trace comes with it, before its first

@@ -159,6 +159,33 @@ describe('AgentLaunchContext', () => {
     session.dispose();
   });
 
+  it('falls back to the generic toast when a live host throws on the missing-agent banner', async () => {
+    // A live host whose banner post throws synchronously (a renderer torn
+    // down mid-post, #10466) must leave the failure unclaimed: it is
+    // pre-registration, so no `result` event exists to present it instead.
+    const events: string[] = [];
+    const session = createTestSession();
+    session.interactions.use({
+      emit: (event) => {
+        if (event === 'showAgentConfigBanner') {
+          throw new Error('renderer torn down mid-post');
+        }
+        events.push(event);
+      },
+      cancel: () => {},
+    });
+
+    try {
+      await launchWithMissingAgent(session);
+    } finally {
+      session.dispose();
+    }
+
+    expect(events.filter((event) => event === 'requestShowError')).toHaveLength(
+      1,
+    );
+  });
+
   it('does not double-surface a model-not-recognized failure via the generic error toast', async () => {
     const recording = createRecordingHost();
     const session = createTestSession();

@@ -509,6 +509,11 @@ export class SessionHostInteractions implements HostInteractions {
     };
   }
 
+  /**
+   * Present `event` through the active host, or queue it for the next one
+   * when `replayWhenAttached` is set. Returns `false` when the live host
+   * threw, so a caller whose notice is a failure's only surface can fall back.
+   */
   emit<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
@@ -520,7 +525,7 @@ export class SessionHostInteractions implements HostInteractions {
         return active.interactions.emit?.(event, payload);
       } catch (error) {
         logger.warn('Live presentation emit failed', { data: error });
-        return undefined;
+        return false;
       }
     }
     // The replay loop warn-logs a replay that throws or rejects.
