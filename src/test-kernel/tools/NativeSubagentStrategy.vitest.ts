@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, Fiber, type Layer } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
@@ -93,19 +93,19 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  type FakeProcessServices,
+} from '@test/support/setupPlatform';
 import {
   createNativeSubagentStrategy,
   provideAgentEngine,
 } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError } from '@utils/errors/errorMessage';
 
-/** The process services the installed fake host provides to a child run. */
-type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
-
 /** Drive and join the native child at the test entry point. */
 function startChildRunLoop<TTurn>(
-  input: ChildRunLoopParams<TTurn, ProcessServices>,
+  input: ChildRunLoopParams<TTurn, FakeProcessServices>,
 ) {
   return Effect.runPromise(
     startNativeChildRunLoop(input).pipe(
@@ -117,7 +117,7 @@ function startChildRunLoop<TTurn>(
 
 /** Run one strategy turn on the fake host's process services. */
 function runOnFakeHost<A, E>(
-  turn: Effect.Effect<A, E, ProcessServices>,
+  turn: Effect.Effect<A, E, FakeProcessServices>,
 ): Promise<A> {
   return Effect.runPromise(Effect.provide(turn, fakeProcessServices()));
 }

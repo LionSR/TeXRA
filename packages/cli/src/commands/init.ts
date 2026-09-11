@@ -172,10 +172,7 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const { agents, models } = await gatherOptions({
-    secrets: services.secrets,
-    globalState: services.globalState,
-  });
+  const { agents, models } = await gatherOptions(services);
 
   const interactive =
     !opts.yes &&

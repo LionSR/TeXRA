@@ -12,8 +12,7 @@ import {
   type CreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { fakeStores } from '@test/support/FakePlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const mocks = vi.hoisted(() => ({
@@ -37,10 +36,7 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
  * The creator only forwards its stores to `createHelperModelKit`, which this
  * suite mocks, so empty stores are enough to exercise the orchestration.
  */
-const STORES: ModelOptionStores = {
-  secrets: new FakeSecrets(),
-  globalState: new FakeStateStore(),
-};
+const STORES = fakeStores();
 
 const CONFIG: CreatorConfig = {
   workflow: {

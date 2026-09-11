@@ -48,21 +48,16 @@ async function loadModelAccessList(
       // The init call hands back the stores it just wired, so the follow-up
       // `show` lookup reads the same pair the list was computed from.
       const services = await initCliPlatform({ ...context, quietLogs: true });
-      const stores = modelOptionStoresOf(services);
       const models = await getCliModelAccessList({
-        stores,
+        stores: services,
         models:
           options.includeUnavailable === true ? knownCliModelIds() : undefined,
       });
-      return { models, stores };
+      return { models, stores: services };
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };
   }
-}
-
-function modelOptionStoresOf(services: CliPlatformServices): ModelOptionStores {
-  return { secrets: services.secrets, globalState: services.globalState };
 }
 
 async function listModels(

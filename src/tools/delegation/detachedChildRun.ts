@@ -29,7 +29,6 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import type { ChildRun } from './childRun';

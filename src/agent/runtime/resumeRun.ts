@@ -24,8 +24,7 @@ import { getRunRecords } from '@agent/storage/RunKVStore';
 import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
-import type { AppState, RecoveryContinuation } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -52,7 +51,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { ToolInjections } from './toolInjection';
+import type { AgentRunServices } from './toolInjection';
 
 /**
  * `started` once the resumed generation has settled (a tool-use turn parked
@@ -138,11 +137,7 @@ export interface ResumeRunOptions extends Pick<
 export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<
-  ResumeRunResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session ?? defaultSession();
   if (
     options.isCancellationRequested?.() === true ||
@@ -206,11 +201,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   runId: RunId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
-): Effect.fn.Return<
-  ResumeRunResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session ?? defaultSession();
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
@@ -389,11 +380,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   resume: ToolUseResumeData,
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
-): Effect.fn.Return<
-  ResumeRunResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
   const runStatus = session.status;
   const followUpsQueue = session.followUps;

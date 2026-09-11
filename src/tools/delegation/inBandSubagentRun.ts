@@ -28,10 +28,8 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
-import type { AppState } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -90,7 +88,7 @@ interface StableInBandSubagentRunOptions {
   readonly prepare: () => Effect.Effect<
     Omit<InBandSubagentRunBaseOptions, 'signal'>,
     Error,
-    ToolInjections | AppState | Secrets
+    AgentRunServices
   >;
   /**
    * Fires once, just before a live attempt runs, with the run id that
@@ -169,11 +167,7 @@ const executeInBand = Effect.fn('executeInBand')(
     mode: PersistenceMode,
     runId: RunId,
     stableAttempt?: StableSubagentAttempt,
-  ): Effect.fn.Return<
-    InBandSubagentDeliveryResult,
-    Error,
-    ToolInjections | AppState | Secrets
-  > {
+  ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
@@ -449,11 +443,7 @@ export const executeStableSubagentInBand = Effect.fn(
 )(
   function* (
     options: StableInBandSubagentRunOptions,
-  ): Effect.fn.Return<
-    InBandSubagentRunResult,
-    Error,
-    ToolInjections | AppState | Secrets
-  > {
+  ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const reservation = yield* Effect.acquireRelease(
@@ -525,11 +515,7 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
   'executeSubagentForDeliveryInBand',
 )(function* (
   options: InBandSubagentDeliveryOptions,
-): Effect.fn.Return<
-  InBandSubagentDeliveryResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(
     options,

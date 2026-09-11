@@ -14,6 +14,7 @@
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AppState } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import type { Secrets } from '@platform/secrets';
@@ -68,6 +69,16 @@ export function installedHost(): FakeHost {
   return current;
 }
 
+/**
+ * The installed fake host's two process stores, as the model-option and CLI
+ * history readers take them. Read per call, not captured: a suite that
+ * reinstalls its host mid-test sees the new one.
+ */
+export function hostStores(): ModelOptionStores {
+  const { secrets, globalState } = installedHost().platform;
+  return { secrets, globalState };
+}
+
 function installedSetup(): SetupPlatformShape {
   const { setup } = installedHost();
   if (!setup) {
@@ -99,11 +110,13 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   },
 };
 
-type FakeProcessServices = Layer.Layer<
-  Secrets | AppState | SetupPlatform | ToolInjections
->;
+/** The four process services a fake host provides to a program. */
+export type FakeProcessServices =
+  Secrets | AppState | SetupPlatform | ToolInjections;
 
-let processServices: FakeProcessServices | undefined;
+type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
+
+let processServices: FakeProcessServicesLayer | undefined;
 
 /**
  * The four process services over the installed fake host, as
@@ -112,7 +125,7 @@ let processServices: FakeProcessServices | undefined;
  * `it.effect`. Available once the first fake host is installed, which the
  * kernel's setup file does before every test.
  */
-export function fakeProcessServices(): FakeProcessServices {
+export function fakeProcessServices(): FakeProcessServicesLayer {
   if (!processServices) {
     throw new Error(
       'No fake host is installed: the process services are built with the first install.',

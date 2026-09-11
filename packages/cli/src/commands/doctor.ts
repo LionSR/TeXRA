@@ -7,6 +7,7 @@ import {
   initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
+import { getCliModelAccessList } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
@@ -15,24 +16,22 @@ import type { CliContext } from '../runtime/cliContext';
 
 async function runDoctor(context: CliContext): Promise<number> {
   let initError: unknown;
-  let services: CliPlatformServices | undefined;
+  let initialized: CliPlatformServices | undefined;
   try {
-    services = await suppressCliFetchStackLogs(() =>
+    initialized = await suppressCliFetchStackLogs(() =>
       initCliPlatform({ ...context, quietLogs: true }),
     );
   } catch (error) {
     initError = error;
   }
+  // A const, so the probe closure below sees the initialized value rather
+  // than the reassignable binding's `| undefined`.
+  const services = initialized;
   const report = await suppressCliFetchStackLogs(() =>
     buildDoctorReport(
       context,
       services
-        ? {
-            stores: {
-              secrets: services.secrets,
-              globalState: services.globalState,
-            },
-          }
+        ? { modelAccessList: () => getCliModelAccessList({ stores: services }) }
         : {},
       initError,
     ),

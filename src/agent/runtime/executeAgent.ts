@@ -20,8 +20,6 @@ import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
-import type { AppState } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
   type ModelHandlerCompatibilityKey,
@@ -66,7 +64,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
-import { ToolInjections } from './toolInjection';
+import { ToolInjections, type AgentRunServices } from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
@@ -388,7 +386,7 @@ export function executeAgent(
 ): Effect.Effect<
   AgentFlowResult | WaitingToolUseFlowResult,
   Error,
-  ToolInjections | AppState | Secrets
+  AgentRunServices
 >;
 export function executeAgent(
   definition: PreparedAgentDefinition,
@@ -397,7 +395,7 @@ export function executeAgent(
     parentRunId?: undefined;
     session: SessionHandle;
   },
-): Effect.Effect<AgentFlowResult, Error, ToolInjections | AppState | Secrets>;
+): Effect.Effect<AgentFlowResult, Error, AgentRunServices>;
 
 /**
  * Low-level run runner for an already-registered run. Fresh
@@ -409,11 +407,7 @@ export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
-): Effect.Effect<
-  AgentRuntimeFlowResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
@@ -723,11 +717,7 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
 export function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-): Effect.Effect<
-  AgentRuntimeFlowResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   return options.session.runs.launchRun(
     resume.runId,
     resumeToolUseTurn(resume, options),

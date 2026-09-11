@@ -12,9 +12,8 @@ import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseF
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { platform } from '@platform/platform';
 import { AgentCategory, type RunId } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 
@@ -106,10 +105,7 @@ describe('run-scoped tool overlay', () => {
             modelCell,
             toolPolicy: createToolPolicy(),
             onModelChanged: () => {},
-            stores: {
-              secrets: platform().secrets,
-              globalState: platform().globalState,
-            },
+            stores: hostStores(),
             toolInjections: new ToolInjectionRegistry(),
             interrupt: () => {},
             onRoundFinalized: () => {},
@@ -182,10 +178,7 @@ describe('run-scoped tool overlay', () => {
             runtimeUnavailableTools: ['inquiry'],
           }),
           onModelChanged: () => {},
-          stores: {
-            secrets: platform().secrets,
-            globalState: platform().globalState,
-          },
+          stores: hostStores(),
           toolInjections: new ToolInjectionRegistry(),
           interrupt: () => {},
           onRoundFinalized: () => {},

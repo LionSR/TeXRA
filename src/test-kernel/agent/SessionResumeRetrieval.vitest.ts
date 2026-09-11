@@ -34,7 +34,6 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { parseToolUseShared } from '@agent/implementations/flows/tooluse/nodes/types';
-import { platform } from '@platform/platform';
 import {
   AgentRunStateSnapshotSchema,
   RUN_OUTCOME,
@@ -44,7 +43,7 @@ import {
   type StateSlicesSnapshot,
   AgentCategory,
 } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -333,10 +332,7 @@ async function runPersistedFlow(
           runScope,
           setting: TOOL_USE_SETTING,
           prompt: TOOL_USE_PROMPT,
-          stores: {
-            secrets: platform().secrets,
-            globalState: platform().globalState,
-          },
+          stores: hostStores(),
           logger: noopTrace,
           userVarChannels,
           modelCell,

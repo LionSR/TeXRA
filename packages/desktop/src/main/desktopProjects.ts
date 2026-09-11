@@ -22,10 +22,7 @@ import {
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
-import {
-  runWithWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import {

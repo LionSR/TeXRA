@@ -1,4 +1,4 @@
-import { Effect, type Layer } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -58,12 +58,12 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  type FakeProcessServices,
+} from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
-
-/** The process services the installed fake host provides to a launch. */
-type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
 
 const LAUNCH_FAILURE = new Error('stop after run activation');
 
@@ -100,7 +100,7 @@ interface StartedLaunch {
 async function captureStartedLaunch(
   run: (
     session: ReturnType<typeof createTestSession>,
-  ) => Effect.Effect<unknown, Error, ProcessServices>,
+  ) => Effect.Effect<unknown, Error, FakeProcessServices>,
   options: {
     /** The launching run, when this launch is a child. */
     readonly parentRunId?: RunId;

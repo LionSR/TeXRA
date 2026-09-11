@@ -24,7 +24,6 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
@@ -101,12 +100,6 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
   onModelChanged: (model: string) => void;
   /** The process's conditional tool injections (`ToolInjections`). */
   toolInjections: ToolInjections['Service'];
-  /**
-   * The process secret store and global state (`Secrets` / `AppState`): the
-   * user's disabled-tool set, and the stores a mid-run model switch rebuilds
-   * its handler from.
-   */
-  stores: ModelOptionStores;
   /** Caller-supplied tools available only to this run. */
   tools?: readonly ITool[];
   /** Reports whether terminal finalization should retain the resume record. */

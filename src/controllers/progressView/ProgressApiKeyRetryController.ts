@@ -18,7 +18,6 @@ import {
   isKimiCodeSubscriptionRetryBlocked,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
-import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('ProgressApiKeyRetryController');

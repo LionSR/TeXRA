@@ -40,7 +40,7 @@ import {
 } from '@agent/runtime/SessionResumeRetrieval';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
@@ -48,8 +48,6 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import type { AppState } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
   emptyRunEndOutput,
@@ -91,11 +89,7 @@ export interface AgentEngine {
   readonly resumeToolUseTurn: (
     resume: ToolUseResumeData,
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-  ) => Effect.Effect<
-    AgentRuntimeFlowResult,
-    Error,
-    ToolInjections | AppState | Secrets
-  >;
+  ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>;
 }
 
 let agentEngine: AgentEngine | undefined;
@@ -202,10 +196,7 @@ function bindAbortSignals(
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<
-  AgentRuntimeFlowResult,
-  ToolInjections | AppState | Secrets
-> {
+): ChildRunStrategy<AgentRuntimeFlowResult, AgentRunServices> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent`/`resumeToolUseTurn` never reject for a
@@ -228,11 +219,7 @@ export function createNativeSubagentStrategy(
     signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => void,
-    ) => Effect.Effect<
-      AgentRuntimeFlowResult,
-      Error,
-      ToolInjections | AppState | Secrets
-    >,
+    ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
     lastResult = undefined;

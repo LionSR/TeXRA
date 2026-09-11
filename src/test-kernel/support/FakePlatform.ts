@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
 // Local imports
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
@@ -506,6 +507,14 @@ export class FakeSecrets implements PlatformSecrets {
   getEnv(name: string): string | undefined {
     return this.env[name];
   }
+}
+
+/**
+ * A detached pair of process stores, for a suite whose readers are all mocked
+ * and only pass the bag through.
+ */
+export function fakeStores(): ModelOptionStores {
+  return { secrets: new FakeSecrets(), globalState: new FakeStateStore() };
 }
 
 export interface FakePlatformOptions {

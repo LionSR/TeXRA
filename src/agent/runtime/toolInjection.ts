@@ -1,5 +1,7 @@
 import { Context, Layer } from 'effect';
 
+import type { AppState } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 // Deliberately not the `@tools/goal` barrel: it also loads goalStore, whose
@@ -83,3 +85,11 @@ export class ToolInjections extends Context.Service<
     return Layer.succeed(ToolInjections)({ list: () => injections });
   }
 }
+
+/**
+ * The process services every step of an agent run reads on the way down: the
+ * conditional tool injections, the global state store and the secret store.
+ * Named once here because the launch, resume and delegation signatures all
+ * carry exactly these three tags in their `R` channel.
+ */
+export type AgentRunServices = ToolInjections | AppState | Secrets;

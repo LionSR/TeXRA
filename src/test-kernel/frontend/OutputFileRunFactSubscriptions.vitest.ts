@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -153,24 +154,8 @@ function latestDiagnostics(absolutePath: string): unknown[] | undefined {
  * list, and the memento the inline-criticism toggle is stored in (the feature
  * reads and writes the toggle through the context it was registered with).
  */
-function fakeExtensionContext(): {
-  subscriptions: Array<{ dispose(): unknown }>;
-  globalState: {
-    get(key: string, defaultValue: unknown): unknown;
-    update(key: string, value: unknown): Promise<void>;
-  };
-} {
-  const values = new Map<string, unknown>();
-  return {
-    subscriptions: [],
-    globalState: {
-      get: (key, defaultValue) =>
-        values.has(key) ? values.get(key) : defaultValue,
-      update: async (key, value) => {
-        values.set(key, value);
-      },
-    },
-  };
+function fakeExtensionContext() {
+  return { subscriptions: [], globalState: new FakeStateStore() };
 }
 
 function disposeContext(context: {

@@ -12,7 +12,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it as effectIt } from '@effect/vitest';
-import { Effect, Result, type Layer } from 'effect';
+import { Effect, Result } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { runWorkflowAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
@@ -27,12 +27,10 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import {
   fakeProcessServices,
+  type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
 import { withTempDir } from '@test/support/tempDirPlatform';
-
-/** The process services the installed fake host provides to a run. */
-type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
 
 const mocks = vi.hoisted(() => {
   return {
@@ -109,7 +107,7 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
       typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
         unknown,
         unknown,
-        ProcessServices
+        FakeProcessServices
       >
     >
   ) =>

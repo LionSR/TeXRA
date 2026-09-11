@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { fakeStores } from '@test/support/FakePlatform';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
 const getModelUnavailableReason = vi.hoisted(() => vi.fn());
@@ -19,10 +18,7 @@ vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
  * (`getHelperModelName`, `getModelUnavailableReason`) are mocked here, so the
  * bag only has to be the one the preference forwards.
  */
-const STORES: ModelOptionStores = {
-  secrets: new FakeSecrets(),
-  globalState: new FakeStateStore(),
-};
+const STORES = fakeStores();
 
 const MODEL_CONFIGS = {
   deepseek: { capabilities: { supportsFunctionCalling: true } },

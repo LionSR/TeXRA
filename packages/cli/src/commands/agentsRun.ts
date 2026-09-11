@@ -67,11 +67,7 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   });
 
   const model = yield* Effect.tryPromise({
-    try: () =>
-      selectCliRunModel(context, init.model, 'chat', {
-        secrets: services.secrets,
-        globalState: services.globalState,
-      }),
+    try: () => selectCliRunModel(context, init.model, 'chat', services),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

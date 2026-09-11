@@ -34,8 +34,8 @@ import {
   apiKeySecretName,
   type ApiProvider,
 } from '@model/apiProviders';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -179,8 +179,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     return yield* runOnboardingFlow({
-      globalState: services.globalState,
-      secrets: services.secrets,
+      stores: services,
       firstRun: true,
       colorEnabled: context.stdoutColorEnabled,
     });
@@ -200,17 +199,18 @@ export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
 ): Effect.fn.Return<CliOnboardingResult, Error> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
   return yield* runOnboardingFlow({
-    globalState: services.globalState,
-    secrets: services.secrets,
+    stores: services,
     firstRun: false,
     colorEnabled,
   });
 });
 
 const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
-  readonly globalState: StateStore;
-  /** The store a picked provider key is written to — the root's own. */
-  readonly secrets: PlatformSecrets;
+  /**
+   * The root's own stores: a picked provider key is written to the secret
+   * store, and the skip flag to the global state.
+   */
+  readonly stores: ModelOptionStores;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Effect.fn.Return<CliOnboardingResult, Error> {
@@ -224,7 +224,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
       renderCliPrompt<OnboardingResolution>(
         (resolve) => (
           <OnboardingApp
-            secrets={options.secrets}
+            secrets={options.stores.secrets}
             pickerSubtitle={
               options.firstRun
                 ? 'No provider API key is configured. Choose how to power model calls:'
@@ -249,7 +249,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.globalState, true),
+      try: () => setOnboardingDeclined(options.stores.globalState, true),
       catch: ensureError,
     }).pipe(
       Effect.catch(() =>
@@ -266,7 +266,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
     yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(options.globalState, false),
+      try: () => setOnboardingDeclined(options.stores.globalState, false),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>

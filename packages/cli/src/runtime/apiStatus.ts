@@ -99,18 +99,13 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
-async function personalKeyProviders(
-  secrets: PlatformSecrets,
-): Promise<string[]> {
-  return configuredApiKeyProviders(secrets);
-}
-
 /** Compact status lines used by the launcher. */
 export async function loadCliApiStatus(
   secrets: PlatformSecrets,
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
 ): Promise<readonly string[]> {
-  const configuredPersonalKeyProviders = await personalKeyProviders(secrets);
+  const configuredPersonalKeyProviders =
+    await configuredApiKeyProviders(secrets);
   const authLine = formatCliAuthStatusLine(profile);
 
   const personalKeysLine = formatPersonalApiKeysLine(
@@ -152,7 +147,7 @@ export async function loadCliDetailedAccountStatusLines(
   const [access, profile, providers] = await Promise.all([
     readCliModelAccessStatus(secrets),
     getCliAuthProfile(),
-    personalKeyProviders(secrets),
+    configuredApiKeyProviders(secrets),
   ]);
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service, and

@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  computeModelOptionsData,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   setCopilotRoutePreference,
@@ -25,7 +22,11 @@ import type {
 } from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installedHost,
+  installPlatform,
+} from '@test/support/setupPlatform';
 
 // The discovered-editor-model fixture must track an llm-zoo base model that
 // is active (neither deprecated nor retired) and Copilot-documented (carries
@@ -52,12 +53,6 @@ const GPT_56: LanguageModelInfo = {
   maxInputTokens: 128_000,
   access: 'allowed',
 };
-
-/** The installed fake host's stores, as the model-option readers take them. */
-function modelOptionStores(): ModelOptionStores {
-  const { secrets, globalState } = installedHost().platform;
-  return { secrets, globalState };
-}
 
 function languageModelPort(
   models: readonly LanguageModelInfo[],
@@ -283,9 +278,7 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(modelOptionStores(), [
-      'gemini31p',
-    ]);
+    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -317,10 +310,7 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(
-      modelOptionStores(),
-      undefined,
-    );
+    const options = await computeModelOptionsData(hostStores(), undefined);
 
     expect(options.map((option) => option.value)).toEqual(['gpt55']);
   });
@@ -344,10 +334,7 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(
-      modelOptionStores(),
-      undefined,
-    );
+    const options = await computeModelOptionsData(hostStores(), undefined);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -372,9 +359,7 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(modelOptionStores(), [
-      'gemini31p',
-    ]);
+    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -394,9 +379,7 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(modelOptionStores(), [
-      'gemini31p',
-    ]);
+    const options = await computeModelOptionsData(hostStores(), ['gemini31p']);
 
     expect(options[0]).toEqual(
       expect.objectContaining({

@@ -24,7 +24,7 @@ import { RunHandle } from './RunHandle';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
-import type { ToolInjections } from './toolInjection';
+import type { AgentRunServices } from './toolInjection';
 
 /**
  * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
@@ -97,11 +97,7 @@ export type RunAgentRequest =
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
   options: RunAgentOptions,
-): Effect.fn.Return<
-  AgentFlowResult,
-  Error,
-  ToolInjections | AppState | Secrets
-> {
+): Effect.fn.Return<AgentFlowResult, Error, AgentRunServices> {
   const {
     beforeLeaseRelease,
     onRunLeaseAcquired,

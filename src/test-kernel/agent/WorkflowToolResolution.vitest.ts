@@ -10,14 +10,13 @@ import {
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { platform } from '@platform/platform';
 import {
   AgentCategory,
   type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testModelCell } from './modelCellTestUtils';
 
@@ -127,10 +126,7 @@ async function observeWorkflowTools({
           prompt: PROMPT,
           logger,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
-          stores: {
-            secrets: platform().secrets,
-            globalState: platform().globalState,
-          },
+          stores: hostStores(),
           userVarChannels: { MODEL: CONFIG.model },
           modelCell,
           toolPolicy: createToolPolicy({

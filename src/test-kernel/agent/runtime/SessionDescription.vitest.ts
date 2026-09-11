@@ -7,10 +7,9 @@ import {
   getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
 import * as logger from '@logger/logUtils';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { fakeStores } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
@@ -27,10 +26,7 @@ const mocks = vi.hoisted(() => ({
  * The launching run's stores. `createHelperModelKit` is the only reader and it
  * is mocked here, so empty stores carry the description path.
  */
-const STORES: ModelOptionStores = {
-  secrets: new FakeSecrets(),
-  globalState: new FakeStateStore(),
-};
+const STORES = fakeStores();
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),

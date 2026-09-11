@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlatformSecrets } from '@platform/secrets';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -22,22 +22,11 @@ interface TokenCase {
  * The case's secret store as the port both readers take: the token flows
  * through this object alone, never through `process.env`.
  */
-function secretsFor({ secret, secretsEnv }: TokenCase): PlatformSecrets {
-  const stored = new Map<string, string>(
-    secret === undefined ? [] : [[GITHUB_TOKEN_STORAGE_KEY, secret]],
+function secretsFor({ secret, secretsEnv }: TokenCase): FakeSecrets {
+  return new FakeSecrets(
+    secret === undefined ? {} : { [GITHUB_TOKEN_STORAGE_KEY]: secret },
+    secretsEnv ?? {},
   );
-  return {
-    get: async (key) => secretsEnv?.[key] ?? stored.get(key),
-    getStored: async (key) => stored.get(key),
-    set: async (key, value) => {
-      stored.set(key, value);
-    },
-    delete: async (key) => {
-      stored.delete(key);
-    },
-    listStoredKeys: async () => [...stored.keys()],
-    getEnv: (name) => secretsEnv?.[name],
-  };
 }
 
 function stubProcessEnv({ processEnv }: TokenCase): void {

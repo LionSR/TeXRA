@@ -15,7 +15,7 @@ import { AppState } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
 import {
@@ -29,7 +29,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -144,11 +144,7 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
         }
 
         const model = yield* Effect.tryPromise({
-          try: () =>
-            selectCliRunModel(context, init.model, 'run', {
-              secrets: services.secrets,
-              globalState: services.globalState,
-            }),
+          try: () => selectCliRunModel(context, init.model, 'run', services),
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);

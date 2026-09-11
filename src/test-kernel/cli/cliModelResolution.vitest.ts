@@ -10,9 +10,8 @@ import {
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { fakeStores } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   selectCliRunnableModel: vi.fn(),
@@ -47,10 +46,7 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
 const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 
 /** The stores each command hands to `selectCliRunModel`; model access is mocked. */
-const STORES: ModelOptionStores = {
-  secrets: new FakeSecrets(),
-  globalState: new FakeStateStore(),
-};
+const STORES = fakeStores();
 
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {

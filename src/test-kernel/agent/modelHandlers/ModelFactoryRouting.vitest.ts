@@ -36,10 +36,7 @@ import {
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,
@@ -49,7 +46,7 @@ import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -111,16 +108,6 @@ function signedInCodexSession(): CodexSession {
 
 const tempDirs = useTempDirs();
 
-/**
- * The two stores of the fake host installed right now. Read per call, not
- * captured: this suite reinstalls the host between assertions and resets
- * modules around it.
- */
-function modelStores(): ModelOptionStores {
-  const { platform } = installedHost();
-  return { secrets: platform.secrets, globalState: platform.globalState };
-}
-
 describe('Copilot model handler routing', () => {
   const copilotConfig = modelConfig(ModelProvider.COPILOT, {
     supportsFunctionCalling: true,
@@ -130,7 +117,7 @@ describe('Copilot model handler routing', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         copilotConfig,
-        modelStores().globalState,
+        hostStores().globalState,
         true,
       ),
     ).toBe('ModelHandlerVscodeLm');
@@ -140,7 +127,7 @@ describe('Copilot model handler routing', () => {
     await installPlatform();
 
     await expect(
-      createModelHandler(copilotConfig, modelStores()),
+      createModelHandler(copilotConfig, hostStores()),
     ).rejects.toMatchObject({
       name: 'LanguageModelPortError',
       code: LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
@@ -154,7 +141,7 @@ describe('Copilot model handler routing', () => {
     );
 
     await inspectHandler(
-      createModelHandler(copilotConfig, modelStores()),
+      createModelHandler(copilotConfig, hostStores()),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
         expect(activeModelHandlerCompatibilityKey(handler)).toBe(
@@ -211,13 +198,13 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         config,
-        modelStores().globalState,
+        hostStores().globalState,
         true,
       ),
     ).toBe('ModelHandlerVscodeLm');
 
     await inspectHandler(
-      createModelHandler(config, modelStores()),
+      createModelHandler(config, hostStores()),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
         expect(handler.config.name).toBe('gemini31p');
@@ -231,7 +218,7 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gemini31p,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerGoogleInteractions');
@@ -246,7 +233,7 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         config,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
         'direct',
       ),
@@ -254,18 +241,18 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         config,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerVscodeLm');
 
     const directHandler = await createModelHandler(
       config,
-      modelStores(),
+      hostStores(),
       undefined,
       'direct',
     );
-    const concurrentHandler = await createModelHandler(config, modelStores());
+    const concurrentHandler = await createModelHandler(config, hostStores());
     try {
       expect(directHandler.constructor.name).toBe(
         'ModelHandlerGoogleInteractions',
@@ -297,12 +284,12 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(() =>
       resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gemini31p,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toThrowError(/needs your approval/);
     await expect(
-      createModelHandler(MODEL_CONFIGS.gemini31p, modelStores()),
+      createModelHandler(MODEL_CONFIGS.gemini31p, hostStores()),
     ).rejects.toThrowError(/needs your approval/);
   });
 
@@ -314,7 +301,7 @@ describe('Copilot route preference on a canonical base model', () => {
     expect(() =>
       resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt56,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toThrowError(/does not currently offer "gpt56"/);
@@ -327,7 +314,7 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     await inspectHandler(
-      createModelHandler(MODEL_CONFIGS.gemini31p, modelStores()),
+      createModelHandler(MODEL_CONFIGS.gemini31p, hostStores()),
       (handler) => {
         expect(handler.config.contextWindow).toBe(160_000);
         expect(handler.config.inputPrice).toBe(0);
@@ -375,7 +362,7 @@ describe('Copilot route preference on a canonical base model', () => {
     await refreshRuntimeModelRegistry();
 
     await inspectHandler(
-      createModelHandler(MODEL_CONFIGS.gpt56, modelStores()),
+      createModelHandler(MODEL_CONFIGS.gpt56, hostStores()),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
         expect(activeModelHandlerCompatibilityKey(handler)).toBe(
@@ -392,7 +379,7 @@ describe('Copilot route preference on a canonical base model', () => {
       createModelHandlerForCompatibilityKey(
         MODEL_CONFIGS.gemini31p,
         'ModelHandlerVscodeLm',
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
@@ -421,11 +408,8 @@ describe('GLM custom endpoint routing', () => {
     });
     invalidateApiKeyCache();
 
-    const [access] = await computeModelOptionsData(modelStores(), ['glm52']);
-    const handler = await createModelHandler(
-      MODEL_CONFIGS.glm52,
-      modelStores(),
-    );
+    const [access] = await computeModelOptionsData(hostStores(), ['glm52']);
+    const handler = await createModelHandler(MODEL_CONFIGS.glm52, hostStores());
     try {
       const credential = await (
         handler as unknown as {
@@ -454,13 +438,10 @@ describe('GLM custom endpoint routing', () => {
     });
     invalidateApiKeyCache();
 
-    const [customAccess] = await computeModelOptionsData(modelStores(), [
+    const [customAccess] = await computeModelOptionsData(hostStores(), [
       'glm52',
     ]);
-    const handler = await createModelHandler(
-      MODEL_CONFIGS.glm52,
-      modelStores(),
-    );
+    const handler = await createModelHandler(MODEL_CONFIGS.glm52, hostStores());
     try {
       expect(handler.constructor.name).toBe('ModelHandlerGLM');
       expect(customAccess).toMatchObject({
@@ -473,7 +454,7 @@ describe('GLM custom endpoint routing', () => {
 
     delete MODEL_CONFIGS.glm52.baseUrl;
 
-    const [openRouterAccess] = await computeModelOptionsData(modelStores(), [
+    const [openRouterAccess] = await computeModelOptionsData(hostStores(), [
       'glm52',
     ]);
     expect(openRouterAccess).toMatchObject({
@@ -566,7 +547,7 @@ describe('OpenAI model handler routing', () => {
           fullName: 'gpt-5-compatible-test',
           shortName: 'legacy-chat-test',
         },
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerOpenAI');
@@ -578,7 +559,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     await inspectHandler(
-      createModelHandler(MODEL_CONFIGS.gpt56pro, modelStores()),
+      createModelHandler(MODEL_CONFIGS.gpt56pro, hostStores()),
       (handler) => {
         expect(handler.config.fullName).toBe('gpt-5.6-sol');
         expect(handler.capabilities.reasoningMode).toBe('pro');
@@ -592,7 +573,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     await expect(
-      createModelHandler(MODEL_CONFIGS.gpt56pro, modelStores()),
+      createModelHandler(MODEL_CONFIGS.gpt56pro, hostStores()),
     ).rejects.toThrow(/reasoning mode pro, which OpenRouter does not support/);
   });
 
@@ -631,7 +612,7 @@ describe('OpenAI model handler routing', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         codexEligibleConfig,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerOpenAIResponse');
@@ -646,7 +627,7 @@ describe('OpenAI model handler routing', () => {
     expect(
       resolveModelHandlerCompatibilityKey(
         codexEligibleConfig,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerOpenAIResponse');
@@ -658,7 +639,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     await inspectHandler(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
       (handler) => {
         expect(activeModelHandlerCompatibilityKey(handler)).toBe(
           'ModelHandlerOpenAIResponse',
@@ -676,7 +657,7 @@ describe('OpenAI model handler routing', () => {
           ...codexEligibleConfig,
           shortName: '',
         },
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(activeModelHandlerCompatibilityKey(handler)).toBe(
@@ -698,7 +679,7 @@ describe('OpenAI model handler routing', () => {
     );
 
     const handlerName = await inspectHandler(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
       (handler) => handler.constructor.name,
     );
     expect(handlerName).toBe('ModelHandlerOpenAIResponse');
@@ -712,7 +693,7 @@ describe('OpenAI model handler routing', () => {
     );
 
     await expect(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
     ).rejects.toMatchObject({
       name: 'AgentError',
       message: expect.stringContaining('Try again in a moment'),
@@ -730,7 +711,7 @@ describe('OpenAI model handler routing', () => {
     vi.spyOn(coordinator, 'loadSession').mockRejectedValue(readError);
 
     await expect(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
     ).rejects.toMatchObject({
       name: 'AgentError',
       cause: { kind: 'transient', cause: readError },
@@ -745,7 +726,7 @@ describe('OpenAI model handler routing', () => {
     );
 
     await expect(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
     ).rejects.toMatchObject({
       name: 'AgentError',
       cause: { name: 'CodexAuthError', kind: 'transient', cause: rawError },
@@ -756,7 +737,7 @@ describe('OpenAI model handler routing', () => {
     await installSignedInCodexPlatform();
 
     await inspectHandler(
-      createModelHandler(codexEligibleConfig, modelStores()),
+      createModelHandler(codexEligibleConfig, hostStores()),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerCodex');
         expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
@@ -769,11 +750,11 @@ describe('OpenAI model handler routing', () => {
 
   it('treats Codex and signed-out Responses handlers with the shared key as compatible', async () => {
     await installSignedInCodexPlatform();
-    const codex = await createModelHandler(codexEligibleConfig, modelStores());
+    const codex = await createModelHandler(codexEligibleConfig, hostStores());
     await codexCoordinator().signOut();
     const signedOut = await createModelHandler(
       codexEligibleConfig,
-      modelStores(),
+      hostStores(),
     );
     try {
       expect(codex.constructor).not.toBe(signedOut.constructor);
@@ -794,7 +775,7 @@ describe('OpenAI model handler routing', () => {
       createModelHandlerForCompatibilityKey(
         codexEligibleConfig,
         'ModelHandlerOpenAI',
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerOpenAI');
@@ -814,7 +795,7 @@ describe('OpenAI model handler routing', () => {
       createModelHandlerForCompatibilityKey(
         codexEligibleConfig,
         'ModelHandlerOpenAIResponse',
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerCodex');
@@ -856,7 +837,7 @@ describe('OpenAI model handler routing', () => {
     expect(
       passingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerValidation');
@@ -866,7 +847,7 @@ describe('OpenAI model handler routing', () => {
         ...modelConfig(ModelProvider.GOOGLE),
         requiresInteractionsAPI: true,
       } as ModelConfig,
-      modelStores(),
+      hostStores(),
     );
     await inspectHandler(validationHandler, (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerValidation');
@@ -878,7 +859,7 @@ describe('OpenAI model handler routing', () => {
     expect(() =>
       failingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toThrow(/restricted to package validation/);
@@ -911,7 +892,7 @@ describe('Google Interactions API routing', () => {
     expect(
       factory.resolveModelHandlerCompatibilityKey(
         googleConfig(),
-        modelStores().globalState,
+        hostStores().globalState,
         false,
       ),
     ).toBe('ModelHandlerGoogleInteractions');
@@ -923,7 +904,7 @@ describe('Google Interactions API routing', () => {
       factory.createModelHandlerForCompatibilityKey(
         googleConfig(),
         'ModelHandlerGoogleInteractions',
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerGoogleInteractions');
@@ -946,7 +927,7 @@ describe('Google Interactions API routing', () => {
       factory.createModelHandlerForCompatibilityKey(
         googleConfig(),
         'ModelHandlerOpenRouterNative',
-        modelStores(),
+        hostStores(),
       ),
       (handler) => {
         expect(handler.constructor.name).toBe('ModelHandlerOpenRouterNative');
@@ -1090,16 +1071,16 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
 
     const mismatches: string[] = [];
     for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
-      const predicted = compatKey(config, modelStores().globalState);
+      const predicted = compatKey(config, hostStores().globalState);
       if (predicted === undefined) {
         await expect(
-          create(config, modelStores()),
+          create(config, hostStores()),
           `${name}: no handler route, createModelHandler should reject`,
         ).rejects.toThrow();
         continue;
       }
       const actual = await inspectHandler(
-        create(config, modelStores()),
+        create(config, hostStores()),
         (handler) => activeKey(handler),
       );
       if (actual !== predicted) {
@@ -1129,7 +1110,7 @@ describe('Kimi Code reroute', () => {
     invalidateApiKeyCache();
 
     const config = await inspectHandler(
-      create(dualBackendKimi, modelStores()),
+      create(dualBackendKimi, hostStores()),
       (handler) => handler.config,
     );
     expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
@@ -1156,7 +1137,7 @@ describe('createKimiCodeFallbackHandler', () => {
     const handler = await createKimiCodeFallbackHandler(
       codingRoutedKimi3,
       'kimi3',
-      modelStores(),
+      hostStores(),
     );
 
     // The compat-key tag (not instanceof) survives this file's
@@ -1176,7 +1157,7 @@ describe('createKimiCodeFallbackHandler', () => {
       createKimiCodeFallbackHandler(
         MODEL_CONFIGS.kimiCoding,
         'kimiCoding',
-        modelStores(),
+        hostStores(),
       ),
     ).resolves.toBeUndefined();
   });
@@ -1184,11 +1165,7 @@ describe('createKimiCodeFallbackHandler', () => {
   it('rebuilds nothing when the live config is not on the coding route', async () => {
     // A plain direct kimi3 handler re-resolves fine with a rebind.
     await expect(
-      createKimiCodeFallbackHandler(
-        MODEL_CONFIGS.kimi3,
-        'kimi3',
-        modelStores(),
-      ),
+      createKimiCodeFallbackHandler(MODEL_CONFIGS.kimi3, 'kimi3', hostStores()),
     ).resolves.toBeUndefined();
   });
 });

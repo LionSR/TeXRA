@@ -20,7 +20,6 @@ import { probeSetupCredential } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const credentialLog = createLog('Setup Credentials');

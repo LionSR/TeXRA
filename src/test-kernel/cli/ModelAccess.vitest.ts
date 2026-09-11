@@ -13,13 +13,10 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import {
-  computeModelOptionsData,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -120,10 +117,7 @@ type ResolveCliRunnableModelOptions = Parameters<
  * The process stores every access lookup reads, threaded in by the caller the
  * way the CLI composition root threads its own.
  */
-const stores: ModelOptionStores = {
-  secrets: new FakeSecrets(),
-  globalState: new FakeStateStore(),
-};
+const stores = fakeStores();
 
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],

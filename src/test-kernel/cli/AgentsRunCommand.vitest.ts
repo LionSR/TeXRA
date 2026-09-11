@@ -10,7 +10,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Effect, type Layer } from 'effect';
+import { Effect } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -19,11 +19,9 @@ import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
+  type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
-
-/** The process services the installed fake host provides to a run. */
-type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
@@ -60,7 +58,7 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
       typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
         unknown,
         unknown,
-        ProcessServices
+        FakeProcessServices
       >
     >
   ) =>

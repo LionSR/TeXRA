@@ -90,10 +90,7 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  appendLocalErrorTranscript,
-} from './state/transcript';
+import { appendLocalAssistantTranscript } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanInterruptActiveRun,
@@ -171,10 +168,7 @@ export async function runChat(
     quietLogs: true,
   });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession({
-    secrets: services.secrets,
-    globalState: services.globalState,
-  });
+  const runtimeSession = await initializeCliTranscriptSession(services);
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
@@ -229,10 +223,7 @@ export async function runChat(
   let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {
-      stores: {
-        secrets: services.secrets,
-        globalState: services.globalState,
-      },
+      stores: services,
       fallbackReason: defaults.modelSource,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         CHAT_STARTUP_MODEL_RECOVERY,

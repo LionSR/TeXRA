@@ -23,7 +23,6 @@ import {
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { platform } from '@platform/platform';
 import {
   AgentRunStateSnapshotSchema,
   MESSAGE_TYPES,
@@ -33,7 +32,11 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createProcessSession } from '@test/support/sessionTestUtils';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installPlatform,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
@@ -91,10 +94,7 @@ async function runPersistedReflectionFlow(
         prompt: PROMPT,
         logger,
         parentStage: logger.openStage('Reflection flow recovery test'),
-        stores: {
-          secrets: platform().secrets,
-          globalState: platform().globalState,
-        },
+        stores: hostStores(),
         userVarChannels: { MODEL: CONFIG.model },
         modelCell,
         toolPolicy: createToolPolicy(),
