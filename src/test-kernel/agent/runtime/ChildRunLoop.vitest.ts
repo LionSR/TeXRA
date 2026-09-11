@@ -385,7 +385,7 @@ describe('childRunLoop E2E fixtures', () => {
           events.push('launch');
           return Effect.tryPromise({
             try: () =>
-              new Promise((_resolve, reject) => {
+              new Promise<never>((_resolve, reject) => {
                 const rejectAbort = () => {
                   aborted();
                   reject(createAbortError());

@@ -115,7 +115,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
     Effect.catch((err): Effect.Effect<ConditionalResponse<T>, unknown> => {
       primary = { error: err };
       return Effect.try({
-        try: () => {
+        try: (): ConditionalResponse<T> => {
           if (err instanceof RequestError) {
             const status = err.status;
             const responseHeaders = err.response?.headers;
