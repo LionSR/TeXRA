@@ -11,6 +11,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
@@ -1029,37 +1030,7 @@ export function openaiChatModel(
           const parameters = yield* chatParameters(turn, config);
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
             undefined;
-          // Registered first: the later signal finalizer aborts before cancel joins.
-          yield* Effect.addFinalizer((exit) => {
-            if (reader === undefined) return Effect.void;
-            const body = reader;
-            const cancel = Effect.tryPromise({
-              try: () => body.cancel(),
-              catch: (cause) => cause,
-            }).pipe(
-              Effect.catch((cause) => {
-                // An errored reader repeats its read error when cancelled. Preserve
-                // distinct cleanup defects; Scope combines them with the primary exit.
-                if (
-                  (signal.aborted && cause === signal.reason) ||
-                  (Exit.isFailure(exit) &&
-                    exit.cause.reasons.some(
-                      (reason) =>
-                        Cause.isFailReason(reason) &&
-                        reason.error instanceof ModelError &&
-                        reason.error.kind === 'transport' &&
-                        reason.error.cause === cause,
-                    ))
-                )
-                  return Effect.void;
-                return Effect.die(cause);
-              }),
-            );
-            return cancel.pipe(
-              Effect.ensuring(Effect.sync(() => body.releaseLock())),
-            );
-          });
-          const signal = yield* Effect.abortSignal;
+          const signal = yield* readerAbortSignal(() => reader);
           const source = yield* Effect.tryPromise({
             try: () =>
               client.chat.completions
