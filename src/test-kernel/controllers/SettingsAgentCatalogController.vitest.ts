@@ -189,14 +189,9 @@ describe('SettingsAgentCatalogController', () => {
     });
     expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
     assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
-    // Unresolved names stay in the resolution's nameSlots to feed the
-    // availability preflight. Nothing persists them: the stored team
-    // reference re-resolves against the catalog on read, so a member joins
-    // the moment it appears (sign-in, install).
     assert.deepEqual(resolved.resolution.keys.toolUse, [
       'builtInToolUse:review',
     ]);
-    assert.deepEqual(resolved.resolution.nameSlots.toolUse, ['missing']);
 
     await controller.commitPreset(resolved.preset);
 

@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { hostPort } from '@common/hostPort';
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
@@ -48,12 +49,6 @@ export interface TeamRosterApplicationDeps {
   readonly signIn: () => Promise<boolean>;
   readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown>;
 }
-
-/** Call a host dialog, auth, or roster-store port from the program. */
-const hostPort = <A>(
-  call: () => A | PromiseLike<A>,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: async () => call(), catch: (error) => error });
 
 /** Host sequence for preflighting and committing one team roster. */
 export function applyTeamRosterWithPreflight(

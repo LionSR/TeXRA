@@ -26,10 +26,6 @@ const unresolved = {
     workflow: [],
     toolUse: [],
   },
-  nameSlots: {
-    workflow: [],
-    toolUse: ['orchestrator'],
-  },
   unresolvedNames: ['orchestrator'],
 };
 
@@ -37,10 +33,6 @@ const resolved = {
   keys: {
     workflow: [],
     toolUse: ['remote:orchestrator'],
-  },
-  nameSlots: {
-    workflow: [],
-    toolUse: [],
   },
   unresolvedNames: [],
 };
