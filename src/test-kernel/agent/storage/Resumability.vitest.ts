@@ -16,6 +16,8 @@ import {
 } from '@agent/node/persistedFlow';
 import {
   aggregateId,
+  AgentCategory,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -55,10 +57,10 @@ describe('deriveResumability', () => {
       await Effect.runPromise(
         session.commit([
           {
-            type: 'status',
+            type: 'run.end',
             aggregateId: aggregateId('run', runId),
-            phase: outcome,
-            cause: 'test outcome',
+            outcome,
+            output: emptyRunEndOutput(AgentCategory.ToolUse),
           },
         ]),
       );
@@ -153,7 +155,7 @@ describe('deriveResumability', () => {
     });
   });
 
-  it('does not mark cancelled executions resumable without a flow record', async () => {
+  it('does not mark a cancelled run resumable without a flow record', async () => {
     const runId = 'ac0005' as RunId;
     await writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED });
 
@@ -165,7 +167,7 @@ describe('deriveResumability', () => {
     });
   });
 
-  it('marks missing-terminal executions with a valid flow record as resumable', async () => {
+  it('marks missing-terminal runs with a valid flow record as resumable', async () => {
     const runId = 'ac0006' as RunId;
     await writeFlow(runId);
 

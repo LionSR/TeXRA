@@ -8,11 +8,11 @@ import {
   RUN_PHASE,
   type ToolUseRunEndOutputSchema,
 } from '@shared/schemas';
-import type { z } from 'zod';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
+import type { z } from 'zod';
 
 export type ExecuteAgentResult = Effect.Success<ReturnType<typeof runAgent>>;
 

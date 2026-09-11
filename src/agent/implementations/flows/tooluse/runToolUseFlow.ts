@@ -23,12 +23,12 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import { aggregateId } from '@shared/schemas';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type {
   RetryErrorInfo,
   RunId,

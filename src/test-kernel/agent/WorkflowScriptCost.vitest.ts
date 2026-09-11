@@ -37,22 +37,22 @@ function entry(
 
 function workflowResult(cost: number): unknown {
   return {
-    category: 'workflow',
     outcome: RUN_OUTCOME.COMPLETED,
-    outputs: [],
-    compileFailures: [],
-    diffs: [],
-    cost,
+    usage: { totalCost: cost },
+    output: {
+      category: 'workflow',
+      outputs: [],
+      compileFailures: [],
+      diffs: [],
+    },
   };
 }
 
 function toolUseResult(cost: number): unknown {
   return {
-    category: 'toolUse',
     outcome: RUN_OUTCOME.COMPLETED,
-    response: 'done',
-    files: [],
-    cost,
+    usage: { totalCost: cost },
+    output: { category: 'toolUse', response: 'done', files: [] },
   };
 }
 
@@ -188,7 +188,7 @@ return await agent('retry cost')`,
 
     expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
     expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
-      /is not an agent final result/,
+      /is not a run result/,
     );
   });
 });
@@ -204,9 +204,9 @@ describe('workflow-script completed journal cost', () => {
     expect(settleJournalCost(journal.toReversed())).toBe(1.75);
   });
 
-  it('uses the final-result default when an older entry omits cost', () => {
+  it('uses the run-end default when an entry recorded no usage', () => {
     const result = workflowResult(0) as Record<string, unknown>;
-    delete result.cost;
+    delete result.usage;
 
     expect(settleJournalCost([entry(0, result)])).toBe(0);
   });
@@ -216,7 +216,7 @@ describe('workflow-script completed journal cost', () => {
     ['negative cost', entry(7, workflowResult(-1))],
   ])('rejects %s with the journal index', (_label, invalidEntry) => {
     expect(() => settleJournalCost([invalidEntry])).toThrow(
-      /is not an agent final result/,
+      /is not a run result/,
     );
     expect(() => settleJournalCost([invalidEntry])).toThrow(
       new RegExp(`entry ${invalidEntry.index}`),

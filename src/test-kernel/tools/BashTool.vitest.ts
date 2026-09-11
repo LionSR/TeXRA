@@ -762,9 +762,9 @@ describe('BashTool', () => {
       assert.equal(
         (await recorded.read()).some(
           (event) =>
-            event.type === 'status' &&
+            event.type === 'run.end' &&
             event.aggregateId === aggregateId('run', runId) &&
-            event.phase === RUN_PHASE.FAILED,
+            event.outcome === RUN_OUTCOME.FAILED,
         ),
         true,
       );

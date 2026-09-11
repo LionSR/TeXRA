@@ -318,18 +318,16 @@ export function buildSubagentFailureResultMeta(
       : result.outcome;
   // Error facts travel only with the outcome they describe. A thrown child
   // failure is not a user-retry offer.
-  const error =
-    outcome !== RUN_OUTCOME.FAILED
-      ? undefined
-      : result?.error !== undefined
-        ? runEndErrorOf(result.error)
-        : options.cause !== undefined
-          ? {
-              kind: classifyAgentError(options.cause),
-              message: toErrorMessage(options.cause),
-              userRetryable: false,
-            }
-          : undefined;
+  const error = ((): RunEnd['error'] => {
+    if (outcome !== RUN_OUTCOME.FAILED) return undefined;
+    if (result?.error !== undefined) return runEndErrorOf(result.error);
+    if (options.cause === undefined) return undefined;
+    return {
+      kind: classifyAgentError(options.cause),
+      message: toErrorMessage(options.cause),
+      userRetryable: false,
+    };
+  })();
   return buildSubagentResultMeta(
     agentName,
     {

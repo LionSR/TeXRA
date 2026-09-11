@@ -11,9 +11,9 @@ import {
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
+  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   type RunId,
   type RunOutcome,
   AgentCategory,
@@ -71,14 +71,15 @@ async function writeRun(
   await Effect.runPromise(
     getRunRecords(session, runId).writeRunRecord(runConfigRecord),
   );
+  // The terminal fact is `run.end`; `RunMeta.outcome` is folded from it.
   if (meta.outcome)
     await Effect.runPromise(
       session.commit([
         {
-          type: 'status',
+          type: 'run.end',
           aggregateId: aggregateId('run', runId),
-          phase: meta.outcome,
-          cause: 'lifecycle',
+          outcome: meta.outcome,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
         },
       ]),
     );

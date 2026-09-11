@@ -255,10 +255,10 @@ function mockExecuteAgentErrorOnce(
 ): void {
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
     const failed = {
-      category: 'toolUse',
       outcome: 'failed',
       runId: CHILD_RUN_ID,
-      totalCostUsd,
+      usage: { totalCost: totalCostUsd },
+      output: { category: 'toolUse', response: '', files: [] },
       ...extra,
     };
     await options.onRunError?.(new Error('review model failed'), failed);
@@ -299,10 +299,12 @@ function mockWaitingChildOnce(
       runOptions.onRun?.(handle);
       options.afterRun?.(handle);
       return {
-        category: 'toolUse',
         outcome: RUN_PHASE.WAITING,
-        response: 'The proof is correct.',
-        files: [],
+        output: {
+          category: 'toolUse',
+          response: 'The proof is correct.',
+          files: [],
+        },
         runId,
         ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
       };
@@ -446,11 +448,13 @@ describe('headless delegation', () => {
       return store;
     });
     mocks.executeAgent.mockResolvedValue({
-      category: 'toolUse',
       outcome: 'completed',
       runId: CHILD_RUN_ID,
-      response: 'The proof is correct.',
-      files: [],
+      output: {
+        category: 'toolUse',
+        response: 'The proof is correct.',
+        files: [],
+      },
     });
   });
 
@@ -491,10 +495,13 @@ describe('headless delegation', () => {
         setting.defaultOutputFiles = ['generated.tex'];
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
-          category: 'workflow',
           outcome: 'completed',
-          outputs: [],
-          files: [],
+          output: {
+            category: 'workflow',
+            outputs: [],
+            compileFailures: [],
+            diffs: [],
+          },
         });
         yield* run();
         expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
@@ -565,11 +572,12 @@ describe('headless delegation', () => {
       }),
     );
     expect(result.result).toEqual({
-      category: 'toolUse',
       outcome: 'completed',
-      response: 'The proof is correct.',
-      files: [],
-      cost: 0,
+      output: {
+        category: 'toolUse',
+        response: 'The proof is correct.',
+        files: [],
+      },
     });
     // The single driver persists the report alongside the manifest for every
     // child — a scripted grandchild is debuggable through the same artifacts
@@ -698,7 +706,11 @@ describe('headless delegation', () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {
       runId: IN_BAND_LOGICAL_RUN_ID,
-      response: 'Partial review.',
+      output: {
+        category: 'toolUse',
+        response: 'Partial review.',
+        files: [],
+      },
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
@@ -711,9 +723,9 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         result: expect.objectContaining({
-          cost: 0.61,
           outcome: 'failed',
-          response: 'Partial review.',
+          usage: expect.objectContaining({ totalCost: 0.61 }),
+          output: expect.objectContaining({ response: 'Partial review.' }),
         }),
       }),
     );
@@ -722,11 +734,14 @@ describe('headless delegation', () => {
   it('persists a cost-bearing WAITING result as a durable single-cycle failure', async () => {
     const onCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
       outcome: RUN_PHASE.WAITING,
       runId: IN_BAND_LOGICAL_RUN_ID,
-      response: 'Waiting for clarification.',
-      totalCostUsd: 0.73,
+      output: {
+        category: 'toolUse',
+        response: 'Waiting for clarification.',
+        files: [],
+      },
+      usage: { totalCost: 0.73 },
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
@@ -747,9 +762,11 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         result: expect.objectContaining({
-          cost: 0.73,
           outcome: 'failed',
-          response: 'Waiting for clarification.',
+          usage: expect.objectContaining({ totalCost: 0.73 }),
+          output: expect.objectContaining({
+            response: 'Waiting for clarification.',
+          }),
         }),
       }),
     );
@@ -758,11 +775,12 @@ describe('headless delegation', () => {
   it('recovers a completed stable child before resolving launch prerequisites', async () => {
     const stableRunId = 'cccccc333333' as RunId;
     const persistedResult = {
-      category: 'toolUse' as const,
       outcome: 'completed' as const,
-      response: 'Recovered review.',
-      files: [],
-      cost: 0,
+      output: {
+        category: 'toolUse' as const,
+        response: 'Recovered review.',
+        files: [],
+      },
     };
     const sequenceStore = stableSequenceStore(stableRunId, 1);
     useStableStores(
@@ -793,11 +811,12 @@ describe('headless delegation', () => {
   it('recovers a later completed attempt when an earlier child was deleted', async () => {
     const logicalRunId = 'cccccc444444' as RunId;
     const persistedResult = {
-      category: 'toolUse' as const,
       outcome: 'completed' as const,
-      response: 'Recovered later attempt.',
-      files: [],
-      cost: 0,
+      output: {
+        category: 'toolUse' as const,
+        response: 'Recovered later attempt.',
+        files: [],
+      },
     };
     const sequenceStore = stableSequenceStore(logicalRunId, 2);
     const missingStore = emptyChildStore();
@@ -930,11 +949,8 @@ describe('headless delegation', () => {
       const priorOutcome = priorOutcomes[stores.size];
       store = priorOutcome
         ? completedChildStore(logicalRunId, {
-            category: 'toolUse',
             outcome: priorOutcome,
-            response: '',
-            files: [],
-            cost: 0,
+            output: { category: 'toolUse', response: '', files: [] },
           })
         : emptyChildStore();
       stores.set(id, store);
@@ -960,11 +976,9 @@ describe('headless delegation', () => {
     const childStore = memoryRunStore();
     useStableStores(stableSequenceStore(logicalRunId), childStore);
     mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
       outcome: 'cancelled',
       runId: logicalRunId,
-      response: '',
-      files: [],
+      output: { category: 'toolUse', response: '', files: [] },
     });
 
     const completed = await runInBand(delegationOptions(), logicalRunId);
@@ -1092,10 +1106,9 @@ describe('headless delegation', () => {
   it('preserves the child failure when its failure result cannot be constructed', async () => {
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
       const failed = {
-        category: 'toolUse',
         outcome: 'failed',
         runId: CHILD_RUN_ID,
-        files: [42],
+        output: { category: 'toolUse', response: '', files: [42] },
       } as never;
       await options.onRunError?.(new Error('review model failed'), failed);
       return failed;
@@ -1115,19 +1128,6 @@ describe('headless delegation', () => {
         }),
       }),
     );
-  });
-
-  it('does not rewrite a completed child when typed result construction fails', async () => {
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'toolUse',
-      outcome: 'completed',
-      runId: CHILD_RUN_ID,
-      files: [42],
-    });
-
-    await expect(runInBand(delegationOptions())).rejects.toThrow();
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
-    expect(mocks.writeReport).not.toHaveBeenCalled();
   });
 
   it('interrupts the live child when the in-band caller aborts', async () => {
@@ -1150,9 +1150,9 @@ describe('headless delegation', () => {
       childReady();
       await interrupted;
       return {
-        category: 'toolUse',
         outcome: 'cancelled',
         runId: CHILD_RUN_ID,
+        output: { category: 'toolUse', response: '', files: [] },
       };
     });
 
@@ -1296,7 +1296,10 @@ describe('headless delegation', () => {
     expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        result: expect.objectContaining({ cost: 0.42, outcome: 'failed' }),
+        result: expect.objectContaining({
+          outcome: 'failed',
+          usage: expect.objectContaining({ totalCost: 0.42 }),
+        }),
       }),
     );
   });

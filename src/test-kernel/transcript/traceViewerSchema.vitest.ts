@@ -9,8 +9,10 @@ import {
 import {
   aggregateId,
   CLI_RUN_STATUS,
+  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   type RunId,
   AgentCategory,
@@ -88,10 +90,10 @@ describe('trace-viewer TraceDataSchema', () => {
         messageType: MESSAGE_TYPES.DEFAULT,
       },
       {
-        type: 'status',
+        type: 'run.end',
         aggregateId: aggregateId('run', runId),
-        phase: 'completed',
-        cause: 'lifecycle',
+        outcome: RUN_OUTCOME.COMPLETED,
+        output: emptyRunEndOutput(AgentCategory.ToolUse),
       },
     ]);
     await session.settlePublications();

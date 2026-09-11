@@ -3,13 +3,13 @@ import { z } from 'zod';
 
 import { byString, normalizeFilePath } from '@utils/core';
 
-import type { AgentCategory } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { JsonValueSchema } from './jsonValue';
 import { CompileFailureSummarySchema, OutputFileSummarySchema } from './output';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunUsageTotalsSchema } from './usage';
+import type { AgentCategory } from './agent';
 
 export const NonAgentRunRecordSchema = z.strictObject({
   name: z.string().min(1),
