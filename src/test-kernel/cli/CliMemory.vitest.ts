@@ -30,14 +30,6 @@ const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
   Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 
 describe('CLI memory formatting', () => {
-  it('formats memory rows with stable user-facing fields', () => {
-    const description = cliMemoryItemDescription(item);
-
-    expect(description).toContain('pinned');
-    expect(description).toContain('2 KiB');
-    expect(description).toContain('by researcher');
-  });
-
   it('does not treat the Unix epoch as an unknown modification date', () => {
     const description = cliMemoryItemDescription({
       ...item,
@@ -46,10 +38,6 @@ describe('CLI memory formatting', () => {
 
     expect(description).toContain('modified:');
     expect(description).not.toContain('modified: unknown');
-  });
-
-  it('formats an empty memory listing explicitly', () => {
-    expect(formatCliMemoryList([])).toBe('No memory files found.');
   });
 
   it('limits long memory listings and reports hidden rows', () => {

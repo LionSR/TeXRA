@@ -137,18 +137,6 @@ describe('workspace storage defaults', () => {
       }),
   );
 
-  it('initializes each workspace storage root only once', async () => {
-    const root = await makeStorageRoot();
-    const workspacePath = '/workspace/a';
-    const provider = new WorkspaceStorageProvider(root, workspacePath);
-    const storagePath = provider.getStoragePath();
-
-    await rm(storagePath, { recursive: true, force: true });
-
-    expect(provider.getStoragePath()).toBe(storagePath);
-    await expect(pathExists(storagePath)).resolves.toBe(false);
-  });
-
   // Regression pin (#C4): a malformed project config used to fail CLI startup
   // outright — `JsonStore.open` throws and only the GUI hosts caught it. Every
   // host now degrades to the internal workspace store, loudly.
@@ -188,20 +176,4 @@ describe('workspace storage defaults', () => {
         ).toBe(true);
       }),
   );
-
-  it('uses the same workspace storage rule for node hosts', async () => {
-    const root = await makeStorageRoot();
-    const workspacePath = '/workspace/a';
-    const provider = createNodeStorageProvider({
-      storageRoot: root,
-      workspacePath,
-    });
-
-    expect(provider.getGlobalStoragePath()).toBe(
-      join(root, 'v1', 'global-storage'),
-    );
-    expect(provider.getStoragePath()).toBe(
-      join(root, 'v1', 'workspace-storage', workspaceStorageId(workspacePath)),
-    );
-  });
 });

@@ -199,7 +199,7 @@ function metadataLinesRows(
 /** Row-count view of {@link agentProposalMetadataLines} for the scrollable
  * prompt-area budget — same descriptor list, counted rather than painted, so
  * the two can never drift. */
-export function agentProposalMetadataRows({
+function agentProposalMetadataRows({
   fileGroups,
   payload,
   width,

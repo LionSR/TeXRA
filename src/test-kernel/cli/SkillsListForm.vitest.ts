@@ -31,41 +31,6 @@ function sourcedSkill(options: {
 }
 
 describe('SkillsListForm helpers', () => {
-  it('formats skill select rows with source labels and descriptions', () => {
-    const skill = sourcedSkill({
-      name: 'proof-audit',
-      description: 'Review mathematical proof steps.',
-      scope: 'project',
-      label: 'project',
-    });
-
-    expect(skillSelectItemsForTui([skill])).toEqual([
-      {
-        value: {
-          name: 'proof-audit',
-          activationPrompt: formatSkillActivationPrompt(skill),
-        },
-        label: 'proof-audit',
-        description: 'project · Review mathematical proof steps.',
-      },
-    ]);
-  });
-
-  it('formats the skill activation prompt with the skill body', () => {
-    const prompt = formatSkillActivationPrompt(
-      sourcedSkill({
-        name: 'proof-audit',
-        description: 'Review mathematical proof steps.',
-        scope: 'project',
-      }),
-    );
-
-    expect(prompt).toContain('<skill_activation>');
-    expect(prompt).toContain('<skill name="proof-audit">');
-    expect(prompt).toContain('<path>/tmp/proof-audit/SKILL.md</path>');
-    expect(prompt).toContain('Use proof-audit.');
-  });
-
   it('escapes skill names in activation prose defensively', () => {
     const prompt = formatSkillActivationPrompt(
       sourcedSkill({

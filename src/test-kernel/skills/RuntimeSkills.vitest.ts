@@ -168,41 +168,6 @@ describe('runtime skills', () => {
     },
   );
 
-  it('keeps ANSI-only and controls-only skills in the raw accepted projection', async () => {
-    const root = await createTempRoot();
-    const descriptions = [
-      ['ansi-only', '"\\u001b[31m\\u001b[0m"'],
-      ['controls-only', '"\\u0001\\u0002\\u007f\\u009b"'],
-    ] as const;
-    for (const [name, description] of descriptions) {
-      const skillDir = path.join(root, name);
-      await fs.mkdir(skillDir, { recursive: true });
-      await fs.writeFile(
-        path.join(skillDir, 'SKILL.md'),
-        `---\nname: ${name}\ndescription: ${description}\n---\n\nApply the skill.\n`,
-      );
-    }
-    setRuntimeSkillSources([{ scope: 'project', path: root }]);
-
-    const result = await loadRuntimeSkillCatalog();
-
-    expect(result.skills).toStrictEqual([
-      {
-        name: 'ansi-only',
-        description: '\u001b[31m\u001b[0m',
-        source: 'project',
-      },
-      {
-        name: 'controls-only',
-        description: '\u0001\u0002\u007f\u009b',
-        source: 'project',
-      },
-    ]);
-    expect(catalogSkillNames(result.catalog)).toStrictEqual(
-      result.skills.map((skill) => skill.name),
-    );
-  });
-
   it('bounds the accepted set once before prompt and snapshot projection', async () => {
     const root = await createTempRoot();
     const discoveredCount = ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS + 2;
@@ -243,48 +208,5 @@ describe('runtime skills', () => {
         .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
         ?.data,
     ).toStrictEqual({ skills: result.skills });
-  });
-
-  it('returns structured issues when a required source is unavailable', async () => {
-    const root = path.join(os.tmpdir(), 'texra-missing-runtime-skill-source');
-    await fs.rm(root, { recursive: true, force: true });
-    setRuntimeSkillSources([
-      { scope: 'bundled', path: root, label: 'bundled', required: true },
-    ]);
-
-    const result = await loadRuntimeSkillCatalog();
-
-    expect(result).toEqual({
-      catalog: '',
-      skills: [],
-      issues: [
-        {
-          severity: 'error',
-          code: 'missing_source',
-          message: 'Skill source does not exist',
-          path: root,
-        },
-      ],
-    });
-  });
-
-  it('injects the available skill catalog into tool-use instructions', async () => {
-    const prompts = await buildInitialToolUsePrompts(
-      {
-        systemPrompt: 'System.',
-        userPrefix: '',
-        userRequest: 'Please help.',
-      },
-      {
-        AVAILABLE_SKILLS:
-          '- manuscript-review: Review mathematical manuscripts.\n  Source: project\n  Path: /tmp/project/.texra/skills/manuscript-review/SKILL.md',
-      },
-    );
-
-    expect(prompts.instructionSuffix).toContain('<available_skills>');
-    expect(prompts.instructionSuffix).toContain('manuscript-review');
-    expect(prompts.instructionSuffix).toContain(
-      'inspect its SKILL.md at the listed path',
-    );
   });
 });

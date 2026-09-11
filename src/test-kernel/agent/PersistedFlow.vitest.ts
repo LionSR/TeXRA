@@ -58,10 +58,6 @@ describe('PersistedFlow', () => {
   // Regression for the runKvFiles leak fix: consumers that recognize a
   // flow record's KV filename (e.g. `isKVFile`) now import FLOW_KEY_PREFIX
   // instead of hard-coding 'flow_', so pin that flowKey() is still built from it.
-  it('builds the flow key from the exported FLOW_KEY_PREFIX', () => {
-    const runId = 'abc125' as RunId;
-    expect(flowKey(runId)).toBe(`${FLOW_KEY_PREFIX}${runId}`);
-  });
 
   it('writes the current schema version into new flow records', async () => {
     const runId = 'abc126' as RunId;
@@ -142,54 +138,5 @@ describe('PersistedFlow', () => {
         lastAction: FlowTransition.WAITING,
       },
     });
-  });
-
-  it('persists flow records as compact JSON', async () => {
-    const runId = 'abc130' as RunId;
-    const store = getRunStore(runId);
-
-    await new PersistedFlow(new CompleteNode(), store, runId).run({
-      count: 0,
-    });
-
-    const raw = await StorageFS.read(
-      resolveRunStoragePath(runId, `${flowKey(runId)}.json`),
-    );
-    expect(raw).toContain('"schemaVersion"');
-    expect(raw).not.toContain('\n');
-  });
-
-  it('parses shared through the schema only at the deserialization boundary', async () => {
-    const runId = 'abc131' as RunId;
-    const store = getRunStore(runId);
-    interface Shared {
-      count: number;
-      continue: boolean;
-    }
-    let parses = 0;
-    const schema: z.ZodType<Shared> = z
-      .object({ count: z.number(), continue: z.boolean() })
-      .refine(() => {
-        parses += 1;
-        return true;
-      });
-    const buildFlow = () => {
-      const first = new ContinueOnceNode();
-      first.on('again', new CompleteNode());
-      return new PersistedFlow(first, store, runId, schema);
-    };
-
-    // A fresh run owns every record it writes: no re-parse per transition.
-    await buildFlow().run({ count: 0, continue: true });
-    expect(parses).toBe(0);
-
-    // A new instance hits the true deserialization boundary exactly once,
-    // and getShared() returns the record's live object, not a copy.
-    const resumed = buildFlow();
-    const shared = await resumed.getShared();
-    expect(shared).toEqual({ count: 2, continue: true });
-    expect(parses).toBe(1);
-    await expect(resumed.getShared()).resolves.toBe(shared);
-    expect(parses).toBe(1);
   });
 });

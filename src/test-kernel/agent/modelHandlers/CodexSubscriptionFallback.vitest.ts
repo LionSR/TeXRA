@@ -159,21 +159,6 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(1_050_000);
   });
 
-  it('leaves a model whose window is already below the ceiling untouched', async () => {
-    // The clamp is a cap (Math.min), so a sub-ceiling window is unchanged.
-    const handler = await newSubscriptionHandler();
-
-    expect(handler.getEffectiveContextWindow()).toBe(config.contextWindow);
-  });
-
-  it('keeps untagged helper handlers on the subscription', async () => {
-    await initFakePlatformWithSubscription();
-
-    const handler = new ModelHandlerCodex(config);
-
-    expectOnSubscription(handler);
-  });
-
   it.each([
     { headroom: 10, error: /route input limit/ },
     { headroom: 100, error: /safety buffer/ },

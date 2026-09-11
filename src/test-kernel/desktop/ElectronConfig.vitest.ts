@@ -102,21 +102,6 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     }),
   );
 
-  it.effect('updates existing canonical keys', () =>
-    Effect.gen(function* () {
-      const { provider, workspaceStore } = yield* createProvider();
-      yield* workspaceStore.set('texra.files.exclude', ['dist']);
-
-      yield* Effect.promise(() =>
-        provider.update('files.exclude', ['node_modules']),
-      );
-
-      expect(workspaceStore.snapshot()).toEqual({
-        'texra.files.exclude': ['node_modules'],
-      });
-    }),
-  );
-
   it.effect('stores new config values under the canonical prefixed key', () =>
     Effect.gen(function* () {
       const { provider, workspaceStore } = yield* createProvider();

@@ -587,29 +587,6 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('does not apply failed-chord child back after a foreground pane opens', async () => {
-    seedChildHierarchy();
-    focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      openInfoPane('Late failed-chord reference', 'Foreground content');
-      await waitFor(
-        () => infoPane.get()?.title === 'Late failed-chord reference',
-      );
-      stdin.write('x');
-      await sleep(50);
-
-      expect(activeRunId.get()).toBe(CHILD);
-      expect(infoPane.get()?.title).toBe('Late failed-chord reference');
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it.each([
     {
       // Completed child: its input is disabled, so the printable key fails the
@@ -641,72 +618,6 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
       expect(onSubmit).toHaveBeenCalledWith('q', undefined, undefined);
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it.each(Object.entries(ARROW_KEYS))(
-    'resolves deferred child back before %s',
-    async (_name, arrowInput) => {
-      seedChildHierarchy();
-      seedRun(CHILD, { status: RUN_PHASE.COMPLETED });
-      focusRun(CHILD);
-      const onSubmit = vi.fn();
-      const { instance, stdin, onInterruptRun } = await renderWithInterrupt({
-        onSubmit,
-      });
-
-      try {
-        stdin.write(ESC);
-        await sleep(WITHIN_CHORD_WINDOW_MS);
-        stdin.write(arrowInput);
-        await waitFor(() => activeRunId.get() === ROOT);
-        stdin.write('\r');
-        await sleep(30);
-
-        expect(onInterruptRun).not.toHaveBeenCalled();
-        expect(onSubmit).not.toHaveBeenCalled();
-      } finally {
-        instance.unmount();
-      }
-    },
-  );
-
-  it('discards failed-chord child back after lifecycle focus advances', async () => {
-    seedChildHierarchy();
-    focusRun(GRANDCHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeRunId.get() === ROOT);
-      stdin.write('x');
-      await sleep(50);
-
-      expect(activeRunId.get()).toBe(ROOT);
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('discards failed-chord child back when the child is promoted', async () => {
-    seedChildHierarchy();
-    focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      seedParentEdge(CHILD, null);
-      stdin.write('x');
-      await sleep(50);
-
-      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();

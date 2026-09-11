@@ -50,16 +50,6 @@ describe('ProgressWorkflowRunActionsController', () => {
     ]);
   });
 
-  it('reports no active output files when the run config declares none', async () => {
-    const config = createWorkflowConfig({ outputFiles: [] });
-    const { controller, diffs } = createProgressWorkflowRunActionsHarness({});
-
-    await controller.diffStream(RUN_A, config);
-
-    assert.equal(diffs[0]?.outputFilesActive, false);
-    assert.deepEqual(diffs[0]?.outputFiles, []);
-  });
-
   it('deduplicates generated outputs for pack and includes run context', async () => {
     const config = createWorkflowConfig({
       inputFiles: ['extra-input.tex', 'second-input.tex'],
@@ -86,29 +76,6 @@ describe('ProgressWorkflowRunActionsController', () => {
             '/workspace/generated.tex',
             'extra.tex',
           ],
-          runId: RUN_A,
-        },
-      },
-    ]);
-  });
-
-  it('passes all resolved output files for clean requests', async () => {
-    const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
-    const { controller, fileOperations } =
-      createProgressWorkflowRunActionsHarness({
-        knownWorkspaceOutputs: new Map([[RUN_A, new Set(['generated.tex'])]]),
-      });
-
-    await controller.runFileOperation(RUN_A, 'clean', config);
-
-    assert.deepEqual(fileOperations, [
-      {
-        operation: 'clean',
-        request: {
-          agent: 'correct',
-          model: 'gemini31p',
-          inputFile: 'input.tex',
-          outputFiles: ['declared.tex', 'generated.tex'],
           runId: RUN_A,
         },
       },

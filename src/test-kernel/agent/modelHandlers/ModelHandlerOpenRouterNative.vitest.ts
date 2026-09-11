@@ -80,21 +80,6 @@ class CompactionProbeHandler extends ModelHandlerOpenRouterNative {
   }
 }
 
-describe('ModelHandlerOpenRouterNative system prompt placement', () => {
-  it.each([
-    ModelProvider.ANTHROPIC,
-    ModelProvider.GOOGLE,
-    ModelProvider.OPENAI,
-  ])(
-    'never resupplies the system prompt per-call, even when the underlying provider is %s',
-    (provider) => {
-      const handler = createHandler({ provider });
-
-      assert.equal(handler.requiresPerCallSystemPrompt, false);
-    },
-  );
-});
-
 describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   function createSendStub() {
     const sendCalls: any[] = [];

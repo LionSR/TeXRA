@@ -429,29 +429,6 @@ describe('desktop agent directory bootstrap', () => {
     }),
   );
 
-  it.effect('uses the configured version-state key', () =>
-    Effect.gen(function* () {
-      const { bootstrapNodeAgentDirectories, globalStateStore, resourcesPath } =
-        yield* createHarness();
-
-      yield* bootstrapNodeAgentDirectories({
-        channel: 'cli',
-        resourcesPath,
-        currentVersion: '2.0.0',
-        versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-      });
-
-      expect(
-        globalStateStore.get(
-          GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-        ),
-      ).toBe('2.0.0');
-      expect(
-        globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION),
-      ).toBeUndefined();
-    }),
-  );
-
   it.effect(
     'registers runtime skills through the shared Node host defaults',
     () =>

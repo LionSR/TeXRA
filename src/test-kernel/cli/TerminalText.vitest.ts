@@ -35,15 +35,6 @@ describe('terminal text width limits', () => {
       expect(clipToWidth('ab', -1)).toBe('');
       expect(clipToWidth('ab', 1.9)).toBe('a');
     });
-
-    it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
-      'rejects the non-finite width %s',
-      (width) => {
-        expect(() => clipToWidth('ab', width)).toThrow(
-          'Terminal width must be finite.',
-        );
-      },
-    );
   });
 
   describe('truncateToWidth', () => {

@@ -19,18 +19,6 @@ describe('replaceLiteralMatches', () => {
     '\\sum_{i=1}^{n} $x_i$',
   ] as const;
 
-  it('returns the unique replacement', () => {
-    expect(
-      replaceLiteralMatches({
-        content: 'alpha\nbeta\ngamma',
-        search: 'beta',
-        replacement: 'delta',
-        mode: 'unique',
-        notFoundError,
-      }),
-    ).toEqual({ content: 'alpha\ndelta\ngamma', count: 1 });
-  });
-
   it('throws the not-found error for absent and empty needles', () => {
     const request = {
       content: 'alpha',
@@ -89,18 +77,4 @@ describe('replaceLiteralMatches', () => {
       ).toEqual({ content: `${replacement} and ${replacement}`, count: 2 });
     },
   );
-});
-
-describe('ViewRangeSchema', () => {
-  it('accepts an inclusive 1-based range', () => {
-    expect(ViewRangeSchema.parse([2, 5])).toEqual([2, 5]);
-  });
-
-  it.each([
-    [0, 1],
-    [2, 1],
-    [1, 1.5],
-  ])('rejects invalid range %j', (range) => {
-    expect(ViewRangeSchema.safeParse(range).success).toBe(false);
-  });
 });

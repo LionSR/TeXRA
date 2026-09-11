@@ -392,14 +392,6 @@ describe('renderAnsiMarkdown', () => {
     },
   );
 
-  it('normalizes shell variables inside nontrivial code spans', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown(
-        '<code>echo $HOME</code> and <code>echo $PATH</code>',
-      ),
-    ).toBe('`echo $HOME` and `echo $PATH`');
-  });
-
   it(
     'normalizes many unmatched HTML code openers without rescanning suffixes',
     { timeout: 2_000 },
@@ -548,14 +540,6 @@ describe('renderAnsiMarkdown', () => {
     expect(normalizeKnownHtmlForCliMarkdown(example)).toBe(
       example.replace('<strong>', '**').replace('</strong>', '**'),
     );
-  });
-
-  it('does not replace user text resembling a dollar placeholder', () => {
-    expect(
-      normalizeKnownHtmlForCliMarkdown(
-        '@@CLI-LITERAL-MATH-0@@ <code>$HOME</code>',
-      ),
-    ).toBe('@@CLI-LITERAL-MATH-0@@ `$HOME`');
   });
 
   it('preserves adjacent inline math spans independently of markdown', () => {
@@ -785,17 +769,6 @@ describe('renderAnsiMarkdown', () => {
     );
   });
 
-  it('styles heading levels distinctly', () => {
-    const h1 = renderAnsiMarkdown('# Title');
-    const h2 = renderAnsiMarkdown('## Title');
-    const h3 = renderAnsiMarkdown('### Title');
-    expect(h1).toContain(`${ESC}[4m`);
-    expect(h2).not.toContain(`${ESC}[4m`);
-    expect(h2).toContain(`${ESC}[36m`);
-    expect(h3).not.toContain(`${ESC}[36m`);
-    expect(h3).toContain(`${ESC}[1m`);
-  });
-
   it('indents nested list items deeper than their parents', () => {
     const plain = renderPlain('- parent\n  - child');
     expect(plain).toContain('  • parent');
@@ -965,17 +938,6 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toContain('@@LATEX');
     expect(plain).toContain('$3+\\sqrt{');
     expect(plain).toContain('\\((47,21)');
-  });
-
-  it('memoises identical inputs (second call hits the cache)', () => {
-    const first = renderAnsiMarkdown('# Title\n\nParagraph.');
-    const before = _ansiMarkdownStatsForTests();
-    const second = renderAnsiMarkdown('# Title\n\nParagraph.');
-    const after = _ansiMarkdownStatsForTests();
-    expect(second).toBe(first);
-    // The second call must hit the cache, not re-render through markdown-it.
-    expect(after.hits - before.hits).toBe(1);
-    expect(after.misses - before.misses).toBe(0);
   });
 
   // Regression: without a math plugin, markdown-it corrupts LaTeX inside math

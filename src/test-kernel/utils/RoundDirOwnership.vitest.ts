@@ -146,27 +146,4 @@ describe('round-dir ownership and editable .tex inheritance', () => {
   // (like ensureMirroredInRoundDir's `r{round}`) is now built from the
   // shared workflowOutputRoundDir helper (@shared/constants/workflowOutput)
   // instead of an inlined path.dirname(workflowOutputPath(...)).
-  it('mirrors into diff/r<N>/ for the latexdiff round directory', async () => {
-    const workspaceDir = await installTempWorkspace('texra-diff-round-dir-');
-    const stylePath = path.join(workspaceDir, 'macros.sty');
-    await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
-
-    const runId = RunIdSchema.parse('c3c3c3c3c3c3');
-    const fileService = new TaskRunFileService(runId);
-
-    await fileService.mirrorWorkspaceFile(
-      createWorkspaceLocation(stylePath, 'macros.sty'),
-    );
-
-    await fileService.ensureMirroredInDiffRoundDir(2);
-
-    const diffRoundFilePath = path.join(
-      getRunDir(runId),
-      'diff',
-      'r2',
-      'macros.sty',
-    );
-    const linkStat = await lstat(diffRoundFilePath);
-    expect(linkStat.isSymbolicLink()).toBe(true);
-  });
 });

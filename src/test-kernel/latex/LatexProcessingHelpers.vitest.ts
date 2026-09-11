@@ -244,28 +244,4 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
       }),
   );
-
-  it.effect(
-    'mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'mirror-basedir-fallback' as RunId;
-        const { texPath, figurePath } = yield* Effect.promise(writeFixture);
-
-        const manager = new LatexMediaManager(
-          logger,
-          new TaskRunFileService(runId),
-        ) as unknown as LatexMediaManagerFigureInternals;
-        yield* manager.mirrorFiguresForFiles([
-          createWorkspaceLocation(texPath, 'main.tex'),
-        ]);
-
-        // Unchanged by the fix: mirrorFiguresForFiles has no precomputed
-        // baseDir, so mirrorFigureDependencies still resolves it itself (once
-        // inside extractFigurePathsFromLatex, once as the fallback).
-        expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
-
-        yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
-      }),
-  );
 });

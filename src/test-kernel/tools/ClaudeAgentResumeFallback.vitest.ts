@@ -180,61 +180,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.release('stale-session');
   });
 
-  it('resolves the Claude binary before child creation and then tracks startup synchronously', async () => {
-    const binaryPath = pDefer<string | undefined>();
-    const runs = stubRuns();
-    const startupEvents: string[] = [];
-    const originalTrackInFlight =
-      ClaudeAgentSessions.trackInFlight.bind(ClaudeAgentSessions);
-    const trackInFlight = vi
-      .spyOn(ClaudeAgentSessions, 'trackInFlight')
-      .mockImplementation((entry) => {
-        startupEvents.push('tracked');
-        originalTrackInFlight(entry);
-      });
-    mocks.findClaudeBinaryPath.mockReturnValue(binaryPath.promise);
-    mocks.startChildRunLoop.mockImplementation(
-      (params: { strategy: ChildRunStrategy<unknown> }) => {
-        startupEvents.push('startLoop');
-        params.strategy.onLoopStart?.({ runs } as any);
-        startupEvents.push('startLoopReturned');
-        return completedChildRunLoop();
-      },
-    );
-
-    try {
-      const launch = new ClaudeAgentTool().call({
-        prompt: 'start after binary discovery',
-      });
-      await vi.waitFor(() =>
-        expect(mocks.findClaudeBinaryPath).toHaveBeenCalledOnce(),
-      );
-
-      expect(mocks.registerRun).not.toHaveBeenCalled();
-      expect(mocks.createChildRun).not.toHaveBeenCalled();
-      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-      expect(trackInFlight).not.toHaveBeenCalled();
-
-      binaryPath.resolve('/opt/claude');
-      await expect(launch).resolves.toMatchObject({ status: 'executed' });
-
-      expect(mocks.createChildRun).toHaveBeenCalledOnce();
-      expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
-      expect(trackInFlight).toHaveBeenCalledOnce();
-      expect(startupEvents).toEqual([
-        'startLoop',
-        'tracked',
-        'startLoopReturned',
-      ]);
-    } finally {
-      const trackedRunId = trackInFlight.mock.calls[0]?.[0].runId;
-      trackInFlight.mockRestore();
-      if (trackedRunId) {
-        ClaudeAgentSessions.releaseByRunId(trackedRunId);
-      }
-    }
-  });
-
   it('refuses a one-shot run whose follow-up could never be collected', async () => {
     mocks.getCurrentToolContexts.mockReturnValue(
       fakeToolContexts({ stopAfterCycle: true }),

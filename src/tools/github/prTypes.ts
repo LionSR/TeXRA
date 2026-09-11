@@ -83,7 +83,7 @@ export type GhCheckRun = z.infer<typeof GhCheckRunSchema>;
  * Subset of `GET /repos/{o}/{r}/check-runs/{id}/annotations` we consume.
  * GitHub renders these as inline warning/notice bubbles on the PR diff view.
  */
-export const GhCheckAnnotationSchema = z.looseObject({
+const GhCheckAnnotationSchema = z.looseObject({
   path: z.string(),
   start_line: z.number(),
   end_line: z.number(),

@@ -167,45 +167,6 @@ describe('compileLatex2Pdf logger seam', () => {
       expect.stringContaining('latexmk not found'),
     );
   });
-
-  it('resolves the channel from the threaded option when one is supplied', async () => {
-    mocks.runToolWithCheck
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(execResult(true));
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-
-    const result = await compileLatex2Pdf(
-      pathToLocation(path.join(workspacePath, 'main.tex')),
-      {
-        channel: 'pinnedCompile',
-        outputDirectory: path.join(workspacePath, 'build'),
-      },
-    );
-
-    expect(result.ok).toBe(true);
-    expect(warn).toHaveBeenCalledWith(
-      'pinnedCompile',
-      expect.stringContaining('latexmk not found'),
-    );
-    expect(
-      warn.mock.calls.filter(([channel]) => channel === LATEX_COMMANDS_CHANNEL),
-    ).toHaveLength(0);
-  });
-
-  it('logs a throwing compiler invocation at error level on the resolved channel', async () => {
-    mocks.runToolWithCheck.mockRejectedValue(
-      new Error('boom: pdflatex crashed'),
-    );
-    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
-
-    const result = await compile();
-
-    expect(result.ok).toBe(false);
-    expect(error).toHaveBeenCalledWith(
-      LATEX_COMMANDS_CHANNEL,
-      expect.stringContaining('Error compiling LaTeX: boom: pdflatex crashed'),
-    );
-  });
 });
 
 const D = path.delimiter;

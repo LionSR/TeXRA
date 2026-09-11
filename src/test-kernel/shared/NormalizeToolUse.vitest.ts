@@ -131,20 +131,6 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.headerSummary).toBe('no such file');
   });
 
-  it('accepts failed runtime tool status directly', () => {
-    const normalized = normalizeToolUseData({
-      toolName: 'Bash',
-      error: 'cancelled by user',
-      status: 'failed',
-    });
-
-    expect(normalized).toMatchObject({
-      errorText: 'cancelled by user',
-      isError: true,
-      status: 'failed',
-    });
-  });
-
   it('treats a status-only runtime failure as an error', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',

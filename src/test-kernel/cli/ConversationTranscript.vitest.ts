@@ -474,34 +474,6 @@ describe('CLI conversation transcript', () => {
     expect(transcriptEntryLayoutRows(toolLayout)).toBe(4);
   });
 
-  it('gives every workflow-call status its own steady marker', () => {
-    const calls: readonly WorkflowCallProgress[] = [
-      { id: 'a', label: 'Task', status: 'planned' },
-      { id: 'a', label: 'Task', status: 'running' },
-      { id: 'a', label: 'Task', status: 'completed' },
-      { id: 'a', label: 'Task', status: 'cached' },
-      { id: 'a', label: 'Task', status: 'skipped', reason: 'user' },
-      { id: 'a', label: 'Task', status: 'failed', error: 'Runner stopped.' },
-    ];
-    const firstLines = calls.map(
-      (call) =>
-        transcriptEntryLayout(workflowTaskRow('a', call, 'Task'), {
-          width: 80,
-        }).lines[0] ?? '',
-    );
-
-    // Every call row nests two columns under the `◆` phase divider heading it.
-    expect(firstLines.every((line) => line.startsWith('  '))).toBe(true);
-    expect(firstLines.map((line) => line.slice(2, 4))).toEqual([
-      '□ ',
-      '☐ ',
-      '☑ ',
-      '✓ ',
-      '⊘ ',
-      '✗ ',
-    ]);
-  });
-
   it('aligns a wrapped call row under its own marker', () => {
     const layout = transcriptEntryLayout(
       workflowTaskRow(

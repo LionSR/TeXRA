@@ -17,39 +17,6 @@ import {
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 
-describe('Kimi Code model registry', () => {
-  it.each([
-    ['kimiCoding', 'kimi-for-coding'],
-    ['kimiCodingFast', 'kimi-for-coding-highspeed'],
-  ])(
-    'registers exclusive plan alias %s with wire id %s',
-    (texraId, fullName) => {
-      const config = MODEL_CONFIGS[texraId];
-      expect(config).toBeDefined();
-      expect(config.fullName).toBe(fullName);
-      expect(config.provider).toBe(ModelProvider.MOONSHOT);
-      expect(config.contextWindow).toBe(262_144);
-      expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
-      expect(isKimiCodeExclusiveModel(config)).toBe(true);
-      expect(resolveModelSource(config)).toBe('kimiCode');
-    },
-  );
-
-  it('flags kimi3 as dual-backend (subscription-eligible, not exclusive)', () => {
-    const config = MODEL_CONFIGS.kimi3;
-    expect(isKimiSubscriptionEligible(config)).toBe(true);
-    expect(isKimiCodeExclusiveModel(config)).toBe(false);
-    // The open platform stays its home: source and key owner are moonshot.
-    expect(resolveModelSource(config)).toBe(ModelProvider.MOONSHOT);
-    expect(resolveModelApiKeyProvider(config, false)).toBe('moonshot');
-  });
-
-  it('resolves plan aliases through the runtime registry like any model', () => {
-    expect(getRuntimeModelConfig('kimiCoding')).toBe(MODEL_CONFIGS.kimiCoding);
-    expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
-  });
-});
-
 describe('Kimi Code exclusivity single-source', () => {
   it('keeps the retry model-id gate aligned with the shared field predicate', () => {
     for (const [id, config] of Object.entries(MODEL_CONFIGS)) {
@@ -118,11 +85,5 @@ describe('Kimi Code routing', () => {
     expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimi25T, false)).toBe(
       'moonshot',
     );
-  });
-});
-
-describe('Kimi Code setup defaults', () => {
-  it('includes a setup model for the kimiCode provider', () => {
-    expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCoding');
   });
 });

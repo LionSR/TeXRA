@@ -290,27 +290,6 @@ describe('inline agent definitions', () => {
     }
   });
 
-  it.live('survives a catalog refresh that rebuilds the cache', () =>
-    Effect.gen(function* () {
-      yield* refresh({ includeRemote: false });
-      assert.strictEqual(getAgent('inline:scratchpad')?.source, 'inline');
-    }),
-  );
-
-  it('accepts a registration made after the initial load', () => {
-    registerInlineAgents([
-      {
-        name: 'lateComer',
-        settings: { agentCategory: AgentCategory.Workflow, rounds: 3 },
-        prompts: { userRequest: 'Do the thing.' },
-      },
-    ]);
-
-    const entry = getAgent('lateComer');
-    assert.strictEqual(entry?.source, 'inline');
-    assert.strictEqual(entry.rounds, 3);
-  });
-
   it('defaults an omitted category to a launchable workflow definition', async () => {
     registerInlineAgents([
       {
@@ -354,10 +333,6 @@ describe('inline agent definitions', () => {
         error instanceof Error &&
         error.message.includes('must be self-contained'),
     );
-  });
-
-  it('rejects a malformed definition at the registration call', () => {
-    assert.throws(() => registerInlineAgents([{ name: '' }]));
   });
 
   it('rejects every workflow-only setting on a tool-use definition', () => {

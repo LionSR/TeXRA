@@ -24,16 +24,6 @@ function restoreDom(): void {
   globalThis.window = originalGlobals.window;
 }
 
-describe('themeIsDark', () => {
-  it.each([
-    { theme: 'dark', expected: true },
-    { theme: 'high-contrast', expected: true },
-    { theme: 'light', expected: false },
-  ] as const)('treats $theme as dark=$expected', ({ theme, expected }) => {
-    expect(themeIsDark(theme)).toBe(expected);
-  });
-});
-
 describe('applyHostBodyTheme', () => {
   beforeEach(() => {
     installDom('http://localhost/');
@@ -68,12 +58,6 @@ describe('applyHostBodyTheme', () => {
 });
 
 describe('resolvePostMessageTargetOrigin', () => {
-  it('returns the origin when it is a real http origin', () => {
-    expect(resolvePostMessageTargetOrigin('http://localhost:5173')).toBe(
-      'http://localhost:5173',
-    );
-  });
-
   it('falls back to "*" when origin is the literal string "null" (file://)', () => {
     // Chromium returns the literal string "null" for file:// URLs. The helper
     // must not pass that through to window.postMessage or messages get

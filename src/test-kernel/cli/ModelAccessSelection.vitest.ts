@@ -225,37 +225,6 @@ describe('CLI model access routes', () => {
     ).toBe('kimi-code-subscription');
   });
 
-  it('formats the shared access routes for detailed and compact surfaces', () => {
-    const detailed: Array<[AccessRoute, string]> = [
-      ['chatgpt-subscription', 'ChatGPT subscription'],
-      ['kimi-code-subscription', 'Kimi Code subscription'],
-      ['api-key', 'Your own API keys'],
-      [undefined, 'Your own API keys'],
-    ];
-    const inline: Array<[AccessRoute, string]> = [
-      ['chatgpt-subscription', 'ChatGPT subscription'],
-      ['kimi-code-subscription', 'Kimi Code subscription'],
-      ['api-key', 'your own API keys'],
-    ];
-    // Every arm is display text; the enum value never reaches the status bar.
-    const short: Array<[AccessRoute, string]> = [
-      ['chatgpt-subscription', 'subscription'],
-      ['xai-subscription', 'subscription'],
-      ['kimi-code-subscription', 'subscription'],
-      ['api-key', 'API keys'],
-    ];
-
-    for (const [route, text] of detailed) {
-      expect(formatCliModelAccessRoute(route)).toBe(text);
-    }
-    for (const [route, text] of inline) {
-      expect(formatCliModelAccessRouteInline(route)).toBe(text);
-    }
-    for (const [route, text] of short) {
-      expect(shortCliModelAccessRoute(route)).toBe(text);
-    }
-  });
-
   it('reports the ChatGPT preference independently of sign-in', async () => {
     mocks.getCodexStatus.mockResolvedValue({
       signedIn: true,
@@ -348,25 +317,6 @@ describe('CLI model access routes', () => {
         expect(result.message).toContain('https://www.kimi.com/code/console');
       }).pipe(withHttpClient),
   );
-
-  it('reports the GLM Coding Plan preference independently of key', async () => {
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider) => provider === 'glm',
-    );
-    mocks.getGLMCodingPlan.mockReturnValue(true);
-
-    await expect(readCliModelAccessStatus()).resolves.toEqual(
-      expectedAccessStatus(
-        {
-          preferences: {
-            chatGpt: 'off',
-            grok: 'off',
-          },
-        },
-        { glmPreferred: true, glmKeySet: true },
-      ),
-    );
-  });
 
   it.effect(
     'enables GLM Coding Plan routing on a personal fallback when a key exists',

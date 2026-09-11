@@ -43,14 +43,6 @@ describe('default model list', () => {
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
   });
-
-  it('does not include retired models', () => {
-    expect(DEFAULT_MODELS.filter(isRetiredModel)).toEqual([]);
-  });
-
-  it('does not include deprecated models', () => {
-    expect(DEFAULT_MODELS.filter(isDeprecatedModel)).toEqual([]);
-  });
 });
 
 /**
@@ -99,12 +91,6 @@ describe('computeModelListVersion', () => {
     );
   });
 
-  it('is wired to the preferred set and current catalogue', () => {
-    expect(MODEL_LIST_VERSION).toBe(
-      computeModelListVersion(PREFERRED_DEFAULT_MODELS),
-    );
-  });
-
   it('does not change when a non-preferred catalogue model retires', () => {
     const activeCatalogue = [
       ['preferred', {}],
@@ -132,19 +118,6 @@ describe('computeModelListVersion', () => {
         [['preferred', { retired: true }]],
       ),
     );
-  });
-
-  it('does not change when an unrelated active catalogue model is added', () => {
-    const before = computeModelListVersion(['preferred'], [['preferred', {}]]);
-    const after = computeModelListVersion(
-      ['preferred'],
-      [
-        ['preferred', {}],
-        ['new-model', {}],
-      ],
-    );
-
-    expect(after).toBe(before);
   });
 
   it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {

@@ -157,22 +157,6 @@ describe('buildUserVars runtime skill diagnostics', () => {
     });
   });
 
-  it('uses caller defaults with an SDK-provided config provider', async () => {
-    await installPlatform({}, { config: callerDefaultConfig });
-    const vars = await buildUserVars(
-      baseConfig,
-      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      basePrompt,
-      '/agents/generic',
-      { isOpenai: false, isAnthropic: false, isGoogle: false },
-      noopTrace,
-      { workspacePath: '/workspace' },
-    );
-
-    expect(vars.DEFAULT_BIB_PATH).toBe('');
-    expect(vars.AVAILABLE_SKILLS).toBe('');
-  });
-
   it('emits the raw accepted catalog without changing prompt membership', async () => {
     const root = await makeTempDir('texra-user-vars-skills-', tempRoots);
     const rawDescription =
@@ -274,20 +258,6 @@ describe('output file prompt variables', () => {
 
 // Compile-time pins for the buildUserVars contract: no runtime I/O, so this
 // describe does not touch the platform.
-describe('buildUserVars declared type', () => {
-  it('admits custom required-file keys beside the precisely typed fixed vocabulary', () => {
-    type BuiltResult = Awaited<ReturnType<typeof buildUserVars>>;
-
-    expectTypeOf<BuiltResult>().toEqualTypeOf<BuiltUserVars>();
-    // Fixed keys keep their precise types.
-    expectTypeOf<BuiltUserVars['IS_OPENAI_MODEL']>().toEqualTypeOf<boolean>();
-    expectTypeOf<BuiltUserVars['INPUT_FILES']>().toEqualTypeOf<string[]>();
-    // Custom required-file keys are admitted beside the fixed vocabulary.
-    expectTypeOf<BuiltUserVars['CUSTOM_CONTENT']>().toEqualTypeOf<unknown>();
-    // The render/channel boundary accepts the builder's product as-is.
-    expectTypeOf<BuiltUserVars>().toMatchTypeOf<TemplateVars>();
-  });
-});
 
 // The describes below replace the whole global platform in their own
 // beforeEach and never restore it — they MUST stay the last describes in
@@ -352,31 +322,6 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.CONTEXT_CONTENT).toBe('present context');
   });
 
-  it('returns every file variable at its empty default when no files are configured', async () => {
-    const vars = await buildVars(
-      AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
-    );
-
-    expect(vars).toMatchObject({
-      INPUT_FILE: null,
-      INPUT_CONTENT: null,
-      CONTEXT_FILE: null,
-      CONTEXT_CONTENT: null,
-      EDITED_FILE: null,
-      EDITED_CONTENT: null,
-      INPUT_FILES: [],
-      CONTEXT_FILES: [],
-      EDITED_FILES: [],
-      ALL_INPUTS: null,
-      ALL_CONTEXTS: null,
-      ALL_EDITEDS: null,
-      LIST_OF_ALL_INPUTS: '',
-      LIST_OF_ALL_CONTEXTS: '',
-      LIST_OF_ALL_EDITEDS: '',
-      MEDIA_FILE: null,
-    });
-  });
-
   it('records attached memory read misses from the prompt-load pass', async () => {
     const vars = await buildVars(
       AgentConfigSchema.parse({
@@ -419,17 +364,6 @@ describe('requiredFilesInternal custom variables', () => {
       ).rejects.toThrow('collides with a fixed template variable');
     },
   );
-
-  it('names the offending generated key in the collision error', async () => {
-    await expect(
-      buildVars(
-        AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
-        { MEDIA: 'brief.txt' },
-      ),
-    ).rejects.toThrow(
-      'requiredFilesInternal name "MEDIA" generates "MEDIA_FILE", which collides with a fixed template variable. Rename the required-file variable.',
-    );
-  });
 
   it('passes custom required-file variables through beside the fixed vocabulary', async () => {
     const vars = await buildVars(

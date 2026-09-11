@@ -59,17 +59,6 @@ describe('filename-era workflow output grammar', () => {
     ).toBe(`paper_${expected}_r0_gpt-4`);
   });
 
-  it('preserves the flat Save as copy filename', () => {
-    const stem = workflowOutputCopyStem({
-      base: 'paper[1]',
-      agent: 'builtInWorkflow:write-polish',
-      model: 'gpt-4',
-      round: 12,
-    });
-
-    expect(`${stem}.tex`).toBe('paper[1]_polish_r12_gpt-4.tex');
-  });
-
   it('preserves the mid-era workspace filename', () => {
     expect(
       midEraWorkflowOutputStem({

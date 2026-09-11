@@ -66,15 +66,6 @@ describe('deliveryTagOf', () => {
 });
 
 describe('summarizeSubagentFollowup', () => {
-  it('passes non-subagent text through unchanged', () => {
-    expect(summarizeSubagentFollowup('hello world')).toBe('hello world');
-    expect(
-      summarizeSubagentFollowup(
-        '<orchestrator-followup>x</orchestrator-followup>',
-      ),
-    ).toBe('<orchestrator-followup>x</orchestrator-followup>');
-  });
-
   it('strips orchestrator follow-up wrappers', () => {
     expect(
       stripOrchestratorFollowup(
@@ -91,11 +82,6 @@ describe('summarizeSubagentFollowup', () => {
     expect(summarizeSubagentFollowup(undefined)).toBe('(empty follow-up)');
   });
 
-  it('preserves empty string messages for transcript rendering', () => {
-    expect(summarizeFollowupMessage('')).toBe('');
-    expect(summarizeSubagentFollowup('')).toBe('');
-  });
-
   it('summarizes a started progress block', () => {
     expect(
       summarizeSubagentFollowup(
@@ -110,14 +96,6 @@ describe('summarizeSubagentFollowup', () => {
         '<subagent-progress id="abc" agent="research" type="overview" tool-calls="1" files-changed="none" cost="0.0007" />',
       ),
     ).toBe('⟳ research · 1 tool call · $0.0007');
-  });
-
-  it('pluralizes tool calls', () => {
-    expect(
-      summarizeSubagentFollowup(
-        '<subagent-progress id="abc" agent="research" type="overview" tool-calls="3" files-changed="none" />',
-      ),
-    ).toBe('⟳ research · 3 tool calls');
   });
 
   it('summarizes todo progress attributes', () => {

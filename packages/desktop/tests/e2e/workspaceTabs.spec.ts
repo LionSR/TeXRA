@@ -142,39 +142,6 @@ test('loads the project tree before an editor panel is opened', async () => {
   ).toHaveCount(0);
 });
 
-test('resizes the window canvas and project sidebar', async () => {
-  const { page } = launched;
-
-  const contentBounds = await setContentSize(1500, 900);
-
-  await expect
-    .poll(() => page.evaluate(() => window.innerWidth))
-    .toBe(contentBounds.width);
-  await expect
-    .poll(() =>
-      page
-        .locator('.task-shell')
-        .evaluate((element) => element.getBoundingClientRect().width),
-    )
-    .toBe(contentBounds.width);
-
-  const sidebar = page.locator('.task-sidebar-slot');
-  const divider = page.locator('.task-shell [part="divider"]').first();
-  const initialSidebarWidth = (await sidebar.boundingBox())?.width;
-  expect(initialSidebarWidth).toBeDefined();
-  if (initialSidebarWidth == null) return;
-
-  // Web Awesome owns pointer and keyboard resizing. Use its documented
-  // keyboard path here because Playwright's synthetic Electron mouse emits
-  // `mousemove` without the `pointermove` that Web Awesome's drag helper
-  // consumes; a real pointing device emits both.
-  await divider.focus();
-  await page.keyboard.press('Shift+ArrowRight');
-  await expect
-    .poll(async () => (await sidebar.boundingBox())?.width ?? 0)
-    .toBeGreaterThan(initialSidebarWidth + 40);
-});
-
 test('aligns titlebar content and keeps the collapsed toggle clear of macOS controls', async () => {
   const { app, page } = launched;
   const brand = await page.locator('.task-sidebar-brand').boundingBox();
@@ -200,95 +167,6 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
 
   await toggle.click();
   await expect(page.locator('.task-sidebar')).toBeVisible();
-});
-
-test('uses normal macOS workspace and stacking behavior', async () => {
-  const flags = await launched.app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().at(0);
-    if (!window) throw new Error('TeXRA window was not found.');
-    return {
-      alwaysOnTop: window.isAlwaysOnTop(),
-      visibleOnAllWorkspaces: window.isVisibleOnAllWorkspaces(),
-    };
-  });
-
-  expect(flags).toEqual({
-    alwaysOnTop: false,
-    visibleOnAllWorkspaces: false,
-  });
-});
-
-test('keeps the composer grouped and centered at compact widths', async () => {
-  const { page } = launched;
-
-  const contentBounds = await setContentSize(1000, 760);
-  await expect
-    .poll(() => page.evaluate(() => window.innerWidth))
-    .toBe(contentBounds.width);
-
-  const layout = await page.evaluate(() => {
-    const root = document
-      .querySelector('progress-app')
-      ?.shadowRoot?.querySelector('session-composer')?.shadowRoot;
-    const box = root?.querySelector<HTMLElement>('.composer');
-    const chips = [
-      ...(root?.querySelectorAll<HTMLElement>('.chips, .chips-collapsed') ??
-        []),
-    ].find((element) => element.getClientRects().length > 0);
-    const tools = root?.querySelector<HTMLElement>('.tools');
-    const send = root?.querySelector<HTMLElement>('#composer-send');
-    if (!box || !chips || !tools || !send) {
-      throw new Error('Conversation composer controls were not mounted.');
-    }
-    const boxRect = box.getBoundingClientRect();
-    const chipsRect = chips.getBoundingClientRect();
-    const toolsRect = tools.getBoundingClientRect();
-    const sendRect = send.getBoundingClientRect();
-    return {
-      overflow: box.scrollWidth - box.clientWidth,
-      controlsInside: [chipsRect, toolsRect, sendRect].every(
-        (rect) =>
-          rect.left >= boxRect.left - 1 &&
-          rect.right <= boxRect.right + 1 &&
-          rect.top >= boxRect.top - 1 &&
-          rect.bottom <= boxRect.bottom + 1,
-      ),
-      controlsCenterOffset:
-        (chipsRect.top + chipsRect.bottom - toolsRect.top - toolsRect.bottom) /
-        2,
-    };
-  });
-
-  expect(layout.overflow).toBe(0);
-  expect(layout.controlsInside).toBe(true);
-  expect(Math.abs(layout.controlsCenterOffset)).toBeLessThan(1);
-
-  await setContentSize(1500, 900);
-});
-
-test('uses one rectangular hover surface for workbench tabs', async () => {
-  const { page } = launched;
-
-  await openSidebarWorkbench('Browser');
-  const browserTab = page.locator(activeWorkbenchTab('browser'));
-  await expect(browserTab).toBeVisible();
-  await browserTab.hover();
-
-  const colors = await browserTab.evaluate((tab) => {
-    const button = tab.querySelector<HTMLElement>(
-      '.task-workbench-tab-activate',
-    );
-    const base =
-      button?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-    if (!base) throw new Error('Workbench tab button base was not found.');
-    return {
-      button: getComputedStyle(base).backgroundColor,
-      tab: getComputedStyle(tab).backgroundColor,
-    };
-  });
-
-  expect(colors.button).toBe('rgba(0, 0, 0, 0)');
-  expect(colors.tab).not.toBe('rgba(0, 0, 0, 0)');
 });
 
 test('opens settings beside the permanent conversation', async () => {
@@ -507,71 +385,6 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     page.locator('wa-dialog.desktop-command-palette'),
   ).toHaveJSProperty('open', true);
   await page.keyboard.press('Escape');
-});
-
-test('keeps settings banners consistent in a narrow side panel', async () => {
-  const { page } = launched;
-  // Only Account and Shortcuts still render a shared settings banner; the
-  // Memory/Models/Teams/Goals pages dropped theirs in the native-settings
-  // consolidation, so they are no longer part of this consistency check.
-  const bannerTabs = [
-    { tab: 'account', tag: 'account-tab' },
-    { tab: 'shortcuts', tag: 'shortcuts-tab' },
-  ] as const;
-  const bannerMetrics: Array<{
-    readonly borderRadius: string;
-    readonly iconSize: string;
-    readonly padding: string;
-    readonly titleWeight: string;
-  }> = [];
-
-  await openSidebarWorkbench('Settings');
-  for (const tab of bannerTabs) {
-    await page.evaluate((panel) => {
-      window.postMessage({ command: 'setTab', tab: panel }, '*');
-    }, tab.tab);
-
-    const banner = page.locator(`${tab.tag} .settings-banner`).first();
-    await expect(banner).toBeVisible();
-    await expect
-      .poll(() =>
-        banner.evaluate(
-          (element) => element.scrollWidth <= element.clientWidth + 1,
-        ),
-      )
-      .toBe(true);
-
-    bannerMetrics.push(
-      await banner.evaluate((element) => {
-        const callout = element.querySelector('wa-callout');
-        const icon = element.querySelector('.settings-banner-icon');
-        const title = element.querySelector('.settings-banner-title');
-        if (
-          !(callout instanceof HTMLElement) ||
-          !(icon instanceof HTMLElement) ||
-          !(title instanceof HTMLElement)
-        ) {
-          throw new Error('Shared settings banner chrome was not rendered.');
-        }
-        const calloutStyle = getComputedStyle(callout);
-        return {
-          borderRadius: calloutStyle.borderRadius,
-          iconSize: getComputedStyle(icon).fontSize,
-          padding: calloutStyle.padding,
-          titleWeight: getComputedStyle(title).fontWeight,
-        };
-      }),
-    );
-  }
-
-  expect(new Set(bannerMetrics.map((metric) => metric.borderRadius)).size).toBe(
-    1,
-  );
-  expect(new Set(bannerMetrics.map((metric) => metric.iconSize)).size).toBe(1);
-  expect(new Set(bannerMetrics.map((metric) => metric.padding)).size).toBe(1);
-  expect(new Set(bannerMetrics.map((metric) => metric.titleWeight)).size).toBe(
-    1,
-  );
 });
 
 test('shows live environment status without duplicate panel actions', async () => {

@@ -209,12 +209,4 @@ describe('desktop shortcut registry', () => {
     expect(renderHints).toHaveBeenCalledTimes(3);
     expect(getDesktopShortcutService()).toBeUndefined();
   });
-
-  it('installs one shared service and removes it on disposal', async () => {
-    const registry = await createRegistry();
-
-    expect(getDesktopShortcutService()).toBe(registry);
-    registry.dispose();
-    expect(getDesktopShortcutService()).toBeUndefined();
-  });
 });

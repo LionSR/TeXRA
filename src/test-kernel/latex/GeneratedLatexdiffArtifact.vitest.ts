@@ -70,31 +70,12 @@ describe('parseVersionControlDiffFilename', () => {
     },
   );
 
-  it('recognizes a minimum-length abbreviated hash', () => {
-    expect(parseVersionControlDiffFilename('/paper/main-diffea26.tex')).toEqual(
-      {
-        sourcePath: path.join('/paper', 'main.tex'),
-        commitHash: 'ea26',
-      },
-    );
-  });
-
   it.each([
     { label: 'plain source files', input: '/paper/main.tex' },
     { label: 'between-round diff files', input: '/paper/output_diffr2r1.tex' },
     { label: 'workspace-side diff files', input: '/paper/revised_diff.tex' },
   ])('ignores $label', ({ input }) => {
     expect(parseVersionControlDiffFilename(input)).toBeNull();
-  });
-});
-
-describe('buildBetweenRoundDiffSuffix', () => {
-  it('builds the `_diffr{newer}r{older}` suffix from numeric rounds', () => {
-    expect(buildBetweenRoundDiffSuffix(2, 1)).toBe('_diffr2r1');
-  });
-
-  it('accepts string round captures (e.g. from a regex match)', () => {
-    expect(buildBetweenRoundDiffSuffix('2', '1')).toBe('_diffr2r1');
   });
 });
 

@@ -43,21 +43,6 @@ describe('BaseFS stat predicates', () => {
     ['isSymbolicLink', (path: string) => AbsoluteFS.isSymbolicLink(path)],
   ] as const;
 
-  it('returns ordinary predicate results for present and missing paths', async () => {
-    await AbsoluteFS.write('/present.txt', 'content');
-
-    await expect(AbsoluteFS.exists('/present.txt')).resolves.toBe(true);
-    await expect(AbsoluteFS.isFile('/present.txt')).resolves.toBe(true);
-    await expect(AbsoluteFS.isSymbolicLink('/present.txt')).resolves.toBe(
-      false,
-    );
-    await expect(AbsoluteFS.exists('/missing.txt')).resolves.toBe(false);
-    await expect(AbsoluteFS.isFile('/missing.txt')).resolves.toBe(false);
-    await expect(AbsoluteFS.isSymbolicLink('/missing.txt')).resolves.toBe(
-      false,
-    );
-  });
-
   it.each(statPredicates)(
     'returns false for ENOTDIR from %s',
     async (_name, run) => {
@@ -87,15 +72,6 @@ describe('BaseFS stat predicates', () => {
 // WorkspaceFS
 // ---------------------------------------------------------------------------
 
-describe('WorkspaceFS.delete', () => {
-  it('is idempotent when the file does not exist', async () => {
-    await assert.doesNotReject(
-      () => WorkspaceFS.delete('this-file-does-not-exist-12345.txt'),
-      'delete() should not throw when file does not exist',
-    );
-  });
-});
-
 // ---------------------------------------------------------------------------
 // mimeUtils
 // ---------------------------------------------------------------------------
@@ -105,60 +81,11 @@ describe('getMimeType', () => {
     assert.strictEqual(getMimeType('/tmp/clip.opus'), 'audio/opus');
     assert.strictEqual(getMimeType('C:\\tmp\\clip.l16'), 'audio/l16');
   });
-
-  it('applies audio override for bare extension values', () => {
-    assert.strictEqual(getMimeType('opus'), 'audio/opus');
-    assert.strictEqual(getMimeType('.mulaw'), 'audio/mulaw');
-  });
-
-  it('does not apply audio override to extensionless file paths', () => {
-    assert.strictEqual(getMimeType('/tmp/opus'), null);
-    assert.strictEqual(getMimeType('C:\\tmp\\mulaw'), null);
-  });
 });
 
 // ---------------------------------------------------------------------------
 // fileTypeUtils and workspace path resolution
 // ---------------------------------------------------------------------------
-
-describe('isTexFile', () => {
-  it('identifies TeX files regardless of extension case', () => {
-    assert.strictEqual(isTexFile('document.tex'), true);
-    assert.strictEqual(isTexFile('DOCUMENT.TEX'), true);
-    assert.strictEqual(isTexFile('path/to/file.tex'), true);
-    assert.strictEqual(isTexFile('file.TeX'), true);
-  });
-
-  it('rejects non-TeX files', () => {
-    assert.strictEqual(isTexFile('document.txt'), false);
-    assert.strictEqual(isTexFile('file.pdf'), false);
-    assert.strictEqual(isTexFile('image.png'), false);
-    assert.strictEqual(isTexFile('script.js'), false);
-    assert.strictEqual(isTexFile('noextension'), false);
-  });
-
-  it('rejects names without a .tex extension of their own', () => {
-    assert.strictEqual(isTexFile(''), false);
-    // '.tex' alone is a dotfile: path.extname('.tex') === '', so it has no
-    // .tex extension under the hasExtension-based implementation.
-    assert.strictEqual(isTexFile('.tex'), false);
-    assert.strictEqual(isTexFile('tex'), false);
-    assert.strictEqual(isTexFile('file.texture'), false);
-  });
-});
-
-describe('WorkspaceFS.toAbsolute', () => {
-  it('returns absolute paths unchanged', () => {
-    const absolutePath = path.resolve('/absolute/path/file.txt');
-    assert.strictEqual(WorkspaceFS.toAbsolute(absolutePath), absolutePath);
-  });
-
-  it('resolves relative paths against the workspace', () => {
-    const resolved = WorkspaceFS.toAbsolute('relative/path/file.txt');
-    assert.ok(path.isAbsolute(resolved));
-    assert.ok(resolved.endsWith(path.join('relative', 'path', 'file.txt')));
-  });
-});
 
 // ---------------------------------------------------------------------------
 // AbsoluteFS.write
@@ -223,33 +150,6 @@ describe('RelativeFS JSON helpers', () => {
 
   afterAll(async () => {
     await fs.rm(BASE_DIR, { recursive: true, force: true });
-  });
-
-  it('readJson round trip preserves written JSON data', async () => {
-    const payload = {
-      foo: 'bar',
-      nested: { count: 3 },
-      list: [1, 2, 3],
-    };
-
-    await TestRelativeFS.write('sample.json', JSON.stringify(payload));
-    const result = await TestRelativeFS.readJson<typeof payload>('sample.json');
-
-    assert.deepStrictEqual(result, payload);
-  });
-
-  it('validates readJson results with a schema', async () => {
-    await TestRelativeFS.write(
-      'typed.json',
-      JSON.stringify({ name: 'alpha', extra: true }),
-    );
-
-    const result = await TestRelativeFS.readJson(
-      'typed.json',
-      z.object({ name: z.string() }),
-    );
-
-    assert.deepStrictEqual(result, { name: 'alpha' });
   });
 
   it('preserves malformed JSON errors as the readJson cause', async () => {

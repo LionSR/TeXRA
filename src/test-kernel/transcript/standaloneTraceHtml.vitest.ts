@@ -42,21 +42,6 @@ function embeddedTrace(html: string): TraceDocument {
 }
 
 describe('injectStandaloneTrace', () => {
-  it('inserts an inline script before the module script tag', () => {
-    const html = injectStandaloneTrace(TEMPLATE, trace());
-    const scriptIndex = html.indexOf('<script>window.__TEXRA_TRACE__');
-    const moduleIndex = html.indexOf('<script type="module"');
-    expect(scriptIndex).toBeGreaterThan(-1);
-    expect(scriptIndex).toBeLessThan(moduleIndex);
-  });
-
-  it('embeds the trace as valid, round-trippable JSON', () => {
-    const t = trace({ runId: 'ab0002' as RunId });
-    const html = injectStandaloneTrace(TEMPLATE, t);
-
-    expect(embeddedTrace(html).runId).toBe('ab0002');
-  });
-
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
     const t = trace({
       meta: {

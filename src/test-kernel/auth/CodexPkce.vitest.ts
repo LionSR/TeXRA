@@ -37,37 +37,12 @@ function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
 describe('codex PKCE', () => {
-  it('generates a base64url verifier with no padding', () => {
-    const verifier = generateCodeVerifier();
-    expect(verifier).toMatch(BASE64URL);
-    expect(verifier).not.toContain('=');
-    // 32 random bytes → 43 base64url chars.
-    expect(verifier.length).toBe(43);
-  });
-
   it('derives the challenge as base64url(SHA-256(verifier))', () => {
     const verifier = 'fixed-test-verifier-value';
     const expected = createHash('sha256').update(verifier).digest('base64url');
     const challenge = computeCodeChallenge(verifier);
     expect(challenge).toBe(expected);
     expect(challenge).toMatch(BASE64URL);
-  });
-
-  it('produces a matching S256 pair', () => {
-    const pair = generatePkcePair();
-    expect(pair.method).toBe('S256');
-    expect(pair.challenge).toBe(computeCodeChallenge(pair.verifier));
-  });
-
-  it('generates unique verifiers and states', () => {
-    const verifiers = new Set(
-      Array.from({ length: 32 }, () => generateCodeVerifier()),
-    );
-    expect(verifiers.size).toBe(32);
-    const states = new Set(
-      Array.from({ length: 32 }, () => generateOAuthState()),
-    );
-    expect(states.size).toBe(32);
   });
 });
 

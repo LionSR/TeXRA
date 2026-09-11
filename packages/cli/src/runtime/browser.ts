@@ -7,7 +7,7 @@ interface BrowserLaunchCommand {
   readonly args: string[];
 }
 
-export function resolveBrowserLaunch(
+function resolveBrowserLaunch(
   url: string,
   platform: NodeJS.Platform = process.platform,
 ): BrowserLaunchCommand {

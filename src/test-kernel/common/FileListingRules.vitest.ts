@@ -10,18 +10,6 @@ import {
 import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 
 describe('shared file-listing rules', () => {
-  it('builds input configs from the product file-handling rules', () => {
-    const settings = loadFileListSettings();
-
-    const config = getFileListConfig('input', settings);
-
-    expect(config).toMatchObject({
-      include: ['.txt', '.tex', '.md'],
-      excludeFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
-    });
-    expect(config.excludeDirs).toContain('node_modules');
-  });
-
   it('normalizes filters once and applies file and directory rules', () => {
     const filters = prepareFileFilters({
       include: ['.TEX'],

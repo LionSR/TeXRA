@@ -44,19 +44,6 @@ describe('logUtils', () => {
     expect(entries[0]?.level).toBe('ERROR');
   });
 
-  it('carries the level and channel as fields rather than message text', () => {
-    const entries = captureEntries();
-
-    logger.warn('BoundChannel', 'bound warning');
-
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      level: 'WARN',
-      message: 'bound warning',
-      annotations: { channel: 'BoundChannel' },
-    });
-  });
-
   it('redacts entries sent to a sink by default', () => {
     const entries = captureEntries();
 
@@ -111,21 +98,6 @@ describe('logUtils', () => {
     expect(payload).toContain('"password": "[redacted]"');
     expect(payload).toContain('"refreshToken": "[redacted]"');
     expect(payload).toContain('"requestId": "visible-request-id"');
-  });
-
-  it('createLog binds its channel onto the same entry the free writers build', () => {
-    enableDebugLogging();
-    const entries = captureEntries();
-
-    logger.createLog('BoundChannel').debug('with data', {
-      data: { requestId: 'visible-request-id' },
-    });
-
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.annotations['channel']).toBe('BoundChannel');
-    expect(payloadOf(entries[0])).toContain(
-      '"requestId": "visible-request-id"',
-    );
   });
 
   it('routes native Effect logs and nested spans through the redacting sink', () => {

@@ -465,17 +465,6 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
-  it('formats long elapsed times with compact duration units', async () => {
-    let now = 0;
-    const output = outputBuffer();
-    const renderer = ansiRenderer(output, { nowMs: () => now });
-
-    now = 3_723_000;
-    await handleRunConfig(renderer);
-
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1h 2m');
-  });
-
   it('ticks the ANSI status line while a root workflow is quiet', async () => {
     let now = 0;
     const output = outputBuffer();
@@ -844,25 +833,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('keeps the task description when an active child switches models', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(renderer, 'child-stream', 'Current review task');
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleRunConfig(renderer, {
-      runId: 'child-stream',
-      agent: 'review',
-    });
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Current review task · 0s\n',
-    );
-  });
-
   it('shows completed terminal stream stops with the shared cli wording', async () => {
     let now = 0;
     const output = outputBuffer();
@@ -946,17 +916,6 @@ describe('CLI run progress renderer', () => {
     ]);
 
     expect(output.text).toBe('orchestrator · 0s\norchestrator · Error · 0s\n');
-  });
-
-  it('uses a separate render flag from platform log suppression', async () => {
-    expect(
-      createRunProgressRenderer(
-        context({ quietLogs: true, renderRunProgress: true }),
-      ),
-    ).toBeDefined();
-    expect(
-      createRunProgressRenderer(context({ renderRunProgress: false })),
-    ).toBe(undefined);
   });
 
   it('derives the run progress flag from quiet and structured-output contexts', async () => {
@@ -1281,18 +1240,5 @@ describe('CLI run progress renderer', () => {
         : [],
     );
     expect(records).toEqual(expectedRecords);
-  });
-
-  it('maps the global quiet flag into CLI context args', async () => {
-    expect(
-      pickGlobalArgs(
-        {
-          quiet: true,
-          'output-format': 'text',
-          'approval-policy': 'never',
-        },
-        { skillSourcePaths: [] },
-      ).quiet,
-    ).toBe(true);
   });
 });

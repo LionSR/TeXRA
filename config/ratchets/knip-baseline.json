@@ -128,12 +128,6 @@
       "name": "buildProviderApiKeyItems"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/ResumeListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resumeEntryDescription"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/SkillsListForm.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -144,12 +138,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "skillSelectItemsForTui"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ToolsListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatToolDescriptionForTui"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
@@ -192,18 +180,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "textInputDisplayRowCount"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/AgentProposal.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "agentProposalMetadataRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/BashApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "bashCwdDisplayLine"
     },
     {
       "file": "packages/cli/src/chat/tui/modals/ConfirmCardState.ts",
@@ -326,12 +302,6 @@
       "name": "userQuestionPromptRowsBudget"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/InfoPane.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "infoPaneRequiredRows"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/InputBar.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -408,18 +378,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "toolDisplaySpanTextProps"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/WorkPlanReader.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatWorkPlanReaderText"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/WorkPlanReader.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workPlanReaderLayout"
     },
     {
       "file": "packages/cli/src/chat/tui/render/DiffView.tsx",
@@ -578,12 +536,6 @@
       "name": "formatPersonalApiKeysLine"
     },
     {
-      "file": "packages/cli/src/runtime/browser.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveBrowserLaunch"
-    },
-    {
       "file": "packages/cli/src/runtime/chatDefaults.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -672,24 +624,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "DeviceAuthorizationSchema"
-    },
-    {
-      "file": "packages/cli/src/runtime/terminalRequirements.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "dumbTerminalMessage"
-    },
-    {
-      "file": "packages/cli/src/runtime/tools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "findCliToolDef"
-    },
-    {
-      "file": "packages/cli/src/runtime/tools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatCliBoolean"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",
@@ -1004,16 +938,22 @@
       "name": "RunLeaseSchema"
     },
     {
+      "file": "src/agent/trace/events.ts",
+      "category": "production-dead",
+      "kind": "types",
+      "name": "StageStartEvent"
+    },
+    {
       "file": "src/agent/trace/index.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "noopTrace"
     },
     {
-      "file": "src/agent/types/StopReasonTypes.ts",
+      "file": "src/agent/trace/index.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "MCP_STOP"
+      "kind": "types",
+      "name": "StageStartEvent"
     },
     {
       "file": "src/agent/workflowScript/persistence.ts",
@@ -1226,12 +1166,6 @@
       "name": "LatexPathTool"
     },
     {
-      "file": "src/controllers/settingsView/SettingsAgentDirectoryController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SettingsAgentDirectoryEntry"
-    },
-    {
       "file": "src/eventBus/AppSignals.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1254,18 +1188,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "DownloadSourceOptions"
-    },
-    {
-      "file": "src/latex/latexdiff/diffCommandExecutor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "LATEXDIFF_CHANGES_ONLY_SUBTYPE"
-    },
-    {
-      "file": "src/latex/latexdiff/diffCommandExecutor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveLatexdiffSubtype"
     },
     {
       "file": "src/latex/texTools.ts",
@@ -1308,6 +1230,12 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveDefaultModels"
+    },
+    {
+      "file": "src/model/providerCapabilities.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT"
     },
     {
       "file": "src/platform/defaults/workspaceStorage.ts",
@@ -1494,12 +1422,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "parseOriginHeadDefaultBranch"
-    },
-    {
-      "file": "src/tools/github/prTypes.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "GhCheckAnnotationSchema"
     },
     {
       "file": "src/tools/grep.ts",

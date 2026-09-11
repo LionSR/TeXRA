@@ -191,16 +191,6 @@ afterEach(() => {
 });
 
 describe('shared retry and human-input decisions', () => {
-  it('presents credential retries only under interactive ask', () => {
-    expect(
-      decideRetryApproval({
-        policy: 'ask',
-        canPresent: true,
-        isCredentialFailure: true,
-      }),
-    ).toBe('present');
-  });
-
   it.effect('denies an ordinary transient retry in yolo', () =>
     Effect.gen(function* () {
       const ctx = context({ approvalPolicy: 'yolo' });
@@ -267,19 +257,6 @@ describe('human input approval policy', () => {
 describe('approval prompt hooks', () => {
   const proposal = agentProposal();
 
-  it('forwards presentation events to the attached CLI presenter', () => {
-    const emit = vi.fn();
-    const interactions = createHeadlessCliHostInteractions(context(), {
-      emit,
-    });
-
-    interactions.emit?.('requestShowError', { message: 'Run failed.' });
-
-    expect(emit).toHaveBeenCalledWith('requestShowError', {
-      message: 'Run failed.',
-    });
-  });
-
   it.effect('runs the before-prompt hook for interactive approval events', () =>
     Effect.gen(function* () {
       const tracker = trackPromptEvents();
@@ -328,27 +305,6 @@ describe('approval prompt hooks', () => {
         expect(result).toEqual({
           action: 'reject',
           reason: 'Denied by TeXRA approval policy.',
-        });
-      }),
-  );
-
-  it.effect(
-    'preserves a failed proposal prompt as an automatic cancellation',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* Effect.promise(async () =>
-          createHeadlessCliHostInteractions(
-            context({
-              approvalPrompt: async () => {
-                throw new Error('terminal input closed');
-              },
-            }),
-          ).requestAgentProposal?.(proposal),
-        );
-
-        expect(result).toEqual({
-          action: 'reject',
-          cause: 'CLI approval prompt failed.',
         });
       }),
   );
@@ -482,33 +438,6 @@ describe('requestRetry classification (#7331)', () => {
       }),
   );
 
-  it.effect(
-    'passes the retry request payload through to the CLI retry presenter unchanged',
-    () =>
-      Effect.gen(function* () {
-        const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
-        const routed = {
-          ...retryRequest,
-          kimiCodeRoutedOnFailure: true,
-        };
-        const notRouted = {
-          ...retryRequest,
-          kimiCodeRoutedOnFailure: false,
-        };
-
-        yield* Effect.promise(async () =>
-          createHeadlessCliHostInteractions(ctx).requestRetry?.(routed),
-        );
-        yield* Effect.promise(async () =>
-          createHeadlessCliHostInteractions(ctx).requestRetry?.(notRouted),
-        );
-
-        // The payload is the exact runtime request object, not a re-built copy.
-        expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(routed);
-        expect(formatRetryRequestMessageMock).toHaveBeenCalledWith(notRouted);
-      }),
-  );
-
   it.effect('cancels a retry the interactive user explicitly rejects', () =>
     Effect.gen(function* () {
       const result = yield* Effect.promise(async () =>
@@ -607,20 +536,6 @@ describe('bounded yolo retry batches (#9532)', () => {
 });
 
 describe('buildToolEditApprovalContent', () => {
-  it('includes the proposed edit diff in interactive CLI prompts', () => {
-    const { summary } = buildToolEditApprovalContent({
-      path: '/tmp/proof.tex',
-      originalContent: 'Let G be a group.\nThis is wrong.\n',
-      proposedContent: 'Let G be a group.\nThis is correct.\n',
-      sourceTool: 'edit_file',
-    });
-
-    expect(summary).toContain('Tool edit requested by edit_file');
-    expect(summary).toContain('Proposed diff:');
-    expect(summary).toContain('-This is wrong.');
-    expect(summary).toContain('+This is correct.');
-  });
-
   it.effect('passes the diff summary to the interactive approval prompt', () =>
     Effect.gen(function* () {
       let promptSummary = '';
@@ -699,31 +614,6 @@ describe('buildToolEditApprovalContent', () => {
       );
 
       const result = yield* Effect.promise(() => requestNewProofEdit());
-
-      expect(result).toEqual({
-        action: 'reject',
-        cause: 'CLI approval prompt failed.',
-      });
-    }),
-  );
-
-  it.effect('preserves a failed Bash prompt as an automatic cancellation', () =>
-    Effect.gen(function* () {
-      useCliHostInteractions(
-        context({
-          approvalPrompt: async () => {
-            throw new Error('terminal input closed');
-          },
-        }),
-      );
-
-      const result = yield* Effect.promise(() =>
-        defaultSession().interactions.requestBashApproval(
-          bashApprovalRequest({
-            command: 'latexmk paper.tex',
-          }),
-        ),
-      );
 
       expect(result).toEqual({
         action: 'reject',

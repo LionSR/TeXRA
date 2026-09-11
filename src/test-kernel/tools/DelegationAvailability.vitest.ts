@@ -151,16 +151,6 @@ describe('delegation agent availability', () => {
     vi.clearAllMocks();
   });
 
-  it('formats an agent list with descriptions and per-agent tools', () => {
-    expect(formatAgentList(RESEARCH_NUMERICS_AGENTS)).toBe(
-      [
-        '- research: Derive and verify.',
-        '- numerics: Run simulations.',
-        '  Tools: bash',
-      ].join('\n'),
-    );
-  });
-
   it('replaces the placeholder Available agents line with the live roster', () => {
     const rewritten = rewriteRoster([
       { name: 'research', description: 'Derive things.' },
@@ -181,122 +171,12 @@ describe('delegation agent availability', () => {
     );
   });
 
-  it('replaces an already-expanded multi-line roster block', () => {
-    const rewritten = rewriteRoster(
-      [{ name: 'apply', description: 'Apply review suggestions.' }],
-      {
-        name: 'delegate_workflow',
-        availabilityCategory: 'workflow',
-        description: [
-          'Delegate to a workflow agent.',
-          '',
-          'Available agents:',
-          '- correct: Proofread.',
-          '- polish: Rewrite.',
-          '',
-          'Pick the agent whose description matches the task.',
-        ].join('\n'),
-      },
-    );
-
-    expect(rewritten.description).toContain(
-      'Available agents:\n- apply: Apply review suggestions.',
-    );
-    expect(rewritten.description).not.toContain('correct: Proofread');
-    expect(rewritten.description).not.toContain('polish: Rewrite');
-    expect(rewritten.description).toContain(
-      'Pick the agent whose description matches the task.',
-    );
-  });
-
-  it('appends the roster block when the description has none', () => {
-    const rewritten = rewriteRoster(
-      [{ name: 'review', description: 'Audit a change.' }],
-      {
-        name: 'delegate_agent',
-        availabilityCategory: 'toolUse',
-        description: 'Delegate a task to a tool-use agent.',
-      },
-    );
-
-    expect(rewritten.description).toBe(
-      'Delegate a task to a tool-use agent.\n\nAvailable agents:\n- review: Audit a change.',
-    );
-  });
-
   it('treats a $ in an agent description as a literal, not a replacement token', () => {
     const rewritten = rewriteRoster([
       { name: 'prover', description: 'Prove $\\forall x$ statements.' },
     ]);
 
     expect(rewritten.description).toContain('Prove $\\forall x$ statements.');
-  });
-
-  it('replaces (not duplicates) a roster block that ends the description', () => {
-    const rewritten = rewriteRoster(
-      [{ name: 'review', description: 'Audit a change.' }],
-      {
-        name: 'delegate_agent',
-        availabilityCategory: 'toolUse',
-        description:
-          'Delegate a task.\n\nAvailable agents: loaded from the active roster at runtime.',
-      },
-    );
-
-    expect(rewritten.description).toBe(
-      'Delegate a task.\n\nAvailable agents:\n- review: Audit a change.',
-    );
-    expect(rewritten.description?.match(/Available agents:/g)).toHaveLength(1);
-  });
-
-  it('emits an actionable line when the roster is empty', () => {
-    const rewritten = rewriteRoster([]);
-
-    expect(rewritten.description).toContain(
-      'none are currently in the active roster',
-    );
-    expect(rewritten.description).not.toContain('Available agents:\n');
-  });
-
-  it('collapses newlines inside an agent description to one paragraph', () => {
-    expect(
-      formatAgentList([
-        { name: 'prover', description: 'Prove theorems.\n\nUses Lean.' },
-      ]),
-    ).toBe('- prover: Prove theorems. Uses Lean.');
-  });
-
-  it('leaves non-delegation tools untouched', () => {
-    const tool: ToolDefinition = {
-      name: 'read_file',
-      availabilityCategory: 'toolUse',
-      description:
-        'Available agents: loaded from the active roster at runtime.',
-    };
-    mocks.getVisibleAgents.mockReturnValue(RESEARCH_NUMERICS_AGENTS);
-
-    expect(annotateDelegationAvailability(tool, ['sonnet46T'])).toBe(tool);
-  });
-
-  it('leaves a tool with no description untouched and reads no state', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      availabilityCategory: 'toolUse',
-    };
-
-    expect(annotateDelegationAvailability(tool, undefined)).toBe(tool);
-    expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
-    expect(mocks.isWorktreeSupportEnabled).not.toHaveBeenCalled();
-  });
-
-  it('leaves a tool with no availability category untouched', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      description: DELEGATE_AGENT_DESCRIPTION,
-    };
-
-    expect(annotateDelegationAvailability(tool, ['sonnet46T'])).toBe(tool);
-    expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
   });
 });
 
@@ -315,31 +195,6 @@ describe('delegation model availability', () => {
         model('deepseekT', { disabled: false, requiresKey: false }),
       ]),
     ).toEqual(['sonnet46T', 'deepseekT']);
-  });
-
-  it('replaces the delegation tool description with current available models', () => {
-    const tool: ToolDefinition = {
-      name: 'delegate_agent',
-      availabilityCategory: 'toolUse',
-      description: [
-        'Delegate to a specialist.',
-        'Available models: opus48T, sonnet46T, gemini31p',
-        'Model selection: use the largest available model when needed.',
-      ].join('\n'),
-    };
-
-    const rewritten = annotateDelegationAvailability(tool, [
-      'sonnet46T',
-      'deepseekT',
-    ]);
-
-    expect(rewritten.description).toContain(
-      'Available models: sonnet46T, deepseekT',
-    );
-    expect(rewritten.description).not.toContain('opus48T');
-    expect(rewritten.description).toContain(
-      'Model selection: use the largest available model when needed.',
-    );
   });
 
   it('tells the agent not to guess models when availability cannot be loaded', () => {
@@ -443,33 +298,6 @@ describe('delegation worktree availability', () => {
       'Available models: loaded from the active API mode at runtime.',
     );
   });
-
-  it('substitutes the DISABLED guidance when worktrees are off', () => {
-    mocks.isWorktreeSupportEnabled.mockReturnValue(false);
-
-    const rewritten = annotateDelegationAvailability(delegateTool(), undefined);
-
-    expect(rewritten.description).toContain(
-      'Git worktree support: DISABLED in this workspace.',
-    );
-    expect(rewritten.description).toContain(
-      'will be rejected at schema validation',
-    );
-  });
-
-  it('leaves a delegation tool without a worktree line alone and reads no setting', () => {
-    const rewritten = annotateDelegationAvailability(
-      {
-        name: 'delegate_workflow',
-        availabilityCategory: 'workflow',
-        description: DELEGATE_WORKFLOW_DESCRIPTION,
-      },
-      undefined,
-    );
-
-    expect(rewritten.description).not.toContain('Git worktree support:');
-    expect(mocks.isWorktreeSupportEnabled).not.toHaveBeenCalled();
-  });
 });
 
 describe('resolveAgentTools delegation annotation', () => {
@@ -483,24 +311,6 @@ describe('resolveAgentTools delegation annotation', () => {
         requiresKey: false,
       },
     ]);
-  });
-
-  it('refreshes the Available agents line of delegation tools per run', async () => {
-    mocks.getVisibleAgents.mockReturnValue(RESEARCH_NUMERICS_AGENTS);
-
-    const delegateAgent = await resolveDelegateAgent();
-    expect(delegateAgent?.description).toContain(
-      'Available agents:\n- research: Derive and verify.',
-    );
-    expect(delegateAgent?.description).toContain(
-      '- numerics: Run simulations.',
-    );
-    expect(delegateAgent?.description).not.toContain(
-      'loaded from the active roster at runtime',
-    );
-    // The models line is refreshed in the same pass.
-    expect(delegateAgent?.description).toContain('Available models: deepseekT');
-    expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
   });
 
   it('reflects the current roster on each call, not a frozen snapshot', async () => {

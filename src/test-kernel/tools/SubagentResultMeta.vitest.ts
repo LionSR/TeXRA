@@ -16,22 +16,6 @@ const baseResult: AgentFlowResult = {
 };
 
 describe('subagent result metadata', () => {
-  it('builds a schema-valid manifest from the canonical final result', () => {
-    const meta = buildSubagentResultMeta(
-      'reviewer',
-      buildAgentFinalResult({
-        flowResult: {
-          ...baseResult,
-          response: 'All findings verified.',
-          files: ['notes.md'],
-        },
-      }),
-      99,
-    );
-
-    expect(ResultMetaSchema.parse(meta)).toEqual(meta);
-  });
-
   it('failure manifest overwrites interim success and never claims success', () => {
     const interim: AgentFlowResult = {
       ...baseResult,

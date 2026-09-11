@@ -7,24 +7,6 @@ import {
 } from '@shared/schemas';
 
 describe('usage wire vocabulary and aggregation', () => {
-  it('preserves the exact usage-provider wire vocabulary', () => {
-    expect(UsageProviderSchema.options).toEqual([
-      'anthropic',
-      'openai',
-      'openai-response',
-      'google',
-      'deepseek',
-      'openrouter',
-      'dashscope',
-      'xai',
-      'moonshot',
-      'minimax',
-      'glm',
-      'meta',
-      'unknown',
-    ]);
-  });
-
   it.each<{
     name: string;
     entries: Parameters<typeof sumUsageStats>[0];

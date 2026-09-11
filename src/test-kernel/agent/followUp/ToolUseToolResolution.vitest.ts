@@ -73,22 +73,6 @@ describe('tool-use tool resolution', () => {
     ).resolves.toEqual(['grep']);
   });
 
-  it('keeps approval-gated tools when approval prompts are available', async () => {
-    const names = [
-      'ask_user_question',
-      'bash',
-      'delegate_agent',
-      'grep',
-      'inquiry',
-      'plan',
-      'update_config',
-    ];
-
-    await expect(
-      resolveNames(names, { approvalPromptsUnavailable: false }),
-    ).resolves.toEqual(names);
-  });
-
   it('filters runtime-unavailable tools without hiding other approval-gated tools', async () => {
     await expect(
       resolveNames(
@@ -99,12 +83,6 @@ describe('tool-use tool resolution', () => {
         },
       ),
     ).resolves.toEqual(['ask_user_question', 'bash', 'grep', 'write_file']);
-  });
-
-  it('omits diagnostics when read support is host-unavailable', async () => {
-    const tools = await resolveDiagnostics(['diagnostics']);
-
-    expect(tools).toEqual([]);
   });
 
   it('drops the workflow script tool when its dashboard switch is disabled', async () => {

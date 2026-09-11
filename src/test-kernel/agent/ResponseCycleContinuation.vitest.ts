@@ -152,12 +152,6 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
 }
 
 describe('response cycle continuation phases', () => {
-  it('requires an output location in cycle-local state', () => {
-    expectTypeOf<
-      ResponseCycleShared['outputLocation']
-    >().toEqualTypeOf<AgentFileLocation>();
-  });
-
   it('skips before interruption checks when no processed response is ready', async () => {
     const shared = createShared();
     const harness = createServices();

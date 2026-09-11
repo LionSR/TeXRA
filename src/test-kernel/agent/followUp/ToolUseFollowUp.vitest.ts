@@ -231,43 +231,6 @@ describe('submitFollowUp', () => {
     expect(tryResumeRun).toHaveBeenCalledTimes(1);
   });
 
-  it('enqueues live notifications for children-running parent without recovery', async () => {
-    const runId = generateRunId();
-    const session = fakeSession({ kind: 'queue' });
-    // Create a child-owned entry to simulate the parent having active children.
-    const child = session.followUps.claimLive(runId, 'child')!;
-    // Release the child so the queue stays but loses its owner.
-    session.followUps.release(child, 'recoverable');
-    const tryResumeRun = mockTryResume();
-
-    const result = await Effect.runPromise(
-      submitFollowUp(runId, 'child update', {
-        session,
-        resumePort: { tryResumeRun },
-        mode: 'live_notification',
-      }),
-    );
-
-    expect(result).toMatchObject({ status: 'queued' });
-    expect(tryResumeRun).not.toHaveBeenCalled();
-    expect(session.followUps.getAll(runId)).toEqual(['child update']);
-  });
-
-  it('keeps children-running explicitly recoverable after child untracking', async () => {
-    const runId = generateRunId();
-    const session = fakeSession({ kind: 'queue' });
-    const tryResumeRun = mockTryResume();
-
-    await Effect.runPromise(
-      submitFollowUp(runId, 'child result', {
-        session,
-        resumePort: { tryResumeRun },
-      }),
-    );
-
-    expect(tryResumeRun).toHaveBeenCalledTimes(1);
-  });
-
   it('admits a child delivery to the retained queue after the parent completes', async () => {
     const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });

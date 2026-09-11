@@ -292,17 +292,6 @@ describe('desktop workspace IPC', () => {
     ).toBe(false);
   });
 
-  it('disposes terminal and browser resources at a renderer boundary', () => {
-    const ptyHost = createPtyHost();
-    const browserViews = createBrowserViews();
-    const ipc = createIpc(vi.fn(), { ptyHost, browserViews });
-
-    ipc.disposeRendererResources();
-
-    expect(ptyHost.disposeAll).toHaveBeenCalledOnce();
-    expect(browserViews.disposeAll).toHaveBeenCalledOnce();
-  });
-
   it('posts environment state and clears loading state after host failures', async () => {
     const environment: DesktopEnvironmentSummary = {
       isGitRepository: true,

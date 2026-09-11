@@ -322,77 +322,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
-  it('refreshes model availability after a provider toggle', async () => {
-    const fixture = await createFixture();
-
-    await fixture.controller.refreshAfterProviderSettingChange(
-      GlobalStateKey.USE_OPENROUTER,
-    );
-
-    expect(fixture.events).toEqual([
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      'modelOptions',
-      'credential',
-    ]);
-  });
-
-  it('replaces GLM usage after the region changes', async () => {
-    const fixture = await createFixture();
-
-    await fixture.controller.refreshAfterProviderSettingChange(
-      GlobalStateKey.GLM_USE_CHINA,
-    );
-
-    expect(fixture.subscriptionUsage.invalidate).not.toHaveBeenCalled();
-    expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
-    expect(fixture.posted).toContainEqual(
-      expect.objectContaining({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      }),
-    );
-  });
-
-  it('delegates TeXRA account sign-in and sign-out without stale posts', async () => {
-    const fixture = await createFixture();
-
-    await assertSupported(fixture.controller.profileHandlers.signIn)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_IN,
-    });
-    await assertSupported(fixture.controller.profileHandlers.signOut)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
-    });
-
-    expect(fixture.signIn).toHaveBeenCalledOnce();
-    expect(fixture.signOut).toHaveBeenCalledOnce();
-    expect(fixture.posted).toEqual([]);
-  });
-
-  it('refreshes auth-dependent data in renderer order', async () => {
-    const fixture = await createFixture();
-
-    await fixture.controller.refreshAuthDependentData();
-
-    expect(fixture.events).toEqual([
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      'modelOptions',
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
-    ]);
-    expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
-  });
-
-  it('posts profile and ChatGPT status as one startup responsibility', async () => {
-    const fixture = await createFixture();
-
-    await fixture.controller.postStartupData();
-
-    expect(fixture.posted.map(commandOf)).toEqual(
-      expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      ]),
-    );
-  });
 
   it('warns when a more specific setting overrides the requested subscription toggle', async () => {
     const fixture = await createFixture();
@@ -518,16 +447,5 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
     expect(loggedError).toBeInstanceOf(LoopbackTransportUnavailableError);
     expect((loggedError as Error).cause).toBe(browserError);
-  });
-
-  it('routes Codex through the subscription for a Settings-panel sign-in', async () => {
-    const fixture = await createFixture();
-
-    await assertSupported(fixture.controller.chatGptHandlers.signInChatGpt)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-    });
-
-    expect(codexMocks.login).toHaveBeenCalledOnce();
-    expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
   });
 });

@@ -168,18 +168,6 @@ describe('SettingsModelSelectionController', () => {
     expect(enabled.length).toBeGreaterThan(0);
   });
 
-  it('uses the runtime helper default when no helper model is configured', async () => {
-    const controller = createController({
-      globalState: new FakeStateStore({
-        [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
-      }),
-    });
-
-    expect((await controller.buildSelectionData()).helperModel).toBe(
-      DEFAULT_HELPER_MODEL,
-    );
-  });
-
   it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {
     const controller = createController({
       getPreferredCopilotRouteModels: () => ['sonnet46'],
@@ -241,16 +229,5 @@ describe('SettingsModelSelectionController', () => {
       ),
     ).toEqual([]);
     expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
-  });
-
-  it('builds the outbound update message from its own selection data', async () => {
-    const controller = createController();
-
-    const message = await controller.buildModelSelectionMessage();
-
-    expect(message).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...(await controller.buildSelectionData()),
-    });
   });
 });

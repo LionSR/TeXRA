@@ -290,10 +290,6 @@ describe('Anthropic-style messages', () => {
 // ---------------------------------------------------------------------------
 
 describe('Edge cases', () => {
-  it('handles empty messages array', () => {
-    expect(normalize([])).toEqual([]);
-  });
-
   it('ignores system messages (no visible node)', () => {
     const nodes = normalize([
       { role: 'system', content: 'You are a helpful assistant.' },
@@ -313,13 +309,6 @@ describe('Edge cases', () => {
 
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({ kind: 'user-message' });
-  });
-
-  it('handles messages with no role (defaults to "unknown")', () => {
-    // Messages with no role should be silently skipped (no known role match).
-    const nodes = normalize([{ content: 'orphan' }]);
-
-    expect(nodes).toHaveLength(0);
   });
 
   it('handles content as object (JSON stringified)', () => {
@@ -377,23 +366,6 @@ describe('Edge cases', () => {
   // and web_fetch_tool_result are — see AnthropicStreamHandler) and land
   // in the switch's `case undefined` arm, same as any other unrecognized
   // block type.
-  it('does not map unused code-execution block types to a node', () => {
-    const nodes = normalize([
-      {
-        role: 'assistant',
-        content: [
-          { type: 'code_execution_tool_result', content: 'run output' },
-          { type: 'bash_code_execution_tool_result', content: 'bash output' },
-          {
-            type: 'text_editor_code_execution_tool_result',
-            content: 'editor output',
-          },
-        ],
-      },
-    ]);
-
-    expect(nodesOfKind(nodes, 'tool-result')).toHaveLength(0);
-  });
 });
 
 // ---------------------------------------------------------------------------

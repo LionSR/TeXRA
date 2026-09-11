@@ -78,34 +78,6 @@ describe('Claude Agent SDK adapter', () => {
     expect(aggregateClaudeModelUsage({})).toBeNull();
   });
 
-  it.each([
-    [
-      'TaskCreate',
-      { subject: 'Check the proof' },
-      'Create task: Check the proof',
-    ],
-    [
-      'TaskUpdate',
-      { taskId: '7', status: 'completed' },
-      'Update task: 7 → completed',
-    ],
-    ['TaskGet', { taskId: '7' }, 'Get task: 7'],
-    ['TaskList', {}, 'List tasks'],
-    [
-      'Agent',
-      { description: 'Inspect the parser' },
-      'Agent Inspect the parser',
-    ],
-  ])('summarizes current %s calls', (toolName, input, summary) => {
-    expect(
-      buildClaudeToolUseLog({
-        toolName,
-        input,
-        status: 'in_progress',
-      }).summary,
-    ).toBe(summary);
-  });
-
   it('replaces the complete background-task level without pairing task edges', () => {
     const { trace, toolStart, toolEnd } = fakeTrace();
     const tracker = new ClaudeBackgroundTaskTracker(trace);

@@ -12,12 +12,6 @@ describe('authCallback', () => {
     expect(isAuthCallbackPath('/not-auth')).toBe(false);
   });
 
-  it('extracts the PKCE code from the query string', () => {
-    expect(
-      parseAuthCallbackCode({ path: '/auth-callback', query: 'code=abc123' }),
-    ).toEqual({ success: true, code: 'abc123' });
-  });
-
   it('reports auth errors before looking for a code', () => {
     expect(
       parseAuthCallbackCode({

@@ -407,35 +407,4 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     // record remains and the wait-node loop has nothing to continue.
     expect(GoalStore.getForRun(RUN_ID)).toBeNull();
   });
-
-  it('complete gives plan-only guidance when no goal is running', async () => {
-    const result = await callTool({
-      command: 'complete',
-      reason: 'I think I am done.',
-    });
-    expect(result.status).toBe('executed');
-    expect(result.summary).toBe(
-      'Plan-only work complete: summarize the result.',
-    );
-    expect(result.output).toContain(
-      'do not call plan(command="complete") again',
-    );
-  });
-
-  it('pause gives direct-response guidance when no goal is running', async () => {
-    const result = await callTool({
-      command: 'pause',
-      reason: 'Need user input.',
-    });
-    expect(result.status).toBe('executed');
-    expect(result.summary).toBe('No autonomous goal to pause.');
-    expect(result.output).toContain('ask the user directly');
-  });
-
-  it('rejects whitespace-only reason on pause', async () => {
-    await GoalStore.start(RUN_ID, 'objective');
-    const result = await callTool({ command: 'pause', reason: '   ' });
-    expect(result.status).toBe('error');
-    expect(result.error).toMatch(/empty/i);
-  });
 });

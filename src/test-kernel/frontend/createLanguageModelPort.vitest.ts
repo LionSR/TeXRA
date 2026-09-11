@@ -177,23 +177,6 @@ describe('createLanguageModelPort', () => {
     },
   );
 
-  it('forwards native model and access change events', () => {
-    const modelChange = { dispose: vi.fn() };
-    const accessChange = { dispose: vi.fn() };
-    mocks.onDidChangeChatModels.mockReturnValue(modelChange);
-    mocks.onDidChangeAccess.mockReturnValue(accessChange);
-    const port = createPort();
-    const listener = vi.fn();
-
-    const subscription = port.onDidChange(listener);
-
-    expect(mocks.onDidChangeChatModels).toHaveBeenCalledWith(listener);
-    expect(mocks.onDidChangeAccess).toHaveBeenCalledWith(listener);
-    subscription.dispose();
-    expect(modelChange.dispose).toHaveBeenCalledOnce();
-    expect(accessChange.dispose).toHaveBeenCalledOnce();
-  });
-
   it('resolves operations by vendor and model id', async () => {
     const model = fakeModel();
     mocks.selectChatModels.mockImplementation(async ({ id }) =>

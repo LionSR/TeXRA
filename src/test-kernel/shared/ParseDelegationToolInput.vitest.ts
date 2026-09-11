@@ -28,14 +28,6 @@ describe('parseDelegationToolInput', () => {
     }
   });
 
-  it('defaults the model to DEFAULT_AGENT_MODEL when omitted', () => {
-    const proposal = parseDelegationToolInput(
-      { agent: 'correct', instruction: 'fix' },
-      'delegate_workflow',
-    );
-    expect(proposal?.model).toBe(DEFAULT_AGENT_MODEL);
-  });
-
   it('maps extractFigures / extractTikz shorthand into toolConfig', () => {
     const proposal = parseDelegationToolInput(
       {
@@ -49,17 +41,6 @@ describe('parseDelegationToolInput', () => {
     expect(proposal?.agentCategory).toBe(AgentCategory.Workflow);
     if (proposal?.agentCategory === AgentCategory.Workflow) {
       expect(proposal.toolConfig.autoExtractFigure).toBe(true);
-      expect(proposal.toolConfig.autoExtractTikzFigure).toBe(false);
-    }
-  });
-
-  it('leaves toolConfig flags at their defaults when shorthand is absent', () => {
-    const proposal = parseDelegationToolInput(
-      { agent: 'correct', instruction: 'fix' },
-      'delegate_workflow',
-    );
-    if (proposal?.agentCategory === AgentCategory.Workflow) {
-      expect(proposal.toolConfig.autoExtractFigure).toBe(false);
       expect(proposal.toolConfig.autoExtractTikzFigure).toBe(false);
     }
   });

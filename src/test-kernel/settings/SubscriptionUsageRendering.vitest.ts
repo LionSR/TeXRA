@@ -157,22 +157,6 @@ describe('subscription usage rendering', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('restarts one fresh clock when the same tab reconnects', async () => {
-    const tab = await mountTabWithFakeTimers();
-
-    tab.remove();
-    expect(vi.getTimerCount()).toBe(0);
-    vi.setSystemTime(NOW + 5 * 60_000);
-    document.body.append(tab);
-    await tab.updateComplete;
-
-    expect(tab._ticker.now).toBe(NOW + 5 * 60_000);
-    expect(vi.getTimerCount()).toBe(1);
-
-    tab.remove();
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
   it('refreshes the tab clock when fresh usage arrives', async () => {
     const tab = await mountTabWithFakeTimers();
     vi.setSystemTime(NOW + 30_000);

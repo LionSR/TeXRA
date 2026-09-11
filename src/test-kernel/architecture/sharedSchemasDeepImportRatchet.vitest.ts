@@ -752,51 +752,6 @@ describe('@shared/schemas deep-import ratchet', () => {
     ]);
   });
 
-  it('tracks published names by their exact leaf and export namespace', () => {
-    const moduleMemo = new Map<string, ModuleExports>();
-    const surface = publishedSurface(moduleMemo);
-
-    expect(surface['@shared/schemas/profileViewMessages']?.type).toContain(
-      'ProviderSetting',
-    );
-    expect(surface['@shared/schemas/profileViewMessages']?.value).not.toContain(
-      'ProviderSetting',
-    );
-    expect(surface['@shared/schemas/settingsViewMessages']?.type).toContain(
-      'ProviderSetting',
-    );
-    expect(surface['@shared/schemas/commonViewMessages']?.type).not.toContain(
-      'ProviderSetting',
-    );
-    expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
-      'ThemeSchema',
-    );
-    expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
-      'Theme',
-    );
-    expect(
-      isLeafFullyPublished(surface, '@shared/schemas/agent', moduleMemo),
-    ).toBe(true);
-    expect(
-      isLeafFullyPublished(
-        surface,
-        '@shared/schemas/profileViewMessages',
-        moduleMemo,
-      ),
-    ).toBe(false);
-    expect(
-      reachableSpace(
-        surface,
-        '@shared/schemas/profileViewMessages',
-        {
-          name: 'ProviderSetting',
-          requestedSpace: 'ordinary',
-        },
-        moduleMemo,
-      ),
-    ).toBe('type');
-  });
-
   const baselineBeforeUpdate = JSON.parse(
     readFileSync(BASELINE_PATH, 'utf8'),
   ) as SchemasBaseline;

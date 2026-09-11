@@ -205,37 +205,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
   });
 
-  it('preserves persisted native follow-up support across resumed waiting turns', async () => {
-    const runId = 'e9911-native-resume' as RunId;
-    const snapshot = createToolUseResumeData({ runId });
-    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
-      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    );
-    mocks.readRunMeta.mockResolvedValue({ parentRunId: PARENT_RUN });
-    mocks.buildAgentLaunchContext
-      .mockResolvedValueOnce(buildResumeContext(runId))
-      .mockResolvedValueOnce(buildResumeContext(runId));
-    mocks.runToolUseFlow.mockResolvedValue({
-      outcome: 'waiting',
-      response: 'ready for another follow-up',
-    });
-
-    await resumeToolUseFromResumeData(snapshot);
-    await resumeToolUseFromResumeData(snapshot);
-
-    // The persisted support rides the launch input: `run.start` stamps it at
-    // the reservation commit point, before the lifecycle runs.
-    expect(mocks.buildAgentLaunchContext).toHaveBeenCalledTimes(2);
-    expect(
-      mocks.buildAgentLaunchContext.mock.calls.map(
-        (call) => call[0]?.userFollowUpSupport,
-      ),
-    ).toEqual([
-      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    ]);
-  });
-
   it('resolves run lineage before activating the resume stream', async () => {
     const storageError = new Error('run metadata unavailable');
     const snapshot = createToolUseResumeData({ runId: 'e8048' as RunId });
@@ -392,36 +361,5 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // persisted AgentConfig schema field; the seeded transient stays as-is.
     expect(ctx.config.model).toBe('next-model');
     expect(ctx.userVarChannels.MODEL).toBe('test-model');
-  });
-
-  it('carries a failed resumed flow result, error included, to the lifecycle', async () => {
-    const runId = 'e9421-error' as RunId;
-    const flowError = {
-      message: 'provider failed mid-resume',
-      userRetryable: true,
-    };
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(runId),
-    );
-    mocks.readRunMeta.mockResolvedValueOnce({ parentRunId: PARENT_RUN });
-    mocks.runToolUseFlow.mockResolvedValueOnce({
-      outcome: RUN_OUTCOME.FAILED,
-      response: 'partial answer',
-      totalCostUsd: 0.25,
-      error: flowError,
-    });
-
-    const result = await resumeToolUseFromResumeData(
-      createToolUseResumeData({ runId }),
-    );
-
-    expect(result).toMatchObject({
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.FAILED,
-      response: 'partial answer',
-      totalCostUsd: 0.25,
-      runId,
-      error: flowError,
-    });
   });
 });

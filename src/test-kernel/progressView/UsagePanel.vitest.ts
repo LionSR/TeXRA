@@ -50,18 +50,6 @@ describe('usage-panel route badges', () => {
     expect(usageAriaLabel(element)).toContain('Free via ChatGPT');
   });
 
-  it('shows Kimi Code subscription usage as free', async () => {
-    const element = await mountUsagePanel(
-      usage({
-        cost: 0,
-        usageRoute: 'kimi-code-subscription',
-      }),
-    );
-
-    expect(panelText(element)).toContain('Free · Kimi Code');
-    expect(usageAriaLabel(element)).toContain('Free via Kimi Code');
-  });
-
   it.each([
     {
       route: 'api-key' as UsageRoute,
@@ -84,21 +72,4 @@ describe('usage-panel route badges', () => {
       expect(usageAriaLabel(element)).toContain(`$0.123 via ${detailedLabel}`);
     },
   );
-
-  it('keeps the route badge intact while the summary can shrink', async () => {
-    const element = await mountUsagePanel(usage({ usageRoute: 'api-key' }));
-    const styles = (element.constructor as typeof UsagePanel).elementStyles
-      .flatMap((style) =>
-        'cssText' in style
-          ? style.cssText
-          : [...style.cssRules].map((rule) => rule.cssText),
-      )
-      .join('\n');
-
-    expect(styles).toMatch(
-      /\.run-summary__route\s*{[^}]*white-space:\s*nowrap/s,
-    );
-    expect(styles).toMatch(/\.run-summary\s*{[^}]*min-width:\s*0/s);
-    expect(styles).toMatch(/\.run-summary__value\s*{[^}]*min-width:\s*0/s);
-  });
 });

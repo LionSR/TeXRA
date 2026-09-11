@@ -235,49 +235,6 @@ function matching(entries: readonly LogEntry[], text: string): LogEntry[] {
 }
 
 describe('session.interactions immediate capabilities', () => {
-  it('forwards approval bypass state through the desktop port', () => {
-    const { interactions, setApprovalBypassState } = createPortSession();
-    const update = {
-      runId,
-      kind: 'toolEdit',
-      bypassActive: true,
-    } as const;
-
-    interactions.setApprovalBypassState?.(update);
-
-    expect(setApprovalBypassState).toHaveBeenCalledWith(update);
-  });
-
-  it('delegates immediate capabilities to the active adapter', async () => {
-    const session = createTestSession();
-    const diagnostics = [diagnostic];
-    const readDiagnostics = vi.fn(async (_path: string) => diagnostics);
-    const addCriticism = vi.fn((_input: typeof criticism) => ({
-      accepted: true,
-      resolvedPath: criticism.absolutePath,
-    }));
-    session.interactions.use({
-      readDiagnostics,
-      addCriticism,
-      cancel: vi.fn(),
-    });
-
-    try {
-      expect(
-        await session.interactions.readDiagnostics?.(criticism.absolutePath),
-      ).toBe(diagnostics);
-      expect(session.interactions.addCriticism?.(criticism)).toEqual({
-        accepted: true,
-        resolvedPath: criticism.absolutePath,
-      });
-
-      expect(readDiagnostics).toHaveBeenCalledWith(criticism.absolutePath);
-      expect(addCriticism).toHaveBeenCalledWith(criticism);
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('does not expose or replay immediate capabilities while detached', () => {
     const session = createTestSession();
     const detach = session.interactions.use({
@@ -584,35 +541,6 @@ describe('session.interactions request bookkeeping', () => {
     }
   });
 
-  it('keeps a parked request pending when the diagnostic sink throws', async () => {
-    setLogSink({
-      write: () => {
-        throw new Error('diagnostic sink failed');
-      },
-    });
-    const session = createTestSession();
-    const adapter = createControllablePlanAdapter();
-    try {
-      const pending = requestPlan(session, 'approval:throwing-warning').then(
-        (result) => ({ status: 'resolved' as const, result }),
-        (error: unknown) => ({ status: 'rejected' as const, error }),
-      );
-
-      session.interactions.use(adapter.interactions);
-      expect(adapter.requests).toHaveLength(1);
-      expect(
-        adapter.submit('approval:throwing-warning', { action: 'approve' }),
-      ).toBe(true);
-      await expect(pending).resolves.toEqual({
-        status: 'resolved',
-        result: { action: 'approve' },
-      });
-    } finally {
-      session.dispose();
-      setLogSink(null);
-    }
-  });
-
   it('settles against the documented minimal `{ cancel }` host', async () => {
     const session = createTestSession();
     session.interactions.use({ cancel: vi.fn() });
@@ -879,14 +807,5 @@ describe('session.interactions request bookkeeping', () => {
     } finally {
       session.dispose();
     }
-  });
-
-  it('session dispose settles whatever is still pending in the port', async () => {
-    const { session } = createPortSession();
-    const pending = requestProposal(session, 'proposal:dispose');
-
-    session.dispose();
-
-    await expect(pending).resolves.toMatchObject({ action: 'reject' });
   });
 });

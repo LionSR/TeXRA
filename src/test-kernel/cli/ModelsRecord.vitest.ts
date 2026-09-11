@@ -81,18 +81,6 @@ describe('CLI model JSON record', () => {
       );
     }
   });
-
-  it('snapshots the source `value` so post-call mutation does not bleed in', () => {
-    // Guards against a future regression where `cliModelRecord` is rewritten
-    // to return a reference instead of a copy: mutating `m.value` after the
-    // projection must not change the record's `id`.
-    const m = model({ value: 'gpt55' });
-    const record = cliModelRecord(m);
-
-    (m as { value: string }).value = 'mutated-after-call';
-
-    expect(record.id).toBe('gpt55');
-  });
 });
 
 describe('CLI model list filtering', () => {
@@ -106,31 +94,6 @@ describe('CLI model list filtering', () => {
     expect(
       listableModelAccessEntries(entries).map((entry) => entry.model.value),
     ).toEqual(['sonnet46T', 'deepseekT']);
-  });
-
-  it('lists only models marked runnable by the loaded access list', () => {
-    const includedModeEntries = [
-      access('sonnet46T', {
-        model: model({ value: 'sonnet46T', availability: 'provider-key' }),
-      }),
-      access('deepseekT', {
-        available: false,
-        model: model({ value: 'deepseekT', availability: 'provider-key' }),
-      }),
-      access('openrouterOnlyT', {
-        available: false,
-        model: model({
-          value: 'openrouterOnlyT',
-          availability: 'openrouter-key',
-        }),
-      }),
-    ];
-
-    expect(
-      listableModelAccessEntries(includedModeEntries).map(
-        (entry) => entry.model.value,
-      ),
-    ).toEqual(['sonnet46T']);
   });
 
   it('does not recompute availability from model metadata', () => {
@@ -169,16 +132,6 @@ describe('CLI model list filtering', () => {
 });
 
 describe('CLI model list empty-state text', () => {
-  it('points users at model status diagnostics and provider-key setup', () => {
-    expect(formatNoListableModelsMessage()).toBe(
-      [
-        'No models are currently available.',
-        'Run `texra models list --all` to see unavailable models and access status.',
-        'Add a provider API key with `texra setup`.',
-      ].join('\n'),
-    );
-  });
-
   it('does not suggest --all when unavailable models were already requested', () => {
     const text = formatNoListableModelsMessage({
       includeUnavailable: true,

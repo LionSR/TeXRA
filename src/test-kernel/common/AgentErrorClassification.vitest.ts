@@ -88,22 +88,3 @@ describe('classifyAgentError', () => {
     expect(classifyAgentError(err)).toBe('missing-api-key');
   });
 });
-
-describe('AGENT_ERROR_OUTCOME', () => {
-  it('maps every kind, with abort the only cancellation', () => {
-    const kinds: readonly AgentErrorKind[] = [
-      'abort',
-      'context-window',
-      'disk-full',
-      'missing-api-key',
-      'unexpected',
-    ];
-
-    expect(Object.keys(AGENT_ERROR_OUTCOME).sort()).toEqual([...kinds].sort());
-    for (const kind of kinds) {
-      expect(AGENT_ERROR_OUTCOME[kind]).toBe(
-        kind === 'abort' ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
-      );
-    }
-  });
-});

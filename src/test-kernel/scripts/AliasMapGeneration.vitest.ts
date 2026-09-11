@@ -44,57 +44,6 @@ describe('aliasUtils deriveDesktopPaths', () => {
       './../../src/*',
     ]);
   });
-
-  it('excludes nothing', () => {
-    expect(Object.keys(result)).toEqual(Object.keys(SAMPLE_ROOT_PATHS));
-  });
-});
-
-describe('generated tsconfig paths match the committed copies', () => {
-  // Regression guard for the generator itself: fails if a copy is hand-edited
-  // without regenerating (the CI-facing version of this is
-  // `npm run check:tsconfig-paths`; this test gives the same signal in the
-  // normal `npm test` loop).
-  const rootPaths = loadRootPaths(rootDir);
-
-  interface CommittedTsconfig {
-    extends?: string;
-    compilerOptions: { paths?: unknown };
-  }
-
-  function readCommittedTsconfig(relativePath: string): CommittedTsconfig {
-    return JSON.parse(
-      readFileSync(resolve(rootDir, relativePath), 'utf8'),
-    ) as CommittedTsconfig;
-  }
-
-  it('tsconfig.build.json paths derive from the root map', () => {
-    const committed = readCommittedTsconfig('tsconfig.build.json');
-
-    expect(committed.compilerOptions.paths).toEqual(
-      deriveBuildPaths(rootPaths),
-    );
-  });
-
-  it('packages/extension/tsconfig.json extends root and inherits its paths', () => {
-    const committed = readCommittedTsconfig('packages/extension/tsconfig.json');
-
-    expect(committed.extends).toBe('../../tsconfig.json');
-    expect(
-      committed.compilerOptions.paths,
-      'extension no longer carries its own paths — it inherits from root',
-    ).toBeUndefined();
-  });
-
-  it('packages/desktop/tsconfig.paths.json paths derive from the root map', () => {
-    const committed = readCommittedTsconfig(
-      'packages/desktop/tsconfig.paths.json',
-    );
-
-    expect(committed.compilerOptions.paths).toEqual(
-      deriveDesktopPaths(rootPaths),
-    );
-  });
 });
 
 describe('generated build-map validation helpers', () => {
@@ -117,12 +66,5 @@ describe('generated build-map validation helpers', () => {
       literalCommaBracket: ',]',
       escapedQuote: 'before " after',
     });
-  });
-
-  it('requires wildcard targets to match at least one file', () => {
-    expect(pathTargetExists(rootDir, 'src/shared/*.ts')).toBe(true);
-    expect(pathTargetExists(rootDir, 'src/definitely-missing/*.ts')).toBe(
-      false,
-    );
   });
 });

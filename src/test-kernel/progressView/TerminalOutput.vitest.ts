@@ -83,35 +83,4 @@ describe('terminal-output text updates', () => {
     expect(resetCount).toBe(1);
     expect(writes).toEqual(['alpha\nbeta\n', 'beta\n']);
   });
-
-  it('keeps the minimum scrollback for small output', async () => {
-    const element = await mountTerminal();
-
-    element.text = 'one\ntwo\n';
-    await flushTerminal();
-
-    expect(terminals[0]?.options.scrollback).toBe(4_000);
-  });
-
-  it('grows scrollback with the rendered row count', async () => {
-    const element = await mountTerminal();
-
-    element.text = 'a\n'.repeat(4_001);
-    await flushTerminal();
-
-    // 4_002 rendered rows, just past the 4_000 minimum.
-    expect(terminals[0]?.options.scrollback).toBe(4_002);
-  });
-
-  it('accumulates the row count across appended writes', async () => {
-    const element = await mountTerminal();
-
-    element.text = 'a\n'.repeat(2_000);
-    await flushTerminal();
-    element.text = `${'a\n'.repeat(2_000)}${'b\n'.repeat(2_000)}`;
-    await flushTerminal();
-
-    // 2_001 rows plus 2_000 appended rows (the trailing newline shares a row).
-    expect(terminals[0]?.options.scrollback).toBe(4_001);
-  });
 });

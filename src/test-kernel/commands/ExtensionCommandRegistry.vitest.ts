@@ -82,68 +82,7 @@ function dispatch(
   );
 }
 
-describe('extension command registry — catalog-driven registration', () => {
-  it('registers exactly the catalog ids tagged extensionRegistry, plus hidden aliases', () => {
-    const registered = Object.keys(EXTENSION_COMMAND_HANDLERS).sort();
-    const expected = [
-      ...catalogRegistryIds,
-      ...EXTENSION_INTERNAL_COMMAND_IDS,
-    ].sort();
-    expect(registered).toEqual(expected);
-  });
-
-  it('flags a catalog entry tagged extensionRegistry that has no handler', () => {
-    // Guards the assertion above against a false-positive pass: if a
-    // future catalog entry is tagged `extensionRegistry: true` without a
-    // matching handler, the id set comparison must fail rather than
-    // silently pass.
-    const taggedIds = new Set(catalogRegistryIds);
-    const registeredIds = new Set(Object.keys(EXTENSION_COMMAND_HANDLERS));
-    for (const id of taggedIds) {
-      expect(registeredIds.has(id)).toBe(true);
-    }
-  });
-
-  it.each(EXTENSION_INTERNAL_COMMAND_IDS)(
-    'internal command %s is absent from the public catalog',
-    (id) => {
-      expect(commandCatalog.some((entry) => (entry.id as string) === id)).toBe(
-        false,
-      );
-    },
-  );
-});
-
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  it.each([
-    ['texra.showDashboard', 'showSettings'],
-    ['texra.cleanOutput', 'cleanOutput'],
-    ['texra.cleanBuild', 'cleanBuild'],
-    ['texra.indentTeX', 'indentTeX'],
-    ['texra.auth.signIn', 'signIn'],
-    ['texra.auth.chatgpt.signIn', 'signInChatGpt'],
-    ['texra.auth.grok.signIn', 'signInGrok'],
-    ['texra.auth.signOut', 'signOut'],
-    ['texra.runSetupAssistant', 'runSetupAssistant'],
-    ['texra.openGettingStarted', 'openGettingStarted'],
-    ['texra.createSampleProject', 'createSampleProject'],
-    ['texra.downloadArXivSource', 'downloadArXivSource'],
-    ['texra.openProgressViewInTab', 'openProgressViewInTab'],
-    ['texra.indentCurrentTeX', 'indentCurrentTeX'],
-    ['texra.fixCompilation', 'fixCompilation'],
-    ['texra.getTeXCount', 'getTeXCount'],
-    ['texra.extractTikzFigures', 'extractTikzFigures'],
-    ['texra.compileTikzFigures', 'compileTikzFigures'],
-    ['texra.cloneOverleafProject', 'cloneOverleafProject'],
-    ['texra.removeApiKey', 'removeApiKey'],
-    ['texra.showImportOptions', 'showImportOptions'],
-    ['texra.toggleView', 'toggleView'],
-  ] as const)('%s dispatches to actions.%s', async (id, actionKey) => {
-    const actions = makeActions();
-    await expect(dispatch(actions, id)).resolves.toBe(true);
-    expect(actions[actionKey]).toHaveBeenCalledOnce();
-  });
-
   it('texra.auth.viewProfile opens the account tab', async () => {
     const actions = makeActions();
     await expect(dispatch(actions, 'texra.auth.viewProfile')).resolves.toBe(

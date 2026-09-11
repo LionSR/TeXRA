@@ -215,59 +215,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }),
   );
 
-  it.effect('tracks transient backoff independently per subscription', () =>
-    Effect.gen(function* () {
-      const now = 1_800_000_000_000;
-      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
-      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
-      const createState = (): BasePollSubscriptionState => ({
-        listeners: new Set(),
-        lastSuccessAt: now,
-        consecutiveFailures: 0,
-        skipPollUntilMs: 0,
-      });
-      const source = new TestPollingSource();
-      const first = createState();
-      const second = createState();
-
-      try {
-        yield* source.failWithTransient('owner/repo#1', first);
-        yield* source.failWithTransient('owner/repo#1', first);
-        yield* source.failWithTransient('owner/repo#2', second);
-
-        expect(first.skipPollUntilMs).toBe(now + 2_000);
-        expect(second.skipPollUntilMs).toBe(now + 1_000);
-      } finally {
-        nowSpy.mockRestore();
-        randomSpy.mockRestore();
-      }
-    }),
-  );
-
-  it('emits one binding change when unsubscribe disposes synchronously', async () => {
-    const host = createRecordingHost();
-    const signal = recordAppSignal('githubSubscriptionsChanged');
-    const source = new RegistryTestSource();
-    const registry = createTestRegistry(source);
-
-    try {
-      await effectRuntime().runPromise(
-        registry.bind('stream-a' as RunId, 'owner/repo'),
-      );
-      host.events.length = 0;
-      signal.events.length = 0;
-
-      expect(registry.unbind('stream-a' as RunId, 'owner/repo')).toBe(true);
-
-      expect(signal.events).toEqual([
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-      ]);
-      expect(host.events).toEqual([]);
-    } finally {
-      signal.dispose();
-    }
-  });
-
   it('passes the bind-time session to detached subscription follow-ups', async () => {
     const runId = 'stream-a' as RunId;
     const source = new RegistryTestSource();

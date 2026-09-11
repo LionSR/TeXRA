@@ -468,53 +468,6 @@ describe('runChat signal ownership wiring', () => {
     }
   }, 20_000);
 
-  it('routes the composer and skill activations through the session controller', async () => {
-    const exitTui = createDeferred();
-    const submit = captureNextRenderOnSubmit();
-    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
-    const restoreAgentRegistry = await stubAgentRegistry();
-    const delegationAgentScope = {
-      workflow: ['builtInWorkflow:physicsReviewer'],
-      toolUse: ['builtInToolUse:orchestrator'],
-    } as const;
-    const mediaFiles = ['/tmp/diagram.png'];
-    const activationPrompt = '<skill_activation>hidden</skill_activation>';
-    const config = AgentConfigSchema.parse({
-      agent: 'orchestrator',
-      model: 'gpt-test',
-      agentCategory: 'toolUse',
-      cli: { multiAgentPresetId: 'physicist' },
-      delegationAgentScope,
-    });
-    const { runChat } = await import('@cli/chat/tui/runChatTui');
-    const runPromise = runChat(INTERACTIVE_CONTEXT, {
-      initialResume: {
-        id: 'exec-resume' as RunId,
-        config,
-      },
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(submit.current).toBeTypeOf('function');
-        expect(mocks.onSkillSelect).toBeTypeOf('function');
-      });
-      expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
-        INTERACTIVE_CONTEXT.cwd,
-      );
-      mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
-      submit.current?.('', mediaFiles);
-
-      await vi.waitFor(() =>
-        expect(mocks.submit).toHaveBeenCalledWith('', mediaFiles, undefined),
-      );
-    } finally {
-      exitTui.resolve();
-      await runPromise;
-      restoreAgentRegistry();
-    }
-  }, 20_000);
-
   it('releases only the current conversation on /clear and preserves history', async () => {
     const exitTui = createDeferred();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);

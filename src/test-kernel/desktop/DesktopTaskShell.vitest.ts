@@ -42,24 +42,6 @@ function active(
 }
 
 describe('desktop task shell model', () => {
-  it('starts conversation-first with a closed, empty workbench', () => {
-    const state = initialDesktopTaskShellState();
-
-    expect(state).toMatchObject({
-      activeWorkbenchTabIds: {},
-      bottomPanelHeight: 300,
-      sidebarCollapsed: false,
-      sidebarWidth: 288,
-      filesExpanded: true,
-      summaryBarVisible: true,
-      workbenchWidth: 640,
-      workbenchTabs: [],
-      nextTerminalSerial: 1,
-    });
-    expect(active(state)).toBeUndefined();
-    expect(active(state, 'bottom')).toBeUndefined();
-  });
-
   it('keys editors by path and derives cross-platform basenames', () => {
     const state = shellWith(
       { kind: 'editor', target: '/papers/first.tex' },
@@ -242,33 +224,6 @@ describe('desktop task shell model', () => {
       state,
     );
     expect(setWorkbenchTabDirty(state, 'missing', true)).toBe(state);
-  });
-
-  it('toggles sidebar sections independently', () => {
-    const initial = initialDesktopTaskShellState();
-    const collapsed = toggleSidebar(initial);
-    const filesCollapsed = toggleFiles(collapsed);
-    const summaryBarHidden = toggleSummaryBar(filesCollapsed);
-
-    expect(collapsed.sidebarCollapsed).toBe(true);
-    expect(collapsed.filesExpanded).toBe(initial.filesExpanded);
-    expect(filesCollapsed.sidebarCollapsed).toBe(true);
-    expect(filesCollapsed.filesExpanded).toBe(false);
-    expect(summaryBarHidden.summaryBarVisible).toBe(false);
-  });
-
-  it('rounds and clamps sidebar, bottom panel, and workbench dimensions', () => {
-    const initial = initialDesktopTaskShellState();
-
-    expect(setBottomPanelHeight(initial, 344.6).bottomPanelHeight).toBe(345);
-    expect(setBottomPanelHeight(initial, -1).bottomPanelHeight).toBe(180);
-    expect(setBottomPanelHeight(initial, 10_000).bottomPanelHeight).toBe(560);
-    expect(setSidebarWidth(initial, 312.7).sidebarWidth).toBe(313);
-    expect(setSidebarWidth(initial, -1).sidebarWidth).toBe(220);
-    expect(setSidebarWidth(initial, 10_000).sidebarWidth).toBe(480);
-    expect(setWorkbenchWidth(initial, 503.4).workbenchWidth).toBe(503);
-    expect(setWorkbenchWidth(initial, -1).workbenchWidth).toBe(380);
-    expect(setWorkbenchWidth(initial, 10_000).workbenchWidth).toBe(960);
   });
 
   it('derives concise workspace labels from POSIX and Windows paths', () => {

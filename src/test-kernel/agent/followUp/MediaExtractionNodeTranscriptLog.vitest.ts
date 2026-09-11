@@ -64,18 +64,6 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
     );
   });
 
-  it('still logs exactly once on the success path', async () => {
-    const services = buildServices({
-      initialUserMessageForTranscript: 'Do the thing.',
-    });
-    const node = new MediaExtractionNode().setServices(services);
-    const shared = reflectionFlowShared();
-
-    await node.post(shared, buildPrepRes(0), MEDIA_FILES);
-
-    expect(services.logger.info).toHaveBeenCalledTimes(1);
-  });
-
   it('does not log on rounds after the first', async () => {
     const services = buildServices({
       initialUserMessageForTranscript: 'Do the thing.',

@@ -30,9 +30,9 @@ const BIBLIOGRAPHY_ERROR_PATTERNS = [
 const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
   Object.freeze(LATEX_CITATION_COMMANDS.map((name) => `${name}\\*?`));
 
-export const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
+const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
 
-export function resolveLatexdiffSubtype(options?: {
+function resolveLatexdiffSubtype(options?: {
   subtype?: string;
   changesOnly?: boolean;
 }): string | undefined {

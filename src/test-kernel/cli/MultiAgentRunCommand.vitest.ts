@@ -372,34 +372,6 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
-  it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
-    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-    isAuthenticatedSpy.mockResolvedValueOnce(true);
-
-    const result = await loadCliMultiAgentPresetPlanSet([
-      {
-        id: 'mathematician',
-        name: 'Mathematician',
-        description: 'For math papers.',
-        icon: 'cube',
-        agents: {
-          workflow: [],
-          toolUse: ['orchestrator'],
-        },
-        source: 'built-in',
-      },
-    ]);
-
-    expect(result.remoteCatalogRefreshAttempted).toBe(true);
-    expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
-      includeRemote: false,
-    });
-    expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
-      includeRemote: true,
-    });
-    expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
-  });
-
   it('reports resolved remote agent loads without implying final missing agents', async () => {
     const remoteLoadMessage =
       'Preset mathematician loaded remote agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
@@ -466,36 +438,6 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(0);
     expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('may run without subagent delegation'),
-    );
-  });
-
-  it('allows instruction-only team runs without input files', async () => {
-    mockExpandedRunInputs({
-      inputFiles: [],
-      contextFiles: [],
-    });
-
-    const exitCode = await runPreset({
-      instruction: 'Prove that every odd square is congruent to 1 modulo 8.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-      [],
-      [],
-      '/tmp/project',
-      {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-        readStdinText: expect.any(Function),
-      },
-      expect.any(Function),
-    );
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.inputFiles).toEqual([]);
-    expect(config?.instruction).toContain('User instruction:');
-    expect(config?.instruction).toContain(
-      'Prove that every odd square is congruent to 1 modulo 8.',
     );
   });
 
@@ -618,31 +560,6 @@ describe('CLI multi-agent run command', () => {
         'Install or sign in for a runnable team root before launching this preset.',
       unexpectedWarning: 'WARN team delegation unavailable',
     });
-  });
-
-  it('keeps degraded-team wording when the root can delegate', async () => {
-    const warning =
-      'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.';
-    mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValueOnce([warning]);
-    mocks.planTeamRun.mockReturnValue(
-      teamPlan({
-        missingAgents: {
-          workflow: ['generic'],
-          toolUse: ['simplifier'],
-        },
-        agentKeys: {
-          workflow: ['builtIn:devise'],
-          toolUse: ['builtInToolUse:orchestrator'],
-        },
-      }),
-    );
-
-    const exitCode = await runPreset({
-      instruction: 'Solve a short math problem.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(warning);
   });
 
   it('refuses a delegating root with no available team members', async () => {

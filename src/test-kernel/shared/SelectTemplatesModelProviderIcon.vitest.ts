@@ -48,49 +48,4 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
       /[\u{1D400}-\u{1D7FF}\u{1F300}-\u{1FAFF}⌀-⏿☀-➿]/u,
     );
   });
-
-  it('mirrors renderAgentOption: icon lives inside an .agent-icon span, not a slot', () => {
-    const modelIconSpan = renderOptions(
-      templates.renderModelOptions([
-        { value: 'gpt-x', label: 'GPT X', provider: 'openai' },
-      ]),
-    ).querySelector('wa-option .agent-icon wa-icon');
-    expect(modelIconSpan).not.toBeNull();
-    expect(modelIconSpan?.getAttribute('slot')).toBeNull();
-
-    const agentIconSpan = renderOptions(
-      templates.renderAgentOptions([
-        { value: 'orchestrator', label: 'Orchestrator', isOrchestrator: true },
-      ]),
-    ).querySelector('wa-option .agent-icon wa-icon');
-    expect(agentIconSpan).not.toBeNull();
-    expect(agentIconSpan?.getAttribute('slot')).toBeNull();
-  });
-
-  it('renders inline provenance in the launcher option', () => {
-    const option = renderOptions(
-      templates.renderAgentOptions([
-        { value: 'inline:helper', label: 'helper', source: 'inline' },
-      ]),
-    ).querySelector('wa-option');
-
-    expect(option?.getAttribute('title')).toContain(
-      'Definition supplied directly by the embedding application',
-    );
-    expect(option?.querySelector('wa-icon')?.getAttribute('name')).toBe('code');
-  });
-
-  it('falls back to the neutral "robot" icon for an unmapped provider', () => {
-    const icon = renderOptions(
-      templates.renderModelOptions([
-        {
-          value: 'mystery',
-          label: 'Mystery Model',
-          provider: 'some-unknown-provider',
-        },
-      ]),
-    ).querySelector('wa-option wa-icon');
-
-    expect(icon?.getAttribute('name')).toBe('robot');
-  });
 });

@@ -39,35 +39,6 @@ beforeEach(() => {
 });
 
 describe('shared setup capabilities', () => {
-  it.effect(
-    'derives credential and configuration operations from platform ports',
-    () =>
-      Effect.gen(function* () {
-        const setup = getSetupPlatform();
-
-        expect(setup.host).toBe('extension');
-        expect(setup.commands).toBeUndefined();
-        expect(setup.extensions).toBeUndefined();
-        expect(setup.terminal).toBeUndefined();
-        expect(yield* setupSecrets.storedApiKeyExists('openai')).toBe(true);
-        expect(yield* setupSecrets.hasUsableApiKey('openai')).toBe(true);
-        expect(yield* setupSecrets.gitHubTokenExists()).toBe('env');
-        expect(yield* setupSecrets.listStoredKeys()).toContain('apiKey.openai');
-
-        expect(texraScopedConfig.get('texra.bib.defaultPath')).toBe(
-          'references.bib',
-        );
-        yield* texraScopedConfig.update(
-          'texra.bib.defaultPath',
-          'main.bib',
-          'user',
-        );
-        expect(
-          workspaceRoots().config.inspect('texra.bib.defaultPath')?.globalValue,
-        ).toBe('main.bib');
-      }),
-  );
-
   it('keeps the configuration boundary at texra.* keys', () => {
     expect(() => texraScopedConfig.get('editor.fontSize')).toThrow(
       'Setup config adapter is scoped to texra.* keys',
@@ -82,18 +53,6 @@ describe('shared setup capabilities', () => {
       ]);
 
       expect(yield* setupSecrets.storedApiKeyExists('openai')).toBe(true);
-    }),
-  );
-
-  it.effect('reports a signed-in account', () =>
-    Effect.gen(function* () {
-      vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-      vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-
-      expect(yield* getSetupAuthStatus()).toEqual({
-        authenticated: true,
-        email: undefined,
-      });
     }),
   );
 

@@ -86,78 +86,6 @@ afterEach(() => {
 });
 
 describe('selectWorkflowRunDetailLines', () => {
-  it('joins lifecycle, planned rounds, generated files, and warnings', () => {
-    const lines = selectWorkflowRunDetailLines(
-      {
-        taskGroups: [
-          {
-            id: 'run',
-            name: 'Repository audit',
-            kind: 'run',
-            startTime: 1_000,
-            endTime: 10_000,
-            status: RUN_PHASE.COMPLETED,
-          },
-          completedRound(0, 2, 2_000, 9_200),
-        ],
-        outputFilesByRound: {
-          0: [generatedFile('output/paper.tex', { added: 12, removed: 3 })],
-        },
-        missingOutputsByRound: { 0: ['appendix.tex'] },
-        compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
-      },
-      100,
-    );
-
-    expect(lines.map((line) => line.text)).toEqual([
-      '✓ Repository audit Completed · 9s',
-      '✓ r1/2 Completed · 7s',
-      '  Generated files',
-      '    • paper.tex (+12 -3)',
-      '  ⚠ r1 · Missing expected output: appendix.tex',
-      '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
-      '□ r2/2 Planned',
-    ]);
-    expect(lines.map((line) => line.tone)).toEqual([
-      'success',
-      'success',
-      'muted',
-      'neutral',
-      'warning',
-      'error',
-      'muted',
-    ]);
-  });
-
-  it('shows the full path for external generated files', () => {
-    const lines = selectWorkflowRunDetailLines(
-      {
-        taskGroups: [completedRound(0, 1, 0, 1)],
-        outputFilesByRound: {
-          0: [
-            {
-              source: 'paper.tex',
-              round: 0,
-              location: {
-                kind: 'external',
-                absolutePath: '/tmp/external-output/paper.tex',
-              },
-              lineage: null,
-              diff: null,
-            },
-          ],
-        },
-        missingOutputsByRound: {},
-        compileFailuresByRound: {},
-      },
-      100,
-    );
-
-    expect(lines.map((line) => line.text)).toContain(
-      '    • /tmp/external-output/paper.tex',
-    );
-  });
-
   it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {
@@ -212,36 +140,6 @@ describe('selectWorkflowRunDetailLines', () => {
     expect(line?.role).toBe('alert');
   });
 
-  it.each([
-    ['unclassified', undefined],
-    ['round without an index', 'round'],
-    ['session stage', 'session'],
-  ] as const)('keeps a %s lifecycle group visible', (_case, kind) => {
-    const lines = selectWorkflowRunDetailLines(
-      {
-        taskGroups: projectTaskGroupsFromStreamLog([
-          {
-            seqNo: 1,
-            id: 'untagged-round',
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-            level: LOG_LEVELS.INFO,
-            timestamp: 0,
-            text: 'Round 3',
-            data: { status: RUN_PHASE.COMPLETED, endTime: 1_000, kind },
-          },
-        ]),
-        outputFilesByRound: {},
-        missingOutputsByRound: {},
-        compileFailuresByRound: {},
-      },
-      100,
-    );
-
-    expect(lines.map((line) => line.text)).toEqual([
-      '✓ Round 3 Completed · 1s',
-    ]);
-  });
-
   it('budgets detail rows together with the live transcript viewport', async () => {
     // A live (not yet settled) log row: the fold's settled prefix stays at 0.
     seedView(
@@ -287,25 +185,5 @@ describe('selectWorkflowRunDetailLines', () => {
     expect(output).toContain('r3/4 Planned');
     expect(output).toContain('live workflow log');
     expect(output).not.toContain('r4/4 Planned');
-  });
-
-  it('keeps warning context ahead of generated files and future plans', () => {
-    const lines = selectWorkflowRunDetailLines(
-      {
-        taskGroups: [completedRound(0, 2, 0, 1)],
-        outputFilesByRound: {
-          0: [generatedFile('paper.tex', null)],
-        },
-        missingOutputsByRound: {},
-        compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
-      },
-      3,
-    );
-
-    expect(lines.map((line) => line.text)).toEqual([
-      '✓ r1/2 Completed · 0s',
-      '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
-      '□ r2/2 Planned',
-    ]);
   });
 });

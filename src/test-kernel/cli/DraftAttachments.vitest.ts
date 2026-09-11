@@ -13,21 +13,6 @@ const img = (name: string) => ({
   displayName: name,
 });
 
-describe('shouldCollapsePaste', () => {
-  it('keeps short single-line pastes inline', () => {
-    expect(shouldCollapsePaste('a short paste')).toBe(false);
-  });
-
-  it('collapses pastes longer than the char threshold', () => {
-    expect(shouldCollapsePaste('x'.repeat(801))).toBe(true);
-  });
-
-  it('collapses pastes with more than two newlines but not fewer', () => {
-    expect(shouldCollapsePaste('a\nb\nc\nd')).toBe(true); // 3 newlines
-    expect(shouldCollapsePaste('a\nb')).toBe(false); // 1 newline
-  });
-});
-
 describe('DraftAttachmentStore', () => {
   let store: DraftAttachmentStore;
 

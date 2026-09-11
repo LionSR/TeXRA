@@ -43,7 +43,7 @@ function wrappedRows(text: string, width: number): number {
 }
 
 /** Compute a frame that fits the terminal. `bodyRows` may be zero. */
-export function workPlanReaderLayout({
+function workPlanReaderLayout({
   availableRows,
   contentWidth,
   hints = READER_SCROLL_HINTS,
@@ -86,7 +86,7 @@ export function workPlanReaderLayout({
 }
 
 /** Render the complete work plan loaded from committed events. */
-export function formatWorkPlanReaderText(
+function formatWorkPlanReaderText(
   plan: Plan | null,
   todos: readonly TodoItem[],
 ): string {

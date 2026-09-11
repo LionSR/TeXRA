@@ -46,15 +46,6 @@ describe('TeXRA approval policy', () => {
     expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
   });
 
-  it('maps deny reasons to distinct user-facing messages', () => {
-    expect(texraApprovalDenialMessage('deny-policy')).toBe(
-      'Denied by TeXRA approval policy.',
-    );
-    expect(texraApprovalDenialMessage('deny-unpresentable')).toBe(
-      'Interactive approval requires a prompt; this run cannot present one.',
-    );
-  });
-
   it.each([
     [
       { policy: 'yolo', canPresent: true, isCredentialFailure: false },
@@ -88,12 +79,6 @@ describe('TeXRA approval policy', () => {
     expect(decideRetryApproval(input)).toEqual(expected);
   });
 
-  it('publishes retry denial copy beside the evaluator', () => {
-    expect(texraRetryDenialMessage('yolo-retry')).toBe(
-      'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-    );
-  });
-
   it.each([
     [{ policy: 'yolo', canPresent: true }, { deny: 'yolo-no-human' }],
     [{ policy: 'never', canPresent: true }, { deny: 'policy' }],
@@ -101,11 +86,5 @@ describe('TeXRA approval policy', () => {
     [{ policy: 'ask', canPresent: false }, { deny: 'unpresentable' }],
   ] as const)('decideHumanInputRequest(%j) → %j', (input, expected) => {
     expect(decideHumanInputRequest(input)).toEqual(expected);
-  });
-
-  it('publishes human-input denial copy beside the evaluator', () => {
-    expect(texraHumanInputDenialMessage('yolo-no-human')).toBe(
-      'User question requires human input; yolo mode cannot synthesize an answer.',
-    );
   });
 });

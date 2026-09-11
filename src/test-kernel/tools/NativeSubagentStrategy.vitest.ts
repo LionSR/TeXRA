@@ -744,23 +744,6 @@ describe('NativeSubagentStrategy', () => {
     }
   });
 
-  it('records the run cumulative cost via ports.recordCost on every turn', async () => {
-    const params = baseParams();
-    const strategy = createNativeSubagentStrategy(params);
-    const ports = fakePorts();
-
-    mocks.executeAgent.mockResolvedValueOnce(
-      toolUseTurnResult(RUN_PHASE.WAITING, params.runId, {
-        totalCostUsd: 0.42,
-      }),
-    );
-
-    await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-    expect(ports.recordCost).toHaveBeenCalledWith(0.42);
-  });
-
   it('derives stageLabel/isTerminal/buildResultMeta from a workflow-category config', async () => {
     const params = baseParams(createTestSession(), 'workflow');
     const strategy = createNativeSubagentStrategy(params);

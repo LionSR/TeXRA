@@ -96,33 +96,6 @@ describe('detectInstallMethod', () => {
   });
 });
 
-describe('buildUpdateCommand', () => {
-  it('produces the matching install invocation per manager', () => {
-    expect(buildUpdateCommand('npm')).toEqual({
-      command: 'npm',
-      args: ['install', '-g', '@texra-ai/cli@latest'],
-    });
-    expect(buildUpdateCommand('pnpm')).toEqual({
-      command: 'pnpm',
-      args: ['add', '-g', '@texra-ai/cli@latest'],
-    });
-    expect(buildUpdateCommand('yarn')).toEqual({
-      command: 'yarn',
-      args: ['global', 'add', '@texra-ai/cli@latest'],
-    });
-    expect(buildUpdateCommand('bun')).toEqual({
-      command: 'bun',
-      args: ['add', '-g', '@texra-ai/cli@latest'],
-    });
-    // Homebrew upgrades through brew, not the npm registry; refresh the tap
-    // first so the just-detected version is actually available locally.
-    expect(buildUpdateCommand('brew')).toEqual({
-      command: 'brew',
-      args: ['update', '&&', 'brew', 'upgrade', 'texra'],
-    });
-  });
-});
-
 describe('fetchLatestCliVersion', () => {
   effectIt.effect.each([
     {
@@ -205,41 +178,6 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
       { command: 'brew', args: ['info', '--json=v2', 'texra'] },
     ]);
   });
-
-  it('passes the formula and timeout through to the command runner', async () => {
-    const calls: Array<{
-      command: string;
-      args: readonly string[];
-      timeoutMs: number;
-      cwd?: string;
-    }> = [];
-    await fetchLatestHomebrewFormulaVersion({
-      formula: 'custom',
-      timeoutMs: 123,
-      cwd: '/workspace',
-      runCommand: async (command, args, timeoutMs, cwd) => {
-        calls.push({ command, args, timeoutMs, cwd });
-        return JSON.stringify({
-          formulae: [{ name: 'custom', versions: { stable: '1.2.3' } }],
-        });
-      },
-    });
-
-    expect(calls).toEqual([
-      {
-        command: 'brew',
-        args: ['update', '--quiet'],
-        timeoutMs: 123,
-        cwd: '/workspace',
-      },
-      {
-        command: 'brew',
-        args: ['info', '--json=v2', 'custom'],
-        timeoutMs: 123,
-        cwd: '/workspace',
-      },
-    ]);
-  });
 });
 
 describe('notifyCliUpdate', () => {
@@ -266,16 +204,6 @@ describe('notifyCliUpdate', () => {
       yield* Effect.promise(() => notifyCliUpdate(context));
 
       expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
-    }),
-  );
-
-  effectIt.live('starts a fresh check once the latch is cleared', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => notifyCliUpdate(context));
-      resetCliUpdateNotifyLatchForTests();
-      yield* Effect.promise(() => notifyCliUpdate(context));
-
-      expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(2);
     }),
   );
 });

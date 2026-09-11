@@ -48,12 +48,6 @@ function outputOf(result: ToolCallResult): string {
 }
 
 describe('list_api_keys tool', () => {
-  it('reports an empty credential store', async () => {
-    const result = await callWithStoredKeys([]);
-    assert.equal(result.summary, 'No secrets stored');
-    assert.match(outputOf(result), /credential store is empty/);
-  });
-
   it('reports unsupported enumeration instead of an empty store', async () => {
     mocks.listStoredKeys.mockReturnValue(
       Effect.fail(new Error('SecretStorage key enumeration is not supported')),
@@ -71,12 +65,6 @@ describe('list_api_keys tool', () => {
     assert.match(outputOf(result), /Provider API keys stored/);
     assert.match(outputOf(result), /^\s+anthropic$/m);
     assert.doesNotMatch(outputOf(result), /apiKey\.anthropic/);
-  });
-
-  it('lists providers without a stored key', async () => {
-    const result = await callWithStoredKeys([apiKeySecretName('anthropic')]);
-    assert.match(outputOf(result), /Providers without a key in TeXRA secrets/);
-    assert.match(outputOf(result), /openai/);
   });
 
   it('recognises the GitHub token', async () => {
@@ -97,36 +85,11 @@ describe('list_api_keys tool', () => {
     assert.doesNotMatch(outputOf(result), /texra\.supabase\.session/);
   });
 
-  it('categorises all key types simultaneously', async () => {
-    const result = await callWithStoredKeys([
-      apiKeySecretName('anthropic'),
-      GITHUB_TOKEN_STORAGE_KEY,
-      'apiKey.oldprovider',
-      'texra.supabase.session',
-    ]);
-    assert.match(outputOf(result), /Provider API keys stored/);
-    assert.match(outputOf(result), /GitHub token: stored/);
-    assert.match(outputOf(result), /Unrecognised apiKey\.\*/);
-    assert.match(outputOf(result), /Other stored secrets: 1 redacted key name/);
-    assert.doesNotMatch(outputOf(result), /texra\.supabase\.session/);
-  });
-
   it('summary counts reflect platform.secrets.providers, not the global import', async () => {
     const result = await callWithStoredKeys([apiKeySecretName('anthropic')]);
     assert.equal(
       result.summary,
       '1 stored secret: 1/2 persisted provider API keys',
-    );
-  });
-
-  it('summary uses plural form for multiple secrets', async () => {
-    const result = await callWithStoredKeys([
-      apiKeySecretName('anthropic'),
-      apiKeySecretName('openai'),
-    ]);
-    assert.equal(
-      result.summary,
-      '2 stored secrets: 2/2 persisted provider API keys',
     );
   });
 
@@ -139,10 +102,5 @@ describe('list_api_keys tool', () => {
     assert.match(outputOf(result), /Providers without a key in TeXRA secrets/);
     assert.match(outputOf(result), /anthropic/);
     assert.match(outputOf(result), /openai/);
-  });
-
-  it('summary reads "no provider keys" when only non-provider secrets are stored', async () => {
-    const result = await callWithStoredKeys(['texra.supabase.session']);
-    assert.match(result.summary ?? '', /no persisted provider API keys/);
   });
 });

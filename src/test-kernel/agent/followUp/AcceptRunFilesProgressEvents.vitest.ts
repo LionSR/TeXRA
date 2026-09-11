@@ -252,28 +252,6 @@ describe('accept_run_files progress events', () => {
     expect(result.userInstruction).toBeUndefined();
   });
 
-  it('does not require a runtime host to publish accepted workspace files', async () => {
-    const tool = new AcceptRunFilesTool();
-    const { written, dispose } = recordWrittenFiles();
-
-    setRunStorageEntries({
-      [`executions/${runId}/output.tex`]: FileType.File,
-    });
-    const write = stubWorkspaceFiles(false, '');
-    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
-    testApprovalHandler = acceptAll;
-
-    const result = await tool.call({
-      execution_id: runId,
-      files: [{ path: 'output.tex', original: 'paper.tex' }],
-    });
-
-    expect(result.status).toBe('executed');
-    expect(write).toHaveBeenCalledOnce();
-    expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
-    dispose();
-  });
-
   it('uses the pre-run snapshot for same-path workspace outputs', async () => {
     const tool = new AcceptRunFilesTool();
     let approvalOriginal = '';

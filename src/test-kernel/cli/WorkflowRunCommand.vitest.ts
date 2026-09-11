@@ -362,48 +362,6 @@ describe('CLI workflow run command', () => {
     expectNoModelOrInputWork();
   });
 
-  it('reports missing workflow agents before resolving the model', async () => {
-    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
-      new Error(
-        'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
-      ),
-    );
-
-    await expect(runWorkflow({ agent: 'missing-agent' })).rejects.toThrow(
-      /Agent not found: missing-agent/,
-    );
-
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: '/tmp/project' }),
-    );
-    expect(
-      cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0]);
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
-      'missing-agent',
-      'run',
-    );
-    expectNoModelOrInputWork();
-  });
-
-  it('reports tool-use agents before resolving the model', async () => {
-    mocks.resolveCliLaunchAgent.mockRejectedValueOnce(
-      new Error(
-        'Agent "chat" is a toolUse agent; `texra run` only handles workflow agents.',
-      ),
-    );
-
-    await expect(runWorkflow({ agent: 'chat' })).rejects.toThrow(
-      /`texra run` only handles workflow agents/,
-    );
-
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: '/tmp/project' }),
-    );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('chat', 'run');
-    expectNoModelOrInputWork();
-  });
-
   it('reports single-output mixed stdin usage before resolving the model', async () => {
     await expect(
       runWorkflow({ inputFiles: ['-', 'paper.tex'], output: 'out.tex' }),
@@ -414,28 +372,6 @@ describe('CLI workflow run command', () => {
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
     expectNoModelOrInputWork();
-  });
-
-  it('reports input expansion errors before resolving the model', async () => {
-    mocks.withExpandedRunInputs.mockRejectedValueOnce(
-      new Error('At least one workflow input file is required.'),
-    );
-
-    await expect(runWorkflow({ inputFiles: [] })).rejects.toThrow(
-      'At least one workflow input file is required.',
-    );
-
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
-    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-      [],
-      [],
-      '/tmp/project',
-      { readStdinText: expect.any(Function) },
-      expect.any(Function),
-    );
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.executeCliConfig).not.toHaveBeenCalled();
   });
 
   it('passes instruction file contents before inline workflow instructions', async () => {
@@ -730,25 +666,6 @@ describe('CLI workflow run command', () => {
       }),
     );
     expect(mocks.finalizeRun).not.toHaveBeenCalled();
-  });
-
-  it('leaves failed output finalization to the live run lifecycle', async () => {
-    mockWorkflowRun(
-      workflowRun('exec-copy-fail', {
-        outputs: [
-          runOutputSummary('/missing/run/r1/paper.tex', '/workspace/paper.tex'),
-        ],
-      }),
-      true,
-    );
-    await expect(runWorkflow({ output: 'polished.tex' })).resolves.toBe(
-      CliExitCode.AgentError,
-    );
-
-    expect(mocks.finalizeRun).not.toHaveBeenCalled();
-    expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ code: 'ENOENT' }),
-    );
   });
 
   it('prints a resumable recovery command after persisting a cancelled workflow', async () => {

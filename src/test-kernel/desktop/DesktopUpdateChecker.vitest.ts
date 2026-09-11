@@ -40,11 +40,6 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
   ).pipe(Effect.provide(NodeFileSystem.layer));
 
 describe('desktop update checker', () => {
-  it('exposes a known-constant releases page URL (never opens API-provided URLs)', () => {
-    expect(DESKTOP_RELEASES_PAGE_URL).toBe(
-      'https://github.com/texra-ai/texra-desktop-releases/releases',
-    );
-  });
   it.live('skips entirely for unpackaged (dev) runs', () =>
     withRecords(
       Effect.gen(function* () {

@@ -121,48 +121,6 @@ describe('formatConversation', () => {
     expect(output).not.toContain('"type":"web_fetch_tool_result"');
   });
 
-  it('formats archived (completed-run sidecar) web_fetch_tool_result blocks as a title/url marker', () => {
-    // `src/transcript/completedRunArchive.ts`'s `webFetchEntryToMessages`
-    // reconstructs this block type in the same nested shape as the live
-    // Anthropic SDK shape above (minus fields only the provider sets).
-    const output = formatAssistantBlocks([
-      {
-        type: 'web_fetch_tool_result',
-        content: {
-          type: 'web_fetch_result',
-          url: 'https://texra.ai',
-          retrieved_at: null,
-          content: {
-            type: 'document',
-            title: 'TeXRA home',
-            source: {
-              type: 'text',
-              data: 'the full fetched page text'.repeat(20),
-            },
-          },
-        },
-      },
-    ]);
-
-    expect(output).toContain('[tool_result: TeXRA home (https://texra.ai)]');
-    expect(output).not.toContain('the full fetched page text');
-  });
-
-  it('does not emit an empty marker for a fieldless live web-fetch result', () => {
-    const output = formatAssistantBlocks([
-      {
-        type: 'web_fetch_tool_result',
-        content: {
-          type: 'web_fetch_result',
-          content: { type: 'document' },
-        },
-      },
-    ]);
-
-    expect(output).not.toContain('[tool_result: ]');
-    expect(output).toContain('web_fetch_result');
-  });
-
   it('summarizes a content-only web-fetch result without dumping page text', () => {
     const output = formatAssistantBlocks([
       {

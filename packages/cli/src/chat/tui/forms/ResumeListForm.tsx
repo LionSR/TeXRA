@@ -19,7 +19,7 @@ interface ResumeListFormProps {
   readonly onClose: () => void;
 }
 
-export function resumeEntryDescription(entry: CliHistoryEntry): string {
+function resumeEntryDescription(entry: CliHistoryEntry): string {
   return `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`;
 }
 

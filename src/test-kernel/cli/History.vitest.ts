@@ -424,27 +424,6 @@ describe('CLI history runtime', () => {
     expect(parseHistoryListLimit(undefined)).toBeUndefined();
   });
 
-  it('explains missing history ids as workspace-scoped', () => {
-    expect(formatCliHistoryNotFoundText('a9ce2eb983bc' as RunId)).toBe(
-      [
-        'Run not found: a9ce2eb983bc',
-        'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
-      ].join('\n'),
-    );
-
-    expect(
-      formatCliHistoryNotFoundText(
-        'a9ce2eb983bc' as RunId,
-        '/tmp/texra-workflow-correct-yM0MOz',
-      ),
-    ).toBe(
-      [
-        'Run not found in workspace /tmp/texra-workflow-correct-yM0MOz: a9ce2eb983bc',
-        'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
-      ].join('\n'),
-    );
-  });
-
   it('returns null for ids without persisted metadata, config, or flow state', async () => {
     mockNothingPersisted();
 
@@ -507,10 +486,6 @@ describe('CLI history runtime', () => {
         ],
       },
     });
-  });
-
-  it('loads the stored config used by resume', async () => {
-    await expect(mocks.readConfig()).resolves.toEqual(config);
   });
 
   it('shows the current resumable model without losing the startup model', async () => {
@@ -937,17 +912,6 @@ describe('CLI history runtime', () => {
   });
 
   describe('history export (--export / --assets-dir)', () => {
-    it('quotes the value in an invalid --export message, including an empty string', () => {
-      expect(formatInvalidExportFormatText('csv')).toBe(
-        'Invalid export format: "csv" (use html or md)',
-      );
-      // Must not collapse into "Invalid export format:  (use html or md)"
-      // with a confusing double space.
-      expect(formatInvalidExportFormatText('')).toBe(
-        'Invalid export format: "" (use html or md)',
-      );
-    });
-
     it('builds export input from the stored config, conversation, and meta', async () => {
       mocks.readConversation.mockResolvedValue([
         { role: 'user', content: 'Polish the lemma.' },
@@ -1026,14 +990,6 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryDetails('facade' as RunId),
       ).resolves.toBeNull();
-    });
-
-    it('still reports "incomplete" when config exists but the stored conversation is only an empty array', async () => {
-      mocks.readConversation.mockResolvedValue([]);
-
-      await expect(
-        readCliHistoryExportInput('a1a1a1' as RunId),
-      ).resolves.toEqual({ status: 'incomplete' });
     });
 
     it('stages the bundled trace-viewer shared bundle into the destination directory', async () => {

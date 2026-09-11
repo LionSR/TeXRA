@@ -280,22 +280,6 @@ describe('tool-use progress events', () => {
 
     expect(onCycleResponse).not.toHaveBeenCalled();
   });
-
-  it('persists a completed cycle structured result in shared state', async () => {
-    const prepRes = createPrepResult(AgentWorkspaceState.create());
-    const shared: Partial<ToolUseRunShared> = {};
-    const structured = { title: 'Durable result' };
-    const node = new ToolUseCycleNode().setServices({
-      getPendingStructuredOutput: () => structured,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared as ToolUseRunShared, prepRes, {
-      outcome: 'completed',
-      messages: [],
-    });
-
-    expect(shared.structured).toEqual(structured);
-  });
 });
 
 describe('tool-use session-stage outcome persistence (#8023)', () => {

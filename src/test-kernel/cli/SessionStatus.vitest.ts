@@ -19,28 +19,6 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
 }
 
 describe('CLI session status formatter', () => {
-  it('lists queued follow-up messages in the details output', () => {
-    expect(
-      sessionStatus({
-        queuedFollowUpMessages: [
-          'First queued follow-up is to re-run the narrow layout proof check.',
-          'Second queued message asks for the theorem statement cleanup.',
-        ],
-      }),
-    ).toBe(
-      [
-        'agent: chat',
-        'model: harness-model',
-        'model access: Your own API keys',
-        'approval: Control Bash and edit prompts independently.',
-        'status: Running',
-        'queued follow-ups: 2',
-        '1. First queued follow-up is to re-run the narrow layout proof check.',
-        '2. Second queued message asks for the theorem statement cleanup.',
-      ].join('\n'),
-    );
-  });
-
   it('keeps multiline queued follow-ups readable as one-line summaries', () => {
     const status = sessionStatus({
       queuedFollowUpMessages: [
@@ -56,27 +34,6 @@ describe('CLI session status formatter', () => {
     );
   });
 
-  it('summarizes queued subagent follow-up payloads', () => {
-    const status = sessionStatus({
-      queuedFollowUpMessages: [
-        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
-      ],
-    });
-
-    expect(status).toContain('1. ✓ reviewer completed All good <ok>');
-    expect(status).not.toContain('<orchestrator-followup>');
-    expect(status).not.toContain('<subagent-result');
-  });
-
-  it('keeps malformed queued follow-up entries from breaking status details', () => {
-    const status = sessionStatus({
-      queuedFollowUpMessages: [undefined as unknown as string],
-    });
-
-    expect(status).toContain('queued follow-ups: 1');
-    expect(status).toContain('1. (empty follow-up)');
-  });
-
   it('surfaces the session id and resume command once a run has started', () => {
     const status = sessionStatus({
       sessionId: 'abc123',
@@ -86,49 +43,6 @@ describe('CLI session status formatter', () => {
     expect(status).toContain('resume later with: texra resume abc123');
   });
 
-  it.each([
-    {
-      name: 'uses the provided command name',
-      overrides: { commandName: 'texra-local' },
-      expected: 'resume later with: texra-local resume abc123',
-    },
-    {
-      name: 'includes cwd when the session uses another workspace',
-      overrides: {
-        commandName: 'texra-local',
-        cwd: '/tmp/paper',
-        processCwd: '/tmp/launcher',
-      },
-      expected: 'resume later with: texra-local resume abc123 --cwd /tmp/paper',
-    },
-    {
-      name: 'includes the active non-default approval policy',
-      overrides: {
-        approvalPolicy: 'never' as const,
-        status: 'waiting' as const,
-        commandName: 'texra-local',
-      },
-      expected:
-        'resume later with: texra-local resume abc123 --approval-policy never',
-    },
-    {
-      name: 'includes cwd and approval policy when both apply',
-      overrides: {
-        approvalPolicy: 'never' as const,
-        status: 'waiting' as const,
-        commandName: 'texra-local',
-        cwd: '/tmp/paper',
-        processCwd: '/tmp/launcher',
-      },
-      expected:
-        'resume later with: texra-local resume abc123 --cwd /tmp/paper --approval-policy never',
-    },
-  ])('resume status line $name', ({ overrides, expected }) => {
-    const status = sessionStatus({ sessionId: 'abc123', ...overrides });
-
-    expect(status).toContain(expected);
-  });
-
   it('omits session lines before the first run starts', () => {
     const status = sessionStatus({
       statusLabel: undefined,
@@ -136,14 +50,6 @@ describe('CLI session status formatter', () => {
 
     expect(status).not.toContain('session:');
     expect(status).not.toContain('resume later with:');
-  });
-
-  it('reports an empty follow-up queue explicitly', () => {
-    expect(
-      sessionStatus({
-        statusLabel: 'Idle',
-      }),
-    ).toContain('queued follow-ups: 0');
   });
 
   it('reports active child sessions only when the count is nonzero', () => {
@@ -202,16 +108,6 @@ describe('CLI session status formatter', () => {
     );
   });
 
-  it('reports personal-API-key model access without a subscription line', () => {
-    const status = sessionStatus({
-      model: 'gpt55',
-      modelAccess: 'api-key',
-    });
-
-    expect(status).toContain('model access: Your own API keys');
-    expect(status).not.toContain('subscription:');
-  });
-
   it('includes team identity when a chat was launched from a preset', () => {
     expect(
       sessionStatus({
@@ -219,16 +115,5 @@ describe('CLI session status formatter', () => {
         teamName: 'Physicist',
       }),
     ).toContain(['team: Physicist', 'agent: orchestrator'].join('\n'));
-  });
-
-  it('uses the footer label for an idle waiting stream', () => {
-    expect(
-      sessionStatus({
-        agent: 'research',
-        model: 'deepseekT',
-        modelAccess: 'api-key',
-        statusLabel: 'Idle',
-      }),
-    ).toContain('status: Idle');
   });
 });

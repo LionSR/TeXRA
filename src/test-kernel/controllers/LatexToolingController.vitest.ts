@@ -56,53 +56,6 @@ function createController(
 }
 
 describe('LatexToolingController', () => {
-  it('builds status from probes, paths, and host facts', async () => {
-    const status = await createController({
-      installedTools: {
-        latexmk: true,
-        latexdiff: true,
-        latexindent: true,
-        perl: true,
-        texcount: true,
-        gs: true,
-        magick: true,
-      },
-      paths: {
-        latexmk: '/usr/bin/latexmk',
-        latexdiff: '/usr/bin/latexdiff',
-        latexindent: '/usr/bin/latexindent',
-        texcount: '/usr/bin/texcount',
-        gs: '/usr/bin/gs',
-        magick: '/usr/bin/magick',
-      },
-      platform: 'darwin',
-      packageManager: 'brew',
-      extensionInstalled: true,
-      outDir: true,
-      autoRevealExclude: true,
-    }).detectStatus();
-
-    expect(status).toStrictEqual({
-      outDir: true,
-      autoRevealExclude: true,
-      texDistributionInstalled: true,
-      latexWorkshopInstalled: true,
-      latexdiffInstalled: true,
-      latexindentInstalled: true,
-      texcountInstalled: true,
-      imageProcessingInstalled: true,
-      platform: 'darwin',
-      pdflatexPath: null,
-      latexmkPath: '/usr/bin/latexmk',
-      latexdiffPath: '/usr/bin/latexdiff',
-      latexindentPath: '/usr/bin/latexindent',
-      texcountPath: '/usr/bin/texcount',
-      ghostscriptPath: '/usr/bin/gs',
-      graphicsmagickPath: '/usr/bin/magick',
-      packageManager: 'brew',
-    });
-  });
-
   it('keeps compound dependency flags false until every required tool is present', async () => {
     const status = await createController({
       installedTools: {

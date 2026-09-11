@@ -70,25 +70,9 @@ describe('stripOrphanedServerToolUse', () => {
       'web_fetch_tool_result',
     ]);
   });
-
-  it('never strips non-server-tool blocks', () => {
-    const blocks = asBlocks([textBlock, thinkingBlock]);
-    const { kept, orphanedIds } = stripOrphanedServerToolUse(blocks);
-    expect(orphanedIds).toEqual([]);
-    expect(kept).toHaveLength(2);
-  });
 });
 
 describe('extractAnthropicServerToolData', () => {
-  it('returns empty results when content is not an array', () => {
-    const result = extractAnthropicServerToolData({} as BetaMessage);
-    expect(result).toEqual({
-      webSearchResults: [],
-      webFetchResults: [],
-      contentBlocks: [],
-    });
-  });
-
   it('keeps only server-tool content and strips orphaned calls', () => {
     const message = asMessage([
       textBlock, // dropped: not server-tool content

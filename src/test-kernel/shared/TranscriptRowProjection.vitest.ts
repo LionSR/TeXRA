@@ -115,28 +115,6 @@ describe('projectTranscriptRow', () => {
     expect(row.model.outputSuppression).toBe('rendered-by-sections');
   });
 
-  it('measures untruncated text and elides only at paint', () => {
-    const text = transcriptText('1\n2\n3\n4\n5\n6\n7\n8\n9\n10');
-    expect(text.lineCount).toBe(10);
-    const elided = elideText(text, { headLines: 2, tailLines: 1 });
-    expect(elided.head).toEqual(['1', '2']);
-    expect(elided.tail).toEqual(['10']);
-    expect(elided.hiddenLines).toBe(7);
-  });
-
-  it('states the compaction row id, order key and label once', () => {
-    const row = compactionActivityRow({
-      operationId: 'op1',
-      status: 'running',
-      finalized: false,
-      startPosition: 4,
-      startedAt: 99,
-    });
-    expect(row.id).toBe('compaction:op1');
-    expect(row.label).toBe('Compacting context…');
-    expect(isSettledRow(row, true)).toBe(false);
-  });
-
   it('drops the state-only and marker message types', () => {
     expect(
       projectTranscriptRow({

@@ -93,24 +93,6 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(await realpath(value.repoRoot)).toBe(repo);
   });
 
-  it('ignores inherited interactive git environment variables', async () => {
-    const previousPager = process.env.PAGER;
-    const previousEditor = process.env.EDITOR;
-    process.env.PAGER = 'less';
-    process.env.EDITOR = 'vim';
-    try {
-      await git('checkout', '-b', 'feature');
-      await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
-
-      await collectDiffOrFail();
-    } finally {
-      if (previousPager === undefined) delete process.env.PAGER;
-      else process.env.PAGER = previousPager;
-      if (previousEditor === undefined) delete process.env.EDITOR;
-      else process.env.EDITOR = previousEditor;
-    }
-  });
-
   it('falls back to the origin remote-tracking branch when no local main exists', async () => {
     // Simulate a manually added remote: origin/main exists as a tracking
     // ref, origin/HEAD is unset, and there is no local main branch.

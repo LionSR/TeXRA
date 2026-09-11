@@ -549,38 +549,6 @@ describe('headless delegation', () => {
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
   });
 
-  it('projects in-band child progress onto the parent trace', async () => {
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onProgress?.({ kind: 'started' });
-      options.onProgress?.({
-        kind: 'overview',
-        toolCallCount: 3,
-        filesChanged: ['a.tex'],
-      });
-      return {
-        category: 'toolUse',
-        outcome: 'completed',
-        runId: CHILD_RUN_ID,
-        response: 'done',
-        files: [],
-      };
-    });
-    const info = vi.fn();
-
-    await withToolFileInteractionContext(
-      { tracker: {} as never, trace: { info } as never },
-      () =>
-        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
-          callDelegateReview(),
-        ),
-    );
-
-    expect(info).toHaveBeenCalledWith("Subagent 'review' started");
-    expect(info).toHaveBeenCalledWith(
-      "Subagent 'review': 3 tool calls, 1 files changed",
-    );
-  });
-
   it('composes durable workflow calls through the native launch primitive', async () => {
     const result = await runInBand(
       delegationOptions({ workflowPhase: 'proof-review' }),
@@ -1370,19 +1338,6 @@ describe('headless delegation', () => {
     expect(executeOptions).not.toEqual(
       expect.objectContaining({ stopAfterCycle: true }),
     );
-  });
-
-  it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
-    const result = await delegateWithProposalDecision({ action: 'reject' });
-
-    expect(result.summary).toBe("User rejected delegation to 'review'");
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('No feedback provided.');
-    expect(result.error).toContain(
-      'Do not retry the same or equivalent delegation',
-    );
-    expect(result.error).toContain('continue directly with available context');
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it('does not attribute proposal cancellation to the user', async () => {

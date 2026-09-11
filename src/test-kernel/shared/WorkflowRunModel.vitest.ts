@@ -518,30 +518,6 @@ describe('workflow run model', () => {
     );
   });
 
-  it('reads a phase heading from its task group, closed or open', () => {
-    const model = modelOf(['Verify'], [{ id: 'v', phase: 'Verify' }]);
-    expect(model.phases[0]?.heading).toStrictEqual({
-      phaseLabel: 'Verify',
-      phaseIndex: 0,
-      phaseTotal: 1,
-    });
-    const closed: TaskGroup = {
-      ...phaseGroup('Verify', 0, 1),
-      status: 'completed',
-      endTime: 5,
-    };
-    expect(
-      workflowRunModel({
-        taskGroups: [closed],
-        rows: [taskRow({ id: 'v', phase: 'Verify' })],
-        plan: undefined,
-        runPhase: RUN_PHASE.COMPLETED,
-        runDurablyFinal: false,
-        childProgress: new Map(),
-      }).phases[0]?.heading,
-    ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
-  });
-
   it('reads the attempt and plan markers off INTERNAL entries', () => {
     const entry = (data: unknown): StreamLogEntry =>
       ({

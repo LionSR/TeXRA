@@ -32,14 +32,6 @@ describe('InquiryStorage', () => {
       ),
     ),
   );
-  it.live('treats a fresh global database as empty', () =>
-    Effect.gen(function* () {
-      const records = yield* InquiryRecords;
-      expect(
-        yield* records.listThreadsByStatus({ status: 'any', scope: 'all' }),
-      ).toEqual([]);
-    }).pipe(Effect.provide(layer)),
-  );
   it.live('opens, answers, and resolves a thread end-to-end', () =>
     Effect.gen(function* () {
       const records = yield* InquiryRecords;

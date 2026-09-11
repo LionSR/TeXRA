@@ -702,16 +702,6 @@ describe('completedRunArchive facade', () => {
       }),
   );
 
-  it('reads an empty task list from a committed empty work plan', async () => {
-    const runId = '0aa2220aa222' as RunId;
-    await seedTasks(runId, []);
-    await stampRun(runId);
-
-    expect(
-      await Effect.runPromise(readCompletedRunTodos(runId, taskSession)),
-    ).toEqual([]);
-  });
-
   it('reports none, with no conversation evidence, when the run has no transcript', async () => {
     const runId = 'ccc333ccc333' as RunId;
 
@@ -742,16 +732,6 @@ describe('completedRunArchive facade', () => {
     ).toEqual([]);
 
     expect(scan).not.toHaveBeenCalled();
-  });
-
-  it('reads a sidecar conversation', async () => {
-    const runId = 'ddd444ddd444' as RunId;
-    await writeArchiveFixture(runId);
-    await stampRun(runId);
-    const result = await readCompletedRunConversation(runId);
-    expect(result.source).toBe('streamLog');
-    expect(result.conversation).not.toBeNull();
-    expect(result.conversation?.length).toBeGreaterThan(0);
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {

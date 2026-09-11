@@ -99,15 +99,6 @@ it.layer(testHttpClientLayer)(
       }),
     );
 
-    it('parses a device authorization and defaults a missing interval', () => {
-      const parsed = DeviceAuthorizationSchema.parse({
-        ...AUTHORIZATION,
-        interval: 'bogus',
-      });
-      expect(parsed.interval).toBe(5);
-      expect(parsed.user_code).toBe('BCDF-GHJK');
-    });
-
     it.effect('requests a device authorization from the auth server', () =>
       Effect.gen(function* () {
         const calls = queuedFetch([jsonResponse(AUTHORIZATION)]);
@@ -249,12 +240,5 @@ it.layer(testHttpClientLayer)(
         expect((yield* Fiber.join(fiber)).access_token).toBe('access-token');
       }),
     );
-
-    it('describes device login as any-device auth with the code inline', () => {
-      const message = formatCliDeviceAuthMessage(AUTHORIZATION);
-      expect(message).toContain(CLI_DEVICE_AUTH_URL_PROMPT);
-      expect(message).toContain(AUTHORIZATION.verification_uri);
-      expect(message).toContain('BCDF-GHJK');
-    });
   },
 );

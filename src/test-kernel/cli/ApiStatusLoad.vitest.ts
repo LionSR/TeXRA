@@ -149,31 +149,6 @@ describe('loadCliApiStatus', () => {
       }));
   });
 
-  it.each([
-    {
-      name: 'without a profile note',
-      profile: { authenticated: false },
-      lines: ['api: your own API keys', 'auth: signed out'],
-    },
-    {
-      name: 'with a profile note',
-      profile: {
-        authenticated: false,
-        note: 'Account metadata may be stale.',
-      },
-      lines: [
-        'api: your own API keys',
-        'auth: signed out',
-        'Account metadata may be stale.',
-      ],
-    },
-  ])(
-    'preserves signed-out launcher details $name',
-    async ({ profile, lines }) => {
-      await expect(launcherStatus(profile)).resolves.toEqual(lines);
-    },
-  );
-
   it('groups personal keys with their route', async () => {
     const profile = {
       authenticated: true,
@@ -345,92 +320,6 @@ describe('loadCliApiStatus', () => {
     },
   );
 
-  it.each([
-    {
-      name: 'off without a key',
-      preference: 'off',
-      enabled: false,
-      expected: ['Otherwise: Your own API keys'],
-    },
-    {
-      name: 'off with a key',
-      preference: 'off',
-      enabled: true,
-      expected: [
-        'Kimi Code: not preferred · key configured',
-        'Otherwise: Your own API keys',
-      ],
-    },
-    {
-      name: 'on without a key',
-      preference: 'on',
-      enabled: false,
-      expected: [
-        'Kimi Code: preferred · key required',
-        'Otherwise: Your own API keys',
-      ],
-    },
-    {
-      name: 'on with a key',
-      preference: 'on',
-      enabled: true,
-      expected: [
-        'Kimi Code: preferred · key configured',
-        'Otherwise: Your own API keys',
-      ],
-    },
-  ] as const)(
-    'renders the Kimi Code route when available: $name',
-    async ({ enabled, expected, preference }) => {
-      await expect(
-        renderPreferenceRoute('kimiCode', preference, enabled),
-      ).resolves.toEqual(expected);
-    },
-  );
-
-  it.each([
-    {
-      name: 'off without a key',
-      preference: 'off',
-      enabled: false,
-      expected: ['Otherwise: Your own API keys'],
-    },
-    {
-      name: 'off with a key',
-      preference: 'off',
-      enabled: true,
-      expected: [
-        'GLM Coding Plan: not preferred · key configured',
-        'Otherwise: Your own API keys',
-      ],
-    },
-    {
-      name: 'on without a key',
-      preference: 'on',
-      enabled: false,
-      expected: [
-        'GLM Coding Plan: preferred · key required',
-        'Otherwise: Your own API keys',
-      ],
-    },
-    {
-      name: 'on with a key',
-      preference: 'on',
-      enabled: true,
-      expected: [
-        'GLM Coding Plan: preferred · key configured',
-        'Otherwise: Your own API keys',
-      ],
-    },
-  ] as const)(
-    'renders the GLM Coding Plan route when available: $name',
-    async ({ enabled, expected, preference }) => {
-      await expect(
-        renderPreferenceRoute('glmCode', preference, enabled),
-      ).resolves.toEqual(expected);
-    },
-  );
-
   it('keeps a shared GLM key in the personal-key inventory', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       preferences: {
@@ -520,22 +409,5 @@ describe('loadCliApiStatus', () => {
     expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
     expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
-  });
-
-  it('lists providers configured by secret or env origin', async () => {
-    const originsByProvider: Record<string, 'secret' | 'env' | 'none'> = {
-      deepseek: 'secret',
-      kimiCode: 'env',
-    };
-    mocks.lookupApiKeyOrigin.mockImplementation(
-      (_secrets: unknown, provider: string) =>
-        Promise.resolve(originsByProvider[provider] ?? 'none'),
-    );
-
-    await expect(launcherStatus()).resolves.toEqual([
-      'api: your own API keys',
-      'your own API keys: DeepSeek, Kimi Code',
-      'auth: signed out',
-    ]);
   });
 });

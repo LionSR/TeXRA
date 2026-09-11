@@ -475,30 +475,6 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
-  it.each([
-    [true, GLM_CODING_PLAN_USAGE_URL],
-    [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
-  ])(
-    'uses the configured GLM region endpoint: China=%s',
-    async (useChina, expectedUrl) => {
-      const http = vi.fn<SubscriptionUsageHttp>(async () =>
-        jsonResponse({
-          success: true,
-          data: {
-            limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-          },
-        }),
-      );
-
-      await serviceWith(
-        http,
-        credentials({ useGlmChina: () => useChina }),
-      ).getUsage('glmCodingPlan');
-
-      expect(http.mock.calls[0][0]).toBe(expectedUrl);
-    },
-  );
-
   it('does not reuse GLM usage from the previous region within the TTL', async () => {
     let useChina = true;
     const http = vi.fn<SubscriptionUsageHttp>(async (url) =>

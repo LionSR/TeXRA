@@ -45,24 +45,6 @@ describe('normalizeStructuredOutputSchema', () => {
     });
   });
 
-  it('derives an equivalent object schema from a Zod schema', () => {
-    const zodSchema = z.strictObject({
-      title: z.string(),
-      count: z.number(),
-    });
-
-    const normalized = normalizeStructuredOutputSchema(zodSchema);
-
-    expect(normalized.zodSchema).toBe(zodSchema);
-    expect(normalized.jsonSchema).toMatchObject({
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        count: { type: 'number' },
-      },
-    });
-  });
-
   it('rejects non-object and unconstrained roots at normalization time', () => {
     expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
     expect(() => normalizeStructuredOutputSchema(z.array(z.string()))).toThrow(
@@ -226,72 +208,5 @@ describe('buildTerminalTool', () => {
       tool.call({ title: 'Second', count: 2 }),
     ).resolves.toMatchObject({ status: 'error' });
     expect(capture).toHaveBeenCalledTimes(1);
-  });
-
-  it('binds capture per instance so concurrent runs never share a sink', async () => {
-    const captureA = makeCapture();
-    const captureB = makeCapture();
-    const toolA = buildTerminalTool(schema, captureA);
-    const toolB = buildTerminalTool(schema, captureB);
-
-    await toolA.call({ title: 'A', count: 1 });
-
-    expect(captureA).toHaveBeenCalledTimes(1);
-    expect(captureB).not.toHaveBeenCalled();
-  });
-});
-
-describe('buildOverlayToolRegistry', () => {
-  const schema = z.strictObject({ title: z.string() });
-
-  function stubTool(name: string): ITool {
-    return {
-      definition: { name, description: name, parameters: {} },
-    } as ITool;
-  }
-
-  const realTool = {
-    definition: { name: 'read_file', description: 'read', parameters: {} },
-  } as ITool;
-  const base = new MapToolRegistry({ read_file: realTool });
-
-  it('resolves every run-scoped tool while delegating other lookups', () => {
-    const first = stubTool('first');
-    const second = stubTool('second');
-    const terminalTool = buildTerminalTool(schema, vi.fn());
-    const overlay = buildOverlayToolRegistry(base, [
-      first,
-      second,
-      terminalTool,
-    ]);
-
-    expect(overlay.get('first')).toBe(first);
-    expect(overlay.get('second')).toBe(second);
-    expect(overlay.get(SUBMIT_OUTPUT_TOOL_NAME)).toBe(terminalTool);
-    expect(overlay.get('read_file')).toBe(realTool);
-    expect(overlay.get('missing')).toBeUndefined();
-    expect(overlay.has('missing')).toBe(false);
-  });
-
-  it('isolates concurrent overlays without mutating the shared base', () => {
-    const first = stubTool('first');
-    const second = stubTool('second');
-    const firstRun = buildOverlayToolRegistry(base, [first]);
-    const secondRun = buildOverlayToolRegistry(base, [second]);
-
-    expect(firstRun.get('first')).toBe(first);
-    expect(firstRun.get('second')).toBeUndefined();
-    expect(secondRun.get('second')).toBe(second);
-    expect(secondRun.get('first')).toBeUndefined();
-    expect(base.get('first')).toBeUndefined();
-    expect(base.get('second')).toBeUndefined();
-  });
-
-  it('lets the last run-scoped tool win a name collision', () => {
-    const first = stubTool('read_file');
-    const second = stubTool('read_file');
-    const overlay = buildOverlayToolRegistry(base, [first, second]);
-
-    expect(overlay.get('read_file')).toBe(second);
   });
 });

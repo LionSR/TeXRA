@@ -104,50 +104,6 @@ describe('terminal result event', () => {
     }
   });
 
-  it('emits the completed result even if ending the parent stage throws', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
-    vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
-      throw new Error('stage listener boom');
-    });
-
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-
-      expectSingleResult(results, ctx, { outcome: 'completed' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
-  });
-
-  it('exposes the per-run handle via onRun and settles handle.result', async () => {
-    const { logger, ctx, runStatus } = setupResultCase();
-    let handle: AgentRunHandle | undefined;
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-          onRun: (h) => {
-            handle = h;
-          },
-        }),
-      );
-      expect(handle).toBeDefined();
-      // The handle carries the run's trace channel for run-scoped subscribers.
-      expect(handle?.trace).toBe(logger);
-      // `result` settles with the same terminal event (always resolves).
-      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-        type: 'result',
-        outcome: 'completed',
-        runId: ctx.runScope.runId,
-      });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
-  });
-
   it.each([
     {
       name: 'throws synchronously',

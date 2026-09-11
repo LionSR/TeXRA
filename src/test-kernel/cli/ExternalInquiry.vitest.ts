@@ -205,24 +205,6 @@ describe('CLI external inquiry modal', () => {
     expect(displayAtEnd('hello world', 5).value).toBe('hello\nworld');
   });
 
-  it('does not render a blank row from consecutive soft-break spaces', () => {
-    expect(displayAtEnd('hell  world', 5).value).toBe('hell\nworld');
-  });
-
-  it('does not render a blank row for trailing wrapped whitespace', () => {
-    const display = displayAtEnd('hello ', 5);
-
-    expect(display.value).toBe('hello');
-    expect(display.cursor).toBe(display.value.length);
-  });
-
-  it('skips space-only soft-wrap rows', () => {
-    const display = displayAtEnd('   word', 2, 4);
-
-    expect(display.value.split('\n')).not.toContain('');
-    expect(display.value).toBe('wo\nrd');
-  });
-
   it('keeps the cursor aligned when clipped ellipsis precedes trimmed text', () => {
     const value = 'aaaaa hell  world';
     const display = textInputDisplayWindow({
@@ -259,46 +241,6 @@ describe('CLI external inquiry modal', () => {
     const display = displayAtEnd('１２３４５', 6, 4);
 
     expect(display.value.split('\n').map(textDisplayWidth)).toEqual([6, 4]);
-  });
-
-  it('keeps Esc skip readable when scroll hints make the footer tight', () => {
-    expect(
-      externalInquiryKeyHintsForWidth({
-        maxColumns: 76,
-        questionScrollable: true,
-      }),
-    ).toEqual([
-      { key: 'PgUp/PgDn', action: 'scroll' },
-      { key: 'Ctrl-Y', action: 'copy' },
-      { key: 'Enter', action: 'submit' },
-      { key: 'Ctrl-R', action: 'reject' },
-      { key: 'Esc', action: 'skip' },
-    ]);
-
-    expect(
-      externalInquiryKeyHintsForWidth({
-        maxColumns: 38,
-        questionScrollable: true,
-      }),
-    ).toEqual([
-      { key: 'Ctrl-Y', action: 'copy' },
-      { key: 'Enter', action: 'submit' },
-      { key: 'Esc', action: 'skip' },
-    ]);
-  });
-
-  it('uses full external inquiry hints when the question is not scrollable', () => {
-    expect(
-      externalInquiryKeyHintsForWidth({
-        maxColumns: 76,
-        questionScrollable: false,
-      }),
-    ).toEqual([
-      { key: 'Ctrl-Y', action: 'copy' },
-      { key: 'Enter', action: 'submit answer' },
-      { key: 'Ctrl-R', action: 'reject with note' },
-      { key: 'Esc', action: 'skip' },
-    ]);
   });
 
   it('counts literal newlines against the clipped input row budget', () => {

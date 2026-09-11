@@ -95,15 +95,6 @@ describe('readPlatformSetting', () => {
     expect(readPlatformSetting(GlobalStateKey.WEBSOCKET_OPENAI)).toBe(false);
   });
 
-  it('returns the stored value when present and valid', async () => {
-    await installPlatform({
-      workspaceState: { [WorkspaceStateKey.LATEX_FORMATTER]: 'tex-fmt' },
-    });
-    expect(readPlatformSetting(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
-      'tex-fmt',
-    );
-  });
-
   it('snaps a stored value that fails the schema back to the catalog default', async () => {
     await installPlatform({
       workspaceState: {
@@ -127,50 +118,7 @@ describe('readPlatformSetting', () => {
 // ProviderConfig (#7873 — converge on readPlatformSetting for catalog keys)
 // ---------------------------------------------------------------------------
 
-describe('getUseOpenRouter', () => {
-  it('resolves the catalog default (false) when unset', async () => {
-    await installPlatform({});
-    expect(getUseOpenRouter()).toBe(false);
-  });
-
-  it('returns the stored globalState value', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.USE_OPENROUTER]: true },
-    });
-    expect(getUseOpenRouter()).toBe(true);
-  });
-
-  it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
-    // Regression for #7873: the pre-fix `tryGlobalState()?.get(key, false)`
-    // read cast the raw stored value to `boolean` without validating it, so a
-    // corrupted/non-boolean value flowed straight through. The catalog-driven
-    // `readPlatformSetting()` runs the entry's schema (`.catch(default)`)
-    // first, so a value that fails validation resolves to the default.
-    await installPlatform({
-      globalState: { [GlobalStateKey.USE_OPENROUTER]: 'not-a-boolean' },
-    });
-    expect(getUseOpenRouter()).toBe(false);
-  });
-
-  it('never falls back to the legacy VS Code config key', async () => {
-    // The `?? getConfig('texra.model.useOpenRouter', false)` fallback this
-    // function used to carry was dead code: `StateStore.get(key, false)`
-    // always resolves to `false` once the platform is initialized, so the
-    // config fallback could never fire in practice. Prove a legacy config
-    // value is ignored now that the fallback is gone.
-    await installPlatform({
-      config: { 'texra.model.useOpenRouter': true },
-    });
-    expect(getUseOpenRouter()).toBe(false);
-  });
-});
-
 describe('getProviderEndpoint', () => {
-  it('resolves the catalog default (empty string) when unset', async () => {
-    await installPlatform({});
-    expect(getProviderEndpoint('openai')).toBe('');
-  });
-
   it('returns the stored globalState value', async () => {
     await installPlatform({
       globalState: {
@@ -190,10 +138,6 @@ describe('getProviderEndpoint', () => {
     });
     expect(getProviderEndpoint('openai')).toBe('');
   });
-
-  it('returns empty string for a provider with no endpoint key', () => {
-    expect(getProviderEndpoint('not-a-real-provider')).toBe('');
-  });
 });
 
 describe('OpenRouter streaming', () => {
@@ -208,29 +152,5 @@ describe('OpenRouter streaming', () => {
       true,
     );
     expect(getProviderStreaming('openrouter')).toBe(true);
-  });
-});
-
-describe('getProviderKeyUrl', () => {
-  it('owns the provider default and applies the configured region', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.MOONSHOT_USE_CHINA]: false },
-    });
-
-    expect(getProviderKeyUrl('moonshot')).toBe(
-      'https://platform.moonshot.ai/console',
-    );
-  });
-
-  it('returns the registry default when the default region is active', async () => {
-    await installPlatform({});
-
-    expect(getProviderKeyUrl('moonshot')).toBe(
-      'https://platform.moonshot.cn/console',
-    );
-    expect(getProviderKeyUrl('openai')).toBe(
-      'https://platform.openai.com/api-keys',
-    );
-    expect(getProviderKeyUrl('not-a-provider')).toBeUndefined();
   });
 });

@@ -459,15 +459,6 @@ describe('latex forbidden commands replacements', () => {
       expected,
     );
   });
-
-  it('removes invalid endings for all section types', () => {
-    const input =
-      '\\chapter{Ch}\n\\end{chapter}\n\\section{S}\n\\end{section}\n\\subsubsection{SS}\n\\end{subsubsection}';
-    const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS);
-    assert.strictEqual(result.includes('\\end{chapter}'), false);
-    assert.strictEqual(result.includes('\\end{section}'), false);
-    assert.strictEqual(result.includes('\\end{subsubsection}'), false);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -637,15 +628,6 @@ describe('escapeTextttUnderscores', () => {
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(escapeTextttUnderscores(input), expected);
-  });
-
-  it('runs as part of applyReplacements', () => {
-    const input = 'See \\texttt{file_name} for details';
-    const expected = 'See \\texttt{file\\_name} for details';
-    assert.strictEqual(
-      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS),
-      expected,
-    );
   });
 });
 

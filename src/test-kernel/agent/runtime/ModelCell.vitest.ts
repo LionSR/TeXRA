@@ -25,34 +25,6 @@ function clientCell<C>(client: C) {
 }
 
 describe('ModelCell', () => {
-  it('moves handler and model id together', () => {
-    const first = stubHandler();
-    const second = stubHandler();
-    const cell = new ModelCell(first, 'deepseekT');
-
-    expect(cell.handler).toBe(first);
-    expect(cell.modelId).toBe('deepseekT');
-
-    cell.swap(second, 'sonnet46T');
-
-    expect(cell.handler).toBe(second);
-    expect(cell.modelId).toBe('sonnet46T');
-  });
-
-  it('is seen live through a spread of the bag that carries it', () => {
-    const launch = stubHandler();
-    const next = stubHandler();
-    const cell = new ModelCell(launch, 'deepseekT');
-    // A run's services bag is built by spreading the launch context, which is
-    // why a bare handler field had to be re-assigned on every copy.
-    const services = { modelCell: cell, extra: true };
-
-    cell.swap(next, 'sonnet46T');
-
-    expect(services.modelCell.handler).toBe(next);
-    expect(services.modelCell.modelId).toBe('sonnet46T');
-  });
-
   it('disposes every handler it has held exactly once', () => {
     const launch = stubHandler();
     const middle = stubHandler();

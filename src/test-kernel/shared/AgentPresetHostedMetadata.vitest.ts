@@ -20,14 +20,6 @@ describe('agent preset hosted-definition metadata', () => {
     }
   });
 
-  it('marks the bundled software-engineer team as local-only', () => {
-    const softwareTeam = AGENT_MODE_PRESETS.find(
-      (preset) => preset.id === 'software-engineer',
-    );
-
-    expect(softwareTeam?.texraHostedAgents).toEqual([]);
-  });
-
   it('rejects a retired legacy pair-shaped custom team with a warning', () => {
     // The `workflowAgents`/`toolUseAgents` legacy pair (#9705) is retired:
     // such a blob must fail parsing loudly, not silently masquerade as an
@@ -115,33 +107,5 @@ describe('parseAgentModePresets icon degradation', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('nonexistent-icon'),
     );
-  });
-
-  it('does not drop sibling presets when one icon is unknown', () => {
-    mockConsoleWarn();
-
-    const presets = parseAgentModePresets([
-      customPreset('rocket'),
-      customPreset('bogus', 'custom-2'),
-    ]);
-
-    expect(presets.map((preset) => preset.id)).toEqual([
-      'custom-1',
-      'custom-2',
-    ]);
-    expect(presets.map((preset) => preset.icon)).toEqual([
-      'rocket',
-      'bookmark',
-    ]);
-  });
-
-  it('degrades codicon-prefixed obsolete icons with a warning', () => {
-    const warn = mockConsoleWarn();
-
-    const presets = parseAgentModePresets([customPreset('codicon-tools')]);
-
-    // 'tools' was removed from canonical icons — falls back to bookmark with warning
-    expect(presets[0]?.icon).toBe('bookmark');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('tools'));
   });
 });

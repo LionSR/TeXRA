@@ -93,22 +93,4 @@ describe('MainViewRunController', () => {
       cli: { multiAgentPresetId: 'custom-team' },
     });
   });
-
-  it('requires a lead model but not a renderer agent for team requests', () => {
-    const fields = {
-      agent: 'builtInToolUse:lead',
-      delegationAgentScope: {
-        workflow: ['builtInWorkflow:writer'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-      cli: { multiAgentPresetId: 'custom-team' },
-    };
-
-    expect(
-      prepareMainViewTeamRunRequest({ agent: 'ignored' }, fields).valid,
-    ).toBe(false);
-    expect(
-      prepareMainViewTeamRunRequest({ model: 'gpt-5.4' }, fields).valid,
-    ).toBe(true);
-  });
 });

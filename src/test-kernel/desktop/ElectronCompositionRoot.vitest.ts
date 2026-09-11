@@ -183,49 +183,6 @@ describe('desktop composition root and launch environment', () => {
       ).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 
-  it('owns one session per project and flushes them before shutdown disposal', async () => {
-    const [source, projectsSource] = await Promise.all([
-      readDesktopMainIndex(),
-      readFile(desktopSourcePath('main', 'desktopProjects.ts'), 'utf8'),
-    ]);
-
-    // Sessions are opened in the project registry only, one per root, through
-    // the process's session owner.
-    expect(source).not.toMatch(/openSession\(/u);
-    expect(projectsSource.match(/openSessionEffect\(/gu)).toHaveLength(1);
-    expect(source).toMatch(/createWindow\(\{[\s\S]*?\bprojects,[\s\S]*?\}\)/u);
-    // Every open project is bound to the window: one backend with this
-    // window's port (the framer's), one host snapshot, one presentation each.
-    expect(source).toContain('new SessionBridge({');
-    expect(source).toContain('createHostSnapshotSource({');
-    expect(source).toContain('for (const [key, project] of open)');
-
-    expectOrderedAfter(source, 'installDesktopWindowTitle(', [
-      'window.loadURL(',
-    ]);
-    expectOrderedAfter(source, 'installDesktopWindowTitle(', [
-      'window.loadFile(',
-    ]);
-    // Window-root ownership: the closed handler disposes the store instead of
-    // running a hand-ordered ledger; intra-window ordering is the store's LIFO.
-    expectOrderedAfter(source, "window.once('closed'", [
-      'windowResources.dispose()',
-    ]);
-
-    expectOrderedAfter(source, 'registerRuntimeShutdownHandlers(lifecycle', [
-      'beforeAgentShutdown:',
-      'processResumeOwner.disable()',
-      'afterAgentShutdown:',
-      'killActiveRecording()',
-      'flushArtifacts:',
-      'projects.flushArtifacts()',
-      'afterFlushArtifacts:',
-      'removeExternalDiffPatchDirs()',
-      'afterRunSettlement:',
-      'processResources.dispose()',
-    ]);
-  });
-
   it('keeps platform initialization in the Electron composition root', async () => {
     const files = sourceFilesUnder(DESKTOP_SRC_DIR);
     const initPlatformFiles: string[] = [];
@@ -241,44 +198,6 @@ describe('desktop composition root and launch environment', () => {
 
     expect(initPlatformFiles).toEqual([
       'packages/desktop/src/main/platform/index.ts',
-    ]);
-  });
-
-  it('surfaces desktop async failures and terminates after post-startup rejections', async () => {
-    const [indexSource, bootstrapSource] = await Promise.all([
-      readDesktopMainIndex(),
-      readDesktopBootstrap(),
-    ]);
-
-    expect(indexSource).toContain(
-      "console.error('Desktop asynchronous operation failed:', error);",
-    );
-    expect(indexSource).toContain(
-      '`A desktop operation failed: ${toErrorMessage(error)}`',
-    );
-    expect(indexSource).toContain(
-      'installDesktopNavigationPolicy(window.webContents',
-    );
-    expect(bootstrapSource).toMatch(
-      /await import\('\.\/index\.js'\);\s*removeFatalStartupHandlers\(\);\s*installPostStartupRejectionHandler\(\);/u,
-    );
-  });
-
-  it('repairs PATH before platform services and bundled agents are initialized', async () => {
-    const source = await readDesktopPlatformIndex();
-
-    expectOrderedAfter(source, 'repairLaunchPath();', [
-      'initPlatform(',
-      'bootstrapNodeAgentDirectories(',
-    ]);
-  });
-
-  it('initializes desktop runtime skills from the resolved resource bundle', async () => {
-    const source = await readDesktopPlatformIndex();
-
-    expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
-      'initializeNodeRuntimeSkills({',
-      'bootstrapNodeAgentDirectories(',
     ]);
   });
 
@@ -435,21 +354,5 @@ describe('desktop composition root and launch environment', () => {
         platform: 'linux',
       }),
     ).toBe('/custom/bin');
-  });
-
-  it('does not call the process-level PATH fixer for injected environments', async () => {
-    const { repairLaunchPath } = await loadSourceModule(
-      '@desktop/main/platform/pathFix',
-    );
-    const processPath = process.env.PATH;
-    const env = { PATH: '/custom/bin' };
-
-    expect(
-      repairLaunchPath({
-        env,
-        platform: 'darwin',
-      }),
-    ).toContain('/custom/bin');
-    expect(process.env.PATH).toBe(processPath);
   });
 });

@@ -46,16 +46,6 @@ describe('applyHelperModelPreference', () => {
     return applyHelperModelPreference(config);
   }
 
-  it('swaps onto the available helper model', async () => {
-    getHelperModelName.mockReturnValue('deepseek');
-    getModelUnavailableReason.mockResolvedValue(undefined);
-
-    const result = await resolve(configFor('opus'));
-
-    expect(result.model).toBe('deepseek');
-    expect(getModelUnavailableReason).toHaveBeenCalledWith('deepseek');
-  });
-
   it.each([
     { helper: 'opus', scenario: 'the helper model already equals it' },
     {

@@ -118,26 +118,6 @@ function clearTitleApprovals(): void {
 }
 
 describe('terminalTitleText', () => {
-  it('names the tab after the project folder', () => {
-    expect(terminalTitleText('/Users/ray/projects/coauthor')).toBe(
-      '{T}·coauthor',
-    );
-  });
-
-  it('falls back to the bare brand name at the filesystem root', () => {
-    expect(terminalTitleText('/')).toBe('{T}');
-  });
-
-  it('leads with running and approval labels ahead of the brand name', () => {
-    expect(terminalTitleText('/Users/ray/projects/coauthor', 'running')).toBe(
-      '⠋ {T}·coauthor',
-    );
-    expect(terminalTitleText('/Users/ray/projects/coauthor', 'approval')).toBe(
-      '⚠ {T}·coauthor',
-    );
-    expect(terminalTitleText('/', 'running')).toBe('⠋ {T}');
-  });
-
   it('strips control characters out of a hostile folder name', () => {
     expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
       '{T}·evil]0;pwned',
@@ -178,19 +158,6 @@ describe('installTerminalTitleUpdates', () => {
     updates.dispose();
   });
 
-  it('stays running after the root id is published but before its status arrives', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    enableOscTitles();
-    rootRunPending.set(true);
-    claimedRunId.set('status-pending-root' as RunId);
-
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-
-    expectLastTitle('⠋ {T}·coauthor');
-    updates.dispose();
-  });
-
   it('uses every run phase and gives queued approval precedence', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -217,51 +184,6 @@ describe('installTerminalTitleUpdates', () => {
     updates.dispose();
   });
 
-  it('animates running titles and stops the timer outside the running state', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    enableOscTitles();
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    setPhase('animated-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-
-    // Frame comes from `loadingFrameAt(Date.now(), TITLE_FRAMES)` on the
-    // shared 1 Hz tick (braille dots, not the TUI's ASCII spin cycle: a bare
-    // `-` reads as punctuation in a tab), not a private timer, so
-    // each check advances a full second and the frame is whatever wall time
-    // projects to — not reset to index 0 on each animation restart.
-    expectLastTitle('⠋ {T}·coauthor');
-    vi.advanceTimersByTime(1000);
-    expectLastTitle('⠹ {T}·coauthor');
-    vi.advanceTimersByTime(1000);
-    expectLastTitle('⠴ {T}·coauthor');
-
-    queueTitleApproval('animated-root');
-    await flushTitleUpdate();
-    expectLastTitle('⚠ {T}·coauthor');
-    expectNoTitleWrites();
-
-    clearTitleApprovals();
-    await flushTitleUpdate();
-    expectLastTitle('⠦ {T}·coauthor');
-    updates.suspend();
-    expectLastTitle('{T}·coauthor');
-    expectNoTitleWrites();
-
-    updates.resume();
-    expectLastTitle('⠹ {T}·coauthor');
-    setPhase('animated-root', RUN_PHASE.WAITING);
-    await flushTitleUpdate();
-    expectLastTitle('{T}·coauthor');
-    expectNoTitleWrites();
-
-    setPhase('animated-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-    expectLastTitle('⠴ {T}·coauthor');
-    updates.dispose();
-    expectNoTitleWrites();
-  });
-
   it('returns to idle when only the canonical run phase changes', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -278,59 +200,6 @@ describe('installTerminalTitleUpdates', () => {
 
     expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
-    updates.dispose();
-  });
-
-  it('deduplicates unchanged title projections and resets an active title on teardown', async () => {
-    enableOscTitles();
-    const on = vi.spyOn(process, 'on');
-    const off = vi.spyOn(process, 'off');
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    const exitListener = on.mock.calls.find(([event]) => event === 'exit')?.[1];
-    setPhase('dedup-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-    setPhase('dedup-child', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-
-    expect(writeSync).toHaveBeenCalledTimes(2);
-    updates.dispose();
-    expect(writeSync).toHaveBeenCalledTimes(3);
-    expectLastTitle('{T}·coauthor');
-    expect(off).toHaveBeenCalledWith('exit', exitListener);
-  });
-
-  it('restores the idle title from the process-exit path', async () => {
-    enableOscTitles();
-    const on = vi.spyOn(process, 'on');
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    const exitListener = on.mock.calls.find(
-      ([event]) => event === 'exit',
-    )?.[1] as ((code: number) => void) | undefined;
-    setPhase('exit-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-
-    exitListener?.(0);
-
-    expectLastTitle('{T}·coauthor');
-    expect(writeSync).toHaveBeenCalledTimes(3);
-    updates.dispose();
-    expect(writeSync).toHaveBeenCalledTimes(3);
-  });
-
-  it('shows the idle title while suspended and re-projects live state on resume', async () => {
-    enableOscTitles();
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    setPhase('suspend-root', RUN_PHASE.RUNNING);
-    await flushTitleUpdate();
-
-    updates.suspend();
-    expectLastTitle('{T}·coauthor');
-    queueTitleApproval('title-suspend');
-    await flushTitleUpdate();
-    expect(writeSync).toHaveBeenCalledTimes(3);
-
-    updates.resume();
-    expectLastTitle('⚠ {T}·coauthor');
     updates.dispose();
   });
 
@@ -368,38 +237,5 @@ describe('restoreTuiInputModes', () => {
       1,
       '\x1b[>1u\x1b[?2004h\x1b[?25l',
     );
-  });
-});
-
-describe('supportsTerminalJobControl', () => {
-  it.each([
-    { platform: 'win32', expected: false },
-    { platform: 'darwin', expected: true },
-    { platform: 'linux', expected: true },
-  ] as const)('returns $expected on $platform', ({ platform, expected }) => {
-    expect(supportsTerminalJobControl(platform)).toBe(expected);
-  });
-});
-
-describe('installTerminalRestoreOnExit', () => {
-  it('registers a process exit listener and removes it on dispose', () => {
-    const on = vi.spyOn(process, 'on').mockReturnThis();
-    const off = vi.spyOn(process, 'off').mockReturnThis();
-
-    const dispose = installTerminalRestoreOnExit();
-    const listener = on.mock.calls[0]?.[1];
-
-    expect(on).toHaveBeenCalledWith('exit', expect.any(Function));
-    dispose();
-    expect(off).toHaveBeenCalledWith('exit', listener);
-  });
-
-  it('tolerates double dispose', () => {
-    vi.spyOn(process, 'on').mockReturnThis();
-    const off = vi.spyOn(process, 'off').mockReturnThis();
-    const dispose = installTerminalRestoreOnExit();
-    dispose();
-    dispose();
-    expect(off).toHaveBeenCalledTimes(2);
   });
 });

@@ -81,33 +81,6 @@ describe('desktop platform adapters', () => {
       }),
     );
 
-  it('keeps default Electron app paths isolated from the checkout', () => {
-    const userDataPath = electronApp.getPath('userData');
-
-    expect(userDataPath).not.toContain(REPO_ROOT);
-    expect(userDataPath).toContain('texra-electron-test-');
-    expect(electronApp.getPath('logs')).toBe(join(userDataPath, 'logs'));
-  });
-
-  it.effect('allows tests to override Electron app paths', () =>
-    Effect.gen(function* () {
-      const root = yield* makeTempDir('texra-electron-user-data-');
-
-      configureElectronTestStub({ userDataPath: root });
-
-      expect(electronApp.getPath('userData')).toBe(root);
-      expect(electronApp.getPath('logs')).toBe(join(root, 'logs'));
-    }),
-  );
-
-  it('merges partial Electron stub safe storage configuration', () => {
-    configureElectronTestStub({ safeStorageEncryptionAvailable: false });
-    configureElectronTestStub({ safeStorageBackend: 'basic_text' });
-
-    expect(electronSafeStorage.isEncryptionAvailable()).toBe(false);
-    expect(electronSafeStorage.getSelectedStorageBackend()).toBe('basic_text');
-  });
-
   it.effect(
     'persists state values and deletes undefined updates through JsonStore',
     () =>

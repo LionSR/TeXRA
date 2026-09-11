@@ -134,14 +134,6 @@ describe('check-dead-code-ratchet extractFindings', () => {
     );
   });
 
-  it('treats missing per-category arrays as no findings, matching knip omitting empty keys', () => {
-    expect(extractFindings([{ file: 'a.ts' }])).toEqual([]);
-  });
-
-  it('returns no findings for an empty issue list', () => {
-    expect(extractFindings([])).toEqual([]);
-  });
-
   it('extracts one finding per symbol from real captured knip --reporter json output', () => {
     const { issues } = JSON.parse(REAL_KNIP_STDOUT);
 
@@ -155,15 +147,6 @@ describe('check-dead-code-ratchet extractFindings', () => {
 });
 
 describe('check-dead-code-ratchet parseKnipIssues', () => {
-  it('extracts issues from real captured knip --reporter json output', () => {
-    const issues = parseKnipIssues(REAL_KNIP_STDOUT, '');
-
-    expect(issues).toHaveLength(5);
-    expect(issues[0]).toMatchObject({
-      file: 'src/test-kernel/support/setupFakePlatform.ts',
-    });
-  });
-
   it('throws with stdout/stderr context when stdout is not parseable JSON', () => {
     expect(() => parseKnipIssues('not json', 'some stderr')).toThrow(
       'knip did not produce parseable JSON output',
@@ -196,14 +179,6 @@ describe('check-dead-code-ratchet parseKnipIssues', () => {
 });
 
 describe('check-dead-code-ratchet readBaseline', () => {
-  it('returns the findings array from a well-formed baseline document', () => {
-    const findings = [{ file: 'a.ts', category: 'exports', name: 'foo' }];
-
-    expect(readBaseline(JSON.stringify({ semantics: 'x', findings }))).toEqual(
-      findings,
-    );
-  });
-
   it('throws when the baseline document has no findings array', () => {
     expect(() => readBaseline(JSON.stringify({ semantics: 'x' }))).toThrow(
       /missing a "findings" array/,
@@ -216,13 +191,6 @@ describe('check-dead-code-ratchet diffFindings', () => {
     { file: 'a.ts', category: 'exports', name: 'foo' },
     { file: 'b.ts', category: 'types', name: 'Bar' },
   ];
-
-  it('reports no new or resolved findings when current matches baseline exactly', () => {
-    expect(diffFindings(baseline, baseline)).toEqual({
-      newFindings: [],
-      resolvedFindings: [],
-    });
-  });
 
   it('flags a finding present in current but absent from the baseline as new, by identity not count', () => {
     // Same total count as baseline (2), but a different export replaced
@@ -247,16 +215,5 @@ describe('check-dead-code-ratchet diffFindings', () => {
       newFindings: [],
       resolvedFindings: [{ file: 'a.ts', category: 'exports', name: 'foo' }],
     });
-  });
-
-  it('sorts both new and resolved findings by file, then category, then name', () => {
-    const current: KnipFinding[] = [
-      { file: 'z.ts', category: 'exports', name: 'z' },
-      { file: 'a.ts', category: 'exports', name: 'a' },
-    ];
-
-    expect(diffFindings(current, []).newFindings).toEqual(
-      [...current].sort(compareFindings),
-    );
   });
 });

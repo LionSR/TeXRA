@@ -48,59 +48,6 @@ function options(overrides: {
 }
 
 describe('team availability preflight', () => {
-  it.effect('does not prompt or refresh a local-only team', () =>
-    Effect.gen(function* () {
-      const deps = options({ initial: { unresolvedNames: ['local-plugin'] } });
-      expect(yield* preflightTeamAvailability(deps.input)).toEqual({
-        status: 'proceed',
-        value: { unresolvedNames: ['local-plugin'] },
-        partial: false,
-      });
-      expect(deps.choose).not.toHaveBeenCalled();
-      expect(deps.refresh).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect('continues only after an explicit partial-team choice', () =>
-    Effect.gen(function* () {
-      const deps = options({ choice: 'continue' });
-      expect(yield* preflightTeamAvailability(deps.input)).toMatchObject({
-        status: 'proceed',
-        partial: true,
-      });
-      expect(deps.signIn).not.toHaveBeenCalled();
-      expect(deps.refresh).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect('cancels without signing in or refreshing', () =>
-    Effect.gen(function* () {
-      const deps = options({ choice: 'cancel' });
-      expect(yield* preflightTeamAvailability(deps.input)).toMatchObject({
-        status: 'cancelled',
-      });
-      expect(deps.signIn).not.toHaveBeenCalled();
-      expect(deps.refresh).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'honors a supplied partial-team choice before authenticated refresh',
-    () =>
-      Effect.gen(function* () {
-        const deps = options({
-          authenticated: true,
-          providedChoice: 'continue',
-        });
-        expect(yield* preflightTeamAvailability(deps.input)).toMatchObject({
-          status: 'proceed',
-          partial: true,
-        });
-        expect(deps.choose).not.toHaveBeenCalled();
-        expect(deps.refresh).not.toHaveBeenCalled();
-      }),
-  );
-
   it.effect('honors a supplied cancellation before authenticated refresh', () =>
     Effect.gen(function* () {
       const deps = options({ authenticated: true, providedChoice: 'cancel' });
@@ -137,25 +84,6 @@ describe('team availability preflight', () => {
       expect(deps.signIn).toHaveBeenCalledOnce();
       expect(deps.refresh).toHaveBeenCalledOnce();
     }),
-  );
-
-  it.effect(
-    'reports the real availability failure after authenticated refresh',
-    () =>
-      Effect.gen(function* () {
-        const deps = options({
-          authenticated: true,
-          refreshed: { unresolvedNames: ['orchestrator'] },
-        });
-        expect(yield* preflightTeamAvailability(deps.input)).toEqual({
-          status: 'unavailable',
-          value: { unresolvedNames: ['orchestrator'] },
-          unavailableNames: ['orchestrator'],
-        });
-        expect(deps.choose).not.toHaveBeenCalled();
-        expect(deps.signIn).not.toHaveBeenCalled();
-        expect(deps.refresh).toHaveBeenCalledOnce();
-      }),
   );
 
   it.effect(

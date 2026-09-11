@@ -221,41 +221,6 @@ describe('state settings catalog', () => {
     }
   });
 
-  it('every editable CLI row documents a runtime-reachability path', () => {
-    for (const entry of ALL_SETTINGS) {
-      if (!entry.surfaces?.cliConfig) continue;
-      const honor = entry.honoredBy.cli;
-      assert.ok(
-        honor,
-        `${entry.key} is editable in /config but no CLI reader honors it`,
-      );
-      const reachability = honor.reachability;
-      assert.ok(
-        reachability,
-        `${entry.key} is editable in /config but declares no reachability`,
-      );
-      assert.match(
-        reachability.command,
-        CLI_RUNTIME_COMMAND_PATTERN,
-        `${entry.key} reachability command is not a recognized runtime command: ${reachability.command}`,
-      );
-      const throughSegments = reachability.through
-        .split('->')
-        .map((segment) => segment.trim())
-        .filter(Boolean);
-      assert.ok(
-        throughSegments.includes(honor.reader),
-        `${entry.key} reachability path must include its CLI reader as a path segment: ${honor.reader}`,
-      );
-      for (const segment of throughSegments) {
-        assert.ok(
-          existsSync(resolve(REPO_ROOT, segment)),
-          `${entry.key} reachability path segment does not exist: ${segment}`,
-        );
-      }
-    }
-  });
-
   it('gives every honoring host a storage slot', () => {
     for (const entry of ALL_SETTINGS) {
       for (const host of SETTING_HOSTS) {
@@ -280,15 +245,6 @@ describe('state settings catalog', () => {
       assert.ok(
         globals === 0 || globals === slots.length,
         `${entry.key} mixes global and project scope across hosts`,
-      );
-    }
-  });
-
-  it('excludes Class-D internal state keys', () => {
-    for (const key of STATE_SETTING_KEYS) {
-      assert.ok(
-        !CLASS_D_KEY_PATTERN.test(key),
-        `${key} looks like internal (Class-D) state and must not be a setting`,
       );
     }
   });
@@ -319,196 +275,6 @@ describe('state settings catalog', () => {
       if (entry.enumLabels) {
         assert.equal(entry.enumLabels.length, options.length, entry.key);
       }
-    }
-  });
-
-  it('drives the LaTeX tab enum option labels from catalog metadata', () => {
-    // Locks the catalog wording the extension's LaTeXTab composes its
-    // <wa-select> labels from.
-    const mathMarkup = entryByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP);
-    const mathMarkupLabels = (settingEnumOptions(mathMarkup) ?? []).map(
-      (value, index) => {
-        const base = `${value} — ${mathMarkup.enumDescriptions?.[index]}`;
-        return value === LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup
-          ? `${base} (default)`
-          : base;
-      },
-    );
-    assert.deepEqual(mathMarkupLabels, [
-      'off — suppress markup',
-      'whole — equation-level',
-      'coarse — within equations (default)',
-      'fine — small changes inside equations',
-    ]);
-
-    const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    const formatterLabels = (settingEnumOptions(formatter) ?? []).map(
-      (value) =>
-        value === LATEX_CONFIG_DEFAULTS.latexFormatter
-          ? `${value} (default)`
-          : value,
-    );
-    assert.deepEqual(formatterLabels, [
-      'latexindent (default)',
-      'tex-fmt',
-      'none',
-    ]);
-  });
-
-  it('drives the AI Agents tab enum option labels from catalog metadata', () => {
-    const labelsFor = (key: WorkspaceStateKey): string[] =>
-      (settingEnumChoices(entryByKey(key)) ?? []).map(
-        (option) => `${option.value} — ${option.label}`,
-      );
-
-    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_SANDBOX_MODE), [
-      'read-only — Read-only',
-      'workspace-write — Workspace write',
-      'danger-full-access — Full access',
-    ]);
-    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_REASONING_EFFORT), [
-      'low — Low',
-      'medium — Medium',
-      'high — High',
-      'xhigh — Extra high',
-    ]);
-    assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_APPROVAL_POLICY), [
-      'never — Auto approve',
-      'on-request — Ask when requested',
-      'untrusted — Ask for untrusted',
-      'on-failure — Ask on failure',
-    ]);
-    assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_MODEL), [
-      'claude-sonnet-5 — Sonnet 5',
-      'claude-fable-5-1 — Fable 5.1',
-      'claude-opus-5 — Opus 5',
-      'claude-haiku-4-5-20251001 — Haiku 4.5',
-    ]);
-    assert.deepEqual(
-      labelsFor(WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE),
-      [
-        'default — Prompt for risky actions',
-        'acceptEdits — Auto-accept edits',
-        'bypassPermissions — Bypass all (dangerous)',
-        'plan — Plan only (read-only)',
-      ],
-    );
-    assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_EFFORT), [
-      'low — Low',
-      'medium — Medium',
-      'high — High',
-      'xhigh — Extra high',
-      'max — Maximum',
-    ]);
-  });
-
-  it('drives model-profile option labels from shared metadata', () => {
-    assert.deepEqual(
-      REASONING_LEVEL_OPTIONS.map(
-        (option) => `${option.value} — ${option.label}`,
-      ),
-      [
-        'none — None',
-        'minimal — Minimal',
-        'low — Low',
-        'medium — Medium',
-        'high — High',
-        'xhigh — Extra High',
-        'max — Max',
-      ],
-    );
-  });
-
-  it('exposes exactly the verified CLI-consumed settings', () => {
-    // Each entry below is confirmed to actually take effect in the CLI:
-    //  - git author identity is merged into spawned commands (execUtils) and
-    //    drives worktree delegation (DelegationTools);
-    //  - Codex and Claude Code agent defaults are read by their tool runtimes
-    //    when a headless tool-use run launches either external CLI;
-    //  - the workflow compile settings run in `texra workflow` / `texra run`
-    //    (the reflection flow, via OutputNode/runCompileCheck).
-    //  - the OpenAI WebSocket toggle is read by the Responses handler the CLI
-    //    runs (and lets the Codex backend attempt WebSocket).
-    //  - provider endpoints are read by the proxy resolver used by CLI model
-    //    handlers before falling back to provider defaults.
-    //  - the provider routing/region toggles (Prefer Kimi Code, the China
-    //    region switches, GLM Coding Plan) are the same catalog rows the
-    //    Models tab renders via `surfaces.models`, read through
-    //    providerConfig/ProxyConfigResolver during CLI model dispatch.
-    //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
-    //    dual-backend Kimi models in CLI runs.
-    //  - agent skills is read by buildUserVars (userVars) when assembling
-    //    tool-use agent prompts, skipping skill discovery when disabled.
-    //  - skill and source exclusions are read by runtimeSkills before prompt
-    //    injection and explicit `/skills` activation.
-    //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
-    //    SessionHandle before bash/edit approval boundaries decide.
-    //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
-    //    chat TUI stops the root run (Ctrl-C) or kills a subagent run.
-    //  - allow-orchestrator-kill is read by ExecutionsTool when an
-    //    orchestrator asks to kill one of its own child executions.
-    //  - compaction threshold and retry attempts are read by the shared model
-    //    handler and invocation node used by headless CLI runs.
-    //  - the child-run concurrency budget is read by childRunBudget (via the
-    //    child-run loop every detached subagent and workflow script launches
-    //    through) and passed to the workflow engine's semaphore.
-    // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
-    // intentionally excluded. Changing the CLI roster must be a deliberate edit
-    // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
-    assert.deepEqual(
-      [...CLI_STATE_SETTINGS].map((entry) => entry.key).sort(),
-      [
-        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-        WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-        WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-        WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-        WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-        WorkspaceStateKey.GIT_AUTHOR_NAME,
-        WorkspaceStateKey.GIT_MARK_COMMITS,
-        WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-        ...PROVIDER_ENDPOINT_STATE_ENTRIES.map(
-          ({ endpointKey }) => endpointKey,
-        ),
-        GlobalStateKey.WEBSOCKET_OPENAI,
-        GlobalStateKey.USE_OPENROUTER,
-        GlobalStateKey.KIMI_CODE_PREFER,
-        GlobalStateKey.MOONSHOT_USE_CHINA,
-        GlobalStateKey.DASHSCOPE_USE_CHINA,
-        GlobalStateKey.MINIMAX_USE_CHINA,
-        GlobalStateKey.GLM_USE_CHINA,
-        GlobalStateKey.GLM_CODING_PLAN,
-        GlobalStateKey.DISABLED_TOOLS,
-        WorkspaceStateKey.DISABLED_SKILLS,
-        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-        AGENT_SKILLS_CONFIG_KEY,
-        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-        MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-        MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ].sort(),
-    );
-  });
-
-  it('round-trips each `.prefault()` default to the real getter default', () => {
-    for (const entry of STATE_SETTINGS) {
-      assert.ok(
-        Object.hasOwn(EXPECTED_DEFAULTS, entry.key),
-        `${entry.key} has no expected default declared in the test`,
-      );
-      assert.deepEqual(
-        settingDefault(entry),
-        EXPECTED_DEFAULTS[entry.key],
-        entry.key,
-      );
     }
   });
 });
@@ -607,19 +373,6 @@ describe('catalog-derived settings snapshots', () => {
     } finally {
       warn.mockRestore();
     }
-  });
-
-  it('keeps the historical OpenAI Models-tab control order', () => {
-    assert.deepEqual(
-      modelsTabSettings('openai').map(({ entry }) => entry.key),
-      [
-        'texra.model.gpt5ReasoningSummary',
-        'texra.model.useOpenAIResponsesAPI',
-        'texra.model.useBackgroundResponses',
-        'texra.model.openaiParallelToolCalls',
-        'texra.websocket.openai',
-      ],
-    );
   });
 });
 

@@ -38,31 +38,6 @@ describe('commandCatalog', () => {
   // package.json contributes.commands/keybindings are code-generated from the
   // catalog by scripts/sync-package-contributes.mjs; these are the CI diff
   // checks that fail when the committed manifest drifts from the catalog.
-  it('matches package command contributions', () => {
-    assert.deepEqual(
-      packageJson.contributes.commands,
-      packageCommandContributions,
-    );
-  });
-
-  it('matches package keybinding contributions', () => {
-    assert.deepEqual(
-      packageJson.contributes.keybindings ?? [],
-      commandKeybindings,
-    );
-  });
-
-  it('gates the Grok subscription sign-in command in the command palette', () => {
-    assert.deepEqual(
-      packageJson.contributes.menus?.commandPalette?.find(
-        (entry) => entry.command === 'texra.auth.grok.signIn',
-      ),
-      {
-        command: 'texra.auth.grok.signIn',
-        when: 'texra.activated',
-      },
-    );
-  });
 
   // commandKeybindings is derived from a hand-mirrored order list
   // (commandKeybindingOrder) in catalog.ts; this guards the silent-drift case

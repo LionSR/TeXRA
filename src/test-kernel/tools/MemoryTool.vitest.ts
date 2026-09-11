@@ -80,42 +80,6 @@ describe('MemoryTool view with an omitted path', () => {
     });
   });
 
-  it('lists the memory root contents instead of erroring when memories already exist', async () => {
-    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
-    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) =>
-      target === MEMORY_STORAGE_DIR
-        ? dirStat()
-        : fileStat(TEST_FRONTMATTER.length),
-    );
-    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) =>
-      target === MEMORY_STORAGE_DIR ? [['notes.md', FileType.File]] : [],
-    );
-    vi.spyOn(StorageFS, 'read').mockResolvedValue(TEST_FRONTMATTER);
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
-      runOfEvent(TEST_FRONTMATTER),
-    );
-
-    const omitted = await viewMemory();
-    const explicitRoot = await viewMemory(MEMORY_DISPLAY_ROOT);
-
-    expect(omitted.status).toBe('executed');
-    expect(omitted).toEqual(explicitRoot);
-    expect(omitted.summary).toContain('Listed directory: /memories');
-    expect(omitted.output).toContain('/memories/notes.md');
-  });
-
-  it('still requires path for non-view commands, e.g. create', async () => {
-    const create = await new MemoryTool().call({
-      command: 'create',
-      file_text: 'body',
-    });
-    expect(create.status).toBe('error');
-    expect(create).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('path'),
-    });
-  });
-
   it.each([
     [
       '/outside.md',

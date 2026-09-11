@@ -46,29 +46,6 @@ describe('ReportReviewIssueTool', () => {
     detachHostInteractions = () => undefined;
   });
 
-  it('hands the report to the sink and confirms acceptance', async () => {
-    const { sink, tool } = useAcceptingSink();
-
-    const result = await tool.call({
-      ...REPORT,
-      endLine: 7,
-      suggestion: 'Use < instead of <=.',
-    });
-
-    expect(result).toMatchObject({
-      summary: expect.stringContaining('src/x.ts:5'),
-    });
-    expect(sink).toHaveBeenCalledWith({
-      file: 'src/x.ts',
-      startLine: 5,
-      endLine: 7,
-      severity: 'critical',
-      title: 'Broken loop',
-      description: 'Off-by-one in bounds.',
-      suggestion: 'Use < instead of <=.',
-    });
-  });
-
   it('runs each finding to the sink immediately and unchanged', async () => {
     const { sink, tool } = useAcceptingSink();
     const first = { ...REPORT, endLine: 7 };

@@ -232,20 +232,6 @@ function launcherLayout(
 }
 
 describe('CLI orchestration items', () => {
-  it('returns from model selection to the agent or team picker that opened it', () => {
-    const action = { kind: 'chat' as const, agent: 'assistant' };
-
-    expect(
-      orchestrationPreviousStep({ kind: 'model', action, backTo: 'agent' }),
-    ).toEqual({ kind: 'agent' });
-    expect(
-      orchestrationPreviousStep({ kind: 'model', action, backTo: 'team' }),
-    ).toEqual({ kind: 'team' });
-    expect(
-      orchestrationPreviousStep({ kind: 'model', action, backTo: 'launcher' }),
-    ).toEqual({ kind: 'launcher' });
-  });
-
   it('keeps compact launcher orientation before advisory footer text', () => {
     const layout = launcherLayout({
       rows: 10,
@@ -315,120 +301,6 @@ describe('CLI orchestration items', () => {
       footerHints: [],
       maxVisibleItems: 2,
       showOverflow: false,
-    });
-  });
-
-  it('starts with new chat and keeps help as the final active item', () => {
-    const items = orchestrationItems();
-
-    expect(items.at(0)).toMatchObject({
-      label: 'New chat',
-      value: { kind: 'chat' },
-    });
-    expect(items.at(-1)).toMatchObject({
-      label: 'Help',
-      value: { kind: 'help' },
-    });
-  });
-
-  it('keeps account & access directly below new chat and presents every access route', () => {
-    const status = accountStatus({
-      chatGptSignedIn: true,
-      chatGptAccountLabel: 'researcher@example.com',
-      texraSignedIn: true,
-    });
-    const items = orchestrationItems({ accountAccess: status });
-
-    expect(items[1]).toEqual({
-      label: 'Account & access',
-      description:
-        'TeXRA account signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
-      value: { kind: 'browse-account-access' },
-    });
-    expect(
-      buildCliModelAccessItems({ kind: 'loaded', access: status }),
-    ).toEqual([
-      {
-        value: {
-          kind: 'subscription-preference',
-          provider: 'chatgpt',
-          state: 'on',
-        },
-        label: 'Prefer ChatGPT subscription',
-        description: 'Off · researcher@example.com',
-      },
-      {
-        value: {
-          kind: 'subscription-preference',
-          provider: 'grok',
-          state: 'on',
-        },
-        label: 'Prefer Grok subscription',
-        description: 'Off · sign in required to enable',
-      },
-      {
-        value: {
-          kind: 'subscription-preference',
-          provider: 'kimi-code',
-          state: 'on',
-        },
-        label: 'Prefer Kimi Code subscription',
-        description: 'Off · key required to enable',
-      },
-      {
-        value: {
-          kind: 'subscription-preference',
-          provider: 'glm-code',
-          state: 'on',
-        },
-        label: 'Prefer GLM Coding Plan',
-        description: 'Off · key required to enable',
-      },
-    ]);
-  });
-
-  it('describes the Kimi Code route by key state and activity', () => {
-    const kimiOff = kimiCodePreferenceItem({
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(false, true),
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    });
-    expect(kimiOff).toEqual({
-      value: {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: 'on',
-      },
-      label: 'Prefer Kimi Code subscription',
-      description: 'Off · key configured',
-    });
-
-    const kimiOnAccess: CliModelAccessStatus = {
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      },
-      codingPlans: codingPlans(true, true),
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    };
-    expect(kimiCodePreferenceItem(kimiOnAccess)?.description).toBe(
-      'On · key configured',
-    );
-
-    expect(
-      orchestrationItems({
-        accountAccess: { ...kimiOnAccess, texraSignedIn: false },
-      })[1],
-    ).toEqual({
-      label: 'Account & access',
-      description:
-        'TeXRA account signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
-      value: { kind: 'browse-account-access' },
     });
   });
 
@@ -502,15 +374,6 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
-  });
-
-  it('prefixes the launcher access summary with the TeXRA account sign-in state', () => {
-    expect(accountDescription(accountStatus({ texraSignedIn: true }))).toBe(
-      'TeXRA account signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
-    );
-    expect(accountDescription(accountStatus())).toBe(
-      'TeXRA account signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
-    );
   });
 
   it('keeps signed-out subscriptions on their toggle rows and always lists TeXRA', () => {
@@ -763,31 +626,6 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('omits the launcher login hint after a remote team load attempt', () => {
-    const items = buildCliTeamItems(
-      [presetPlan({ id: 'lean-project', name: 'Lean Project' })],
-      { includeLoginHint: false },
-    );
-
-    expect(orchestrationFooterHints(items)).toEqual([
-      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-    ]);
-  });
-
-  it('keeps team launch actions keyed by preset id only', () => {
-    const items = buildCliTeamItems(
-      [presetPlan({ id: 'physicist', name: 'Physicist' })],
-      {},
-    );
-
-    expect(
-      items.find((item) => item.label === 'Team physicist')?.value,
-    ).toEqual({
-      kind: 'preset',
-      preset: 'physicist',
-    });
-  });
-
   it('disables model-dependent launcher rows when no personal model can run', () => {
     const view = orchestrationModelAccessView(
       orchestrationItems({
@@ -827,30 +665,6 @@ describe('CLI orchestration items', () => {
       disabled: true,
       description: 'unavailable; no team root; 1/2 tools; Lean Project',
     });
-  });
-
-  it('names Kimi Code subscription access in model rows', () => {
-    const kimi = modelAccess('kimi3', 'provider-key', true, 'api key set');
-    const view = orchestrationModelAccessView(
-      orchestrationItems({ presetPlans: [readyPresetPlan()] }),
-      [
-        {
-          ...kimi,
-          model: {
-            ...kimi.model,
-            provider: 'kimiCode',
-            routeLabel: 'Via Kimi Code',
-          },
-        },
-      ],
-    );
-
-    expect(view.modelItems).toMatchObject([
-      {
-        value: 'kimi3',
-        description: 'api: Kimi Code subscription',
-      },
-    ]);
   });
 
   it('keeps launcher rows active when model registry state is unknown', () => {

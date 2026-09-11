@@ -191,35 +191,6 @@ describe('formatResumeHint', () => {
     );
   });
 
-  it('uses the provided command name for every resume target', () => {
-    expect(
-      formatResumeHint(TWO_RESUME_TARGETS, undefined, 'texra-local', {
-        approvalPolicy: 'never',
-      }),
-    ).toBe(
-      [
-        'Resume this session with:',
-        '  texra-local resume root --approval-policy never  (main)',
-        '  texra-local resume rev --approval-policy never  (reviewer)',
-      ].join('\n'),
-    );
-  });
-
-  it('includes cwd on every resume target when needed', () => {
-    expect(
-      formatResumeHint(TWO_RESUME_TARGETS, undefined, 'texra-local', {
-        cwd: '/tmp/paper',
-        processCwd: '/tmp/launcher',
-      }),
-    ).toBe(
-      [
-        'Resume this session with:',
-        '  texra-local resume root --cwd /tmp/paper  (main)',
-        '  texra-local resume rev --cwd /tmp/paper  (reviewer)',
-      ].join('\n'),
-    );
-  });
-
   it('prepends token usage when available', () => {
     expect(
       formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {

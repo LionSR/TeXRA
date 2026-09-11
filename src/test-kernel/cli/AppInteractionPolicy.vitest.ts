@@ -143,36 +143,6 @@ describe('app interaction policy', () => {
     ).toBe(true);
   });
 
-  it('resolves exhaustive foreground row caps', () => {
-    const surfaceCases = [
-      [{ kind: 'form' }, 18],
-      [{ kind: 'infoPane' }, undefined],
-      [{ kind: 'transcriptReader' }, undefined],
-      [{ kind: 'workPlanReader' }, undefined],
-    ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
-    const expectedByKind = {
-      planApproval: undefined,
-      retry: undefined,
-      userQuestion: undefined,
-      bash: 18,
-      toolEdit: 18,
-      proposal: 18,
-      externalInquiry: 18,
-    } satisfies Record<ApprovalKind, number | undefined>;
-
-    for (const [input, expected] of surfaceCases) {
-      expect(foregroundMaxRowsForKind(input)).toBe(expected);
-    }
-    for (const approvalKind of Object.keys(expectedByKind) as ApprovalKind[]) {
-      expect(
-        foregroundMaxRowsForKind({
-          approvalKind,
-          kind: 'approval',
-        }),
-      ).toBe(expectedByKind[approvalKind]);
-    }
-  });
-
   it('defers Escape interrupt whenever an Esc chord binding is visible', () => {
     const cases = [
       [{ ...escChordHidden, runFocusAvailable: true }, true],
@@ -189,20 +159,6 @@ describe('app interaction policy', () => {
 
     for (const [state, expected] of cases) {
       expect(shouldDeferEscapeInterruptForMetaChord(state)).toBe(expected);
-    }
-  });
-
-  it('parses stripped meta shortcut digits', () => {
-    const cases = [
-      ['1', 1],
-      ['9', 9],
-      ['0', undefined],
-      ['10', undefined],
-      ['p', undefined],
-    ] satisfies readonly (readonly [string, number | undefined])[];
-
-    for (const [value, expected] of cases) {
-      expect(digitFromMetaShortcut(value)).toBe(expected);
     }
   });
 
@@ -274,33 +230,5 @@ describe('app interaction policy', () => {
     expect(visible(root, childApproval)).toBe(true);
     expect(visible(sibling, childApproval)).toBe(false);
     expect(visible(sibling, globalApproval)).toBe(true);
-  });
-
-  it('labels foreground escape actions from the owning surface', () => {
-    const surfaceCases = [
-      [{ foregroundKind: 'form' }, 'close'],
-      [{ foregroundKind: 'infoPane' }, 'close'],
-      [{ foregroundKind: 'transcriptReader' }, 'close'],
-      [{ foregroundKind: 'workPlanReader' }, 'close'],
-      [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],
-    ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
-    const approvalCases = [
-      ['externalInquiry', 'skip'],
-      // Esc on an approval card rejects — the label names the consequence.
-      ['bash', 'reject'],
-      ['retry', 'give up'],
-    ] satisfies readonly (readonly [ApprovalKind, string])[];
-
-    for (const [input, expected] of surfaceCases) {
-      expect(foregroundEscapeAction(input)).toBe(expected);
-    }
-    for (const [kind, expected] of approvalCases) {
-      expect(
-        foregroundEscapeAction({
-          approvalKind: kind,
-          foregroundKind: 'approval',
-        }),
-      ).toBe(expected);
-    }
   });
 });

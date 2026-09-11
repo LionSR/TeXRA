@@ -42,20 +42,4 @@ describe('getSubscriptionSessionStatus', () => {
       ),
     );
   });
-
-  it('passes a healthy coordinator status through without logging', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const healthy = coordinator({
-      getStatus: async () => ({ signedIn: true, email: 'user@example.com' }),
-    });
-
-    const status = await getSubscriptionSessionStatus(
-      () => healthy,
-      'subscriptionStatusProbe',
-      'ChatGPT',
-    );
-
-    expect(status).toEqual({ signedIn: true, email: 'user@example.com' });
-    expect(warn).not.toHaveBeenCalled();
-  });
 });

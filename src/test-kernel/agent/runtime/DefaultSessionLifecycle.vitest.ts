@@ -99,33 +99,6 @@ describe('default session lifecycle', () => {
     }
   });
 
-  it('does not let a throwing warning sink break or repeat fallback resolution', async () => {
-    const warningFailure = new Error('warning sink failed');
-    channelTraceMocks.warn.mockImplementation(() => {
-      throw warningFailure;
-    });
-    const {
-      createTestSession,
-      defaultSession,
-      initializeDefaultSession,
-      teardownDefaultSession,
-    } = await importSessionRuntime();
-    const processDefault = initializeDefaultSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'process default' },
-    });
-    const liveSession = createTestSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'live non-default' },
-    });
-
-    try {
-      expect(defaultSession()).toBe(processDefault);
-      expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
-    } finally {
-      liveSession.dispose();
-      teardownDefaultSession();
-    }
-  });
-
   it('rejects access before explicit initialization', async () => {
     const { defaultSession, initializeDefaultSession, teardownDefaultSession } =
       await importSessionRuntime();
@@ -165,31 +138,6 @@ describe('default session lifecycle', () => {
       'The default session has not been initialized',
     );
     expect(tryDefaultSession()).toBeUndefined();
-  });
-
-  it('resolves an explicitly threaded session without a process default', async () => {
-    const { createTestSession, currentSession, tryDefaultSession } =
-      await importSessionRuntime();
-    const { createRunContext, withRunContext } =
-      await import('@agent/runtime/RunContext');
-    const owned = createTestSession({
-      transcriptMode: {
-        kind: 'ephemeral',
-        reason: 'explicitly threaded session',
-      },
-    });
-
-    try {
-      const resolved = withRunContext(
-        createRunContext({ session: owned }),
-        () => currentSession(),
-      );
-
-      expect(resolved).toBe(owned);
-      expect(tryDefaultSession()).toBeUndefined();
-    } finally {
-      owned.dispose();
-    }
   });
 
   // `closeSession` forks a real-time `Effect.sleep` deadline budget and

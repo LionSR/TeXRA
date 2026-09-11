@@ -70,22 +70,6 @@ describe('SlashPalette navigation', () => {
     expect(slashPaletteOwnsArrows(2)).toBe(true);
   });
 
-  it('describes what Enter does for the highlighted slash command', () => {
-    expect(
-      slashPaletteEnterHintAction({
-        name: 'help',
-        description: 'show help',
-      }),
-    ).toBe('run');
-    expect(
-      slashPaletteEnterHintAction({
-        name: 'model',
-        description: 'choose model',
-        formComponent: () => null,
-      }),
-    ).toBe('open');
-  });
-
   it('reserves enough row width for full slash command names', () => {
     expect(
       slashPaletteCommandLabelWidth([

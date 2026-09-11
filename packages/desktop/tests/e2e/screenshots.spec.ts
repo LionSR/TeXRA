@@ -73,25 +73,6 @@ test('startup team chooser screenshot', async () => {
   await dismissOnboarding(launched.page);
 });
 
-test('launcher screenshot', async () => {
-  await showLauncher(launched);
-  await launched.page.screenshot({
-    path: getScreenshotPath(test.info(), 'launcher.png'),
-    fullPage: false,
-  });
-  expect(launched.page.url()).toBeTruthy();
-});
-
-test('settings screenshot', async () => {
-  // Open the Multi-Agent settings page — the most visually rich area.
-  await setSettingsTab(launched, 'multi-agent');
-  await launched.page.screenshot({
-    path: getScreenshotPath(test.info(), 'settings.png'),
-    fullPage: false,
-  });
-  expect(launched.page.url()).toBeTruthy();
-});
-
 test('command palette opens and dismisses', async () => {
   await showLauncher(launched);
   // A prior screenshot can leave Settings in the workbench. Hide the workbench

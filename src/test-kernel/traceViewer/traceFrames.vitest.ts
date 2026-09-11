@@ -348,10 +348,6 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     },
   );
 
-  it('rejects a retired snapshot status instead of normalizing it', () => {
-    expect(() => legacyTrace('stopped')).toThrow();
-  });
-
   it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);
 

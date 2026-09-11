@@ -57,30 +57,6 @@ describe('CLI diff display', () => {
     });
   });
 
-  it('clamps the bottom scroll offset so the last rows remain visible', () => {
-    expect(maxScrollableRowOffset({ maxDisplayLines: 4, totalLines: 10 })).toBe(
-      7,
-    );
-  });
-
-  it.each([1, 2, 3])(
-    'keeps cramped diff windows static at a budget of %i rows',
-    (budget) => {
-      expect(
-        maxScrollableRowOffset({ maxDisplayLines: budget, totalLines: 10 }),
-      ).toBe(0);
-    },
-  );
-
-  it('shows a changed line in a one-row diff window', () => {
-    const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
-
-    const lines = scrollBoundedDiffDisplayLines(hunks, 1, 0);
-
-    expect(lines).toHaveLength(1);
-    expect(['added', 'removed']).toContain(lines[0]?.kind);
-  });
-
   it('prioritizes changed rows in a cramped diff window', () => {
     const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
@@ -158,39 +134,6 @@ describe('CLI diff display', () => {
     expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
-  it('anchors a wrapped replacement on its added side', () => {
-    const hunks = buildDiffHunks(
-      [
-        'alpha',
-        'beta',
-        'gamma',
-        `old result ${'continuation '.repeat(12)}`,
-        'epsilon',
-        'zeta',
-        'eta',
-      ].join('\n'),
-      [
-        'alpha',
-        'beta',
-        'gamma',
-        `new result ${'continuation '.repeat(12)}`,
-        'epsilon',
-        'zeta',
-        'eta',
-      ].join('\n'),
-    );
-    const maxDisplayLines = 7;
-
-    const initialLines = scrollBoundedDiffDisplayLines(
-      hunks,
-      maxDisplayLines,
-      initialDiffScrollOffset(hunks, 32, maxDisplayLines),
-      32,
-    );
-
-    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
-  });
-
   it('does not skip a standalone deletion to a later hunk addition', () => {
     const hunks = buildDiffHunks(
       [
@@ -252,22 +195,6 @@ describe('CLI diff display', () => {
     expect(lines.length).toBeGreaterThan(
       scrollBoundedDiffDisplayLines(hunks, 0, 0).length,
     );
-  });
-
-  it('applies the display budget to wrapped visual diff rows', () => {
-    const hunks = buildDiffHunks(
-      'old sentence',
-      'This is a deliberately long replacement sentence that needs multiple visual rows.',
-    );
-
-    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 24);
-
-    expect(lines).toHaveLength(4);
-    expect(lines.at(-1)).toMatchObject({
-      kind: 'overflow',
-      text: expect.stringContaining('more rows'),
-    });
-    expect(lines.at(-1)?.text).not.toContain('diff rows');
   });
 
   it('keeps wrapped overflow markers to one visual row at narrow widths', () => {

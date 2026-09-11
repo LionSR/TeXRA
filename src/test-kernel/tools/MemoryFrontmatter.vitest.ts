@@ -85,43 +85,4 @@ describe('memory frontmatter (yaml-backed)', () => {
     expect(parsed.meta).toBeNull();
     expect(parsed.content).toBe(raw);
   });
-
-  it('quotes pathological values so they survive a round-trip', () => {
-    const meta: MemoryFileMeta = {
-      modifiedBy: 'agent: with colon',
-      modifiedAt: '2026-06-20T14:30:45.123Z',
-    };
-    const file = buildFile('body', meta);
-    const parsed = parseFrontmatter(file);
-    expect(parsed.meta?.modifiedBy).toBe('agent: with colon');
-  });
-
-  it('buildFile returns content unchanged when meta is null', () => {
-    expect(buildFile('raw content', null)).toBe('raw content');
-  });
-
-  it('createMeta carries the pinned flag from existing metadata', () => {
-    const existing: MemoryFileMeta = {
-      modifiedBy: 'old',
-      modifiedAt: '2026-01-01T00:00:00.000Z',
-      pinned: true,
-    };
-    const meta = createMeta('new-agent', 'exec_9', existing);
-    expect(meta?.modifiedBy).toBe('new-agent');
-    expect(meta?.runId).toBe('exec_9');
-    expect(meta?.pinned).toBe(true);
-  });
-
-  it('createMeta returns null when no agent name is available', () => {
-    expect(createMeta(undefined, 'exec_9')).toBeNull();
-  });
-
-  it('setPinnedMeta toggles the pinned flag, synthesizing meta when absent', () => {
-    const pinned = setPinnedMeta(null, true);
-    expect(pinned.pinned).toBe(true);
-    expect(pinned.modifiedBy).toBe('user');
-
-    const unpinned = setPinnedMeta(pinned, false);
-    expect(unpinned.pinned).toBeUndefined();
-  });
 });

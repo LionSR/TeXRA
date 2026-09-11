@@ -228,27 +228,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
     ]);
   });
 
-  it('keeps a cold probe cache uncoerced when toggling a tool', async () => {
-    const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
-    const { controller } = createFixture({
-      dashboard: {
-        buildItems: async (results) => {
-          buildInputs.push(results);
-          return [DASHBOARD_ITEM];
-        },
-        getCachedCheckResults: async () => undefined,
-      },
-    });
-
-    await assertSupported(controller.toolHandlers.toggleTool)({
-      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-      toolId: 'zotero',
-      enabled: false,
-    });
-
-    expect(buildInputs).toEqual([undefined]);
-  });
-
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
     const events: string[] = [];
     const { controller } = createFixture({
@@ -336,17 +315,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
     ).rejects.toThrow('Rejected unknown install command: echo not-allowlisted');
 
     expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
-  });
-
-  it('routes install URLs through explicit navigation', async () => {
-    const { controller, openedUrls } = createFixture();
-
-    await assertSupported(controller.toolHandlers.openToolInstallUrl)({
-      command: SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
-      url: 'https://example.com/install',
-    });
-
-    expect(openedUrls).toEqual(['https://example.com/install']);
   });
 
   it('declares extension installs unsupported and strips their dashboard affordance', async () => {

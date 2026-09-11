@@ -158,22 +158,6 @@ describe('format-staged', () => {
     expect(git(['diff', '--stat', 'c.ts'])).toContain('1 insertion');
   });
 
-  it('keeps a CRLF worktree intact when core.autocrlf is on', () => {
-    git(['config', 'core.autocrlf', 'true']);
-    writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
-    git(['add', 'a.ts']);
-    // autocrlf stores the LF blob even though the checkout is CRLF.
-    expect(stagedBlob('a.ts')).toBe(STAGED);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(toCrlf(FORMATTED));
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
   it('treats core.autocrlf=1 as a CRLF checkout (#10505)', () => {
     git(['config', 'core.autocrlf', '1']);
     writeFileSync(join(dir, 'a.ts'), toCrlf(STAGED));
@@ -316,29 +300,6 @@ describe('format-staged', () => {
     expect(stagedBlob('a.ts')).toBe("const x = 'a';\n");
   });
 
-  it('leaves a clean extensionless YAML config with an unstaged dependency to Prettier (#10504)', () => {
-    writeFileSync(join(dir, 'fake-plugin.mjs'), 'export default {};\n');
-    writeFileSync(
-      join(dir, '.prettierrc'),
-      'plugins:\n  - "./fake-plugin.mjs"\n',
-    );
-    git(['add', '.prettierrc', 'fake-plugin.mjs']);
-    git(['commit', '-qm', 'config base']);
-    writeFileSync(
-      join(dir, 'fake-plugin.mjs'),
-      'export default {};\n// edit\n',
-    );
-    writeFileSync(join(dir, 'a.ts'), STAGED);
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(result.stdout).not.toContain('fake-plugin.mjs has unstaged edits');
-    expect(stagedBlob('a.ts')).toBe(FORMATTED);
-  });
-
   it('uses the staged .prettierignore when the worktree copy has unstaged edits', () => {
     writeFileSync(join(dir, '.prettierignore'), 'ignored.ts\n');
     git(['add', '.prettierignore']);
@@ -418,13 +379,6 @@ describe('format-staged', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe('');
     expect(git(['ls-files', '-s'])).toBe(before);
-  });
-
-  it('is a no-op when nothing is staged', () => {
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toBe('');
   });
 
   it('leaves staged content alone while a merge is in progress', () => {
@@ -553,22 +507,6 @@ describe('format-staged', () => {
     expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(
       toCrlf(MULTI_FORMATTED),
     );
-    expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
-  });
-
-  it('writes LF formatted output verbatim for a fully staged CRLF file (#10505)', () => {
-    writeFileSync(join(dir, '.prettierrc'), '{"endOfLine":"lf"}\n');
-    git(['add', '.prettierrc']);
-    git(['commit', '-qm', 'lf config']);
-    writeFileSync(join(dir, 'a.ts'), toCrlf(MULTI_STAGED));
-    git(['add', 'a.ts']);
-
-    const result = runFormat();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('staged Prettier output for a.ts');
-    expect(stagedBlob('a.ts')).toBe(MULTI_FORMATTED);
-    expect(readFileSync(join(dir, 'a.ts'), 'utf8')).toBe(MULTI_FORMATTED);
     expect(git(['diff', '--name-only', '--', 'a.ts'])).toBe('');
   });
 

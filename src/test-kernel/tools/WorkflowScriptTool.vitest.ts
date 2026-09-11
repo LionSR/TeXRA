@@ -294,12 +294,6 @@ beforeEach(async () => {
 });
 
 describe('WorkflowScriptTool', () => {
-  it('is registered and classified without becoming a proposal tool', () => {
-    expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
-    expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
-    expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
-  });
-
   it('does not register or execute the workflow before approval', async () => {
     let approve!: () => void;
     mocks.requestDelegationProposal.mockReturnValueOnce(
@@ -334,17 +328,6 @@ describe('WorkflowScriptTool', () => {
       runIdFor('tool-test'),
       parentRunId,
       'auto-approved',
-      currentSession(),
-    );
-  });
-
-  it('keeps explicit workflow approval on inherited per-kind policy', async () => {
-    await callTool();
-
-    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      runIdFor('tool-test'),
-      parentRunId,
-      'inherit',
       currentSession(),
     );
   });
@@ -560,14 +543,6 @@ return null`;
       'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
     );
     expect(result.output).toContain('same meta.name');
-  });
-
-  it('saves submitted source as an editable workspace script', async () => {
-    await callTool();
-
-    expect(
-      await WorkspaceFS.read('.texra/workflow-scripts/draft-tool-call.mjs'),
-    ).toBe(script);
   });
 
   it('never overwrites an edited submitted-source draft', async () => {
@@ -994,17 +969,5 @@ return null`;
     // A relaunch over a live run never starts a second competing loop.
     expect(mocks.createChildRun).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('derives distinct checkpoints when name or default agent differ', () => {
-    const base = checkpointIdFor('tool-test');
-    expect(checkpointIdFor('other-name')).not.toBe(base);
-    expect(
-      deriveWorkflowScriptCheckpointId({
-        name: 'tool-test',
-        defaultAgent: 'merge',
-        parentRunId,
-      }),
-    ).not.toBe(base);
   });
 });

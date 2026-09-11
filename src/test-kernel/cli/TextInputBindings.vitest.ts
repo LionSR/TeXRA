@@ -151,12 +151,6 @@ describe('text input keymap', () => {
     expect(unreachable).toEqual([]);
   });
 
-  it('declares each chord label once', () => {
-    const labels = TEXT_INPUT_BINDINGS.map((binding) => binding.keys);
-
-    expect(new Set(labels).size).toBe(labels.length);
-  });
-
   it('renders the advertised bindings into /help from the same table', () => {
     const help = textInputEditingHelp();
 

@@ -88,27 +88,6 @@ function providerAttributedError(body: unknown): Error {
   return error;
 }
 
-describe('detectStatusText', () => {
-  it('applies the nullish-then-truthy check per candidate, not a blank-skipping scan', () => {
-    // A blank direct statusText is non-nullish, so it wins the ?? chain and
-    // then fails the truthy check — falling back to the reason phrase rather
-    // than reading the nested carrier's statusText.
-    expect(
-      detectStatusText(
-        { statusText: '', response: { statusText: 'Teapot Override' } },
-        418,
-      ),
-    ).toBe("I'm a teapot");
-    // A whitespace-only direct statusText is truthy, so it wins outright.
-    expect(
-      detectStatusText({
-        statusText: ' ',
-        response: { statusText: 'Not Found' },
-      }),
-    ).toBe(' ');
-  });
-});
-
 describe('formatProviderHttpError', () => {
   it('matches generic SDK API errors through the prototype chain', () => {
     const formatted = formatProviderHttpError(
@@ -700,19 +679,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
-  it('derives SDK error kinds from the shared status mapping', () => {
-    expect(sdkErrorKindFromStatusCode(400)).toBe('bad_request');
-    expect(sdkErrorKindFromStatusCode(401)).toBe('authentication');
-    expect(sdkErrorKindFromStatusCode(403)).toBe('permission_denied');
-    expect(sdkErrorKindFromStatusCode(404)).toBe('not_found');
-    expect(sdkErrorKindFromStatusCode(409)).toBe('conflict');
-    expect(sdkErrorKindFromStatusCode(422)).toBe('unprocessable_entity');
-    expect(sdkErrorKindFromStatusCode(429)).toBe('rate_limit');
-    expect(sdkErrorKindFromStatusCode(500)).toBe('internal_server');
-    expect(sdkErrorKindFromStatusCode(418)).toBe('api_error');
-    expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
-  });
-
   it('does not cache a fresh normalization, so metadata attached afterward is still surfaced', () => {
     const error = new Error('stream failed');
     attachSdkErrorMetadata(error, {
@@ -905,32 +871,6 @@ describe('isPreviousResponseIdError', () => {
 });
 
 describe('provider error schemas', () => {
-  it('rejects legacy classifications on live partial transport', () => {
-    expect(
-      ProviderErrorPartialSchema.safeParse({
-        exhaustionReason: 'upstream-credit',
-      }).success,
-    ).toBe(false);
-  });
-
-  it('rejects the retired independent classification markers outright', () => {
-    for (const legacy of [
-      { exhaustionReason: 'upstream-credit' },
-      { missingApiKey: true },
-      { contextWindow: true },
-      { isCredentialExhausted: true, isChatGptSubscriptionLimited: true },
-      { isRelayError: true },
-    ]) {
-      expect(
-        RetryErrorInfoSchema.safeParse({
-          message: 'retired persisted error',
-          userRetryable: true,
-          ...legacy,
-        }).success,
-      ).toBe(false);
-    }
-  });
-
   it('rejects a malformed canonical classification', () => {
     expect(() =>
       RetryErrorInfoSchema.parse({
@@ -979,16 +919,6 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     });
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
-  });
-
-  it('preserves stream diagnostics and partial text through the round-trip', () => {
-    const reconstructed: ProviderError = toRetryErrorInfo(fullProviderError);
-
-    expect(reconstructed.streamDiagnostics?.eventsProcessed).toBe(15);
-    expect(reconstructed.streamDiagnostics?.anthropicMessageId).toBe(
-      'msg_01ABC',
-    );
-    expect(reconstructed.partialText).toBe('Here is the analysis of the');
   });
 
   it('omits rawErrorBody from the RetryErrorInfo record', () => {

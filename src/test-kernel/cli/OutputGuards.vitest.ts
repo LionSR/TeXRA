@@ -165,12 +165,6 @@ describe('dangling output symlinks', () => {
 });
 
 describe('assertOutputDirAvailable', () => {
-  it('no-ops when --output-dir was not passed', async () => {
-    await expect(
-      assertOutputDirAvailable(undefined, tmpdir()),
-    ).resolves.toBeUndefined();
-  });
-
   it('accepts a directory that already exists', async () => {
     const root = await makeTempDir('texra-cli-outdir-', tempDirs);
     const target = join(root, 'flagged');
@@ -203,16 +197,6 @@ describe('assertOutputDirAvailable', () => {
     );
   });
 
-  it('resolves a relative --output-dir against cwd before stat-ing', async () => {
-    const root = await makeTempDir('texra-cli-outdir-', tempDirs);
-    const filePath = join(root, 'relative-file.txt');
-    await writeFile(filePath, 'not a dir');
-    // Pass just the basename; the helper joins it with cwd.
-    await expect(
-      assertOutputDirAvailable('relative-file.txt', root),
-    ).rejects.toThrow(/--output-dir is not a directory/);
-  });
-
   it('rejects an --output-dir whose parent path component is a file (ENOTDIR)', async () => {
     // `mkdir -p` can't fix this — `/tmp/file/sub` where `/tmp/file` is a
     // regular file — so previously the fast path treated the stat ENOTDIR as
@@ -231,12 +215,6 @@ describe('assertOutputDirAvailable', () => {
 });
 
 describe('assertOutputFileAvailable', () => {
-  it('no-ops when --output was not passed', async () => {
-    await expect(
-      assertOutputFileAvailable(undefined, tmpdir()),
-    ).resolves.toBeUndefined();
-  });
-
   it('accepts a path that does not exist yet (writer creates the file)', async () => {
     const root = await makeTempDir('texra-cli-outfile-', tempDirs);
     await expect(

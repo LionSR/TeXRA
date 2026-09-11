@@ -299,27 +299,6 @@ describe('ProgressApiKeyRetryController', () => {
   );
 
   it.effect(
-    'disables the Grok subscription and retries with the existing xAI key, no prompt',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { xai: 'stored-xai' },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-grok' as RunId,
-          requestId: 'retry-grok',
-          provider: 'xai',
-          exhaustionReason: 'xai-subscription',
-        });
-
-        expect(harness.prompts).toStrictEqual([]);
-        expect(harness.grokSubscriptionValues).toStrictEqual([false]);
-        expect(harness.retries).toStrictEqual(['stream-grok']);
-      }),
-  );
-
-  it.effect(
     'does not disable the subscription when no usable OpenAI key is available',
     () =>
       Effect.gen(function* () {
@@ -336,29 +315,6 @@ describe('ProgressApiKeyRetryController', () => {
         expect(harness.prompts).toStrictEqual(['openai']);
         expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
         expect(harness.retries).toStrictEqual([]);
-      }),
-  );
-
-  it.effect(
-    'disables the GLM Coding Plan and retries with the existing GLM key, no prompt',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { glm: 'stored-glm' },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-glm' as RunId,
-          requestId: 'retry-glm',
-          provider: 'glm',
-          exhaustionReason: 'glm-coding-plan',
-        });
-
-        // The coding-plan quota failed, not the key — a stored key is already
-        // usable, so "Use your own API key" must not jump to the key-input prompt.
-        expect(harness.prompts).toStrictEqual([]);
-        expect(harness.glmCodingPlanValues).toStrictEqual([false]);
-        expect(harness.retries).toStrictEqual(['stream-glm']);
       }),
   );
 

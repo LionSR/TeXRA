@@ -24,7 +24,7 @@ interface BashApprovalProps {
 
 const COMMAND_APPROVAL_TITLE = 'Run command?';
 
-export function bashCwdDisplayLine({
+function bashCwdDisplayLine({
   cwd,
   width,
 }: {

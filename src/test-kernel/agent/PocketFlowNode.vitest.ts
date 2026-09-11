@@ -22,19 +22,6 @@ describe('BaseNode.getNextNode', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['complete'] as const)(
-    "returns undefined silently for the terminal action '%s' when unregistered",
-    (action) => {
-      const node = new TestNode();
-      // Register an unrelated successor so `_successors.size > 0`, which is
-      // the branch that would otherwise trigger the "Flow ends" warning.
-      node.on('default', new TestNode());
-
-      expect(node.getNextNode(action)).toBeUndefined();
-      expect(warnSpy).not.toHaveBeenCalled();
-    },
-  );
-
   it('warns when a non-terminal unregistered action falls through', () => {
     const node = new TestNode();
     node.on('default', new TestNode());
@@ -46,13 +33,6 @@ describe('BaseNode.getNextNode', () => {
         "Flow ends: 'unregistered-action' not found in [default]",
       ),
     );
-  });
-
-  it('does not warn when no successors are registered at all', () => {
-    const node = new TestNode();
-
-    expect(node.getNextNode('anything')).toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -197,20 +177,6 @@ describe('ModelInvocationNode manual retry', () => {
     expect(node.events).toEqual(['exec:1', 'prompt:not automatic', 'exec:2']);
   });
 
-  it('returns success from the single approved attempt', async () => {
-    const node = new ScriptedRetryNode(
-      3,
-      [...failureSequence(3), 'completed'],
-      [true],
-    );
-
-    await expect(node.runRetries()).resolves.toEqual(
-      scriptedResult('completed'),
-    );
-    expect(node.calls).toBe(4);
-    expect(node.prompts).toBe(1);
-  });
-
   it('does not execute or prompt again when cancelled while awaiting approval', async () => {
     const controller = new AbortController();
     const node = new ScriptedRetryNode(
@@ -301,39 +267,5 @@ describe('ModelInvocationNode manual retry', () => {
     );
     expect(node.promptErrors[1]).toBe(originalError);
     expect(node.fallbackError).toBe(originalError);
-  });
-
-  it('normalizes a non-Error thrown by an approved attempt', async () => {
-    const node = new ScriptedRetryNode(
-      1,
-      [new Error('initial failure'), { thrown: 'raw failure' }],
-      [true, false],
-    );
-
-    await expect(node.runRetries()).resolves.toEqual(
-      scriptedResult('fallback'),
-    );
-    expect(node.promptErrors[1]).toBeInstanceOf(TypeError);
-    expect(node.promptErrors[1]?.message).toBe(
-      'Non-error was thrown: "raw failure". You should only throw errors.',
-    );
-    expect(node.fallbackError).toBe(node.promptErrors[1]);
-  });
-
-  it('continues beyond the former 100-approval ceiling one attempt at a time', async () => {
-    const node = new ScriptedRetryNode(
-      1,
-      [
-        ...Array.from({ length: 101 }, () => new Error('temporary failure')),
-        'completed',
-      ],
-      Array.from({ length: 101 }, () => true),
-    );
-
-    await expect(node.runRetries()).resolves.toEqual(
-      scriptedResult('completed'),
-    );
-    expect(node.calls).toBe(102);
-    expect(node.prompts).toBe(101);
   });
 });

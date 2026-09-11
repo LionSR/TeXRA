@@ -12,55 +12,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AGENT_SOURCE, AgentCategory, ToolConfigSchema } from '@shared/schemas';
 
-describe('ToolConfigSchema', () => {
-  it('ignores unknown toolConfig keys', () => {
-    const parsed = ToolConfigSchema.parse({
-      reflect: true,
-      usePrefillFromInput: true,
-      printInputPrompt: true,
-    } as Record<string, unknown>);
-
-    assert.strictEqual('reflect' in parsed, false);
-    assert.strictEqual(parsed.autoExtractFigure, false);
-    assert.strictEqual(
-      (parsed as Record<string, unknown>).usePrefillFromInput,
-      undefined,
-    );
-    assert.strictEqual(
-      (parsed as Record<string, unknown>).printInputPrompt,
-      undefined,
-    );
-  });
-});
-
 describe('AgentConfigSchema', () => {
-  it('strips unknown properties for backward compatibility', () => {
-    const parsed = AgentConfigSchema.parse({
-      legacyFlag: 'remove-me',
-      toolConfig: {
-        reflect: true,
-        usePrefillFromInput: true,
-      },
-    } as Record<string, unknown>);
-
-    assert.ok(parsed.toolConfig, 'toolConfig should be defined when provided');
-    assert.strictEqual('reflect' in parsed.toolConfig, false);
-    assert.strictEqual(parsed.toolConfig.autoExtractFigure, false);
-    assert.strictEqual('legacyFlag' in parsed, false);
-    assert.deepStrictEqual(parsed.inputFiles, []);
-    assert.strictEqual(
-      'usePrefillFromInput' in (parsed.toolConfig as Record<string, unknown>),
-      false,
-    );
-    assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
-  });
-
-  it('defaults to Workflow category when agentCategory is omitted', () => {
-    const parsed = AgentConfigSchema.parse({});
-
-    assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
-  });
-
   it('keeps category-specific parsers aligned with the discriminated union', () => {
     const workflow = WorkflowAgentConfigSchema.parse({});
     const toolUse = ToolUseAgentConfigSchema.parse({

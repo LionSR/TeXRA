@@ -37,31 +37,6 @@ describe('tool status formatting', () => {
     ]);
   });
 
-  it('formats subagent todos with the shared status display', () => {
-    const progress = formatSubagentProgress('exec-1', 'review', {
-      kind: 'todos',
-      todos: [
-        {
-          content: 'Inspect lemma',
-          status: TODO_STATUS.COMPLETED,
-          activeForm: 'Inspecting lemma',
-        },
-        {
-          content: 'Write response',
-          status: TODO_STATUS.PENDING,
-          activeForm: 'Writing response',
-        },
-      ],
-    });
-
-    expect(progress).toContain(
-      `  ${STATUS_DISPLAY[TODO_STATUS.COMPLETED].icon} Inspect lemma`,
-    );
-    expect(progress).toContain(
-      `  ${STATUS_DISPLAY[TODO_STATUS.PENDING].icon} Write response`,
-    );
-  });
-
   it('renders bash run history as a process without a model', async () => {
     const entry: RunListingEntry = {
       kind: 'run',

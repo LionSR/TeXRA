@@ -186,41 +186,6 @@ function remoteTeamPreset(): Record<string, unknown> {
 }
 
 describe('DefaultDesktopAgentSettingsController', () => {
-  it('implements the custom-agent management commands', () => {
-    const { handlers } = createControllerFixture().controller;
-
-    // The desktop owns the custom-agent create/copy/delete flows and the
-    // remote prompt viewer, so none of them may be an `unsupported(...)`
-    // placeholder.
-    expect(
-      [
-        handlers.createAgent,
-        handlers.customizeAgent,
-        handlers.deleteCustomAgent,
-        handlers.viewRemoteAgentPrompt,
-      ].some(isUnsupported),
-    ).toBe(false);
-  });
-
-  it('posts startup agent data to the settings renderer', async () => {
-    const loadAgents = vi.fn(() => Effect.void);
-    const { controller, posted } = createControllerFixture({
-      catalog: physicistCatalog(),
-      loadAgents,
-    });
-
-    await controller.postStartupData();
-
-    expect(loadAgents).toHaveBeenCalledOnce();
-    expect(postedCommands(posted)).toEqual(
-      expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-        SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      ]),
-    );
-  });
-
   it('updates source-qualified visibility state and both renderer surfaces', async () => {
     const { catalogChanges, controller, posted, workspaceState } =
       createControllerFixture({
@@ -245,16 +210,6 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(postedCommands(posted)).toContain(
       SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     );
-    expect(catalogChanges).toEqual([undefined]);
-  });
-
-  it('reports a catalog change when the catalog refreshes', async () => {
-    const { catalogChanges, controller } = createControllerFixture({
-      catalog: physicistCatalog(),
-    });
-
-    await controller.refreshCatalogData();
-
     expect(catalogChanges).toEqual([undefined]);
   });
 
@@ -296,25 +251,6 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(infoMessages).toEqual([
       'Applied "Physicist" with 7 members still unavailable',
     ]);
-  });
-
-  it('reports a fully applied team without an unavailable-member suffix', async () => {
-    const catalog = physicistCatalog();
-    const workspaceState = customTeamState({
-      id: 'paper-team',
-      name: 'Paper Team',
-      description: 'Every member resolves locally',
-      icon: 'screwdriver-wrench',
-      agents: { workflow: ['correct'], toolUse: ['review'] },
-    });
-    const { controller, infoMessages } = createControllerFixture({
-      catalog,
-      workspaceState,
-    });
-
-    await applyAgentPreset(controller, 'paper-team');
-
-    expect(infoMessages).toEqual(['Applied "Paper Team" team']);
   });
 
   it('signs in before one forced remote refresh and commits the team once', async () => {
@@ -468,20 +404,6 @@ describe('DefaultDesktopAgentSettingsController', () => {
     await deleteAgentPreset(controller, 'missing-team');
 
     expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
-  });
-
-  it('opens the custom agent directory through the required directory port', async () => {
-    const { controller, opened } = createControllerFixture({
-      getCustomAgentDirectory: async () => '/agents/custom',
-    });
-    const openFolder = assertSupported(controller.handlers.openAgentFolder);
-
-    await openFolder({
-      command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
-      folderType: 'custom',
-    });
-
-    expect(opened).toEqual(['/agents/custom']);
   });
 
   it('reports unknown presets without writing roster state', async () => {

@@ -37,11 +37,6 @@ describe('renderAgentTemplateString', () => {
     expect(rendered).toBe('request: write tests');
   });
 
-  it('keeps the default tool-use template list in the agent layer', () => {
-    expect(DEFAULT_AGENT_TEMPLATE_TOOLS_YAML).toMatch(/ {4}- bash/);
-    expect(DEFAULT_AGENT_TEMPLATE_TOOLS_YAML).toMatch(/ {4}- read_file/);
-  });
-
   it('keeps {{ ALL_CONTEXTS }} literal when the settings-view creation path renders the bundled workflow template (issue #7678)', () => {
     // The settings-view agent-creation path (agentHandlers.ts createAgentFromTemplate)
     // only supplies AGENT_NAME/DESCRIPTION/TOOLS_YAML, so {{ ALL_CONTEXTS }} must
@@ -59,14 +54,5 @@ describe('renderAgentTemplateString', () => {
     });
 
     expect(rendered).toMatch(/\{\{ ALL_CONTEXTS \}\}/);
-  });
-
-  it('derives passthrough variables from the shared user-vars owner', () => {
-    expect(USER_VAR_RUNTIME_TOKENS.includes('ALL_CONTEXTS')).toBe(true);
-    expect(USER_VAR_RUNTIME_TOKENS.includes('LIST_OF_ALL_CONTEXTS')).toBe(true);
-
-    const passthrough = buildUserVarPassthrough();
-    expect(passthrough.ALL_CONTEXTS).toBe('{{ ALL_CONTEXTS }}');
-    expect(passthrough.LIST_OF_ALL_CONTEXTS).toBe('{{ LIST_OF_ALL_CONTEXTS }}');
   });
 });

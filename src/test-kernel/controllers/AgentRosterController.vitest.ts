@@ -85,65 +85,6 @@ describe('AgentRosterController', () => {
     expectMalformedWarning(warn);
   });
 
-  it('treats the retired pair-shaped roster as malformed and overwrites it in place', async () => {
-    // The pre-record `workflowAgentKeys`/`toolUseAgentKeys` pair is retired
-    // vocabulary: it warns and reads as inherited, and the next write
-    // replaces it at the same key.
-    const warn = stubWarn();
-    const pairShaped = {
-      kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write'],
-      toolUseAgentKeys: 'all',
-    };
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: pairShaped,
-    });
-    const roster = controller(workspaceState);
-
-    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
-    expectMalformedWarning(warn);
-
-    await roster.setTeam('test-team');
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'test-team' });
-    expect(roster.snapshot().selection).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-  });
-
-  it('falls back to the inherited roster for a retired pair-shaped value', async () => {
-    // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
-    // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. That reader is gone, so
-    // the value no longer parses and the read warns and inherits. The read
-    // must still not persist anything: the mutations read the selection while
-    // holding the write mutex, so a write from here would overwrite what they
-    // just committed.
-    const warn = stubWarn();
-    const hybrid = {
-      kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write'],
-      toolUseAgentKeys: ['builtInToolUse:lead'],
-    };
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: hybrid,
-    });
-    const roster = controller(workspaceState);
-
-    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
-    expect(warn).toHaveBeenCalled();
-    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
-      hybrid,
-    );
-
-    // The next mutation is what normalizes the stored value.
-    await roster.setTeam('test-team');
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'test-team' });
-  });
-
   it('uses the user default only for inherited workspaces', () => {
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, {
@@ -329,37 +270,6 @@ describe('AgentRosterController', () => {
     expect(roster.getVisibleAgents('toolUse')).toEqual([
       { category: 'toolUse', source: 'remote', name: 'review' },
     ]);
-  });
-
-  it('resolves an exact source key hidden by the display projection', () => {
-    const custom: AgentRosterEntry = {
-      category: 'toolUse',
-      source: 'custom',
-      name: 'review',
-    };
-    const remote: AgentRosterEntry = {
-      category: 'toolUse',
-      source: 'remote',
-      name: 'review',
-    };
-    const roster = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-          kind: 'custom',
-          agentKeys: {
-            workflow: [],
-            toolUse: ['remote:review'],
-          },
-        },
-      }),
-      {
-        getAgents: (category) => (category === 'toolUse' ? [custom] : []),
-        resolveAgent: (_category, identifier) =>
-          identifier === 'remote:review' ? remote : undefined,
-      },
-    );
-
-    expect(roster.getVisibleAgents('toolUse')).toEqual([remote]);
   });
 
   it('serializes concurrent category changes through one workspace owner', async () => {
