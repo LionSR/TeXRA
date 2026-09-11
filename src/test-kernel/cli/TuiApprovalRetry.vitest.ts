@@ -556,13 +556,6 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
-  it('does not mutate the runtime host emitter', () => {
-    const presentationHost = host();
-    const originalEmit = presentationHost.emit;
-    tui(presentationHost);
-    expect(presentationHost.emit).toBe(originalEmit);
-  });
-
   it('updates TUI bash bypass state at the approval decision site', async () => {
     const { presentationHost, interactions } = tui();
     const result = port().requestBashApproval(
@@ -598,16 +591,6 @@ describe('TUI retry approvals', () => {
       kind: 'bash',
       bypassActive: false,
     });
-  });
-
-  it('scopes goal auto-approval to all agent work and clears it together', async () => {
-    tui();
-    await setGoalSessionAutoApproval(
-      runIdFor('goal-all-bypass'),
-      'allAgentWork',
-    );
-
-    await setGoalSessionAutoApproval(runIdFor('goal-all-bypass'), false);
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {

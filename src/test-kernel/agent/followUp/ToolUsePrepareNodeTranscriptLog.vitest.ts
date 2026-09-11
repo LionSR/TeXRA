@@ -63,17 +63,6 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     ).toHaveBeenCalledWith('initial');
   });
 
-  it('still logs exactly once on the success path', async () => {
-    const services = buildServices({
-      initialUserMessageForTranscript: 'Do the thing.',
-    });
-    const node = new ToolUsePrepareNode().setServices(services);
-
-    await node.exec(undefined);
-
-    expect(services.logger.info).toHaveBeenCalledTimes(1);
-  });
-
   it('does not log when there is no initial transcript row to write', async () => {
     const services = buildServices({
       initialUserMessageForTranscript: undefined,

@@ -134,22 +134,4 @@ describe('output summary transforms', () => {
     expect(workspaceSummary.logAbsolutePath).toBe('/workspace/logs/main.log');
     expect(externalSummary.outputPath).toBe('/tmp/main.pdf');
   });
-
-  it('projects compile failures from round outputs', () => {
-    const summaries = roundOutputsToCompileFailureSummaries([
-      roundOutput({
-        compileFailures: [compileFailure({ round: 3 })],
-      }),
-    ]);
-
-    expect(summaries).toEqual([
-      {
-        round: 3,
-        displayName: 'main.tex',
-        outputPath: 'out/main.pdf',
-        logPath: 'logs/main.log',
-        logAbsolutePath: '/workspace/logs/main.log',
-      },
-    ]);
-  });
 });

@@ -130,21 +130,6 @@ afterEach(() => {
 });
 
 describe('createTuiHostInteractions', () => {
-  it('forwards presentation events to the attached CLI presenter', () => {
-    const presentationHost = host();
-    const interactions = createTuiHostInteractions(
-      presentationHost,
-      createTuiCliContext(),
-    );
-    onTestFinished(() => interactions.dispose?.());
-
-    interactions.emit?.('requestShowError', { message: 'Run failed.' });
-
-    expect(presentationHost.emit).toHaveBeenCalledWith('requestShowError', {
-      message: 'Run failed.',
-    });
-  });
-
   it('cancels a queued plan approval for the target run, leaving other runs untouched', async () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval({

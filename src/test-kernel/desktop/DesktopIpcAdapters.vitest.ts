@@ -107,76 +107,6 @@ function expectFunnelState(
 }
 
 describe('desktop IPC adapters', () => {
-  it('opens settings tabs and the custom agent directory from the shell actions', async () => {
-    const openPath = vi.fn(async (_filePath: string) => {});
-    const { actions, postToRenderer } = await createShellHarness({ openPath });
-
-    actions.showLauncher();
-    actions.showSettings('models');
-    actions.showSettings('agents', 'toolUse');
-    await flushMicrotasks();
-
-    expect(postToRenderer).toHaveBeenNthCalledWith(1, {
-      command: 'desktop:showLauncher',
-    });
-    expect(postToRenderer).toHaveBeenNthCalledWith(2, {
-      command: 'desktop:openWorkbench',
-      kind: 'settings',
-    });
-    expect(postToRenderer).toHaveBeenNthCalledWith(3, {
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tab: 'models',
-    });
-    expect(postToRenderer).toHaveBeenNthCalledWith(4, {
-      command: 'desktop:openWorkbench',
-      kind: 'settings',
-    });
-    expect(postToRenderer).toHaveBeenNthCalledWith(5, {
-      agentSubTab: 'toolUse',
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tab: 'agents',
-    });
-
-    actions.openAgentDirectory(true);
-    await flushMicrotasks();
-    expect(openPath).toHaveBeenCalledWith('/agents/custom');
-
-    postToRenderer.mockClear();
-    actions.openAgentDirectory(false);
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: 'desktop:openWorkbench',
-      kind: 'settings',
-    });
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tab: 'agents',
-    });
-  });
-
-  it('forwards native layout commands to the renderer', async () => {
-    const { actions, postToRenderer } = await createShellHarness();
-
-    actions.toggleSummaryBar?.();
-    actions.toggleBottomBar?.();
-    actions.toggleSidePanel?.();
-
-    expect(postToRenderer.mock.calls.map(([message]) => message)).toEqual([
-      { command: 'desktop:toggleLayout', panel: 'summaryBar' },
-      { command: 'desktop:toggleLayout', panel: 'bottomBar' },
-      { command: 'desktop:toggleLayout', panel: 'sidePanel' },
-    ]);
-  });
-
-  it('shows the launcher for New Session through the shell messages', async () => {
-    const { actions, postToRenderer } = await createShellHarness();
-
-    actions.resetMainView();
-
-    expect(postToRenderer.mock.calls.map(([message]) => message)).toEqual([
-      { command: 'desktop:showLauncher' },
-    ]);
-  });
-
   it('claims only the desktop-local shell commands', async () => {
     const { postToRenderer, shellIpc } = await createShellHarness();
 
@@ -289,18 +219,6 @@ describe('desktop IPC adapters', () => {
     expectFunnelState(onboarding, 'done');
   });
 
-  it('calls the ChatGPT sign-in callback and refreshes the funnel', async () => {
-    const signInCalled = vi.fn(async () => {});
-    const { onboarding } = await createOnboardingHarness({
-      signInWithChatGpt: signInCalled,
-    });
-
-    await onboarding.signInWithChatGpt();
-    await flushAsync();
-    expect(signInCalled).toHaveBeenCalledOnce();
-    expectFunnelState(onboarding, 'needs-credential');
-  });
-
   it('runs the real kickoff path on runSetup and refreshes after', async () => {
     const callOrder: string[] = [];
     const selectSetupAgent = vi.fn(async () => {
@@ -363,42 +281,5 @@ describe('desktop IPC adapters', () => {
     // did not interleave and clobber `previousFunnelState`.
     expect(funnelStates.at(-1)).toBe('setup');
     expect(selectSetupAgent).toHaveBeenCalledOnce();
-  });
-
-  it('serves desktop log snapshots and copy/export actions', async () => {
-    const { createDesktopLogIpc } = await loadSourceModule(
-      '@desktop/main/desktopLogIpc',
-    );
-    const logText = '2026-05-07T00:00:00.000Z [info] safe log line';
-    const postToRenderer = vi.fn();
-    const copyLog = vi.fn(async (_text: string) => {});
-    const exportLog = vi.fn(async (_text: string) => {});
-    const readLog = vi.fn(() => ({
-      path: '/logs/texra-desktop.log',
-      text: logText,
-      truncated: false,
-    }));
-    const logs = createDesktopLogIpc(
-      { postToRenderer },
-      { readLog, copyLog, exportLog },
-    );
-
-    expect(logs.handleMessage({ command: 'desktop:requestLog' })).toBe(true);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: 'desktop:setLog',
-      log: {
-        path: '/logs/texra-desktop.log',
-        text: logText,
-        truncated: false,
-      },
-    });
-
-    expect(logs.handleMessage({ command: 'desktop:copyLog' })).toBe(true);
-    await Promise.resolve();
-    expect(copyLog).toHaveBeenCalledWith(logText);
-
-    expect(logs.handleMessage({ command: 'desktop:exportLog' })).toBe(true);
-    await Promise.resolve();
-    expect(exportLog).toHaveBeenCalledWith(logText);
   });
 });

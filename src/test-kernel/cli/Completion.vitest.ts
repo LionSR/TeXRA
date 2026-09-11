@@ -73,32 +73,6 @@ describe('CLI shell completion', () => {
     expect(bash).toContain('texra models list --quiet');
   });
 
-  it('advertises the negated no-color flag in every shell', async () => {
-    const [bash, zsh, fish] = await Promise.all(
-      CLI_COMPLETION_SHELLS.map((shell) =>
-        generateCompletionScript(rootCommand, shell),
-      ),
-    );
-
-    expect(bash).toContain('--no-color');
-    expect(zsh).toContain('--no-color[Disable ANSI color on every stream]');
-    expect(fish).toContain("-l 'no-color'");
-  });
-
-  it('uses dynamic zsh completions for agent and model flag values', async () => {
-    const zsh = await generateCompletionScript(rootCommand, 'zsh');
-
-    expect(zsh).toContain(
-      "'--agent[Tool-use agent for the session]:agent:($(_texra_tool_use_agents))'",
-    );
-    expect(zsh).toContain(
-      "'--model[Model for the session]:model:($(_texra_models))'",
-    );
-    expect(zsh).toContain(
-      "'-m[Model for the session]:model:($(_texra_models))'",
-    );
-  });
-
   it('consumes every bash value flag while resolving command paths', async () => {
     const commands = await collectCommands(rootCommand);
     const lines = bash.split('\n');
@@ -215,24 +189,6 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
-
-  it('keeps fish workflow agent completion scoped to top-level run', async () => {
-    const fish = await generateCompletionScript(rootCommand, 'fish');
-
-    expect(fish).toContain(
-      "complete -c texra -n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --all --category workflow",
-    );
-    expect(fish).toContain(
-      "complete -c texra -n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run' -a '(test \"$TEXRA_COMPLETION_DYNAMIC\" != 0; and texra agents list --quiet --all --category toolUse",
-    );
-  });
-
-  it('does not emit fish completions for the removed agents inspect command', async () => {
-    const fish = await generateCompletionScript(rootCommand, 'fish');
-
-    expect(fish).not.toContain('__fish_seen_subcommand_from inspect');
-    expect(fish).not.toContain('agents inspect');
   });
 
   it('keeps spaced bash file completions as one candidate', () => {

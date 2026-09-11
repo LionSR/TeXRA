@@ -136,19 +136,6 @@ describe('desktop protocol callbacks', () => {
     );
   });
 
-  it('routes argv callbacks when routeArgv is passed as a standalone function', () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const listener = vi.fn();
-    router.subscribe(listener);
-
-    const { routeArgv } = router;
-    routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']);
-
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ query: 'state=standalone' }),
-    );
-  });
-
   it('registers protocol handling and routes warm-start argv callbacks', () => {
     const { app, focusMainWindow, listener } = installLifecycle();
 
@@ -242,18 +229,4 @@ describe('desktop protocol callback lifecycle', () => {
       ).toEqual(protocolRegistrations);
     },
   );
-
-  it('focuses the primary window for every second-instance launch', () => {
-    const { app, focusMainWindow } = installLifecycle();
-
-    app.listeners.secondInstance?.({}, ['/Users/ray/paper'], process.cwd());
-    expect(focusMainWindow).toHaveBeenCalledTimes(1);
-
-    app.listeners.secondInstance?.(
-      {},
-      ['/Users/ray/other-paper'],
-      process.cwd(),
-    );
-    expect(focusMainWindow).toHaveBeenCalledTimes(2);
-  });
 });

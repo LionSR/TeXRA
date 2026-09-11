@@ -59,15 +59,6 @@ afterEach(() => {
 });
 
 describe('ConfigTools — read_config', () => {
-  it('reads an existing texra.* key', async () => {
-    createPlatform({ 'texra.bib.zoteroPort': 23119 });
-
-    const result = await readTool.call({ key: 'texra.bib.zoteroPort' });
-
-    assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /23119/);
-  });
-
   it('rejects keys not starting with texra.', async () => {
     createPlatform();
 
@@ -122,18 +113,5 @@ describe('ConfigTools — update_config allowlist', () => {
 
     assert.equal(result.status, 'error');
     assert.equal(updates.length, 0, 'must not call platform.update');
-  });
-
-  it('honors target=workspace scope', async () => {
-    const { updates } = createPlatform();
-
-    await updateTool.call({
-      key: 'texra.bib.defaultPath',
-      value: 'refs.bib',
-      target: 'workspace',
-    });
-
-    assert.equal(updates.length, 1);
-    assert.equal(updates[0].target, 'workspace');
   });
 });

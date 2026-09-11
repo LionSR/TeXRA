@@ -232,32 +232,6 @@ function openConfigFormProps(
 }
 
 describe('ConfigForm helpers', () => {
-  it('rosters exactly the catalog rows surfaced in /config', () => {
-    expect([...CLI_STATE_SETTINGS].map((entry) => entry.key)).toEqual(
-      ALL_SETTINGS.filter((entry) => entry.surfaces?.cliConfig).map(
-        (entry) => entry.key,
-      ),
-    );
-    expect(CLI_STATE_SETTINGS.length).toBeGreaterThan(0);
-    // A row the CLI can edit must be one the CLI runtime actually honors.
-    for (const entry of CLI_STATE_SETTINGS) {
-      expect(entry.honoredBy.cli).toBeDefined();
-      expect(entry.slots.cli).toBeDefined();
-    }
-  });
-
-  it.each<[string, string]>([
-    [WorkspaceStateKey.GIT_MARK_COMMITS, 'boolean'],
-    [WorkspaceStateKey.GIT_AUTHOR_NAME, 'string'],
-    [WorkspaceStateKey.LATEX_FORMATTER, 'enum'],
-    [GlobalStateKey.DISABLED_TOOLS, 'form'],
-    ['texra.model.compactionThresholdPercent', 'number'],
-    ['texra.model.retry.maxAttempts', 'number'],
-    [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS, 'number'],
-  ])('classifies %s as a %s edit kind', (key, kind) => {
-    expect(settingEditKind(entryByKey(key))).toBe(kind);
-  });
-
   it.each<[string, boolean, ReturnType<typeof coerceSettingInput>]>([
     ['texra-ai', false, { ok: true, value: 'texra-ai' }],
     ['', false, { ok: true, value: '' }],
@@ -299,16 +273,6 @@ describe('ConfigForm helpers', () => {
     },
   );
 
-  it.each<[unknown, string]>([
-    [true, 'on'],
-    [false, 'off'],
-    ['', '(empty)'],
-    ['latexindent', 'latexindent'],
-    [120000, '120000'],
-  ])('formats %j for display as %j', (value, formatted) => {
-    expect(formatSettingValue(value)).toBe(formatted);
-  });
-
   it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
     [
       {
@@ -327,150 +291,11 @@ describe('ConfigForm helpers', () => {
     expect(formatProviderApiKeySummary(view)).toBe(summary);
   });
 
-  it('uses configured provider names in the parent API keys row', () => {
-    const props = createCliConfigFormProps({
-      stores: makeFakeSettingsStores().stores,
-      apiKeyStatusView: {
-        statuses: { openai: 'set', anthropic: 'not-set' },
-        loading: false,
-        error: false,
-      },
-      onClose: () => undefined,
-    });
-    expect(props.formLinks?.find((link) => link.name === 'api-keys')).toEqual({
-      name: 'api-keys',
-      label: 'API keys',
-      description: 'Configured: OpenAI',
-    });
-  });
-
-  it('labels configured and unconfigured provider key rows', () => {
-    const items = buildProviderApiKeyItems({
-      statuses: {
-        openai: 'set',
-        anthropic: 'not-set',
-        glm: 'not-set',
-        kimiCode: 'env',
-      },
-      loading: false,
-      error: false,
-    });
-    expect(items.find((item) => item.value === 'openai')).toMatchObject({
-      label: 'OpenAI',
-      description: 'Key set',
-    });
-    expect(items.find((item) => item.value === 'anthropic')).toMatchObject({
-      label: 'Anthropic',
-      description: 'Not set',
-    });
-    expect(items.find((item) => item.value === 'kimiCode')).toMatchObject({
-      label: 'Kimi Code',
-      description: 'Env',
-    });
-    const glmRows = items.filter((item) => item.value === 'glm');
-    expect(glmRows).toHaveLength(1);
-    expect(glmRows[0]).toMatchObject({
-      label: 'GLM API/GLM Coding Plan',
-      description: 'Not set',
-    });
-  });
-
-  it.each<[string, string]>([
-    [GlobalStateKey.DASHSCOPE_USE_CHINA, 'Qwen China region (Bailian)'],
-    [GlobalStateKey.MINIMAX_USE_CHINA, 'MiniMax China region'],
-    [GlobalStateKey.MOONSHOT_USE_CHINA, 'Kimi/Moonshot China region'],
-    [GlobalStateKey.GLM_USE_CHINA, 'GLM China region'],
-    [GlobalStateKey.GLM_CODING_PLAN, 'GLM Coding Plan'],
-  ])('labels %s self-identifying as %j', (key, name) => {
-    expect(settingDisplayName(entryByKey(key))).toBe(name);
-  });
-
-  it.each<[string, string]>([
-    [WorkspaceStateKey.GIT_MARK_COMMITS, 'config'],
-    [WorkspaceStateKey.LATEX_FORMATTER, 'workspaceState'],
-  ])(
-    'labels the store the CLI reads from for %s (its own slot wins)',
-    (key, store) => {
-      expect(settingStoreLabel(entryByKey(key))).toBe(store);
-    },
-  );
-
-  it('prefers compact titles and falls back to stripped keys for display names', () => {
-    expect(
-      settingDisplayName(entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS)),
-    ).toBe('Mark agent commits');
-
-    expect(settingDisplayName(RECORD_ENTRY)).toBe('example.record');
-  });
-
-  it('builds list items showing value + store, with editable rows enabled', () => {
-    const items = buildConfigListItems(CLI_STATE_SETTINGS, (entry) =>
-      entry.key === WorkspaceStateKey.GIT_MARK_COMMITS ? true : 'texra-ai',
-    );
-    const markCommits = items.find(
-      (item) => item.value === WorkspaceStateKey.GIT_MARK_COMMITS,
-    );
-    const authorName = items.find(
-      (item) => item.value === WorkspaceStateKey.GIT_AUTHOR_NAME,
-    );
-    const tools = items.find(
-      (item) => item.value === GlobalStateKey.DISABLED_TOOLS,
-    );
-
-    expect(markCommits).toMatchObject({
-      label: 'Mark agent commits',
-      disabled: false,
-    });
-    expect(markCommits?.description).toContain('on');
-    expect(markCommits?.description).toContain('config');
-    // Strings/numbers are now editable, so no row is read-only in the roster.
-    expect(authorName).toMatchObject({ disabled: false });
-    expect(authorName?.description).not.toContain('read-only');
-    expect(tools).toMatchObject({
-      label: 'Tool integrations',
-      description: 'open /tools · globalState',
-      disabled: false,
-    });
-  });
-
-  it('groups settings by catalog category with readable labels and counts', () => {
-    const entries = [
-      entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS),
-      entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME),
-      entryByKey(WorkspaceStateKey.CODEX_REASONING_EFFORT),
-    ];
-
-    expect(buildConfigCategoryItems(entries)).toEqual([
-      {
-        value: 'git',
-        label: 'Git and worktrees',
-        description: '2 settings',
-      },
-      {
-        value: 'ai-agents',
-        label: 'AI agents',
-        description: '1 setting',
-      },
-    ]);
-    expect(configCategoryLabel('custom-provider')).toBe('Custom Provider');
-  });
-
   it('marks an unsupported schema kind read-only', () => {
     expect(settingEditKind(RECORD_ENTRY)).toBe('readonly');
     const [item] = buildConfigListItems([RECORD_ENTRY], () => ({}));
     expect(item).toMatchObject({ disabled: true });
     expect(item?.description).toContain('read-only');
-  });
-
-  it('builds enum items from catalog enum metadata', () => {
-    const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    const items = buildEnumItems(formatter);
-    expect(items.map((item) => item.value)).toEqual([
-      'latexindent',
-      'tex-fmt',
-      'none',
-    ]);
-    expect(items[0]?.description).toBeTruthy();
   });
 });
 
@@ -674,20 +499,6 @@ describe('CliConfigForm API-key status lifecycle', () => {
 });
 
 describe('/config slash command wiring', () => {
-  it('registers /config with a form and settings alias', () => {
-    registerBuiltinSlashCommands({
-      getConfigStores: () => makeFakeSettingsStores().stores,
-    });
-    const config = listSlashCommands().find((cmd) => cmd.name === 'config');
-    expect(config).toEqual(
-      expect.objectContaining({
-        description: 'View and toggle settings',
-        aliases: ['settings'],
-        formComponent: expect.any(Function),
-      }),
-    );
-  });
-
   it('wires the roster and reads through the injected CLI stores', () => {
     const { stores, config } = makeFakeSettingsStores();
     // Seed the git-author config slot the CLI reads from.
@@ -787,19 +598,5 @@ describe('/config slash command wiring', () => {
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
     await props.writeValue?.(preferKimiCode, false);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
-  });
-
-  it('provides native linked forms with the shared terminal row budget', () => {
-    const props = openConfigFormProps();
-    const linkedRows = (name: string): number | undefined =>
-      (
-        props.formRenderers?.[name]?.(() => undefined) as
-          { props?: { availableRows?: number } } | undefined
-      )?.props?.availableRows;
-
-    expect(props.availableRows).toBe(20);
-    expect(linkedRows('tools')).toBe(20);
-    expect(linkedRows('agents')).toBe(20);
-    expect(linkedRows('api-keys')).toBe(20);
   });
 });

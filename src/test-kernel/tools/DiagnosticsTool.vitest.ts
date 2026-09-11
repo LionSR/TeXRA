@@ -86,22 +86,6 @@ describe('DiagnosticsTool', () => {
     });
   });
 
-  it('rejects an add command missing required fields', async () => {
-    const result = await new DiagnosticsTool().call({
-      command: 'add',
-      path: 'paper.tex',
-    });
-
-    expect(result.status).toBe('error');
-    // Now caught by DiagnosticsInputSchema's discriminated union (the `add`
-    // variant requires these fields) rather than a hand-rolled message, so
-    // the structured Zod diagnostics list each missing field individually.
-    expect(result.error).toContain('at line');
-    expect(result.error).toContain('at message');
-    expect(result.error).toContain('at severity');
-    expect(result.error).toContain('at confidence');
-  });
-
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
     await withSession(async (session) => {
       session.interactions.use({

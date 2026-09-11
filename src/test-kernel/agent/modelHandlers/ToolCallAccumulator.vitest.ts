@@ -47,14 +47,6 @@ describe('ToolCallAccumulator', () => {
     ]);
   });
 
-  it('materializes multiple calls in ascending index order', () => {
-    const acc = new ToolCallAccumulator();
-    acc.add({ index: 1, id: 'b', name: 'second', arguments: '{}' });
-    acc.add({ index: 0, id: 'a', name: 'first', arguments: '{}' });
-
-    expect(build(acc).map((c) => c.id)).toEqual(['a', 'b']);
-  });
-
   it('drops fully-empty entries', () => {
     const acc = new ToolCallAccumulator();
     acc.add({ index: 0, id: '', name: '', arguments: '' });

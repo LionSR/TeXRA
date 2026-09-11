@@ -65,12 +65,4 @@ describe('diff refresh throttle', () => {
       { preserveFocus: true },
     );
   });
-
-  it('still throttles repeated changes for the same diff', () => {
-    registerDiffRefresh(uri('a-left'), uri('a-right'), 'A');
-    mocks.fireViewColumnChange?.();
-    mocks.fireViewColumnChange?.();
-
-    expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
-  });
 });

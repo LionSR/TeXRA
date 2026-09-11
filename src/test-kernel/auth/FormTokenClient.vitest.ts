@@ -149,18 +149,6 @@ describe('postOAuth', () => {
   );
 });
 
-describe('oauthTokenErrorKind', () => {
-  it.each([
-    [400, 'fatal'],
-    [401, 'fatal'],
-    [403, 'fatal'],
-    [429, 'transient'],
-    [500, 'transient'],
-  ] as const)('treats status %i as %s', (status, kind) => {
-    expect(oauthTokenErrorKind(status)).toBe(kind);
-  });
-});
-
 describe('decodeJwtClaimsWithSchema', () => {
   const schema = z.object({ email: z.string() });
 

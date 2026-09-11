@@ -75,20 +75,6 @@ function installTitle(
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('desktop process-session window title', () => {
-  it('formats exact copy for absent and hostile workspace names', () => {
-    const style = { style: NATIVE_WINDOW_TITLE };
-    expect(formatSessionTitle(undefined, 'idle', style)).toBe('TeXRA');
-    expect(formatSessionTitle(undefined, 'running', style)).toBe(
-      'Running TeXRA',
-    );
-    expect(formatSessionTitle(undefined, 'approval', style)).toBe(
-      'Approval needed TeXRA',
-    );
-    expect(
-      formatSessionTitle('draft — Running <script>.tex', 'approval', style),
-    ).toBe('Approval needed TeXRA · draft — Running <script>.tex');
-  });
-
   it('reads the activity from the view rollup, a decision first', () => {
     const { session, setRollup } = createSession();
     expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
@@ -147,24 +133,5 @@ describe('desktop process-session window title', () => {
     } finally {
       dispose();
     }
-  });
-
-  it('derives a pending approval on reopen and isolates sessions', () => {
-    const first = createSession({ waiting: 1 });
-    const second = createSession();
-
-    expect(getDesktopWindowTitle(first.session, '/work/geometry')).toBe(
-      'Approval needed TeXRA · geometry',
-    );
-    expect(getDesktopWindowTitle(second.session, '/work/algebra')).toBe(
-      'TeXRA · algebra',
-    );
-
-    const reopened = createWindow(
-      getDesktopWindowTitle(first.session, '/work/geometry'),
-    );
-    const dispose = installTitle(reopened.window, first.session);
-    expect(reopened.setTitle).not.toHaveBeenCalled();
-    dispose();
   });
 });

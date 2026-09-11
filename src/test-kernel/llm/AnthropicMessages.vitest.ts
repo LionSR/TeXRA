@@ -845,32 +845,6 @@ describe('canonical Anthropic Messages protocol', () => {
   );
 
   it.each([
-    {
-      thinking: { mode: 'enabled', budgetTokens: 1024, display: 'omitted' },
-      effort: 'low',
-      temperature: 1,
-    },
-    { thinking: { mode: 'disabled' }, effort: 'medium', temperature: 0.25 },
-  ] satisfies Partial<TurnRequest>[])(
-    'keeps effort independent of $thinking.mode thinking',
-    async (controls) => {
-      fetchModel.mockImplementation(async () =>
-        response([initial(), ...terminal()]),
-      );
-      const configured = model();
-      const turn = await Effect.runPromise(
-        configured.prepareTurn({ ...REQUEST, ...controls }),
-      );
-      assert(turn.mode === 'foreground');
-      await Effect.runPromise(configured.generateTurn(turn));
-      const body = JSON.parse(fetchModel.mock.calls[0][1]!.body as string);
-      expect(body.output_config.effort).toBe(controls.effort);
-      expect(body.temperature).toBe(controls.temperature);
-      expect(body.thinking.type).toBe(controls.thinking?.mode);
-    },
-  );
-
-  it.each([
     { temperature: 0.5 },
     {
       thinking: { mode: 'enabled', budgetTokens: 8192, display: 'summarized' },

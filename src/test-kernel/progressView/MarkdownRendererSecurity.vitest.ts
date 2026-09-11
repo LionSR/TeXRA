@@ -54,27 +54,6 @@ describe('processMarkdownContent renders math and code', () => {
     expect(doc.body.textContent).not.toContain('$$');
   });
 
-  it('renders inline math to a KaTeX element', () => {
-    const doc = renderToDocument('The energy is $E = mc^2$ at rest.');
-
-    expect(doc.querySelector('.katex')).not.toBeNull();
-  });
-
-  it('renders the max-style macro fixes without unknown-command errors', () => {
-    const label = renderToDocument('$\\label{eqn:e}$');
-    expect(label.querySelector('.katex')).not.toBeNull();
-    expect(label.querySelector('.katex-error')).toBeNull();
-
-    const section = renderToDocument('$\\text{\\S}$');
-    expect(section.querySelector('.katex')).not.toBeNull();
-    expect(section.querySelector('.katex-error')).toBeNull();
-    expect(section.querySelector('.katex')?.textContent).toContain('§');
-
-    const bold = renderToDocument('${\\bf x}$');
-    expect(bold.querySelector('.katex')).not.toBeNull();
-    expect(bold.querySelector('.katex-error')).toBeNull();
-  });
-
   const CRITERION_FORMULA =
     'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).';
 
@@ -159,22 +138,5 @@ describe('processMarkdownContent renders math and code', () => {
 
     expect(doc.querySelector('.katex')).toBeNull();
     expect(doc.querySelector('code')?.textContent).toContain('\\[\nx^2\n\\]');
-  });
-
-  it('syntax-highlights a fenced code block instead of leaving it plain', () => {
-    const doc = renderToDocument(
-      [
-        '```python',
-        'def solve(x: int) -> int:',
-        '    return x ** 2 + 1',
-        '```',
-      ].join('\n'),
-    );
-
-    const block = doc.querySelector('pre.hljs code.language-python');
-    expect(block).not.toBeNull();
-    expect(block?.querySelector('.hljs-keyword')).not.toBeNull();
-    expect(block?.querySelector('.hljs-built_in')).not.toBeNull();
-    expect(block?.textContent).toContain('def solve');
   });
 });

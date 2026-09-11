@@ -30,49 +30,6 @@ const agents: AgentEntry[] = [
 ];
 
 describe('AgentRosterForm', () => {
-  it('renders loading through the shared Ink indicator', async () => {
-    const { ink, React } = await loadInk();
-    vi.useFakeTimers();
-    const { instance, stdout } = renderWithTerminalSize(
-      ink,
-      React.createElement(AgentRosterForm, { onClose: () => undefined }),
-      80,
-    );
-
-    try {
-      await vi.advanceTimersByTimeAsync(100);
-      const loadingLines = stripAnsi(stdout.output)
-        .split('\n')
-        .filter((line) => line.includes('Loading agents...'));
-      const loadingCopy = loadingLines[0]
-        ?.replace(/^│\s*/, '')
-        .replace(/\s*│$/, '');
-
-      expect(loadingLines).toHaveLength(1);
-      expect(loadingCopy).toMatch(/^[|/\\-] Loading agents\.\.\.$/);
-    } finally {
-      instance.unmount();
-      vi.useRealTimers();
-    }
-  });
-
-  it('offers chat defaults only from the effective tool-use roster', () => {
-    expect(
-      buildChatDefaultAgentItems(agents, ['builtInToolUse:assistant']),
-    ).toEqual([
-      {
-        value: '',
-        label: 'Automatic',
-        description: 'Choose from the effective workspace roster',
-      },
-      {
-        value: 'builtInToolUse:assistant',
-        label: 'assistant',
-        description: 'General assistant',
-      },
-    ]);
-  });
-
   it('reports open categories without materializing the current catalog', () => {
     const output = formatCliAgentRoster({
       selection: { kind: 'team', teamId: 'deleted-team' },

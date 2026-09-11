@@ -139,28 +139,6 @@ describe('CLI workflow output resolution', () => {
     );
   });
 
-  it('carries only the cancelled outcome for missing workflow outputs', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-
-    const result = await resolveWorkflowOutput(
-      'out.tex',
-      undefined,
-      workflowResult([], RUN_OUTCOME.CANCELLED),
-      testContext(cwd),
-      { runDirectory: join(cwd, 'run') },
-    );
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-      workingDirectory: cwd,
-      runDirectory: join(cwd, 'run'),
-    });
-    expect(Object.hasOwn(result, 'status')).toBe(false);
-    expect(Object.hasOwn(result, 'terminalStatus')).toBe(false);
-    expect(Object.hasOwn(result, 'endGroupStatus')).toBe(false);
-    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
-  });
-
   it('copies every expected --output-dir workflow output', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');

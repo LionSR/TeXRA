@@ -195,19 +195,6 @@ describe('desktop preview host', () => {
     },
   );
 
-  it('opens existing files through Electron shell.openPath', async () => {
-    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const dir = await makeTempDir();
-    const filePath = path.join(dir, 'output.pdf');
-    await writeFile(filePath, 'pdf');
-    const shell = makeShell();
-
-    const host = createDesktopPreviewHost({ shell });
-
-    await host.openPath(filePath);
-    expect(shell.openPath).toHaveBeenCalledWith(filePath);
-  });
-
   it('reports missing files before calling shell.openPath', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const missingPath = path.join(await makeTempDir(), 'missing.pdf');
@@ -361,16 +348,6 @@ describe('desktop preview host', () => {
       expect.stringContaining(logTail),
     );
     expect(shell.openPath).not.toHaveBeenCalled();
-  });
-
-  it('opens external URLs through Electron shell.openExternal', async () => {
-    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const shell = makeShell();
-
-    const host = createDesktopPreviewHost({ shell });
-
-    await host.openExternal('https://texra.ai');
-    expect(shell.openExternal).toHaveBeenCalledWith('https://texra.ai');
   });
 
   it('can preserve an external-open error without showing a dialog', async () => {

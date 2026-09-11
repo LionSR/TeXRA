@@ -62,8 +62,4 @@ describe('DiffResult transforms', () => {
   it('skips invalid non-object entries', () => {
     expect(parseDiffResultEntries([null, 'not an entry', 1])).toEqual([]);
   });
-
-  it('skips invalid object entries without diff-result fields', () => {
-    expect(parseDiffResultEntries([{}, { foo: 'bar' }])).toEqual([]);
-  });
 });

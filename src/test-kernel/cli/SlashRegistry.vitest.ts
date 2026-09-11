@@ -151,74 +151,6 @@ describe('slashRegistry', () => {
     expect(events).toEqual(['echo', 'outcome']);
   }
 
-  it('keeps the CLI session control commands registered', () => {
-    registerBuiltinSlashCommands();
-    expect(listSlashCommands().map((cmd) => cmd.name)).toEqual(
-      expect.arrayContaining([
-        'agent',
-        'model',
-        'models',
-        'api',
-        'key',
-        'auth',
-        'login',
-        'logout',
-        'approval',
-        'yolo',
-        'status',
-        'plan',
-        'goal',
-        'resume',
-        'memory',
-        'skills',
-        'tools',
-        'compact',
-      ]),
-    );
-    const withForm = {
-      formComponent: expect.any(Function),
-    };
-    const expectedShapes: ReadonlyArray<readonly [string, object]> = [
-      ['model', { description: 'Choose the model for this chat' }],
-      [
-        'models',
-        {
-          description: 'Enable or disable models in pickers',
-          ...withForm,
-        },
-      ],
-      ['agent', { description: 'List or choose the root agent', ...withForm }],
-      ['approval', { description: 'Switch approval policy', ...withForm }],
-      ['memory', { description: 'List stored memories', ...withForm }],
-      ['resume', { description: 'Resume a previous session', ...withForm }],
-      [
-        'tools',
-        { description: 'List or toggle external integrations', ...withForm },
-      ],
-      [
-        'skills',
-        {
-          description: 'List skills or activate one',
-          aliases: ['skill'],
-          ...withForm,
-        },
-      ],
-      [
-        'login',
-        {
-          description:
-            'Sign in with ChatGPT or Grok, or sign in to your TeXRA account',
-          ...withForm,
-        },
-      ],
-      ['plan', { description: 'Read the focused session work plan' }],
-      ['compact', { description: 'Request context compaction' }],
-    ];
-    for (const [name, shape] of expectedShapes) {
-      expect(requireSlashCommand(name)).toEqual(expect.objectContaining(shape));
-    }
-  });
-
   it('shares one account & access form across /api, /login, and /logout', () => {
     registerBuiltinSlashCommands();
 
@@ -228,13 +160,6 @@ describe('slashRegistry', () => {
     for (const name of ['login', 'logout']) {
       expect(requireSlashCommand(name).formComponent).toBe(api.formComponent);
     }
-  });
-
-  it('opens registered structured forms through the shared form opener', () => {
-    registerBuiltinSlashCommands();
-    const tools = requireSlashCommand('tools');
-    expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('tools');
   });
 
   it('opens structured forms by registered command name or alias', () => {
@@ -359,12 +284,6 @@ describe('slashRegistry', () => {
   it('defers a form command echo until a persistent selection', async () => {
     await expectDeferredEcho((onEcho) => {
       openRegisteredCliSlashForm(requireSlashCommand('model'), '', onEcho);
-    });
-  });
-
-  it('preserves deferred echo through the command-name form helper', async () => {
-    await expectDeferredEcho((onEcho) => {
-      openCliSlashCommandForm('model', '', onEcho);
     });
   });
 

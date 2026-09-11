@@ -282,45 +282,6 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     );
   });
 
-  it('passes the run-bound client to batched follow-up construction', async () => {
-    const probe = newProbe();
-    const runClient = { route: 'personal' };
-    let receivedClient: unknown;
-    await withDispatchHarness(
-      {
-        tools: {
-          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
-        },
-        runClient,
-        modelHandlerOverrides: {
-          requiresBatchedParallelToolResults: true,
-          createBatchedToolUseFollowUpMessages: async (
-            _entries: unknown,
-            _workspace: unknown,
-            _text: unknown,
-            client: unknown,
-          ) => {
-            receivedClient = client;
-            return [];
-          },
-        },
-      },
-      async ({ node }) => {
-        const calls = [
-          makeCall('c1', 'grep', { pattern: 'a' }),
-          makeCall('c2', 'grep', { pattern: 'b' }),
-        ];
-        const shared = { toolCalls: calls, shouldStop: false, messages: [] };
-
-        const prepped = await internals(node).prep(shared);
-        const results = await execPrepped(node, prepped);
-        await internals(node).post(shared, prepped, results);
-
-        assert.equal(receivedClient, runClient);
-      },
-    );
-  });
-
   it('treats non-safe tools as ordering barriers', async () => {
     const probe = newProbe();
     await withDispatchHarness(

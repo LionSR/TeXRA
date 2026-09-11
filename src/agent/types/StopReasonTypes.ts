@@ -15,7 +15,7 @@ export const OPENAI_CHAT_FINISH = {
 type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
-export const MCP_STOP = {
+const MCP_STOP = {
   MAX_TOKENS: 'maxTokens',
 } as const;
 type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];

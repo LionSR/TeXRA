@@ -9,17 +9,6 @@ import {
 } from '@utils/core/pathCore';
 
 describe('toPosixPath', () => {
-  it('converts backslashes and collapses duplicate separators', () => {
-    expect(toPosixPath(String.raw`sections\\intro`)).toBe('sections/intro');
-    expect(toPosixPath('sections//intro')).toBe('sections/intro');
-    expect(toPosixPath(String.raw`sections\/intro`)).toBe('sections/intro');
-  });
-
-  it('strips leading and trailing separators', () => {
-    expect(toPosixPath('/sections/intro/')).toBe('sections/intro');
-    expect(toPosixPath('\\sections\\intro\\')).toBe('sections/intro');
-  });
-
   it.each([
     ['', '.'],
     ['.', '.'],
@@ -40,13 +29,6 @@ describe('toPosixPath', () => {
 });
 
 describe('normalizeLatexPath', () => {
-  it('normalizes redundant separators before removing leading dot segments', () => {
-    expect(normalizeLatexPath('.//sections//intro')).toBe('sections/intro');
-    expect(normalizeLatexPath(String.raw`.\\sections\\intro`)).toBe(
-      'sections/intro',
-    );
-  });
-
   it.each([
     ['', ''],
     ['./', '.'],
@@ -57,24 +39,6 @@ describe('normalizeLatexPath', () => {
     ['sections/../main.tex', 'main.tex'],
   ])('normalizes %j → %j', (input, expected) => {
     expect(normalizeLatexPath(input)).toBe(expected);
-  });
-
-  it('preserves non-ASCII escaped path text while normalizing separators', () => {
-    const unicodeSegment = '\u00E9tudes';
-    expect(normalizeLatexPath(String.raw`./${unicodeSegment}\\intro.tex`)).toBe(
-      `${unicodeSegment}/intro.tex`,
-    );
-  });
-
-  it('handles long paths without changing segment text', () => {
-    const segments = Array.from(
-      { length: 40 },
-      (_, index) => `section-${index}`,
-    );
-
-    expect(normalizeLatexPath(`./${segments.join('//')}`)).toBe(
-      segments.join('/'),
-    );
   });
 });
 

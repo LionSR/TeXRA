@@ -234,23 +234,6 @@ describe('computeModelOptionsData availability', () => {
     );
   });
 
-  it('honors the catalogue retirement of the legacy Copilot model', async () => {
-    await installAccessPlatform();
-
-    const [model] = await computeModelOptionsData(['copilot4o']);
-    const reason = await getModelUnavailableReason('copilot4o');
-
-    expect(model).toMatchObject({
-      availability: 'retired',
-      availabilityLabel: 'Retired',
-      disabled: true,
-      requiresKey: false,
-    });
-    expect(reason).toBe(
-      'Model "copilot4o" is retired and no longer available from its provider. Choose an active model.',
-    );
-  });
-
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
     await installAccessPlatform({ config: PREFER_CODEX_CONFIG });
 

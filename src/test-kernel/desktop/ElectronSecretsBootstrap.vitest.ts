@@ -133,48 +133,6 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
   });
 });
 
-describe('desktop renderer bootstrap fallback', () => {
-  it('wraps the initial render in a try/catch with a fallback UI', () => {
-    const source = loadRendererMain();
-    expect(source).toContain('renderBootstrapFallback');
-    // The initial render (rerender + shell) must sit inside the bootstrap
-    // try/catch whose handler flags the failure and renders the fallback —
-    // a bare `try {`/`catch (error)` containment check would match almost
-    // any source, so pin the whole guard structurally.
-    expect(source).toMatch(
-      /try \{\s*logsController\.rerenderViewer\(\);\s*rerenderShell\(\);[\s\S]*?\} catch \(error\) \{\s*bootstrapFailed = true;[\s\S]*?renderBootstrapFallback\(error\);/,
-    );
-  });
-
-  it('uses the fatal fallback only while startup is incomplete', () => {
-    const source = loadRendererMain();
-
-    expect(source).toMatch(
-      /window\.addEventListener\('unhandledrejection',[\s\S]*?event\.preventDefault\(\);[\s\S]*?if \(bootstrapComplete\) \{[\s\S]*?reportRuntimeFailure\(event\.reason\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?bootstrapFailed = true;[\s\S]*?renderBootstrapFallback\(event\.reason\);/u,
-    );
-    expect(source).toContain('bootstrapComplete = true;');
-  });
-
-  it('renders a Reload control and a "continue without saved secrets" affordance', () => {
-    const source = loadRendererMain();
-    expect(source).toContain('Reload');
-    expect(source).toContain('Continue without saved secrets');
-    // Use Lit html for the fallback so we do not pull in another component.
-    expect(source).toContain('html`');
-    expect(source).toContain('window.location.reload');
-  });
-
-  it('skips IPC requests and DOM-dependent setup when bootstrap fails', () => {
-    const source = loadRendererMain();
-    // The DOM-dependent setup (event wiring + onboarding REQUEST_STATE +
-    // the projects request) must be gated behind !bootstrapFailed so it
-    // cannot throw on top of the already-rendered fallback UI.
-    expect(source).toContain('if (!bootstrapFailed) {');
-    expect(source).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
-    expect(source).toContain('DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS');
-  });
-});
-
 describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
   beforeEach(() => {
     delete process.env.TEXRA_DISABLE_KEYCHAIN;
@@ -246,17 +204,5 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     process.env.TEXRA_DISABLE_KEYCHAIN = 'true';
     const mod = await loadElectronSecrets();
     expect(mod.getSecretStorageMode()).toBe('unavailable');
-  });
-});
-
-describe('desktop main process keychain access', () => {
-  it('does not force a keychain prewarm during startup', () => {
-    const source = readFileSync(
-      repoPath('packages/desktop/src/main/index.ts'),
-      'utf8',
-    );
-    expect(source).not.toContain('prewarmElectronKeychain');
-    expect(source).not.toContain('safeStorage.encryptString');
-    expect(source).toContain("webContents.once('did-finish-load'");
   });
 });

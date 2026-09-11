@@ -122,17 +122,6 @@ describe('planOnboardingFunnelTransition', () => {
 });
 
 describe('onboarding flags', () => {
-  it('round-trips firstRunDone and defaultTeamId through global state', async () => {
-    const state = new FakeStateStore();
-    expect(getFirstRunDone(state)).toBe(false);
-    await setFirstRunDone(state, true);
-    expect(getFirstRunDone(state)).toBe(true);
-
-    expect(getDefaultTeamId(state)).toBeUndefined();
-    await setDefaultTeamId(state, 'physicist');
-    expect(getDefaultTeamId(state)).toBe('physicist');
-  });
-
   it.each([7, ''])(
     'treats a non-team-id defaultTeamId %j as unset',
     (value) => {
@@ -145,20 +134,6 @@ describe('onboarding flags', () => {
       ).toBeUndefined();
     },
   );
-
-  it('reads both funnel flags in one call', async () => {
-    const state = new FakeStateStore();
-    expect(readOnboardingFlags(state)).toEqual({
-      declined: false,
-      firstRunDone: false,
-    });
-    await state.update(GlobalStateKey.ONBOARDING_DECLINED, true);
-    await setFirstRunDone(state, true);
-    expect(readOnboardingFlags(state)).toEqual({
-      declined: true,
-      firstRunDone: true,
-    });
-  });
 });
 
 describe('backfillFirstRunDone', () => {

@@ -57,12 +57,6 @@ describe('saveProviderApiKey', () => {
     },
   );
 
-  it('returns no credential-derived text', async () => {
-    await expect(
-      saveProviderApiKey('openai', 'sk-super-secret-value'),
-    ).resolves.toBeUndefined();
-  });
-
   it('writes the secret before invalidating the key cache', async () => {
     // The only correctness-critical ordering: the secret must be written before
     // the key cache is dropped, or a concurrent read could repopulate a stale

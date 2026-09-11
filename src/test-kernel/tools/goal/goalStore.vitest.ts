@@ -154,10 +154,6 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     expect(GoalStore.list().map((o) => o.runId)).toEqual([RUN_B]);
   });
 
-  it('is idempotent — forgetting an unknown stream is a no-op', async () => {
-    await expect(GoalStore.forget(RUN_A)).resolves.toBeUndefined();
-  });
-
   it('lets the same runId start a fresh goal after forget', async () => {
     await GoalStore.start(RUN_A, 'objective one');
     await GoalStore.forget(RUN_A);

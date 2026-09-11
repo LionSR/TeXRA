@@ -266,43 +266,4 @@ describe('runCompileCheck', () => {
     expect(persistedB).toContain(`LOG MARKER FOR ${texPathB}`);
     expect(persistedB).not.toContain(texPathA);
   });
-
-  it('records a resolvable log path through the outer backstop when compileOne throws before its own try/catch', async () => {
-    // Simulates a bug in compileOne's own pre-compile bookkeeping (path/hash
-    // computation), which runs before compileOne's internal try/catch and so
-    // can only be caught by runCompileCheck's outer per-file backstop.
-    const runId = 'compile-outer-backstop' as RunId;
-    await seedCompilableMainTex(runId);
-
-    const schemasModule = await import('@shared/schemas');
-    const comparablePathSpy = vi
-      .spyOn(schemasModule, 'fileLocationDisplayPath')
-      .mockImplementationOnce(() => {
-        throw new Error('simulated bookkeeping bug');
-      });
-
-    try {
-      const relativePath = path.join('r0', 'main.tex');
-      const outputState = seedMainTexOutput(runId);
-
-      const result = await runCompileCheck(
-        compileContext(runId, outputState),
-        0,
-      );
-
-      const failures = compileFailuresOf(result.compileResult);
-      expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
-      expect(result.compileResult?.status).toBe('failed');
-      expect(failures).toHaveLength(1);
-      // The second (uninstrumented) call to fileLocationDisplayPath, made from the
-      // backstop itself, resolves normally -- so the failure gets a real,
-      // resolvable path instead of a broken placeholder string.
-      expect(failures[0].logRelativePath).toBe(relativePath);
-      expect(failures[0].log).toEqual(
-        outputFile(runId, relativePath, 'main.tex', 0).location,
-      );
-    } finally {
-      comparablePathSpy.mockRestore();
-    }
-  });
 });

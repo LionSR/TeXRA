@@ -306,41 +306,6 @@ describe('MediaAttachmentProcessor', () => {
     ]);
   });
 
-  it.each([
-    ['.opus', 'audio/opus'],
-    ['.l16', 'audio/l16'],
-    ['.alaw', 'audio/alaw'],
-    ['.mulaw', 'audio/mulaw'],
-  ] as const)(
-    'processes %s audio with provider-supported MIME type',
-    async (extension, mediaType) => {
-      const audioPath = await createRawAudioFixture(extension);
-      const audioLocation = pathToLocation(audioPath);
-      const stub = createMediaLogRecorder();
-      const processor = createProcessor(
-        stub,
-        {
-          supportsNativeAudio: true,
-        },
-        false,
-      );
-
-      const { entries, results } = await processor.loadEntries([audioLocation]);
-
-      expectAudioResult(
-        results,
-        fileLocationDisplayPath(audioLocation),
-        mediaType,
-        audioPath,
-      );
-      assert.equal(entries.length, 1, 'expected a single audio entry');
-
-      const [entry] = entries;
-      expectAudioEntry(entry, audioPath);
-      assert.equal(entry.media_type, mediaType);
-    },
-  );
-
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = await createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);

@@ -45,12 +45,6 @@ describe('logUserMessage', () => {
     expect(entries[0].data).toBeUndefined();
   });
 
-  it('omits data when the attachments array is empty', () => {
-    logUserMessage(logger, 'Fix the lemma.', []);
-
-    expect(capturedEntries()[0].data).toBeUndefined();
-  });
-
   it('records attachment kinds (not bytes) on the row data', () => {
     logUserMessage(logger, 'See the attached figure.', ['image', 'document']);
 

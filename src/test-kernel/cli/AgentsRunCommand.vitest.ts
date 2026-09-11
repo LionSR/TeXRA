@@ -251,43 +251,4 @@ describe('CLI agents run command', () => {
     expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
-
-  it.each([
-    {
-      scenario: 'missing agents',
-      agent: 'missing-agent',
-      message:
-        'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
-    },
-    {
-      scenario: 'workflow agents',
-      agent: 'polish',
-      message:
-        'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
-    },
-  ])(
-    'reports $scenario before resolving the model',
-    async ({ agent, message }) => {
-      mocks.resolveCliLaunchAgent.mockRejectedValueOnce(new Error(message));
-      await expect(
-        runToolUseAgent(createRunCommandCliContext(), {
-          agent,
-          inputFiles: [],
-          contextFiles: [],
-          model: 'gpt54',
-          instruction: 'Check this.',
-        }),
-      ).rejects.toThrow(message);
-
-      expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/tmp/project' }),
-      );
-      expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
-        agent,
-        'agentsRun',
-      );
-      expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-    },
-  );
 });

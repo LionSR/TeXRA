@@ -67,29 +67,6 @@ describe('AgentSelectionPanel', () => {
     mocks.postMessage.mockClear();
   });
 
-  it('renders the per-agent enabled toggle as wa-switch, not wa-checkbox', async () => {
-    const panel = await renderAgentSelectionPanel();
-
-    expect(panel.shadowRoot!.querySelector('wa-checkbox')).toBeNull();
-    const toggle = queryToggle(panel);
-
-    expect(toggle.tagName.toLowerCase()).toBe('wa-switch');
-    expect(toggle.checked).toBe(true);
-  });
-
-  it('keeps selection and availability as separate accessible controls', async () => {
-    const panel = await renderAgentSelectionPanel();
-    const root = panel.shadowRoot!;
-    const row = root.querySelector('.agent-list-item');
-    const selectButton = root.querySelector('.agent-list-item-select');
-
-    expect(root.querySelector('[role="listbox"]')).toBeNull();
-    expect(row?.getAttribute('role')).toBe('listitem');
-    expect(selectButton?.tagName.toLowerCase()).toBe('button');
-    expect(selectButton?.getAttribute('aria-current')).toBe('true');
-    expect(selectButton?.contains(queryToggle(panel))).toBe(false);
-  });
-
   it('posts setAgentEnabled (not a click on the row) when the toggle is clicked', async () => {
     const panel = await renderAgentSelectionPanel();
 

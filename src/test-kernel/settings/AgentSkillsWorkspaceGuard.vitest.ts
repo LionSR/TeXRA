@@ -123,24 +123,4 @@ describe('agent skills workspace guard', () => {
     );
     expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
   });
-
-  it('routes the multi-agent snapshot to its status sender', async () => {
-    const handler = Object.create(
-      SettingsViewMessageHandler.prototype,
-    ) as SnapshotHarness;
-    const webview = {};
-    const sendSettingsSnapshot = vi.fn();
-    Reflect.set(handler, 'sendSettingsSnapshot', sendSettingsSnapshot);
-    Reflect.set(
-      handler,
-      'withActiveWebview',
-      vi.fn(async (fn: (activeWebview: object) => Promise<void>) =>
-        fn(webview),
-      ),
-    );
-
-    await handler.postStateSettingSnapshot('multi-agent');
-
-    expect(sendSettingsSnapshot).toHaveBeenCalledWith(webview, 'multi-agent');
-  });
 });

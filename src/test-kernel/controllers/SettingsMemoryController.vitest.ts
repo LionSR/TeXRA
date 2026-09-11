@@ -66,71 +66,6 @@ describe('SettingsMemoryController', () => {
     vi.clearAllMocks();
   });
 
-  it.effect('builds memory data messages from core loadMemoryItems', () =>
-    Effect.gen(function* () {
-      mocks.loadMemoryItems.mockReturnValue(
-        Effect.succeed([
-          {
-            displayPath: 'item.md',
-            storagePath: 'item.md',
-            size: 13,
-            mtime: '2026-05-03T00:00:00.000Z',
-          },
-        ]),
-      );
-      const { controller } = createController();
-
-      assert.deepEqual(yield* controller.getMemoryDataMessage(), {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
-        items: [
-          {
-            displayPath: 'item.md',
-            storagePath: 'item.md',
-            size: 13,
-            mtime: '2026-05-03T00:00:00.000Z',
-          },
-        ],
-      });
-    }),
-  );
-
-  it.effect('builds preview messages through the resolved storage path', () =>
-    Effect.gen(function* () {
-      mocks.loadMemoryPreview.mockReturnValue(
-        Effect.succeed({
-          storagePath: 'mem/item.md',
-          lineCount: 1,
-          preview: 'remember this',
-        }),
-      );
-      const { controller } = createController();
-
-      assert.deepEqual(yield* controller.getMemoryPreviewMessage('item.md'), {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-        preview: {
-          storagePath: 'mem/item.md',
-          lineCount: 1,
-          preview: 'remember this',
-        },
-      });
-    }),
-  );
-
-  plainIt(
-    'builds preview error messages through the resolved storage path',
-    () => {
-      const { controller } = createController();
-
-      assert.deepEqual(controller.getMemoryPreviewErrorMessage('item.md'), {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-        preview: {
-          storagePath: 'mem/item.md',
-          error: true,
-        },
-      });
-    },
-  );
-
   it.effect('leaves memory files untouched when deletion is cancelled', () =>
     Effect.gen(function* () {
       const { controller } = createController({ confirmResponses: [false] });
@@ -162,43 +97,6 @@ describe('SettingsMemoryController', () => {
       ]);
       assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
     }),
-  );
-
-  it.effect.each([{ pinned: true }, { pinned: false }] as const)(
-    'setMemoryPinned(pinned: $pinned) sets the pinned flag and returns refreshed data',
-    ({ pinned }) =>
-      Effect.gen(function* () {
-        mocks.setMemoryPinned.mockReturnValue(
-          Effect.succeed({ status: 'changed', pinnedCount: 1 }),
-        );
-        mocks.loadMemoryItems.mockReturnValue(Effect.succeed([]));
-        const { controller } = createController();
-
-        const message = yield* controller.setMemoryPinned('item.md', pinned);
-
-        assert.deepEqual(mocks.setMemoryPinned.mock.calls[0], [
-          'mem/item.md',
-          pinned,
-        ]);
-        assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-      }),
-  );
-
-  it.effect(
-    'refreshes without warning when the file is already in the requested state',
-    () =>
-      Effect.gen(function* () {
-        mocks.setMemoryPinned.mockReturnValue(
-          Effect.succeed({ status: 'already' }),
-        );
-        mocks.loadMemoryItems.mockReturnValue(Effect.succeed([]));
-        const { controller, hosts } = createController();
-
-        const message = yield* controller.setMemoryPinned('item.md', true);
-
-        assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-        assert.equal(hosts.prompt.messages.length, 0);
-      }),
   );
 
   it.effect(

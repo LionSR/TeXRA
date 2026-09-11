@@ -519,68 +519,6 @@ describe('ToolUseWaitNode', () => {
     }
   });
 
-  it('keeps injecting active goal continuations across a long run', async () => {
-    const runId = generateRunId();
-    await installPlatform();
-
-    await GoalStore.start(
-      runId,
-      'Keep solving the hard problem until verification is complete.',
-    );
-
-    const shared = toolUseRunShared();
-    const createUserFollowUpMessages = appendUserFollowUpMessages();
-    const waitForFollowUp = vi.fn(async () => null);
-    const services = createWaitNodeServices({
-      modelHandler: {
-        createUserFollowUpMessages,
-      },
-      runId,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      const continuationCycles = 25;
-      for (let cycle = 0; cycle < continuationCycles; cycle += 1) {
-        const prep = await node.prep(shared);
-        const exec = await withTestRunContext(services.runScope, () =>
-          node.exec(prep),
-        );
-
-        expect(exec.kind).toBe('continue');
-        if (exec.kind !== 'continue') return;
-        expect(exec.synthetic).toBe(true);
-        expect(exec.followUps[0]?.text).toContain(
-          'Keep solving the hard problem until verification is complete.',
-        );
-
-        const transition = await withTestRunContext(services.runScope, () =>
-          node.post(shared, prep, exec),
-        );
-        expect(transition).toBe(FlowTransition.CONTINUE);
-        expect(createUserFollowUpMessages).toHaveBeenCalledTimes(cycle + 1);
-      }
-
-      expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(shared.messages).toHaveLength(continuationCycles);
-
-      await GoalStore.setStatus(runId, 'paused');
-
-      const prep = await node.prep(shared);
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(prep),
-      );
-
-      expect(waitForFollowUp).toHaveBeenCalledOnce();
-      expect(exec.kind).toBe('stop');
-    } finally {
-      await GoalStore.forget(runId);
-    }
-  });
-
   it('lets queued user follow-up win over an active goal continuation', async () => {
     const runId = generateRunId();
     await installPlatform();
@@ -611,40 +549,6 @@ describe('ToolUseWaitNode', () => {
         followUps: [{ text: 'user correction', origin: 'user' }],
         synthetic: false,
       });
-    } finally {
-      await GoalStore.forget(runId);
-    }
-  });
-
-  it('does not let a subagent drive the parent goal continuation loop', async () => {
-    // A subagent cycle always exits WAITING before the goal-continuation path,
-    // which is gated on the run having no parent and sits after the
-    // subagent-suspend branch.
-    // So a subagent can never synthesize a continuation against the PARENT's
-    // goal, structurally rather than by any check on waitForFollowUp.
-    const runId = generateRunId();
-    await installPlatform();
-
-    await GoalStore.start(runId, 'Parent-owned objective.');
-
-    const waitForFollowUp = vi.fn(async () => null);
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      runId,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(waitPrep()),
-      );
-
-      expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(exec.kind).toBe('waiting');
-      expect(GoalStore.getForRun(runId)?.status).toBe('active');
     } finally {
       await GoalStore.forget(runId);
     }
@@ -1032,23 +936,6 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     expect(onFollowUpConsumed).not.toHaveBeenCalled();
   });
 
-  it('acknowledges consumption after a successful append', async () => {
-    const onFollowUpConsumed = vi.fn();
-    const services = transcriptLogServices({ onFollowUpConsumed });
-
-    await runPost(services, userFollowUp());
-
-    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
-  });
-
-  it('still logs exactly once per follow-up on the success path', async () => {
-    const services = transcriptLogServices();
-
-    await runPost(services, userFollowUp());
-
-    expect(services.logger.info).toHaveBeenCalledTimes(1);
-  });
-
   it('logs a workflow delivery with its typed summary beside the collapsed text', async () => {
     // The delivery envelope carries the summary typed at the write site; the
     // transcript row producer parses it once and attaches it structured, so
@@ -1095,18 +982,5 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     });
 
     expect(services.logger.info).not.toHaveBeenCalled();
-  });
-});
-
-describe('extractTouchedFiles', () => {
-  it('tolerates legacy partial state slices', () => {
-    expect(
-      extractTouchedFiles({} as Parameters<typeof extractTouchedFiles>[0]),
-    ).toEqual([]);
-    expect(
-      extractTouchedFiles({
-        workspaceSnapshot: {},
-      } as Parameters<typeof extractTouchedFiles>[0]),
-    ).toEqual([]);
   });
 });

@@ -12,7 +12,7 @@ import { Markdown } from '../render/Markdown';
 const INFO_PANE_FIXED_CHROME_ROWS = 4;
 const INFO_PANE_HORIZONTAL_CHROME_COLUMNS = 4;
 
-export function infoPaneRequiredRows(
+function infoPaneRequiredRows(
   title: string,
   lines: readonly string[],
   textWidth: number,

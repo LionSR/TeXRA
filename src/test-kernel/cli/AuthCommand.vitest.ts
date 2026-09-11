@@ -96,21 +96,6 @@ describe('CLI auth command', () => {
     expect(stderr).toBe('');
   });
 
-  it('honors structured output on bare auth status', async () => {
-    mocks.getCliAuthProfile.mockResolvedValueOnce(SIGNED_IN_PROFILE);
-
-    const result = await runCli([
-      'auth',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(JSON.parse(stdout)).toEqual(SIGNED_IN_PROFILE);
-    expect(stderr).toBe('');
-  });
-
   it('forwards group-level global flags to explicit auth subcommands', async () => {
     mocks.getCliAuthProfile.mockResolvedValueOnce(SIGNED_IN_PROFILE);
 

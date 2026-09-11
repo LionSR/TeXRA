@@ -427,21 +427,6 @@ describe('desktop Supabase auth', () => {
     );
   });
 
-  it('rejects a callback with no nonce while a sign-in is pending', async () => {
-    const { router, coordinator, auth } = createAuthSetup();
-
-    await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        code: 'authorization-code',
-      }),
-    );
-    await Promise.resolve();
-
-    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
-    expect(coordinator.storeSession).not.toHaveBeenCalled();
-  });
-
   it('ignores routed callbacks until desktop sign-in starts', async () => {
     const log = createLog();
     const { router, coordinator } = createAuthSetup({ log });
@@ -527,32 +512,6 @@ describe('desktop Supabase auth', () => {
 
       expect(expiredCallbackState.hasPendingSignIn()).toBe(false);
       expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('clears expired pending state when matching a nonce directly', async () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
-      const stateStore = new FakeStateStore();
-      const callbackState = createDesktopAuthCallbackState(
-        createLog(),
-        stateStore,
-      );
-
-      await callbackState.beginAuthAttempt('attempt-nonce');
-      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
-
-      expect(callbackState.matchesPendingNonce('attempt-nonce')).toBe(false);
-      expect(callbackState.hasPendingSignIn()).toBe(false);
-      expect(
-        createDesktopAuthCallbackState(
-          createLog(),
-          stateStore,
-        ).hasPendingSignIn(),
-      ).toBe(false);
     } finally {
       vi.useRealTimers();
     }

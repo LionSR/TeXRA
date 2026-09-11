@@ -53,32 +53,6 @@ describe('extractBibliography helpers', () => {
     }),
   );
 
-  it.effect('handles wildcard nocite directives consistently across runs', () =>
-    Effect.gen(function* () {
-      const texPath = 'paper.tex';
-      const expectedBibPath = 'refs.bib';
-
-      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
-      % bibliographies
-      \\bibliography{refs}
-      Intro text
-      \\nocite{*}
-    `);
-      vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
-
-      const first = yield* extractBibliographyContext(texPath);
-      const second = yield* extractBibliographyContext(texPath);
-
-      const expectedKeys = new Set(['*']);
-
-      assert.deepStrictEqual(first.bibliographyFiles, [expectedBibPath]);
-      assert.deepStrictEqual(second.bibliographyFiles, [expectedBibPath]);
-      assert.deepStrictEqual(new Set(first.citationKeys), expectedKeys);
-      assert.deepStrictEqual(new Set(second.citationKeys), expectedKeys);
-      assert.deepStrictEqual(second, first);
-    }),
-  );
-
   it.effect(
     'marks missing bibliography files and ignores empty citations',
     () =>

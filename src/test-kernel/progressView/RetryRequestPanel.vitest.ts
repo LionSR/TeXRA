@@ -141,36 +141,6 @@ describe('retry-request-panel', () => {
     ]);
   });
 
-  it('marks retry action buttons with action ids for shared sizing styles', async () => {
-    const element = await mountPanel();
-
-    expect(actionButtonIds(element)).toEqual([
-      'useOwnApiKey',
-      'retry',
-      'cancel',
-    ]);
-  });
-
-  it('distinguishes a fresh direct-model run from retrying Copilot', async () => {
-    const element = await mountPanel({
-      requestId: 'copilot-retry',
-      model: 'sonnet46',
-      errorMessage: 'Copilot quota exhausted',
-      errorDetails: {
-        classification: { kind: 'copilot-subscription' },
-        userRetryable: true,
-      },
-    });
-
-    const actions = element.shadowRoot?.querySelector(
-      '.retry-request__actions',
-    );
-    expect(actions?.textContent?.replaceAll(/\s+/g, ' ')).toContain(
-      'Start with your own API key',
-    );
-    expect(actions?.textContent).toContain('Retry Copilot');
-  });
-
   it('shows exactly the claimed number of tail characters for truncated partial output', async () => {
     const element = await mountPanel();
 

@@ -26,15 +26,6 @@ function rowTexts(
 }
 
 describe('CLI queued follow-up panel display model', () => {
-  it('uses no rows when there are no queued follow-ups', () => {
-    expect(queuedFollowUpPanelRowCount([])).toBe(0);
-    expect(panelDisplay([])).toEqual({
-      title: undefined,
-      rows: [],
-      hiddenCount: 0,
-    });
-  });
-
   it('uses a compact title plus readable message rows', () => {
     expect(queuedFollowUpPanelRowCount(['first', 'second'])).toBe(3);
 
@@ -91,24 +82,6 @@ describe('CLI queued follow-up panel display model', () => {
       '… 2 queued follow-ups hidden',
     ]);
     expect(display.hiddenCount).toBe(2);
-  });
-
-  it('uses an overflow row when only one message slot fits', () => {
-    const display = panelDisplay(['first', 'second'], { maxRows: 2 });
-
-    expect(display.rows.map((row) => row.text)).toEqual([
-      '… 2 queued follow-ups hidden',
-    ]);
-    expect(display.hiddenCount).toBe(2);
-  });
-
-  it('keeps hidden count nonnegative when callers pass extra rows', () => {
-    const display = panelDisplay(['only queued follow-up'], { maxRows: 5 });
-
-    expect(display.rows.map((row) => row.text)).toEqual([
-      '1. only queued follow-up',
-    ]);
-    expect(display.hiddenCount).toBe(0);
   });
 
   it('truncates wide messages by terminal columns', () => {

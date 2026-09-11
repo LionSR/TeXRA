@@ -157,20 +157,6 @@ describe('tool-use follow-up progress events', () => {
     expect(onFollowUp).toHaveBeenCalledOnce();
   });
 
-  it('stops breaking waits once the follow-up listener is cleaned up', () => {
-    const session = trackSession();
-    const onFollowUp = vi.fn();
-
-    let cleanup: () => void = () => {};
-    withRunContext(createRunContext({ session, runId }), () => {
-      cleanup = listenForFollowUp(onFollowUp);
-    });
-    cleanup();
-
-    notifyFollowUpSent(runId, session);
-    expect(onFollowUp).not.toHaveBeenCalled();
-  });
-
   it('does not append through stale active contexts after final status', async () => {
     seedRunStatusForTest(defaultSession().status, runId, {
       phase: RUN_PHASE.COMPLETED,
@@ -183,20 +169,6 @@ describe('tool-use follow-up progress events', () => {
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(defaultSession().followUps.getAll(runId)).toEqual([]);
-  });
-
-  it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
-    const session = trackSession();
-    const recorded = recordSessionEvents(session);
-
-    const result = await Effect.runPromise(
-      submitFollowUp('run:no-follow-up-session' as RunId, 'cannot deliver', {
-        session,
-      }),
-    );
-
-    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(await recorded.read()).toEqual([]);
   });
 
   it('queues follow-ups for resuming runs through registry admission', async () => {

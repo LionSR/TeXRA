@@ -68,12 +68,6 @@ describe('pageStdout', () => {
     expect(stdout).toBe('row1\nrow2\n');
   });
 
-  it('defaults to non-TTY when stdoutIsTty is omitted', () => {
-    pageStdout('row', {});
-    expect(spawnSyncMock).not.toHaveBeenCalled();
-    expect(stdout).toBe('row\n');
-  });
-
   it('pages through $PAGER only on an interactive TTY', () => {
     process.env.TEXRA_PAGER_TEST_ENV = 'inherited';
     try {

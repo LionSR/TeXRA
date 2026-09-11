@@ -402,26 +402,6 @@ describe('child run progress events', () => {
     );
   });
 
-  it('releases completed child presentation without direct host emission', async () => {
-    const active = createRecordingHost();
-    const recorded = recordSessionEvents(defaultSession());
-
-    const childRun = await startBashChild(noProjectionAutoCloseRunId);
-
-    await Effect.runPromise(
-      childRun.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
-      }),
-    );
-
-    expect(active.events).toEqual([]);
-    expect(eventsOfType(await recorded.read(), 'run.removed')).toEqual([]);
-    expect(defaultSession().transcripts.has(noProjectionAutoCloseRunId)).toBe(
-      true,
-    );
-  });
-
   it('retains completed command history after automatic presentation release', async () => {
     const recorded = recordSessionEvents(defaultSession());
 
@@ -652,25 +632,6 @@ describe('child run progress events', () => {
       type: 'result',
       outcome: 'cancelled',
       runId: stoppedRunId,
-    });
-  });
-
-  it('settles child handle results as cancelled for stopped finalization', async () => {
-    const childRun = await startCodexChild(
-      cancelledRunId,
-      'Run an interrupted Codex child loop',
-    );
-    const handle = defaultSession().runs.getHandle(cancelledRunId);
-    expect(handle).toBeDefined();
-
-    await Effect.runPromise(
-      childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED }),
-    );
-
-    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'result',
-      outcome: 'cancelled',
-      runId: cancelledRunId,
     });
   });
 

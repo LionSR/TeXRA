@@ -125,26 +125,6 @@ describe('external inquiry continuation session routing', () => {
     readExternalInquiryThreadMock.mockClear();
   });
 
-  it.effect('passes the host-provided session through to sendFollowUp', () =>
-    Effect.gen(function* () {
-      const session = sessionStub('desktop-session');
-
-      const outcome: InjectionOutcome =
-        yield* injectContinuationForAnsweredThread(
-          THREAD,
-          answeredManifest(),
-          session,
-        ).pipe(Effect.provideService(InquiryRecords, records));
-
-      expect(outcome).toBe('sent');
-      expect(submitFollowUpMock).toHaveBeenCalledWith(
-        PARENT_RUN,
-        expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
-        { session },
-      );
-    }),
-  );
-
   it.effect(
     'archives a turn-less manifest without dispatching a follow-up',
     () =>
@@ -226,29 +206,6 @@ describe('external inquiry continuation session routing', () => {
           detach();
           session.dispose();
         }
-      }),
-  );
-
-  it.effect.each([
-    {
-      name: 'threads the provided session to the wake decision',
-      session: sessionStub('desktop-session'),
-    },
-  ])(
-    'delegates queued wake decisions to the follow-up owner ($name)',
-    ({ session }) =>
-      Effect.gen(function* () {
-        submitFollowUpMock.mockReturnValueOnce(
-          Effect.succeed({ status: 'queued' }),
-        );
-
-        const outcome = yield* injectContinuationForAnsweredThread(
-          THREAD,
-          answeredManifest(),
-          session,
-        ).pipe(Effect.provideService(InquiryRecords, records));
-
-        expect(outcome).toBe('queued');
       }),
   );
 

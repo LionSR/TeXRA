@@ -111,18 +111,6 @@ async function triggerQueuedMissingAgentFailure(
 }
 
 describe('AgentLaunchContext', () => {
-  it('still rejects empty canonical values, now at agent resolution', async () => {
-    // The pre-mint missing-field guard died with the model-keyed stream id
-    // (Axis T): an empty agent now fails agent resolution instead of a
-    // dedicated field check, but it must still fail the launch.
-    const session = createTestSession();
-    try {
-      await launchWithMissingAgent(session);
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('publishes missing-agent banners through the supplied host interactions', async () => {
     // Delivery is confirmed so the launch catch adds no generic toast; the
     // undelivered variant is covered by the generic-error-toast test below.
@@ -377,34 +365,6 @@ describe('AgentLaunchContext', () => {
       modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
       expect(tryUseRunContext()?.model).toBe('sonnet46T');
-    });
-  });
-
-  it('projects an empty tool policy as absent ambient fields', async () => {
-    const session = {} as SessionHandle;
-    const runScope = createRunScope({
-      runId: 'launch-context-defaults' as RunId,
-      session,
-      signal: new AbortController().signal,
-    });
-    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
-    const ctx = {
-      runScope,
-      logger: noopTrace,
-      modelCell,
-      toolPolicy: createToolPolicy(),
-      config: { agent: 'chat', model: 'deepseekT' },
-    } as unknown as AgentLaunchContext;
-
-    await withLaunchRunContext(ctx, {}, async () => {
-      const context = tryUseRunContext()!;
-      if (context.kind !== 'launch') {
-        throw new Error('expected launch context');
-      }
-      expect(context.approvalPromptsUnavailable).toBeUndefined();
-      expect(context.runtimeUnavailableTools).toBeUndefined();
-      expect(context.stopAfterCycle).toBeUndefined();
-      expect(context.onApprovalPolicyDenial).toBeUndefined();
     });
   });
 

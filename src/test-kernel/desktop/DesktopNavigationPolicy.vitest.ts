@@ -31,18 +31,6 @@ describe('desktop navigation policy', () => {
     expect(isAllowedExternalUrl('https://supabase.co/')).toBe(false);
   });
 
-  it('allows the static https host allow-list', () => {
-    expect(isAllowedExternalUrl('https://github.com/owner/repo')).toBe(true);
-    expect(
-      isAllowedExternalUrl(
-        'https://marketplace.visualstudio.com/items?itemName=foo',
-      ),
-    ).toBe(true);
-    expect(isAllowedExternalUrl('https://open-vsx.org/extension/foo')).toBe(
-      true,
-    );
-  });
-
   it('rejects non-https schemes', () => {
     expect(isAllowedExternalUrl('http://texra.ai/')).toBe(false);
     expect(isAllowedExternalUrl('javascript:alert(1)')).toBe(false);

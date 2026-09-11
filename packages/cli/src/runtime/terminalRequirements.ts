@@ -16,7 +16,7 @@ export function interactiveTerminalFailure(
   return undefined;
 }
 
-export function dumbTerminalMessage(
+function dumbTerminalMessage(
   command: string,
   options: { commandName?: string; nonInteractiveFallback?: string } = {},
 ): string {

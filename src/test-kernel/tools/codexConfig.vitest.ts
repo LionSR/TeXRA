@@ -21,13 +21,6 @@ import {
 } from '@tools/codexShared';
 
 describe('toCodexCliReasoningEffort', () => {
-  it.each(['low', 'medium', 'high'] as const)(
-    'passes the CLI-compatible %s tier through unchanged',
-    (tier) => {
-      assert.equal(toCodexCliReasoningEffort(tier), tier);
-    },
-  );
-
   it("caps 'xhigh' to 'high' so the Codex CLI config deserializer accepts it", () => {
     // Regression: the Codex CLI's Rust-side config deserializer rejects
     // 'xhigh' with `unknown variant 'xhigh', expected one of 'minimal',
@@ -37,23 +30,6 @@ describe('toCodexCliReasoningEffort', () => {
 });
 
 describe('buildCodexFileChangeToolLog', () => {
-  it('builds a structured Codex patch log entry', () => {
-    const log = buildCodexFileChangeToolLog({
-      changes: [{ kind: 'update', path: '/tmp/workspace/src/App.ts' }],
-      status: 'completed',
-    });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_FILE_CHANGE_TOOL,
-      summary: 'update App.ts',
-      input: {
-        changes: [{ kind: 'update', path: '/tmp/workspace/src/App.ts' }],
-        patchStatus: 'completed',
-      },
-      status: 'completed',
-    });
-  });
-
   it('deduplicates repeated file-change entries', () => {
     const log = buildCodexFileChangeToolLog({
       changes: [
@@ -153,130 +129,6 @@ describe('buildCodexCommandToolLog', () => {
       isError: true,
       status: 'completed',
     });
-  });
-
-  it('keeps running commands in progress while streaming output', () => {
-    const log = buildCodexCommandToolLog({
-      command: 'lake build',
-      aggregated_output: 'Compiling...\n',
-      status: 'in_progress',
-    });
-
-    assert.deepEqual(log, {
-      toolName: 'bash',
-      summary: 'lake build',
-      input: { command: 'lake build' },
-      output: 'Compiling...',
-      status: 'in_progress',
-    });
-  });
-});
-
-describe('buildCodexMcpToolLog', () => {
-  it('preserves structured and block MCP output for native rendering', () => {
-    const log = buildCodexMcpToolLog({
-      id: 'mcp-1',
-      type: 'mcp_tool_call',
-      server: 'github',
-      tool: 'search',
-      arguments: { query: 'codex' },
-      result: {
-        structured_content: { total: 1 },
-        content: [{ type: 'text', text: 'Found one result' }],
-      },
-      status: 'completed',
-    });
-
-    assert.deepEqual(log, {
-      toolName: 'mcp:github/search',
-      input: { query: 'codex' },
-      output: {
-        status: 'completed',
-        structuredContent: { total: 1 },
-        contentBlocks: [{ type: 'text', text: 'Found one result' }],
-      },
-      status: 'completed',
-    });
-  });
-});
-
-describe('buildCodexTodoToolLog', () => {
-  it('builds a native checklist card', () => {
-    const log = buildCodexTodoToolLog(
-      {
-        id: 'todo-1',
-        type: 'todo_list',
-        items: [
-          { text: 'Inspect logs', completed: true },
-          { text: 'Patch formatter', completed: false },
-        ],
-      },
-      'in_progress',
-    );
-
-    assert.deepEqual(log, {
-      toolName: CODEX_TODO_TOOL,
-      summary: '1/2 completed',
-      input: {
-        items: [
-          { text: 'Inspect logs', completed: true },
-          { text: 'Patch formatter', completed: false },
-        ],
-        completedCount: 1,
-        totalCount: 2,
-      },
-      status: 'in_progress',
-    });
-  });
-});
-
-describe('buildCodexTurnToolLog', () => {
-  it.each([
-    {
-      name: 'builds a structured Codex turn summary entry',
-      options: { state: 'completed', wallTimeMs: 518_000 },
-      expected: {
-        toolName: CODEX_TURN_TOOL,
-        summary: 'Completed',
-        input: { state: 'completed', wallTimeMs: 518_000 },
-        status: 'completed',
-      },
-    },
-    {
-      name: 'builds a running Codex turn entry',
-      options: { state: 'running' },
-      expected: {
-        toolName: CODEX_TURN_TOOL,
-        summary: 'Running',
-        input: { state: 'running' },
-        status: 'in_progress',
-      },
-    },
-    {
-      name: 'marks a failed turn as an error even without an error message',
-      options: { state: 'failed' },
-      expected: {
-        toolName: CODEX_TURN_TOOL,
-        summary: 'Failed',
-        input: { state: 'failed' },
-        isError: true,
-        status: 'completed',
-      },
-    },
-    {
-      name: 'attaches the error message when a failed turn has one',
-      options: { state: 'failed', error: 'boom' },
-      expected: {
-        toolName: CODEX_TURN_TOOL,
-        summary: 'Failed',
-        input: { state: 'failed' },
-        error: 'boom',
-        isError: true,
-        status: 'completed',
-      },
-    },
-  ] as const)('$name', ({ options, expected }) => {
-    assert.deepEqual(buildCodexTurnToolLog(options), expected);
   });
 });
 

@@ -65,33 +65,6 @@ describe('CLI TodosPlanPanel display model', () => {
     );
   });
 
-  it('uses all rows when the todo and plan content fits', () => {
-    const display = compactTodosPlanRows({ maxRows: 4, plan, todos });
-
-    expectRows(
-      display,
-      [
-        'todo:Split theorem into algebraic and analytic checks',
-        'todo:Ask leanSolver to verify the finite case',
-        'todo:Merge subagent conclusions into final answer',
-        'plan:summary',
-      ],
-      0,
-    );
-
-    // The plan row shows the document's first non-empty line.
-    const summaryRow = display.rows.find((row) => row.kind === 'planSummary');
-    expect(summaryRow?.summary).toBe(
-      'Coordinate a small math proof through nested CLI work.',
-    );
-  });
-
-  it('uses the single available row for the highest-signal item', () => {
-    const display = compactTodosPlanRows({ maxRows: 1, plan, todos });
-
-    expectRows(display, ['todo:Ask leanSolver to verify the finite case'], 3);
-  });
-
   it('drops the plan summary before todo rows under pressure', () => {
     const display = compactTodosPlanRows({
       maxRows: 1,

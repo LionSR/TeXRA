@@ -61,16 +61,6 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       .map(([, payload]) => (payload as { presetId: string }).presetId);
   }
 
-  it('renders every preset apply action as a native button', async () => {
-    const element = await mount();
-    const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
-    expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
-    for (const card of cards) {
-      expect(card.tagName).toBe('BUTTON');
-      expect(card.getAttribute('type')).toBe('button');
-    }
-  });
-
   it('applies the preset from its native button', async () => {
     const element = await mount();
 

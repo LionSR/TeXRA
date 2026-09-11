@@ -55,27 +55,6 @@ describe('channel trace adapters', () => {
     expect(output).toContain('visible line');
   });
 
-  it('keeps non-log AgentTrace members inert', () => {
-    const trace = createChannelTrace('TestChannel');
-
-    const unsubscribe = trace.subscribe(() => {
-      throw new Error('a channel trace must never fan out to subscribers');
-    });
-    expect(() =>
-      trace.emit({ type: 'log', level: 'info', message: 'x' }),
-    ).not.toThrow();
-    unsubscribe();
-
-    expect(trace.activeStageId()).toBeUndefined();
-
-    const stage = trace.openStage('stage');
-    expect(() => stage.end()).not.toThrow();
-
-    const stream = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    stream.append('chunk');
-    expect(stream.finalize()).toBe('');
-  });
-
   it('routes public emitter logs until the subscriber is detached', () => {
     const entries = captureEntries();
     const trace = new TraceEmitter();

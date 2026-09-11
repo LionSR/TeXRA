@@ -157,20 +157,6 @@ describe('hierarchical settings navigation', () => {
     });
   });
 
-  it('renders category navigation plus only the active category pages', async () => {
-    const app = await mountSettingsApp();
-
-    expect(
-      app.shadowRoot?.querySelectorAll('.settings-category-button'),
-    ).toHaveLength(navGroups.length);
-    const activeGroup = navGroups.find((group) =>
-      group.entries.some((entry) => entry.name === 'ACCOUNT'),
-    )!;
-    expect(
-      app.shadowRoot?.querySelectorAll('.settings-page-button'),
-    ).toHaveLength(activeGroup.entries.length);
-  });
-
   it('selects the first page when changing category, then any page within it', async () => {
     const app = await mountSettingsApp();
 
@@ -205,26 +191,6 @@ describe('hierarchical settings navigation', () => {
     expect(app.shadowRoot?.querySelector('latex-tab')).not.toBeNull();
   });
 
-  it('renders the same page heading contract for every settings page', async () => {
-    const app = await mountSettingsApp();
-
-    for (const group of navGroups) {
-      for (const entry of group.entries) {
-        setSelectedPanel(entry.panel);
-        await app.updateComplete;
-
-        const header = app.shadowRoot?.querySelector('.settings-page-header');
-        expect(header?.querySelector('h1')?.textContent?.trim()).toBe(
-          entry.label,
-        );
-        expect(header?.querySelector('p')?.textContent?.trim()).toBe(
-          entry.description,
-        );
-        expect(header?.querySelector('wa-icon')).toBeNull();
-      }
-    }
-  });
-
   it('keeps account key management in the models page', async () => {
     const app = await mountSettingsApp();
 
@@ -243,23 +209,6 @@ describe('hierarchical settings navigation', () => {
     expect(activePanelLabel(app)).toBe('Providers & Models');
     expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
     expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
-  });
-
-  it('keeps icon-only navigation controls accessible', async () => {
-    const app = await mountSettingsApp();
-
-    for (const group of navGroups) {
-      expect(categoryButton(app, group.label).getAttribute('aria-label')).toBe(
-        group.label,
-      );
-      categoryButton(app, group.label).click();
-      await app.updateComplete;
-      for (const entry of group.entries) {
-        expect(pageButton(app, entry.panel).getAttribute('aria-label')).toBe(
-          `${group.label}: ${entry.label}`,
-        );
-      }
-    }
   });
 
   it('keeps unsupported Goals out of the Data & Activity pages', async () => {

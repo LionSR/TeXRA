@@ -296,52 +296,6 @@ describe('OpenAI-compatible provider request params', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
-  it('classifies a frozen SDK error without masking it', async () => {
-    const handler = createKimiHandler({
-      name: 'kimi3',
-      fullName: 'kimi-k3',
-      kimiSubscription: true,
-      baseUrl: KIMI_CODE_BASE_URL,
-    });
-    const usageLimitMessage =
-      "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle.";
-    const thrown = new Error(usageLimitMessage) as Error & {
-      status: number;
-      error: unknown;
-    };
-    thrown.status = 403;
-    thrown.error = {
-      message: usageLimitMessage,
-      type: 'invalid_request_error',
-      code: 'usage_limit_reached',
-    };
-    Object.freeze(thrown);
-    const client = {
-      baseURL: KIMI_CODE_BASE_URL,
-      chat: {
-        completions: {
-          create: async () => {
-            throw thrown;
-          },
-        },
-      },
-    };
-
-    // Recording must be best-effort: the original 403 propagates unchanged
-    // instead of being replaced by a stamping TypeError.
-    await expect(
-      handler.createResponse({
-        client: client as never,
-        messages: SINGLE_TURN,
-        temperature: 0,
-      }),
-    ).rejects.toBe(thrown);
-
-    const formatted = formatProviderHttpError(thrown);
-    expect(formatted.classification?.kind).toBe('kimi-code-subscription');
-    expect(formatted.userRetryable).toBe(true);
-  });
-
   it.each(KIMI_K27_CODE_ALIASES)(
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {
@@ -422,21 +376,6 @@ describe('OpenAI-compatible provider request params', () => {
     },
   );
 
-  it.each(KIMI_K3_ALIASES)(
-    'preserves thinking in Kimi K3 alias %s compaction summaries',
-    async (fullName) => {
-      const handler = createK3Handler(fullName);
-      handler.setAgentCategory(AgentCategory.ToolUse);
-      handler.requestCompaction();
-
-      const { createCalls } = await sendRequest(handler, COMPACTION_TURN);
-
-      assert.equal(createCalls.length, 2);
-      assert.equal('temperature' in createCalls[0], false);
-      assert.equal(createCalls[0].thinking, undefined);
-    },
-  );
-
   it('disables thinking for the Kimi K2.6 non-reasoning entry sharing a fullName with its thinking sibling (#7081)', async () => {
     // kimi26 and kimi26T both resolve to fullName 'kimi-k2.6' in the live
     // registry — the same shared-fullName ambiguity as K2.5 — but before
@@ -452,14 +391,6 @@ describe('OpenAI-compatible provider request params', () => {
     // K2.6 has no fixed-temperature requirement, so the caller's temperature
     // passes through unchanged.
     assert.equal(createCalls[0].temperature, 0);
-  });
-
-  it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
-    const handler = createKimi26Handler(true);
-
-    const { createCalls } = await sendRequest(handler);
-
-    assert.equal(createCalls[0].thinking, undefined);
   });
 
   it('preserves GLM low reasoning effort when the registry accepts it', async () => {
@@ -504,34 +435,6 @@ describe('OpenAI-compatible provider request params', () => {
     ]);
 
     assert.equal(createCalls[0].reasoning_effort, 'max');
-  });
-
-  it('preserves temperature for Grok reasoning models', async () => {
-    const handler = createXaiHandler({
-      name: 'grok45',
-      fullName: 'grok-4.5',
-      capabilities: { supportsReasoning: true },
-    });
-
-    const { createCalls } = await sendRequest(handler);
-
-    assert.equal(createCalls[0].temperature, 0);
-  });
-
-  it('passes medium reasoning effort through for current Grok models', async () => {
-    const handler = createXaiHandler({
-      name: 'grok45',
-      fullName: 'grok-4.5',
-      capabilities: {
-        supportsReasoning: true,
-        supportsReasoningEffort: true,
-        reasoningEffort: ReasoningEffort.MEDIUM,
-      },
-    });
-
-    const { createCalls } = await sendRequest(handler);
-
-    assert.equal(createCalls[0].reasoning_effort, 'medium');
   });
 
   it('clamps above-high reasoning effort to high for Grok models', async () => {

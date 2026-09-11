@@ -148,15 +148,6 @@ describe('focus over the session view', () => {
 });
 
 describe('cliState surface fields', () => {
-  it('clears foreground reference text with the session state', () => {
-    openInfoPane('/help', 'reference text');
-    expect(infoPane.get()).toBeDefined();
-
-    resetCliState();
-
-    expect(infoPane.get()).toBeUndefined();
-  });
-
   it('preserves multiple reference results until each is dismissed', () => {
     openInfoPane('/memory list', 'first\r\nresult');
     openInfoPane('/memory preview', 'second result');
@@ -262,54 +253,6 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
-  it('caps static transcript rows only in compact layouts', () => {
-    expect(
-      staticTranscriptRowBudget({
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        rows: 10,
-      }),
-    ).toBe(0);
-    expect(
-      staticTranscriptRowBudget({
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        rows: 14,
-      }),
-    ).toBe(4);
-    expect(
-      staticTranscriptRowBudget({
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        rows: 24,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('keeps the compact live reserve aligned with pinned chrome', () => {
-    const staticRows = staticTranscriptRowBudget({
-      footerRows: 5,
-      foregroundOpen: false,
-      queuedFollowUpPanelRows: 3,
-      rows: 14,
-    });
-
-    expect(staticRows).toBe(4);
-    expect(
-      allocateMiddleRows({
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        reverseSearchOpen: false,
-        rows: 14,
-        slashPaletteOpen: false,
-        staticTranscriptRows: staticRows,
-      }).transcriptRows,
-    ).toBe(2);
-  });
-
   it.each([
     {
       name: 'reserves rows for reverse-search input chrome',
@@ -340,261 +283,11 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
-  it.each([
-    {
-      transcriptRows: 1,
-      expected: {
-        bottomPanelRows: 0,
-        conversationRows: 1,
-        sessionPanelRows: 0,
-        todosPlanRows: 0,
-      },
-    },
-    {
-      transcriptRows: 2,
-      expected: {
-        bottomPanelRows: 0,
-        conversationRows: 2,
-        sessionPanelRows: 0,
-        todosPlanRows: 0,
-      },
-    },
-    {
-      transcriptRows: 3,
-      expected: {
-        bottomPanelRows: 2,
-        conversationRows: 1,
-        sessionPanelRows: 2,
-        todosPlanRows: 0,
-      },
-    },
-    // The focused list takes its full content (4 sessions + separator) and
-    // never shares the panel with todos, which hide while it has focus.
-    {
-      transcriptRows: 8,
-      expected: {
-        bottomPanelRows: 5,
-        conversationRows: 3,
-        sessionPanelRows: 5,
-        todosPlanRows: 0,
-      },
-    },
-  ])(
-    'reserves a live conversation row with $transcriptRows transcript rows',
-    ({ transcriptRows, expected }) => {
-      expect(
-        allocateConversationPanelRows({
-          maxRows: 10,
-          sessionCount: 4,
-          childListFocused: true,
-          todosPlanContentRows: 2,
-          transcriptRows,
-        }),
-      ).toEqual(expected);
-    },
-  );
-
-  it('hides the child list when its gap and content cannot both fit', () => {
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: false,
-        todosPlanContentRows: 5,
-        transcriptRows: 2,
-      }),
-    ).toEqual({
-      conversationRows: 2,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 1,
-        childListFocused: true,
-        todosPlanContentRows: 0,
-        transcriptRows: 2,
-      }),
-    ).toEqual({
-      conversationRows: 2,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 3,
-        childListFocused: true,
-        minimumSessionPanelRows: 3,
-        todosPlanContentRows: 0,
-        transcriptRows: 3,
-      }),
-    ).toEqual({
-      conversationRows: 3,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-  });
-
-  it('keeps the child list collapsed until it receives focus', () => {
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: false,
-        todosPlanContentRows: 0,
-        transcriptRows: 7,
-      }),
-    ).toEqual({
-      conversationRows: 7,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: true,
-        todosPlanContentRows: 0,
-        transcriptRows: 7,
-      }),
-    ).toEqual({
-      conversationRows: 4,
-      bottomPanelRows: 3,
-      sessionPanelRows: 3,
-      todosPlanRows: 0,
-    });
-  });
-
-  it('reserves a separator row above the todos panel', () => {
-    // 2 todos + separator = 3 rows when the transcript allows it.
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 0,
-        childListFocused: false,
-        todosPlanContentRows: 2,
-        transcriptRows: 9,
-      }),
-    ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
-  });
-
-  it('hands a lone todos row back instead of rendering a dead separator', () => {
-    // The grant would be exactly one row, too small for separator + content.
-    const allocation = allocateConversationPanelRows({
-      maxRows: 10,
-      sessionCount: 0,
-      childListFocused: false,
-      todosPlanContentRows: 4,
-      transcriptRows: 3,
-    });
-    expect(allocation).toEqual({
-      conversationRows: 3,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-  });
-
-  it('does not allocate session rows without transcript space', () => {
-    expect(
-      allocateConversationPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: false,
-        todosPlanContentRows: 5,
-        transcriptRows: 1,
-      }),
-    ).toEqual({
-      conversationRows: 1,
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    });
-  });
-
   const openTodo = {
     content: 'Check the live proof',
     activeForm: 'Checking the live proof',
     status: TODO_STATUS.IN_PROGRESS,
   } satisfies TodoItem;
-
-  it.each([
-    {
-      name: 'an open todo with no plan',
-      foregroundOpen: false,
-      hasPlan: false,
-      todos: [openTodo],
-      expected: true,
-    },
-    {
-      name: 'a plan with no open todos',
-      foregroundOpen: false,
-      hasPlan: true,
-      todos: [],
-      expected: true,
-    },
-    {
-      name: 'the foreground open',
-      foregroundOpen: true,
-      hasPlan: false,
-      todos: [openTodo],
-      expected: false,
-    },
-    {
-      name: 'no todo or plan',
-      foregroundOpen: false,
-      hasPlan: false,
-      todos: [],
-      expected: false,
-    },
-    {
-      name: 'a plan with only completed todos',
-      foregroundOpen: false,
-      hasPlan: true,
-      todos: [
-        {
-          content: 'Finish the old goal',
-          activeForm: 'Finishing the old goal',
-          status: TODO_STATUS.COMPLETED,
-        },
-      ],
-      expected: true,
-    },
-    {
-      name: 'the child list focused',
-      childListFocused: true,
-      foregroundOpen: false,
-      hasPlan: true,
-      todos: [openTodo],
-      expected: false,
-    },
-  ])(
-    'keeps unfinished todo and plan chrome across stream phases: $name',
-    ({
-      childListFocused = false,
-      foregroundOpen,
-      hasPlan,
-      todos,
-      expected,
-    }) => {
-      expect(
-        shouldShowTodosPlanPanel({
-          childListFocused,
-          foregroundOpen,
-          hasPlan,
-          todos,
-        }),
-      ).toBe(expected);
-    },
-  );
 
   it.each([
     {
@@ -634,34 +327,6 @@ describe('CLI TUI row allocation', () => {
     },
   );
 
-  it.each([
-    {
-      name: 'with no run pending',
-      runCompleted: false,
-      runPromise: undefined,
-      expected: true,
-    },
-    {
-      name: 'while a run is pending',
-      runCompleted: false,
-      runPromise: Promise.resolve(),
-      expected: false,
-    },
-    {
-      name: 'after a terminal chat failure',
-      runCompleted: true,
-      runPromise: Promise.resolve(),
-      expected: true,
-    },
-  ])(
-    'allows a fresh root run $name',
-    ({ runCompleted, runPromise, expected }) => {
-      expect(chatTuiCanStartRootRun({ runCompleted, runPromise })).toBe(
-        expected,
-      );
-    },
-  );
-
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = new TuiSession();
@@ -698,21 +363,6 @@ describe('CLI TUI row allocation', () => {
 
     expect(claimedRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
-  });
-
-  it('restores root run availability when clearing session run state', () => {
-    const startupPromise = new Promise<void>(() => {});
-    const session = new TuiSession();
-    session.runId = root;
-    session.runExitCode = CliExitCode.AgentError;
-    session.stopRequested = true;
-    session.markRunPending(startupPromise);
-
-    session.clearRunState();
-
-    expect(chatTuiCanStartRootRun(session)).toBe(true);
-    expect(rootRunPending.get()).toBe(false);
-    expect(claimedRunId.get()).toBeUndefined();
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

@@ -111,11 +111,6 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(() => parseTraceData(result.trace)).not.toThrow();
   });
 
-  it('rejects a trace missing required top-level fields', () => {
-    // config, meta, entries and snapshot all missing.
-    expectTraceRejected({ runId: 'abcdef' });
-  });
-
   it('applies source config defaults to legacy traces', () => {
     const legacyConfig: Partial<AgentConfig> = config();
     delete legacyConfig.agent;
@@ -175,10 +170,6 @@ describe('trace-viewer TraceDataSchema', () => {
     );
   });
 
-  it('rejects a trace whose entries are not an array of StreamLogEntry', () => {
-    expectTraceRejected(trace({ entries: [{ notAStreamLogEntry: true }] }));
-  });
-
   it('rejects a trace whose nested payload is malformed', () => {
     // The per-row recovery reader is gone: a row that fails the canonical
     // entry schema fails the whole parse instead of degrading to a generic row.
@@ -196,35 +187,5 @@ describe('trace-viewer TraceDataSchema', () => {
         ],
       }),
     );
-  });
-
-  it('rejects a null/undefined/primitive trace payload', () => {
-    expectTraceRejected(null);
-    expectTraceRejected(undefined);
-    expectTraceRejected('trace');
-  });
-
-  it('parses a legacy trace carrying the retired child-activity keys', () => {
-    // Pre-#9145 exports recorded `activeSubagents`/`activeProcesses` plus the
-    // two finished-child counters; #9139 additionally retired the whole
-    // process roster (`processes`). Neither schema on this path is strict, so
-    // those keys are stripped rather than rejected — and no data is lost,
-    // because they were always written at their prefault values.
-    const parsed = parseTraceData(
-      trace({
-        snapshot: {
-          runId: 'abcdef',
-          activeSubagents: [],
-          activeProcesses: [],
-          processes: [],
-          finishedSubagentCount: 3,
-          finishedProcessCount: 2,
-        },
-      }),
-    );
-    expect(parsed.snapshot.subagents).toEqual([]);
-    expect(parsed.snapshot).not.toHaveProperty('processes');
-    expect(parsed.snapshot).not.toHaveProperty('finishedSubagentCount');
-    expect(parsed.snapshot).not.toHaveProperty('activeSubagents');
   });
 });

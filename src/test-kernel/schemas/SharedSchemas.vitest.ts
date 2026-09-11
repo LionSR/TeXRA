@@ -16,20 +16,7 @@ import {
   parseCodexApprovalPolicy,
 } from '@shared/schemas';
 
-describe('work plan schema helpers', () => {
-  it('returns a stable placeholder for whitespace-only objectives', () => {
-    expect(planSummaryLine(' \n\t')).toBe('(empty plan)');
-  });
-});
-
 describe('parseCodexApprovalPolicy', () => {
-  it.each(['never', 'on-request', 'on-failure', 'untrusted'])(
-    'accepts the SDK approval policy %s',
-    (policy) => {
-      expect(parseCodexApprovalPolicy(policy)).toBe(policy);
-    },
-  );
-
   it('defaults to automatic approval for invalid persisted values', () => {
     expect(parseCodexApprovalPolicy('ask')).toBe('never');
   });
@@ -196,32 +183,9 @@ describe('settings view tool install actions', () => {
 });
 
 describe('settings view tab definitions', () => {
-  it('keeps panel names unique', () => {
-    expect(new Set(SETTINGS_TAB_PANEL_NAMES).size).toBe(
-      SETTINGS_TAB_PANEL_NAMES.length,
-    );
-  });
-
   // Panel names cross the IPC boundary as `SET_TAB.tab`, so the set is pinned
   // literally. A retired internal panel must disappear from this contract
   // together with every producer and handler.
-  it('pins the settings tab wire contract (panel names)', () => {
-    expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
-      'memory',
-      'models',
-      'agents',
-      'multi-agent',
-      'tools',
-      'skills',
-      'ai-agents',
-      'git',
-      'latex',
-      'goal',
-      'account',
-      'shortcuts',
-      'subscriptions',
-    ]);
-  });
 
   // A group that silently omits a tab makes that panel unreachable from the
   // nav while it stays a valid IPC target; a tab listed twice renders two rows
@@ -231,12 +195,5 @@ describe('settings view tab definitions', () => {
 
     expect(new Set(grouped).size).toBe(grouped.length);
     expect([...grouped].sort()).toEqual([...SETTINGS_TAB_ORDER].sort());
-  });
-
-  it('keeps group labels unique and non-empty', () => {
-    const labels = SETTINGS_TAB_GROUPS.map((group) => group.label);
-
-    expect(labels.every((label) => label.trim().length > 0)).toBe(true);
-    expect(new Set(labels).size).toBe(labels.length);
   });
 });

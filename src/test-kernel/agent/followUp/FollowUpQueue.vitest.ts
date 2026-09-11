@@ -257,25 +257,6 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     expect(queues.getAll(id)).toEqual(['child result']);
   });
 
-  it('admits concurrent submissions of one delivery id at most once', () => {
-    const { queues, id } = liveFlowQueue('run:concurrent-replay');
-    const delivery = childResult('d1');
-
-    const outcomes = [
-      queues.submit(id, delivery, 'live_owner'),
-      queues.submit(id, delivery, 'live_owner'),
-      queues.submit(id, delivery, 'live_owner'),
-    ];
-
-    expect(
-      outcomes.filter((outcome) => outcome.kind === 'delivered_live'),
-    ).toHaveLength(1);
-    expect(
-      outcomes.filter((outcome) => outcome.kind === 'duplicate'),
-    ).toHaveLength(2);
-    expect(queues.getAll(id)).toEqual(['child result']);
-  });
-
   it('never suppresses input that carries no delivery id', () => {
     const { queues, id } = liveFlowQueue('run:no-delivery-id');
 

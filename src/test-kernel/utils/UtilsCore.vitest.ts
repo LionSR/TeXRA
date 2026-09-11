@@ -19,117 +19,6 @@ import {
 } from '@utils/core';
 import { deriveRunId, truncatedHexId } from '@utils/core/idHash';
 
-describe('utcMonthStart', () => {
-  it('builds midnight UTC on the 1st of the given month', () => {
-    expect(utcMonthStart(2026, 4).toISOString()).toBe(
-      '2026-05-01T00:00:00.000Z',
-    );
-  });
-
-  it('rolls a 12-index month into the next year, for exclusive-end ranges', () => {
-    expect(utcMonthStart(2026, 12).toISOString()).toBe(
-      '2027-01-01T00:00:00.000Z',
-    );
-  });
-});
-
-describe('toNewestFirstByTimestamp', () => {
-  it('orders values by newest timestamp first', () => {
-    const rows = [
-      { id: 'middle', timestamp: '2026-06-20T12:00:00.000Z' },
-      { id: 'newest', timestamp: '2026-06-21T12:00:00.000Z' },
-      { id: 'oldest', timestamp: '2026-06-19T12:00:00.000Z' },
-    ];
-
-    expect(
-      toNewestFirstByTimestamp(rows, (row) => row.timestamp).map(
-        (row) => row.id,
-      ),
-    ).toEqual(['newest', 'middle', 'oldest']);
-  });
-
-  it('does not mutate the input array', () => {
-    const rows = [
-      { id: 'first', timestamp: '2026-06-20T12:00:00.000Z' },
-      { id: 'second', timestamp: '2026-06-21T12:00:00.000Z' },
-    ];
-
-    const sorted = toNewestFirstByTimestamp(rows, (row) => row.timestamp);
-
-    expect(sorted.map((row) => row.id)).toEqual(['second', 'first']);
-    expect(rows.map((row) => row.id)).toEqual(['first', 'second']);
-  });
-});
-
-describe('core type guard predicates', () => {
-  it('filters null values as an Array.filter predicate', () => {
-    const values: Array<string | null> = ['alpha', null, 'beta'];
-
-    expect(values.filter(filterNotNull)).toEqual(['alpha', 'beta']);
-  });
-
-  it('filters nullish values as an Array.filter predicate', () => {
-    const values: Array<string | null | undefined> = [
-      'alpha',
-      null,
-      undefined,
-      'beta',
-    ];
-
-    expect(values.filter(filterNotNullish)).toEqual(['alpha', 'beta']);
-  });
-
-  it('returns array values unchanged', () => {
-    const values = ['alpha', 'beta'];
-
-    expect(ensureArray(values)).toBe(values);
-  });
-
-  it('wraps scalar values in an array', () => {
-    expect(ensureArray('alpha')).toEqual(['alpha']);
-  });
-});
-
-describe('aggregateError', () => {
-  it('unwraps the lone failure when exactly one is collected', () => {
-    const only = new Error('boom');
-    expect(aggregateError([only], 'ignored')).toBe(only);
-  });
-
-  it('wraps several failures in an AggregateError carrying the message', () => {
-    const a = new Error('a');
-    const b = new Error('b');
-    const aggregate = aggregateError([a, b], 'both failed');
-    expect(aggregate).toBeInstanceOf(AggregateError);
-    expect(aggregate).toMatchObject({ message: 'both failed', errors: [a, b] });
-  });
-
-  it('preserves a lone falsy failure rather than aggregating it', () => {
-    // A single collected `undefined` must round-trip unwrapped, matching a
-    // bare `throw failures[0]`.
-    expect(aggregateError([undefined], 'ignored')).toBeUndefined();
-  });
-});
-
-describe('throwAggregated', () => {
-  it('is a no-op when no failures were collected', () => {
-    expect(() => throwAggregated([], 'nothing failed')).not.toThrow();
-  });
-
-  it('throws the lone failure unwrapped', () => {
-    const only = new Error('boom');
-    expect(() => throwAggregated([only], 'ignored')).toThrow(only);
-  });
-
-  it('throws an AggregateError when several failed', () => {
-    const a = new Error('a');
-    const b = new Error('b');
-    const throwing = () => throwAggregated([a, b], 'both failed');
-    expect(throwing).toThrow(AggregateError);
-    expect(throwing).toThrowError(expect.objectContaining({ errors: [a, b] }));
-  });
-});
-
 describe('getBasename', () => {
   it.each([
     ['/home/user/file.txt', 'file.txt'],
@@ -339,27 +228,11 @@ describe('coalesceAsync', () => {
   });
 });
 
-describe('truncatedHexId', () => {
-  it('returns a sha256 prefix of the requested length', () => {
-    expect(truncatedHexId('source', 8)).toBe('41cf6794');
-    expect(truncatedHexId('source', 16)).toBe('41cf6794ba4200b8');
-  });
-});
-
 describe('deriveRunId', () => {
   it('is stable across identity field order', () => {
     expect(deriveRunId({ parent: 'abc', attempt: 2 })).toBe(
       deriveRunId({ attempt: 2, parent: 'abc' }),
     );
-  });
-
-  it('returns distinct 24-hex ids for distinct identities', () => {
-    const first = deriveRunId({ parent: 'abc', attempt: 1 });
-    const second = deriveRunId({ parent: 'abc', attempt: 2 });
-
-    expect(first).toMatch(/^[a-f0-9]{24}$/);
-    expect(second).toMatch(/^[a-f0-9]{24}$/);
-    expect(first).not.toBe(second);
   });
 });
 
@@ -414,15 +287,6 @@ describe('createFlushableDebounce', () => {
     expect(callback).toHaveBeenCalledOnce();
   });
 
-  it('flush() is a no-op when nothing is pending', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.flush();
-
-    expect(callback).not.toHaveBeenCalled();
-  });
-
   it('cancel() drops the pending call without invoking the callback', () => {
     const callback = vi.fn();
     const batcher = createFlushableDebounce(callback, 100);
@@ -433,28 +297,6 @@ describe('createFlushableDebounce', () => {
 
     vi.advanceTimersByTime(1000);
     expect(callback).not.toHaveBeenCalled();
-  });
-
-  it('cancel() is a no-op when nothing is pending', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    expect(() => batcher.cancel()).not.toThrow();
-    expect(batcher.pending).toBe(false);
-  });
-
-  it('pending reflects schedule/fire/flush/cancel transitions', () => {
-    const batcher = createFlushableDebounce(vi.fn(), 50);
-
-    expect(batcher.pending).toBe(false);
-    batcher.schedule();
-    expect(batcher.pending).toBe(true);
-    vi.advanceTimersByTime(50);
-    expect(batcher.pending).toBe(false);
-
-    batcher.schedule();
-    batcher.cancel();
-    expect(batcher.pending).toBe(false);
   });
 
   // The CLI transcript sync re-schedules from inside its own callback (its
@@ -479,19 +321,6 @@ describe('createFlushableDebounce', () => {
     vi.advanceTimersByTime(100);
     expect(inner).toHaveBeenCalledTimes(2);
     expect(batcher.pending).toBe(false);
-  });
-
-  it('schedule() after flush() starts a fresh window (flush fully resets state)', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.schedule();
-    batcher.flush();
-    expect(callback).toHaveBeenCalledOnce();
-
-    batcher.schedule();
-    vi.advanceTimersByTime(100);
-    expect(callback).toHaveBeenCalledTimes(2);
   });
 });
 

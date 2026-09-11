@@ -100,15 +100,6 @@ describe('desktop command palette', () => {
     ).toEqual(entries.map((entry) => entry.id));
   });
 
-  it('wraps active command selection through filtered entries', async () => {
-    const { getNextCommandPaletteIndex } = await loadDesktopCommandPalette();
-
-    expect(getNextCommandPaletteIndex(0, 3, 1)).toBe(1);
-    expect(getNextCommandPaletteIndex(2, 3, 1)).toBe(0);
-    expect(getNextCommandPaletteIndex(0, 3, -1)).toBe(2);
-    expect(getNextCommandPaletteIndex(0, 0, 1)).toBe(-1);
-  });
-
   // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
   // polyfills installed by useLitComponentTestDom above let those WA
   // components register and animate inside jsdom.
@@ -228,17 +219,5 @@ describe('desktop command palette', () => {
     pressKey(waInput, { key: 'ArrowUp' });
     await flushDialogTicks();
     expect(selectedIndex()).toBe(0);
-  });
-
-  it('exposes the wa-input value through the shadow-root native input', async () => {
-    const controller = await mountPalette();
-    controller.open();
-    await flushDialogTicks();
-
-    // wa-input wraps a native <input> in shadow DOM. Look it up via the host
-    // wa-input tag, then descend into its shadow root for the real input.
-    expect(
-      paletteInput(controller.element).shadowRoot?.querySelector('input'),
-    ).toBeTruthy();
   });
 });

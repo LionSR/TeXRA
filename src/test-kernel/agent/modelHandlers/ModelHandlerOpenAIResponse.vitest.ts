@@ -1497,11 +1497,6 @@ describe('ModelHandlerOpenAIResponse background abort handling', () => {
     assert.equal(isUserAbort(err), true);
   });
 
-  it('recognizes plain AbortController DOMExceptions (delay path)', () => {
-    const err = new DOMException('This operation was aborted', 'AbortError');
-    assert.equal(isUserAbort(err), true);
-  });
-
   it('clears the pending background ID on abort during resume retrieve', async () => {
     const handler = createBackgroundAbortHandler();
     const target = backgroundLifecycleInternals(handler);

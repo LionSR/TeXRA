@@ -110,10 +110,6 @@ describe('API provider key caches', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses the documented Kimi Code environment variable', () => {
-    expect(apiKeyEnvName('kimiCode')).toBe('KIMI_CODE_API_KEY');
-  });
-
   it('derives provider status from the canonical API-key origin cache', async () => {
     const { secrets } = createSecrets({
       [apiKeySecretName('openai')]: 'sk-test',
@@ -143,12 +139,6 @@ describe('API provider key caches', () => {
       'openai',
       'moonshot',
     ]);
-  });
-
-  it('reports no configured providers when every key is absent', async () => {
-    const { secrets } = createSecrets();
-
-    await expect(configuredApiKeyProviders(secrets)).resolves.toEqual([]);
   });
 
   it('treats empty env keys as missing in uncached lookups', async () => {

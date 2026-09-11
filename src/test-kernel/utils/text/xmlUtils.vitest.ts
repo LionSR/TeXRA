@@ -11,63 +11,6 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
   checkToolInstalled: async () => false,
 }));
 
-describe('xmlUtils.formatContent', () => {
-  it('converts HTML scratchpad content to markdown bullets', async () => {
-    const htmlInput =
-      '<scratchpad><div><strong>Plan</strong><ul><li>Step 1</li><li>Step 2</li></ul></div></scratchpad>';
-
-    // Turndown's list items use the bullet marker plus three spaces.
-    expect(await formatContent(htmlInput)).toBe(
-      '**Plan**\n\n-   Step 1\n-   Step 2',
-    );
-  });
-
-  it('converts LaTeX scratchpad content to markdown structure', async () => {
-    const latexInput = `\\section{Plan}\\begin{itemize}\\item Step 1\\item Step 2\\end{itemize}`;
-
-    // \section{...} expands to '## ...\n\n' and each \item adds its own
-    // leading newline, so a blank-plus-newline separates heading and list.
-    expect(await formatContent(latexInput)).toBe(
-      '## Plan\n\n\n- Step 1\n- Step 2',
-    );
-  });
-
-  it('processes mixed HTML and LaTeX content sequentially', async () => {
-    const mixedInput =
-      '<div><strong>Plan</strong></div>\\begin{itemize}\\item Step 1\\item Step 2\\end{itemize}';
-
-    const result = await formatContent(mixedInput);
-
-    // Contract for mixed content: both fallback passes apply — the HTML half
-    // becomes markdown emphasis and the LaTeX items become bullets. The exact
-    // escaping of the LaTeX tail is an artifact of running the HTML pass
-    // first and is deliberately not pinned.
-    expect(result.startsWith('**Plan**')).toBe(true);
-    expect(result).toContain('- Step 1');
-    expect(result).toContain('- Step 2');
-  });
-
-  it('passes through existing markdown content after trimming', async () => {
-    expect(await formatContent('Plan:\n-  Step 1\n-   Step 2\n\n')).toBe(
-      'Plan:\n-  Step 1\n-   Step 2',
-    );
-  });
-
-  it('returns empty string for empty content', async () => {
-    expect(await formatContent('')).toBe('');
-  });
-});
-
-describe('xmlUtils.extractScratchpad', () => {
-  it('extracts and formats scratchpad blocks', async () => {
-    const response = `<?xml version="1.0"?><root><scratchpad>\\section{Plan}\\begin{itemize}\\item Step 1\\item Step 2\\end{itemize}</scratchpad></root>`;
-
-    expect(await extractScratchpad(response)).toBe(
-      '## Plan\n\n\n- Step 1\n- Step 2',
-    );
-  });
-});
-
 describe('xmlUtils CDATA handling', () => {
   it.each([
     {

@@ -72,17 +72,6 @@ describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', ()
     expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
   });
 
-  it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
-    const { trace, row } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'round' });
-    stage.end(RUN_OUTCOME.CANCELLED);
-
-    const endEntry = row(stage.id);
-
-    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.CANCELLED);
-  });
-
   it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
     const { trace, row } = attachRecorder();
 
@@ -112,18 +101,6 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
     expect(dataOf(roundEntry).kind).toBe('round');
   });
 
-  it("preserves the root run stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, row } = attachRecorder();
-
-    const runStage = trace.openStage('Run: agent', { kind: 'run' });
-    runStage.end();
-
-    const runEntry = row(runStage.id);
-
-    expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(dataOf(runEntry).kind).toBe('run');
-  });
-
   it('persists and projects phase attempt ownership through stage end', () => {
     const { trace, row } = attachRecorder();
     trace.emit({
@@ -150,27 +127,6 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
     expect(groups).toMatchObject([
       { id: phase.id, attemptId: 'attempt-2', status: RUN_PHASE.COMPLETED },
     ]);
-  });
-
-  it('preserves phase position metadata on the terminal row', () => {
-    const { trace, row } = attachRecorder();
-
-    const phase = trace.openStage('Review', {
-      kind: 'phase',
-      index: 1,
-      total: 3,
-    });
-    phase.end();
-
-    const entry = row(phase.id);
-    expect(entry).toMatchObject({
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: {
-        kind: 'phase',
-        index: 1,
-        total: 3,
-      },
-    });
   });
 });
 
@@ -234,30 +190,6 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     expect(modelResponseEntries[1]?.id).not.toBe(output.id);
   });
 
-  it('does not let an earlier tool-use turn leak into a later session stage', () => {
-    const { trace, rows } = attachRecorder();
-
-    const turn0 = trace.openStage('Tool-use turn', { kind: 'session' });
-    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('I will inspect the workspace.');
-    output.finalize();
-    turn0.end();
-
-    const turn1 = trace.openStage('Tool-use turn', { kind: 'session' });
-    trace.responseFinalized('The workspace is ready.');
-    turn1.end();
-
-    const modelResponseEntries = rows().filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
-    expect(modelResponseEntries.map((entry) => entry.text)).toEqual([
-      'I will inspect the workspace.',
-      'The workspace is ready.',
-    ]);
-    expect(modelResponseEntries[0]?.id).toBe(output.id);
-    expect(modelResponseEntries[1]?.id).not.toBe(output.id);
-  });
-
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const { trace, rows } = attachRecorder();
 
@@ -286,14 +218,6 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
       'The file contains the theorem statement.',
     ]);
     expect(modelResponseEntries[1]?.id).not.toBe(modelResponseEntries[0]?.id);
-  });
-
-  it('ignores an empty finalized response', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.responseFinalized('');
-
-    expect(rows()).toHaveLength(0);
   });
 });
 

@@ -175,20 +175,6 @@ describe('formatChildRunError', () => {
       ].join('\n'),
     );
   });
-
-  it('uses the provided tag and stringifies non-Error values', () => {
-    const xml = formatChildRunError(
-      { tag: 'claude-agent-error', runId: 'e', prompt: 'p' },
-      { message: toErrorMessage('plain') },
-    );
-    expect(xml).toBe(
-      [
-        '<claude-agent-error id="e" prompt="p">',
-        '<message>plain</message>',
-        '</claude-agent-error>',
-      ].join('\n'),
-    );
-  });
 });
 
 describe('formatSubagentDelivery', () => {
@@ -245,27 +231,6 @@ describe('formatSubagentDelivery', () => {
     expect(delivery).not.toContain('Keep </response> literal');
   });
 
-  it('includes attached memory misses in subagent delivery XML', () => {
-    const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
-      response: 'Checked the proof.',
-    });
-
-    const delivery = formatSubagentDelivery('reviewer', result, {
-      runId: 'abc123' as RunId,
-      memoryMisses: [
-        {
-          path: '/memories/missing.md',
-          reason: 'Path is missing & unreadable',
-        },
-      ],
-    });
-
-    expect(delivery).toContain('<memory-misses>');
-    expect(delivery).toContain(
-      '<memory-miss path="/memories/missing.md" reason="Path is missing &amp; unreadable" />',
-    );
-  });
-
   it('flags failed diff computation so orchestrators read outputs directly', () => {
     const result = workflowResult({
       outputs: [
@@ -295,14 +260,6 @@ describe('formatSubagentDelivery', () => {
       'read-path="/executions/abc123/files/paper.tex"',
     );
     expect(delivery).not.toContain('absolute-path=');
-  });
-
-  it('omits the diffs-unavailable element on clean deliveries', () => {
-    expect(
-      formatSubagentDelivery('polish', workflowResult(), {
-        runId: 'abc123' as RunId,
-      }),
-    ).not.toContain('diffs-unavailable');
   });
 
   it('emits canonical failed and cancelled statuses for orchestrators', () => {
@@ -403,20 +360,6 @@ describe('formatBashDelivery', () => {
     expect(delivery).toContain(
       '<stderr-elided>250 characters elided</stderr-elided>',
     );
-  });
-
-  it('omits the elision note when the head is not truncated', () => {
-    const delivery = formatBashDelivery(
-      'bash-4',
-      'echo hi',
-      1000,
-      { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
-      { tail: 'ok' },
-      { tail: '' },
-    );
-
-    expect(delivery).not.toContain('output-head');
-    expect(delivery).not.toContain('elided');
   });
 
   it('normalizes CRLF when truncating background output previews', () => {

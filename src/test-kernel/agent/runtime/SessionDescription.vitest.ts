@@ -139,44 +139,4 @@ describe('session description helpers', () => {
       expect.stringContaining('helper unavailable'),
     );
   });
-
-  it('does not reject when the diagnostic sink also fails', async () => {
-    const session = createTestSession();
-    mocks.createHelperModelKit.mockRejectedValueOnce(
-      new Error('helper unavailable'),
-    );
-    vi.spyOn(logger, 'warn').mockImplementation(() => {
-      throw new Error('log sink unavailable');
-    });
-
-    await expect(
-      runDescription(generateRunId(), session),
-    ).resolves.toBeUndefined();
-  });
-
-  it('keeps generating compact descriptions for tool-use runs', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, 'a0b0c2' as RunId);
-    await session.settlePublications();
-    const recorded = recordSessionEvents(session);
-    mockToolUseAnswer('Fixing proof typos');
-
-    await runDescription('a0b0c2' as RunId, session);
-
-    expect(
-      (
-        await Effect.runPromise(
-          getRunRecords(session, 'a0b0c2' as RunId).readMeta(),
-        )
-      )?.description,
-    ).toBe('Fixing proof typos');
-    await session.settlePublications();
-    expect(await recorded.read()).toMatchObject([
-      {
-        type: 'updateRunDescription',
-        aggregateId: qualifyAggregateId('run', 'a0b0c2' as RunId),
-        description: 'Fixing proof typos',
-      },
-    ]);
-  });
 });

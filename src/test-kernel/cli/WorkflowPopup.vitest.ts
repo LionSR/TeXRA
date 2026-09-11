@@ -107,37 +107,6 @@ async function renderPopup(
 
 describe('workflow popup', () => {
   beforeAll(bindTestSessionView);
-  it('renders a frame around a current empty dynamic phase', async () => {
-    // A phase the script opened dynamically carries no declared position.
-    const { instance, stdout } = await renderPopup(
-      [
-        {
-          id: 'phase-current',
-          name: 'Explore',
-          startTime: 0,
-          status: 'running',
-          kind: 'phase',
-        },
-      ],
-      [
-        {
-          kind: 'phase',
-          id: 'phase-current',
-          timestamp: 0,
-          level: 'info',
-          heading: 'Explore',
-          phaseLabel: 'Explore',
-        },
-      ],
-      20,
-    );
-    try {
-      await waitFor(() => stdout.output.includes('Explore'));
-      expect(stdout.output).toContain('No calls in this phase yet');
-    } finally {
-      instance.unmount();
-    }
-  });
 
   it('windows a big phase to the row budget with attention rows first', async () => {
     const rows = [

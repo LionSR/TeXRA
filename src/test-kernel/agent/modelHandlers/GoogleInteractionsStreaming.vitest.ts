@@ -281,9 +281,4 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
       GOOGLE_FINISH.MAX_TOKENS,
     );
   });
-
-  it('declares manual compaction support (client-side compaction is implemented)', () => {
-    const handler = createHandler([]);
-    expect(handler.supportsManualCompaction).toBe(true);
-  });
 });

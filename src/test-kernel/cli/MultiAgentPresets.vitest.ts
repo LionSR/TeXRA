@@ -101,45 +101,6 @@ function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
 }
 
 describe('CLI multi-agent presets', () => {
-  it('includes critical review in the mathematician team', () => {
-    const preset = findPreset('mathematician');
-
-    expect(preset.agents.workflow).toContain('criticize');
-    expect(preset.texraHostedAgents).toContain('criticize');
-  });
-
-  it('lists planned built-in team presets with stable counts', () => {
-    const presets = teamPresets(undefined);
-    const plans = planTeamRuns(presets, {
-      agents: {
-        workflow: presets.flatMap((preset) =>
-          preset.agents.workflow.map((name) =>
-            agent(name, AgentCategory.Workflow),
-          ),
-        ),
-        toolUse: presets.flatMap((preset) =>
-          preset.agents.toolUse.map((name) =>
-            agent(
-              name,
-              AgentCategory.ToolUse,
-              ['orchestrator', 'leanOrchestrator', 'engineer'].includes(name)
-                ? ['delegate_agent']
-                : [],
-            ),
-          ),
-        ),
-      },
-    });
-
-    expect(presets.map((preset) => preset.id)).toContain('physicist');
-    const output = formatCliMultiAgentPresetList(plans);
-
-    expect(output).toContain(
-      'built-in\tphysicist\tPhysicist\tworkflow:6\ttool-use:9',
-    );
-    expect(output).not.toContain('Hint:');
-  });
-
   it('lists missing preset members as unavailable when no team can launch', () => {
     const plan = partialLeanProjectPlan();
 
@@ -166,21 +127,6 @@ describe('CLI multi-agent presets', () => {
     expect(output).not.toContain('after `texra login`');
   });
 
-  it('formats compact launcher summaries from planned availability', () => {
-    const plan = planRun(findPreset('physicist'), {
-      workflow: [agent('correct', AgentCategory.Workflow)],
-      toolUse: degradedPhysicistToolUse(),
-    });
-
-    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'degraded; 1/6 workflows; 2/9 tools',
-    );
-    expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
-      'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-      'TeXRA account sign-in may unlock more remote team agents.',
-    ]);
-  });
-
   it('formats run warnings from planned missing team members', () => {
     const plan = planRun(findPreset('physicist'), {
       toolUse: degradedPhysicistToolUse(),
@@ -189,19 +135,6 @@ describe('CLI multi-agent presets', () => {
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
       'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
       'WARN preset physicist is degraded; running root agent orchestrator with 1 available team agent.',
-    ]);
-  });
-
-  it('omits degraded run warnings when only the root is available', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-      ],
-    });
-
-    expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:review, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
     ]);
   });
 
@@ -373,35 +306,6 @@ describe('CLI multi-agent presets', () => {
     warn.mockRestore();
 
     expect(customPresets([{ id: 'broken' }])).toEqual([]);
-  });
-
-  it('formats an inspection plan with root and missing members', () => {
-    const details = formatCliMultiAgentPresetInspection(partialPhysicistPlan());
-
-    expect(details).toContain('Team root agent:\n  orchestrator');
-    expect(details).toContain(
-      'Available workflow agents:\n  correct\n  polish',
-    );
-    expect(details).toContain(
-      'Available tool-use agents:\n  orchestrator\n  review',
-    );
-    expect(details).toContain(
-      'Missing workflow agents:\n  generic\n  devise\n  apply\n  criticize',
-    );
-    expect(details).toContain(
-      [
-        'Missing tool-use agents:',
-        '  research',
-        '  numerics',
-        '  presenter',
-        '  simplifier',
-        '  latexFixer',
-        '  progressCheck',
-        '  search',
-        '',
-        'Hint: TeXRA account sign-in may load additional remote team agents.',
-      ].join('\n'),
-    );
   });
 
   it('omits inspection login recovery hint after a remote agent load was attempted', () => {

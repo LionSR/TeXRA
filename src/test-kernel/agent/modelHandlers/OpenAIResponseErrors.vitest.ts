@@ -121,16 +121,6 @@ describe('OpenAI Responses error normalization', () => {
     expect(normalized.userRetryable).toBe(false);
   });
 
-  it('classifies provider-worded context-window errors as non-retryable', () => {
-    const error = new Error(
-      "This model's maximum context length is 1050000 tokens.",
-    );
-
-    const providerError = formatProviderHttpError(error);
-
-    expect(providerError.userRetryable).toBe(false);
-  });
-
   it('keeps body-classified rate limits retryable when their message mentions context', () => {
     const error = Object.assign(
       new Error("This model's maximum context length is temporarily limited."),

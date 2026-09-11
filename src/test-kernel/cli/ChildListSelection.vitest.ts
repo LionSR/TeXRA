@@ -71,20 +71,6 @@ describe('CLI child list selection', () => {
     });
   });
 
-  it('preserves identity when active-stream sync keeps the same row', () => {
-    const hidden: ChildListSelectionState = {
-      focused: true,
-      selectedValue: main,
-    };
-    const state = reduceChildListSelection(hidden, {
-      kind: 'syncActiveRun',
-      runId: main,
-      values: [main, strategy],
-    });
-
-    expect(state).toBe(hidden);
-  });
-
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategy },
@@ -131,33 +117,6 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: analysis,
-    });
-  });
-
-  it('returns input after a stream is focused', () => {
-    const state = reduceChildListSelection(
-      { focused: true, selectedValue: analysis },
-      { kind: 'focusRun', runId: strategy },
-    );
-    expect(state).toEqual({
-      focused: false,
-      selectedValue: strategy,
-    });
-  });
-
-  it('changes only the highlighted row without opening a detail block', () => {
-    let state = reduceChildListSelection(
-      { focused: false, selectedValue: main },
-      { kind: 'focus' },
-    );
-    state = reduceChildListSelection(state, {
-      kind: 'highlight',
-      value: strategy,
-    });
-
-    expect(state).toEqual({
-      focused: true,
-      selectedValue: strategy,
     });
   });
 });

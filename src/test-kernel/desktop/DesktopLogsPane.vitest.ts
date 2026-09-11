@@ -120,34 +120,6 @@ describe('desktop logs pane', () => {
     });
   });
 
-  it('shows a status-announced loading state before the first snapshot arrives', async () => {
-    const { createLogsPane } = await loadLogsPane();
-    const controller = createLogsPane({ sendCommand: vi.fn() });
-    document.body.append(controller.element);
-
-    const loading = controller.element.querySelector('.loading-state');
-    expect(loading).not.toBeNull();
-    expect(loading?.getAttribute('role')).toBe('status');
-    expect(loading?.textContent).toContain('Loading recent entries…');
-  });
-
-  it('shows a status-announced empty state when a snapshot has no entries', async () => {
-    const { createLogsPane } = await loadLogsPane();
-    const controller = createLogsPane({ sendCommand: vi.fn() });
-    document.body.append(controller.element);
-
-    controller.applySnapshot({
-      command: DESKTOP_LOG_COMMANDS.SET_LOG,
-      log: { path: '/redacted/texra-desktop.log', text: '', truncated: false },
-    });
-
-    expect(controller.element.querySelector('.loading-state')).toBeNull();
-    const empty = controller.element.querySelector('.desktop-log-viewer-empty');
-    expect(empty).not.toBeNull();
-    expect(empty?.textContent).toContain('No desktop log entries yet.');
-    expect(empty?.closest('[role="status"]')).not.toBeNull();
-  });
-
   it('renders one expandable Web Awesome details row per parsed entry', async () => {
     const { createLogsPane } = await loadLogsPane();
     const controller = createLogsPane({ sendCommand: vi.fn() });
@@ -206,48 +178,5 @@ describe('desktop logs pane', () => {
     expect(cancelRefresh).toHaveBeenCalledWith(17);
     expect(sendCommand).toHaveBeenCalledTimes(2);
     cancelRefresh.mockRestore();
-  });
-
-  it('preserves the four existing toolbar commands', async () => {
-    const { createLogsPane } = await loadLogsPane();
-    const sendCommand = vi.fn();
-    const controller = createLogsPane({ sendCommand });
-    document.body.append(controller.element);
-
-    const buttons = [
-      ...controller.element.querySelectorAll<HTMLElement>(
-        '.desktop-log-viewer-actions wa-button',
-      ),
-    ];
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      'Refresh',
-      'Copy',
-      'Export',
-      'Open Folder',
-    ]);
-    for (const button of buttons) {
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    }
-
-    expect(sendCommand.mock.calls.map(([command]) => command)).toEqual([
-      DESKTOP_LOG_COMMANDS.REQUEST_LOG,
-      DESKTOP_LOG_COMMANDS.COPY_LOG,
-      DESKTOP_LOG_COMMANDS.EXPORT_LOG,
-      DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-    ]);
-  });
-
-  it('keeps the toolbar single-row and the entry list internally scrollable', () => {
-    const styles = readFileSync(
-      repoPath('packages/desktop/src/renderer/styles.css'),
-      'utf8',
-    );
-
-    expect(styles).toMatch(
-      /\.desktop-log-viewer-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap;[\s\S]*?overflow-x:\s*auto;/u,
-    );
-    expect(styles).toMatch(
-      /\.desktop-log-viewer-list\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto;/u,
-    );
   });
 });

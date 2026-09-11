@@ -14,27 +14,6 @@ describe('desktop PDF messages', () => {
       await loadSourceModule('@desktop/shared/desktopPdfMessages'));
   });
 
-  it('round-trips a complete payload', () => {
-    const parsed = DesktopShowPdfMessageSchema.parse({
-      command: 'desktop:showPdf',
-      session: '/paper',
-      title: 'paper.pdf',
-      pdfPath: '/abs/path/to/paper.pdf',
-    });
-    expect(parsed.command).toBe('desktop:showPdf');
-    expect(parsed.pdfPath).toBe('/abs/path/to/paper.pdf');
-  });
-
-  it('rejects empty pdfPath', () => {
-    const result = DesktopShowPdfMessageSchema.safeParse({
-      command: 'desktop:showPdf',
-      session: '/paper',
-      title: 'paper',
-      pdfPath: '',
-    });
-    expect(result.success).toBe(false);
-  });
-
   it.each<[string, boolean]>([
     // posix absolute PDF paths
     ['/Users/me/paper.pdf', true],

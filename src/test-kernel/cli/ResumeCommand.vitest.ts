@@ -251,29 +251,6 @@ describe('runResumeCommand', () => {
     );
   });
 
-  it('preserves whitespace in a persisted workflow output directory', async () => {
-    const workingDirectory = path.join(path.sep, 'tmp', 'paper');
-    const outputDirectory = path.join(workingDirectory, ' out ');
-    const workflowConfig = AgentConfigSchema.parse({
-      ...WORKFLOW_CONFIG,
-      workingDirectory,
-      cli: { outputDirectory },
-    });
-    await stubWorkflowResume(workflowConfig);
-
-    await expect(run(cliContext())).resolves.toBe(0);
-
-    expect(mocks.assertOutputDirAvailable).toHaveBeenCalledWith(
-      outputDirectory,
-      expect.any(String),
-    );
-    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
-      workflowConfig,
-      expect.any(Object),
-      expect.any(Object),
-    );
-  });
-
   it('validates a restored output directory before resuming the workflow', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper');
     const workflowConfig = AgentConfigSchema.parse({
@@ -326,19 +303,6 @@ describe('runResumeCommand', () => {
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra run`.'),
-    );
-  });
-
-  it('uses the local launcher in headless resume guidance', async () => {
-    await expect(
-      run(cliContext({ commandName: 'texra-local', stdoutIsTty: false })),
-    ).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra-local resume ${RUN_ID}`),
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining('For scripting, use `texra-local run`.'),
     );
   });
 

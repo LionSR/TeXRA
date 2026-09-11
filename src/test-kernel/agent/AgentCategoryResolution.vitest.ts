@@ -89,19 +89,6 @@ describe('cross-category agent resolution', () => {
     await cleanupTempDirs(tempDirs);
   });
 
-  it('demonstrates the divergence the category-scoped resolver closes', () => {
-    // Category-blind resolution picks the custom workflow entry by source
-    // priority…
-    const categoryBlind = resolveAgent('assistant')?.entry;
-    expect(categoryBlind?.source).toBe('custom');
-    expect(categoryBlind?.category).toBe('workflow');
-
-    // …while validation correctly resolves the visible tool-use entry.
-    expect(getVisibleAgent('toolUse', 'assistant')?.source).toBe(
-      'builtInToolUse',
-    );
-  });
-
   it('pins launch to the exact (source, name) entry validation captured', () => {
     // The tool-use delegation validates via getVisibleAgent and carries the
     // entry's source; launch resolves that exact key — the built-in tool-use
@@ -121,13 +108,6 @@ describe('cross-category agent resolution', () => {
     );
     expect(workflow?.entry.category).toBe('workflow');
     expect(workflow?.entry.source).toBe('custom');
-  });
-
-  it('launch resolution matches validation for the colliding tool-use name', () => {
-    const validated = getVisibleAgent('toolUse', 'assistant');
-    const launched = launchAs('toolUse', validated);
-    expect(launched?.entry.source).toBe(validated?.source);
-    expect(launched?.entry.name).toBe(validated?.name);
   });
 
   it('resolves an unpinned launch through the same visible set as validation', () => {

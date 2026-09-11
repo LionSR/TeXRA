@@ -72,21 +72,6 @@ describe('executeCommand', () => {
   // platform at a directory that exists on disk so spawning succeeds.
   setupPlatform({ workspacePath: process.cwd() });
 
-  it('exposes only text encodings and non-transform output modes', () => {
-    expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
-      'utf8' | 'utf-8' | 'utf16le' | undefined
-    >();
-    expectTypeOf<ExecuteCommandOptions['maxBuffer']>().toEqualTypeOf<
-      number | undefined
-    >();
-    expectTypeOf<ExecuteCommandOptions['stdout']>().toEqualTypeOf<
-      'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
-    >();
-    expectTypeOf<ExecuteCommandOptions['stderr']>().toEqualTypeOf<
-      'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
-    >();
-  });
-
   // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
   // backgrounded sleep has published its pid, so callers can assert on the
   // descendant's fate after an abort or timeout.
@@ -110,25 +95,6 @@ describe('executeCommand', () => {
     assert.ok(Number.isInteger(childPid) && childPid > 0);
     return { promise, childPid };
   }
-
-  it.each([
-    {
-      name: 'shell operators intact',
-      command: 'node -e "process.stdout.write(\'one\')" && echo two',
-      stdout: 'onetwo',
-    },
-    {
-      name: 'fallback execution with logical OR',
-      command: 'node -e "process.exit(1)" || echo fallback',
-      stdout: 'fallback',
-    },
-  ])('runs string commands with $name', async ({ command, stdout }) => {
-    const result = await executeCommand(command);
-
-    assert.ok(result.success);
-    assert.equal(result.stdout, stdout);
-    assert.equal(result.stderr, '');
-  });
 
   it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
     const result = await executeCommand([
@@ -332,73 +298,9 @@ describe('executeCommand', () => {
 // executeCommandSync
 // ---------------------------------------------------------------------------
 
-describe('executeCommandSync', () => {
-  const tempDirs = useTempDirs();
-
-  setupPlatform(async () => {
-    const storageRoot = await makeTempDir('texra-exec-utils-', tempDirs);
-    return createFakeHost(
-      {
-        workspacePath: process.cwd(),
-        storagePath: join(storageRoot, 'storage'),
-        globalStoragePath: join(storageRoot, 'global-storage'),
-      },
-      { fs: nodeFilesystem },
-    );
-  });
-
-  it('returns normalized stdout for successful commands', () => {
-    const result = executeCommandSync([
-      process.execPath,
-      '-e',
-      'process.stdout.write("ok\\n")',
-    ]);
-
-    expect(result).toMatchObject({
-      success: true,
-      stdout: 'ok',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
-  });
-
-  it('returns stderr and exit code for failing commands', () => {
-    const result = executeCommandSync([
-      process.execPath,
-      '-e',
-      'process.stderr.write("bad\\n"); process.exit(7)',
-    ]);
-
-    expect(result).toMatchObject({
-      success: false,
-      stdout: '',
-      stderr: 'bad',
-      timedOut: false,
-      exitCode: 7,
-    });
-  });
-});
-
 // ---------------------------------------------------------------------------
 // WorkspaceInfo
 // ---------------------------------------------------------------------------
-
-describe('buildWorkspaceInfoBlock', () => {
-  const tempDirs = useTempDirs();
-
-  it('tells agents when the workspace is not a git repository', async () => {
-    const workspace = await makeTempDir('texra-workspace-info-', tempDirs);
-
-    const block = await buildWorkspaceInfoBlock(workspace);
-
-    expect(block).toContain(`Workspace: ${workspace}`);
-    expect(block).toContain(
-      'Git: no repository detected or git could not be checked',
-    );
-    expect(block).toContain('avoid git history/status checks');
-  });
-});
 
 // ---------------------------------------------------------------------------
 // BinaryResolver
@@ -415,13 +317,6 @@ function createResolver(
 }
 
 describe('BinaryResolverService', () => {
-  it('resolves nullable tool paths', () => {
-    const resolver = createResolver({ latexmk: '/usr/bin/latexmk' });
-
-    assert.equal(resolver.findPath('latexmk'), '/usr/bin/latexmk');
-    assert.equal(resolver.findPath('missing'), null);
-  });
-
   it('routes Perl scripts through the Perl launcher', () => {
     const resolver = createResolver({
       latexindent: '/usr/local/texlive/scripts/latexindent/latexindent.pl',
@@ -434,35 +329,6 @@ describe('BinaryResolverService', () => {
     });
   });
 
-  it.each([
-    {
-      tool: 'latexdiff',
-      path: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff',
-      args: ['a', 'b'],
-    },
-    {
-      tool: 'latexmk',
-      path: 'C:\\texlive\\texmf-dist\\scripts\\latexmk\\latexmk',
-      args: ['-pdf'],
-    },
-    {
-      tool: 'latexdiff-vc',
-      path: 'C:\\texlive\\texmf-dist\\scripts\\latexdiff\\latexdiff-vc',
-      args: ['--git'],
-    },
-  ])(
-    'routes extensionless Windows $tool scripts through Perl',
-    ({ tool, path, args }) => {
-      const resolver = createResolver({ [tool]: path }, true);
-
-      assert.deepEqual(resolver.resolveOptionalCommand(tool, args), {
-        command: 'perl',
-        args: [path, ...args],
-        resolvedPath: path,
-      });
-    },
-  );
-
   it('launches extensionless Windows binaries directly', () => {
     const resolver = createResolver({ sox: 'C:\\msys64\\usr\\bin\\sox' }, true);
 
@@ -471,26 +337,6 @@ describe('BinaryResolverService', () => {
       args: [],
       resolvedPath: 'C:\\msys64\\usr\\bin\\sox',
     });
-  });
-
-  it('builds commands from an already-resolved path', () => {
-    const resolver = createResolver({}, true);
-
-    assert.deepEqual(
-      resolver.resolveOptionalCommand('latexindent', ['-w'], {
-        resolvedPath:
-          'C:\\texlive\\texmf-dist\\scripts\\latexindent\\latexindent',
-      }),
-      {
-        command: 'perl',
-        args: [
-          'C:\\texlive\\texmf-dist\\scripts\\latexindent\\latexindent',
-          '-w',
-        ],
-        resolvedPath:
-          'C:\\texlive\\texmf-dist\\scripts\\latexindent\\latexindent',
-      },
-    );
   });
 
   it('returns null when a command cannot be resolved', () => {

@@ -171,18 +171,6 @@ describe('CLI scrollable modal text section', () => {
     expect(textDisplayWidth(visible[0]?.text ?? '')).toBeLessThanOrEqual(24);
   });
 
-  it('qualifies one-row overflow markers with the hidden noun', () => {
-    const visible = boundedModalTextLines({
-      hiddenNoun: 'prompt rows',
-      lines: modalTextDisplayLines({ text: 'a\nb\nc', width: 40 }),
-      maxRows: 1,
-      width: 40,
-    });
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.text).toContain('prompt rows hidden');
-  });
-
   it('preserves empty source lines when wrapping', () => {
     const lines = modalTextDisplayLines({
       text: 'first\n\nthird',

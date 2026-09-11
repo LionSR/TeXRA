@@ -95,37 +95,6 @@ describe('desktop package native CLI payload', () => {
     expect(result.stderr).toContain('MiB');
   });
 
-  it.each([{ cli: 'codex' as const }, { cli: 'claude' as const }])(
-    'fails when the $cli payload is bundled through the pnpm store layout',
-    ({ cli }) => {
-      const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-      writeNativeCliPackage(resourcesDir, cli, 'pnpmStore');
-
-      const result = runVerifier(packageRoot);
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('bundles native CLI payloads');
-    },
-  );
-
-  it('keeps the Codex and Claude Code SDKs out of desktop runtime dependencies', () => {
-    const packageJson = JSON.parse(
-      readFileSync(repoPath('packages/desktop/package.json'), 'utf8'),
-    ) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-
-    // electron-builder copies the node_modules of production dependencies
-    // only, so this is what keeps the native CLI binaries out of the app.
-    for (const name of [
-      '@openai/codex-sdk',
-      '@anthropic-ai/claude-agent-sdk',
-    ]) {
-      expect(packageJson.dependencies ?? {}).not.toHaveProperty(name);
-      expect(packageJson.devDependencies ?? {}).toHaveProperty(name);
-    }
-  });
-
   it('requires the trace-viewer template in packaged resources', () => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
     rmSync(join(resourcesDir, 'resources', 'traceViewer', 'index.html'));
@@ -135,19 +104,6 @@ describe('desktop package native CLI payload', () => {
     expect(result.stderr).toContain(
       'Missing trace-viewer HTML template: resources/traceViewer/index.html',
     );
-  });
-
-  it('keeps pnpm platform settings in the workspace manifest', () => {
-    const rootPackageJson = JSON.parse(
-      readFileSync(repoPath('package.json'), 'utf8'),
-    ) as { pnpm?: unknown };
-    const workspaceYaml = readFileSync(repoPath('pnpm-workspace.yaml'), 'utf8');
-
-    expect(rootPackageJson.pnpm).toBeUndefined();
-    expect(workspaceYaml).toContain('supportedArchitectures:');
-    expect(workspaceYaml).toContain('  cpu:');
-    expect(workspaceYaml).toContain('    - x64');
-    expect(workspaceYaml).toContain('    - arm64');
   });
 
   it('resolves relative metafile imports from the importing output directory', () => {

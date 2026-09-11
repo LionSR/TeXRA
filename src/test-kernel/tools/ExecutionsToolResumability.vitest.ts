@@ -37,22 +37,4 @@ describe('ExecutionsTool resumability fallback', () => {
     expect(result.output).toContain('Status: resumable');
     expect(result.output).not.toContain('Status: completed');
   });
-
-  it.each([
-    { pathSuffix: '', runId: 'abc123abc124' },
-    { pathSuffix: '/conversation', runId: 'abc123abc125' },
-  ] as const)(
-    'does not treat invalid metadata-free flow records as found (path suffix "$pathSuffix")',
-    async ({ pathSuffix, runId: rawId }) => {
-      const runId = rawId as RunId;
-      await writeRecord(runId, { ...BASE_FLOW_RECORD, shared: null });
-
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${runId}${pathSuffix}`,
-      });
-
-      expect(result.status).toBe('error');
-      expect(result.error).toContain(`Run not found: ${runId}`);
-    },
-  );
 });

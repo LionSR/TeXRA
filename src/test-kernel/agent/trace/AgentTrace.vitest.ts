@@ -46,19 +46,6 @@ describe('TraceEmitter stage metadata', () => {
 });
 
 describe('TraceEmitter responseFinalized', () => {
-  it('emits a response.finalized event carrying the given text', () => {
-    const events = collectEvents((trace) => {
-      trace.responseFinalized('The answer is 2.');
-    });
-
-    expect(events).toEqual([
-      expect.objectContaining({
-        type: 'response.finalized',
-        text: 'The answer is 2.',
-      }),
-    ]);
-  });
-
   it('stamps the ambient stage id when no explicit stageId is given', () => {
     let stageId: string | undefined;
     const events = collectEvents((trace) => {

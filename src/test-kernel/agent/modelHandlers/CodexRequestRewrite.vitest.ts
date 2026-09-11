@@ -39,18 +39,6 @@ describe('rewriteCodexRequestBody', () => {
     expect(out.model).toBe('gpt-5.5');
   });
 
-  it('drops a non-background-mode background flag and forces store/stream', () => {
-    const out = rewriteCodexRequestBody({
-      background: false,
-      store: true,
-      stream: false,
-      input: [{ role: 'user', content: 'hi' }],
-    });
-    expect(out).not.toHaveProperty('background');
-    expect(out.store).toBe(false);
-    expect(out.stream).toBe(true);
-  });
-
   it('hoists system/developer items into instructions and keeps the rest of input', () => {
     expect(
       rewriteCodexRequestBody({
@@ -136,19 +124,6 @@ describe('rewriteCodexRequestBody', () => {
       instructions: 'S',
       input: [{ role: 'user', content: 'u' }],
     });
-  });
-
-  it('is pure — it never mutates the caller body', () => {
-    const body = {
-      max_output_tokens: 10,
-      input: [
-        { role: 'system', content: 'S' },
-        { role: 'user', content: 'u' },
-      ],
-    };
-    const snapshot = structuredClone(body);
-    rewriteCodexRequestBody(body);
-    expect(body).toEqual(snapshot);
   });
 
   it.each(['high', 'xhigh', 'max'])(

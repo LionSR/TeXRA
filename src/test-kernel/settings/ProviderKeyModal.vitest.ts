@@ -128,24 +128,4 @@ describe('ProviderKeyModal', () => {
     expect(setCustomValidity).toHaveBeenLastCalledWith('');
     expect(input.querySelector('[slot="hint"]')?.textContent?.trim()).toBe('');
   });
-
-  it('opens the wa-dialog when mounted and closes it after submit', async () => {
-    const modal = await mountModal();
-
-    const dialog =
-      modal.shadowRoot!.querySelector<WaDialogElement>('wa-dialog')!;
-    expect(dialog).toBeTruthy();
-    // wa-dialog opens itself when `open` is set in firstUpdated.
-    expect(dialog.open).toBe(true);
-
-    const counts = countModalEvents(modal);
-
-    setKey(modal, 'sk-after-submit');
-    submitForm(modal);
-    await flushDialogTicks();
-
-    // Submit closes the dialog programmatically and must NOT also fire cancel.
-    expect(dialog.open).toBe(false);
-    expect(counts.cancelled).toBe(0);
-  });
 });

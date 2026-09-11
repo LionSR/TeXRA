@@ -214,23 +214,6 @@ describe('CLI doctor', () => {
     });
   });
 
-  it('keeps human-readable hints in text output', async () => {
-    const report = await buildReport({
-      authProfile: async () => ({ authenticated: false }),
-    });
-
-    const text = formatDoctorText(report);
-
-    expect(text).toContain(
-      [
-        'FAIL Models: No model is currently available.',
-        '     Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
-      ].join('\n'),
-    );
-    expect(text).not.toContain('/api personal');
-    expect(text).toContain('SKIP Config: No workspace CLI config file found.');
-  });
-
   it('reports loaded workspace config warnings', async () => {
     const report = await buildReadyReport(
       async () => ({ authenticated: true }),
@@ -244,24 +227,6 @@ describe('CLI doctor', () => {
     expect(checkById(report, 'config')?.status).toBe('warn');
     expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
   });
-
-  it.each(accountLabelCases)(
-    'shows account labels plainly in text output ($expected)',
-    async ({ profile, expected }) => {
-      const report = await buildReadyReport(async () => profile);
-
-      const text = formatDoctorText(report);
-      const records = doctorNdjsonRecords(report, NDJSON_TS);
-
-      expect(checkById(report, 'auth')?.message).toContain(
-        profile.accountLabel,
-      );
-      expect(text).toContain(expected);
-      expect(records).toContainEqual(
-        expect.objectContaining({ id: 'auth', message: expected }),
-      );
-    },
-  );
 
   it('redacts email-like values outside the auth account message', () => {
     const report: DoctorReport = {

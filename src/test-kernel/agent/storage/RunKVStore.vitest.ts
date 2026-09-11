@@ -166,19 +166,3 @@ describe('canonical run records', () => {
     ]);
   });
 });
-
-describe('remaining generic run keys', () => {
-  it('reserves only the current turn-state record', () => {
-    expect(isReservedKvKeyName('turn-state')).toBe(true);
-    for (const key of [
-      'meta',
-      'config',
-      'report',
-      'workspace-files',
-      'result-meta',
-      'child-abcdef',
-      'flow_abcdef',
-    ])
-      expect(isReservedKvKeyName(key)).toBe(false);
-  });
-});

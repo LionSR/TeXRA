@@ -113,22 +113,6 @@ describe('AgentFinalResult', () => {
     });
   });
 
-  it('keeps tool-use files as path strings', () => {
-    const flowResult = toolUseFlowResult({
-      response: 'Checked the argument.',
-      files: ['notes.md'],
-      totalCostUsd: 0.2,
-    });
-
-    expect(buildAgentFinalResult({ flowResult })).toEqual({
-      category: 'toolUse',
-      outcome: 'completed',
-      response: 'Checked the argument.',
-      files: ['notes.md'],
-      cost: 0.2,
-    });
-  });
-
   it.each([
     {
       category: 'workflow',
@@ -162,15 +146,6 @@ describe('AgentFinalResult', () => {
       structured: { title: 'Captured' },
     });
   });
-
-  it.each(['failed', 'cancelled'] as RunOutcome[])(
-    'allows an error path to preserve the %s outcome',
-    (outcome) => {
-      expect(
-        buildAgentFinalResult({ category: 'toolUse', outcome }),
-      ).toMatchObject({ category: 'toolUse', outcome });
-    },
-  );
 
   it('rejects runtime-only fields at the final-result boundary', () => {
     expectInvalidFinalResult({

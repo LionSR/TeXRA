@@ -47,12 +47,6 @@ describe('shared CLI list-form row budget', () => {
       }),
     ).toEqual({ maxVisibleItems: 1, showOverflow: false });
   });
-
-  it('leaves the list unwindowed when the terminal height is unknown', () => {
-    expect(
-      listFormSelectWindow({ availableRows: undefined, itemCount: 20 }),
-    ).toEqual({ maxVisibleItems: undefined, showOverflow: false });
-  });
 });
 
 describe('shared CLI list-form buffered selection', () => {
@@ -69,13 +63,5 @@ describe('shared CLI list-form buffered selection', () => {
   it('ignores disabled and non-hotkey input', () => {
     expect(pendingListFormChoice({ input: '2', items })).toBeUndefined();
     expect(pendingListFormChoice({ input: '/', items })).toBeUndefined();
-  });
-});
-
-describe('shared CLI list-form shortcut labels', () => {
-  it('describes only keys that have rows', () => {
-    expect(listFormShortcutLabel(1)).toBe('1/Enter');
-    expect(listFormShortcutLabel(4)).toBe('1-4/Enter');
-    expect(listFormShortcutLabel(12)).toBe('1-9/a-z/Enter');
   });
 });

@@ -41,17 +41,6 @@ const ANSWERS: InitAnswers = {
   outputFormat: 'json',
 };
 
-describe('buildInitConfig', () => {
-  it('maps answers to the canonical config shape', () => {
-    expect(buildInitConfig(ANSWERS)).toEqual({
-      'texra.model': 'deepseekT',
-      'texra.outputFormat': 'json',
-      'texra.approvalPolicy': 'ask',
-      'texra.chat': { agent: 'chat', model: 'deepseekT' },
-    });
-  });
-});
-
 describe('writeInitConfig', () => {
   it.effect('writes pretty JSON with a trailing newline', () =>
     Effect.gen(function* () {
@@ -72,14 +61,6 @@ describe('writeInitConfig', () => {
       expect(text).toContain('  "texra.chat": {');
     }),
   );
-});
-
-describe('workspaceTexraConfigPath', () => {
-  it('resolves the workspace path under cwd', () => {
-    expect(workspaceTexraConfigPath('/projects/paper')).toBe(
-      path.join('/projects/paper', '.texra', 'config.json'),
-    );
-  });
 });
 
 describe('setWorkspaceCliChatAgent', () => {

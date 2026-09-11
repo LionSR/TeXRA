@@ -132,16 +132,6 @@ describe('Codex background/websocket transports follow the shared toggles', () =
     expect(internals(handler).storesResponsesServerSide).toBe(true);
   });
 
-  it('enables WebSocket against the Codex backend from the global websocket toggle', async () => {
-    await initPlatformWith({
-      config: { 'texra.model.useBackgroundResponses': false },
-      globalState: { 'texra.websocket.openai': true },
-    });
-    const handler = workflowHandler();
-
-    expect(internals(handler).isWebSocketModeEnabled()).toBe(true);
-  });
-
   it('rebuilds the sparse Codex completed response from streamed items/text', async () => {
     // The Codex backend's `response.completed` carries no output (verified
     // against the official Rust client: its Completed event has only

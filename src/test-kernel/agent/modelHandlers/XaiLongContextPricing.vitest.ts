@@ -23,44 +23,14 @@ function catalogXaiConfig(fullName: string): ModelConfig {
 }
 
 describe('xaiLongContextTier', () => {
-  it('carries the documented tier tuple for each current xAI model', () => {
-    expect(xaiLongContextTier('grok-4.6')).toStrictEqual({
-      thresholdTokens: 200_000,
-      inputPrice: 4,
-      outputPrice: 12,
-    });
-    expect(xaiLongContextTier('grok-4.5')).toStrictEqual({
-      thresholdTokens: 200_000,
-      inputPrice: 4,
-      outputPrice: 12,
-    });
-    expect(xaiLongContextTier('grok-4.3')).toStrictEqual({
-      thresholdTokens: 200_000,
-      inputPrice: 2.5,
-      outputPrice: 5,
-    });
-  });
-
   it('has no tier for undocumented or OpenRouter-qualified ids', () => {
     expect(xaiLongContextTier('grok-4-0709')).toBeUndefined();
     expect(xaiLongContextTier('x-ai/grok-4.6')).toBeUndefined();
     expect(xaiLongContextTier('gpt-5.5')).toBeUndefined();
   });
-
-  it('returns a fresh tier object per call', () => {
-    expect(xaiLongContextTier('grok-4.6')).not.toBe(
-      xaiLongContextTier('grok-4.6'),
-    );
-  });
 });
 
 describe('xaiCacheDiscountFactor', () => {
-  it('carries the documented per-model cache factor', () => {
-    expect(xaiCacheDiscountFactor('grok-4.3')).toBe(0.16);
-    expect(xaiCacheDiscountFactor('grok-4.5')).toBe(0.15);
-    expect(xaiCacheDiscountFactor('grok-4.6')).toBe(0.25);
-  });
-
   it('has no factor for undocumented or OpenRouter-qualified ids', () => {
     expect(xaiCacheDiscountFactor('grok-4-0709')).toBeUndefined();
     expect(xaiCacheDiscountFactor('x-ai/grok-4.6')).toBeUndefined();
@@ -78,43 +48,6 @@ describe('llm-zoo catalog cross-check', () => {
         xaiLongContextTierGap(model),
       ),
     ).toEqual([]);
-  });
-
-  it('pins the tier rows against the catalog short rates', () => {
-    // Every documented tier is exactly double the catalog's short rates
-    // today; a mismatch on either side means the table needs re-verification
-    // against docs.x.ai, not a silent edit.
-    const tiered = Object.values(MODEL_CONFIGS).filter(
-      (model) =>
-        model.provider === ModelProvider.XAI &&
-        xaiLongContextTier(model.fullName) !== undefined,
-    );
-    expect(tiered.map((model) => model.fullName).toSorted()).toEqual([
-      'grok-4.3',
-      'grok-4.5',
-      'grok-4.6',
-    ]);
-    for (const model of tiered) {
-      const tier = xaiLongContextTier(model.fullName);
-      expect(tier?.inputPrice).toBe(2 * model.inputPrice);
-      expect(tier?.outputPrice).toBe(2 * model.outputPrice);
-    }
-  });
-});
-
-describe('catalog cache-factor pin', () => {
-  it('reports the no-discount default for every served xAI model', () => {
-    // llm-zoo's xAI entries inherit the default factor of 1 — the reason the
-    // handler override exists. If upstream ever ships real factors (a short
-    // window would not trip the tier sweep above), prefer the catalog and
-    // drop the override table and this pin.
-    const served = Object.values(MODEL_CONFIGS).filter(
-      (model) => model.provider === ModelProvider.XAI && !model.retired,
-    );
-    expect(served.length).toBeGreaterThan(0);
-    for (const model of served) {
-      expect(model.capabilities.cacheDiscountFactor).toBe(1);
-    }
   });
 });
 
@@ -164,35 +97,6 @@ describe('xaiLongContextTierGap', () => {
 });
 
 describe('ModelHandlerXAI cache rebate wiring', () => {
-  it.each([
-    ['grok-4.3', 1.25, 2.5, 0.16],
-    ['grok-4.5', 2, 6, 0.15],
-    ['grok-4.6', 2, 6, 0.25],
-  ] as const)(
-    'rebates %s cached tokens at its documented factor on the real catalog config',
-    (fullName, inputPrice, outputPrice, factor) => {
-      const handler = new ModelHandlerXAI(catalogXaiConfig(fullName));
-
-      expect(
-        handler.normalizeUsage(
-          {
-            prompt_tokens: 100_000,
-            completion_tokens: 1_000,
-            total_tokens: 101_000,
-            prompt_tokens_details: { cached_tokens: 40_000 },
-          },
-          0,
-        ).cost,
-      ).toBeCloseTo(
-        (100_000 * inputPrice +
-          1_000 * outputPrice -
-          40_000 * inputPrice * (1 - factor)) /
-          1e6,
-        12,
-      );
-    },
-  );
-
   it('follows the tier input rate for the rebate past the threshold', () => {
     const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
 

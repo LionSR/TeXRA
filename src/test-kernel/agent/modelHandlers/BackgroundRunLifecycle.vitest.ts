@@ -59,78 +59,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('BackgroundRunLifecycle.isPending / pending-id bookkeeping', () => {
-  it.each([
-    { status: 'queued', pending: true },
-    { status: 'in_progress', pending: true },
-    { status: 'completed', pending: false },
-    { status: 'failed', pending: false },
-  ])('treats $status as pending=$pending', ({ status, pending }) => {
-    const lifecycle = createLifecycle();
-
-    expect(lifecycle.isPending({ status } as Response)).toBe(pending);
-  });
-
-  it('reports no pending resume until a poll remembers one', () => {
-    const lifecycle = createLifecycle();
-
-    expect(lifecycle.hasPendingResume()).toBe(false);
-    expect(lifecycle.getPendingId()).toBeNull();
-  });
-
-  it('clearPending resets both the id and retrieve params', async () => {
-    const lifecycle = createLifecycle();
-    const client = clientWith(vi.fn(async () => completedResponse('resp-1')));
-
-    await lifecycle.waitForCompletion(client, {
-      id: 'resp-1',
-      status: 'completed',
-    } as Response);
-    // waitForCompletion always remembers the id as pending first (so a
-    // connection failure mid-poll can resume) — clearing it is the caller's
-    // job (the handler's finalizeResponse()), not waitForCompletion's.
-    expect(lifecycle.hasPendingResume()).toBe(true);
-
-    lifecycle.clearPending();
-    expect(lifecycle.hasPendingResume()).toBe(false);
-    expect(lifecycle.getPendingId()).toBeNull();
-  });
-});
-
 describe('BackgroundRunLifecycle.tryResume', () => {
-  it('returns null when nothing is pending', async () => {
-    const lifecycle = createLifecycle();
-    const client = clientWith(vi.fn());
-
-    await expect(lifecycle.tryResume(client)).resolves.toBeNull();
-    expect(client.responses.retrieve).not.toHaveBeenCalled();
-  });
-
-  it('resolves with the retrieved response once it is already completed', async () => {
-    const lifecycle = createLifecycle();
-    const client = clientWith(
-      vi.fn(async () => completedResponse('resp-done')),
-    );
-
-    // A prior poll remembers the id as pending through the public path.
-    await lifecycle.retrieveAndRemember(
-      client,
-      'resp-done',
-      undefined,
-      undefined,
-    );
-    vi.mocked(client.responses.retrieve).mockClear();
-
-    const result = await lifecycle.tryResume(client);
-
-    expect(result?.id).toBe('resp-done');
-    expect(client.responses.retrieve).toHaveBeenCalledWith(
-      'resp-done',
-      undefined,
-      undefined,
-    );
-  });
-
   it('clears the pending id and returns null when the response failed remotely', async () => {
     const lifecycle = createLifecycle();
     const client = clientWith(

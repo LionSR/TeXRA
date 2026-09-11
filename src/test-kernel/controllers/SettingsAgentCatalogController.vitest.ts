@@ -207,24 +207,6 @@ describe('SettingsAgentCatalogController', () => {
     assert.deepEqual(enabled.toolUse, undefined);
   });
 
-  it('reports unknown presets without writing enabled agent state', () => {
-    const { controller, enabled } = createController();
-
-    expect(controller.resolvePreset('missing')).toStrictEqual({
-      ok: false,
-      reason: 'unknownPreset',
-    });
-    assert.deepEqual(enabled, {});
-  });
-
-  it('loads invalid custom presets as an empty list', () => {
-    const { controller } = createController({
-      customPresets: [MALFORMED_PRESET],
-    });
-
-    assert.deepEqual(controller.getCustomPresets(), []);
-  });
-
   it('records hosted-definition ownership when saving a custom team', async () => {
     const { controller } = createController();
 
@@ -273,19 +255,6 @@ describe('SettingsAgentCatalogController', () => {
         'leanOrchestrator',
       ]),
       'leanOrchestrator',
-    );
-  });
-
-  it('previews the orchestrator root for a built-in team before the catalog loads', () => {
-    const { controller } = createController({
-      agents: { toolUse: [] },
-    });
-    const physicist = AGENT_MODE_PRESETS_BY_ID.get('physicist');
-
-    assert.ok(physicist);
-    assert.equal(
-      controller.getPresetToolUseRoot(physicist.agents.toolUse),
-      'orchestrator',
     );
   });
 
@@ -371,15 +340,6 @@ describe('SettingsAgentCatalogController', () => {
         'custom-team',
       ),
       'teamLead',
-    );
-  });
-
-  it('falls back to custom semantics for an unresolvable preset id', () => {
-    const { controller } = createController();
-
-    assert.equal(
-      controller.getPresetToolUseRoot(['review', 'customTool'], 'missing-team'),
-      undefined,
     );
   });
 

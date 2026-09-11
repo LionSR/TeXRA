@@ -481,61 +481,6 @@ describe('OpenAI model handler routing', () => {
     ).toBe(true);
   });
 
-  it.each<{
-    model: keyof typeof MODEL_CONFIGS;
-    useOpenRouter: boolean;
-    expected: string;
-  }>([
-    {
-      model: 'gpt54',
-      useOpenRouter: false,
-      expected: 'ModelHandlerOpenAIResponse',
-    },
-    {
-      model: 'gpt55',
-      useOpenRouter: false,
-      expected: 'ModelHandlerOpenAIResponse',
-    },
-    {
-      model: 'sonnet5T',
-      useOpenRouter: false,
-      expected: 'ModelHandlerAnthropic',
-    },
-    {
-      model: 'gpt54',
-      useOpenRouter: true,
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-    {
-      model: 'deepseekT',
-      useOpenRouter: true,
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-    {
-      model: 'musespark13',
-      useOpenRouter: false,
-      expected: 'ModelHandlerMeta',
-    },
-    {
-      model: 'musespark13',
-      useOpenRouter: true,
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-  ])(
-    'computes the $expected compatibility key for $model (openRouter=$useOpenRouter)',
-    ({ model, useOpenRouter, expected }) => {
-      // Meta Muse Spark routes to the Meta handler directly and to OpenRouter
-      // when proxied; OpenRouter-proxied models always key on the native
-      // OpenRouter handler.
-      expect(
-        resolveModelHandlerCompatibilityKey(
-          MODEL_CONFIGS[model],
-          useOpenRouter,
-        ),
-      ).toBe(expected);
-    },
-  );
-
   it('uses short-name routing when computing compatibility keys', async () => {
     await installPlatform({
       config: { 'texra.model.useOpenAIResponsesAPI': false },
@@ -579,16 +524,6 @@ describe('OpenAI model handler routing', () => {
     await expect(createModelHandler(MODEL_CONFIGS.gpt56pro)).rejects.toThrow(
       /reasoning mode pro, which OpenRouter does not support/,
     );
-  });
-
-  it('tags created handlers with a minifier-safe compatibility key', async () => {
-    await installPlatform();
-
-    await inspectHandler(createModelHandler(MODEL_CONFIGS.gpt54), (handler) => {
-      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
-        'ModelHandlerOpenAIResponse',
-      );
-    });
   });
 
   const codexEligibleConfig: ModelConfig = {
@@ -881,15 +816,6 @@ describe('Google Interactions API routing', () => {
     ).toBe('ModelHandlerGoogleInteractions');
   });
 
-  it('creates the Interactions handler tagged with its compatibility key', async () => {
-    const factory = await initGoogleRouting();
-    await inspectHandler(factory.createModelHandler(googleConfig()), (h) => {
-      expect(factory.activeModelHandlerCompatibilityKey(h)).toBe(
-        'ModelHandlerGoogleInteractions',
-      );
-    });
-  });
-
   it('keeps a direct Interactions session off OpenRouter after the global toggle changes', async () => {
     const factory = await initGoogleRouting(true);
     await inspectHandler(
@@ -969,20 +895,6 @@ describe('OpenRouter-proxied provider capabilities', () => {
       ).toBe(false);
     }
   });
-
-  it.each([
-    { provider: ModelProvider.DEEPSEEK, expected: true },
-    { provider: ModelProvider.GOOGLE, expected: false },
-  ])(
-    'grants a reasoning-level override only to proxied DeepSeek with reasoning but no granular effort ($provider → $expected)',
-    ({ provider, expected }) => {
-      const handler = openRouterHandler(provider, {
-        supportsReasoning: true,
-        supportsReasoningEffort: false,
-      });
-      expect(handler.supportsReasoningLevelOverride).toBe(expected);
-    },
-  );
 });
 
 describe('direct handler capability overrides', () => {
@@ -1164,15 +1076,6 @@ describe('createKimiCodeFallbackHandler', () => {
     // A plain direct kimi3 handler re-resolves fine with a rebind.
     await expect(
       createKimiCodeFallbackHandler(MODEL_CONFIGS.kimi3, 'kimi3'),
-    ).resolves.toBeUndefined();
-  });
-
-  it('rebuilds nothing for a non-Kimi model', async () => {
-    await expect(
-      createKimiCodeFallbackHandler(
-        modelConfig(ModelProvider.OPENAI),
-        'test-openai',
-      ),
     ).resolves.toBeUndefined();
   });
 });

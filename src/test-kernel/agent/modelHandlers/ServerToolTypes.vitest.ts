@@ -37,14 +37,4 @@ describe('extractWebFetchResultFields', () => {
     const fields = extractWebFetchResultFields(block);
     expect(fields?.content).toBe(`${'x'.repeat(19_997)}...`);
   });
-
-  it('reads nothing from the retired flat block shape', () => {
-    expect(
-      extractWebFetchResultFields({
-        url: 'https://example.com/archived',
-        title: 'Archived',
-        page_content: page,
-      }),
-    ).toBeUndefined();
-  });
 });

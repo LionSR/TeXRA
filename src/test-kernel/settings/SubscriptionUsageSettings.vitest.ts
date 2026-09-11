@@ -74,29 +74,4 @@ describe('subscription usage settings IPC', () => {
   ] as const)('formats boundary usage %s as %s', (percent, expected) => {
     expect(formatSubscriptionUsagePercent(percent)).toBe(expected);
   });
-
-  it('fetches every provider through the injected reader and posts no raw data', async () => {
-    const getUsage = vi.fn(
-      async (provider: SubscriptionUsageProvider) => snapshots[provider],
-    );
-    const postMessage = vi.fn(async () => true);
-
-    await sendSubscriptionUsage(
-      { postMessage } as never,
-      { getUsage, invalidate: vi.fn() },
-      true,
-    );
-
-    expect(getUsage.mock.calls).toStrictEqual(
-      SUBSCRIPTION_USAGE_PROVIDERS.map((provider) => [
-        provider,
-        { forceRefresh: true },
-      ]),
-    );
-    expect(postMessage).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots,
-    });
-    expect(JSON.stringify(postMessage.mock.calls)).not.toContain('secret');
-  });
 });

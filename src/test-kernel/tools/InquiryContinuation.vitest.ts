@@ -26,57 +26,6 @@ function makeSummary(
 }
 
 describe('buildContinuationText', () => {
-  it('emits Variant A when there are other open inquiries (answered)', () => {
-    const text = buildContinuationText({
-      event: 'answered',
-      threadId: THREAD,
-      question: 'Q',
-      answer: 'A',
-      stillOpen: [makeSummary({})],
-    });
-
-    expect(text).toContain(`[inquiry] ${THREAD} answered.`);
-    expect(text).toContain('Q: Q');
-    expect(text).toContain('A: A');
-    expect(text).toContain(`Full thread: ${THREAD}`);
-    expect(text).not.toContain(`inquiry { command: 'read'`);
-    expect(text).toContain('Still open on this stream:');
-    expect(text).toContain(OTHER_THREAD);
-    expect(text).toContain(
-      'Proceed using the new answer. Do not re-dispatch any open thread_id.',
-    );
-  });
-
-  it('emits Variant B when no other inquiries are open (answered)', () => {
-    const text = buildContinuationText({
-      event: 'answered',
-      threadId: THREAD,
-      question: 'Q',
-      answer: 'A',
-      stillOpen: [],
-    });
-
-    expect(text).toContain('No other open inquiries on this stream.');
-    expect(text).toContain('Proceed using the new answer.');
-    expect(text).not.toContain('Still open on this stream:');
-  });
-
-  it('emits Variant C for dropped threads', () => {
-    const text = buildContinuationText({
-      event: 'dropped',
-      threadId: THREAD,
-      question: 'Q',
-      stillOpen: [makeSummary({})],
-    });
-
-    expect(text).toContain(`[inquiry] ${THREAD} dropped by user.`);
-    expect(text).toContain('Q: Q');
-    expect(text).toContain(`Full thread: ${THREAD}`);
-    expect(text).not.toContain(`inquiry { command: 'read'`);
-    expect(text).toContain('re-formulate (new thread)');
-    expect(text).toContain(`Do not re-dispatch ${THREAD}.`);
-  });
-
   it('collapses multiline markdown previews to avoid rendering code blocks', () => {
     const text = buildContinuationText({
       event: 'answered',

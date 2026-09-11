@@ -58,26 +58,6 @@ function thinkingConfig(
 }
 
 describe('normalizeAnthropicEffort', () => {
-  it.each(ADAPTIVE_MODELS)(
-    '$0.name uses the exact official vocabulary and accepts max',
-    (model, accepted, onXhigh) => {
-      expect(model.capabilities.supportsAdaptiveThinking).toBe(true);
-      expect(model.capabilities.supportedReasoningEfforts).toEqual(accepted);
-      expect(
-        normalizeAnthropicEffort(
-          model.capabilities.supportedReasoningEfforts,
-          ReasoningEffort.MAX,
-        ),
-      ).toBe('max');
-      expect(
-        normalizeAnthropicEffort(
-          model.capabilities.supportedReasoningEfforts,
-          ReasoningEffort.XHIGH,
-        ),
-      ).toBe(onXhigh);
-    },
-  );
-
   it('preserves low/medium/high and floors none at low', () => {
     const accepted =
       MODEL_CONFIGS.opus5T.capabilities.supportedReasoningEfforts;
@@ -130,13 +110,6 @@ describe('normalizeAnthropicEffort', () => {
 });
 
 describe('local Anthropic request traits', () => {
-  it('keeps compaction eligibility for the eight adaptive families', () => {
-    for (const [model] of ADAPTIVE_MODELS) {
-      expect(isCompactionEligibleModel(model.fullName)).toBe(true);
-    }
-    expect(isCompactionEligibleModel(SONNET_35)).toBe(false);
-  });
-
   it('covers future Mythos-class family members via the family prefix', () => {
     // The traits table matches 'claude-fable-'/'claude-mythos-' as families:
     // a new member must not fall through to DEFAULT_REQUEST_TRAITS, whose

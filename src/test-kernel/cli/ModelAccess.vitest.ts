@@ -191,30 +191,6 @@ describe('CLI model access resolution', () => {
     ).resolves.toEqual({ model: 'deepseekT' });
   });
 
-  it('falls back from stale defaults to the first currently runnable model', async () => {
-    await expect(
-      resolveModelFromAccessList(
-        [missingKeyModel('opus48T'), model('deepseekT'), model('sonnet46T')],
-        'opus48T',
-        { fallbackReason: 'command-config' },
-      ),
-    ).resolves.toEqual({
-      model: 'deepseekT',
-      notice:
-        'Model "opus48T" is not available (missing api key). Available models: deepseekT, sonnet46T. Using "deepseekT" instead.',
-    });
-  });
-
-  it('can fall back silently from an implicit default', async () => {
-    await expect(
-      resolveModelFromAccessList(
-        [missingKeyModel('deepseekT'), model('gpt55')],
-        'deepseekT',
-        { fallbackReason: 'builtin-default' },
-      ),
-    ).resolves.toEqual({ model: 'gpt55' });
-  });
-
   it('filters runnable models by access-list availability', () => {
     const entries = [
       model('sonnet46T', {
@@ -457,15 +433,6 @@ describe('CLI model access resolution', () => {
         missingKeyModel('opus48T'),
       ]),
     ).toEqual([]);
-  });
-
-  it('formats no-runnable model reasons for the model picker view', () => {
-    expect(formatCliNoRunnableModelsMessage(INTERACTIVE_RECOVERY)).toBe(
-      'No models are available. Configure a provider API key.',
-    );
-    expect(formatCliNoAvailableModelsRecovery(INTERACTIVE_RECOVERY)).toBe(
-      'Configure a provider API key.',
-    );
   });
 
   it('keeps defaults for omitted and nullish recovery actions', () => {

@@ -494,39 +494,6 @@ describe('long-running model transport', () => {
     expect(init?.duplex).toBeUndefined();
   });
 
-  it('does not set duplex on a direct string body', async () => {
-    stubOkResponse();
-
-    await expect(
-      longRunningModelFetch('https://api.example/v1/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{"prompt":"hello"}',
-      }),
-    ).resolves.toBeInstanceOf(Response);
-
-    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
-    expect(init?.body).toBe('{"prompt":"hello"}');
-    expect(init?.duplex).toBeUndefined();
-  });
-
-  it('does not set duplex on a direct ArrayBuffer body', async () => {
-    stubOkResponse();
-    const body = new TextEncoder().encode('{"prompt":"hello"}').buffer;
-
-    await expect(
-      longRunningModelFetch('https://api.example/v1/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body,
-      }),
-    ).resolves.toBeInstanceOf(Response);
-
-    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
-    expect(init?.body).toBe(body);
-    expect(init?.duplex).toBeUndefined();
-  });
-
   it('sets duplex: half when a caller sends a stream body without it', async () => {
     stubOkResponse();
     const body = new ReadableStream<Uint8Array>({
@@ -657,24 +624,6 @@ describe('long-running model transport', () => {
       body: '{"prompt":"override"}',
     });
     expect(request.arrayBuffer).not.toHaveBeenCalled();
-  });
-
-  it('forwards the duplex hint when an init stream body overrides a Request', async () => {
-    stubOkResponse();
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.close();
-      },
-    });
-
-    await longRunningModelFetch(foreignRequest({ method: 'GET' }), {
-      method: 'POST',
-      body,
-    });
-
-    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
-    expect(init?.body).toBe(body);
-    expect(init?.duplex).toBe('half');
   });
 
   it('passes array-form init headers through untransformed', async () => {

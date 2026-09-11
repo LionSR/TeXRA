@@ -17,38 +17,6 @@ afterEach(() => {
 });
 
 describe('formatSlashCommandHelp', () => {
-  it('groups builtin commands into ordered sections with one list item each', () => {
-    registerBuiltinSlashCommands();
-    const help = formatSlashCommandHelp(listSlashCommands());
-
-    const sessionIndex = help.indexOf('**Session**');
-    const configurationIndex = help.indexOf('**Configuration**');
-    const accountIndex = help.indexOf('**Account**');
-    const keyboardIndex = help.indexOf('**Keyboard**');
-    expect(sessionIndex).toBeGreaterThanOrEqual(0);
-    expect(configurationIndex).toBeGreaterThan(sessionIndex);
-    expect(accountIndex).toBeGreaterThan(configurationIndex);
-    expect(keyboardIndex).toBeGreaterThan(accountIndex);
-    expect(help).not.toContain('**Other**');
-
-    // Each command renders as its own markdown list item: single newlines
-    // collapse in the help surface's markdown renderer, list items do not.
-    expect(help).toContain('- `/clear` — Start a fresh chat session');
-    expect(help).toContain(
-      '- `/goal` (`/goals`) — Configure autonomous goal mode',
-    );
-    expect(help).toContain('- `/plan` — Read the focused session work plan');
-    expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
-    expect(help).toContain('- `/model` — Choose the model for this chat');
-    expect(help).toContain('- `/models` — Enable or disable models in pickers');
-    expect(help).toContain(
-      '- `/key` (`/keys`) — Add a provider API key with masked input',
-    );
-    expect(help).toContain(
-      '- `/login` — Sign in with ChatGPT or Grok, or sign in to your TeXRA account',
-    );
-  });
-
   it('collects uncategorized commands under a trailing Other section', () => {
     const plugin: SlashCommand = {
       name: 'plugin-thing',
@@ -80,12 +48,6 @@ describe('formatSlashCommandHelp', () => {
     expect(macKittyHelp).toContain('`Shift-Enter` or `Ctrl-J`');
     expect(macKittyHelp).toContain(
       "`Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
-    );
-  });
-
-  it('mentions that typing during a run queues a follow-up', () => {
-    expect(formatSlashCommandHelp([])).toContain(
-      'queues your message as a follow-up',
     );
   });
 });

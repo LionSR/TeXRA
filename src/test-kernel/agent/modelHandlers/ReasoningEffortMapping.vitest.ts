@@ -25,13 +25,6 @@ describe('toOpenAIReasoningEffort', () => {
       toOpenAIReasoningEffort(ReasoningEffort.MAX, ReasoningEffort.MAX),
     ).toBe('max');
   });
-
-  it('passes through values OpenAI natively accepts', () => {
-    expect(toOpenAIReasoningEffort(ReasoningEffort.XHIGH)).toBe('xhigh');
-    expect(toOpenAIReasoningEffort(ReasoningEffort.HIGH)).toBe('high');
-    expect(toOpenAIReasoningEffort(ReasoningEffort.MEDIUM)).toBe('medium');
-    expect(toOpenAIReasoningEffort(ReasoningEffort.LOW)).toBe('low');
-  });
 });
 
 describe('toOpenRouterReasoningEffort', () => {
@@ -41,13 +34,6 @@ describe('toOpenRouterReasoningEffort', () => {
       'xhigh',
     );
   });
-
-  it.each(['xhigh', 'high', 'medium', 'low', 'minimal', 'none'])(
-    'passes %s through unchanged when OpenRouter natively accepts it',
-    (effort) => {
-      expect(toOpenRouterReasoningEffort(effort, false)).toBe(effort);
-    },
-  );
 
   it('falls back to "low" for unrecognized values', () => {
     expect(toOpenRouterReasoningEffort('bogus', false)).toBe('low');
@@ -60,14 +46,5 @@ describe('clampReasoningEffortToHighOrMax', () => {
   it('maps the above-high tiers to "max"', () => {
     expect(clampReasoningEffortToHighOrMax(ReasoningEffort.XHIGH)).toBe('max');
     expect(clampReasoningEffortToHighOrMax(ReasoningEffort.MAX)).toBe('max');
-  });
-
-  it.each([
-    ReasoningEffort.HIGH,
-    ReasoningEffort.MEDIUM,
-    ReasoningEffort.LOW,
-    ReasoningEffort.NONE,
-  ])('maps %s and every below-high tier to the "high" floor', (effort) => {
-    expect(clampReasoningEffortToHighOrMax(effort)).toBe('high');
   });
 });

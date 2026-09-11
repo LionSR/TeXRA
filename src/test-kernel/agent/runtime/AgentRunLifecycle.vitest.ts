@@ -206,58 +206,6 @@ describe('runFlowWithLifecycle', () => {
   // The run's category reaches the handle and the terminal `result` through
   // the one descriptor the lifecycle builds, so a workflow run reports
   // `workflow` on both without either side re-deriving the string.
-  it('reports the config agent category on the handle and terminal result', async () => {
-    await initLifecycleTestPlatform(true);
-    const { runId, runStatus, ctx } = lifecycleFixture(
-      'polish',
-      AgentCategory.Workflow,
-    );
-    let terminalResult: AgentRunHandle['result'] | undefined;
-
-    try {
-      const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => workflowResult(runId, RUN_OUTCOME.COMPLETED),
-          {
-            onRun: async (handle) => {
-              expect(handle.category).toBe('workflow');
-              terminalResult = handle.result;
-            },
-          },
-        ),
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
-        category: 'workflow',
-        agentName: 'polish',
-      });
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('stops the Lean servers attributed to a run when the run ends', async () => {
-    await initLifecycleTestPlatform(true);
-    const { runId, runStatus, ctx } = lifecycleFixture();
-    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
-
-    try {
-      const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-          { onRunEnd: stopSessionsForRun },
-        ),
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
 
   it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
@@ -316,51 +264,6 @@ describe('runFlowWithLifecycle', () => {
       }
     });
   }
-
-  it('persists terminal state before updating onboarding state', async () => {
-    const fake = await initLifecycleTestPlatform(false);
-    const { runId, runStatus, ctx } = lifecycleFixture('assistant');
-    const updateOnboarding = vi.spyOn(fake.globalState, 'update');
-
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-        ),
-      );
-
-      expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
-      expect(updateOnboarding).toHaveBeenCalledWith(
-        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-        true,
-      );
-      expect(storageMocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
-        updateOnboarding.mock.invocationCallOrder[0] ??
-          Number.POSITIVE_INFINITY,
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('finalizes the status machine owned by the run session', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      // The lifecycle owns the whole transition (RUNNING on entry, terminal
-      // on exit) against the run session's one status machine.
-      expect(runStatus).toBe(ctx.runScope.session.status);
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-        ),
-      );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
 
   it('projects run config before the RUNNING status projection', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();

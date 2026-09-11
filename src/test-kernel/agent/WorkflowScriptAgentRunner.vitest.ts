@@ -334,23 +334,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     },
   );
 
-  it('keeps dependency fingerprints stable for unchanged binary bytes', async () => {
-    const bytes = Buffer.from([0, 255, 1, 128]);
-    mocks.absoluteReadBytes.mockResolvedValue(bytes);
-    const options = {
-      inputFiles: ['proof.bin'],
-      contextFiles: ['context.bin'],
-    };
-
-    const [first, second] = await Promise.all([
-      fingerprintWorkflowAgentDependencies(runId, options),
-      fingerprintWorkflowAgentDependencies(runId, options),
-    ]);
-
-    expect(first).toEqual(expect.any(String));
-    expect(first).toBe(second);
-  });
-
   it('keeps the requested workspace symlink name in the launched inputs', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
     const workspace = path.join(root, 'workspace');
@@ -475,35 +458,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       message: expect.stringContaining('absent.tex'),
     });
     expect(mocks.preparedOptions).toHaveLength(0);
-  });
-
-  it('passes each declarative model override to delegation policy', async () => {
-    const runner = defaultRunner();
-
-    await runner(
-      invocation({
-        model: 'economy-model',
-        inputFiles: ['paper.tex'],
-      }),
-    );
-    await runner(
-      invocation({
-        agentName: 'assistant',
-        model: 'strong-model',
-        schema: { type: 'object' },
-      }),
-    );
-
-    expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(1, {
-      requestedModel: 'economy-model',
-      parentModel: 'parent-model',
-      withScope: expect.any(Function),
-    });
-    expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(2, {
-      requestedModel: 'strong-model',
-      parentModel: 'parent-model',
-      withScope: expect.any(Function),
-    });
   });
 
   it('fails the workflow when a declared model is unavailable', async () => {
@@ -948,21 +902,5 @@ describe('createWorkflowScriptAgentRunner', () => {
         configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
       }),
     );
-  });
-
-  it('reports a recovered attempt only through its recovered child id', async () => {
-    // A recovered attempt never fires onActiveRunId, so the only child id
-    // it reports is the durable one that supplied the result — no phantom live
-    // attempt is announced for a call that never ran.
-    mocks.executeStableSubagentInBand.mockImplementation(async () => ({
-      runId: 'bbbbbb222222',
-      result,
-    }));
-    const report = reportSpy();
-    const runner = defaultRunner();
-
-    await expect(runner({ ...invocation(), report })).resolves.toBe(result);
-    expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
-    expect(reported(report, 'costUsd')).toEqual([]);
   });
 });

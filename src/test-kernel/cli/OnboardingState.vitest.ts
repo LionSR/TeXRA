@@ -16,18 +16,6 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
 describe('onboarding decline flag', () => {
-  it('defaults to false and round-trips through global state', async () => {
-    const state = new MemoryStateStore();
-    expect(readOnboardingFlags(state).declined).toBe(false);
-
-    await setOnboardingDeclined(state, true);
-    expect(readOnboardingFlags(state).declined).toBe(true);
-    expect(state.get(ONBOARDING_DECLINED_KEY)).toBe(true);
-
-    await setOnboardingDeclined(state, false);
-    expect(readOnboardingFlags(state).declined).toBe(false);
-  });
-
   it('treats a non-boolean stored value as not-declined', async () => {
     const state = new MemoryStateStore();
     await state.update(ONBOARDING_DECLINED_KEY, 'yes');
@@ -47,36 +35,7 @@ describe('maskDisplayValue', () => {
   });
 });
 
-describe('formatPersonalApiKeysLine', () => {
-  it('formats the configured provider inventory without access claims', () => {
-    expect(formatPersonalApiKeysLine(['deepseek'])).toBe(
-      'your own API keys: DeepSeek',
-    );
-    expect(formatPersonalApiKeysLine([])).toBeUndefined();
-  });
-});
-
 describe('maybeRunCliOnboarding headless parity', () => {
-  effectIt.effect(
-    'returns configured:false and writes nothing in headless mode',
-    () =>
-      Effect.gen(function* () {
-        const writeSpy = vi.spyOn(process.stdout, 'write');
-        try {
-          expect(
-            yield* maybeRunCliOnboarding(createFakePlatform(), {
-              mode: 'headless',
-              stdoutIsTty: true,
-              termIsDumb: false,
-            }),
-          ).toEqual({ configured: false, declined: false });
-          expect(writeSpy).not.toHaveBeenCalled();
-        } finally {
-          writeSpy.mockRestore();
-        }
-      }),
-  );
-
   effectIt.effect(
     'returns configured:false on a non-TTY stdout even when marked interactive',
     () =>

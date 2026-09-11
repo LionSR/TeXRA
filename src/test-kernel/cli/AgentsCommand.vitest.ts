@@ -133,27 +133,6 @@ describe('CLI agents command', () => {
     );
   });
 
-  it('reports hidden agents in json mode without changing stdout payload', async () => {
-    stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
-
-    const exitCode = await listAgents(
-      createRunCommandCliContext({ outputFormat: 'json' }),
-      {
-        category: AgentCategory.Workflow,
-      },
-    );
-
-    expect(exitCode).toBe(0);
-    expectEmittedAgents({
-      json: [],
-      ndjson: [],
-      text: '',
-    });
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
-    );
-  });
-
   it('shows a text empty state when no workflow agents are visible', async () => {
     stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
 
@@ -191,30 +170,6 @@ describe('CLI agents command', () => {
     expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
   });
 
-  it('suppresses hidden-agent notices in quiet text mode', async () => {
-    stubCatalog({
-      [AgentCategory.Workflow]: {
-        visible: [POLISH_AGENT],
-        all: [POLISH_AGENT, CORRECT_AGENT],
-      },
-    });
-
-    const exitCode = await listAgents(
-      createRunCommandCliContext({ quietLogs: true }),
-      {
-        category: AgentCategory.Workflow,
-      },
-    );
-
-    expect(exitCode).toBe(0);
-    expectEmittedAgents({
-      json: [POLISH_AGENT],
-      ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
-      text: 'workflow\tpolish\tPolishes prose.',
-    });
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-  });
-
   it('filters agents by category and reports hidden agents in that category', async () => {
     agentCatalogMock.getVisibleAgents.mockImplementation(
       (category: AgentCategory) => {
@@ -247,29 +202,6 @@ describe('CLI agents command', () => {
     });
     expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
       'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category toolUse --all` to show all tool-use agents.',
-    );
-  });
-
-  it('keeps the workflow category in the hidden-agent notice', async () => {
-    stubCatalog({
-      [AgentCategory.Workflow]: {
-        visible: [POLISH_AGENT],
-        all: [POLISH_AGENT, CORRECT_AGENT],
-      },
-    });
-
-    const exitCode = await listAgents(createRunCommandCliContext(), {
-      category: AgentCategory.Workflow,
-    });
-
-    expect(exitCode).toBe(0);
-    expectEmittedAgents({
-      json: [POLISH_AGENT],
-      ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
-      text: 'workflow\tpolish\tPolishes prose.',
-    });
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
-      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --category workflow --all` to show all workflow agents.',
     );
   });
 

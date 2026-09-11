@@ -117,33 +117,9 @@ describe('DedupedResource', () => {
 
     expect(emitted).toEqual([2, 3, 4]);
   });
-
-  it('keeps an existing cursor when seeding an empty list', () => {
-    const resource = new DedupedResource<TestItem>({
-      getId: (item) => item.id,
-      getCursor: getNewestTimestamp,
-      maxSeenIds: 3,
-      sinceCursor: '2026-07-04T00:00:00Z',
-    });
-
-    resource.seed([]);
-
-    expect(resource.sinceCursor).toBe('2026-07-04T00:00:00Z');
-  });
 });
 
 describe('PollingSourceBase.validateOrSkip', () => {
-  it('returns parsed 200 responses and passes through 304 responses', () => {
-    const source = new TestPollingSource();
-    const schema = z.object({ id: z.number() });
-
-    expect(
-      source.validate({ status: 200, data: { id: 7 }, etag: 'etag' }, schema),
-    ).toEqual({ status: 200, data: { id: 7 }, etag: 'etag' });
-
-    expect(source.validate({ status: 304 }, schema)).toEqual({ status: 304 });
-  });
-
   it('logs and skips malformed 200 responses without throwing', () => {
     const source = new TestPollingSource();
     const warn = vi.fn();

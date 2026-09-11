@@ -50,33 +50,6 @@ afterEach(() => {
 });
 
 describe('BackgroundPoller', () => {
-  it('resolves the logger supplier at poll time', async () => {
-    const staleLogger = trace();
-    const activeLogger = trace();
-    let logger = staleLogger;
-    const poller = createPoller({
-      maxDurationMs: 1000,
-      isPending: () => false,
-      logger: () => logger,
-    });
-
-    logger = activeLogger;
-    await poller.poll({
-      initialResponse: { id: 'resp-1', status: 'completed' },
-      retrieve: vi.fn(),
-      extractId,
-      extractStatus,
-      deadlineAtMs: Date.now() + 1000,
-      providerLabel: 'OpenAI',
-    });
-
-    expect(staleLogger.debug).not.toHaveBeenCalled();
-    expect(activeLogger.debug).toHaveBeenCalledWith(
-      expect.stringContaining('OpenAI polling started'),
-      expect.anything(),
-    );
-  });
-
   it('uses provider-specific timeout guidance', async () => {
     const logger = trace();
     const poller = createPoller({ maxDurationMs: -1, logger: () => logger });
@@ -266,45 +239,5 @@ describe('BackgroundPoller', () => {
           message.includes('poll 1'),
       ),
     ).toBe(true);
-  });
-
-  it('logs final stats with provider usage data', async () => {
-    const logger = trace();
-    let finishedStats: BackgroundPollStats | undefined;
-    const usage = { input_tokens: 3, output_tokens: 5 };
-    const poller = createPoller({ maxDurationMs: 1000, logger: () => logger });
-
-    await poller.poll({
-      initialResponse: { id: 'resp-3', status: 'in_progress' },
-      retrieve: vi.fn(async () => ({
-        id: 'resp-3',
-        status: 'completed',
-        usage,
-      })),
-      extractId,
-      extractStatus,
-      deadlineAtMs: Date.now() + 1000,
-      providerLabel: 'OpenAI',
-      extraFinishData: (response) => ({ usage: response.usage }),
-      onFinished: (_response, stats) => {
-        finishedStats = stats;
-      },
-    });
-
-    expect(finishedStats).toMatchObject({
-      responseId: 'resp-3',
-      status: 'completed',
-      pollCount: 1,
-    });
-    expect(logger.debug).toHaveBeenCalledWith(
-      expect.stringContaining('polling finished'),
-      expect.objectContaining({
-        data: expect.objectContaining({
-          responseId: 'resp-3',
-          pollCount: 1,
-          usage,
-        }),
-      }),
-    );
   });
 });

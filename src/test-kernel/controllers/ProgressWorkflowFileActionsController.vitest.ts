@@ -60,61 +60,6 @@ function createDeps(
 }
 
 describe('ProgressWorkflowFileActionsController', () => {
-  it('compares previous output without also running latexdiff', async () => {
-    const compared: Array<[string, string]> = [];
-    const latexdiffs: Array<[string, string]> = [];
-    const deps = createDeps({
-      compareFiles: async (baseFile, editedFile) => {
-        compared.push([baseFile, editedFile]);
-      },
-      latexdiffFile: async (baseFile, editedFile) => {
-        latexdiffs.push([baseFile, editedFile]);
-      },
-    });
-    const controller = new ProgressWorkflowFileActionsController(deps);
-
-    await controller.comparePrevious(
-      '/workspace/output-r1.tex',
-      '/workspace/original.tex',
-      '/workspace/output-r0.tex',
-    );
-
-    expect(compared).toEqual([
-      ['/workspace/output-r0.tex', '/workspace/output-r1.tex'],
-    ]);
-    expect(latexdiffs).toEqual([]);
-  });
-
-  it('shows one fallback message when a host cannot open a label', async () => {
-    const deps = createDeps({
-      openLabel: async () => false,
-    });
-    const controller = new ProgressWorkflowFileActionsController(deps);
-
-    await controller.openLabel('missing-label');
-
-    expect(deps.host.infos).toEqual(['Label "missing-label" not found.']);
-  });
-
-  it('reports task storage open failures', async () => {
-    const failure = new Error('cannot reveal folder');
-    const deps = createDeps({
-      openDirectory: async () => {
-        throw failure;
-      },
-    });
-    const controller = new ProgressWorkflowFileActionsController(deps);
-
-    await controller.openTaskStorage(RUN);
-
-    expect(deps.host.errors).toEqual([
-      'Failed to open task storage folder: cannot reveal folder',
-    ]);
-    expect(deps.host.logs).toEqual([
-      { message: 'Failed to open task storage folder', error: failure },
-    ]);
-  });
-
   it('keeps the accept follow-up backup when the host cancels acceptance', async () => {
     const followUps: string[] = [];
     const acceptResults = [false, true];

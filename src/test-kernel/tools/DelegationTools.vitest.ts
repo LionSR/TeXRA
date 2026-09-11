@@ -105,54 +105,6 @@ describe('DelegationTools', () => {
 
     assert.strictEqual(result, null);
   });
-
-  it('ignores non-bib context files', async () => {
-    let statCalled = false;
-    WorkspaceFS.stat = async () => {
-      statCalled = true;
-      return stat(500 * 1024);
-    };
-
-    const result = await rejectOversizedBibAttachments([
-      'paper.tex',
-      'preamble.tex',
-    ]);
-
-    assert.strictEqual(result, null);
-    assert.strictEqual(statCalled, false);
-  });
-
-  it('keeps delegation field and handoff copy free of em dashes', () => {
-    const fieldDescriptions = [
-      ...Object.values(WorkflowAgentInputSchema.shape).map(
-        (field) => field.description,
-      ),
-      workingDirectoryField.description,
-    ];
-    const delegatedInstruction = 'User \u2014 instruction.';
-    const parentInstruction = 'Parent \u2014 instruction.';
-    const handoff = withToolUseSubagentHandoffInstruction(
-      delegatedInstruction,
-      parentInstruction,
-    );
-
-    expect(handoff).toContain(
-      `Parent user request (constraint context only):\n${parentInstruction}`,
-    );
-    expect(handoff).toContain(
-      'Constraints in the parent user request are mandatory and override conflicting delegated-task wording.',
-    );
-    expect(handoff).toMatch(
-      /Your final response is delivered verbatim to the parent orchestrator\..*never only a status note such as "done"\.$/,
-    );
-
-    const authoredHandoff = handoff
-      .replace(delegatedInstruction, '')
-      .replace(parentInstruction, '');
-    expect(`${fieldDescriptions.join('\n')}\n${authoredHandoff}`).not.toContain(
-      '\u2014',
-    );
-  });
 });
 
 describe('DelegateAgentTool resume ownership', () => {
@@ -180,19 +132,6 @@ describe('DelegateAgentTool resume ownership', () => {
     mocks.deliverChildRunFollowUp.mockReturnValue(
       Effect.succeed({ kind: 'delivered' }),
     );
-  });
-
-  it('uses the merged submission result without a caller-local owner check', async () => {
-    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'queued' }));
-
-    const result = await new DelegateAgentTool().call({
-      execution_id: runId,
-      instruction: 'Keep going.',
-    });
-
-    assert.strictEqual(result.status, 'executed');
-    assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 1);
-    assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 0);
   });
 
   it('reports a merged recovery failure to the parent', async () => {

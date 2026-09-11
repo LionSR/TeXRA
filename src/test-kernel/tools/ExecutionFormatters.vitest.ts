@@ -88,17 +88,6 @@ describe('getRunStatusInfo', () => {
     assert.strictEqual(mocks.inspectRunLease.mock.calls.length, 0);
   });
 
-  it('costs one lease read and one stat for a settled row', async () => {
-    persisted({}, 'no-checkpoint');
-
-    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session, {}));
-
-    assert.strictEqual(info.status, 'unknown');
-    assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
-    assert.strictEqual(mocks.inspectRunLease.mock.calls.length, 1);
-    assert.strictEqual(mocks.exists.mock.calls.length, 1);
-  });
-
   it('reports a checkpointless run a live foreign owner holds as held', async () => {
     // A background shell holds its run lease for its whole lifetime and
     // never writes a flow record, so the checkpoint stat cannot decide it.

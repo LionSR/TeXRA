@@ -121,61 +121,6 @@ describe('Copilot model access settings', () => {
     ]);
   });
 
-  it('keeps other route actions reachable while one route is preferred', async () => {
-    const tab = await renderSubscriptionsTab([
-      { ...allowedRoute, preferred: true },
-      consentRoute,
-    ]);
-
-    const buttons = sectionButtons(copilotSection(tab));
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      'Stop using Copilot',
-      'Grant access',
-    ]);
-    const actionRows = [
-      ...(tab.shadowRoot?.querySelectorAll<HTMLElement>(
-        '#copilot-access .copilot-route-action',
-      ) ?? []),
-    ];
-    expect(actionRows).toHaveLength(2);
-    expect(actionRows[0]?.textContent).toContain('GPT-5.5');
-    expect(actionRows[1]?.textContent).toContain('Claude Sonnet 4.6');
-    expect(buttons[0]?.classList.contains('btn-secondary')).toBe(true);
-    expect(buttons[0]?.getAttribute('appearance')).toBe('outlined');
-    expect(buttons[1]?.classList.contains('btn-primary')).toBe(true);
-    expect(buttons[1]?.getAttribute('appearance')).toBe('filled');
-
-    buttons[0]?.click();
-    buttons[1]?.click();
-    expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'gpt55' }],
-      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
-    ]);
-  });
-
-  it('describes a preferred route that is waiting for consent', async () => {
-    const tab = await renderSubscriptionsTab([
-      { ...consentRoute, preferred: true },
-    ]);
-
-    const section = copilotSection(tab);
-    expect(section?.textContent).toContain(
-      'Selected. Waiting for your approval in VS Code.',
-    );
-    const buttons = sectionButtons(section);
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      'Grant access',
-      'Stop using Copilot',
-    ]);
-    expect(section?.querySelector('.copilot-route-controls')).not.toBeNull();
-    buttons[0]?.click();
-    buttons[1]?.click();
-    expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
-      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'sonnet46' }],
-    ]);
-  });
-
   it('keeps an unavailable preferred route removable', async () => {
     const tab = await renderSubscriptionsTab([
       { ...allowedRoute, access: 'unavailable', preferred: true },

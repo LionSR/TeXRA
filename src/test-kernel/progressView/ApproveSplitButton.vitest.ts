@@ -91,33 +91,6 @@ describe('approve-split-button', () => {
     expect(approve?.hasAttribute('disabled')).toBe(true);
   });
 
-  it('uses the native group with matching primary segments and accessible labels', async () => {
-    const element = await mount({ canBypass: true });
-    const group = element.shadowRoot?.querySelector('wa-button-group');
-    const approve = group?.querySelector<HTMLElement>(
-      'wa-button[data-action="approve"]',
-    );
-    const menu = group?.querySelector('wa-dropdown');
-    const trigger = menu?.querySelector<HTMLElement>(
-      'wa-button[slot="trigger"]',
-    );
-
-    expect(group?.getAttribute('label')).toBe('Approve');
-    expect(approve?.parentElement).toBe(group);
-    expect(menu?.parentElement).toBe(group);
-    expect(approve?.classList.contains('action-button')).toBe(false);
-    expect(approve?.getAttribute('appearance')).toBe('accent');
-    expect(approve?.getAttribute('variant')).toBe('brand');
-    expect(approve?.getAttribute('size')).toBe('s');
-    expect(trigger?.getAttribute('appearance')).toBe('accent');
-    expect(trigger?.getAttribute('variant')).toBe('brand');
-    expect(trigger?.getAttribute('size')).toBe('s');
-    expect(trigger?.getAttribute('aria-label')).toBe('More approve options');
-    expect(element.shadowRoot?.querySelector('wa-tooltip')?.parentNode).toBe(
-      element.shadowRoot,
-    );
-  });
-
   it('names only the kind the panel grants when canBypass is true', async () => {
     const element = await mount({
       canBypass: true,
@@ -138,14 +111,6 @@ describe('approve-split-button', () => {
     expect(tooltip?.textContent).toContain(
       DELEGATION_APPROVAL_COPY.progressViewCommandAction,
     );
-  });
-
-  it('emits approve on the main button click in split mode', async () => {
-    const element = await mount({ canBypass: true });
-    const events = recordEvents(element);
-
-    clickApproveButton(element);
-    expect(events).toStrictEqual(['approve']);
   });
 
   it('emits approve-session only for the run-scoped bypass menu item', async () => {

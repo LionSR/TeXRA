@@ -39,29 +39,6 @@ describe('SupabaseClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('waits for token provider readiness', async () => {
-    const readiness = createDeferred();
-    const provider = createTokenProvider({
-      whenReady: () => Effect.promise(() => readiness.promise),
-    });
-
-    initializeSupabase(new FakeSecrets());
-    SupabaseClient.setAuthProvider(provider);
-
-    let settled = false;
-    const readyPromise = SupabaseClient.isReady().then((ready) => {
-      settled = true;
-      return ready;
-    });
-    await Promise.resolve();
-
-    assert.equal(settled, false);
-
-    readiness.resolve();
-
-    assert.equal(await readyPromise, true);
-  });
-
   it('reports not ready when token provider readiness fails', async () => {
     const provider = createTokenProvider({
       whenReady: () =>

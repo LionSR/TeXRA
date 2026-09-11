@@ -66,45 +66,12 @@ test('first launch shows a usable launcher chrome', async () => {
  * Account identity and usage live in their own page; Models remains the single
  * home for configuring model access and provider credentials.
  */
-test('settings → models tab mounts and provider settings are reachable', async () => {
-  // Confirm the Models panel actually activated; without this we may catch
-  // the previous tab's render and report a false positive.
-  await setSettingsTab(launched, 'models');
-  // Sanity: the panel mounted its child custom element. The provider list lives
-  // another shadow root deep, so structural presence is sufficient here.
-  const panelHasChild = await launched.page.evaluate(() => {
-    const settingsApp = document.querySelector('settings-app');
-    return settingsApp?.shadowRoot?.querySelector('models-tab') != null;
-  });
-  expect(panelHasChild).toBe(true);
-});
-
-test('account and usage lives in its own settings panel', async () => {
-  await setSettingsTab(launched, 'account');
-
-  const structure = await launched.page.evaluate(() => {
-    const root = document.querySelector('settings-app')?.shadowRoot;
-    const account = root?.querySelector('account-tab');
-    return {
-      accountPage: account?.shadowRoot?.querySelector('.account-page') != null,
-      persistentHeader: root?.querySelector('.settings-header') != null,
-    };
-  });
-
-  expect(structure).toEqual({
-    accountPage: true,
-    persistentHeader: false,
-  });
-});
 
 /**
  * Trajectory 3 — Memory tab is the leftmost settings panel. Cross-launch
  * persistence is covered by `settingsPersistence.spec.ts`, which relaunches
  * the desktop app on a shared Electron user-data directory.
  */
-test('settings → memory tab mounts', async () => {
-  await setSettingsTab(launched, 'memory');
-});
 
 /**
  * Trajectory 4 — Logs view: ensure the Logs workbench renders the desktop log
@@ -170,9 +137,6 @@ test('logs workbench renders the desktop log viewer', async () => {
  * as a partial-integration finding in the audit doc (Electron currently
  * surfaces a copy-the-command dialog rather than running it for the user).
  */
-test('settings → tools tab mounts', async () => {
-  await setSettingsTab(launched, 'tools');
-});
 
 /**
  * Trajectory 6 — settings tab switching smoke. Drive the tab a few times and

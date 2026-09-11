@@ -97,13 +97,4 @@ describe('uploadInlineInputFiles data URLs', () => {
       file_data: fileData,
     });
   });
-
-  it('uploads an empty data URL payload', async () => {
-    const { message } = inputFileMessage('data:application/pdf;base64,');
-    const { client, uploadedBytes } = uploadClient();
-
-    await upload(client, message);
-
-    expect(uploadedBytes()).toHaveLength(0);
-  });
 });

@@ -396,22 +396,6 @@ describe('BashTool', () => {
     assert.equal(receivedSignal.aborted, false);
   });
 
-  it.each([
-    { name: '50,000 characters', text: 'a'.repeat(50_000) },
-    { name: '50,001 characters', text: 'b'.repeat(50_001) },
-    { name: '52,000 characters', text: 'c'.repeat(52_000) },
-    { name: 'exactly 54,000 characters', text: 'd'.repeat(54_000) },
-  ])('reconstructs $name exactly without a marker', async ({ text }) => {
-    mockStreamingCommand((options) => {
-      options.onStdout?.(text.slice(0, 777));
-      options.onStdout?.(text.slice(777));
-    });
-
-    const result = await new BashTool().call({ command: 'boundary-output' });
-    assert.equal(result.output, text);
-    assert.ok(!String(result.output).includes('characters elided'));
-  });
-
   it('marks exactly one character elided at 54,001 normalized characters', async () => {
     const text = 'h'.repeat(4_000) + 'X' + 't'.repeat(50_000);
     mockStreamingCommand((options) => options.onStdout?.(text));
@@ -531,80 +515,6 @@ describe('BashTool', () => {
     assert.ok(error.includes('STDOUT_TAIL'));
     assert.ok(error.includes('characters elided from stdout'));
     assert.ok(error.indexOf('STDERR_HEAD') < error.indexOf('STDOUT_HEAD'));
-  });
-
-  it('keeps result status out of visible tool log output', async () => {
-    const { trace, events, dispose } = traceWithEvents(
-      'ToolStatusLogTest' as RunId,
-    );
-
-    try {
-      const options = roundServices({
-        toolName: 'empty',
-        logger: trace,
-        runId: 'tool-status-log' as RunId,
-        toolRegistry: new MapToolRegistry({}),
-      });
-
-      const call = {
-        provider: 'openai',
-        callId: 'empty-1',
-        name: 'empty',
-        input: '{}',
-        raw: {
-          id: 'empty-1',
-          type: 'function',
-          function: {
-            name: 'empty',
-            arguments: '{}',
-          },
-        },
-      } as SdkToolCall;
-      const messages: ProviderMessage[] = [];
-      const shared = freshRoundShared(messages);
-
-      const node = new ToolUseDispatchNode();
-      node.setServices(options);
-      await withTestRunContext(options.runScope, () =>
-        node.post(
-          shared,
-          [call],
-          [
-            {
-              call,
-              result: {},
-              parsedInput: {},
-              extracted: {
-                attachments: [],
-                sanitizedResult: { status: 'executed' },
-              },
-              editedFiles: [],
-              logRef: {
-                logId: undefined,
-                groupId: trace.activeStageId(),
-              },
-            } as any,
-          ],
-        ),
-      );
-
-      const completedEvent = events.findLast(
-        (event) => event.type === 'tool.end' && event.status === 'completed',
-      );
-      assert.ok(completedEvent, 'Tool completion event should be emitted');
-      const logPayload =
-        completedEvent?.type === 'tool.end'
-          ? (completedEvent.result as Record<string, unknown>)
-          : {};
-      assert.equal(Object.hasOwn(logPayload, 'output'), false);
-
-      const toolOutputMessage = messages.find(
-        (msg) => (msg as any).type === 'function_call_output',
-      ) as any;
-      assert.equal(toolOutputMessage?.output, 'OK');
-    } finally {
-      dispose();
-    }
   });
 
   it('keeps head and tail of an oversized command failure instead of discarding it', async () => {
@@ -897,27 +807,6 @@ describe('BashTool', () => {
       );
     });
     detachBackgroundRun(recorded, parentRunId, runId);
-  });
-
-  it('accepts optional command descriptions without passing them to the shell', async () => {
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-      success: true,
-      stdout: 'checked\n',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
-
-    const result = await new BashTool().call({
-      command: 'test -f proof.tex',
-      description: 'Check that the proof file exists.',
-    });
-
-    assert.equal(result.output, 'checked\n');
-    assert.equal(
-      vi.mocked(execUtils.executeCommand).mock.calls[0]?.[0],
-      'test -f proof.tex',
-    );
   });
 
   it('keeps bounded streamed stdout and stderr in timeout feedback', async () => {

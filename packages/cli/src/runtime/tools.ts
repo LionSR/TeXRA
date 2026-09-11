@@ -97,7 +97,7 @@ export async function readCliToolStatus(
   return (await readCliToolStatuses()).find((record) => record.id === id);
 }
 
-export function findCliToolDef(id: string): ExternalToolDef | undefined {
+function findCliToolDef(id: string): ExternalToolDef | undefined {
   return getCliToolDefs().find((def) => def.id === id);
 }
 
@@ -136,7 +136,7 @@ export async function setCliToolEnabled(
   return true;
 }
 
-export function formatCliBoolean(value: boolean | null): string {
+function formatCliBoolean(value: boolean | null): string {
   if (value == null) return '-';
   return value ? 'yes' : 'no';
 }

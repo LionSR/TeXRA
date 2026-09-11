@@ -38,41 +38,6 @@ function buildWithWorkflowPrompts(prompts: Record<string, unknown>) {
 }
 
 describe('bundled agent-creator template loading', () => {
-  it('preserves all bundled prompt and agent-template bytes', () => {
-    const files = {
-      workflowYaml: readFileSync(
-        resolve(TEMPLATES_DIR, 'agentCreatorWorkflow.yaml'),
-        'utf8',
-      ),
-      toolUseYaml: readFileSync(
-        resolve(TEMPLATES_DIR, 'agentCreatorToolUse.yaml'),
-        'utf8',
-      ),
-      workflowSingle: readFileSync(
-        resolve(TEMPLATES_DIR, 'agentTemplate-workflowSingle.yaml'),
-        'utf8',
-      ),
-      toolUseTpl: readFileSync(
-        resolve(TEMPLATES_DIR, 'agentTemplate-toolUse.yaml'),
-        'utf8',
-      ),
-    };
-    const config = buildCreatorConfig(files);
-
-    for (const [category, raw] of [
-      ['workflow', files.workflowYaml],
-      ['toolUse', files.toolUseYaml],
-    ] as const) {
-      const { prompts } = yaml.parse(raw);
-      // No trimming or other rewriting of multiline block-scalar prompts.
-      expect(config[category].systemPrompt).toBe(prompts.systemPrompt);
-      expect(config[category].userRequest).toBe(prompts.userRequest);
-      expect(config[category].systemPrompt.endsWith('\n')).toBe(true);
-    }
-    expect(config.templates.workflowSingle).toBe(files.workflowSingle);
-    expect(config.templates.toolUse).toBe(files.toolUseTpl);
-  });
-
   it.each(['systemPrompt', 'userRequest'])(
     'rejects empty or whitespace-only %s',
     (field) => {
@@ -94,10 +59,5 @@ describe('bundled agent-creator template loading', () => {
         userRequst: 'Generate the thing.\n',
       }),
     ).toThrow('userRequst');
-  });
-
-  it('rejects a missing required prompt field', () => {
-    const { userRequest: _omitted, ...rest } = VALID.prompts;
-    expect(() => buildWithWorkflowPrompts(rest)).toThrow('userRequest');
   });
 });

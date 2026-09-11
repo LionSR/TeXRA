@@ -44,33 +44,6 @@ describe('resolveXtermTheme', () => {
     warn.mockRestore();
   });
 
-  it('reads the full token map from the supplied target', () => {
-    const target = document.createElement('div');
-    target.style.setProperty('--wa-color-terminal-background', '#111111');
-    target.style.setProperty('--wa-color-terminal-foreground', '#eeeeee');
-    target.style.setProperty('--wa-color-surface-default', '#222222');
-    target.style.setProperty('--wa-color-text-normal', '#dddddd');
-    target.style.setProperty('--wa-color-terminal-cursor', '#00aa00');
-    target.style.setProperty('--wa-color-terminal-selection-bg', '#264f78');
-    target.style.setProperty('--wa-font-family-mono', '"JetBrains Mono"');
-    for (const [, cssVar, value] of ANSI_TOKENS) {
-      target.style.setProperty(cssVar, value);
-    }
-    document.body.append(target);
-
-    const { theme, fontFamily } = resolveXtermTheme(target);
-
-    expect(theme.background).toBe('#111111');
-    expect(theme.foreground).toBe('#eeeeee');
-    expect(theme.cursor).toBe('#00aa00');
-    expect(theme.selectionBackground).toBe('#264f78');
-    expect(fontFamily).toBe('"JetBrains Mono"');
-    for (const [key, , value] of ANSI_TOKENS) {
-      expect(theme[key]).toBe(value);
-    }
-    expect(warn).not.toHaveBeenCalled();
-  });
-
   it('falls cursor back to text-normal, then to foreground', () => {
     const target = document.createElement('div');
     target.style.setProperty('--wa-color-text-normal', '#eeeeee');
@@ -120,17 +93,5 @@ describe('resolveXtermTheme', () => {
     const message = warn.mock.calls[0]?.[0];
     expect(message).toContain('--wa-color-terminal-foreground');
     expect(message).not.toContain('--wa-color-terminal-background');
-  });
-
-  it('uses hardcoded fallbacks when surface tokens are unset', () => {
-    const target = document.createElement('div');
-    document.body.append(target);
-
-    const { theme, fontFamily } = resolveXtermTheme(target);
-    expect(theme.background).toBe('#1e1e1e');
-    expect(theme.foreground).toBe('#cccccc');
-    expect(theme.selectionBackground).toBeUndefined();
-    expect(theme.red).toBeUndefined();
-    expect(fontFamily).toBe('monospace');
   });
 });

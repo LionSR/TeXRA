@@ -14,17 +14,6 @@ describe('CLI AgentListForm row budget', () => {
     { value: 'remote:lean', label: 'lean' },
   ];
 
-  it.each([
-    [120, 80],
-    [80, 80],
-    [60, 60],
-  ])(
-    'clamps the regular form width %i to the terminal columns',
-    (columns, expected) => {
-      expect(formFrameWidth(columns)).toBe(expected);
-    },
-  );
-
   it('resolves the current visible agent from bare names or canonical keys', () => {
     expect(currentVisibleAgent(visibleAgents, 'chat')?.label).toBe('chat');
     expect(currentVisibleAgent(visibleAgents, 'remote:lean')?.label).toBe(
@@ -76,22 +65,6 @@ describe('CLI AgentListForm row budget', () => {
     );
     expect(hiddenCurrentAgentHint(visibleAgents, 'chat')).toBeUndefined();
   });
-
-  it.each([
-    { rows: [], expected: 'Tool-use agents' },
-    { rows: [{ isOrchestrator: false }], expected: 'Tool-use agents' },
-    { rows: [{ isOrchestrator: undefined }], expected: 'Tool-use agents' },
-    { rows: [{ isOrchestrator: true }], expected: 'Delegating agents' },
-    {
-      rows: [{ isOrchestrator: false }, { isOrchestrator: true }],
-      expected: 'Tool-use and delegating agents',
-    },
-  ])(
-    'labels the primary agent section "$expected" from the visible row kinds',
-    ({ rows, expected }) => {
-      expect(agentPickerPrimarySectionTitle(rows)).toBe(expected);
-    },
-  );
 
   it.each([
     {

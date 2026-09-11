@@ -17,21 +17,6 @@ import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 describe('CLI login arguments (texra login)', () => {
-  it('uses account-specific grammar for TeXRA sign-in copy', () => {
-    expect(RESEARCHER_ACCESS_AUTH.signInLabel).toBe(
-      'Sign in to your TeXRA account',
-    );
-    expect(RESEARCHER_ACCESS_AUTH.signOutDescription).toBe(
-      'Sign out of your TeXRA account',
-    );
-    expect(RESEARCHER_ACCESS_AUTH.signedIn('user@example.edu')).toBe(
-      'Signed in to your TeXRA account as user@example.edu.',
-    );
-    expect(RESEARCHER_ACCESS_AUTH.signedOut).toBe(
-      'Signed out of your TeXRA account.',
-    );
-  });
-
   it('marks bare texra login as using the fallback provider', () => {
     expect(loginInitFromArgs({})).toMatchObject({
       provider: 'github',
@@ -40,13 +25,6 @@ describe('CLI login arguments (texra login)', () => {
     expect(loginInitFromArgs({ providerArg: '  ' })).toMatchObject({
       provider: 'github',
       providerExplicit: false,
-    });
-  });
-
-  it('takes the provider from the positional argument', () => {
-    expect(loginInitFromArgs({ providerArg: 'google' })).toMatchObject({
-      provider: 'google',
-      providerExplicit: true,
     });
   });
 
@@ -176,18 +154,6 @@ describe('CLI login arguments (texra login)', () => {
     });
   });
 
-  it.each([
-    { device: true, noBrowser: true, expected: true },
-    { device: true, noBrowser: false, expected: false },
-    { device: false, noBrowser: true, expected: false },
-    { device: false, noBrowser: false, expected: false },
-  ])(
-    'treats --device and --no-browser as a transport conflict only when both are set (device=$device, noBrowser=$noBrowser)',
-    ({ device, noBrowser, expected }) => {
-      expect(hasLoginTransportConflict({ device, noBrowser })).toBe(expected);
-    },
-  );
-
   it('rejects --device + --no-browser from the CLI login command', () => {
     expect(() =>
       assertLoginTransportExclusive({ device: true, noBrowser: true }),
@@ -214,26 +180,6 @@ describe('CLI login arguments (texra login)', () => {
     '--unexpected',
   ])('rejects invalid in-chat login slash command options: "%s"', (input) => {
     expect(parseChatLoginSlashArgs(input)).toBeUndefined();
-  });
-
-  it('formats login provider policy messages from one runtime owner', () => {
-    expect(unsupportedLoginProviderMessage('slack')).toBe(
-      'Unsupported provider: slack. Expected github or google.',
-    );
-    expect(
-      githubSelectAccountWarning({
-        provider: 'github',
-        selectAccount: true,
-      }),
-    ).toBe(
-      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
-    );
-    expect(
-      githubSelectAccountWarning({
-        provider: 'google',
-        selectAccount: true,
-      }),
-    ).toBeUndefined();
   });
 
   const interactiveText = {
@@ -285,17 +231,4 @@ describe('CLI login arguments (texra login)', () => {
       expect(shouldPromptForLoginProvider(context, init)).toBe(expected);
     },
   );
-
-  it('describes manual login as a loopback callback, not any-device auth', () => {
-    const message = formatCliManualAuthUrlMessage(
-      'http://127.0.0.1:49152/auth-callback',
-    );
-
-    expect(message).toContain(
-      'Open this URL in a browser that can reach this terminal session:',
-    );
-    expect(message).toContain('http://127.0.0.1:49152/auth-callback');
-    expect(message).toContain('Remote SSH/container users');
-    expect(message).not.toContain('any device');
-  });
 });

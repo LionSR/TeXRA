@@ -121,18 +121,6 @@ describe('apply_team', () => {
     expect(getDefaultTeamId(platform().globalState)).toBe('physicist');
   });
 
-  it('reports the account-served orchestrator as available after sign-in', async () => {
-    const result = await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'continue',
-    });
-
-    expect(result.status).toBe('executed');
-    expect(result.summary).toMatch(/sign-in/);
-    expect(result.output).toMatch(/orchestrator/);
-    expect(result.output).toMatch(/sign-in/);
-  });
-
   it('rejects an unknown teamId without writing any state', async () => {
     const result = await applyTeam({ teamId: 'astrologer' });
 

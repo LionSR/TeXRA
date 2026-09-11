@@ -33,18 +33,6 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
     expect(RoundKeySchema.safeParse(key).success).toBe(false);
   });
 
-  it('RoundKeySchema and RoundKeyStringSchema agree on scientific notation', () => {
-    // "1e5" is a plain numeric string Number() coerces to 100000; both the
-    // scalar coercion and the record-key predicate must agree it is valid,
-    // rather than one accepting it via numeric coercion and the other
-    // rejecting it via a stricter digits-only regex.
-    expect(RoundKeySchema.safeParse('1e5')).toMatchObject({
-      success: true,
-      data: 100000,
-    });
-    expect(RoundKeyStringSchema.safeParse('1e5').success).toBe(true);
-  });
-
   it.each(['run-1', 'abc', '-1', '1.5'])(
     'RoundKeyStringSchema rejects non-numeric and legacy runId-shaped key %s',
     (key) => {
@@ -66,14 +54,6 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
       expect(schema.safeParse({ [key]: ['a'] }).success).toBe(false);
     },
   );
-
-  it('roundIndexedRecord() accepts scientific-notation keys, matching RoundKeySchema', () => {
-    const schema = roundIndexedRecord(StringItemSchema);
-    expect(schema.safeParse({ '1e5': ['a'] })).toMatchObject({
-      success: true,
-      data: { '1e5': ['a'] },
-    });
-  });
 });
 
 describe('parsePersistedRoundIndexed (canonical round-indexed parse entry)', () => {

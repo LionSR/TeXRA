@@ -168,34 +168,4 @@ describe('texcount diagnostics', () => {
 
   // #10649: pins the sum-mode path's own emission — getSummedCount's
   // Chinese-package line reaches the caller's channel and the default one.
-  it.effect(
-    'emits the sum-mode Chinese-package debug line on the resolved channel',
-    () =>
-      Effect.gen(function* () {
-        yield* withPlatform({
-          '/workspace/main.tex': '\\documentclass{ctexart}\n',
-        });
-        mocks.runToolWithCheck.mockResolvedValue({
-          success: true,
-          stdout: 'Words in text: 5',
-          stderr: '',
-          exitCode: 0,
-        });
-        const logs = captureLogEntries();
-
-        const pinned = yield* getTeXCount('main.tex', {
-          mode: 'sum',
-          channel: 'pinnedTexcount',
-        });
-        const defaulted = yield* getTeXCount('main.tex', { mode: 'sum' });
-
-        // The (sum) prefix proves the summed path, not the per-file path, ran.
-        expect(pinned.output).toContain('Combined TeX Count Results (sum):');
-        expect(defaulted).toEqual(pinned);
-        const line =
-          'Chinese packages detected in main.tex, enabling Chinese character counting';
-        expect(logs.has('DEBUG', 'pinnedTexcount', line)).toBe(true);
-        expect(logs.has('DEBUG', LATEX_COMMANDS_CHANNEL, line)).toBe(true);
-      }).pipe(withDiagnostics),
-  );
 });

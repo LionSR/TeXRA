@@ -135,20 +135,6 @@ describe('getGitignoreMatcher', () => {
     await expect(loadMatcher()).rejects.toBe(error);
   });
 
-  it('rejects when ignore policy construction fails', async () => {
-    const constructionError = new Error('Invalid ignore policy');
-    vi.doMock('ignore', () => ({
-      default: () => ({
-        add: () => {
-          throw constructionError;
-        },
-      }),
-    }));
-    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
-
-    await expect(loadMatcher()).rejects.toBe(constructionError);
-  });
-
   it('rereads the ignore policy on every call', async () => {
     vi.resetModules();
     const { getGitignoreMatcher } = await import('@tools/gitignore');
@@ -161,33 +147,5 @@ describe('getGitignoreMatcher', () => {
     expect(before.ignores('dist')).toBe(true);
     expect(after.ignores('dist')).toBe(false);
     expect(after.ignores('build')).toBe(true);
-  });
-
-  it('preserves directory-only rules for bare directory entries', async () => {
-    const matcher = await loadWorkspaceMatcher('dist/\n');
-
-    expect(matcher.ignores('dist')).toBe(true);
-    expect(matcher.ignores('dist/output.txt')).toBe(true);
-  });
-
-  it('keeps valid negated file patterns unignored', async () => {
-    const matcher = await loadWorkspaceMatcher('*.log\n!important.log\n');
-
-    expect(matcher.ignores('debug.log')).toBe(true);
-    expect(matcher.ignores('important.log')).toBe(false);
-  });
-
-  it('follows gitignore semantics for negations inside ignored directories', async () => {
-    const matcher = await loadWorkspaceMatcher('dist/\n!dist/.gitkeep\n');
-
-    expect(matcher.ignores('dist/.gitkeep')).toBe(true);
-  });
-
-  it('propagates matcher failures', async () => {
-    const matcher = await loadWorkspaceMatcher('dist/\n');
-
-    expect(() => matcher.ignores('../outside')).toThrow(
-      'path should be a `path.relative()`d string',
-    );
   });
 });

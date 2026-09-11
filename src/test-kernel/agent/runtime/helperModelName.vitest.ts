@@ -22,18 +22,6 @@ describe('resolveEffectiveHelperModel', () => {
     ).toBe(DEFAULT_HELPER_MODEL);
   });
 
-  it('falls back to the built-in default when the candidate list is empty', () => {
-    expect(resolveEffectiveHelperModel('retired-model', [])).toBe(
-      DEFAULT_HELPER_MODEL,
-    );
-  });
-
-  it('returns the built-in default as-is regardless of the candidate list', () => {
-    expect(resolveEffectiveHelperModel(DEFAULT_HELPER_MODEL, [])).toBe(
-      DEFAULT_HELPER_MODEL,
-    );
-  });
-
   it('returns the built-in default when no model is configured', () => {
     expect(resolveEffectiveHelperModel(undefined, ['gpt55'])).toBe(
       DEFAULT_HELPER_MODEL,

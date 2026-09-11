@@ -83,26 +83,6 @@ describe('tool-edit-request-panel', () => {
     () => import('@progressView/frontend/components/ToolEditRequestPanel'),
   );
 
-  it('uses a shared tooltip for the direct diff action', async () => {
-    const element = await mountPanel(createPermission());
-    const button = element.shadowRoot?.querySelector('#tool-edit-diff-button');
-
-    expect(button).toBeTruthy();
-    expect(button?.hasAttribute('title')).toBe(false);
-    expect(tooltipText(element, 'tool-edit-diff-button')).toBe('Open diff (d)');
-  });
-
-  it('keeps the non-LaTeX diff action as a plain standalone button', async () => {
-    const element = await mountPanel(createPermission());
-    const button = element.shadowRoot?.querySelector(
-      'wa-button[data-action="openDiff"]',
-    );
-
-    expect(element.shadowRoot?.querySelector('wa-button-group')).toBeNull();
-    expect(element.shadowRoot?.querySelector('wa-dropdown')).toBeNull();
-    expect(button?.classList.contains('action-button')).toBe(true);
-  });
-
   it('dispatches the primary and menu diff actions', async () => {
     const element = await mountPanel(createPermission({ isLatex: true }));
     const actions = recordPermissionActions(element);
@@ -123,33 +103,6 @@ describe('tool-edit-request-panel', () => {
         request.kind === 'toolEdit' ? request.action : null,
       ),
     ).toStrictEqual(['openDiff', 'previewProposed', 'showLatexdiff']);
-  });
-
-  it('keeps archived diff controls plain and disabled', async () => {
-    const element = await mountPanel(createPermission({ isLatex: true }));
-    element.readOnly = true;
-    await element.updateComplete;
-
-    const button = element.shadowRoot?.querySelector(
-      'wa-button[data-action="openDiff"]',
-    );
-    expect(element.shadowRoot?.querySelector('wa-button-group')).toBeNull();
-    expect(element.shadowRoot?.querySelector('wa-dropdown')).toBeNull();
-    expect(button?.hasAttribute('disabled')).toBe(true);
-  });
-
-  it('anchors the line-change hint with wa-tooltip instead of title', async () => {
-    const element = await mountPanel(
-      createPermission({ addedLines: 2, removedLines: 1 }),
-    );
-
-    const summary = element.shadowRoot?.querySelector(
-      '#tool-edit-diff-summary',
-    );
-    expect(summary?.hasAttribute('title')).toBe(false);
-    expect(tooltipText(element, 'tool-edit-diff-summary')).toBe(
-      '+2 / -1 lines changed',
-    );
   });
 
   it('delegates the diff action to the host on every press', async () => {

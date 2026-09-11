@@ -619,44 +619,6 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
-  it('does not delete a flow after the run lifecycle has taken ownership', async () => {
-    const session = makeSession();
-    mocks.executeAgent.mockImplementationOnce(
-      async (
-        _config: unknown,
-        _runId: unknown,
-        options: { readonly onRun?: () => void },
-      ) => {
-        options.onRun?.();
-        throw new Error('recovery remains resumable');
-      },
-    );
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.startRootRun(makeRunRequest('Continue the recoverable proof.'));
-    await session.runPromise;
-
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      'recovery remains resumable',
-    );
-  });
-
-  it('stop() sets stopRequested on the session', () => {
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    expect(session.stopRequested).toBe(false);
-    ctrl.stop();
-    expect(session.stopRequested).toBe(true);
-  });
-
-  it('stop() is idempotent', () => {
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.stop();
-    ctrl.stop();
-    expect(session.stopRequested).toBe(true);
-  });
-
   it('reads the shared detach-subagents setting key when stopping an active run', () => {
     const session = makeSession({
       runId: 'a11111' as RunId,

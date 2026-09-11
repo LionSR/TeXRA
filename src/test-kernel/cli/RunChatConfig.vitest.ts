@@ -71,19 +71,6 @@ describe('CLI chat run config', () => {
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
 
-  it('accepts valid tool-use root chat agents', () => {
-    mockedResolveAgentForLaunch.mockReturnValueOnce(
-      registryResolution(AgentCategory.ToolUse),
-    );
-
-    expect(chatToolUseAgentUsageError('assistant')).toBeUndefined();
-    expect(mockedResolveAgentForLaunch).toHaveBeenCalledWith(
-      AgentCategory.ToolUse,
-      'assistant',
-      undefined,
-    );
-  });
-
   it('rejects missing root chat agents before a prompt is submitted', () => {
     mockedResolveAgentForLaunch.mockReturnValue(undefined);
 

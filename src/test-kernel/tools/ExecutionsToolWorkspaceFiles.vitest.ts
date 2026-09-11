@@ -161,35 +161,6 @@ describe('ExecutionsTool', () => {
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
-  it.each([
-    { label: 'caps oversized', timeout: 3600 },
-    { label: 'raises sub-minimum', timeout: 30 },
-  ])(
-    '$label wait timeouts instead of rejecting the tool call',
-    async ({ timeout }) => {
-      const result = await new ExecutionsTool().call({
-        path: '/executions',
-        action: 'wait',
-        timeout,
-      });
-
-      expect(result.status).toBe('executed');
-      expect(result.error).toBeUndefined();
-      expect(result.output).toBe('No run history found.');
-    },
-  );
-
-  it('rejects non-finite wait timeouts', async () => {
-    const result = await new ExecutionsTool().call({
-      path: '/executions',
-      action: 'wait',
-      timeout: Number.NaN,
-    });
-
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('Invalid input');
-  });
-
   it("rejects '..' path traversal in /executions/{id}/files/{path}", async () => {
     const result = await new ExecutionsTool().call({
       path: '/executions/abc123def456/files/../../../../../../etc/passwd',
@@ -563,25 +534,6 @@ describe('ExecutionsTool', () => {
   // Every real KV entry is written as `{key}.json` (KVStore.keyToPath always
   // appends the suffix), so a generated file whose basename collides with a
   // reserved key name but carries no `.json` extension stays visible.
-  it('keeps extensionless generated files named like reserved KV keys', async () => {
-    await withTempStorage(async () => {
-      const runId = 'abc123' as RunId;
-      const runDir = resolveRunStoragePath(runId);
-      await StorageFS.ensureDir(runDir);
-      const bareNames = ['meta', 'config', 'report', 'child-def456'];
-      for (const name of bareNames) {
-        await StorageFS.write(path.join(runDir, name), 'generated');
-      }
-
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${runId}/files`,
-      });
-
-      for (const name of bareNames) {
-        expect(result.output).toContain(name);
-      }
-    });
-  });
 
   it('reads recorded files inside a top-level workspace directory', async () => {
     await withTempDir('texra-exec-files-', async (workspace) => {

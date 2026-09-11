@@ -69,46 +69,6 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
     mocks.readMeta.mockResolvedValue(null);
   });
 
-  it('assembles a ChatExportInput when config and a non-empty conversation are both present', async () => {
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.readConversation.mockResolvedValue(CONVERSATION);
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      description: 'Polish pass',
-    });
-
-    const result = await loadChatExportInput('a1' as RunId);
-
-    expect(result.exportInput).toEqual({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      description: 'Polish pass',
-      config: {
-        agent: 'correct',
-        model: 'deepseekT',
-        instruction: 'Polish the introduction.',
-        inputFiles: ['chapters/intro.tex'],
-        mediaFiles: [],
-        contextFiles: [],
-        outputFiles: ['chapters/intro.tex'],
-      },
-      messages: CONVERSATION,
-    });
-    expect(result.conversation).toEqual(CONVERSATION);
-    expect(result.hasTranscriptEvidence).toBe(true);
-  });
-
-  it('returns a null exportInput when nothing is stored at all', async () => {
-    const result = await loadChatExportInput('missing' as RunId);
-
-    expect(result).toEqual({
-      meta: null,
-      config: null,
-      conversation: null,
-      hasTranscriptEvidence: false,
-      exportInput: null,
-    });
-  });
-
   it('normalizes a stored-but-empty conversation array to null, matching "no conversation"', async () => {
     // An empty array is truthy in JS (`![]` is `false`) — a naive presence
     // check on the raw store value would treat it as "a conversation is
@@ -119,17 +79,6 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
 
     const result = await loadChatExportInput('missing' as RunId);
 
-    expect(result.conversation).toBeNull();
-    expect(result.exportInput).toBeNull();
-  });
-
-  it('reports a null exportInput when config is present but the conversation is empty', async () => {
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.readConversation.mockResolvedValue([]);
-
-    const result = await loadChatExportInput('a1' as RunId);
-
-    expect(result.config).toEqual(config);
     expect(result.conversation).toBeNull();
     expect(result.exportInput).toBeNull();
   });

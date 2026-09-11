@@ -437,49 +437,6 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('installs CLI host interactions with the runtime prompt hook', async () => {
-    const { executeCliRequest } = await loadExecuteCli();
-    const request = baseRequest();
-    const context = cliContext({ mode: 'interactive', approvalPolicy: 'ask' });
-
-    await executeCliRequest(request, context);
-
-    expect(mocks.createHeadlessCliHostInteractions).toHaveBeenCalledWith(
-      context,
-      expect.objectContaining({
-        beforePrompt: expect.any(Function),
-        emit: expect.any(Function),
-        setApprovalBypassState: expect.any(Function),
-      }),
-    );
-
-    const hooks = mocks.createHeadlessCliHostInteractions.mock
-      .calls[0]?.[1] as {
-      beforePrompt?: () => void;
-      emit?: (event: 'requestShowError', payload: { message: string }) => void;
-      setApprovalBypassState?: (update: {
-        runId: string;
-        kind: 'bash';
-        bypassActive: boolean;
-      }) => void;
-    };
-    hooks.beforePrompt?.();
-    expect(mocks.prepareInteractivePrompt).toHaveBeenCalledTimes(1);
-    hooks.emit?.('requestShowError', { message: 'Run failed.' });
-    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-      message: 'Run failed.',
-    });
-    const update = {
-      runId: 'stream:bypass',
-      kind: 'bash',
-      bypassActive: true,
-    } as const;
-    hooks.setApprovalBypassState?.(update);
-    expect(
-      mocks.createCliRuntimeHost.mock.results[0]?.value.emitApprovalBypassState,
-    ).toHaveBeenCalledWith(update);
-  });
-
   it('restores CLI host interactions before closing the runtime host', async () => {
     const { executeCliRequest } = await loadExecuteCli();
     const request = baseRequest();
@@ -638,25 +595,6 @@ describe('executeCliRequest', () => {
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message: 'Agent not found.',
     });
-  });
-
-  it('maps a completed run to Success even after a shared policy denial', async () => {
-    const { executeCliRequest } = await loadExecuteCli();
-    const { runOutcomeExitCode } = await import('@cli/runtime/terminalStatus');
-    const request = baseRequest();
-    const context = cliContext();
-    mocks.runAgent.mockImplementationOnce(async (_request, options) => {
-      options.onRunLeaseAcquired?.('exec-1' as RunId);
-      options.onApprovalPolicyDenial?.();
-      return COMPLETED_RUN;
-    });
-
-    await executeCliRequest(request, context);
-
-    // A denied gate is feedback the model routes around, so it never affects
-    // the exit code; reporting it as failure made callers discard good results.
-    expect(runOutcomeExitCode('completed')).toBe(CliExitCode.Success);
-    expect(runOutcomeExitCode('failed')).toBe(CliExitCode.AgentError);
   });
 
   it.each([

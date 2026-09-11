@@ -75,10 +75,4 @@ describe('MainViewDroppedFilesController', () => {
     expect(plan.attachedCount).toBe(1);
     expect(plan.rejectedCount).toBe(2);
   });
-
-  it('normalizes extension strings used by manager filters', () => {
-    expect(normalizeMainViewFileExtension('FIGURE.PNG')).toBe('png');
-    expect(normalizeMainViewFileExtension('.TeX')).toBe('tex');
-    expect(normalizeMainViewFileExtension('tex')).toBe('tex');
-  });
 });

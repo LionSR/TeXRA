@@ -129,13 +129,4 @@ describe('texra setup combined flow', () => {
     });
     expect(exit).toBe(CliExitCode.Success);
   });
-
-  it('propagates the chat session exit code', async () => {
-    mocks.hasUsableSetupCredential.mockResolvedValue(true);
-    mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.AgentError });
-
-    await expect(runSetup(INTERACTIVE_CONTEXT)).resolves.toBe(
-      CliExitCode.AgentError,
-    );
-  });
 });

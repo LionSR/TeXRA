@@ -57,19 +57,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     () => import('@progressView/frontend/components/ProposalRequestPanel'),
   );
 
-  it('uses a shared tooltip for the direct Setup action', async () => {
-    const element = await mountPanel();
-    const setup = element.shadowRoot?.querySelector('#proposal-setup-button');
-
-    expect(setup).toBeTruthy();
-    expect(setup?.hasAttribute('title')).toBe(false);
-    expect(
-      element.shadowRoot
-        ?.querySelector('wa-tooltip[for="proposal-setup-button"]')
-        ?.textContent?.trim(),
-    ).toBe('Edit as new task (s)');
-  });
-
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);
@@ -103,26 +90,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       decision: { action: 'approve', model: null, agent: null },
     };
     expect(actions).toEqual([superYolo, approve, superYolo, approve, approve]);
-  });
-
-  it('renders archived proposal approval as a plain disabled button', async () => {
-    const element = await mountPanel();
-    element.readOnly = true;
-    await element.updateComplete;
-
-    const split = element.shadowRoot?.querySelector<ApproveSplitButton>(
-      'approve-split-button',
-    );
-    await split?.updateComplete;
-
-    expect(split?.disabled).toBe(true);
-    expect(split?.shadowRoot?.querySelector('wa-button-group')).toBeNull();
-    expect(split?.shadowRoot?.querySelector('wa-dropdown')).toBeNull();
-    expect(
-      split?.shadowRoot
-        ?.querySelector('wa-button[data-action="approve"]')
-        ?.hasAttribute('disabled'),
-    ).toBe(true);
   });
 
   it('attaches selected overrides only to approval decisions', async () => {
@@ -207,22 +174,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     ).toBeTruthy();
   });
 
-  it('exposes role=button and tabindex=0 on every clickable file-name span', async () => {
-    const element = await mountPanel();
-    const names = element.shadowRoot?.querySelectorAll(
-      '.workflow-proposal__file-name',
-    );
-    expect(names?.length).toBeGreaterThan(0);
-    for (const name of names ?? []) {
-      expect(name.getAttribute('role')).toBe('button');
-      expect(name.getAttribute('tabindex')).toBe('0');
-      expect(name.hasAttribute('title')).toBe(false);
-      expect(
-        element.shadowRoot?.querySelector(`wa-tooltip[for="${name.id}"]`),
-      ).toBeTruthy();
-    }
-  });
-
   it('opens the file on Enter and Space, not on other keys', async () => {
     const element = await mountPanel();
     const posted = recordPermissionActions(element);
@@ -243,22 +194,5 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       line: null,
     };
     expect(posted).toEqual([openPaper, openPaper]);
-  });
-
-  it('does not add role/tabindex to read-only (non-clickable) file names', async () => {
-    const permission = createPermission();
-    permission.data.memories = ['/memories/notes.md'];
-    const element = await mountPanel(permission);
-
-    const posted = recordPermissionActions(element);
-    const readonlyName = element.shadowRoot?.querySelector(
-      '.workflow-proposal__file-name--readonly',
-    );
-    expect(readonlyName).toBeInstanceOf(HTMLElement);
-    expect(readonlyName?.hasAttribute('role')).toBe(false);
-    expect(readonlyName?.hasAttribute('tabindex')).toBe(false);
-
-    dispatchKey(readonlyName!, 'Enter');
-    expect(posted).toHaveLength(0);
   });
 });

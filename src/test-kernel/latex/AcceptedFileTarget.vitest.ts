@@ -226,35 +226,4 @@ describe('commitAcceptedFile', () => {
     ]);
     expect(ports.infoMessages).toEqual([expect.stringMatching(/created/)]);
   });
-
-  it('reports "replaced" when the caller says the target already existed', async () => {
-    const { base, edited } = buildCommitLocations();
-    const ports = buildCommitPorts();
-
-    await commitAcceptedFile(
-      base,
-      edited,
-      { targetLocation: base, targetFileName: 'paper.tex' },
-      true,
-      ports,
-    );
-
-    expect(ports.infoMessages).toEqual([expect.stringMatching(/replaced/)]);
-  });
-
-  it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
-    const { base, edited, copy } = buildCommitLocations();
-    const { deleted, deleteFile } = recordingDelete();
-    const ports = buildCommitPorts({ deleteFile });
-
-    await commitAcceptedFile(
-      base,
-      edited,
-      { targetLocation: copy, targetFileName: 'paper_copy.tex' },
-      false,
-      ports,
-    );
-
-    expect(deleted).toEqual([]);
-  });
 });

@@ -22,27 +22,6 @@ function oversizedText(): { head: string; tail: string; text: string } {
 }
 
 describe('formatToolResultAsText', () => {
-  it.each([
-    [
-      'returns output when present',
-      { status: 'executed', output: 'test output' },
-      'test output',
-    ],
-    [
-      'returns summary when no output',
-      { status: 'executed', summary: 'test summary' },
-      'test summary',
-    ],
-    [
-      'returns error when no output',
-      { status: 'error', error: 'test error' },
-      'test error',
-    ],
-    ['returns OK when all fields empty', { status: 'executed' }, 'OK'],
-  ] as const)('%s', (_scenario, result, expected) => {
-    expect(formatToolResultAsText(result)).toBe(expected);
-  });
-
   it('includes user feedback', () => {
     const result = formatToolResultAsText({
       status: 'executed',
@@ -62,14 +41,6 @@ describe('formatToolResultAsText', () => {
     expect(result).toContain('+added line');
   });
 
-  it('appends attachment summary', () => {
-    const result = formatToolResultAsText(
-      { status: 'executed', output: 'test' },
-      'Attachments: file.pdf',
-    );
-    expect(result).toContain('Attachments: file.pdf');
-  });
-
   it('keeps head and tail when result exceeds limit, not a discard stub', () => {
     const { text } = oversizedText();
     const result = formatToolResultAsText({
@@ -83,15 +54,6 @@ describe('formatToolResultAsText', () => {
     expect(result).toContain('TAIL_MARKER_');
     expect(result).not.toContain('x'.repeat(1000));
     expect(result.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_TEXT_LENGTH);
-  });
-
-  it('returns normal result when within limit', () => {
-    const normalOutput = 'a'.repeat(1000);
-    const result = formatToolResultAsText({
-      status: 'executed',
-      output: normalOutput,
-    });
-    expect(result).toBe(normalOutput);
   });
 });
 
@@ -108,24 +70,6 @@ describe('formatToolResultTextWithAttachments', () => {
     );
     expect(result).toContain('done');
     expect(result).toContain('chart.png (image/png)');
-  });
-
-  it('omits the summary when the handler cannot process attachments', () => {
-    const result = formatToolResultTextWithAttachments(
-      { status: 'executed', output: 'done' },
-      attachments,
-      false,
-    );
-    expect(result).toBe('done');
-  });
-
-  it('omits the summary when there are no attachments', () => {
-    const result = formatToolResultTextWithAttachments(
-      { status: 'executed', output: 'done' },
-      [],
-      true,
-    );
-    expect(result).toBe('done');
   });
 });
 

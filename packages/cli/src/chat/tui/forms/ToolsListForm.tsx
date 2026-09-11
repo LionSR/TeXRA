@@ -34,7 +34,7 @@ function formatToolDetectionForTui(
   return undefined;
 }
 
-export function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
+function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
   // "Coming soon" already says the tool is off and cannot run, so the
   // enablement and status parts would only repeat it.
   if (tool.comingSoon) return 'coming soon';

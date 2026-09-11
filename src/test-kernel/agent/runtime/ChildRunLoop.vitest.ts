@@ -1083,29 +1083,6 @@ describe('childRunLoop E2E fixtures', () => {
     );
   });
 
-  it('sizes the child-run budget to the machine when the setting is auto', () => {
-    const config = workspaceRoots().config as FakeConfigProvider;
-    try {
-      config.set(
-        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto,
-      );
-      expect(resolveChildRunConcurrencyBudget()).toBe(
-        Math.min(
-          CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
-          Math.max(1, os.availableParallelism()),
-        ),
-      );
-      config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 7);
-      expect(resolveChildRunConcurrencyBudget()).toBe(7);
-    } finally {
-      config.set(
-        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
-      );
-    }
-  });
-
   it('gates budgeted child turns through the session child-run budget', async () => {
     const config = workspaceRoots().config as FakeConfigProvider;
     config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);

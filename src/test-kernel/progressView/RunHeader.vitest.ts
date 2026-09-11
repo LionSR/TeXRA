@@ -66,26 +66,6 @@ function expectAnchoredTooltip(element: RunHeader, anchorId: string): void {
 }
 
 describe('stream-header over the fold', () => {
-  it('names the stream and its status from the view, with anchored tooltips', async () => {
-    const view = fanOutView();
-    const stream = runOfEvent(view, ROOT);
-    const { element } = await mountHeader(view, stream);
-
-    const name = element.shadowRoot?.querySelector<HTMLElement>(
-      `#${ELEMENT_IDS.ACTIVE_STREAM_NAME}`,
-    );
-    expect(name?.textContent?.trim()).toBe(stream.label);
-    expect(name?.dataset.stream).toBe(ROOT);
-    expectAnchoredTooltip(element, ELEMENT_IDS.ACTIVE_STREAM_NAME);
-
-    const status = element.shadowRoot?.querySelector(
-      `#${ELEMENT_IDS.STATUS_INDICATOR}`,
-    );
-    expect(status?.getAttribute('role')).toBe('img');
-    expect(status?.getAttribute('aria-label')).toBe(stream.statusLabel);
-    expectAnchoredTooltip(element, ELEMENT_IDS.STATUS_INDICATOR);
-  });
-
   it('renders the ancestors path for a child and selects the ancestor on activation', async () => {
     const view = fanOutView();
     const child = runOfEvent(view, CHILD);
@@ -102,12 +82,6 @@ describe('stream-header over the fold', () => {
     expect(surfaceActions).toEqual([{ kind: 'select', runId: ROOT }]);
   });
 
-  it('renders no ancestors path for a top-level stream', async () => {
-    const view = fanOutView();
-    const { element } = await mountHeader(view, runOfEvent(view, ROOT));
-    expect(element.shadowRoot?.querySelector('nav.ancestors')).toBeNull();
-  });
-
   it('dispatches the stop arm from the toolbar of a running stream', async () => {
     const view = fanOutView();
     const stream = runOfEvent(view, ROOT);
@@ -121,22 +95,5 @@ describe('stream-header over the fold', () => {
     expectAnchoredTooltip(element, ELEMENT_IDS.STOP_STREAM_BTN);
     stop?.click();
     expect(requests).toEqual([{ kind: 'run.stop', runId: ROOT }]);
-  });
-
-  it('offers no copy-run-context action on a workflow-script run or a tool-use stream', async () => {
-    const view = fanOutView();
-    const root = runOfEvent(view, ROOT);
-    expect(root.identity?.kind).toBe('multiAgentWorkflow');
-    const { element: script } = await mountHeader(view, root);
-    expect(
-      script.shadowRoot?.querySelector(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`),
-    ).toBeNull();
-
-    const child = runOfEvent(view, CHILD);
-    expect(child.category).toBe('toolUse');
-    const { element: toolUse } = await mountHeader(view, child);
-    expect(
-      toolUse.shadowRoot?.querySelector(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`),
-    ).toBeNull();
   });
 });

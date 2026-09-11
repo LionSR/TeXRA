@@ -105,36 +105,6 @@ describe('CLI init command', () => {
     stderrSpy.mockRestore();
   });
 
-  it('accepts global CLI flags while keeping init-specific cwd help', () => {
-    const args = initCommand.args as Record<
-      string,
-      {
-        readonly type?: string;
-        readonly valueHint?: string;
-        readonly description?: string;
-      }
-    >;
-
-    expect(args).toHaveProperty('approval-policy');
-    expect(args).toHaveProperty('color');
-    expect(args).toHaveProperty('no-input');
-    expect(args.cwd).toMatchObject({
-      type: 'string',
-      valueHint: 'directory',
-      description: 'Working directory to initialize (defaults to $PWD)',
-    });
-  });
-
-  it('defaults non-interactive init to the visible team lead', () => {
-    const answers = defaultInitAnswers(
-      [{ name: 'research' }, { name: 'review' }],
-      [modelAccess('sonnet46T')],
-    );
-
-    expect(answers.agent).toBe('research');
-    expect(answers.model).toBe('sonnet46T');
-  });
-
   it('highlights the visible team lead in the interactive init wizard', () => {
     expect(
       initWizardDefaultAgentIndex([

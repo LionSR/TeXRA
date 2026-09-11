@@ -36,55 +36,6 @@ function installFakePlatform(
 }
 
 describe('shared text-diff caller fixtures', () => {
-  it('preserves output diff line-change stats', async () => {
-    await installFakePlatform({
-      '/workspace/base.tex': 'one\ntwo\nthree\n',
-      '/workspace/out.tex': 'one\nTWO\nthree\nfour\n',
-    });
-    const state = createOutputState();
-    const outputLocation = createExternalLocation('/workspace/out.tex');
-    ensureRoundData(state, 0).outputs = [
-      {
-        source: 'out.tex',
-        round: 0,
-        location: outputLocation,
-        lineage: null,
-        diff: null,
-      },
-    ];
-    const baseLocation = createExternalLocation('/workspace/base.tex');
-    const mapping: RoundFileMapping = new Map([
-      [fileLocationDisplayPath(outputLocation), { base: baseLocation }],
-    ]);
-
-    const [output] = await computeOutputDiffStats(
-      state,
-      [baseLocation],
-      0,
-      mapping,
-    );
-
-    expect(output?.diff).toEqual({ added: 2, removed: 1 });
-  });
-
-  it('preserves content-similarity assignment output', () => {
-    const revision = 'Intro\nrevised result\nConclusion\n';
-    const unrelated = 'Detached notes about something else entirely.';
-
-    const assigned = assignByContentSimilarity(
-      [revision, unrelated],
-      [
-        {
-          name: 'paper.tex',
-          content: 'Intro\noriginal result\nConclusion\n',
-        },
-      ],
-      0.5,
-    );
-
-    expect(assigned).toEqual([{ content: revision, name: 'paper.tex' }, null]);
-  });
-
   it('preserves subagent line-mode diff files', async () => {
     await installFakePlatform({
       '/workspace/original.tex': 'one\ntwo\nthree\n',

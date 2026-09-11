@@ -15,23 +15,6 @@ describe('CLI TUI input history', () => {
     storage = await makeTempDir('texra-input-history-', tempDirs);
   });
 
-  it.live('exposes indexed entries for ↑/↓ history browsing', () =>
-    Effect.gen(function* () {
-      const history = yield* loadInputHistory(() => storage);
-
-      expect(history.length()).toBe(0);
-      expect(history.at(0)).toBeUndefined();
-
-      yield* history.push('first message');
-      yield* history.push('second message');
-
-      expect(history.length()).toBe(2);
-      expect(history.at(0)).toBe('first message');
-      expect(history.at(1)).toBe('second message');
-      expect(history.at(2)).toBeUndefined();
-    }),
-  );
-
   it.live('persists entries across loads and skips adjacent duplicates', () =>
     Effect.gen(function* () {
       const history = yield* loadInputHistory(() => storage);

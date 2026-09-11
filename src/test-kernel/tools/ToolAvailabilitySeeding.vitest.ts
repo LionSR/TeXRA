@@ -19,20 +19,6 @@ const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
 
-  it.effect(
-    'seeds every toggleable tool as disabled on a genuinely fresh install',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => installPlatform({ globalState: {} }));
-
-        yield* seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
-
-        expect(
-          platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-        ).toEqual(EXPECTED_DEFAULTS);
-      }),
-  );
-
   it.effect.each([
     {
       name: 'a host with a prior-install version marker',

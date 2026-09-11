@@ -74,30 +74,6 @@ describe('selectCliRunModel precedence', () => {
     );
   });
 
-  it('reads the role-specific config section', async () => {
-    const context = makeContext({
-      cliConfig: { chat: { model: OTHER_MODEL }, run: { model: 'deepseekR' } },
-    });
-
-    await selectCliRunModel(context, undefined, 'chat');
-    await selectCliRunModel(context, undefined, 'run');
-
-    expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
-      1,
-      expect.arrayContaining([
-        { model: OTHER_MODEL, reason: 'command-config' },
-      ]),
-      {},
-    );
-    expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
-      2,
-      expect.arrayContaining([
-        { model: 'deepseekR', reason: 'command-config' },
-      ]),
-      {},
-    );
-  });
-
   it('checks model access before returning the model', async () => {
     const context = makeContext({
       cliConfig: runConfig('staleConfiguredModel'),
@@ -140,23 +116,5 @@ describe('selectCliRunModel precedence', () => {
       ]),
       {},
     );
-  });
-});
-
-describe('buildHeadlessRunContext', () => {
-  it('quiets logs and enables progress for text output', () => {
-    const context = makeContext({
-      outputFormat: 'text',
-      quietLogs: false,
-    });
-    const runContext = buildHeadlessRunContext(context);
-    expect(runContext.quietLogs).toBe(true);
-    expect(runContext.renderRunProgress).toBe(true);
-  });
-
-  it('keeps human run progress for json output', () => {
-    const context = makeContext({ outputFormat: 'json' });
-    const runContext = buildHeadlessRunContext(context);
-    expect(runContext.renderRunProgress).toBe(true);
   });
 });

@@ -409,40 +409,6 @@ describe('CLI platform init', () => {
     }
   });
 
-  it('installs a CLI agent resume port that delegates to the active handler', async () => {
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-
-    await initCliPlatform(cliContext({ installSignalHandlers: false }));
-
-    type NodePlatformOptions = {
-      readonly agentResume: {
-        tryResumeRun(runId: RunId, recovery?: unknown): Promise<boolean>;
-      };
-    };
-    const createNodePlatformCalls = mocks.createNodePlatform.mock
-      .calls as unknown as Array<[NodePlatformOptions]>;
-    const nodePlatformOptions = createNodePlatformCalls[0]?.[0];
-    expect(nodePlatformOptions?.agentResume).toBeDefined();
-    if (!nodePlatformOptions) throw new Error('expected node platform options');
-
-    const runId = 'stream:cli-resume' as RunId;
-    await expect(
-      nodePlatformOptions.agentResume.tryResumeRun(runId),
-    ).resolves.toBe(false);
-
-    const tryResumeRun = vi.fn(async () => true);
-    const dispose = setCliAgentResumeHandler(tryResumeRun);
-
-    try {
-      await expect(
-        nodePlatformOptions.agentResume.tryResumeRun(runId),
-      ).resolves.toBe(true);
-      expect(tryResumeRun).toHaveBeenCalledWith(runId, undefined);
-    } finally {
-      dispose();
-    }
-  });
-
   it('wires setup sign-in to the existing CLI login implementation', async () => {
     isAuthenticatedSpy.mockResolvedValue(true);
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });

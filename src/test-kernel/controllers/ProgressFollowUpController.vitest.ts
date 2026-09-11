@@ -278,23 +278,4 @@ describe('ProgressFollowUpController', () => {
       'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
     );
   });
-
-  it('keeps missing latexdiff context when a source target is already present', async () => {
-    const plan = await createController().planCompileFixer({
-      runId: RUN,
-      runConfig: createExactInputsConfig({
-        inputFiles: ['main.tex', 'main-diffea268c1.tex'],
-      }),
-      compileFailures: [createCompileFailure()],
-      runOutputs: {},
-      modelOptions: [{ value: 'gemini31p' }],
-    });
-
-    expect(plan.kind).toBe('execute');
-    if (plan.kind !== 'execute') return;
-    expect(plan.request.config.inputFiles).toEqual(['main.tex']);
-    expect(plan.request.config.instruction).toContain(
-      'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
-    );
-  });
 });

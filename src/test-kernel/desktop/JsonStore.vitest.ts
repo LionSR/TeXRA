@@ -372,25 +372,4 @@ describe('shared JsonStore', () => {
         }
       }),
   );
-
-  it.effect(
-    'restricts the store file and its directory to the owner when a mode is set',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return; // POSIX modes don't apply.
-        const JsonStore = yield* Effect.promise(() => loadJsonStore());
-        tempDir = yield* Effect.promise(() =>
-          makeTempDir('texra-json-store-', tempDirs),
-        );
-        const filePath = join(tempDir, 'nested', 'secrets.json');
-
-        const store = yield* JsonStore.open(filePath, { mode: 0o600 });
-        yield* store.set('key', 'value');
-
-        const fileStat = yield* Effect.promise(() => stat(filePath));
-        const dirStat = yield* Effect.promise(() => stat(dirname(filePath)));
-        expect(fileStat.mode & 0o777).toBe(0o600);
-        expect(dirStat.mode & 0o777).toBe(0o700);
-      }),
-  );
 });

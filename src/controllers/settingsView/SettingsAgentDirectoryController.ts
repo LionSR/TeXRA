@@ -6,7 +6,7 @@ import type { AgentCategory, AgentSource } from '@shared/schemas';
 
 import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
 
-export interface SettingsAgentDirectoryEntry {
+interface SettingsAgentDirectoryEntry {
   path?: string;
 }
 

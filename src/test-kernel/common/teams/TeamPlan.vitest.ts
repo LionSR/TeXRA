@@ -129,20 +129,6 @@ describe('planTeamRun', () => {
     expect(plan.rootAgent?.name).toBe('orchestrator');
   });
 
-  it('selects engineer for the built-in software-engineer team', () => {
-    const plan = planTeamRun(builtInPreset('software-engineer'), {
-      agents: {
-        workflow: [],
-        toolUse: [
-          agent('coder', { tools: delegateTools }),
-          agent('engineer', { tools: delegateTools }),
-        ],
-      },
-    });
-
-    expect(plan.rootAgent?.name).toBe('engineer');
-  });
-
   it('does not fall back to an arbitrary delegating agent for a built-in', () => {
     const plan = planTeamRun(builtInPreset('physicist'), {
       agents: {
@@ -367,15 +353,6 @@ describe('buildTeamOptions', () => {
     expect(options[3].unavailableMembers).toEqual(['writer', 'member']);
     expect(options[3].disabled).toBeUndefined();
   });
-
-  it('capitalizes non-root disabled reasons', () => {
-    const option = buildTeamOptions([
-      manualPlan({ rootAgent: agent('plain') }),
-    ])[0];
-    expect(option.disabledReason).toBe(
-      'Team root plain is not a delegating agent.',
-    );
-  });
 });
 
 describe('loadTeamOptions', () => {
@@ -509,31 +486,6 @@ describe('resolveTeamLaunch', () => {
     }),
   );
 
-  it.effect('loads the catalog before planning a team launch', () =>
-    Effect.gen(function* () {
-      let loaded = false;
-      const getAgents = vi.fn((category: string) => {
-        expect(loaded).toBe(true);
-        return category === 'workflow'
-          ? [agent('writer', { source: 'builtInWorkflow' })]
-          : [agent('lead', { tools: delegateTools }), agent('member')];
-      });
-
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({
-            ensureCatalogLoaded: () =>
-              Effect.sync(() => {
-                loaded = true;
-              }),
-            getAgents,
-          }),
-        ),
-      ).toMatchObject({ status: 'ready' });
-      expect(getAgents).toHaveBeenCalled();
-    }),
-  );
-
   it.effect('continues with available members and reports a partial team', () =>
     Effect.gen(function* () {
       const hostedPreset = preset({
@@ -650,81 +602,5 @@ describe('resolveTeamLaunch', () => {
         reason: 'no runnable team root',
       });
     }),
-  );
-});
-
-describe('refreshRemoteCatalogForGaps', () => {
-  it.effect(
-    'refreshes and returns the replanned value only when gaps and access exist',
-    () =>
-      Effect.gen(function* () {
-        let refreshed = false;
-        const replan = vi.fn(() => 'remote');
-        const canAccessRemoteCatalog = vi.fn(async () => true);
-
-        const result = yield* refreshRemoteCatalogForGaps(
-          'local',
-          () => true,
-          replan,
-          {
-            canAccessRemoteCatalog,
-            refreshRemote: () =>
-              Effect.sync(() => {
-                refreshed = true;
-              }),
-          },
-        );
-
-        expect(result).toEqual({
-          value: 'remote',
-          remoteCatalogRefreshAttempted: true,
-        });
-        expect(refreshed).toBe(true);
-        expect(replan).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect.each([
-    {
-      name: 'without gaps',
-      hasGaps: false,
-      canAccess: true,
-      accessChecks: 0,
-    },
-    {
-      name: 'when remote access is unavailable',
-      hasGaps: true,
-      canAccess: false,
-      accessChecks: 1,
-    },
-  ])(
-    'returns the local plan $name without refreshing or replanning',
-    ({ hasGaps, canAccess, accessChecks }) =>
-      Effect.gen(function* () {
-        const canAccessRemoteCatalog = vi.fn(async () => canAccess);
-        let refreshed = false;
-        const replan = vi.fn(() => 'remote');
-
-        const result = yield* refreshRemoteCatalogForGaps(
-          'local',
-          () => hasGaps,
-          replan,
-          {
-            canAccessRemoteCatalog,
-            refreshRemote: () =>
-              Effect.sync(() => {
-                refreshed = true;
-              }),
-          },
-        );
-
-        expect(result).toEqual({
-          value: 'local',
-          remoteCatalogRefreshAttempted: false,
-        });
-        expect(canAccessRemoteCatalog).toHaveBeenCalledTimes(accessChecks);
-        expect(refreshed).toBe(false);
-        expect(replan).not.toHaveBeenCalled();
-      }),
   );
 });

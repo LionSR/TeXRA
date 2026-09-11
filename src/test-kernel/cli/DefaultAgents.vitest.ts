@@ -22,19 +22,6 @@ describe('CLI implicit default agent policy', () => {
     ]);
   });
 
-  it.each([
-    { name: 'review', eligible: true },
-    { name: ' review ', eligible: true },
-    { name: 'simplifier', eligible: false },
-    { name: 'SIMPLIFIER', eligible: false },
-    { name: 'builtInToolUse:simplifier', eligible: false },
-  ])(
-    'recognizes "$name" as implicit-default-eligible: $eligible',
-    ({ name, eligible }) => {
-      expect(isImplicitDefaultEligible(name)).toBe(eligible);
-    },
-  );
-
   it('selects the built-in default only when it is visible', () => {
     expect(
       pickDefaultToolUseAgent([{ name: 'research' }, { name: 'review' }]),

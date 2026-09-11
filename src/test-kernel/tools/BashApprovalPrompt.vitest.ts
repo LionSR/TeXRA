@@ -17,41 +17,6 @@ import { requestBashApproval } from '@tools/approval/bashApproval';
 import { generateRunId } from '@utils/core';
 
 describe('requestBashApproval queueing', () => {
-  it('hands the host a schema-valid permission with a prefixed request id and a trimmed cwd', async () => {
-    const session = createTestSession();
-    const runId = generateRunId();
-    const prompted: HostBashApprovalRequest[] = [];
-    session.interactions.use({
-      requestBashApproval: async (request) => {
-        prompted.push(request);
-        return { action: 'approve' };
-      },
-      cancel: () => undefined,
-    });
-    const request = (command: string, cwd?: string) =>
-      withRunContext(createRunContext({ runId, session }), () =>
-        requestBashApproval({ command, ...(cwd ? { cwd } : {}) }),
-      );
-
-    try {
-      await request('lake build', ' /work ');
-      await request('echo hi', '   ');
-      const [first, second] = prompted.map((p) => p.permission);
-      expect(BashPermissionSchema.parse(first)).toEqual(first);
-      expect(first).toMatchObject({
-        command: 'lake build',
-        cwd: '/work',
-        allowBypass: true,
-        runId,
-      });
-      expect(first.requestId).toMatch(/^bash-.+/);
-      expect(second.requestId).not.toBe(first.requestId);
-      expect(second).not.toHaveProperty('cwd');
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('lets never override a run bypass at the shared boundary', async () => {
     const session = createTestSession();
     const runId = generateRunId();

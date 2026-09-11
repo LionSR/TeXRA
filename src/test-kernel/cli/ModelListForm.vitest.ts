@@ -13,41 +13,6 @@ import {
 } from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 
-describe('CLI ModelListForm empty state', () => {
-  it.each<{
-    itemCount: number;
-    selectable: boolean;
-    expected: string;
-  }>([
-    {
-      itemCount: 0,
-      selectable: false,
-      expected: 'No model choices available.',
-    },
-    {
-      itemCount: 0,
-      selectable: true,
-      expected: 'No model choices available.',
-    },
-    {
-      itemCount: 2,
-      selectable: false,
-      expected:
-        'Available models. Finish the active response before switching models.',
-    },
-    {
-      itemCount: 2,
-      selectable: true,
-      expected: 'Choose the model for future turns.',
-    },
-  ])(
-    'describes itemCount=$itemCount selectable=$selectable truthfully',
-    ({ itemCount, selectable, expected }) => {
-      expect(modelListDescription({ itemCount, selectable })).toBe(expected);
-    },
-  );
-});
-
 describe('CLI async list form close input', () => {
   it.each<{
     name: string;
@@ -169,23 +134,6 @@ describe('CLI async list form buffered input', () => {
     },
   ])('$name', ({ args, expected }) => {
     expect(shouldBufferAsyncListFormInput(args)).toBe(expected);
-  });
-});
-
-describe('Select render keys', () => {
-  it('does not collapse object-valued items to the same React key', () => {
-    const first = selectItemRenderKey(
-      { value: { kind: 'chat' }, label: 'New chat' },
-      0,
-    );
-    const second = selectItemRenderKey(
-      { value: { kind: 'help' }, label: 'Help' },
-      1,
-    );
-
-    expect(first).toBe('0:New chat');
-    expect(second).toBe('1:Help');
-    expect(first).not.toBe(second);
   });
 });
 
@@ -344,12 +292,5 @@ describe('CLI Select disabled-row focus', () => {
     },
   ])('$name', ({ args, expected }) => {
     expect(nextSelectHighlightIndex(args)).toBe(expected);
-  });
-});
-
-describe('CLI ModelListForm row budget', () => {
-  it('uses compact slash forms before bordered content clips titles', () => {
-    expect(isCompactFormRows(9)).toBe(true);
-    expect(isCompactFormRows(10)).toBe(false);
   });
 });

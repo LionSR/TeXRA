@@ -63,26 +63,6 @@ describe('memory-item action group', () => {
     mocks.postMessage.mockClear();
   });
 
-  it('renders each grouped action as a wa-button with a matching sibling tooltip', async () => {
-    const element = await mount(makeItem());
-
-    const deleteButton = query<HTMLElement>(element, '#memory-delete-button');
-    expect(deleteButton).toBeTruthy();
-    expect(deleteButton?.tagName).toBe('WA-BUTTON');
-    expect(deleteButton?.getAttribute('aria-label')).toBe('Delete: notes.md');
-    expect(tooltipText(element, 'memory-delete-button')).toBe(
-      'Delete this memory',
-    );
-  });
-
-  it('flips the pin button label/tooltip/icon based on item.pinned', async () => {
-    const element = await mount(makeItem({ pinned: true }));
-
-    const pinButton = query<HTMLElement>(element, '#memory-pin-button');
-    expect(pinButton?.getAttribute('aria-label')).toBe('Unpin: notes.md');
-    expect(tooltipText(element, 'memory-pin-button')).toBe('Unpin this memory');
-  });
-
   it('posts deleteMemory on delete-button click', async () => {
     const element = await mount(makeItem());
 

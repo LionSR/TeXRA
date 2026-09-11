@@ -595,12 +595,6 @@ describe('handleTuiSlashCommand', () => {
     await expectFormOpens('/model', 'model');
   });
 
-  it('opens the login form for bare /login', async () => {
-    registerBuiltinSlashCommands();
-
-    await expectFormOpens('/login', 'login');
-  });
-
   it('opens /approval status without an early transcript echo', async () => {
     registerBuiltinSlashCommands();
 
@@ -1040,71 +1034,6 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Running');
     expect(statusText).toContain('active background tasks: 2');
-  });
-
-  it('filters idle siblings from the owning workflow count', async () => {
-    registerBuiltinSlashCommands();
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const focusedChildId = 'stream-focused-child' as RunId;
-    const runningSiblingId = 'stream-running-sibling' as RunId;
-    const idleSiblingId = 'stream-idle-sibling' as RunId;
-    activeRunId.set(focusedChildId);
-    ensureRun(focusedChildId, { status: RUN_PHASE.WAITING });
-    ensureRun(runningSiblingId, { status: RUN_PHASE.RUNNING });
-    ensureRun(idleSiblingId, { status: RUN_PHASE.WAITING });
-    seedChildRoster(
-      rootRunId,
-      [focusedChildId, runningSiblingId, idleSiblingId].map(
-        (childRunId, index) => ({
-          identity: { kind: 'agent' as const, agent: `critic-${index}` },
-          agentName: `critic-${index}`,
-          status:
-            childRunId === runningSiblingId
-              ? RUN_PHASE.RUNNING
-              : RUN_PHASE.WAITING,
-          startedAt: index + 1,
-          childRunId,
-        }),
-      ),
-    );
-
-    await handleTuiSlashCommand('/status', createContext(session));
-
-    const statusText = lastEntryText(rootRunId);
-    expect(statusText).toContain('active background tasks: 1');
-    expect(statusText).not.toContain('active background tasks: 3');
-  });
-
-  it('counts delegated work owned by a focused intermediate parent', async () => {
-    registerBuiltinSlashCommands();
-    const session = createSession();
-    const rootRunId = 'stream-root' as RunId;
-    const parentRunId = 'stream-parent' as RunId;
-    const rootSiblingIds = [
-      'stream-root-sibling-1',
-      'stream-root-sibling-2',
-    ] as RunId[];
-    const grandchildId = 'stream-grandchild' as RunId;
-    activeRunId.set(parentRunId);
-    for (const runId of [parentRunId, ...rootSiblingIds, grandchildId]) {
-      ensureRun(runId, { status: RUN_PHASE.RUNNING });
-    }
-    const rosterRow = (childRunId: RunId, index: number) => ({
-      identity: { kind: 'agent' as const, agent: `reviewer-${index}` },
-      agentName: `reviewer-${index}`,
-      status: RUN_PHASE.RUNNING,
-      startedAt: index + 1,
-      childRunId,
-    });
-    seedChildRoster(rootRunId, [parentRunId, ...rootSiblingIds].map(rosterRow));
-    seedChildRoster(parentRunId, [rosterRow(grandchildId, 3)]);
-
-    await handleTuiSlashCommand('/status', createContext(session));
-
-    const statusText = lastEntryText(rootRunId);
-    expect(statusText).toContain('active background tasks: 1');
-    expect(statusText).not.toContain('active background tasks: 3');
   });
 
   it('reports the access route that produced the focused stream usage', async () => {

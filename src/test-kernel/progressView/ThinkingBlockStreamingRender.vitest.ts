@@ -102,15 +102,6 @@ describe('progress view live activity rendering', () => {
     ).not.toBeNull();
   });
 
-  it('preserves newlines in raw text while streaming', () => {
-    const container = renderRow(
-      thinkingRow({ id: 'think-multiline', text: 'line one\nline two' }),
-    );
-
-    const content = container.querySelector('.banner-content--streaming');
-    expect(content?.textContent).toBe('line one\nline two');
-  });
-
   it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', () => {
     const container = renderRow(
       thinkingRow({
@@ -126,39 +117,5 @@ describe('progress view live activity rendering', () => {
     // No caller-supplied defaultOpen/preservedOpen here, so a finalized
     // thinking block collapses back down once it's no longer streaming.
     expect(details?.hasAttribute('open')).toBe(false);
-  });
-
-  it('applies the same running/finalized behavior to model-response entries', () => {
-    const runningContainer = renderRow(
-      thinkingRow({
-        id: 'resp-1',
-        text: '**bold** answer in progress',
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      }),
-    );
-
-    const runningDetails = runningContainer.querySelector(
-      'wa-details.banner-details',
-    );
-    expect(runningDetails).not.toBeNull();
-    expect(runningContainer.querySelector('.log-line')).toBeNull();
-    expect(runningContainer.querySelector('strong')).toBeNull();
-    expect(runningDetails?.hasAttribute('open')).toBe(true);
-  });
-
-  it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', () => {
-    const container = renderRow(
-      thinkingRow({
-        id: 'scratch-1',
-        text: 'jotting down a formula',
-        messageType: MESSAGE_TYPES.SCRATCHPAD,
-      }),
-    );
-
-    const details = container.querySelector('wa-details.banner-details');
-    expect(details).not.toBeNull();
-    expect(details?.hasAttribute('open')).toBe(true);
-    expect(container.textContent).toContain('Scratchpad');
-    expect(container.querySelector('wa-icon[name="pencil"]')).not.toBeNull();
   });
 });

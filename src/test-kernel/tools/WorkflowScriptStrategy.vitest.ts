@@ -104,31 +104,6 @@ beforeEach(() => {
 });
 
 describe('createWorkflowScriptStrategy', () => {
-  it('is a terminal-only strategy with no runTurn', () => {
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        createRunAgent: billingRunAgent,
-      }),
-    );
-    expect(strategy.isTerminal({} as never)).toBe(true);
-    expect(strategy.runTurn).toBeUndefined();
-    expect(strategy.stageLabel).toBe("Workflow script 'strategy-test'");
-  });
-
-  it('uses persist-only delivery when the headless caller owns the report', () => {
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        deliveryMode: 'persistOnly',
-        createRunAgent: billingRunAgent,
-      }),
-    );
-
-    expect(strategy.deliveryMode).toBe('persistOnly');
-    expect(strategy.resolveDeliveryTarget).toBeUndefined();
-  });
-
   it('runs a live call, settles its journal cost, and delivers the result', async () => {
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(

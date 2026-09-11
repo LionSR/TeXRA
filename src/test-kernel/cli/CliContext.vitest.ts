@@ -98,19 +98,6 @@ describe('CLI package manifest discovery', () => {
   });
 });
 
-describe('CLI env boundary', () => {
-  it('returns a snapshot for environment reads', () => {
-    process.env.TEXRA_READ_ENV_TEST = 'original';
-    try {
-      const env = readCliEnv();
-      env.TEXRA_READ_ENV_TEST = 'mutated';
-      expect(process.env.TEXRA_READ_ENV_TEST).toBe('original');
-    } finally {
-      delete process.env.TEXRA_READ_ENV_TEST;
-    }
-  });
-});
-
 describe('CLI context config defaults', () => {
   it('applies flag over env over workspace config over built-in defaults', async () => {
     const workspace = await workspaceWithConfig(

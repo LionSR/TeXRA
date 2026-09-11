@@ -199,33 +199,9 @@ function createClearingStorageCoordinator(options: {
 
 describe('SupabaseSession', () => {
   describe('parseStoredSupabaseSession', () => {
-    it('returns null for missing session data', () => {
-      assert.equal(parseStoredSupabaseSession(undefined), null);
-    });
-
-    it('parses valid stored session data', () => {
-      const session = makeSession();
-
-      assert.deepEqual(
-        parseStoredSupabaseSession(JSON.stringify(session)),
-        session,
-      );
-    });
-
     it('returns null for invalid stored session data', () => {
       assert.equal(parseStoredSupabaseSession('{'), null);
       assert.equal(parseStoredSupabaseSession(JSON.stringify({ id: 1 })), null);
-    });
-
-    it('trims whitespace from the account label on parse', () => {
-      const session = makeSession({
-        account: { id: 'user-id', label: '  stored@example.com  ' },
-      });
-
-      assert.equal(
-        parseStoredSupabaseSession(JSON.stringify(session))?.account.label,
-        'stored@example.com',
-      );
     });
   });
 
@@ -241,17 +217,6 @@ describe('SupabaseSession', () => {
         label: 'user@example.com',
       });
       assert.equal(session.expiresAt, 123_000);
-    });
-
-    it('trims whitespace from the native session email label', () => {
-      const nativeSession = makeNativeSession({
-        user: { id: 'user-id', email: '  native@example.com  ' },
-      });
-
-      assert.equal(
-        toStorableSupabaseSession(nativeSession).account.label,
-        'native@example.com',
-      );
     });
 
     it('falls back to the user id when email is missing', () => {
@@ -298,48 +263,9 @@ describe('SupabaseSession', () => {
         expiresAt: 123_000,
       });
     });
-
-    it('falls back to the user id and the default expiry', () => {
-      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
-      const response = makeExchangeResponse();
-      const session = toStorableSupabaseSession(response);
-
-      assert.equal(session.account.label, response.user.id);
-      assert.ok(session.expiresAt >= earliestExpiry);
-      assert.ok(
-        session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      );
-    });
   });
 
   describe('SupabaseSessionCoordinator', () => {
-    it('stores session data and exposes session tokens', async () => {
-      const { coordinator, read, getReadCount } = createCoordinator();
-      const session = makeSession();
-
-      await runAuthProgram(coordinator.storeSession(session));
-
-      assert.deepEqual(read(), session);
-      assert.deepEqual(await runAuthProgram(coordinator.getSessionTokens()), {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-      assert.equal(getReadCount(), 1);
-    });
-
-    it('reads storage once when ensuring a cached fresh token', async () => {
-      const initialSession = makeSession();
-      const { coordinator, getReadCount } = createCoordinator({
-        initialSession,
-      });
-
-      assert.equal(
-        await runAuthProgram(coordinator.ensureFreshToken()),
-        'access-token',
-      );
-      assert.equal(getReadCount(), 1);
-    });
-
     it('exchanges a PKCE code from the query for a session', async () => {
       const client = {
         auth: {

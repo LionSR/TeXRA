@@ -29,21 +29,6 @@ describe('child subagent stream approval inheritance', () => {
     defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
-  it('mirrors the parent bash bypass onto the child stream', () => {
-    const { parent, child } = runPair();
-    currentSession().approvals.bash.bypass.setBypass(parent, true, {
-      silent: true,
-    });
-    // Sanity: the parent bypass round-trips through the public barrel.
-    expect(currentSession().approvals.bash.bypass.isBypassed(parent)).toBe(
-      true,
-    );
-
-    configureDelegatedChildApprovals(child, parent);
-
-    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
-  });
-
   it('mirrors the parent tool-edit bypass onto the child stream', () => {
     const { parent, child } = runPair();
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {

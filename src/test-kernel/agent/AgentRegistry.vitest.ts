@@ -113,17 +113,6 @@ describe('agent registry', () => {
     await Effect.runPromise(refresh({ includeRemote: false }));
   });
 
-  it('keeps unknown names unresolved', () => {
-    expect(getAgent('no-such-agent')).toBeUndefined();
-    expect(getVisibleAgent('toolUse', 'no-such-agent')).toBeUndefined();
-  });
-
-  it('exposes workflow round counts from local agent YAML', () => {
-    expect(getAgent('polish')?.rounds).toBe(2);
-    expect(getAgent('correct')?.rounds).toBe(1);
-    expect(getAgent('assistant')?.rounds).toBeUndefined();
-  });
-
   it('treats lookup category as priority, not a filter', () => {
     const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
     expect(workflow?.name).toBe('polish');

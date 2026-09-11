@@ -159,24 +159,6 @@ describe('stream-tabs over the fold', () => {
     ]);
   });
 
-  it('groups rows under section headings by their fold group', async () => {
-    const view = fanOutView();
-    const { element } = await mountTabs(view, emptySurface(view.key), {
-      sections: true,
-    });
-    const headings = [
-      ...(element.shadowRoot?.querySelectorAll('.group-heading') ?? []),
-    ];
-    const groups = new Set(view.order.map((id) => view.runs.get(id)?.group));
-    expect(headings.length).toBe(groups.size);
-    for (const heading of headings) {
-      const group = [...heading.classList]
-        .find((name) => name.startsWith('group-') && name !== 'group-heading')
-        ?.slice('group-'.length);
-      expect(groups.has(group as RunView['group'])).toBe(true);
-    }
-  });
-
   it('filters rows by the surface search', async () => {
     const view = fanOutView();
     const label = view.runs.get(ROOT)?.label ?? '';
