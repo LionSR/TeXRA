@@ -446,8 +446,12 @@ if (
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await platform().globalState.update(GlobalStateKey.MODEL_SELECTION, {
-    enabledExtras: HARNESS_VISIBLE_MODELS,
-    disabledDefaults: DEFAULT_MODELS,
+    enabledExtras: HARNESS_VISIBLE_MODELS.filter(
+      (model) => !DEFAULT_MODELS.includes(model),
+    ),
+    disabledDefaults: DEFAULT_MODELS.filter(
+      (model) => !HARNESS_VISIBLE_MODELS.includes(model),
+    ),
   });
 }
 await effectRuntime().runPromise(loadAgents({ includeRemote: false }));

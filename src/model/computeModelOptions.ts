@@ -448,23 +448,17 @@ export async function setModelEnabled(input: {
     throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
   }
 
+  // Edit the list the picker shows — including the all-defaults fallback — and
+  // re-encode the delta from it, so a write never acts on a hidden state.
   const current = getEnabledModels(state);
-  const selection = readModelSelection(state);
-  const without = (models: readonly string[]) =>
-    models.filter((model) => model !== input.model);
-  const next: ModelSelection = DEFAULT_MODELS.includes(input.model)
-    ? {
-        ...selection,
-        disabledDefaults: input.enabled
-          ? without(selection.disabledDefaults)
-          : [...without(selection.disabledDefaults), input.model],
-      }
-    : {
-        ...selection,
-        enabledExtras: input.enabled
-          ? [...without(selection.enabledExtras), input.model]
-          : without(selection.enabledExtras),
-      };
+  const others = current.filter((model) => model !== input.model);
+  const toggled = input.enabled ? [...others, input.model] : others;
+  const next: ModelSelection = {
+    enabledExtras: toggled.filter((model) => !DEFAULT_MODELS.includes(model)),
+    disabledDefaults: DEFAULT_MODELS.filter(
+      (model) => !toggled.includes(model),
+    ),
+  };
   const nextEnabled = enabledModelsOf(next);
   if (nextEnabled.length === 0) {
     throw new Error(
