@@ -2,14 +2,12 @@
  * Shared formatters for rendering a stored execution conversation
  * from archived stream data as text.
  *
- * A stored conversation is `unknown[]` — whichever model handler produced it
- * (Anthropic, OpenAI, Google, OpenRouter, VS Code LM) writes its own
- * provider-native message shape, so `content` blocks show up as Anthropic-style
- * `{type: 'text'|'tool_use'|'tool_result'}`, Google's discriminator-less
- * `{text}`/`{functionCall}`/`{functionResponse}` parts, VS Code LM's
- * `{kind: 'text'|'toolCall'|'toolResult'}` parts, or OpenAI's top-level
- * `tool_calls`. This module recognizes those shapes once, instead of every
- * caller re-parsing them with its own drifted truncation rules.
+ * A stored conversation is the `{role, content}` array
+ * `readCompletedRunConversation` (`@transcript/completedRunArchive`) rebuilds
+ * from transcript rows, with Anthropic-style
+ * `{type: 'text'|'tool_use'|'tool_result'|…}` content blocks. This module
+ * renders that vocabulary once, instead of every caller re-parsing it with
+ * its own drifted truncation rules.
  *
  * Used by:
  *  - `ExecutionsTool`'s `/executions/{id}/conversation` endpoint
@@ -19,8 +17,7 @@
  *
  * Callers keep their own output composition (XML-ish `<message>` blocks for
  * the tools endpoint; a structured preview/transcript shape plus whole-message
- * truncation for the CLI). Provider-native message and content recognition is
- * shared here.
+ * truncation for the CLI). Message and content recognition is shared here.
  */
 import {
   classifyProviderMessageBlockType,
@@ -29,14 +26,13 @@ import {
 } from '@agent/types/ConversationBlockTypes';
 import { extractWebFetchResultFields } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
-import { isImageMimeType } from '@utils/files/mimeUtils';
 
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
 export interface ConversationFormatOptions {
   /** Truncate each string/text message value at this many chars. Omit for no limit. */
   readonly textLimit?: number;
-  /** Truncate tool_use/tool_result (and Google functionCall/functionResponse) block text at this many chars. Omit for no limit. */
+  /** Truncate tool_use/tool_result block text at this many chars. Omit for no limit. */
   readonly toolBlockLimit?: number;
   /** Render a `[tool_use: ...]` marker for tool-call blocks. Defaults to `true`. */
   readonly includeToolUseMarkers?: boolean;
@@ -48,10 +44,6 @@ export interface ConversationFormatOptions {
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function objectStringField(value: unknown, key: string): string {
-  return isObject(value) ? asText(value[key]) : '';
 }
 
 /** `JSON.stringify` returns `undefined` for undefined/symbol/function values; fall back to `''` so truncation never sees a non-string. */
@@ -83,16 +75,6 @@ function isProviderReasoningBlock(block: unknown): boolean {
     (block.type === CONVERSATION_BLOCK_TYPES.thinking ||
       block.type === CONVERSATION_BLOCK_TYPES.redactedThinking)
   );
-}
-
-function extractGoogleFunctionResponseContent(
-  functionResponse: Record<string, unknown>,
-): unknown {
-  const response = isObject(functionResponse.response)
-    ? functionResponse.response
-    : undefined;
-  if (response && Object.hasOwn(response, 'result')) return response.result;
-  return response ?? functionResponse;
 }
 
 function formatToolUseMarker(
@@ -178,11 +160,9 @@ function formatWebFetchResultMarker(
 }
 
 /**
- * Render a single content-block (an element of a message's `content`/`parts`
- * array) to text. Handles Anthropic's `{type: ...}` discriminated blocks,
- * Google's discriminator-less `{text}`/`{functionCall}`/`{functionResponse}`
- * parts, VS Code LM's `kind`-discriminated parts, and falls back to a JSON dump
- * for unrecognized shapes.
+ * Render a single content block (an element of a message's `content` array)
+ * to text: `{type: ...}` discriminated blocks, with a JSON dump for
+ * unrecognized shapes.
  */
 function formatConversationBlock(
   block: unknown,
@@ -194,63 +174,10 @@ function formatConversationBlock(
   if (!isObject(block)) {
     return truncate(stringifyConversationValue(block), options.toolBlockLimit);
   }
-  switch (block.kind) {
-    case 'text':
-      return truncate(asText(block.text), options.textLimit);
-    case 'toolCall':
-      return formatToolUseMarker(
-        asText(block.name) || 'unknown',
-        block.input,
-        options,
-      );
-    case 'toolResult':
-      return formatToolResultMarker(block.text, options);
-  }
-  // Google's `parts` entries have no `type` discriminator at all — a plain
-  // `text` field is the only signal, so check it before the `type` switch.
-  if (typeof block.text === 'string') {
-    return truncate(block.text, options.textLimit);
-  }
 
-  if (
-    isObject(block.inlineData) ||
-    isObject(block.fileData) ||
-    isObject(block.image_url) ||
-    isObject(block.source)
-  ) {
-    const mimeType =
-      asText(block.mimeType) ||
-      asText(block.media_type) ||
-      objectStringField(block.inlineData, 'mimeType') ||
-      objectStringField(block.inlineData, 'mime_type') ||
-      objectStringField(block.fileData, 'mimeType') ||
-      objectStringField(block.fileData, 'mime_type') ||
-      objectStringField(block.image_url, 'mime_type') ||
-      objectStringField(block.source, 'media_type');
-    return isImageMimeType(mimeType)
-      ? '[image attachment]'
-      : '[document attachment]';
-  }
-
-  if (isObject(block.functionCall)) {
-    return formatToolUseMarker(
-      asText(block.functionCall.name) || 'unknown',
-      block.functionCall.args,
-      options,
-    );
-  }
-  if (isObject(block.functionResponse)) {
-    return formatToolResultMarker(
-      extractGoogleFunctionResponseContent(block.functionResponse),
-      options,
-    );
-  }
-
-  // A recognized text block whose `text` failed the duck-type check above
-  // (missing/non-string) — render empty, not its JSON form. Only the literal
-  // `text` tag gets this treatment: `input_text`/`output_text` are not
-  // classified (see `@agent/types/ConversationBlockTypes`) and fall through
-  // to the JSON dump below.
+  // A text block with a missing/non-string `text` renders empty, not its
+  // JSON form. Text stays outside the shared classifier (see
+  // `@agent/types/ConversationBlockTypes`).
   if (block.type === 'text') {
     return truncate(asText(block.text), options.textLimit);
   }
@@ -289,9 +216,7 @@ function formatConversationBlock(
       return formatWebSearchResultMarker(block.content, options);
     case 'web-fetch-tool-result':
       return formatWebFetchResultMarker(block, options);
-    // Unrecognized tags — including the deliberately unclassified
-    // `input_text`/`output_text` literals (see the classifier's docstring) —
-    // keep the JSON-dump fallback.
+    // Unrecognized tags keep the JSON-dump fallback.
     case undefined:
       return truncate(
         stringifyConversationValue(block),
@@ -303,12 +228,11 @@ function formatConversationBlock(
 }
 
 /**
- * Render a message's `content` (or Google's `parts`) field to text: a string
- * passes through (truncated at `textLimit`), an array joins each block's
- * rendering, and any other JSON-ish value is stringified (also truncated at
- * `textLimit`).
+ * Render a message's `content` field to text: a string passes through
+ * (truncated at `textLimit`), an array joins each block's rendering, and any
+ * other JSON-ish value is stringified (also truncated at `textLimit`).
  */
-export function formatConversationContent(
+function formatConversationContent(
   content: unknown,
   options: ConversationFormatOptions = {},
 ): string {
@@ -326,8 +250,8 @@ export function formatConversationContent(
 }
 
 /**
- * Normalize one provider-native stored message to the role and text consumed
- * by conversation views.
+ * Normalize one stored message to the role and text consumed by conversation
+ * views.
  */
 export function formatConversationMessage(
   message: unknown,
@@ -335,55 +259,15 @@ export function formatConversationMessage(
 ): { role: string; content: string } {
   const raw = isObject(message) ? message : {};
   const role = asText(raw.role) || 'unknown';
-  const content = [
-    formatConversationContent(raw.content, options),
-    formatConversationContent(raw.parts, options),
-    formatTopLevelToolCalls(raw.tool_calls, options),
-  ]
-    .filter((part) => part.trim().length > 0)
-    .join('\n')
-    .trim();
+  const content = formatConversationContent(raw.content, options).trim();
 
   if (content) return { role, content };
   const onlyHiddenReasoning =
     options.hideProviderReasoning === true &&
-    (role === 'assistant' || role === 'model') &&
-    (hasProviderReasoningBlock(raw.content) ||
-      hasProviderReasoningBlock(raw.parts));
+    role === 'assistant' &&
+    hasProviderReasoningBlock(raw.content);
   return {
     role,
     content: onlyHiddenReasoning ? HIDDEN_PROVIDER_REASONING_MARKER : '',
   };
-}
-
-function formatTopLevelToolCalls(
-  toolCalls: unknown,
-  options: ConversationFormatOptions,
-): string {
-  if (!Array.isArray(toolCalls) || options.includeToolUseMarkers === false) {
-    return '';
-  }
-  return toolCalls
-    .map((toolCall) => formatTopLevelToolCall(toolCall, options))
-    .join('\n');
-}
-
-function formatTopLevelToolCall(
-  toolCall: unknown,
-  options: ConversationFormatOptions,
-): string {
-  if (!isObject(toolCall)) {
-    return `[tool_use: ${truncate(
-      stringifyConversationValue(toolCall),
-      options.toolBlockLimit,
-    )}]`;
-  }
-  const nestedFunction = isObject(toolCall.function)
-    ? toolCall.function
-    : undefined;
-  const name =
-    asText(nestedFunction?.name) || asText(toolCall.name) || 'unknown';
-  const input =
-    nestedFunction?.arguments ?? toolCall.arguments ?? toolCall.input ?? {};
-  return formatToolUseMarker(name, input, options);
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatConversationContent } from '@agent/storage/conversationFormat';
 import { formatConversation } from '@tools/executions/conversationFormat';
 
 /** Formats a single assistant message whose content is the given blocks. */
@@ -30,95 +29,16 @@ describe('formatConversation', () => {
     expect(output).toContain('[tool_result: done]');
   });
 
-  it('formats Google parts at the shared message boundary', () => {
-    const output = formatConversation([
-      {
-        role: 'model',
-        parts: [
-          { text: 'I will inspect the workspace.' },
-          { functionCall: { name: 'ls', args: { path: '.' } } },
-        ],
-      },
-    ]);
-
-    expect(output).toContain('I will inspect the workspace.');
-    expect(output).toContain('[tool_use: ls({"path":"."})]');
-  });
-
-  it('bounds Google part text with the message text limit', () => {
-    const output = formatConversation([
-      {
-        role: 'model',
-        parts: [
-          { text: 'x'.repeat(501) },
-          { functionCall: { name: 'ls', args: { path: '.' } } },
-        ],
-      },
-    ]);
-
-    expect(output).toContain(`${'x'.repeat(497)}...`);
-    expect(output).not.toContain('x'.repeat(498));
-    expect(output).toContain('[tool_use: ls({"path":"."})]');
-  });
-
-  it('formats OpenAI top-level tool calls at the shared message boundary', () => {
-    const output = formatConversation([
-      {
-        role: 'assistant',
-        content: '',
-        tool_calls: [
-          {
-            type: 'function',
-            function: {
-              name: 'read_file',
-              arguments: '{"path":"paper.tex"}',
-            },
-          },
-        ],
-      },
-    ]);
-
-    expect(output).toContain('[tool_use: read_file({"path":"paper.tex"})]');
-  });
-
-  it('formats VS Code language-model tool parts through the shared policy', () => {
-    const toolCall = {
-      kind: 'toolCall',
-      callId: 'call-1',
-      name: 'read',
-      input: { path: 'secret.tex' },
-    };
-
-    expect(
-      formatConversationContent([toolCall], {
-        includeToolUseMarkers: false,
-        includeToolUseInput: false,
-      }),
-    ).toBe('');
-    expect(
-      formatConversationContent([toolCall], {
-        includeToolUseMarkers: true,
-        includeToolUseInput: false,
-      }),
-    ).toBe('[tool_use: read]');
-    expect(
-      formatConversationContent([
-        { kind: 'toolResult', callId: 'call-1', text: 'done' },
-      ]),
-    ).toBe('[tool_result: done]');
-  });
-
   it('formats media blocks as readable attachment markers', () => {
     const output = formatConversation([
       {
         role: 'user',
         content: [
-          { type: 'input_image', image_url: 'data:image/png;base64,abc' },
+          { type: 'image' },
           {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf' },
           },
-          { inlineData: { mimeType: 'image/png', data: 'abc' } },
         ],
       },
     ]);

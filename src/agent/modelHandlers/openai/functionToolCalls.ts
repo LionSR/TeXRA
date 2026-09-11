@@ -1,5 +1,5 @@
 /**
- * Narrowing helpers for OpenAI Chat Completions `tool_calls` arrays.
+ * Narrowing helper for OpenAI Chat Completions `tool_calls` arrays.
  *
  * Local reimplementation of the openai SDK's
  * `assertToolCallsAreChatCompletionFunctionToolCalls` from `openai/lib/parser`,
@@ -7,9 +7,8 @@
  * path (`openai/resources/...` is the documented surface). Only the `function`
  * tool-call type is supported: a non-function entry throws so a malformed
  * provider payload surfaces loudly instead of being read as "no tool calls".
- * Shared by the OpenAI model handler (which lets the throw propagate to the
- * error-classification boundary) and the format-agnostic export normalizer
- * (which filters non-function entries out of a conversation).
+ * The OpenAI model handler lets the throw propagate to the
+ * error-classification boundary.
  */
 
 import { OpenAIError } from 'openai';
@@ -17,21 +16,6 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
-
-/**
- * True when a chat-completions tool call is a `function` tool call.
- * Accepts unknown entries so export paths can filter malformed conversation
- * payloads (e.g. null array slots) without throwing.
- */
-export function isFunctionToolCall(
-  toolCall: unknown,
-): toolCall is ChatCompletionMessageFunctionToolCall {
-  return (
-    toolCall != null &&
-    typeof toolCall === 'object' &&
-    (toolCall as ChatCompletionMessageToolCall).type === 'function'
-  );
-}
 
 /**
  * Assert that every entry in a `tool_calls` array is a `function` tool call,

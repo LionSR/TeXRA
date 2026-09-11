@@ -160,17 +160,18 @@ async function useTempWorkspace(prefix = 'texra-history-'): Promise<string> {
   return workspace;
 }
 
-// Provider-shaped assistant turn carrying tool calls. `args` is passed through
-// verbatim so callers can cover both JSON-string and object argument encodings.
+// Assistant turn carrying tool_use blocks. `args` is passed through verbatim
+// so callers can cover both JSON-string and object argument encodings.
 function mockToolCallConversation(
   ...calls: ReadonlyArray<{ name: string; args: unknown }>
 ): void {
   mocks.readConversation.mockResolvedValue([
     {
       role: 'assistant',
-      tool_calls: calls.map(({ name, args }) => ({
-        type: 'function',
-        function: { name, arguments: args },
+      content: calls.map(({ name, args }) => ({
+        type: 'tool_use',
+        name,
+        input: args,
       })),
     },
   ]);
@@ -492,13 +493,7 @@ describe('CLI history runtime', () => {
     mocks.readConversation.mockResolvedValue([
       {
         role: 'assistant',
-        content: '',
-        tool_calls: [
-          {
-            type: 'function',
-            function: { name: 'bash', arguments: '{}' },
-          },
-        ],
+        content: [{ type: 'tool_use', name: 'bash', input: {} }],
       },
     ]);
 
@@ -633,17 +628,14 @@ describe('CLI history runtime', () => {
     mocks.readConversation.mockResolvedValue([
       { role: 'user', content: 'Review the proof.' },
       { role: 'assistant', content: '' },
-      { role: 'tool', content: 'problem.tex contents' },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'problem.tex contents' }],
+      },
       { role: 'assistant', content: 'Final proof analysis.' },
       {
         role: 'assistant',
-        content: '',
-        tool_calls: [
-          {
-            type: 'function',
-            function: { name: 'read_file', arguments: '{}' },
-          },
-        ],
+        content: [{ type: 'tool_use', name: 'read_file', input: {} }],
       },
     ]);
 
@@ -775,16 +767,16 @@ describe('CLI history runtime', () => {
       { role: 'assistant', content: '' },
       {
         role: 'assistant',
-        content: '',
-        tool_calls: [
-          {
-            type: 'function',
-            function: { name: 'read_file', arguments: '{}' },
-          },
-        ],
+        content: [{ type: 'tool_use', name: 'read_file', input: {} }],
       },
-      { role: 'tool', content: 'problem.tex contents' },
-      { role: 'tool', content: longToolOutput },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'problem.tex contents' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: longToolOutput }],
+      },
       { role: 'assistant', content: 'Final proof analysis.' },
     ]);
 
@@ -818,14 +810,14 @@ describe('CLI history runtime', () => {
         },
         {
           index: 4,
-          role: 'tool',
-          content: 'problem.tex contents',
+          role: 'user',
+          content: '[tool_result: problem.tex contents]',
           truncated: false,
         },
         {
           index: 5,
-          role: 'tool',
-          content: longToolOutput,
+          role: 'user',
+          content: `[tool_result: ${longToolOutput}]`,
           truncated: false,
         },
         {
@@ -841,96 +833,10 @@ describe('CLI history runtime', () => {
     );
     expect(text).toContain('[user #1]\nReview the proof.');
     expect(text).toContain('[assistant #3]\n[tool_use: read_file]');
-    expect(text).toContain('[tool #4]\nproblem.tex contents');
-    expect(text).toContain(`[tool #5]\n${longToolOutput}`);
+    expect(text).toContain('[user #4]\n[tool_result: problem.tex contents]');
+    expect(text).toContain(`[user #5]\n[tool_result: ${longToolOutput}]`);
     expect(text).not.toContain('...[truncated]');
     expect(text).toContain('[assistant #6]\nFinal proof analysis.');
-  });
-
-  it('can show Gemini parts-based conversations', async () => {
-    mocks.readConversation.mockResolvedValue([
-      {
-        role: 'user',
-        parts: [{ text: 'Solve the finite Pell check.' }],
-      },
-      {
-        role: 'model',
-        parts: [
-          { text: 'I will inspect the workspace first.' },
-          {
-            functionCall: {
-              name: 'ls',
-              args: { path: '.' },
-              id: 'tool-1',
-            },
-          },
-        ],
-      },
-      {
-        role: 'user',
-        parts: [
-          {
-            functionResponse: {
-              id: 'tool-1',
-              name: 'ls',
-              response: { result: 'file problem.tex' },
-            },
-          },
-        ],
-      },
-      {
-        role: 'model',
-        parts: [{ text: 'Final answer: (9, 4) and (-9, 4).' }],
-      },
-    ]);
-
-    const details = await readCliHistoryDetails('a1' as ExecutionId, {
-      includeFullConversation: true,
-    });
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(details?.conversationPreview?.messages).toEqual([
-      {
-        index: 4,
-        role: 'model',
-        content: 'Final answer: (9, 4) and (-9, 4).',
-        truncated: false,
-      },
-    ]);
-    expect(details?.conversation).toEqual({
-      messageCount: 4,
-      messages: [
-        {
-          index: 1,
-          role: 'user',
-          content: 'Solve the finite Pell check.',
-          truncated: false,
-        },
-        {
-          index: 2,
-          role: 'model',
-          content: 'I will inspect the workspace first.\n[tool_use: ls]',
-          truncated: false,
-        },
-        {
-          index: 3,
-          role: 'user',
-          content: '[tool_result: file problem.tex]',
-          truncated: false,
-        },
-        {
-          index: 4,
-          role: 'model',
-          content: 'Final answer: (9, 4) and (-9, 4).',
-          truncated: false,
-        },
-      ],
-    });
-    expect(text).toContain('[model #2]');
-    expect(text).toContain('I will inspect the workspace first.');
-    expect(text).toContain('[tool_use: ls]');
-    expect(text).toContain('[user #3]\n[tool_result: file problem.tex]');
-    expect(text).toContain('[model #4]\nFinal answer: (9, 4) and (-9, 4).');
   });
 
   it('still shows a child run asked for by explicit id', async () => {
