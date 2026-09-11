@@ -90,7 +90,17 @@ function lowerMessages(
               new vscode.LanguageModelToolCallPart(
                 part.providerCallId,
                 part.name,
-                part.arguments,
+                yield* Effect.try({
+                  try: () =>
+                    JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
+                  catch: (cause) =>
+                    new ModelError({
+                      kind: 'invalid-request',
+                      message:
+                        'History carries local-call arguments that are not a JSON object.',
+                      cause,
+                    }),
+                }),
               ),
             );
           } else {
@@ -547,7 +557,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     // a re-encode of a parse whose original was dropped: the
                     // object is the only representation this source ever had.
                     argumentsText: JSON.stringify(args.data),
-                    arguments: args.data,
                   });
                   if (phaseOpen)
                     events.push({

@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import {
-  AgentRunStateSnapshotSchema,
-  recordCycleMetrics,
-} from '@agent/core/state/AgentState';
+import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  AgentRunStateSnapshotSchema,
+  type RunId,
+} from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local file imports

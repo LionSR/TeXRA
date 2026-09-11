@@ -2,9 +2,9 @@ import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
-  FileLocationSchema,
-  LineCountSchema,
+  AgentWorkspaceStateSnapshotSchema,
   planSummaryLine,
+  type AgentWorkspaceSnapshot,
   type EditRecord,
   type FileLocation,
   type LineChanges,
@@ -14,41 +14,28 @@ import {
   WorkPlanSnapshotSchema,
 } from '@shared/schemas';
 
-/** Schema for thinking blocks (used by model handlers). */
-const ThinkingBlockSchema = z.object({
-  type: z.string(),
-  thinking: z.string().optional(),
-  signature: z.string().optional(),
-  data: z.string().optional(),
-});
-
-export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
-
-/** Internal schema for response assembly state. */
-const ResponseAssemblyStateSchema = z.object({
-  lastResponse: z.string().prefault(''),
-  accumulatedOutput: z.string().prefault(''),
-});
-
+/**
+ * The persisted slices, read off the one snapshot schema (`@shared/schemas`).
+ * `.unwrap()` drops the composition's `.prefault({})`: the whole snapshot
+ * substitutes a missing slice, a slice parsed on its own still refuses
+ * `undefined`.
+ */
+const ResponseAssemblyStateSchema =
+  AgentWorkspaceStateSnapshotSchema.shape.assembly.unwrap();
 type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
-
-/** File-local snapshot schema for flattened file-edit records. */
-const FileEditSnapshotSchema = z.object({
-  path: z.string(),
-  added: LineCountSchema.prefault(0),
-  removed: LineCountSchema.prefault(0),
-});
-
-/** Internal schema for file interaction state snapshot. */
-const FileInteractionStateSnapshotSchema = z.object({
-  readFiles: z.array(z.string()).prefault([]),
-  edits: z.array(FileEditSnapshotSchema).prefault([]),
-  toolCallCount: z.int().nonnegative().prefault(0),
-});
-
+const FileInteractionStateSnapshotSchema =
+  AgentWorkspaceStateSnapshotSchema.shape.interactions.unwrap();
 type FileInteractionStateSnapshot = z.output<
   typeof FileInteractionStateSnapshotSchema
 >;
+const MediaAttachmentStateSnapshotSchema =
+  AgentWorkspaceStateSnapshotSchema.shape.media.unwrap();
+type MediaAttachmentStateSnapshot = z.output<
+  typeof MediaAttachmentStateSnapshotSchema
+>;
+const ReasoningCacheStateSchema =
+  AgentWorkspaceStateSnapshotSchema.shape.reasoning.unwrap();
+type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
 export class FileInteractionState {
   private readonly readFiles = new Set<string>();
@@ -136,14 +123,6 @@ export class FileInteractionState {
   }
 }
 
-/** Internal schema for media attachment state snapshot. */
-const MediaAttachmentStateSnapshotSchema = z.object({
-  files: z.array(FileLocationSchema).prefault([]),
-});
-type MediaAttachmentStateSnapshot = z.output<
-  typeof MediaAttachmentStateSnapshotSchema
->;
-
 export class MediaAttachmentState {
   private readonly _files: FileLocation[] = [];
   private readonly pathSet = new Set<string>();
@@ -176,13 +155,6 @@ export class MediaAttachmentState {
     }
   }
 }
-
-/** Internal schema for reasoning cache state. */
-const ReasoningCacheStateSchema = z.object({
-  thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
-});
-
-type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
 /**
  * Server-tool content carried across turns. Never persisted — every
@@ -287,23 +259,6 @@ export class WorkPlanState {
     return a.objective === b.objective;
   }
 }
-
-/**
- * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
- * state has one supported format; an older record (one written before
- * `workPlan` entered the shape) fails its resume parse here.
- */
-export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSchema.prefault({}),
-  media: MediaAttachmentStateSnapshotSchema.prefault({}),
-  reasoning: ReasoningCacheStateSchema.prefault({}),
-  interactions: FileInteractionStateSnapshotSchema.prefault({}),
-  workPlan: WorkPlanSnapshotSchema,
-});
-
-export type AgentWorkspaceSnapshot = z.output<
-  typeof AgentWorkspaceStateSnapshotSchema
->;
 
 export class AgentWorkspaceState {
   private constructor(

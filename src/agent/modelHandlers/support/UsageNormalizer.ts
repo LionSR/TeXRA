@@ -1,6 +1,6 @@
 /** Assemble provider-neutral usage from counts and cost already computed by the provider. */
 
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type { NormalizedUsage } from '@shared/schemas';
 
 /** Counts and cost derived from one provider usage object. */
 interface UsageValues {

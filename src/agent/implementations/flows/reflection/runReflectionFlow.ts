@@ -9,7 +9,6 @@ import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory'
 import { hasPersistedCompileRejection } from '@agent/runtime/persistedCompileRejection';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,6 +21,7 @@ import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   type AgentFileLocation,
+  AgentRunStateSnapshotSchema,
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,

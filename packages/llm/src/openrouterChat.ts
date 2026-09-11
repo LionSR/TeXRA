@@ -1178,10 +1178,8 @@ export function openrouterChatModel(
                   kind: 'local-call',
                   providerCallId: call.id,
                   name: call.name,
-                  // The accumulated delta bytes, which `arguments` above is the
-                  // parse of, so the pair holds by construction.
+                  // The accumulated delta bytes, validated above.
                   argumentsText: call.arguments,
-                  arguments: parsedArgs.data,
                 });
               }
               content.push(...annotations);

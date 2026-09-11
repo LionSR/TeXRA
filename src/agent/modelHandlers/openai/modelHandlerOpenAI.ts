@@ -11,7 +11,6 @@ import {
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/types/ProviderUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
@@ -33,6 +32,7 @@ import { attachPartialText } from '@common/errors/sdkError/errorMetadata';
 import {
   type FileLocation,
   type MediaAttachmentKind,
+  type NormalizedUsage,
   type ToolDefinition,
   type ToolFileAttachment,
   type ToolResult,

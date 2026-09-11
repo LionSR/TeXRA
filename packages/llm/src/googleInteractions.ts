@@ -272,7 +272,17 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
               type: 'function_call',
               id: part.providerCallId,
               name: part.name,
-              arguments: part.arguments,
+              arguments: yield* Effect.try({
+                try: () =>
+                  JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
+                catch: (cause) =>
+                  new ModelError({
+                    kind: 'invalid-request',
+                    message:
+                      'History carries local-call arguments that are not a JSON object.',
+                    cause,
+                  }),
+              }),
             });
             break;
           default:
@@ -511,7 +521,10 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
           content: [{ kind: 'text', text: text.text }],
         });
       } else if (step.type === 'function_call') {
-        if (step.arguments === undefined || callIds.has(step.id)) {
+        if (
+          (step.argumentsText === undefined && step.arguments === undefined) ||
+          callIds.has(step.id)
+        ) {
           return yield* new ModelError({
             kind: 'malformed-output',
             message:
@@ -526,7 +539,6 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
           // A background snapshot hands back the SDK's parse with no bytes
           // behind it, so its text is re-encoded from that parse.
           argumentsText: step.argumentsText ?? JSON.stringify(step.arguments),
-          arguments: step.arguments,
         });
       } else {
         return yield* new ModelError({
@@ -996,19 +1008,18 @@ export function googleInteractionsModel(
                   slot.step.type === 'function_call' &&
                   argumentsText !== undefined
                 ) {
-                  responseSteps.push({
-                    ...slot.step,
-                    arguments: yield* Effect.try({
-                      try: () => JSON.parse(argumentsText),
-                      catch: (cause) =>
-                        new ModelError({
-                          kind: 'malformed-output',
-                          message: 'Google emitted malformed tool arguments.',
-                          cause,
-                        }),
-                    }),
-                    argumentsText,
+                  yield* Effect.try({
+                    try: () => {
+                      JsonObjectSchema.parse(JSON.parse(argumentsText));
+                    },
+                    catch: (cause) =>
+                      new ModelError({
+                        kind: 'malformed-output',
+                        message: 'Google emitted malformed tool arguments.',
+                        cause,
+                      }),
                   });
+                  responseSteps.push({ ...slot.step, argumentsText });
                   continue;
                 }
                 responseSteps.push(slot.step);

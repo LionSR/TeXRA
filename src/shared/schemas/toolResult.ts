@@ -20,7 +20,7 @@ export type FileReference = z.infer<typeof FileReferenceSchema>;
  * Schema for file attachments with optional binary data.
  * Extends FileReferenceSchema with binary payload fields.
  */
-const ToolFileAttachmentSchema = FileReferenceSchema.extend({
+export const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   /** Base64 encoded payload when inline transport is supported */
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
@@ -126,7 +126,7 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
-const ExecutedToolResultSchema = z.object({
+export const ExecutedToolResultSchema = z.object({
   status: z.literal('executed'),
   /** Detailed output from the tool */
   output: z.string().optional(),
@@ -142,7 +142,7 @@ const ExecutedToolResultSchema = z.object({
   ...ToolResultSharedFields,
 });
 
-const ErrorToolResultSchema = z.object({
+export const ErrorToolResultSchema = z.object({
   status: z.literal('error'),
   /** Error message if tool run failed */
   error: z.string().min(1),

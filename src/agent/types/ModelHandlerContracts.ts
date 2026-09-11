@@ -1,11 +1,10 @@
 // Local imports
 import type { LanguageModelToolCallPart } from '@platform/languageModel';
-import type { ToolDefinition } from '@shared/schemas';
+import type { NormalizedUsage, ToolDefinition } from '@shared/schemas';
 
 // Local file imports
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderUsage } from './ProviderUsage';
-import type { NormalizedUsage } from './NormalizedUsage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 // Third-party imports

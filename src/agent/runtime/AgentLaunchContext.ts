@@ -19,8 +19,6 @@ import {
   type ToolPolicy,
 } from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   createModelHandler,
@@ -28,10 +26,6 @@ import {
 } from '@agent/runtime/ModelFactory';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
-import {
-  ModelHandlerCompatibilityKeySchema,
-  type ModelHandlerCompatibilityKey,
-} from '@agent/runtime/modelHandlerCompatibilityKey';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
@@ -47,11 +41,15 @@ import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
+  type AttachedMemoryMiss,
+  type ModelHandlerCompatibilityKey,
   type RunId,
+  type UserVariableChannels,
 } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
+  ModelHandlerCompatibilityKeySchema,
   RUN_OUTCOME,
   RUN_PHASE,
 } from '@shared/schemas';

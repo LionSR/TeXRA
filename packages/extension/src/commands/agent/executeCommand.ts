@@ -3,17 +3,15 @@ import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  ModelHandlerCompatibilityKeySchema,
-  runAgent,
-  defaultSession,
-} from '@agent/runtime';
+import { AgentConfigSchema, runAgent, defaultSession } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
-import { RunIdSchema } from '@shared/schemas';
+import {
+  ModelHandlerCompatibilityKeySchema,
+  RunIdSchema,
+} from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
 

@@ -18,7 +18,6 @@ import {
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { isTokenLimitStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
@@ -60,6 +59,7 @@ import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransp
 import type {
   FileLocation,
   MediaAttachmentKind,
+  NormalizedUsage,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

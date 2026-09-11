@@ -6,10 +6,9 @@ import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import { formatPostCompactionContext } from '@agent/core/flows/postCompactionContext';
-import type { RetryErrorInfo } from '@shared/schemas';
+import type { NormalizedUsage, RetryErrorInfo } from '@shared/schemas';
 
 /**
  * Runtime fields shared by every model invocation cycle.

@@ -2,12 +2,11 @@ import { z } from 'zod';
 
 import {
   NormalizedUsageSchema,
+  type AgentRunStateSnapshot,
   type NormalizedUsage,
-} from '@agent/types/NormalizedUsage';
-import {
-  RunUsageAccumulatorJSONSchema,
-  recordNormalizedUsage,
-} from '../usage/RunUsageAccumulator';
+} from '@shared/schemas';
+
+import { recordNormalizedUsage } from '../usage/RunUsageAccumulator';
 
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
@@ -18,16 +17,6 @@ export const ConversationRoundStateSnapshotSchema = z.object({
 
 export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
->;
-
-export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative().prefault(0),
-  totalResponseTimeMs: z.number().nonnegative().prefault(0),
-  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({}),
-});
-
-export type AgentRunStateSnapshot = z.output<
-  typeof AgentRunStateSnapshotSchema
 >;
 
 /**

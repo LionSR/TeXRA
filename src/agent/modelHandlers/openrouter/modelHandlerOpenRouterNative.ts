@@ -6,7 +6,6 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import type { StreamHandle } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
@@ -26,6 +25,7 @@ import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import type {
   FileLocation,
   MediaAttachmentKind,
+  NormalizedUsage,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

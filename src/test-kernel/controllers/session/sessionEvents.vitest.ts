@@ -59,6 +59,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 }));
 
 import { TraceEmitter } from '@agent/trace';
+import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   forEachLiveSession,
@@ -92,6 +93,8 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
@@ -1843,5 +1846,456 @@ describe('the C1 event table and the C6 publisher', () => {
         }).pipe(Effect.provide(substrate(storage, OTHER)));
       }).pipe(Effect.provide(substrate(storage)));
     },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The run ledger over the real publisher and the real (in-memory) store: no
+// second `RunLedger`, no hand-written `SessionEvents`, so a schema mistake
+// fails here rather than in the PR that turns the writes on.
+// ---------------------------------------------------------------------------
+
+describe('RunLedger', () => {
+  const ledger = () =>
+    runLedgerLayer.pipe(
+      Layer.provideMerge(sessionEventsLayer),
+      Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
+      Layer.provide(
+        Layer.succeed(WorkspaceRoots)(
+          createFakeWorkspaceRoots({ storagePath: '/workspace/ledger' }),
+        ),
+      ),
+      Layer.provide(ProcessIdentity.layer(SELF)),
+    );
+  const AGGREGATE = qualifyAggregateId('run', RUN);
+  const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
+  const ORIGIN = {
+    protocol: 'deepseek-chat',
+    requestedModel: 'deepseek-test',
+    deployment: {
+      endpoint: 'https://api.example.test/v1',
+      credentialScope: 'deepseek',
+    },
+    codecVersion: 1,
+  } as const;
+  const INVOCATION = {
+    invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
+    attempt: 1,
+  } as const;
+  const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+  const TURN = {
+    kind: 'http',
+    providerResponseId: 'resp-1',
+    requestedOrigin: ORIGIN,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: [
+      {
+        kind: 'reasoning',
+        summary: [],
+        content: [{ kind: 'text', text: `the key is ${SECRET}` }],
+        evidence: { kind: 'chat-reasoning-content' },
+      },
+      {
+        kind: 'local-call',
+        providerCallId: 'call-a',
+        name: 'bash',
+        argumentsText: `{"command":"echo ${SECRET}"}`,
+      },
+      {
+        kind: 'local-call',
+        providerCallId: 'call-b',
+        name: 'bash',
+        argumentsText: '{"command":"ls"}',
+      },
+    ],
+    finishReason: 'tool-calls',
+    usage: null,
+  } as const;
+  const CALLS = [
+    {
+      callId: 'call-a',
+      toolName: 'bash',
+      ordinal: 0,
+      parallelSafe: false,
+      partition: 0,
+      duplicateOf: null,
+      logId: null,
+      stageId: null,
+    },
+    {
+      callId: 'call-b',
+      toolName: 'bash',
+      ordinal: 1,
+      parallelSafe: false,
+      partition: 0,
+      duplicateOf: 'call-a',
+      logId: null,
+      stageId: null,
+    },
+  ] as const;
+  const snapshot = (
+    phase: string,
+    references: Extract<
+      RunLedgerDraft,
+      { type: 'flow.snapshot' }
+    >['payload']['references'] = {
+      pendingIntents: [],
+      pendingResponse: null,
+    },
+  ): RunLedgerDraft => ({
+    type: 'flow.snapshot',
+    aggregateId: AGGREGATE,
+    payload: {
+      family: 'toolUse',
+      runtime: {
+        phase: phase === 'round.ready' ? 'round.ready' : 'results.ready',
+        round: 0,
+        turn: 0,
+        continuationIndex: 0,
+        modelId: 'gpt-test',
+        modelHandlerCompatibilityKey: null,
+        lastError: null,
+        pendingRetry: null,
+      },
+      references,
+      state: { shouldSkipCycle: false, stateSlices: null },
+    },
+  });
+  const refusalOf = (error: unknown): RunLedgerRefused | null =>
+    error instanceof RunLedgerRefused ? error : null;
+  /** The approval a barrier call waits on, and the snapshot that binds it. */
+  const approvalRequested: RunLedgerDraft = {
+    type: 'approval.requested',
+    aggregateId: AGGREGATE,
+    requestId: 'req-1',
+    payload: {
+      kind: 'bash',
+      data: {
+        requestId: 'req-1',
+        command: 'ls',
+        allowBypass: true,
+        runId: RUN,
+      },
+    },
+  };
+  const bindingSnapshot = snapshot('results.ready', {
+    pendingIntents: [
+      {
+        callId: 'call-a',
+        attempt: 1,
+        responseId: RESPONSE_ID,
+        approvalRequestId: 'req-1',
+      },
+    ],
+    pendingResponse: { responseId: RESPONSE_ID, settled: [] },
+  });
+  const toolEnd = (callId: string): RunLedgerDraft => ({
+    type: 'tool.end',
+    aggregateId: AGGREGATE,
+    logId: callId,
+    status: 'completed',
+  });
+  const settled = (
+    callId: string,
+    body: Partial<
+      Extract<RunLedgerDraft, { type: 'tool.result' }>['payload']
+    > = {},
+  ): RunLedgerDraft => ({
+    type: 'tool.result',
+    aggregateId: AGGREGATE,
+    payload: {
+      responseId: RESPONSE_ID,
+      callId,
+      attempt: 1,
+      disposition: 'executed',
+      duplicateOf: null,
+      result: { status: 'executed', output: 'ok' },
+      attachments: [],
+      stateMutation: [],
+      ...body,
+    },
+  });
+  const group: RunLedgerDraft = {
+    type: 'model.message',
+    aggregateId: AGGREGATE,
+    payload: {
+      kind: 'append',
+      sourceResponse: RESPONSE_ID,
+      messages: [
+        {
+          role: 'tool',
+          results: [
+            {
+              callOrdinal: 0,
+              status: 'success',
+              content: [{ kind: 'text', text: 'ok' }],
+            },
+            {
+              callOrdinal: 1,
+              status: 'success',
+              content: [{ kind: 'text', text: 'ok' }],
+            },
+          ],
+        },
+      ],
+    },
+  };
+  /** The batches of one turn, in order, up to and excluding the delivery. */
+  const openTurn = (run: typeof RunLedger.Service) =>
+    Effect.gen(function* () {
+      let state = yield* run.appendBatch(RUN, null, [
+        {
+          type: 'model.message',
+          aggregateId: AGGREGATE,
+          payload: {
+            kind: 'append',
+            sourceResponse: null,
+            messages: [
+              { role: 'user', content: [{ kind: 'text', text: 'ls' }] },
+            ],
+          },
+        },
+        snapshot('round.ready'),
+      ]);
+      state = yield* run.appendBatch(RUN, state, [
+        {
+          type: 'model.message',
+          aggregateId: AGGREGATE,
+          payload: {
+            kind: 'attempt',
+            invocation: INVOCATION,
+            origin: ORIGIN,
+            delivery: 'stream',
+          },
+        },
+      ]);
+      state = yield* run.appendBatch(RUN, state, [
+        {
+          type: 'model.message',
+          aggregateId: AGGREGATE,
+          payload: {
+            kind: 'identified',
+            invocation: INVOCATION,
+            providerResponseId: 'resp-1',
+            returnedModel: null,
+          },
+        },
+      ]);
+      state = yield* run.appendBatch(RUN, state, [
+        {
+          type: 'model.message',
+          aggregateId: AGGREGATE,
+          payload: {
+            kind: 'response',
+            responseId: RESPONSE_ID,
+            invocation: INVOCATION,
+            turn: TURN,
+            calls: CALLS,
+            usage: null,
+          },
+        },
+        {
+          type: 'tool.intent',
+          aggregateId: AGGREGATE,
+          payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+        },
+      ]);
+      return state;
+    });
+
+  it.effect('live state equals reloaded state', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const run = yield* RunLedger;
+      yield* events.publish([runStart]);
+      yield* run.acquire(RUN);
+      let state = yield* openTurn(run);
+      state = yield* run.appendBatch(RUN, state, [
+        settled('call-a', {
+          stateMutation: [
+            { op: 'add', path: ['usage', 'totalCost'], amount: 0.25 },
+          ],
+        }),
+        toolEnd('call-a'),
+      ]);
+      state = yield* run.appendBatch(RUN, state, [
+        settled('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
+        toolEnd('call-b'),
+      ]);
+      state = yield* run.appendBatch(RUN, state, [
+        group,
+        snapshot('results.ready'),
+        {
+          type: 'flow.step',
+          aggregateId: AGGREGATE,
+          payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
+        },
+      ]);
+      expect(state.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'tool',
+      ]);
+      expect(state.usage.totalCost).toBe(0.25);
+      expect(yield* run.load(RUN)).toEqual(state);
+    }).pipe(Effect.provide(ledger())),
+  );
+
+  it.effect(
+    'stores ledger rows byte-exact while the same secret in a log row is redacted',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const run = yield* RunLedger;
+        const log = yield* Database;
+        yield* events.publish([runStart]);
+        yield* openTurn(run);
+        yield* events.publish([
+          {
+            type: 'log',
+            aggregateId: AGGREGATE,
+            level: 'info',
+            message: `the key is ${SECRET}`,
+          },
+        ]);
+        const rows = yield* log.readAggregate(AGGREGATE, 1);
+        const response = rows.find(
+          (row) =>
+            row.type === 'model.message' && row.payload.kind === 'response',
+        );
+        expect(
+          response?.type === 'model.message' &&
+            response.payload.kind === 'response'
+            ? response.payload.turn
+            : null,
+        ).toEqual(TURN);
+        const logged = rows.find((row) => row.type === 'log');
+        expect(logged?.type === 'log' ? logged.message : null).not.toContain(
+          SECRET,
+        );
+      }).pipe(Effect.provide(ledger())),
+  );
+
+  it.effect(
+    'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const run = yield* RunLedger;
+        const log = yield* Database;
+        yield* events.publish([runStart]);
+        let state = yield* openTurn(run);
+        // Delivering before the settlements committed is a caller defect.
+        const early = yield* run
+          .appendBatch(RUN, state, [group])
+          .pipe(Effect.exit);
+        expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
+        // A batch the fold rejects commits nothing: the refusal has to mean
+        // "not written", or every later `load` meets the orphan row.
+        const written = (yield* log.readAggregate(AGGREGATE, 1)).length;
+        const orphan = yield* run
+          .appendBatch(RUN, state, [settled('call-z'), toolEnd('call-z')])
+          .pipe(Effect.flip);
+        expect(refusalOf(orphan)?.reason).toBe('inconsistent');
+        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        expect(yield* run.load(RUN)).toEqual(state);
+        // Same rule for the history the batch assembles: an append that leaves
+        // a tool group with no calling assistant is refused before publishing,
+        // not discovered on the next cold load.
+        const orphanGroup = yield* run
+          .appendBatch(RUN, state, [
+            {
+              type: 'model.message',
+              aggregateId: AGGREGATE,
+              payload: {
+                kind: 'append',
+                sourceResponse: null,
+                messages: [
+                  {
+                    role: 'tool',
+                    results: [
+                      {
+                        callOrdinal: 0,
+                        status: 'success',
+                        content: [{ kind: 'text', text: 'ok' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ])
+          .pipe(Effect.flip);
+        expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
+        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        // An approval precedes the snapshot that binds it. The other order is
+        // a caller defect, not a refusal the loop could act on.
+        const late = yield* run
+          .appendBatch(RUN, state, [bindingSnapshot, approvalRequested])
+          .pipe(Effect.exit);
+        expect(Exit.isFailure(late) && Cause.hasDies(late.cause)).toBe(true);
+        state = yield* run.appendBatch(RUN, state, [
+          approvalRequested,
+          bindingSnapshot,
+        ]);
+        expect(state.approvals['req-1']?.resolved).toBe(false);
+        // A real attachment carries loose keys and binary fields: accepted, and
+        // the binary fields never reach the row.
+        state = yield* run.appendBatch(RUN, state, [
+          settled('call-a', {
+            result: {
+              status: 'executed',
+              output: 'ok',
+              files: [
+                {
+                  path: 'out/plot.png',
+                  mimeType: 'image/png',
+                  base64Data: 'AAAA',
+                  bytes: new Uint8Array([1, 2]),
+                  sourceTool: 'bash',
+                },
+              ],
+            },
+          }),
+          toolEnd('call-a'),
+        ]);
+        const file =
+          state.pendingResponse?.settled['call-a']?.result.files?.[0];
+        expect(file).toEqual({
+          path: 'out/plot.png',
+          mimeType: 'image/png',
+          sourceTool: 'bash',
+        });
+        // A credential-bearing endpoint is refused before anything is written,
+        // and the refusal carries the permitted components only: the rejected
+        // query string is the credential this check exists to keep out.
+        const unsafe = yield* run
+          .appendBatch(RUN, state, [
+            {
+              type: 'model.message',
+              aggregateId: AGGREGATE,
+              payload: {
+                kind: 'attempt',
+                invocation: { ...INVOCATION, attempt: 2 },
+                origin: {
+                  ...ORIGIN,
+                  deployment: {
+                    ...ORIGIN.deployment,
+                    endpoint: `https://api.example.test/v1?api-key=${SECRET}`,
+                  },
+                },
+                delivery: 'stream',
+              },
+            },
+          ])
+          .pipe(Effect.flip);
+        expect(unsafe).toBeInstanceOf(RunLedgerRefused);
+        expect(refusalOf(unsafe)?.reason).toBe('unsafe-endpoint');
+        expect(refusalOf(unsafe)?.detail).not.toContain(SECRET);
+        expect(refusalOf(unsafe)?.detail).toContain(
+          'https://api.example.test/v1',
+        );
+      }).pipe(Effect.provide(ledger())),
   );
 });

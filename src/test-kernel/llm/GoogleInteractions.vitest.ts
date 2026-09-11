@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it as effectIt } from '@effect/vitest';
-import { RemoteOperationSchema } from '@texra-ai/llm/turn';
-import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
 import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
+import { googleInteractionsModel } from '@llm/googleInteractions';
+import { RemoteOperationSchema } from '@llm/turn';
+import type { ModelError, TurnRequest, TurnResult } from '@llm/turn';
 
 function model(
   store = true,
@@ -1025,13 +1025,13 @@ describe('canonical Google Interactions protocol', () => {
             kind: 'local-call',
             providerCallId: 'call_1',
             name: 'search',
-            arguments: { q: 'x' },
+            argumentsText: '{"q":"x"}',
           },
           {
             kind: 'local-call',
             providerCallId: 'call_2',
             name: 'fetch',
-            arguments: { u: 'y' },
+            argumentsText: '{"u":"y"}',
           },
         ],
         usage: {

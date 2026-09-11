@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
-import { ContextManagementDataSchema } from '@shared/schemas';
+import {
+  AgentRunStateSnapshotSchema,
+  ContextManagementDataSchema,
+} from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
 const usageFixture = {
@@ -12,19 +14,21 @@ const usageFixture = {
   provider: 'anthropic',
 } as const;
 
-describe('RunUsageAccumulatorJSONSchema — canonical shape', () => {
+describe('run-state snapshot usage accumulator — canonical shape', () => {
   it('parses empty object to zero totals and null latestUsage', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({});
+    const result = AgentRunStateSnapshotSchema.parse({}).usageAccumulator;
 
     expect(result.latestUsage).toBeNull();
     expect(result.totals.totalInputTokens).toBe(0);
   });
 
   it('passes a canonical payload through unchanged', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      totals: { totalInputTokens: 100 },
-      latestUsage: usageFixture,
-    });
+    const result = AgentRunStateSnapshotSchema.parse({
+      usageAccumulator: {
+        totals: { totalInputTokens: 100 },
+        latestUsage: usageFixture,
+      },
+    }).usageAccumulator;
 
     expect(result.totals.totalInputTokens).toBe(100);
     expect(result.latestUsage).toMatchObject(usageFixture);
@@ -34,8 +38,10 @@ describe('RunUsageAccumulatorJSONSchema — canonical shape', () => {
     // The legacy writer is extinct; a blob still carrying the key must fail
     // loudly through the resume-parse failure path, not degrade silently.
     expect(() =>
-      RunUsageAccumulatorJSONSchema.parse({
-        normalizedSnapshots: [{ round: 0, usage: usageFixture }],
+      AgentRunStateSnapshotSchema.parse({
+        usageAccumulator: {
+          normalizedSnapshots: [{ round: 0, usage: usageFixture }],
+        },
       }),
     ).toThrow();
   });

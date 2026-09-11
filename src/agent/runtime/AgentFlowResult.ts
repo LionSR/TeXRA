@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
+import type {
+  AgentCategory,
+  AttachedMemoryMiss,
+  RunId,
+  RunOutcome,
+} from '@shared/schemas';
 import {
   AttachedMemoryMissSchema,
-  type AttachedMemoryMiss,
-} from '@agent/types/AttachedMemory';
-import type { AgentCategory, RunId, RunOutcome } from '@shared/schemas';
-import {
   emptyRunEndOutput,
   RetryErrorInfoSchema,
   RunEndSchema,

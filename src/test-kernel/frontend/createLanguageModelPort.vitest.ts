@@ -3,12 +3,8 @@ import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { TurnRequest, VscodeLanguageModelConfiguration } from '@llm/turn';
 import { LANGUAGE_MODEL_PORT_ERROR_CODE } from '@platform/languageModel';
-
-import type {
-  TurnRequest,
-  VscodeLanguageModelConfiguration,
-} from '@texra-ai/llm/turn';
 
 class LanguageModelTextPart {
   constructor(public readonly value: string) {}

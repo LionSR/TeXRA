@@ -14,7 +14,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
@@ -31,18 +30,17 @@ import {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { parseToolUseShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
-  parseToolUseShared,
-  type StateSlicesSnapshot,
-} from '@agent/implementations/flows/tooluse/nodes/types';
-import {
+  AgentRunStateSnapshotSchema,
   RUN_OUTCOME,
   RUN_PHASE,
+  type ModelHandlerCompatibilityKey,
   type RunId,
+  type StateSlicesSnapshot,
   AgentCategory,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';

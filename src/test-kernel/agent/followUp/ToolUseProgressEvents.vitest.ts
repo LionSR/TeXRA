@@ -27,7 +27,6 @@ vi.mock('@agent/implementations/flows/tooluse/ToolUseRoundFlow', () => ({
 
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
 import type {
@@ -36,6 +35,7 @@ import type {
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import {
+  AgentRunStateSnapshotSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,

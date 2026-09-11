@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 // Local imports
 import {
-  NormalizedUsageSchema,
+  RunUsageTotalsSchema,
   type NormalizedUsage,
-} from '@agent/types/NormalizedUsage';
-import { RunUsageTotalsSchema } from '@shared/schemas';
+  type RunUsageAccumulatorJSON,
+} from '@shared/schemas';
 
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
@@ -30,28 +30,6 @@ const TOTAL_ACCUMULATORS = [
   ['serverToolRequests', 'totalServerToolRequests'],
 ] as const satisfies ReadonlyArray<
   readonly [usageField: keyof NormalizedUsage, totalField: keyof RunUsageTotals]
->;
-
-/**
- * Schema for RunUsageAccumulator JSON serialization.
- *
- * `latestUsage` replaces the old unbounded `normalizedSnapshots` array;
- * only the most-recent round's usage is needed at runtime. The legacy
- * `normalizedSnapshots` format is retired: strict parsing rejects a blob
- * still carrying that key, so stale resume data fails loudly through the
- * existing resume-parse failure path instead of silently dropping usage.
- */
-export const RunUsageAccumulatorJSONSchema = z.strictObject({
-  totals: RunUsageTotalsSchema.prefault({}),
-  latestUsage: NormalizedUsageSchema.nullable().prefault(null),
-});
-
-/**
- * Output type for RunUsageAccumulator serialization.
- * Uses z.output<> to get the type after parsing (totals fully resolved).
- */
-export type RunUsageAccumulatorJSON = z.output<
-  typeof RunUsageAccumulatorJSONSchema
 >;
 
 // ============================================================================

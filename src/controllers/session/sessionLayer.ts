@@ -38,6 +38,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
+import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -456,6 +457,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
+    Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
