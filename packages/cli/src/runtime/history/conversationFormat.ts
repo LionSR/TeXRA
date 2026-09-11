@@ -23,7 +23,7 @@ export function createConversationPreview(
   if (!transcript) return null;
 
   const lastAssistant = transcript.messages.findLast(
-    (message) => message.role === 'assistant' || message.role === 'model',
+    (message) => message.role === 'assistant',
   );
   const selected = lastAssistant
     ? [lastAssistant]

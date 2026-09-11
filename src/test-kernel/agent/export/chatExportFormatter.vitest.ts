@@ -55,36 +55,6 @@ function webFetchBlock(fields: {
 }
 
 describe('chat export formatters', () => {
-  it('renders OpenAI Responses function call outputs with mixed parts', () => {
-    const markdown = formatChatAsMarkdown({
-      timestamp: '2026-01-01T00:00:00.000Z',
-      config: {},
-      messages: [
-        {
-          type: 'function_call',
-          name: 'fetch_notes',
-          arguments: '{"topic":"sdk"}',
-        },
-        {
-          type: 'function_call_output',
-          call_id: 'call_1',
-          output: [
-            { type: 'input_text', text: 'first line' },
-            { type: 'input_text', text: '' },
-            { type: 'input_image', image_url: 'https://example.com/image.png' },
-            { type: 'input_file', file_id: 'file_123' },
-          ],
-        },
-      ],
-    });
-
-    assert.match(markdown, /#### Tool: `fetch_notes`/);
-    assert.match(
-      markdown,
-      /```\nfirst line\n\n\[image attachment]\n\[file attachment]\n```/,
-    );
-  });
-
   it.each([
     {
       shape: 'live Anthropic nested',

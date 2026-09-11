@@ -137,7 +137,7 @@ export function normalizeAnthropicUsage(
 
   const usageTotals = getAnthropicUsageTokenTotals(rawUsage);
   // Anthropic bills cache-read and cache-creation tokens separately, so
-  // total input is base + read + creation (matches percentageCached).
+  // total input is base + read + creation.
   const totalInput =
     usageTotals.baseInputTokens +
     usageTotals.cacheReadTokens +
@@ -149,8 +149,6 @@ export function normalizeAnthropicUsage(
     outputTokens: usageTotals.outputTokens,
     cachedTokens: usageTotals.cacheReadTokens,
     cacheCreationTokens: usageTotals.cacheCreationTokens,
-    cachePercentageBasis:
-      usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
     // Thinking tokens are a subset of outputTokens, not an extra charge.
     reasoningTokens: rawUsage.output_tokens_details?.thinking_tokens ?? 0,
     serverToolRequests:

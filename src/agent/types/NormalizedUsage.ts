@@ -38,8 +38,6 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   cacheMissInputTokens: TokenCountSchema.optional(),
   /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
   cacheCreationTokens: TokenCountSchema.optional(),
-  /** Percentage of input tokens served from cache */
-  percentageCached: z.number().nonnegative().optional(),
   /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
   reasoningTokens: TokenCountSchema.optional(),
   /** Tokens consumed by tool use prompts (Google) */
@@ -48,8 +46,6 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   serverToolRequests: TokenCountSchema.optional(),
   /** Canonical route used for usage display and telemetry. */
   usageRoute: UsageRouteSchema.optional(),
-  /** Original API response payload (for debugging) */
-  _native: z.unknown().optional(),
 });
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

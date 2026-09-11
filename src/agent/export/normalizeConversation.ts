@@ -1,25 +1,16 @@
 /**
- * Provider-shape normalization: raw provider messages → format-agnostic
+ * Conversation normalization: completed-run messages → format-agnostic
  * `ExportNode[]`.
  *
- * Collapses Anthropic, OpenAI (Chat Completions and Response API), Google
- * GenAI, and VS Code language-model message shapes into a single intermediate
- * representation consumed by every chat-export renderer. This module lives
- * alongside the model handlers so provider SDK type changes don't propagate
- * into the command layer.
+ * The input is the Anthropic-style `{role, content}` vocabulary that
+ * `readCompletedRunConversation` (`@transcript/completedRunArchive`) emits;
+ * this module collapses it into a single intermediate representation consumed
+ * by every chat-export renderer.
  *
  * The command-layer export package imports only `normalizeConversationForExport`
- * and the IR types from `@agent/export/schemas` — never `openai/*`,
- * `@agent/modelHandlers/openai/*`, or `@google/genai`.
+ * and the IR types from `@agent/export/schemas`.
  */
 
-import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-import { isFunctionToolCall } from '@agent/modelHandlers/openai/functionToolCalls';
-import {
-  extractTextContentPart,
-  isFunctionCallOutputItem,
-  isResponseFunctionToolCallItem,
-} from '@agent/modelHandlers/openai/responsesShapeGuards';
 import {
   classifyProviderMessageBlockType,
   CONVERSATION_BLOCK_TYPES,
@@ -31,12 +22,6 @@ import {
   type WebSearchResult,
 } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
-import { isImageMimeType } from '@utils/files/mimeUtils';
-import type { Part } from '@google/genai';
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionMessageFunctionToolCall,
-} from 'openai/resources/chat/completions';
 
 import type { ExportNode, UserPart } from './schemas';
 
@@ -55,30 +40,17 @@ type WebSearchResultItem = Partial<
 > & { type: string };
 
 /**
- * Discriminated union of API content blocks across the four provider shapes
- * this module normalizes (Anthropic, OpenAI Chat Completions, OpenAI
- * Response API, Google GenAI — the latter via {@link googlePartToBlocks},
- * which translates Google's field-based `Part` into these type-based
- * blocks). Each variant declares only the fields this module reads for that
+ * Discriminated union of the content blocks `readCompletedRunConversation`
+ * emits. Each variant declares only the fields this module reads for that
  * block kind. Existing runtime guards narrow the raw values; this union gives
  * the consumers below exhaustive `type`-based narrowing afterward.
  */
 type ContentBlock =
-  // Plain text. Anthropic and Google GenAI use 'text'; OpenAI Response API
-  // splits it into 'input_text' (user) and 'output_text' (assistant).
   | { type: 'text'; text?: string }
-  | { type: 'input_text'; text?: string }
-  | { type: 'output_text'; text?: string }
-
-  // Anthropic extended-thinking / Google GenAI thought blocks.
   | {
       type: typeof CONVERSATION_BLOCK_TYPES.thinking;
       thinking?: string;
     }
-  | { type: typeof CONVERSATION_BLOCK_TYPES.redactedThinking }
-
-  // Tool call / tool result — shared by Anthropic, Google GenAI, and the
-  // VS Code language-model bridge (see normalizeContentBlock).
   | {
       type: typeof CONVERSATION_BLOCK_TYPES.toolUse;
       name?: string;
@@ -89,16 +61,10 @@ type ContentBlock =
       content?: unknown;
     }
 
-  // Attachment markers: Anthropic ('image'/'document'), OpenAI Response API
-  // ('input_image'/'input_file'), OpenAI Chat Completions ('image_url'/
-  // 'file'). None of these carry fields this module reads — only `type`
+  // Attachment markers carry no fields this module reads — only `type`
   // decides which attachment kind to render.
   | { type: typeof CONVERSATION_BLOCK_TYPES.image }
-  | { type: typeof CONVERSATION_BLOCK_TYPES.inputImage }
-  | { type: typeof CONVERSATION_BLOCK_TYPES.imageUrl }
   | { type: typeof CONVERSATION_BLOCK_TYPES.document }
-  | { type: typeof CONVERSATION_BLOCK_TYPES.inputFile }
-  | { type: typeof CONVERSATION_BLOCK_TYPES.file }
 
   // Anthropic server-side tool blocks (the provider executes these, not a
   // local tool handler).
@@ -121,8 +87,6 @@ type ContentBlock =
 interface ConversationMessage {
   role?: string;
   content?: unknown;
-  // Google GenAI uses `parts` instead of `content`
-  parts?: unknown[];
   [key: string]: unknown;
 }
 
@@ -141,16 +105,11 @@ function toolResultContentText(content: unknown): string {
 }
 
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
-  // Google GenAI: field-based Parts → type-based ContentBlocks
-  if (Array.isArray(msg.parts)) {
-    return (msg.parts as Part[]).flatMap(googlePartToBlocks);
-  }
-
   if (typeof msg.content === 'string') {
     return [{ type: 'text', text: msg.content }];
   }
   if (Array.isArray(msg.content)) {
-    return msg.content.flatMap(normalizeContentBlock);
+    return msg.content.filter(isObject) as ContentBlock[];
   }
   if (msg.content != null) {
     return [{ type: 'text', text: prettyJson(msg.content) }];
@@ -158,81 +117,12 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   return [];
 }
 
-/** Convert host-neutral VS Code language-model parts to the shared block form. */
-function normalizeContentBlock(block: unknown): ContentBlock[] {
-  if (!isObject(block)) return [];
-  switch (block.kind) {
-    case 'text':
-      return [
-        {
-          type: 'text',
-          text: typeof block.text === 'string' ? block.text : undefined,
-        },
-      ];
-    case 'toolCall':
-      return [
-        {
-          type: 'tool_use',
-          name: typeof block.name === 'string' ? block.name : undefined,
-          input: block.input,
-        },
-      ];
-    case 'toolResult':
-      return [{ type: 'tool_result', content: block.text }];
-    default:
-      return [block as ContentBlock];
-  }
-}
-
-/** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
-function googlePartToBlocks(part: Part): ContentBlock[] {
-  // Google GenAI: thought is a boolean flag; the actual text is in part.text.
-  // Must check before the plain text branch to avoid exposing thinking as assistant text.
-  if (part.thought === true && typeof part.text === 'string') {
-    return [{ type: 'thinking', thinking: part.text }];
-  }
-  if (typeof part.text === 'string') {
-    return [{ type: 'text', text: part.text }];
-  }
-  if (part.functionCall && typeof part.functionCall === 'object') {
-    const fc = part.functionCall;
-    return [
-      {
-        type: 'tool_use',
-        name: fc.name ?? 'unknown',
-        input: fc.args ?? {},
-      },
-    ];
-  }
-  if (part.functionResponse && typeof part.functionResponse === 'object') {
-    const fr = part.functionResponse;
-    return [
-      {
-        type: 'tool_result',
-        content: toolResultContentText(fr.response),
-      },
-    ];
-  }
-  // Google GenAI: inline bytes or URI-based file data (uploads over the inline
-  // threshold). Both expose the media type the same way.
-  const blob = part.inlineData ?? part.fileData;
-  if (blob && typeof blob === 'object') {
-    const { mimeType } = blob as { mimeType?: string };
-    return isImageMimeType(mimeType)
-      ? [{ type: 'image' }]
-      : [{ type: 'document' }];
-  }
-  return [];
-}
-
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
-    // Anthropic: 'text', OpenAI Response API: 'input_text'. Text tags stay
-    // per-literal (user text is 'text'/'input_text' here but assistant text
-    // is 'text'/'output_text' in `assistantBlockToNode`), so they are not in
-    // the shared classifier — see `@agent/types/ConversationBlockTypes`.
-    if (b.type === 'text' || b.type === 'input_text') {
+    // Text stays per-literal, outside the shared classifier — see
+    // `@agent/types/ConversationBlockTypes`.
+    if (b.type === 'text') {
       if (b.text) parts.push({ type: 'text', text: b.text });
       continue;
     }
@@ -266,8 +156,7 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
 }
 
 function extractToolResultText(block: ContentBlock): string | undefined {
-  // Anthropic: 'text', OpenAI Response API: 'input_text'
-  if (block.type === 'text' || block.type === 'input_text') {
+  if (block.type === 'text') {
     return block.text || undefined;
   }
   if (classifyProviderMessageBlockType(block.type) !== 'tool-result') {
@@ -301,9 +190,7 @@ function asClassifiedBlock<T extends ContentBlock['type']>(
 // (`default: assertNever`), so a category added to the classifier fails at
 // compile time here instead of silently dropping the block.
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
-  // Anthropic: 'text', OpenAI Response API: 'output_text'. Text tags stay
-  // per-literal (see `blocksToUserParts` for the user-side split).
-  if (block.type === 'text' || block.type === 'output_text') {
+  if (block.type === 'text') {
     return block.text?.trim()
       ? { kind: 'assistant-text', text: block.text }
       : null;
@@ -389,12 +276,9 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
 // ============================================================
 
 /**
- * Normalize raw provider messages into a format-agnostic {@link ExportNode[]}.
- *
- * Handles Anthropic, OpenAI (Chat Completions and Response API), Google GenAI,
- * and VS Code language-model message shapes. The resulting nodes are consumed
- * by every format spec (markdown, LaTeX); the HTML export path uses
- * `assembleTrace` instead.
+ * Normalize completed-run messages into a format-agnostic
+ * {@link ExportNode[]}. The resulting nodes are consumed by every format spec
+ * (markdown, LaTeX); the HTML export path uses `assembleTrace` instead.
  */
 export function normalizeConversationForExport(
   messages: unknown[],
@@ -404,50 +288,10 @@ export function normalizeConversationForExport(
 
   for (const raw of messages) {
     if (!isObject(raw)) continue;
-    const item = raw;
-
-    // OpenAI Response API: top-level function_call items (not wrapped in a message)
-    if (isResponseFunctionToolCallItem(item)) {
-      const args =
-        typeof item.arguments === 'string'
-          ? item.arguments
-          : prettyJson(item.arguments ?? {});
-      const name = item.name ?? 'unknown';
-      nodes.push({ kind: 'tool-call', name, input: args });
-      lastAssistantHadToolUse = true;
-      continue;
-    }
-
-    // OpenAI Response API: top-level function_call_output items.
-    // output can be a string OR an array of input_text/input_file/input_image parts.
-    if (isFunctionCallOutputItem(item)) {
-      const output = item.output;
-      if (Array.isArray(output)) {
-        const textParts = output.flatMap((part) => {
-          const text = extractTextContentPart(part);
-          if (text !== undefined) return [text];
-          if (part.type === 'input_image') return ['[image attachment]'];
-          if (part.type === 'input_file') return ['[file attachment]'];
-          return [];
-        });
-        if (textParts.length) {
-          nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
-        }
-      } else {
-        nodes.push({
-          kind: 'tool-result',
-          text: toolResultContentText(output),
-        });
-      }
-      lastAssistantHadToolUse = false;
-      continue;
-    }
-
-    const msg = item as ConversationMessage;
-    const role = msg.role ?? 'unknown';
+    const msg = raw as ConversationMessage;
     const blocks = extractBlocks(msg);
 
-    if (role === 'user') {
+    if (msg.role === 'user') {
       if (lastAssistantHadToolUse) {
         for (const block of blocks) {
           const text = extractToolResultText(block);
@@ -461,8 +305,7 @@ export function normalizeConversationForExport(
       continue;
     }
 
-    // Google GenAI uses 'model' role instead of 'assistant'
-    if (role === 'assistant' || role === 'model') {
+    if (msg.role === 'assistant') {
       lastAssistantHadToolUse = false;
       for (const block of blocks) {
         const node = assistantBlockToNode(block);
@@ -471,42 +314,8 @@ export function normalizeConversationForExport(
           nodes.push(node);
         }
       }
-
-      // OpenAI Chat Completions: tool_calls array on assistant messages
-      for (const tc of getAssistantToolCalls(item)) {
-        const fn = tc.function;
-        if (fn?.name) {
-          nodes.push({
-            kind: 'tool-call',
-            name: fn.name,
-            input: fn.arguments ?? '{}',
-          });
-          lastAssistantHadToolUse = true;
-        }
-      }
-      continue;
-    }
-
-    // OpenAI Chat Completions tool role
-    if (role === 'tool') {
-      const text =
-        typeof msg.content === 'string' ? msg.content : prettyJson(msg.content);
-      nodes.push({ kind: 'tool-result', text });
-      lastAssistantHadToolUse = false;
     }
   }
 
   return nodes;
-}
-
-function getAssistantToolCalls(
-  item: unknown,
-): ChatCompletionMessageFunctionToolCall[] {
-  const message = item as ChatCompletionMessageParam;
-  if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
-    return [];
-  }
-
-  // Skip non-function entries while preserving valid calls.
-  return message.tool_calls.filter(isFunctionToolCall);
 }
