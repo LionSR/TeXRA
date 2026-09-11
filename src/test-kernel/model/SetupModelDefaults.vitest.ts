@@ -6,8 +6,9 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 /**
  * The setup pins are literal data. An llm-zoo bump that retires or deprecates
@@ -15,6 +16,8 @@ import { API_PROVIDERS } from '@model/apiProviders';
  * never probes a dead model and never swaps one silently at runtime.
  */
 describe('SETUP_MODEL_BY_PROVIDER', () => {
+  setupPlatform();
+
   it('pins every provider to a live, non-deprecated, directly reachable model', () => {
     for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
       const config = MODEL_CONFIGS[model];
@@ -38,7 +41,12 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which accepts only
     // Codex-eligible model ids.
     assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
-    assert.ok(isCodexSubscriptionEligible(MODEL_CONFIGS[CHATGPT_SETUP_MODEL]));
+    assert.ok(
+      resolveCodexSubscriptionProfile({
+        model: MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
+        useOpenRouter: false,
+      }),
+    );
   });
 
   it('covers every non-OpenRouter direct-key API provider', () => {

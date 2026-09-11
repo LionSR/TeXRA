@@ -73,14 +73,13 @@ export function codexBackendModelId(config: {
  * it lives in the registry data, not in code.
  *
  * Requires `model.provider === ModelProvider.OPENAI` — asserted here (not
- * just by callers) since this function is exported and a non-OpenAI
- * `ModelConfig` must never resolve eligible.
+ * just by callers) so a non-OpenAI `ModelConfig` never resolves eligible.
  *
  * Trust boundary: no `retired`/`deprecated` cross-check is layered back on
  * top — the registry owns serving status outright, so an llm-zoo release
  * that retires a model must also flip its `codexSubscription` to false.
  */
-export function isCodexSubscriptionEligible(model: ModelConfig): boolean {
+function isCodexSubscriptionEligible(model: ModelConfig): boolean {
   if (model.provider !== ModelProvider.OPENAI) return false;
   return model.codexSubscription === true;
 }
