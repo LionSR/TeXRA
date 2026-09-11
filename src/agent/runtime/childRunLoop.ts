@@ -1151,8 +1151,6 @@ export function startChildRunLoop<TTurn>(
               yield* finalizeRunTerminal({
                 session: runSession,
                 handle,
-                runs: runSession.runs,
-                runStatus: runSession.status,
                 outcome,
                 error:
                   sawTurnFailure && lastTurnErr !== undefined
@@ -1161,7 +1159,6 @@ export function startChildRunLoop<TTurn>(
                         message: toErrorMessage(lastTurnErr),
                       }
                     : undefined,
-                flushArtifacts: () => runSession.flushArtifacts(),
                 flowRecord: retainFlowRecordUnlessCompleted,
               });
             }

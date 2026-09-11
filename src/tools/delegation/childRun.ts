@@ -278,12 +278,9 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   yield* finalizeRunTerminal({
     session,
     handle,
-    runs: session.runs,
-    runStatus: session.status,
     outcome,
     error,
     stage: options.stage,
-    flushArtifacts: () => session.flushArtifacts(),
     flowRecord: options.flowRecord ?? 'preserve',
   });
   disposeTrace();
