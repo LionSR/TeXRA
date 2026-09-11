@@ -468,6 +468,27 @@ return await agent('saved call')`;
     // The live candidate, then the failure path's settlement of that same
     // retained spend: the malformed result never reached the journal.
     expect(ports.recordCost.mock.calls).toEqual([[0.2], [0.2]]);
+
+    // A well-formed but failed RunEnd fails the same way, naming its outcome
+    // and error, rather than resolving an `{ outcome: 'failed' }` envelope.
+    const failedStrategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'failed-outcome',
+        script: malformedScript.replaceAll('malformed-cost', 'failed-outcome'),
+        createRunAgent: () => async () => ({
+          ...finalResult,
+          outcome: 'failed',
+          error: { kind: 'unexpected', message: 'prover crashed' },
+        }),
+      }),
+    );
+    await expect(
+      Effect.runPromise(
+        failedStrategy.launch(fakePorts(), new AbortController().signal),
+      ),
+    ).rejects.toThrow(
+      'Workflow agent() result ended with failed outcome: prover crashed.',
+    );
   });
 });
 

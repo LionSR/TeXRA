@@ -312,7 +312,16 @@ export function createWorkflowScriptStrategy(
                         { cause: parsed.error },
                       );
                     }
-                    const { outcome, usage, output } = parsed.data;
+                    const { outcome, error, usage, output } = parsed.data;
+                    // agent() resolves only a completed child. Any other outcome
+                    // is a failure, never an envelope a script could mistake
+                    // for a result.
+                    if (outcome !== 'completed') {
+                      throw new Error(
+                        `Workflow agent() result ended with ${outcome} outcome${error?.message ? `: ${error.message}` : ''}.`,
+                        error ? { cause: error } : undefined,
+                      );
+                    }
                     return { ...output, outcome, cost: usage?.totalCost ?? 0 };
                   },
                   fingerprintAgentDependencies:
