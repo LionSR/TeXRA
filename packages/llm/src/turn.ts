@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Data, Effect, Exit, Result, type Scope, Stream } from 'effect';
+import { Cause, Data, Effect, Exit, type Scope, Stream } from 'effect';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -20,10 +20,25 @@ const InputPartSchema = z.discriminatedUnion('kind', [
     kind: z.enum(['audio', 'video', 'document']),
   }).readonly(),
 ]);
+/**
+ * Scheme, host and path only. The origin is written into durable rows that
+ * are never scrubbed, and `z.url()` alone admits `user:key@host`,
+ * `?api-key=` and `#api-key=` alike.
+ */
+const EndpointSchema = z.url().refine(
+  (endpoint) => {
+    const url = new URL(endpoint);
+    return url.username === '' && url.password === '' && !/[?#]/.test(endpoint);
+  },
+  { message: 'Endpoints carry no userinfo, query string or fragment.' },
+);
 const BindingSchema = z.strictObject({
   requestedModel: z.string().min(1),
   deployment: z
-    .strictObject({ endpoint: z.url(), credentialScope: z.string().min(1) })
+    .strictObject({
+      endpoint: EndpointSchema,
+      credentialScope: z.string().min(1),
+    })
     .readonly(),
 });
 const OriginSchema = BindingSchema.extend({
@@ -252,67 +267,18 @@ const MessagePartSchema = z.strictObject({
     ])
     .optional(),
 });
-/**
- * `argumentsText` and `arguments` are two representations of one value on
- * purpose, not a dual system. A JSON.parse then JSON.stringify round trip is
- * not byte exact: it truncates integers past 2^53, rewrites 1.0 as 1,
- * collapses duplicate keys and reorders integer-like keys, and that loss
- * happens in the codec, before anything durable is written. So the exact
- * provider bytes and the parsed form callers read are both carried, and this
- * refinement keeps the pair one value.
- */
-function sameJsonValue(left: unknown, right: unknown): boolean {
-  // `===`, not `Object.is`: -0 and 0 are one JSON number. No encoder can write
-  // -0 back out, so a row that carries it always reads back as 0 in
-  // `arguments` while `argumentsText` still says -0. Demanding the distinction
-  // would make every such row unloadable and would reject the two producers
-  // below that have no provider bytes and must encode their own.
-  if (left === right) return true;
-  if (
-    typeof left !== 'object' ||
-    typeof right !== 'object' ||
-    left === null ||
-    right === null ||
-    Array.isArray(left) !== Array.isArray(right)
-  ) {
-    return false;
-  }
-  const entries = Object.entries(left);
-  return (
-    entries.length === Object.keys(right).length &&
-    entries.every(
-      ([key, value]) =>
-        Object.hasOwn(right, key) &&
-        sameJsonValue(value, (right as Record<string, unknown>)[key]),
-    )
-  );
-}
-
-function validateLocalCallArguments(
-  part: { readonly argumentsText: string; readonly arguments: unknown },
-  ctx: z.RefinementCtx,
-): void {
-  const parsed = Result.try((): unknown => JSON.parse(part.argumentsText));
-  if (
-    Result.isFailure(parsed) ||
-    !sameJsonValue(parsed.success, part.arguments)
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['argumentsText'],
-      message:
-        'Returned argument bytes must parse to exactly the reported arguments.',
-    });
-  }
-}
-
-const LocalCallFieldsSchema = z.strictObject({
+const LocalCallPartSchema = z.strictObject({
   kind: z.literal('local-call'),
   providerCallId: z.string().min(1),
   name: z.string().min(1),
-  /** The provider's exact returned bytes; `arguments` is their parse. */
+  /**
+   * The provider's exact returned bytes, the one carrier of the arguments.
+   * A JSON.parse then JSON.stringify round trip is not byte exact (it
+   * truncates integers past 2^53, rewrites 1.0 as 1, collapses duplicate
+   * keys and reorders integer-like keys), so the parse is never stored;
+   * codecs parse these bytes where a request is lowered.
+   */
   argumentsText: z.string(),
-  arguments: JsonObjectSchema,
   evidence: z
     .discriminatedUnion('kind', [
       z
@@ -331,9 +297,6 @@ const LocalCallFieldsSchema = z.strictObject({
     ])
     .optional(),
 });
-const LocalCallPartSchema = LocalCallFieldsSchema.superRefine(
-  validateLocalCallArguments,
-);
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
   OpenRouterFileAnnotationSchema,
@@ -404,9 +367,7 @@ const EditorContentSchema = z
       MessagePartSchema.omit({ evidence: true })
         .extend({ content: z.array(TextPartSchema).readonly() })
         .readonly(),
-      LocalCallFieldsSchema.omit({ evidence: true })
-        .superRefine(validateLocalCallArguments)
-        .readonly(),
+      LocalCallPartSchema.omit({ evidence: true }).readonly(),
     ]),
   )
   .readonly();

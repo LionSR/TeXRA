@@ -303,7 +303,16 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             type: 'tool_use',
             id: part.providerCallId,
             name: part.name,
-            input: part.arguments,
+            input: yield* Effect.try({
+              try: () => JsonObjectSchema.parse(JSON.parse(part.argumentsText)),
+              catch: (cause) =>
+                new ModelError({
+                  kind: 'invalid-request',
+                  message:
+                    'History carries local-call arguments that are not a JSON object.',
+                  cause,
+                }),
+            }),
           });
         } else if (
           part.kind === 'reasoning' &&
@@ -835,7 +844,6 @@ export function anthropicMessagesModel(
                     providerCallId: block.id,
                     name: block.name,
                     argumentsText,
-                    arguments: argumentsResult.data,
                   });
                 }
                 open = undefined;

@@ -1601,8 +1601,10 @@ export function openaiChatModel(
                       'The model returned incomplete tool call identities.',
                   });
                 }
-                const args = yield* Effect.try({
-                  try: () => JsonObjectSchema.parse(JSON.parse(call.arguments)),
+                yield* Effect.try({
+                  try: () => {
+                    JsonObjectSchema.parse(JSON.parse(call.arguments));
+                  },
                   catch: (cause) =>
                     new ModelError({
                       kind: 'malformed-output',
@@ -1616,7 +1618,6 @@ export function openaiChatModel(
                   providerCallId: call.id,
                   name: call.name,
                   argumentsText: call.arguments,
-                  arguments: args,
                   ...(turn.protocol === 'minimax-chat'
                     ? {
                         evidence: {

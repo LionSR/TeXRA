@@ -243,8 +243,10 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
           message: 'Incomplete local calls are not dispatchable.',
         });
       }
-      const args = yield* Effect.try({
-        try: () => JsonObjectSchema.parse(JSON.parse(item.arguments)),
+      yield* Effect.try({
+        try: () => {
+          JsonObjectSchema.parse(JSON.parse(item.arguments));
+        },
         catch: (cause) =>
           new ModelError({
             kind: 'malformed-output',
@@ -257,7 +259,6 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
         providerCallId: item.call_id,
         name: item.name,
         argumentsText: item.arguments,
-        arguments: args,
         evidence: {
           kind: 'openai-responses-function-call',
           ...(item.id !== undefined ? { itemId: item.id } : {}),
