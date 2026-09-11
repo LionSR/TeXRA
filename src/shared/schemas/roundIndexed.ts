@@ -53,12 +53,6 @@ const RoundKeyStringSchema = z
   });
 
 /**
- * Parses a round number out of a string (a filename's `_r{n}` capture): the
- * string must be a canonical round key (see {@link RoundKeyStringSchema}).
- */
-export const RoundKeySchema = RoundKeyStringSchema.transform(Number);
-
-/**
  * Scalar round-number schema: the single definition shared by round-indexed
  * collections' own item fields (`OutputFileInfo.round`, `RoundOutput.round`,
  * `CompileResult.round`) and by round-POINTER fields that reference a round
@@ -67,7 +61,7 @@ export const RoundKeySchema = RoundKeyStringSchema.transform(Number);
  * different concept from {@link RoundIndexed} — "which round does this diff
  * compare" rather than "items grouped by round" — so they are not folded into
  * the record container, but they still mean the same "this integer is a
- * round number" (non-negative integer, matching {@link RoundKeySchema}) and
+ * round number" (non-negative integer, matching {@link RoundKeyStringSchema}) and
  * now share one schema instead of a repeated `z.number()`.
  */
 export const RoundNumberSchema = z.int().nonnegative();
@@ -75,8 +69,8 @@ export const RoundNumberSchema = z.int().nonnegative();
 /**
  * Schema factory for the canonical record: `{ "0": T[], "1": T[], … }`.
  * Callers attach their own field policy (`.prefault({})`, `.optional()`).
- * Keys must be canonical round keys ({@link RoundKeyStringSchema}, the same
- * definition {@link RoundKeySchema} parses), so a validated record enumerates
+ * Keys must be canonical round keys ({@link RoundKeyStringSchema}), so a
+ * validated record enumerates
  * in ascending round order per the ES2015+ integer-key rule and no two keys
  * name the same round.
  */

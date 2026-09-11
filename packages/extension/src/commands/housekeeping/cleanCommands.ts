@@ -3,13 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { runCleanSingle, runCleanMultiple } from '@housekeeping/clean';
 import { runCleanRunDir } from '@housekeeping/runDirOps';
 import { createLog } from '@logger/logUtils';
 
 import type { FileOpResult } from '@shared/schemas';
 import { type CleanConfig } from './fileOpSchemas';
-import { runFileOp } from './fileOpRunner';
 
 const CHANNEL = 'cleanCommands';
 const log = createLog(CHANNEL);
@@ -35,12 +33,11 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
+/** Clean removes a run's own storage; without a run there is nothing to clean. */
 export async function handleClean(config: CleanConfig): Promise<void> {
   log.debug(`Clean command called with config: ${JSON.stringify(config)}`);
-  await runFileOp(config, {
-    runSingle: runCleanSingle,
-    runMultiple: runCleanMultiple,
-    runRunDir: runCleanRunDir,
-    showResult: showCleanResult,
-  });
+  const result: FileOpResult = config.runId
+    ? await runCleanRunDir(config.runId)
+    : { status: 'noFiles' };
+  showCleanResult(result, config.inputFile);
 }

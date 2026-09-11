@@ -2,7 +2,6 @@
 import path from 'node:path';
 
 // Local imports
-import { extractAgentSuffix } from '@latex/mergeFileUtils';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -210,12 +209,10 @@ function diffFileLocation(
   baseLocation: FileLocation,
   editedPath: string,
 ): FileLocation {
-  const diffFileName = generateDiffFileName(
-    baseLocation.absolutePath,
-    editedPath,
-    '_diff',
+  return siblingLocation(
+    baseLocation,
+    generateDiffFileName(editedPath, '_diff'),
   );
-  return siblingLocation(baseLocation, diffFileName);
 }
 
 /**
@@ -291,15 +288,7 @@ export function getAcceptedFileTarget(
     };
   }
 
-  const baseNameWithoutExt = path.parse(basePath).name;
-  const editedNameWithoutExt = path.parse(editedPath).name;
-  const agentSuffix = extractAgentSuffix(
-    baseNameWithoutExt,
-    editedNameWithoutExt,
-  );
-  const targetFileName = agentSuffix
-    ? `${baseNameWithoutExt}_${agentSuffix}${path.extname(editedPath)}`
-    : path.basename(editedPath);
+  const targetFileName = path.basename(editedPath);
 
   return {
     targetLocation: siblingLocation(baseLocation, targetFileName),

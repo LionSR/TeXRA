@@ -56,14 +56,6 @@ export const commandCatalog = [
     icon: '$(mortar-board)',
   },
   {
-    id: 'texra.cleanOutput',
-    extensionRegistry: true,
-    title: 'Clean All LLM Output Files (Workspace-wide)',
-    shortTitle: 'Clean LLM Outputs',
-    category: 'TeXRA',
-    icon: '$(clear-all)',
-  },
-  {
     id: 'texra.cleanBuild',
     extensionRegistry: true,
     title: 'Clean All Build Files (Workspace-wide)',

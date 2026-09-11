@@ -5,16 +5,10 @@ import * as path from 'node:path';
 import { globIterate } from 'glob';
 
 // Local imports
-import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
-import {
-  workflowOutputCopyStem,
-  midEraWorkflowOutputStem,
-} from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig } from '@utils/config/configUtils';
 
-import { CHANNEL, DEFAULT_MAX_ROUNDS } from './constants';
+import { CHANNEL } from './constants';
 
 const log = createLog(CHANNEL);
 
@@ -24,112 +18,6 @@ const log = createLog(CHANNEL);
  */
 export function generateTimestamp(): string {
   return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
-}
-
-/**
- * Build glob patterns that match pre-refactor workflow output filenames
- * left over in the user's workspace. Current-layout outputs live inside
- * task-run storage (`executions/{id}/…`) and are managed per-execution, so
- * they are not scanned for here.
- *
- * Pass the raw agent identifier (with any source prefix) — the SSOT
- * helpers derive the legacy chunk form internally so the result matches
- * what pre-refactor runs wrote to disk.
- */
-function getFilePatterns(
-  base: string,
-  model: string,
-  agent: string,
-  numRounds: number,
-): string[] {
-  const patterns: string[] = [];
-
-  // Mid-era layout: files live under `r{round}/<base>_<cleanAgent>_<model>.*`.
-  // These files can still be present in workspaces for users who upgraded
-  // from the mid-era PR; without matching patterns here, clean/pack would
-  // leave them orphaned.
-  const midEraStem = midEraWorkflowOutputStem({ base, agent, model });
-  for (let round = 0; round < numRounds; round++) {
-    patterns.push(
-      `r${round}/${midEraStem}`,
-      `r${round}/${midEraStem}_diff`,
-      `r${round}/${midEraStem}_thinking`,
-    );
-    if (round > 0) {
-      patterns.push(
-        `r${round}/${midEraStem}${buildBetweenRoundDiffSuffix(round, round - 1)}`,
-      );
-    }
-  }
-
-  for (let round = 0; round < numRounds; round++) {
-    // Legacy flat layout: `<base>_<chunk>_r{round}_<model>.*`
-    const legacyStem = workflowOutputCopyStem({ base, agent, model, round });
-    // Legacy stem already includes `_<model>`; for suffix variants
-    // we reconstruct the prefix (everything up to the model token).
-    const legacyPrefix = legacyStem.slice(0, -(model.length + 1));
-    patterns.push(
-      legacyStem,
-      `${legacyStem}_diff`,
-      `${legacyPrefix}_full_${model}`,
-      `${legacyPrefix}_full_${model}_diff`,
-      `${legacyStem}_thinking`,
-    );
-    if (round > 0) {
-      const diffSuffix = buildBetweenRoundDiffSuffix(round, round - 1);
-      patterns.push(
-        `${legacyStem}${diffSuffix}`,
-        `${legacyPrefix}_full_${model}${diffSuffix}`,
-      );
-    }
-  }
-  // Legacy merge output lived next to the input and was named after the
-  // edited file (`<editedBase>_full_<model>.tex`). Requiring the `_` after
-  // `<base>` keeps siblings like `paper2_…` from matching when the target
-  // is `paper.tex`.
-  patterns.push(
-    `${base}_full_${model}`,
-    `${base}_full_${model}_diff`,
-    `${base}_*_full_${model}`,
-    `${base}_*_full_${model}_diff`,
-  );
-  return patterns;
-}
-
-export interface HousekeepingTargets {
-  baseName: string;
-  inputDir: string;
-  filePatterns: string[];
-}
-
-/**
- * Validates the parameters shared by clean and pack operations, then derives
- * the parsed input path parts and round-aware file patterns for the agent's
- * output layouts. Returns null (after logging) when a parameter is missing.
- */
-export function resolveHousekeepingTargets(
-  model: string,
-  inputFile: string,
-  agent: string,
-): HousekeepingTargets | null {
-  if (!inputFile || !model || !agent) {
-    log.error(
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
-    return null;
-  }
-
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  log.debug(`Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
-
-  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
-  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
-  // the new clean-agent forms internally so both disk layouts are matched.
-  const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
-  log.debug(`Generated patterns: ${filePatterns}`);
-
-  return { baseName, inputDir, filePatterns };
 }
 
 /**

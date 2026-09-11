@@ -6,10 +6,12 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runPackSingle, runPackMultiple } from '@housekeeping/pack';
 import { runPackRunDir } from '@housekeeping/runDirOps';
 
-import type { FileOpResult } from '@shared/schemas';
+import {
+  mergeRunDirAndWorkspaceResult,
+  type FileOpResult,
+} from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { type PackConfig } from './fileOpSchemas';
-import { runFileOp } from './fileOpRunner';
 
 const CHANNEL = 'packCommands';
 
@@ -46,11 +48,20 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export function handlePack(config: PackConfig): Promise<void> {
-  return runFileOp(config, {
-    runSingle: runPackSingle,
-    runMultiple: runPackMultiple,
-    runRunDir: runPackRunDir,
-    showResult: showPackResult,
-  });
+export async function handlePack(config: PackConfig): Promise<void> {
+  const { agent, model, inputFile, outputFiles, runId } = config;
+  const packWorkspace = (): Promise<FileOpResult> =>
+    outputFiles.length > 0
+      ? runPackMultiple(model, inputFile, agent, outputFiles)
+      : runPackSingle(model, inputFile, agent);
+
+  // Toolbar invocations pass a runId: pack the run's storage AND the source
+  // document's own files beside it in the workspace.
+  const result = runId
+    ? mergeRunDirAndWorkspaceResult(
+        await runPackRunDir(runId, agent, model, inputFile),
+        await packWorkspace(),
+      )
+    : await packWorkspace();
+  showPackResult(result, inputFile);
 }

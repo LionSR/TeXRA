@@ -131,7 +131,7 @@ export class LaTeXdiffService {
         return failed('Files missing document environment');
       }
 
-      const diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
+      const diffFileName = generateDiffFileName(editedFile, suffix);
       const outputDirectory =
         options?.outputDirectory ?? path.dirname(inputFile);
       const outputPath = path.join(outputDirectory, diffFileName);

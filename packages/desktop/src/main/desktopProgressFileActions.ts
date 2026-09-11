@@ -214,7 +214,7 @@ export class DesktopProgressFileActions {
     if (!hasOutputs && !scan) return undefined;
 
     // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
-    // auto-discovery → workspace scan) to the single host-neutral core shared
+    // auto-discovery) to the single host-neutral core shared
     // with the VS Code command and the CLI, instead of re-implementing it here.
     // Desktop has no per-operation progress UI.
     const progress: DiffProgressReporter = { report: () => undefined };

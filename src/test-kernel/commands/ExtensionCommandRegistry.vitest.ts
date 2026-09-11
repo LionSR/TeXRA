@@ -34,7 +34,6 @@ function makeActions(): ExtensionCommandActions {
     showSettings: asyncNoop(),
     resetMainView: asyncNoop(),
     cleanBuild: asyncNoop(),
-    cleanOutput: asyncNoop(),
     pack: asyncNoop(),
     clean: asyncNoop(),
     compare: asyncNoop(),
@@ -288,7 +287,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   // must surface that same rejection to VS Code's `executeCommand` callers.
   describe('async rejection propagation (regression guard for #3782)', () => {
     it.each([
-      ['texra.cleanOutput', 'cleanOutput'],
       ['texra.auth.signIn', 'signIn'],
       ['texra.showMemory', 'showSettings'],
       ['texra.cloneOverleafProject', 'cloneOverleafProject'],

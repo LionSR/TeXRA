@@ -5,15 +5,10 @@
  * Per-run isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
  *
- * The `<base>_<agent>_r{round}_<model>` grammar below is not purely historic:
- * workspace migration readers still match files pre-refactor runs wrote with
- * it, and the extension's "Save as copy" action still writes new files with
- * it today. Everything in it derives from one place so a reader can never
- * spell a name a writer would not produce.
+ * The one exception is the extension's "Save as copy" action, which still
+ * names its copy `<base>_<chunk>_r{round}_<model>` beside the base file.
+ * Those copies are ordinary user files: no reader parses that name.
  */
-
-// Third-party imports
-import escapeRegExp from 'escape-string-regexp';
 
 // Local imports
 import { getCleanAgentName } from '@shared/schemas';
@@ -51,17 +46,7 @@ export function workflowOutputPath(params: {
   return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
 }
 
-// ============================================================================
-// Agent/round/model filename grammar
-// ============================================================================
-//
-// Before workflow outputs moved to run-scoped `r{round}/output.*`
-// paths, their agent, round, and model were encoded in workspace filenames.
-// Housekeeping, XML packing, latexdiff discovery, and the extension's
-// "Save as copy" action still consume this grammar — the last of those still
-// writes it.
-
-/** First-name chunk used in the `<base>_<chunk>_r{round}_<model>` grammar. */
+/** First-name chunk used in the "Save as copy" stem. */
 function getAgentFirstNameChunk(agent: string): string {
   const cleanAgent = getCleanAgentName(agent);
   if (cleanAgent.startsWith('write-')) {
@@ -74,9 +59,8 @@ function getAgentFirstNameChunk(agent: string): string {
 }
 
 /**
- * The `<base>_<chunk>_r{round}_<model>` stem: the name filename-era
- * runs wrote, and the one "Save as copy" still writes beside a base file
- * today. Every reader of that layout composes its names from here.
+ * The `<base>_<chunk>_r{round}_<model>` stem "Save as copy" writes beside a
+ * base file.
  */
 export function workflowOutputCopyStem(params: {
   base: string;
@@ -85,29 +69,4 @@ export function workflowOutputCopyStem(params: {
   round: number;
 }): string {
   return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${params.model}`;
-}
-
-/**
- * Mid-era filename stem: `<base>_<cleanAgent>_<model>`.
- *
- * These files lived in workspace `r{round}/` directories, after the round
- * token left the basename but before outputs moved to run storage.
- */
-export function midEraWorkflowOutputStem(params: {
-  base: string;
-  agent: string;
-  model: string;
-}): string {
-  return `${params.base}_${getCleanAgentName(params.agent)}_${params.model}`;
-}
-
-/** Regex capturing the round from a filename-era flat output name. */
-export function legacyWorkflowOutputRoundRegex(
-  base: string,
-  agent: string,
-  model: string,
-): RegExp {
-  return new RegExp(
-    `${escapeRegExp(base)}_${escapeRegExp(getAgentFirstNameChunk(agent))}_r(\\d+)_${escapeRegExp(model)}`,
-  );
 }

@@ -320,7 +320,6 @@ const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
   'texra.extractTikzFigures',
   'texra.execute',
   'texra.showProgressView',
-  'texra.cleanOutput',
   'texra.cleanBuild',
 ] as const satisfies readonly CommandId[];
 

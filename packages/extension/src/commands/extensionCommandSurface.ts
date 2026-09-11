@@ -39,7 +39,7 @@ import {
 } from '@commands/progress/progressViewCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
+import { runCleanBuild } from '@housekeeping/clean';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -68,7 +68,6 @@ export function createExtensionCommandActions(
     // view with the launcher's selections as they are.
     resetMainView: () => progressViewProvider.showLauncher(),
     cleanBuild: runCleanBuild,
-    cleanOutput: runCleanOutput,
     pack: fileHandlePack,
     clean: fileHandleClean,
     compare: latexHandleCompare,

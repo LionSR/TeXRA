@@ -7,11 +7,8 @@
 import { getFileStem } from '@utils/core';
 
 /**
- * Trailing/embedded `_r{N}` round token used by mid-era workflow output
- * filenames (`<base>_r{round}`). No shared owner function covers this
- * end-anchored form: `extractLastRoundMatch`'s `/_r(\d+)_/g` requires a
- * trailing underscore and does not match it (verified), so this module owns
- * it for both uses below.
+ * Trailing/embedded `_r{N}` round token (`<base>_r{round}`), owned here for
+ * both uses below.
  */
 const ROUND_TOKEN_SOURCE = '_r\\d+';
 const TRAILING_ROUND_TOKEN_REGEX = new RegExp(
