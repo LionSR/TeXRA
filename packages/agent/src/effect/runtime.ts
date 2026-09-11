@@ -142,7 +142,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       () => platform.storage.getGlobalStoragePath(),
     );
     if (!active) {
-      initNodeAgentRuntime(platform.lifecycle, platform.globalState);
+      initNodeAgentRuntime(platform.lifecycle);
     }
     installedHere = true;
   }

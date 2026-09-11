@@ -341,10 +341,7 @@ describe('agent package run lifecycle', () => {
 
     expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
     expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(
-      PLATFORM.lifecycle,
-      PLATFORM.globalState,
-    );
+    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 

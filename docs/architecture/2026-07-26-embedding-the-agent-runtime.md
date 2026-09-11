@@ -57,29 +57,23 @@ Only a composition root calls `initPlatform`; that rule is stated in the
 
 ### Feature-parity step — `initNodeAgentRuntime(lifecycle)`
 
-`src/platform/defaults/nodeHost.ts:133-136`. It is exactly two registrations:
+`src/platform/defaults/nodeAgentRuntime.ts`. It is exactly one registration:
 
 ```ts
-registerAgentFeatures(); // src/agent/features.ts:35-38
 registerDirectLeanLanguageServices(lifecycle);
 ```
 
-`registerAgentFeatures` installs the two conditional tool injections — `memory`
-and the unified `plan` tool that drives the goal loop
-(`src/agent/features.ts:18-31`). The shipped hosts call it after Step 1, as the
-source comment prescribes (`src/agent/features.ts:33-34`). Registration itself
-only stores predicates, however: the `platform().globalState` read occurs
-later, when the memory predicate is evaluated. Thus this ordering is a
-supported convention rather than an immediate execution dependency; the
-platform must merely exist before injected tools are resolved.
+The two conditional tool injections — `memory` and the unified `plan` tool
+that drives the goal loop — are not part of this step: they self-register when
+`src/agent/runtime/toolInjection.ts` loads. Registration only stores
+predicates: the memory setting is read later, when its predicate is evaluated.
+The platform must merely exist before injected tools are resolved.
 
-If used, call it **exactly once per process**: the doc comment at
-`src/platform/defaults/nodeHost.ts:129-131` records that both inner
-registrations throw or double-register on a second call.
+If used, call it **exactly once per process**: its doc comment records that
+the Lean registration double-registers on a second call.
 
-An embedder that only wants the raw loop can skip this step. An embedder that
-wants the `memory` and `plan` injections but not Lean can call
-`registerAgentFeatures()` directly.
+An embedder that does not want Lean can skip this step; the `memory` and `plan`
+injections are present either way.
 
 ### Step 2 — credential resolution
 
@@ -565,14 +559,9 @@ says so.
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
   written, so no toggleable external tools are default-disabled. More tools
   are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
-- **`initNodeAgentRuntime(lifecycle)`:** The raw loop still runs, but the
-  `memory`/`plan` injections and direct Lean language services are absent
-  (`src/platform/defaults/nodeHost.ts:121-136`;
-  `src/agent/features.ts:18-38`).
-- **`registerDirectLeanLanguageServices`:** If the embedder calls
-  `registerAgentFeatures()` alone instead of `initNodeAgentRuntime`, Lean LSP
-  tooling is unavailable; the `memory`/`plan` injections remain registered
-  (`src/platform/defaults/nodeHost.ts:133-136`).
+- **`initNodeAgentRuntime(lifecycle)`:** The raw loop still runs, but direct
+  Lean language services are absent. The `memory`/`plan` injections do not
+  depend on this step (`src/agent/runtime/toolInjection.ts`).
 
 `bootstrapNodeAgentDirectories` is safe to skip **only** if the installed
 `AgentDirectoriesPort` names directories populated by some other means (§2).
@@ -594,10 +583,9 @@ classification makes that distinction.
 - **`:280` — `initPlatform(createNodePlatform({…}))`:** Required.
   `platform()` throws otherwise (`src/platform/platform.ts:73-80`).
 - **`:316` — `initNodeAgentRuntime(lifecycle)`:** Shipped-feature parity, not a
-  raw-loop requirement. It registers the `memory` and `plan` injections and
-  direct Lean services. Without it those features are absent
-  (`src/platform/defaults/nodeHost.ts:121-136`;
-  `src/agent/features.ts:18-38`).
+  raw-loop requirement. It registers the direct Lean services; without it Lean
+  is absent. The `memory` and `plan` injections self-register
+  (`src/agent/runtime/toolInjection.ts`).
 - **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
   Required only when using the packaged agent bundle; an injected port that
   names other real directories replaces it (§2).
@@ -649,7 +637,7 @@ desktop also calls
    throw in `platform()` itself. Feature-parity registration stores
    predicates and a Lean adapter without evaluating host services; the
    platform is needed only when the memory predicate later runs
-   (`src/agent/features.ts:18-38`;
+   (`src/agent/runtime/toolInjection.ts`;
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **Feature-parity registration is once-per-process.** A second
    `initNodeAgentRuntime` throws or double-registers
