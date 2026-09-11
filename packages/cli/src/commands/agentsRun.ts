@@ -29,10 +29,7 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
 import { executeCliToolUseConfig } from '../runtime/executeCli';
-import {
-  cliRunResultPayload,
-  toolUseResultText,
-} from '../runtime/terminalStatus';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -105,10 +102,9 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         });
         if (!run.ok) return run.exitCode;
 
-        const payload = cliRunResultPayload(run.result);
         emitCliResult(runContext, {
-          json: payload,
-          ndjson: { kind: 'agent-result', result: payload },
+          json: run.result,
+          ndjson: { kind: 'agent-result', result: run.result },
           text: toolUseResultText(run.result),
         });
 

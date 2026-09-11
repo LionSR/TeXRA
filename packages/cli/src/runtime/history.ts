@@ -536,11 +536,10 @@ export function formatInvalidExportFormatText(raw: string): string {
 }
 
 /**
- * Frozen-NDJSON status projection (proposal gate G): the public NDJSON stream
- * keeps the pre-consolidation vocabulary — terminal outcomes emit as
- * `CliRunStatus` ('completed' | 'interrupted' | 'error') while
- * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
- * output keeps `HistoryRunStatus`.
+ * The one rename the NDJSON history records keep: a terminal outcome is
+ * spelled as `CliRunStatus` ('completed' | 'interrupted' | 'error'), the
+ * word the CLI contract promises, while 'resumable'/'unknown' pass through
+ * unchanged. Internal and human-readable output keeps `HistoryRunStatus`.
  */
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (

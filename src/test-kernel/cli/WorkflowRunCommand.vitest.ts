@@ -475,17 +475,15 @@ describe('CLI workflow run command', () => {
         runDirectory: '/tmp/runs/exec-output',
         copiedOutput: path.join(root, 'polished.tex'),
       });
-      // The v0.41 cut removed the three deprecated status projections, so the
-      // emitted object is the run result plus its filesystem metadata, in the
-      // order `resolveWorkflowOutput` builds it, with the run id moved to the
-      // frozen 0.40 wire key by `cliRunResultPayload`.
+      // The emitted object is the run result plus its filesystem metadata, in
+      // the order `resolveWorkflowOutput` builds it; the run id is `runId`.
       expect(Object.keys(emission?.json ?? {})).toEqual([
         'outcome',
         'output',
+        'runId',
         'workingDirectory',
         'runDirectory',
         'copiedOutput',
-        'executionId',
       ]);
       expect(emission?.ndjson).toEqual({
         kind: 'result',

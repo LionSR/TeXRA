@@ -31,19 +31,6 @@ export type CliToolUseRunResult = CliRunResult & {
   readonly output: z.infer<typeof ToolUseRunEndOutputSchema>;
 };
 
-/**
- * The 0.40 wire's result payload: the run's result with its id under the key
- * the frozen `agent-result` / `result` records promised (`executionId`). The
- * internal result carries `runId`; this projection is the only place the old
- * key is spelled, until S5 versions the CLI contract.
- */
-export function cliRunResultPayload<R extends { readonly runId: string }>(
-  result: R,
-): Omit<R, 'runId'> & { readonly executionId: string } {
-  const { runId, ...rest } = result;
-  return { ...rest, executionId: runId };
-}
-
 /** Display text for a finished tool-use run: the last response if present,
  *  otherwise a terse status/run-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {

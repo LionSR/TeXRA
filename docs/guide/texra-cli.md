@@ -98,7 +98,7 @@ texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
 texra run correct --input 'paper/**/*.tex' --output-dir corrected
 ```
 
-Workflow agents always write generated files into the execution's run-storage
+Workflow agents always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage.
@@ -110,9 +110,29 @@ include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
-Final run result objects report their terminal state through `outcome`.
-Streamed NDJSON progress records continue to use status fields for live
-progress.
+Final run result objects report their terminal state through `outcome` and
+name the run through `runId`.
+
+### NDJSON contract, version 2
+
+Every `--output-format ndjson` line is one JSON object whose first key is
+`kind`, followed by the record's own fields, a `ts` timestamp, and
+`contract: 2`, the version of this contract. Version 2 is the 1.0 contract:
+
+- `kind: "progress"` records carry a session event verbatim. `event` is the
+  event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
+  `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
+  the rest of the event under its own field names. A run's events name it
+  through `payload.aggregateId`, the JSON array `["run", "<run id>"]`; a
+  parent edge is `payload.parent` on `run.start`; the terminal fact is
+  `run.end` with its `outcome`. One record with no session event behind it,
+  `event: "run.children"`, reports a parent run's live child roster as
+  `{ runId, children }`, each child carrying its `childRunId` and `identity`.
+- `kind: "agent-result"`, `kind: "result"`, and `kind: "multi-agent-result"`
+  carry the run result described above under `result`, with `runId`.
+- History records (`history-entry`, `history-detail`) spell a terminal
+  outcome as `completed`, `interrupted`, or `error`; `resumable` and
+  `unknown` pass through unchanged.
 
 ## Authentication
 
@@ -295,16 +315,18 @@ texra history list --limit 10        # only the most recent runs (alias: -n)
 texra history list --output-format ndjson
 ```
 
-Text output prints one tab-separated row per execution:
+Text output prints one tab-separated row per run:
 
 ```text
 <id>    <timestamp>    <agent>    <status>    <primary input>
 ```
 
-The NDJSON form is stable for scripts. Each line has kind `history-entry` and
-contains the same execution entry object used by JSON output.
+The NDJSON form is stable for scripts under the version-2 contract above.
+Each line has kind `history-entry` and contains the same run entry object used
+by JSON output, with the terminal outcome spelled as `completed`,
+`interrupted`, or `error`.
 
-Inspect or delete one execution:
+Inspect or delete one run:
 
 ```bash
 texra history show <id>

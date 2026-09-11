@@ -52,10 +52,7 @@ import {
   executeCliConfig,
   type CliConfigExecuteOptions,
 } from '../runtime/executeCli';
-import {
-  cliRunResultPayload,
-  runOutcomeExitCode,
-} from '../runtime/terminalStatus';
+import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -319,10 +316,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // the copy cannot leave a completed presentation beside a cancelled run.
     workflowResult = { ...workflowResult, outcome: result.outcome };
 
-    const payload = cliRunResultPayload(workflowResult);
     emitCliResult(runContext, {
-      json: payload,
-      ndjson: { kind: 'result', result: payload },
+      json: workflowResult,
+      ndjson: { kind: 'result', result: workflowResult },
       text: formatWorkflowTextResult(workflowResult),
     });
 
