@@ -41,7 +41,7 @@
       "src/model/kimiCodeSubscriptionRouting.ts": 1,
       "src/model/runtimeModelRegistry.ts": 1,
       "src/tools/claudeAgentConfig.ts": 1,
-      "src/tools/externalToolDefs.ts": 3,
+      "src/tools/externalToolDefs.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/tools/github/githubAuth.ts": 1,
       "src/tools/setup/platform.ts": 7,
