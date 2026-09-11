@@ -596,12 +596,12 @@ export function createChatSessionController(
     // plain suspension, so a run parked at the WAIT node leaves the promise
     // pending exactly as before.
     const claimedRun = Deferred.makeUnsafe<void, unknown>();
-     // Native launch may resolve its stream on this turn. Claim first so
-     // marking the run pending cannot erase that run or a reentrant stop.
-     session.markRunPending(
-       effectRuntime().runPromise(Deferred.await(claimedRun)),
-     );
-     session.runId = runId;
+    // Native launch may resolve its stream on this turn. Claim first so
+    // marking the run pending cannot erase that run or a reentrant stop.
+    session.markRunPending(
+      effectRuntime().runPromise(Deferred.await(claimedRun)),
+    );
+    session.runId = runId;
     void effectRuntime()
       .runPromise(
         recoverRun(
