@@ -72,12 +72,24 @@ export function extractionShorthandToolConfig(
   return overrides;
 }
 
-function warnProposalParseFailure(toolName: string, message: string): void {
+/**
+ * Parse `data` against `schema`, warning and returning `null` on failure
+ * instead of throwing. Shared by both delegation-tool branches below so a
+ * reconstruction failure is reported identically regardless of category.
+ */
+function parseOrWarn<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  toolName: string,
+): T | null {
+  const result = schema.safeParse(data);
+  if (result.success) return result.data;
   console.warn(
     `[proposalInput] Could not reconstruct a proposal for delegation tool ` +
       `"${toolName}"; the "Restore setup" link will be unavailable for this ` +
-      `logged call: ${message}`,
+      `logged call: ${result.error.message}`,
   );
+  return null;
 }
 
 /**
@@ -96,25 +108,20 @@ export function parseDelegationToolInput(
   const spread = isObject(input) ? input : {};
 
   if (category === AgentCategory.ToolUse) {
-    const result = LenientToolUseProposalSchema.safeParse({
-      agentCategory: AgentCategory.ToolUse,
-      ...spread,
-    });
-    if (!result.success) {
-      warnProposalParseFailure(toolName, result.error.message);
-      return null;
-    }
-    return result.data;
+    return parseOrWarn(
+      LenientToolUseProposalSchema,
+      { agentCategory: AgentCategory.ToolUse, ...spread },
+      toolName,
+    );
   }
 
-  const result = LenientWorkflowProposalSchema.safeParse({
-    agentCategory: AgentCategory.Workflow,
-    ...spread,
-    toolConfig: extractionShorthandToolConfig(spread),
-  });
-  if (!result.success) {
-    warnProposalParseFailure(toolName, result.error.message);
-    return null;
-  }
-  return result.data;
+  return parseOrWarn(
+    LenientWorkflowProposalSchema,
+    {
+      agentCategory: AgentCategory.Workflow,
+      ...spread,
+      toolConfig: extractionShorthandToolConfig(spread),
+    },
+    toolName,
+  );
 }
