@@ -1,5 +1,5 @@
 // Screenshot every harness scene: node shoot.mjs [outDir]
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 

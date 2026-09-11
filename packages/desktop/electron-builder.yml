@@ -17,12 +17,13 @@ npmRebuild: false
 directories:
   output: dist-packaged
   buildResources: build
-# electron-builder copies the node_modules of production dependencies only.
-# The Codex and Claude Code SDKs are therefore devDependencies: esbuild inlines
-# their JavaScript into dist/main, while their platform packages — 250-410 MiB
-# of native CLI binary each — stay out of the app, which resolves a
-# user-installed CLI at runtime instead. scripts/verify-desktop-package.mjs
-# fails the build if any of them reappear in the packaged app.
+# electron-builder copies the node_modules of production dependencies only, so
+# node-pty (the one package the bundles keep external) is the only production
+# dependency. Everything esbuild or Vite inlines into dist is a devDependency;
+# otherwise the app would ship a second, never-loaded node_modules copy. For the
+# Codex and Claude Code SDKs that copy would include 250-410 MiB of native CLI
+# binary each; the app resolves a user-installed CLI at runtime instead.
+# scripts/verify-desktop-package.mjs fails the build if either reappears.
 files:
   - from: dist
     to: dist

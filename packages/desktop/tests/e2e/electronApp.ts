@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron } from 'playwright';
+import { _electron as electron } from '@playwright/test';
 import {
   loadDatabaseFixture,
   rememberOpenProject,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
-import type { ElectronApplication, Page } from 'playwright';
+import type { ElectronApplication, Page } from '@playwright/test';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');

@@ -378,7 +378,7 @@ async function captureVscodeDiff() {
     );
   }
 
-  const { _electron } = desktopRequire('playwright');
+  const { _electron } = desktopRequire('@playwright/test');
   const tmp = await mkdtemp(join(os.tmpdir(), 'texra-vscode-diff-'));
   const originalPath = join(tmp, 'main.tex');
   const revisedPath = join(tmp, 'main-revised.tex');
