@@ -72,11 +72,6 @@
       "specifier": "@agent/index"
     },
     {
-      "file": "src/test-kernel/cli/OnboardingGate.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
       "file": "src/test-kernel/cli/ResumeCommand.vitest.ts",
       "form": "mock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"

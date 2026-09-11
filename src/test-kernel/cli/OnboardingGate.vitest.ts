@@ -9,20 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   hasUsableSetupCredential: vi.fn(),
-  listRuns: vi.fn(),
 }));
 
 vi.mock('@model/setupCredentialAccess', () => ({
   hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
-vi.mock('@agent/storage', () => ({
-  listRuns: () => Effect.tryPromise(() => mocks.listRuns()),
-}));
-
-vi.mock('@cli/runtime/transcriptSession', () => ({
-  initializeCliTranscriptSession: vi.fn(async () => ({})),
-}));
 vi.mock('@platform/processRuntime', () => ({
   effectRuntime: () => ({ runPromise: Effect.runPromise }),
 }));
@@ -52,7 +44,6 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
-    mocks.listRuns.mockReset().mockResolvedValue([]);
     services = createFakePlatform();
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -80,41 +71,6 @@ describe('maybeRunCliOnboarding gate', () => {
       }),
   );
 
-  effectIt.effect(
-    'marks prior installs with credentials as first-run done',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          services.globalState.update(
-            GlobalStateKey.LAST_KNOWN_VERSION,
-            '1.2.3',
-          ),
-        );
-        mocks.hasUsableSetupCredential.mockResolvedValue(true);
-
-        expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
-          SKIPPED,
-        );
-        expect(
-          services.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-        ).toBe(true);
-      }),
-  );
-
-  effectIt.effect(
-    'backfills a credentialed fresh install as NOT done (env keys)',
-    () =>
-      Effect.gen(function* () {
-        // Credential alone proves nothing, fresh installs can inherit env keys.
-        mocks.hasUsableSetupCredential.mockResolvedValue(true);
-
-        yield* maybeRunCliOnboarding(services, INTERACTIVE);
-        expect(
-          services.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-        ).toBe(false);
-      }),
-  );
-
   effectIt.effect('skips when onboarding was previously declined', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
@@ -134,12 +90,6 @@ describe('maybeRunCliOnboarding gate', () => {
         yield* Effect.promise(() =>
           services.globalState.update(GlobalStateKey.ONBOARDING_DECLINED, true),
         );
-        yield* Effect.promise(() =>
-          services.globalState.update(
-            GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-            false,
-          ),
-        );
         mocks.hasUsableSetupCredential.mockResolvedValue(true);
 
         // `configured` stays false: only the picker actually configuring a
@@ -151,21 +101,6 @@ describe('maybeRunCliOnboarding gate', () => {
         expect(
           services.globalState.get(GlobalStateKey.ONBOARDING_DECLINED),
         ).toBe(false);
-      }),
-  );
-
-  effectIt.effect(
-    'skips onboarding for credential-less users with prior run history',
-    () =>
-      Effect.gen(function* () {
-        mocks.listRuns.mockResolvedValue([{ id: 'previous-run' }]);
-
-        expect(yield* maybeRunCliOnboarding(services, INTERACTIVE)).toEqual(
-          SKIPPED,
-        );
-        expect(
-          services.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-        ).toBe(true);
       }),
   );
 
@@ -203,8 +138,7 @@ describe('firstRunSetupAgentOverride', () => {
       expected: undefined,
     },
     {
-      scenario:
-        'does nothing once the first run is done (backfilled or earned)',
+      scenario: 'does nothing once the first run is done',
       input: { onboardingConfigured: true, firstRunDone: true },
       expected: undefined,
     },

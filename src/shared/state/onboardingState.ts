@@ -60,28 +60,3 @@ export function readOnboardingFlags(state: StateStore): {
     firstRunDone: getFirstRunDone(state),
   };
 }
-
-/**
- * One-shot migration: upgraders keep their normal product. A prior install
- * with a credential, or any install with run history, never sees first-run
- * onboarding. The key is written on the first call, even when the value is
- * false, so the backfill never re-evaluates.
- */
-export async function backfillFirstRunDone(
-  state: StateStore,
-  signals: {
-    hasCredential: boolean;
-    hasPriorInstall?: boolean;
-    hasRunHistory: boolean;
-  },
-): Promise<void> {
-  const existing = state.get<boolean | undefined>(
-    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-  );
-  if (existing !== undefined) return;
-  await setFirstRunDone(
-    state,
-    signals.hasRunHistory ||
-      (signals.hasPriorInstall === true && signals.hasCredential),
-  );
-}

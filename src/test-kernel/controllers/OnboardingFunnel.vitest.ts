@@ -7,14 +7,7 @@ import {
   type OnboardingFunnelTransition,
 } from '@controllers/onboarding/onboardingFunnel';
 import type { OnboardingFunnelState } from '@shared/schemas';
-import {
-  backfillFirstRunDone,
-  getDefaultTeamId,
-  getFirstRunDone,
-  readOnboardingFlags,
-  setDefaultTeamId,
-  setFirstRunDone,
-} from '@shared/state/onboardingState';
+import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -134,56 +127,4 @@ describe('onboarding flags', () => {
       ).toBeUndefined();
     },
   );
-});
-
-describe('backfillFirstRunDone', () => {
-  it.each<[string, Parameters<typeof backfillFirstRunDone>[1], boolean]>([
-    [
-      'marks prior installs with a credential as done',
-      { hasCredential: true, hasPriorInstall: true, hasRunHistory: false },
-      true,
-    ],
-    [
-      'does not mark fresh credential-only installs as done',
-      { hasCredential: true, hasRunHistory: false },
-      false,
-    ],
-    [
-      'marks upgraders with run history as done',
-      { hasCredential: false, hasRunHistory: true },
-      true,
-    ],
-  ])('%s', async (_name, signals, expected) => {
-    const state = new FakeStateStore();
-    await backfillFirstRunDone(state, signals);
-    expect(getFirstRunDone(state)).toBe(expected);
-  });
-
-  it('writes false for a fresh install so the backfill never re-evaluates', async () => {
-    const state = new FakeStateStore();
-    await backfillFirstRunDone(state, {
-      hasCredential: false,
-      hasRunHistory: false,
-    });
-    expect(state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(false);
-
-    // A later credential must not flip the backfilled value: a fresh install
-    // that signs in minutes after activation still enters State 1.
-    await backfillFirstRunDone(state, {
-      hasCredential: true,
-      hasRunHistory: false,
-    });
-    expect(getFirstRunDone(state)).toBe(false);
-  });
-
-  it('never overwrites an existing flag', async () => {
-    const state = new FakeStateStore({
-      [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true,
-    });
-    await backfillFirstRunDone(state, {
-      hasCredential: false,
-      hasRunHistory: false,
-    });
-    expect(getFirstRunDone(state)).toBe(true);
-  });
 });
