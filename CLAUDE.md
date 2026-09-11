@@ -56,11 +56,11 @@ Things the tree won't tell you:
   shrink-only counts: `platform()`, `setServices()`, `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
   `effect`-importing files, and imports reaching into `src/agent/node/` or
-  `src/agent/modelHandlers/` from outside them; the same script fails on any
-  `@adapter-until` marker, since the owner ruled there are no temporary
-  adapters, and admits a new `Effect.run*` file only under
-  `packages/{extension,desktop,cli,agent}/src/` or `src/tools/**/*Tool.ts`,
-  R1's three boundary kinds), and `pure-tier-kernel-suites` (suites a source
+  `src/agent/modelHandlers/` from outside them; it admits a new `Effect.run*`
+  file only under `packages/{extension,desktop,cli,agent}/src/` or
+  `src/tools/**/*Tool.ts`, R1's three boundary kinds, and ESLint's
+  `no-warning-comments` fails on any `@adapter-until` marker, since the owner
+  ruled there are no temporary adapters), and `pure-tier-kernel-suites` (suites a source
   scan classes as host-free but which read the host through the module under
   test, so they run in the isolated `kernel` Vitest project — see AGENTS.md
   "Test tiers"). The invariant to hold is "never widen a
@@ -71,13 +71,14 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
   invariants with hardcoded allowlists rather than baseline JSON.
-- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly five
-  modules are browser-reachable today: `@utils/core`,
+- **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
+  `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
   `@utils/core/keyedMutex`, `@utils/errors/errorMessage`,
-  `@utils/files/pastedImageName`, and `@utils/text/stringUtils`. The other 60
-  TypeScript modules are not browser-reachable and must not be assumed
-  browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
-  (`scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.)
+  `@utils/files/pastedImageName`, `@utils/text/stringUtils`) is
+  browser-reachable: ESLint lets the webview frontends import only those at
+  runtime, and holds those to no Node built-ins and runtime imports of each
+  other only. The rest of `src/utils/` must not be assumed browser-safe.
+  Side-specific helpers still belong in `frontend/` or `common/`.
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
   (auth, subscriptions, tool availability, workspace-file writes). It is _not_
   run or session progress; those live in `@agent/trace` and `SessionEvents`

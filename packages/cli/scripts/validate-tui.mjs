@@ -4095,7 +4095,6 @@ let failed = 0;
 let skipped = 0;
 const results = [];
 for (const [index, scenario] of scenarios.entries()) {
-  // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario, index);
   if (!result.skipped && scenario.equivalentFrameTo) {
     const oracle = results.find(

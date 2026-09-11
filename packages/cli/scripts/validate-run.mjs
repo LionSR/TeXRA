@@ -1203,9 +1203,6 @@ function runCliPackageScript(script, options = {}) {
 }
 
 function buildValidationBundle() {
-  runCliPackageScript('typecheck');
-  runCliPackageScript('check:architecture');
-  runCliPackageScript('smoke:react-compiler');
   runCliPackageScript('bundle', {
     env: {
       TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,

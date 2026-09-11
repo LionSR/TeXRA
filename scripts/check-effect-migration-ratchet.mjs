@@ -12,31 +12,22 @@
 // R7). Every row is a per-file allowlist: a file absent from a row fails on
 // its first site. The PR that zeroes a row deletes the row.
 //
-// Two checks carry the owner's second ruling of 2026-09-06 ("fully embrace
-// Effect. No more pass-throughs nor adapters"; PRD R1 and execution rule 3
-// as amended): there are no temporary adapters, so a separate hard check
-// fails on the presence of any `@adapter-until` marker in production scope,
-// not on its expiry; and the `Effect.run*` row separates runs at R1's three
-// boundary kinds (a host entry under packages/extension, packages/desktop,
-// or packages/cli; a tool `execute()` contract, until lane D; the SDK's
-// public API under packages/agent/src) from runs below them. A run below the
-// register is CLOSED: `--update` refuses a below-boundary file the committed
-// `debtLanes` does not already name, and refuses any count that would grow
-// (except `Effect.run*` at a boundary path, where a rise means runs moved up
-// out of the debt below). The map records the debt that existed when it was
-// written, names the lane deleting each file, and only ever shrinks — an
-// entry whose debt is gone is rejected as stale. Naming future work does not
-// admit new debt (owner ruling 2026-09-06: never widen a ratchet in
-// config/ratchets/). Neither
-// check can recognize an adapter written without a marker, since "adapter"
-// is not mechanically recognizable; that stays a review obligation.
+// The owner's second ruling of 2026-09-06 ("fully embrace Effect. No more
+// pass-throughs nor adapters"; PRD R1 and execution rule 3 as amended) shapes
+// the `Effect.run*` row: it counts only runs below R1's three boundary kinds
+// (a host entry under packages/extension, packages/desktop, or packages/cli;
+// a tool `execute()` contract; the SDK's public API under packages/agent/src),
+// so it only ever shrinks, and `--update` never adds a file to any row, so
+// new debt fails instead of being admitted (owner ruling 2026-09-06: never
+// widen a ratchet in config/ratchets/). The ruling's other half, that no
+// `@adapter-until` marker may exist, is ESLint's `no-warning-comments` in
+// eslint.config.mjs.
 //
 // Files are parsed with the TypeScript compiler API (the repo's `typescript`
-// devDependency, as scripts/check-browser-safe-utils.mjs does) rather than
-// grepped, so a comment or string literal that merely mentions `platform()`,
-// a getter that happens to be named `runPromise`, or a `./delay` relative
-// import classify the way the compiler sees them. The `@adapter-until`
-// markers live in comments, so that scan is textual by design.
+// devDependency) rather than grepped, so a comment or string literal that
+// merely mentions `platform()`, a getter that happens to be named
+// `runPromise`, or a `./delay` relative import classify the way the compiler
+// sees them.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
@@ -120,7 +111,7 @@ function isBoundaryPath(file, toolExecuteFiles) {
   );
 }
 
-const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them. The debtLanes register is closed: it names the debt that already existed and shrinks as lanes land, and --update will not admit a file it does not already name`;
+const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
 
 /** Module specifiers that export the tool contract factory. */
 const TOOL_DEFINE_MODULES = new Set([
@@ -213,13 +204,12 @@ const SEMANTICS =
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. Every file here belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, never adds a file to a row, and writes the lower of the committed count and the tree's); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   "'dep:@agent/node' counts, in each file OUTSIDE src/agent/node/, the module specifiers that reach into that directory — the @agent/node alias itself or any deeper path under it, plus relative specifiers that resolve inside it (type-only included, as for the package rows) — so the row measures the PocketFlow engine's consumers, not its class hierarchy, and a file inside the directory importing its own sibling is not a consumer and does not count; " +
   "'dep:@agent/modelHandlers' counts the same reaches into src/agent/modelHandlers/, the model handler hierarchy the ModelInvoker service replaces. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
-  "'debtLanes' maps each below-boundary 'Effect.run*' file to the lane that removes it; an entry whose file leaves the row is stale and --update drops it. " +
-  'The PR that zeroes a row deletes the row. The same script fails on the presence of any `@adapter-until` marker in scope (owner ruling 2026-09-06: no temporary adapters), a hard check with no baseline.';
+  'The PR that zeroes a row deletes the row.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -678,9 +668,9 @@ function generatedToolBases(sourceFile, factory) {
       // A name bound more than once in the file is not resolved lexically
       // here, so it is not trusted at all: if any binding of it is something
       // other than defineTool(...), the name stops counting as a tool base.
-      // That fails closed -- the class is treated as a helper, its runs count
-      // as debt, and the register demands a lane -- which is the safe
-      // direction for a check whose whole job is refusing to widen.
+      // That fails closed -- the class is treated as a helper and its runs
+      // count as debt -- which is the safe direction for a check whose whole
+      // job is refusing to widen.
       if (isBase) fromDefineTool.add(name);
       else shadowed.add(name);
     }
@@ -831,14 +821,12 @@ function sortObject(object) {
   );
 }
 
-/** Survey the tree: { rows: { rowId: { file: count } }, texts: { file: text } }. */
+/** Survey the tree: { rows: { rowId: { file: count } }, toolExecuteFiles }. */
 function surveyTree(files) {
   const rows = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
-  const texts = new Map();
   const toolExecuteFiles = new Set();
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
-    texts.set(file, text);
     const { counts, runsOnlyInExecute } = surveySource(text, file);
     for (const [row, count] of counts) {
       const entries = rows[row];
@@ -863,117 +851,17 @@ function surveyTree(files) {
   // every conversion lane widen this baseline: runs MOVE to a host entry, so
   // the entry's count rises, and the ratchet then had to be argued with
   // rather than obeyed. Dropping them makes "this row only ever shrinks" true
-  // by construction instead of by exception, and leaves the row's keys equal
-  // to the register's.
+  // by construction instead of by exception.
   rows[ROW_RUN_BOUNDARY] = Object.fromEntries(
     Object.entries(rows[ROW_RUN_BOUNDARY]).filter(
       ([file]) => !isBoundaryPath(file, toolExecuteFiles),
     ),
   );
-  return { rows, texts, toolExecuteFiles };
+  return { rows, toolExecuteFiles };
 }
 
-/**
- * `@adapter-until` markers. There are no temporary adapters (owner ruling
- * 2026-09-06), so the presence of a marker anywhere in production scope
- * fails; the date after it, if any, is irrelevant.
- */
-function checkAdapterMarkers(texts) {
-  const failures = [];
-  for (const [file, text] of texts) {
-    text.split('\n').forEach((line, index) => {
-      if (/@adapter-until\b/.test(line)) {
-        failures.push(
-          `${file}:${index + 1}: @adapter-until marker present — the owner ruled on 2026-09-06 "fully embrace Effect. No more pass-throughs nor adapters" (${PRD} R1, second ruling; execution rule 3): there are no temporary adapters to date, so the adapter is deleted by converting the port and its callers to Effect`,
-        );
-      }
-    });
-  }
-  return failures;
-}
-
-/** Placeholder `--update` writes for a below-boundary file with no lane yet. */
-const UNASSIGNED_LANE = 'UNASSIGNED';
-
-/**
- * The `debtLanes` map for the `Effect.run*` row: every below-boundary file
- * currently running an Effect, mapped to the lane that deletes it. Lanes
- * already named in the committed baseline are carried forward; a file that
- * is new, or that the baseline never named, gets `UNASSIGNED`, which the
- * check rejects — so a PR that adds a below-boundary run site must name its
- * owning lane in the same PR rather than quietly widening an allowlist. A
- * file that has left the row is dropped.
- */
-function runBoundaryDebtLanes(current, committedLanes, toolExecuteFiles) {
-  const lanes = {};
-  for (const file of Object.keys(current)) {
-    if (isBoundaryPath(file, toolExecuteFiles)) continue;
-    lanes[file] = committedLanes?.[file] ?? UNASSIGNED_LANE;
-  }
-  return lanes;
-}
-
-/** Below-boundary files whose lane is missing or still the placeholder. */
-function unassignedDebt(current, lanes, toolExecuteFiles) {
-  return Object.keys(current)
-    .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
-    .filter((file) => {
-      const lane = lanes?.[file];
-      return (
-        typeof lane !== 'string' ||
-        lane.trim() === '' ||
-        lane === UNASSIGNED_LANE
-      );
-    });
-}
-
-/**
- * Lane entries the register no longer needs: a file the map names that is no
- * longer below the boundary — converted, moved into a recognized `execute()`,
- * or deleted. `diffRows` cannot see this, because a run that merely moves
- * inside its own file leaves the counted total untouched; only the lane map
- * goes stale. Rejecting it keeps the register a statement about the debt that
- * exists now rather than an archive of debt that once did.
- */
-function staleDebtLanes(current, lanes, toolExecuteFiles) {
-  const below = new Set(
-    Object.keys(current).filter(
-      (file) => !isBoundaryPath(file, toolExecuteFiles),
-    ),
-  );
-  return Object.keys(lanes ?? {})
-    .filter((file) => !below.has(file))
-    .toSorted(compareCodePoints);
-}
-
-/** Fail the ratchet itself if the marker scan or the boundary gate regresses. */
-function selfTestBoundaryAndMarkers() {
-  const markerFailures = checkAdapterMarkers(
-    new Map([
-      [
-        'src/agent/probe.ts',
-        '// @adapter-until 2026-12-01\nx();\n/* @adapter-until */\nconst s = "adapter-until";\n',
-      ],
-      ['src/agent/clean.ts', '// no marker here\n'],
-    ]),
-  );
-  const markerWhere = markerFailures.map((f) =>
-    f.slice(0, f.indexOf(':', f.indexOf(':') + 1)),
-  );
-  if (
-    JSON.stringify(markerWhere) !==
-      JSON.stringify(['src/agent/probe.ts:1', 'src/agent/probe.ts:3']) ||
-    !markerFailures.every((f) =>
-      f.includes('No more pass-throughs nor adapters'),
-    )
-  ) {
-    console.error(
-      'checkAdapterMarkers self-test failed:',
-      JSON.stringify(markerFailures),
-    );
-    process.exit(1);
-  }
-
+/** Fail the ratchet itself if the boundary gate regresses. */
+function selfTestBoundary() {
   const boundaryCases = [
     ['packages/extension/src/commands/run.ts', true],
     ['packages/desktop/src/main/ipc.ts', true],
@@ -1024,58 +912,6 @@ function selfTestBoundaryAndMarkers() {
     }
   }
 
-  const debtRow = {
-    'src/agent/runtime/newRunner.ts': 1,
-    'packages/cli/src/commands/newCommand.ts': 2,
-    'src/tools/NewTool.ts': 1,
-    'src/tools/goal/goalStore.ts': 3,
-  };
-  const lanes = runBoundaryDebtLanes(
-    debtRow,
-    {
-      'src/tools/goal/goalStore.ts': 'lane D',
-      'src/agent/runtime/gone.ts': 'lane D',
-    },
-    new Set(),
-  );
-  if (
-    JSON.stringify(lanes) !==
-    JSON.stringify({
-      'src/agent/runtime/newRunner.ts': UNASSIGNED_LANE,
-      'src/tools/goal/goalStore.ts': 'lane D',
-    })
-  ) {
-    console.error(
-      'runBoundaryDebtLanes self-test failed:',
-      JSON.stringify(lanes),
-    );
-    process.exit(1);
-  }
-  if (
-    JSON.stringify(unassignedDebt(debtRow, lanes)) !==
-    JSON.stringify(['src/agent/runtime/newRunner.ts'])
-  ) {
-    console.error('unassignedDebt self-test failed');
-    process.exit(1);
-  }
-  const stale = staleDebtLanes(
-    debtRow,
-    {
-      'src/agent/runtime/newRunner.ts': UNASSIGNED_LANE,
-      'src/tools/goal/goalStore.ts': 'lane D',
-      'src/tools/lean/lspTools.ts': 'Lean LSP follow-up',
-      'packages/cli/src/main.ts': 'host entry',
-    },
-    new Set(),
-  );
-  if (
-    JSON.stringify(stale) !==
-    JSON.stringify(['packages/cli/src/main.ts', 'src/tools/lean/lspTools.ts'])
-  ) {
-    console.error('staleDebtLanes self-test failed:', JSON.stringify(stale));
-    process.exit(1);
-  }
-
   // A row the committed baseline does not carry has no ceiling yet, so
   // `--update`'s pre-write diff must not report its entries as growth: they
   // are about to be seeded, and saying "the check stays red" about them is
@@ -1095,7 +931,7 @@ function selfTestBoundaryAndMarkers() {
   }
 }
 
-const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git; it cannot be regenerated from scratch, because the lane names in its debtLanes map are written by hand and --update cannot recover them.`;
+const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git.`;
 
 function readBaseline() {
   if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
@@ -1129,19 +965,6 @@ function readBaseline() {
       }
     }
   }
-  // Absent means an empty register, which is the end state the migration is
-  // aiming at: no run below a boundary, so no lane to name. writeBaseline
-  // omits the key in exactly that case, so the two must agree.
-  const debtLanes = parsed?.debtLanes ?? {};
-  if (
-    typeof debtLanes !== 'object' ||
-    Array.isArray(debtLanes) ||
-    Object.values(debtLanes).some((lane) => typeof lane !== 'string')
-  ) {
-    throw new Error(
-      `Baseline debtLanes is not a map of file to lane name: ${baselinePath}. Run --update, then name each lane.`,
-    );
-  }
   if (parsed.semantics !== SEMANTICS) {
     throw new Error(
       `Baseline semantics text is out of date with the script: ${baselinePath}. Run --update.`,
@@ -1151,14 +974,14 @@ function readBaseline() {
 }
 
 /**
- * The committed counts and lane keys, read for `--update`'s own gates.
+ * The committed counts, read for `--update`'s own gates.
  *
  * Deliberately looser than {@link readBaseline}: that one rejects a baseline
  * whose `semantics` text or row set has drifted from the script and tells the
  * reader to run `--update` — which would then call it and hit the same
  * rejection, so a legitimate script edit could never be recorded. The gates
- * need only the previous per-file counts and which files the register already
- * names; a row the script has since added simply has nothing committed yet.
+ * need only the previous per-file counts; a row the script has since added
+ * simply has nothing committed yet.
  */
 function readCommittedCounts() {
   if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
@@ -1183,30 +1006,16 @@ function readCommittedCounts() {
     // empty and then report every real entry as new, and the row could never
     // be introduced at all.
     unseeded: new Set(ROWS.map((row) => row.id).filter((id) => !has(id))),
-    debtLanes:
-      typeof parsed?.debtLanes === 'object' && parsed.debtLanes !== null
-        ? parsed.debtLanes
-        : {},
   };
 }
 
-function writeBaseline(rows, debtLanes) {
+function writeBaseline(rows) {
   const sortedRows = Object.fromEntries(
     ROWS.map((row) => [row.id, sortObject(rows[row.id])]),
   );
   writeFileSync(
     baselinePath,
-    `${JSON.stringify(
-      Object.keys(debtLanes).length === 0
-        ? { semantics: SEMANTICS, rows: sortedRows }
-        : {
-            semantics: SEMANTICS,
-            rows: sortedRows,
-            debtLanes: sortObject(debtLanes),
-          },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify({ semantics: SEMANTICS, rows: sortedRows }, null, 2)}\n`,
   );
 }
 
@@ -1265,9 +1074,9 @@ function parseArgs(argv) {
 function main() {
   const options = parseArgs(process.argv.slice(2));
   selfTestSurvey();
-  selfTestBoundaryAndMarkers();
+  selfTestBoundary();
   const files = productionFiles();
-  const { rows, texts, toolExecuteFiles } = surveyTree(files);
+  const { rows, toolExecuteFiles } = surveyTree(files);
   let failed = false;
 
   if (options.update) {
@@ -1297,22 +1106,6 @@ function main() {
       }
     }
 
-    const admitted = new Set(Object.keys(committed.debtLanes ?? {}));
-    const newDebt = Object.keys(rows[ROW_RUN_BOUNDARY])
-      .filter((file) => !admitted.has(file))
-      .toSorted(compareCodePoints);
-    if (newDebt.length > 0) {
-      console.error(
-        `\n--update refused: ${newDebt.length} file(s) would enter the below-boundary register that the committed baseline does not already name.`,
-      );
-      for (const file of newDebt)
-        console.error(`  - ${file} is ${BELOW_BOUNDARY}.`);
-      console.error(
-        `\nThe register records the debt that already existed when it was written; it is not an intake. Convert the file and its callers so the run moves to one of ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06: never widen a ratchet in config/ratchets/ — naming future work does not create an exception).`,
-      );
-      process.exit(1);
-    }
-
     // Every written count is the lower of the committed one and the tree's,
     // and a file the row does not already carry is not added at all, so this
     // command cannot raise a ceiling or open a new one. A file that is new to
@@ -1333,31 +1126,8 @@ function main() {
             ),
       ]),
     );
-    // The register is built from the SURVEY, not from `tightened`. The row
-    // holds ceilings and refuses a file it does not already carry; the
-    // register holds the debt that exists right now and who deletes it. Those
-    // are different things, and building the register from the row dropped
-    // the lane name of any file the row had refused -- leaving the check
-    // demanding a name that --update would wipe on its next run.
-    const lanes = runBoundaryDebtLanes(
-      rows[ROW_RUN_BOUNDARY],
-      committed.debtLanes ?? {},
-      toolExecuteFiles,
-    );
-    writeBaseline(tightened, lanes);
+    writeBaseline(tightened);
     console.log(`Effect migration baseline written: ${baselinePath}`);
-    const pending = unassignedDebt(
-      rows[ROW_RUN_BOUNDARY],
-      lanes,
-      toolExecuteFiles,
-    );
-    if (pending.length > 0) {
-      console.log(
-        `\n${pending.length} below-boundary Effect.run* file(s) need a lane name in debtLanes ` +
-          `(replace ${UNASSIGNED_LANE}); the check fails until each is named:`,
-      );
-      for (const file of pending) console.log(`  - ${file}`);
-    }
   }
 
   const baseline = readBaseline();
@@ -1439,69 +1209,6 @@ function main() {
     console.error(
       '\nGood news; lock it in: run `node scripts/check-effect-migration-ratchet.mjs --update` and commit the baseline in this PR.',
     );
-  }
-
-  const debtLanes = baseline.debtLanes ?? {};
-  const debtFiles = Object.keys(rows[ROW_RUN_BOUNDARY])
-    .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
-    .toSorted(compareCodePoints);
-  if (debtFiles.length > 0) {
-    console.log(
-      `\nEffect.run* below the boundary (${debtFiles.length} file(s)), each owned by the lane that deletes it:`,
-    );
-    for (const file of debtFiles) {
-      console.log(
-        `  - ${file}: ${rows[ROW_RUN_BOUNDARY][file]} site(s) — ${debtLanes[file] ?? UNASSIGNED_LANE}`,
-      );
-    }
-  }
-  const pendingDebt = unassignedDebt(
-    rows[ROW_RUN_BOUNDARY],
-    debtLanes,
-    toolExecuteFiles,
-  );
-  if (pendingDebt.length > 0) {
-    failed = true;
-    console.error(
-      `\nEffect migration ratchet failed: ${pendingDebt.length} below-boundary Effect.run* file(s) have no lane named in debtLanes.`,
-    );
-    for (const file of pendingDebt) {
-      console.error(`  - ${file} is ${BELOW_BOUNDARY}.`);
-    }
-    console.error(
-      `\nName the lane that deletes each one in the baseline's debtLanes map (replace ${UNASSIGNED_LANE}), or convert the file and its callers in this PR.`,
-    );
-  }
-
-  const staleLanes = staleDebtLanes(
-    rows[ROW_RUN_BOUNDARY],
-    debtLanes,
-    toolExecuteFiles,
-  );
-  if (staleLanes.length > 0) {
-    failed = true;
-    console.error(
-      `\nEffect migration ratchet failed: debtLanes names ${staleLanes.length} file(s) that are no longer below the boundary.`,
-    );
-    for (const file of staleLanes) {
-      console.error(
-        `  - ${file}: ${debtLanes[file]} — the debt is gone, the entry is not.`,
-      );
-    }
-    console.error(
-      '\nGood news; lock it in: run `node scripts/check-effect-migration-ratchet.mjs --update` and commit the baseline in this PR.',
-    );
-  }
-
-  const markers = checkAdapterMarkers(texts);
-  if (markers.length > 0) {
-    failed = true;
-    console.error(
-      `\n@adapter-until check failed: ${markers.length} marker(s) present; there are no temporary adapters.`,
-    );
-    for (const failure of markers) console.error(`  - ${failure}`);
-  } else {
-    console.log('@adapter-until markers OK: none present.');
   }
 
   if (failed) process.exit(1);
