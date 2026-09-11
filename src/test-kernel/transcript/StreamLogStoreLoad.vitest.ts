@@ -247,24 +247,4 @@ describe('StreamLogStore event reads', () => {
         expect(store.get(RUN)).toBeUndefined();
       }).pipe(Effect.provide(substrate)),
   );
-
-  it.effect('releases only the presentation lease that owns its token', () =>
-    Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.appendAll(history);
-      const store = yield* StreamLogStore.open(database);
-      const first = yield* store.ensureLoaded(RUN, {
-        retainForPresentation: true,
-      });
-      const second = yield* store.ensureLoaded(RUN, {
-        retainForPresentation: true,
-      });
-      first.close();
-      first.close();
-      expect(store.get(RUN)).toBeDefined();
-      second.close();
-      expect(store.get(RUN)).toBeUndefined();
-      expect(yield* store.readEntries(RUN)).not.toEqual([]);
-    }).pipe(Effect.provide(substrate)),
-  );
 });

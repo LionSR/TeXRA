@@ -3,10 +3,9 @@
  *
  * A FormatSpec is a header template, a footer string, and a node-renderer
  * table. `renderDocument` runs the pandoc-style pipeline:
- *   raw messages → normalizeMessages() → ExportNode[] → FormatSpec → string
+ *   ExportNode[] → FormatSpec → string
  */
 
-import { normalizeConversationForExport as normalizeMessages } from '@agent/export/normalizeConversation';
 import type {
   ChatExportInput,
   DocumentMeta,
@@ -72,11 +71,9 @@ export function renderDocument(
   input: ChatExportInput,
   spec: FormatSpec,
 ): string {
-  const meta = extractMeta(input);
-  const nodes = normalizeMessages(input.messages);
   return [
-    spec.header(meta),
-    ...nodes.map((n) => renderNode(n, spec.nodes)),
+    spec.header(extractMeta(input)),
+    ...input.nodes.map((n) => renderNode(n, spec.nodes)),
     spec.footer,
   ]
     .filter(Boolean)

@@ -1,8 +1,9 @@
 /**
  * Format-agnostic intermediate representation types for chat export.
  *
- * These describe the `ExportNode` produced by normalization and consumed by
- * every format spec (markdown, LaTeX). The HTML export path uses
+ * These describe the `ExportNode` that `readCompletedRunConversation`
+ * (`@transcript/completedRunArchive`) projects from transcript rows and every
+ * format spec (markdown, LaTeX) and text view consumes. The HTML export path uses
  * `assembleTrace` instead. They are host-neutral and carry no
  * provider-specific types — the command-layer export package imports these
  * without pulling in `openai/*`, `@agent/modelHandlers/openai/*`, or
@@ -35,7 +36,7 @@ export interface ChatExportInput {
   timestamp: string;
   description?: string;
   config: ExportConfig;
-  messages: unknown[];
+  nodes: readonly ExportNode[];
 }
 
 // ============================================================
@@ -60,14 +61,17 @@ type ExportWebSearchResult = Pick<
  */
 export type ExportAttachmentType = MediaAttachmentKind;
 
-export type UserPart =
+type UserPart =
   | { type: 'text'; text: string }
   | { type: 'attachment'; attachmentType: ExportAttachmentType };
 
 export type ExportNode =
   | { kind: 'user-message'; parts: UserPart[] }
   | { kind: 'assistant-text'; text: string }
-  | { kind: 'tool-call'; name: string; input: string }
+  /** Provider reasoning; document exports omit it, text views may show it. */
+  | { kind: 'thinking'; text: string }
+  /** `input` is the call's raw arguments; each renderer serializes them. */
+  | { kind: 'tool-call'; name: string; input: unknown }
   | { kind: 'tool-result'; text: string }
   | { kind: 'web-search'; query: string }
   | { kind: 'web-search-results'; results: ExportWebSearchResult[] }

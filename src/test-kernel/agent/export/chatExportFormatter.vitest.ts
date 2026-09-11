@@ -10,116 +10,61 @@ import {
   formatChatAsMarkdown,
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
+import type { ExportNode } from '@agent/export/schemas';
 
-/** A single-message ChatExportInput fixture wrapping the given content blocks. */
-function assistantChatInput(content: unknown[]): ChatExportInput {
-  return {
-    timestamp: '2026-01-01T00:00:00.000Z',
-    config: {},
-    messages: [{ role: 'assistant', content }],
-  };
+/** A ChatExportInput fixture wrapping the given conversation nodes. */
+function chatInput(nodes: ExportNode[]): ChatExportInput {
+  return { timestamp: '2026-01-01T00:00:00.000Z', config: {}, nodes };
 }
 
-/** A `web_search_tool_result` block wrapping the given result entries. */
-function webSearchBlock(
+/** A web-search result-list node. */
+function webSearchResults(
   ...results: { title: string; url: string }[]
-): Record<string, unknown> {
-  return {
-    type: 'web_search_tool_result',
-    content: results.map((result) => ({
-      type: 'web_search_result',
-      ...result,
-    })),
-  };
+): ExportNode {
+  return { kind: 'web-search-results', results };
 }
 
-/** A `web_fetch_tool_result` block in the nested live/archived shape. */
-function webFetchBlock(fields: {
+/** A web-fetch node. */
+function webFetch(fields: {
   url: string;
   title: string;
-  page_content: string;
-}): Record<string, unknown> {
-  return {
-    type: 'web_fetch_tool_result',
-    content: {
-      type: 'web_fetch_result',
-      url: fields.url,
-      retrieved_at: null,
-      content: {
-        type: 'document',
-        title: fields.title,
-        source: { type: 'text', data: fields.page_content },
-      },
-    },
-  };
+  content: string;
+}): ExportNode {
+  return { kind: 'web-fetch', ...fields };
 }
 
 describe('chat export formatters', () => {
-  it.each([
-    {
-      shape: 'live Anthropic nested',
-      block: {
-        type: 'web_fetch_tool_result',
-        content: {
-          type: 'web_fetch_result',
-          url: 'https://example.com/live-export',
-          content: {
-            type: 'document',
-            title: 'Live Export',
-            source: {
-              type: 'text',
-              media_type: 'text/plain',
-              data: 'Live export content',
-            },
-          },
-        },
-      },
-      url: 'https://example.com/live-export',
-      title: 'Live Export',
-      content: 'Live export content',
-    },
-    {
-      shape: 'archived',
-      block: webFetchBlock({
-        url: 'https://example.com/archived-export',
-        title: 'Archived Export',
-        page_content: 'Archived export content',
-      }),
-      url: 'https://example.com/archived-export',
-      title: 'Archived Export',
-      content: 'Archived export content',
-    },
-  ])(
-    'renders $shape web-fetch fields in Markdown and LaTeX exports',
-    ({ block, url, title, content }) => {
-      const input = assistantChatInput([block]);
+  it('renders web-fetch fields in Markdown and LaTeX exports', () => {
+    const url = 'https://example.com/export';
+    const input = chatInput([
+      webFetch({ url, title: 'Export', content: 'Export content' }),
+    ]);
 
-      const markdown = formatChatAsMarkdown(input);
-      assert.ok(markdown.includes(`**URL:** ${url}`));
-      assert.ok(markdown.includes(`**Title:** ${title}`));
-      assert.ok(markdown.includes(content));
+    const markdown = formatChatAsMarkdown(input);
+    assert.ok(markdown.includes(`**URL:** ${url}`));
+    assert.ok(markdown.includes('**Title:** Export'));
+    assert.ok(markdown.includes('Export content'));
 
-      const latex = formatChatAsLatex(input, '');
-      assert.ok(latex.includes(`\\textbf{URL:} \\url{${url}}`));
-      assert.ok(latex.includes(`\\textbf{Title:} ${title}`));
-      assert.ok(latex.includes(content));
-    },
-  );
+    const latex = formatChatAsLatex(input, '');
+    assert.ok(latex.includes(`\\textbf{URL:} \\url{${url}}`));
+    assert.ok(latex.includes('\\textbf{Title:} Export'));
+    assert.ok(latex.includes('Export content'));
+  });
 
   it('sanitizes web tool URLs before rendering Markdown links', () => {
     const markdown = formatChatAsMarkdown(
-      assistantChatInput([
-        webSearchBlock(
+      chatInput([
+        webSearchResults(
           { title: 'unsafe result', url: 'javascript:alert(1)' },
           {
             title: 'safe result',
             url: '  https://example.com/search?q=texra  ',
           },
         ),
-        webFetchBlock({
+        webFetch({
           url: 'data:text/html,<script>alert(1)</script>',
           title: 'unsafe fetch',
-          page_content: 'body',
+          content: 'body',
         }),
       ]),
     );
@@ -136,15 +81,15 @@ describe('chat export formatters', () => {
 
   it('escapes Markdown syntax in web tool titles before rendering Markdown links', () => {
     const markdown = formatChatAsMarkdown(
-      assistantChatInput([
-        webSearchBlock({
+      chatInput([
+        webSearchResults({
           title: 'safe ](javascript:alert(1)) [again',
           url: 'https://example.com/search',
         }),
-        webFetchBlock({
+        webFetch({
           url: 'https://example.com/fetch',
           title: '[pwn](javascript:alert(1))',
-          page_content: 'body',
+          content: 'body',
         }),
       ]),
     );
@@ -163,9 +108,9 @@ describe('chat export formatters', () => {
   it('escapes allowed-scheme URLs before rendering Markdown URL containers', () => {
     const url = 'https://example.com/a) [pwn](javascript:alert(1))';
     const markdown = formatChatAsMarkdown(
-      assistantChatInput([
-        webSearchBlock({ title: 'safe result', url }),
-        webFetchBlock({ url, title: 'safe fetch', page_content: 'body' }),
+      chatInput([
+        webSearchResults({ title: 'safe result', url }),
+        webFetch({ url, title: 'safe fetch', content: 'body' }),
       ]),
     );
 
@@ -188,24 +133,24 @@ describe('chat export formatters', () => {
   it.each([
     {
       container: 'web search result link',
-      block: webSearchBlock({ title: RAW_TITLE, url: 'https://example.com' }),
+      block: webSearchResults({ title: RAW_TITLE, url: 'https://example.com' }),
       expected: ESCAPED_TITLE,
     },
     {
       // Same escapeMarkdownText call, but through the web_fetch **Title:**
       // container (markdownSpec.ts's second call site).
       container: 'web-fetch **Title:**',
-      block: webFetchBlock({
+      block: webFetch({
         url: 'https://example.com',
         title: RAW_TITLE,
-        page_content: 'body',
+        content: 'body',
       }),
       expected: `**Title:** ${ESCAPED_TITLE}`,
     },
   ])(
     'escapes emphasis/code-span/heading characters in $container titles',
     ({ block, expected }) => {
-      const markdown = formatChatAsMarkdown(assistantChatInput([block]));
+      const markdown = formatChatAsMarkdown(chatInput([block]));
 
       assert.ok(
         markdown.includes(expected),
@@ -217,7 +162,7 @@ describe('chat export formatters', () => {
   it('preserves IPv6 host brackets in Markdown link destinations', () => {
     const url = 'http://[::1]:8080/path';
     const markdown = formatChatAsMarkdown(
-      assistantChatInput([webSearchBlock({ title: 'ipv6', url })]),
+      chatInput([webSearchResults({ title: 'ipv6', url })]),
     );
 
     assert.ok(
@@ -228,15 +173,15 @@ describe('chat export formatters', () => {
 
   it('sanitizes web tool URLs before rendering LaTeX links', () => {
     const latex = formatChatAsLatex(
-      assistantChatInput([
-        webSearchBlock(
+      chatInput([
+        webSearchResults(
           { title: 'unsafe result', url: 'vbscript:msgbox(1)' },
           { title: 'safe result', url: 'https://example.com/path#frag' },
         ),
-        webFetchBlock({
+        webFetch({
           url: 'file:///etc/passwd',
           title: 'unsafe fetch',
-          page_content: 'body',
+          content: 'body',
         }),
       ]),
       '',
@@ -255,9 +200,9 @@ describe('chat export formatters', () => {
   it('escapes allowed-scheme URLs before rendering LaTeX URL commands', () => {
     const url = String.raw`https://e.test/}\input{/etc/passwd`;
     const latex = formatChatAsLatex(
-      assistantChatInput([
-        webSearchBlock({ title: 'safe result', url }),
-        webFetchBlock({ url, title: 'safe fetch', page_content: 'body' }),
+      chatInput([
+        webSearchResults({ title: 'safe result', url }),
+        webFetch({ url, title: 'safe fetch', content: 'body' }),
       ]),
       '',
     );

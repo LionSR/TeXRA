@@ -57,11 +57,6 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
-const CONVERSATION = [
-  { role: 'user', content: 'Polish the lemma.' },
-  { role: 'assistant', content: 'Done.' },
-];
-
 describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => {
   beforeEach(() => {
     mocks.readConfig.mockResolvedValue(null);
@@ -84,7 +79,9 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
   });
 
   it('reports a null exportInput when conversation is present but config is missing', async () => {
-    mocks.readConversation.mockResolvedValue([{ role: 'user', content: 'hi' }]);
+    mocks.readConversation.mockResolvedValue([
+      { kind: 'assistant-text', text: 'hi' },
+    ]);
 
     const result = await loadChatExportInput('a1' as RunId);
 

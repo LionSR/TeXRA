@@ -1,3 +1,4 @@
+import type { ExportNode } from '@agent/export';
 import { formatConversationMessage } from '@agent/storage';
 
 import type {
@@ -14,7 +15,7 @@ interface ConversationMessageFormatOptions {
 }
 
 export function createConversationPreview(
-  conversation: readonly unknown[] | null,
+  conversation: readonly ExportNode[] | null,
 ): CliHistoryConversationPreview | null {
   const transcript = buildConversationMessages(conversation, {
     includeToolUseMarkers: false,
@@ -36,7 +37,7 @@ export function createConversationPreview(
 }
 
 export function createConversationTranscript(
-  conversation: readonly unknown[] | null,
+  conversation: readonly ExportNode[] | null,
 ): CliHistoryConversationPreview | null {
   return buildConversationMessages(conversation, {
     includeToolUseMarkers: true,
@@ -44,7 +45,7 @@ export function createConversationTranscript(
 }
 
 function buildConversationMessages(
-  conversation: readonly unknown[] | null,
+  conversation: readonly ExportNode[] | null,
   options: ConversationMessageFormatOptions,
 ): CliHistoryConversationPreview | null {
   if (!conversation?.length) return null;
@@ -59,7 +60,7 @@ function buildConversationMessages(
 }
 
 function toConversationPreviewMessage(
-  message: unknown,
+  message: ExportNode,
   index: number,
   options: ConversationMessageFormatOptions,
 ): CliHistoryConversationPreviewMessage {

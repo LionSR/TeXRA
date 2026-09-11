@@ -3,7 +3,6 @@
  * Channel traces publish through their owning session; transcript history is
  * read from the committed event prefix.
  */
-export { StreamLogStore } from './StreamLogStore';
 export { createRunTrace, type RunTrace } from './runTrace';
 export { RunSnapshotStore } from './RunSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';

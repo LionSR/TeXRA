@@ -24,7 +24,7 @@ import { Effect } from 'effect';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ChatExportInput } from '@agent/export/schemas';
+import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
 import { redactDisplayValue } from '@logger/redaction';
 import type { RunId, RunMeta } from '@shared/schemas';
 import {
@@ -44,7 +44,7 @@ export interface ChatExportLoadResult {
   readonly config: AgentConfig | null;
   /** Normalized: `null` when absent *or* empty — an empty array never counts
    *  as "a conversation is present" (see module doc). */
-  readonly conversation: readonly unknown[] | null;
+  readonly conversation: readonly ExportNode[] | null;
   /** Host-neutral storage evidence used to distinguish incomplete from absent. */
   readonly hasTranscriptEvidence: boolean;
   readonly exportInput: ChatExportInput | null;
@@ -64,8 +64,8 @@ export interface ChatExportLoadResult {
  * either.
  */
 function hasConversationMessages(
-  conversation: readonly unknown[] | null,
-): conversation is readonly unknown[] {
+  conversation: readonly ExportNode[] | null,
+): conversation is readonly ExportNode[] {
   return Array.isArray(conversation) && conversation.length > 0;
 }
 
@@ -114,7 +114,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
         contextFiles: config.contextFiles,
         outputFiles: config.outputFiles,
       },
-      messages: conversation,
+      nodes: conversation,
     }),
   };
 });

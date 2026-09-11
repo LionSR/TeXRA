@@ -1,10 +1,11 @@
 /**
  * Message-level formatter for rendering a stored execution conversation as
- * text, built on the shared per-content-block formatter in
- * `@agent/storage/conversationFormat` (the same block recognition and
- * truncation the CLI's `texra history` conversation previews use).
+ * text, built on the shared node renderer in
+ * `@agent/storage/conversationFormat` (the same rendering and truncation the
+ * CLI's `texra history` conversation previews use).
  * Pure: the caller owns storage access and paging.
  */
+import type { ExportNode } from '@agent/export/schemas';
 import {
   formatConversationMessage,
   type ConversationFormatOptions,
@@ -25,7 +26,7 @@ interface ConversationPageFormatOptions {
 
 /** Render a stored conversation as numbered <message> blocks. */
 export function formatConversation(
-  conversation: readonly unknown[],
+  conversation: readonly ExportNode[],
   options: ConversationPageFormatOptions = {},
 ): string {
   const offset = options.offset ?? 0;

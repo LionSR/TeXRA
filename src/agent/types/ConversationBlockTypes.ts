@@ -1,17 +1,9 @@
 /**
- * Shared provider content-block `type` tag vocabulary and classification.
+ * Provider content-block `type` tag vocabulary and classification, used by
+ * the tool-use round to recognize tool-result blocks in a provider message.
  *
- * Single source of truth for the non-text block-type literals that both
- * `formatConversationBlock` (`@agent/storage/conversationFormat`) and
- * `assistantBlockToNode`/`blocksToUserParts`/`extractToolResultText`
- * (`@agent/export/normalizeConversation`) must recognize. Each consumer maps
- * the canonical {@link ProviderMessageBlockCategory} into its own output shape,
- * so the vocabulary and classification live in one place.
- *
- * `text`/`input_text`/`output_text` are deliberately NOT included: those are
- * genuinely handled differently in the two consumers, so the classifier
- * returns `undefined` for them (and for any unrecognized tag), leaving each
- * consumer's own fallback in place.
+ * `text`/`input_text`/`output_text` are deliberately NOT included: the
+ * classifier returns `undefined` for them (and for any unrecognized tag).
  *
  * The Anthropic server-tool tags live in
  * {@link ANTHROPIC_SERVER_TOOL_BLOCK_TYPES} (`@agent/types/ServerTools`) and
@@ -19,7 +11,7 @@
  */
 import { ANTHROPIC_SERVER_TOOL_BLOCK_TYPES } from './ServerTools';
 
-export const CONVERSATION_BLOCK_TYPES = Object.freeze({
+const CONVERSATION_BLOCK_TYPES = Object.freeze({
   // Anthropic and Google GenAI extended-thinking / thought blocks.
   thinking: 'thinking',
   redactedThinking: 'redacted_thinking',
@@ -68,7 +60,7 @@ const CATEGORY_BY_BLOCK_TYPE = Object.freeze({
  * Canonical classification of a provider message block's non-text `type`
  * tag.
  */
-export type ProviderMessageBlockCategory =
+type ProviderMessageBlockCategory =
   (typeof CATEGORY_BY_BLOCK_TYPE)[keyof typeof CATEGORY_BY_BLOCK_TYPE];
 
 /**
