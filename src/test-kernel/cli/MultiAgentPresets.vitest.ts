@@ -329,6 +329,7 @@ describe('CLI multi-agent presets', () => {
         name: id,
         description: 'User-authored team.',
         icon: 'cube',
+        texraHostedAgents: [],
         source: 'custom',
         agents: {
           workflow: [],

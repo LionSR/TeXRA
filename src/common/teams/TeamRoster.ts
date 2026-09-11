@@ -65,18 +65,6 @@ export function resolveTeamRoster(
   };
 }
 
-/**
- * Legacy presets without provenance conservatively preflight every unresolved
- * member. Known local members already resolve and therefore never enter this
- * set; explicit metadata remains authoritative for current presets.
- */
-export function teamHostedNamesForPreflight(
-  preset: AgentModePreset,
-  unresolvedNames: readonly string[],
-): ReadonlySet<string> {
-  return new Set(preset.texraHostedAgents ?? unresolvedNames);
-}
-
 /** Split a preset's member names into catalog entries and unmatched names. */
 export function resolvePresetAgents<
   T extends { readonly name: string; readonly source: AgentSource },

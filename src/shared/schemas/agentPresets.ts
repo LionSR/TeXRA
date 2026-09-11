@@ -30,7 +30,7 @@ export const AgentModePresetSchema = z.object({
   icon: z.enum(AGENT_MODE_PRESET_ICON_NAMES),
   agents: z.record(AgentCategorySchema, z.array(z.string())),
   /** Members whose definitions may be supplied by TeXRA's remote catalog. */
-  texraHostedAgents: z.array(z.string()).optional(),
+  texraHostedAgents: z.array(z.string()),
 });
 
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;

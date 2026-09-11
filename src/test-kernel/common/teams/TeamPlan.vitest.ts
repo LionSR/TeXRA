@@ -41,6 +41,7 @@ function preset(overrides: Partial<TeamPreset> = {}): TeamPreset {
     name: 'Custom Team',
     description: 'A custom team.',
     icon: 'bookmark',
+    texraHostedAgents: [],
     agents: {
       workflow: ['writer'],
       toolUse: ['lead', 'member'],

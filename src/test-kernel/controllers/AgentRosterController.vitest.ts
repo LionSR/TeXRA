@@ -35,6 +35,7 @@ const preset: AgentModePreset = {
     workflow: ['write'],
     toolUse: ['lead'],
   },
+  texraHostedAgents: [],
 };
 
 function controller(

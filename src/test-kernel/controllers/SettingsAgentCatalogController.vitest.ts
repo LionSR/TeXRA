@@ -419,6 +419,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: [],
         toolUse: [],
       },
+      texraHostedAgents: [],
     };
     const state = createController({ customPresets: [preset] });
 
@@ -440,6 +441,7 @@ describe('SettingsAgentCatalogController', () => {
         workflow: [],
         toolUse: [],
       },
+      texraHostedAgents: [],
     };
     const state = createController({
       customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],
