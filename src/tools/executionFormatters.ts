@@ -22,7 +22,6 @@ import type { RunHandle, RunStatusInfo } from '@agent/runtime/RunHandle';
 import type {
   AgentCategory,
   RunId,
-  RunMeta,
   RunIdentity,
   TodoItem,
 } from '@shared/schemas';
@@ -32,13 +31,15 @@ import {
   RUN_OUTCOME,
   STATUS_DISPLAY,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - liveness
 import {
   resolveRunLiveness,
   type RunLiveness,
-  type KnownRunMeta,
+  type KnownRunOutcome,
 } from './executions/runLiveness';
 
 /**
@@ -140,11 +141,12 @@ export function formatStatusInfo(info: RunStatusInfo): string {
  * a live handle's phase, else the recorded outcome, else the fact that forbids
  * a terminal reading, else `cancelled` for an interrupted run.
  *
- * `knownMeta` is the metadata row the caller just read for this same request
- * (`null` when it read one and found none), so a listing row does not pay a
- * second read of the file it was built from. Omitting it means "I have no
- * row", and the liveness resolver reads one. Never pass an older snapshot: two
- * surfaces reading the same run must not disagree about how it ended.
+ * `knownOutcome` is the outcome the caller just read for this same request
+ * (`null` when it read the run and found no terminal row), so a listing row
+ * does not pay a second read of the facts it was built from. Omitting it
+ * means "I have none", and the liveness resolver reads one. Never pass an
+ * older reading: two surfaces reading the same run must not disagree about
+ * how it ended.
  *
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
@@ -152,10 +154,10 @@ export function formatStatusInfo(info: RunStatusInfo): string {
 export const getRunStatusInfo = Effect.fn('getRunStatusInfo')(function* (
   runId: RunId,
   session: SessionHandle,
-  knownMeta?: KnownRunMeta,
+  knownOutcome?: KnownRunOutcome,
 ) {
   return statusInfoFromLiveness(
-    yield* resolveRunLiveness(runId, session, knownMeta),
+    yield* resolveRunLiveness(runId, session, knownOutcome),
   );
 });
 
@@ -191,9 +193,11 @@ export const formatListingLine = Effect.fn('formatListingLine')(function* (
   const ts = formatTimestamp(entry.timestamp);
   // The row was built from this run's metadata, outcome included, so the
   // status reading reuses it instead of reading the same file again.
-  const info = yield* getRunStatusInfo(entry.id, session, {
-    outcome: entry.outcome,
-  });
+  const info = yield* getRunStatusInfo(
+    entry.id,
+    session,
+    entry.outcome ?? null,
+  );
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
@@ -248,12 +252,18 @@ export function shouldSuppressAutoDeliveredSubagentReport(
 /** Format a single child run as a summary line. */
 export const formatChildLine = Effect.fn('formatChildLine')(function* (
   child: ChildRecord,
-  childMeta: RunMeta | null,
+  childRun: RunView | undefined,
   session: SessionHandle,
 ) {
-  const info = yield* getRunStatusInfo(child.id, session, childMeta);
+  const info = yield* getRunStatusInfo(
+    child.id,
+    session,
+    childRun && isTerminalOutcomePhase(childRun.status)
+      ? childRun.status
+      : null,
+  );
   const ts = formatTimestamp(child.timestamp);
-  const desc = childMeta?.description ? `: ${childMeta.description}` : '';
+  const desc = childRun?.description ? `: ${childRun.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
 });
 
@@ -263,7 +273,7 @@ export function buildRunningSummaryLines(
   handle: RunHandle,
   category: RunDisplayCategory | undefined,
   info: RunStatusInfo,
-  meta: RunMeta | null,
+  run: RunView | undefined,
 ): string[] {
   const lines = [
     `Run: ${runId}`,
@@ -273,8 +283,8 @@ export function buildRunningSummaryLines(
     `Status: ${formatStatusInfo(info)}`,
   ];
 
-  if (meta?.parentRunId) {
-    lines.push(`Parent: ${meta.parentRunId}`);
+  if (run?.parentId) {
+    lines.push(`Parent: ${run.parentId}`);
   }
 
   return lines;
@@ -287,7 +297,7 @@ export function buildCompletedSummaryLines(
   identity: RunIdentity | undefined,
   category: RunDisplayCategory | undefined,
   info: RunStatusInfo,
-  meta: RunMeta | null,
+  run: RunView | undefined,
 ): string[] {
   const name =
     record && (isAgentRunRecord(record) ? record.agent : record.name);
@@ -297,16 +307,16 @@ export function buildCompletedSummaryLines(
     `Agent: ${name ?? 'unknown'}`,
     ...(category ? [`Category: ${category}`] : []),
     ...(model === null ? [] : [`Model: ${model}`]),
-    `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
+    `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
     `Status: ${formatStatusInfo(info)}`,
   ];
 
-  if (meta?.description) {
-    lines.push(`Description: ${meta.description}`);
+  if (run?.description) {
+    lines.push(`Description: ${run.description}`);
   }
 
-  if (meta?.parentRunId) {
-    lines.push(`Parent: ${meta.parentRunId}`);
+  if (run?.parentId) {
+    lines.push(`Parent: ${run.parentId}`);
   }
 
   return lines;

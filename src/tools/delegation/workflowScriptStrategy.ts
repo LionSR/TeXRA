@@ -148,7 +148,7 @@ export interface WorkflowScriptStrategyParams {
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
-      totalCostUsd: number | undefined,
+      costUsd: number | undefined,
     ) => void;
   }) => WorkflowAgentRunner;
 }
@@ -270,8 +270,8 @@ export function createWorkflowScriptStrategy(
           settleSummary({ journal, snapshot }, costUsd);
         };
         const runAgent = params.createRunAgent({
-          onCost: (invocation, totalCostUsd) => {
-            ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
+          onCost: (invocation, costUsd) => {
+            ports.recordCost(attemptCost.record(invocation, costUsd ?? 0));
           },
         });
 

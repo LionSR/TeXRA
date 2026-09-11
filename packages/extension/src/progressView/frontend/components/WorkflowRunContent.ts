@@ -1,5 +1,5 @@
 /**
- * A workflow stream's conversation: the header, its pending approvals, the
+ * A workflow run's conversation: the header, its pending approvals, the
  * inquiries it is waiting on, then the run board for a workflow-script run
  * or the transcript log for any other, and the files and usage it closes
  * with. Reads the view and the surface; every send is a child's event.
@@ -15,7 +15,6 @@ import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
 // Local imports - progress view
-import { totalRunUsage } from '../usageTotals';
 import { conversationContentStyles } from './ConversationContent.styles';
 
 // Side-effect imports - register the elements rendered below
@@ -32,28 +31,24 @@ type WorkflowRunView = Extract<
   { readonly category: typeof AgentCategory.Workflow }
 >;
 
-@customElement('workflow-stream-content')
+@customElement('workflow-run-content')
 export class WorkflowRunContent extends LitElement {
   static override styles = conversationContentStyles;
 
-  @property({ attribute: false }) stream!: WorkflowRunView;
+  @property({ attribute: false }) run!: WorkflowRunView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
   /** The host's clock, for the run board's elapsed times. */
   @property({ type: Number }) nowMs: number | null = null;
 
   override render(): TemplateResult {
-    const { stream, view, surface } = this;
+    const { run, view, surface } = this;
     const approvals = view.approvals
-      .filter((entry) => entry.runId === stream.id)
+      .filter((entry) => entry.runId === run.id)
       .map((entry) => entry.payload);
-    const { transcript } = stream;
+    const { transcript } = run;
     return html`
-      <stream-header
-        .stream=${stream}
-        .view=${view}
-        .surface=${surface}
-      ></stream-header>
+      <run-header .run=${run} .view=${view} .surface=${surface}></run-header>
 
       <div class="conversation-content">
         ${
@@ -62,7 +57,7 @@ export class WorkflowRunContent extends LitElement {
                 <request-panels
                   .permissions=${approvals}
                   .view=${view}
-                  .readOnly=${stream.readOnly === true}
+                  .readOnly=${run.readOnly === true}
                 ></request-panels>
               </div>`
             : nothing
@@ -71,7 +66,7 @@ export class WorkflowRunContent extends LitElement {
         <div class="conversation-column conversation-prelude">
           <background-tasks-panel
             scope="inquiries"
-            .stream=${stream}
+            .run=${run}
             .view=${view}
             .surface=${surface}
           ></background-tasks-panel>
@@ -80,27 +75,27 @@ export class WorkflowRunContent extends LitElement {
         ${
           transcript.run
             ? html`<workflow-run-board
-                .stream=${stream}
+                .run=${run}
                 .view=${view}
                 .surface=${surface}
                 .nowMs=${this.nowMs}
               ></workflow-run-board>`
             : html`<div class="conversation-log">
-                <log-list .stream=${stream} .surface=${surface}></log-list>
+                <log-list .run=${run} .surface=${surface}></log-list>
               </div>`
         }
 
         <div class="conversation-column conversation-epilogue">
           <file-list
-            .runId=${stream.id}
+            .runId=${run.id}
             .surface=${surface}
-            .filesByRound=${stream.files}
-            .failuresByRound=${stream.compileFailures}
+            .filesByRound=${run.files}
+            .failuresByRound=${run.compileFailures}
           ></file-list>
 
           <usage-panel
-            .usage=${totalRunUsage(stream.usage)}
-            .contextState=${stream.context}
+            .usage=${run.usage}
+            .contextState=${run.context}
           ></usage-panel>
         </div>
       </div>
@@ -110,6 +105,6 @@ export class WorkflowRunContent extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'workflow-stream-content': WorkflowRunContent;
+    'workflow-run-content': WorkflowRunContent;
   }
 }

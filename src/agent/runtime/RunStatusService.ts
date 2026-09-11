@@ -30,7 +30,7 @@ export interface RunPhaseState {
    * substate changes, cleared when the phase stops being active, and stamped
    * again on a later WAITING→RUNNING transition. Hosts render
    * elapsed-while-active time from this value. This is not durable run
-   * creation time; that is `RunMeta.timestamp`.
+   * creation time; that is `RunView.launchedAt`.
    * `RunHandle.startedAt` separately timestamps a handle generation
    * and may remain present on a parked handle after this field has cleared.
    */

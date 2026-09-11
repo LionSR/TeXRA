@@ -28,8 +28,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { assembleTrace, RunSnapshotStore } from '@transcript';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+import { assembleTrace } from '@transcript';
 
 const tempDirs = useTempDirs();
 let session: ReturnType<typeof createTestSession>;
@@ -60,7 +59,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   });
 }
 
-/** Persist a run record plus a meta row for a run. */
+/** Persist a run record plus, when given, the run's terminal outcome. */
 async function writeRun(
   runId: RunId,
   meta: { outcome?: RunOutcome } = {},
@@ -71,7 +70,7 @@ async function writeRun(
   await Effect.runPromise(
     getRunRecords(session, runId).writeRunRecord(runConfigRecord),
   );
-  // The terminal fact is `run.end`; `RunMeta.outcome` is folded from it.
+  // The terminal fact is `run.end`; the view's outcome is folded from it.
   if (meta.outcome)
     await Effect.runPromise(
       session.commit([
@@ -107,7 +106,7 @@ describe('assembleTrace', () => {
     vi.restoreAllMocks();
   });
 
-  it('assembles a registered run without any sidecar scan (#9590 A1)', async () => {
+  it('assembles a registered run from its folded view', async () => {
     const runId = 'abc900abc900' as RunId;
     const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
     await Effect.runPromise(
@@ -118,14 +117,11 @@ describe('assembleTrace', () => {
     await releaseOwnedRunLease(runId);
     await appendLogEntry(runId, 'registered row');
 
-    const scan = vi.spyOn(RunSnapshotStore.prototype, 'listPersistedRuns');
-
     const trace = unwrapOkTrace(
       await Effect.runPromise(assembleTrace(runId, session)),
     );
 
     expect(trace.runId).toBe(runId);
-    expect(scan).not.toHaveBeenCalled();
   });
 
   it('assembles a full trace document for a run', async () => {
@@ -163,9 +159,8 @@ describe('assembleTrace', () => {
     expect(trace.entries[0]).toMatchObject({
       text: 'hello',
     });
-    expect(trace.meta?.outcome).toBe('completed');
-    expect(trace.snapshot.runId).toBe(runId);
-    expect(trace.snapshot.todos).toEqual(todos);
+    expect(trace.meta.outcome).toBe('completed');
+    expect(trace.meta.todos).toEqual(todos);
   });
 
   it('returns config_missing when no config was ever written', async () => {

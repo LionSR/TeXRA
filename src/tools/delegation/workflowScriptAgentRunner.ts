@@ -185,7 +185,7 @@ export function createWorkflowScriptAgentRunner(
     /** Fires per live child on success and failure with its total cost. */
     readonly onCost?: (
       invocation: WorkflowAgentInvocation,
-      totalCostUsd: number | undefined,
+      costUsd: number | undefined,
     ) => void;
   },
 ): (invocation: WorkflowAgentInvocation) => Effect.Effect<RunEnd, Error> {
@@ -255,13 +255,13 @@ export function createWorkflowScriptAgentRunner(
                   runScope.session,
                 );
               },
-              onCost: (totalCostUsd) => {
-                hooks?.onCost?.(invocation, totalCostUsd);
+              onCost: (costUsd) => {
+                hooks?.onCost?.(invocation, costUsd);
                 // Stamp progressive spend onto the live snapshot attempt so a
                 // failed/cancelled/retried attempt still shows what it consumed
                 // even when run never reaches the success path below.
-                if (totalCostUsd !== undefined) {
-                  invocation.report({ costUsd: totalCostUsd });
+                if (costUsd !== undefined) {
+                  invocation.report({ costUsd: costUsd });
                 }
               },
             };

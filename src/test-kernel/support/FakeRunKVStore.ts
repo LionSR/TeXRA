@@ -37,10 +37,11 @@ export function createFakeRunRecords(
   overrides: Partial<ReturnType<typeof getRunRecords>> = {},
 ): ReturnType<typeof getRunRecords> {
   return {
-    readMeta: () => Effect.succeed(null),
+    exists: () => Effect.succeed(false),
     readRunRecord: () => Effect.succeed(null),
     readConfig: () => Effect.succeed(null),
     readReport: () => Effect.succeed(null),
+    readWorkflow: () => Effect.succeed(null),
     readWorkspaceFiles: () => Effect.succeed([]),
     readResultMeta: () => Effect.succeed(null),
     readRunEnd: () => Effect.succeed(null),

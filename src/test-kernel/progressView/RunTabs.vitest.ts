@@ -29,7 +29,7 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/RunTabs'),
 );
 
-/** Let the nested <stream-tab> rows finish their own first render. */
+/** Let the nested <run-tab> rows finish their own first render. */
 function settleChildRender(): Promise<unknown> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -45,7 +45,7 @@ async function mountTabs(
   surface: Surface,
   props: Partial<RunTabs> = {},
 ): Promise<Mounted> {
-  const element = await mountComponent<RunTabs>('stream-tabs', {
+  const element = await mountComponent<RunTabs>('run-tabs', {
     view,
     surface,
     ...props,
@@ -63,11 +63,11 @@ async function mountTabs(
 }
 
 function rowOf(element: RunTabs, runId: string): HTMLElement {
-  const rows = [...(element.shadowRoot?.querySelectorAll('stream-tab') ?? [])];
+  const rows = [...(element.shadowRoot?.querySelectorAll('run-tab') ?? [])];
   const row = rows.find(
     (candidate) =>
       candidate.shadowRoot?.querySelector(
-        `[data-stream="${runId}"][data-action="select"]`,
+        `[data-run="${runId}"][data-action="select"]`,
       ) !== null,
   );
   if (!row) throw new Error(`no row for ${runId}`);
@@ -82,7 +82,7 @@ function control(row: HTMLElement, action: string): HTMLElement {
   return control;
 }
 
-describe('stream-tabs over the fold', () => {
+describe('run-tabs over the fold', () => {
   it("renders every top-level stream with a workflow run's calls beneath it, and the rail without them", async () => {
     const view = fanOutView();
     const { element } = await mountTabs(view, emptySurface(view.key));
@@ -167,7 +167,7 @@ describe('stream-tabs over the fold', () => {
       value: 'no such stream label',
     });
     const { element } = await mountTabs(view, surface);
-    expect(element.shadowRoot?.querySelectorAll('stream-tab').length).toBe(0);
+    expect(element.shadowRoot?.querySelectorAll('run-tab').length).toBe(0);
 
     element.surface = applySurfaceAction(surface, {
       kind: 'search',

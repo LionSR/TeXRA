@@ -5,20 +5,20 @@
  *
  * | Concept | Term | Never say |
  * | --- | --- | --- |
- * | Anything nested under a run (delegated agent, agent CLI, background command) | background task | child stream |
+ * | Anything nested under a run (delegated agent, agent CLI, background command) | background task | child run |
  * | A delegated TeXRA agent specifically | subagent | child |
- * | The internal stream-tree relationship | child stream — code only | in any UI string |
+ * | The internal run-tree relationship | child run — code only | in any UI string |
  *
  * The persistent CLI list of those rows is the **session list**: Tab opens it,
  * Enter focuses a session, Esc returns to the prompt. Do not call that list
- * "children" (stream-tree jargon) or "tasks" (collides with the todo pane).
+ * "children" (run-tree jargon) or "tasks" (collides with the todo pane).
  *
  * Status-bar count exception: the compact chip stays "N sub" / "N subagents"
  * because the rows are overwhelmingly delegated agents and "N bg" is less
  * legible in the footer. Full sentences and disabled-input copy still use
  * "background task" when the focused row might not be an agent.
  *
- * Hosts import these strings instead of paraphrasing stream-tree or roster
+ * Hosts import these strings instead of paraphrasing run-tree or roster
  * vocabulary. Wire identifiers (`childRunId`, `parentRun`, …) stay
  * internal and never reach the screen.
  */

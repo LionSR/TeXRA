@@ -8,7 +8,7 @@ import { conversationContentStyles } from './ConversationContent.styles';
 
 import './RunHeader';
 
-@customElement('process-stream-content')
+@customElement('process-run-content')
 export class ProcessRunContent extends BaseRunContent {
   static override styles = [
     conversationContentStyles,
@@ -71,15 +71,15 @@ export class ProcessRunContent extends BaseRunContent {
   ];
 
   override render(): TemplateResult | typeof nothing {
-    const stream = this.stream;
-    if (!stream) return nothing;
+    const run = this.run;
+    if (!run) return nothing;
 
     // The full command that spawned the process, from `run.start`; the
     // toolbar itself stays neutral for a process identity.
-    const command = (stream.command ?? stream.description ?? '').trim();
+    const command = (run.command ?? run.description ?? '').trim();
 
     return html`
-      <stream-header .stream=${stream} .view=${this.view}></stream-header>
+      <run-header .run=${run} .view=${this.view}></run-header>
       <div class="conversation-content">
         ${
           command
@@ -106,6 +106,6 @@ export class ProcessRunContent extends BaseRunContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'process-stream-content': ProcessRunContent;
+    'process-run-content': ProcessRunContent;
   }
 }

@@ -22,7 +22,6 @@ import {
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import {
-  RUN_META_SCHEMA_VERSION,
   aggregateId,
   CLI_RUN_STATUS,
   AgentCategory,
@@ -132,10 +131,10 @@ describe('CLI history status formatting', () => {
     const text = formatCliHistoryDetailsText({
       id: 'abc123' as RunId,
       status: HISTORY_RUN_STATUS.RESUMABLE,
-      meta: {
-        schemaVersion: RUN_META_SCHEMA_VERSION,
-        timestamp: '2026-06-03T05:03:06.717Z',
-        identity: { kind: 'agent', agent: 'assistant' },
+      run: {
+        launchedAt: Date.parse('2026-06-03T05:03:06.717Z'),
+        parentId: null,
+        description: null,
       },
       config: null,
       result: null,

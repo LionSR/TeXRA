@@ -80,8 +80,9 @@ interface HostRunActions {
   ): Effect.Effect<void, unknown>;
   /** The launcher's form of a settled run's saved setup. */
   restoreState(runId: RunId): Effect.Effect<AgentConfig, Error>;
-  /** The hydrated stream state used by the workflow controllers. */
-  readonly snapshotPort: ProgressFollowUpState & {
+  /** The run's output facts as the view holds them, read by the workflow
+   *  controllers. */
+  readonly runOutputs: ProgressFollowUpState & {
     getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
   restoreProposal(proposal: unknown): AgentConfig;
@@ -92,21 +93,30 @@ export function createHostRunActions(
   ports: HostRunActionPorts,
 ): HostRunActions {
   const { session } = ports;
-  const { snapshots } = session;
   const view = () => SubscriptionRef.getUnsafe(session.view);
 
-  const snapshotPort = {
-    getRunMetadata: (runId: RunId) => snapshots.getRunMetadata(runId),
-    getOutputFiles: (runId: RunId) => snapshots.getOutputFiles(runId),
-    getCompileFailures: (runId: RunId) => snapshots.getCompileFailures(runId),
+  const getOutputFiles = (runId: RunId) => {
+    const run = session.runView(runId);
+    if (run === undefined) return {};
+    return run.category === AgentCategory.Workflow ? run.files : run.outputs;
+  };
+  const runOutputs = {
+    getOutputFiles,
+    getCompileFailures: (runId: RunId) =>
+      session.runView(runId)?.compileFailures ?? {},
     getKnownWorkspaceOutputPaths: (runId: RunId) =>
-      snapshots.getKnownFilePaths(runId, { workspaceOnly: true }),
+      new Set(
+        Object.values(getOutputFiles(runId)).flatMap((files) =>
+          files
+            .filter((file) => file.location.kind === 'workspace')
+            .map((file) => file.location.absolutePath),
+        ),
+      ),
   };
 
   const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
     runId: RunId,
   ) {
-    yield* snapshots.preload([runId]);
     return (yield* getRunRecords(session, runId).readConfig()) ?? undefined;
   });
 
@@ -115,20 +125,19 @@ export function createHostRunActions(
     runId: RunId,
     action: string,
   ) {
-    if (!view().runs.has(runId)) {
+    const run = session.runView(runId);
+    if (run === undefined) {
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The stream is no longer open.',
+          reason: 'The run is no longer open.',
         }),
       );
     }
-    yield* snapshots.preload([runId]);
-    const metadata = snapshots.getRunMetadata(runId);
-    if (!isPlainAgentIdentity(metadata.identity)) {
+    if (!isPlainAgentIdentity(run.identity)) {
       return yield* Effect.fail(
         new Rejected({
-          reason: `Only TeXRA agent runs can be ${action} from here; this stream's run is not one.`,
+          reason: `Only TeXRA agent runs can be ${action} from here; this run is not one.`,
         }),
       );
     }
@@ -140,7 +149,7 @@ export function createHostRunActions(
         }),
       );
     }
-    return { ...metadata, config };
+    return config;
   });
 
   const isRetryPending = (runId: RunId, requestId: string) =>
@@ -189,7 +198,7 @@ export function createHostRunActions(
 
   const followUp = new ProgressFollowUpController({
     loadModelOptions: () => ports.loadModelOptions(),
-    state: snapshotPort,
+    state: runOutputs,
     workspace: WorkspaceFS,
   });
 
@@ -311,7 +320,7 @@ export function createHostRunActions(
   );
 
   return {
-    snapshotPort,
+    runOutputs,
     restoreProposal(proposal) {
       const parsed = AgentConfigSchema.safeParse(proposal);
       if (!parsed.success) {
@@ -341,7 +350,7 @@ export function createHostRunActions(
      * restores it instead of starting a fresh run.
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-      const { config } = yield* nativeAgentRun(runId, 'resumed');
+      const config = yield* nativeAgentRun(runId, 'resumed');
       if (config.agentCategory !== AgentCategory.Workflow) {
         yield* Effect.tryPromise({
           try: () => platform().agentResume.tryResumeRun(runId),
@@ -355,7 +364,7 @@ export function createHostRunActions(
       });
     }),
     runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
-      const { config } = yield* nativeAgentRun(runId, 're-run');
+      const config = yield* nativeAgentRun(runId, 're-run');
       yield* Effect.tryPromise({
         try: () => ports.runAgentRequest({ config }),
         catch: ensureError,
@@ -367,7 +376,7 @@ export function createHostRunActions(
         return yield* Effect.fail(
           new Unavailable({
             runId,
-            reason: 'The stream is no longer open.',
+            reason: 'The run is no longer open.',
           }),
         );
       }
@@ -414,8 +423,7 @@ export function createHostRunActions(
       });
     },
     restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-      const { config } = yield* nativeAgentRun(runId, 'restored');
-      return config;
+      return yield* nativeAgentRun(runId, 'restored');
     }),
   };
 }

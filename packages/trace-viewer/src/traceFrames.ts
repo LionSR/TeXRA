@@ -8,87 +8,21 @@
 import {
   aggregateId as qualifyAggregateId,
   referencedAggregates,
-  RunIdSchema,
   AgentCategory,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   runIdentityDisplayName,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type RunIdentity,
   type DisplaySessionEvent,
   type DisplaySessionEventDraft,
-  type RunPhase,
 } from '@shared/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
 } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { TraceDocument } from '@transcript';
-
-/**
- * Stage kinds nested under the root "Run:" stage (see `StageOptions.kind` in
- * `@agent/trace`). A tool-use round (and any other non-root stage of these
- * kinds) is opened without an ambient parent, so its `GROUP_END` row gets
- * `groupId === undefined` just like the root run stage's own. Only the root
- * stage's row is tagged `kind: 'run'` (or has no `kind` at all, for traces
- * recorded before stage kinds existed); anything tagged with one of these
- * kinds is a nested stage that shares the root's "no parent" shape and must
- * be excluded from the reverse scan below.
- */
-const NESTED_STAGE_KINDS = new Set(['round', 'phase', 'session']);
-
-/**
- * The root run stage's entry id by structural position, for archived traces
- * where `data.kind` is not available to check. Every historical trace holds
- * each stage in exactly one entry for its whole lifetime (`stage.end`
- * mutates that entry in place), and `beginRunStage` opens the root run stage
- * before any flow starts, so among every top-level stage entry the root's is
- * the earliest by seqNo.
- */
-function findRootStageId(
-  entries: TraceDocument['entries'],
-): string | undefined {
-  return entries.find(
-    (entry) =>
-      entry.groupId === undefined &&
-      (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
-        entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END),
-  )?.id;
-}
-
-/**
- * The terminal phase the trace records, or null for a trace that never
- * reached one. `meta.outcome` is the one terminal fact the document
- * carries; failing that, the persisted transcript's last terminal root group
- * row decides, then the snapshot status. Every one of those is a canonical
- * `RunPhase`. A trace with no terminal fact folds as interrupted: an
- * exported file has no producer that could still be running it.
- */
-function traceOutcome(trace: TraceDocument): RunPhase | null {
-  if (trace.meta.outcome) return trace.meta.outcome;
-  const rootStageId = findRootStageId(trace.entries);
-  for (const entry of trace.entries.toReversed()) {
-    if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
-    if (entry.groupId !== undefined) continue;
-    const kind = entry.data.kind;
-    if (kind !== undefined) {
-      if (NESTED_STAGE_KINDS.has(kind)) continue;
-    } else if (entry.id !== rootStageId) {
-      // Untagged: only the entry at the root stage's fixed position can be the
-      // run's own GROUP_END; anything else sharing the "no parent" shape is a
-      // nested round, phase, or session.
-      continue;
-    }
-    const { status } = entry.data;
-    if (status !== undefined) return status;
-  }
-  const status = trace.snapshot.status;
-  return status !== undefined && isTerminalOutcomePhase(status) ? status : null;
-}
 
 /** The run's display name: the same identity rule every host's stream tab
  *  labels with, so the page title and the tab cannot disagree. */
@@ -98,10 +32,10 @@ export function traceDisplayName(trace: TraceDocument): string {
 
 /** The listing facts of the run, in publish order, without envelopes. */
 function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
-  const { snapshot, runId } = trace;
+  const { meta, runId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
-  const identity = trace.meta.identity;
+  const identity = meta.identity;
   // Workflow-shaped for workflow agents and multi-agent-workflow containers
   // (both have round outputs); everything else renders the tool-use shape.
   const category =
@@ -148,62 +82,60 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       }),
     });
   }
-  if (trace.meta.description) {
+  if (meta.description !== null) {
     bodies.push({
       type: 'run.description',
-      aggregateId: qualifyAggregateId('run', trace.runId),
-      description: trace.meta.description,
+      aggregateId: qualifyAggregateId('run', runId),
+      description: meta.description,
     });
   }
-  if (snapshot.conversationProgress) {
-    bodies.push({
+  bodies.push(
+    {
       type: 'conversation.progress',
-      aggregateId: qualifyAggregateId('run', trace.runId),
-      progress: snapshot.conversationProgress,
-    });
-  }
-  for (const [usageRunId, usage] of Object.entries(snapshot.runUsage)) {
-    bodies.push({
+      aggregateId: qualifyAggregateId('run', runId),
+      progress: meta.conversationProgress,
+    },
+    {
       type: 'usage',
       aggregateId: qualifyAggregateId('run', runId),
-      runId: RunIdSchema.parse(usageRunId),
-      usage,
-    });
-  }
-  if (category === AgentCategory.Workflow) {
-    bodies.push(
-      {
-        type: 'addOutputFiles',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        filesByRound: snapshot.outputFilesByRound,
-      },
-      {
-        type: 'updateMissingOutputs',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        filesByRound: snapshot.missingOutputsByRound,
-      },
-      {
-        type: 'updateCompileFailures',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        filesByRound: snapshot.compileFailuresByRound,
-      },
-    );
-  } else {
+      runId,
+      usage: meta.usage,
+    },
+    {
+      type: 'addOutputFiles',
+      aggregateId: qualifyAggregateId('run', runId),
+      filesByRound: meta.outputs,
+    },
+    {
+      type: 'updateMissingOutputs',
+      aggregateId: qualifyAggregateId('run', runId),
+      filesByRound: meta.missingOutputs,
+    },
+    {
+      type: 'updateCompileFailures',
+      aggregateId: qualifyAggregateId('run', runId),
+      filesByRound: meta.compileFailures,
+    },
+  );
+  if (category === AgentCategory.ToolUse) {
     bodies.push(
       {
         type: 'updateTodos',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        todos: snapshot.todos,
+        aggregateId: qualifyAggregateId('run', runId),
+        todos: meta.todos,
       },
       {
         type: 'updatePlan',
-        aggregateId: qualifyAggregateId('run', trace.runId),
-        plan: snapshot.plan,
+        aggregateId: qualifyAggregateId('run', runId),
+        plan: meta.plan,
       },
     );
   }
-  const outcome = traceOutcome(trace);
-  if (outcome !== null && isTerminalOutcomePhase(outcome)) {
+  // `meta.outcome` is the one terminal fact the document carries; a trace
+  // with none folds as interrupted: an exported file has no producer that
+  // could still be running it.
+  const { outcome } = meta;
+  if (outcome !== null) {
     bodies.push(
       // `run.end` carries the outcome but no run window; the non-terminal
       // status row is what gives the folded view its `runStartedAt`, so an

@@ -62,8 +62,8 @@ export function formatWorkflowCallMetadataParts(
     terminal && call.durationMs !== undefined
       ? formatCompactDuration(call.durationMs)
       : undefined,
-    terminal && call.totalCostUsd !== undefined
-      ? formatCostUsd(call.totalCostUsd)
+    terminal && call.costUsd !== undefined
+      ? formatCostUsd(call.costUsd)
       : undefined,
   ].filter(filterNotNullish);
 }

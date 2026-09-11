@@ -249,7 +249,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     return {
       ...(model !== undefined && { model }),
       ...(durationMs !== undefined && { durationMs }),
-      ...(call.costUsd !== undefined && { totalCostUsd: call.costUsd }),
+      costUsd: call.costUsd,
     };
   };
 
@@ -298,7 +298,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // carries spend but no model/duration, the same shape the settle
         // sweep emits.
         const spentOnly =
-          call.costUsd !== undefined ? { totalCostUsd: call.costUsd } : {};
+          call.costUsd !== undefined ? { costUsd: call.costUsd } : {};
         return {
           ...identity,
           status: 'failed',

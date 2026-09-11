@@ -26,21 +26,22 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
 import { redactDisplayValue } from '@logger/redaction';
-import type { RunId, RunMeta } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
 
 /**
- * Facts read from the run store, plus the assembled
+ * Facts read from the run store and the session's fold, plus the assembled
  * {@link ChatExportInput} when both `config` and a non-empty `conversation`
  * are present. `exportInput` is `null` whenever there is nothing (or not
  * enough) to export; callers distinguish "nothing at all" from "something is
- * missing" using `meta`/`config`/`conversation` themselves.
+ * missing" using `run`/`config`/`conversation` themselves.
  */
 export interface ChatExportLoadResult {
-  readonly meta: RunMeta | null;
+  readonly run: RunView | null;
   readonly config: AgentConfig | null;
   /** Normalized: `null` when absent *or* empty — an empty array never counts
    *  as "a conversation is present" (see module doc). */
@@ -73,14 +74,15 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ChatExportLoadResult, Error> {
-  const [config, conversationResult, meta] = yield* Effect.all(
+  const [config, conversationResult, view] = yield* Effect.all(
     [
       getRunRecords(session, id).readConfig(),
       readCompletedRunConversation(id, session),
-      getRunRecords(session, id).readMeta(),
+      session.readView([]),
     ],
     { concurrency: 3 },
   );
+  const run = view.runs.get(id) ?? null;
   const conversation = hasConversationMessages(conversationResult.conversation)
     ? conversationResult.conversation
     : null;
@@ -89,7 +91,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
 
   if (!config || !conversation) {
     return {
-      meta,
+      run,
       config,
       conversation,
       hasTranscriptEvidence,
@@ -98,13 +100,15 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   }
 
   return {
-    meta,
+    run,
     config,
     conversation,
     hasTranscriptEvidence,
     exportInput: redactDisplayValue({
-      timestamp: meta?.timestamp ?? new Date().toISOString(),
-      description: meta?.description,
+      timestamp: run
+        ? new Date(run.launchedAt).toISOString()
+        : new Date().toISOString(),
+      description: run?.description ?? undefined,
       config: {
         agent: config.agent,
         model: config.model,

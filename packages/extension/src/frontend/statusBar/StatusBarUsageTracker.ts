@@ -8,15 +8,15 @@ import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
  * extension status bar.
  *
  * Holds no state of its own: the session status plane is the one writer of
- * which runs are in flight, and the session's `RunSnapshotStore` is the
- * one accumulator of per-run usage. Both getters read those planes live, so
+ * which runs are in flight, and the session's view carries each run's
+ * metered total (`RunView.usage`). Both getters read those planes live, so
  * a run leaving flight drops out of the total without any bookkeeping
  * here, and the summing rule has a single home (`sumUsageStats`).
  */
 export class StatusBarUsageTracker {
   constructor(
     private readonly status: Pick<SessionHandle['status'], 'getAllRunStates'>,
-    private readonly snapshots: Pick<SessionHandle['snapshots'], 'getRunUsage'>,
+    private readonly session: Pick<SessionHandle, 'runView'>,
   ) {}
 
   public get activeRunCount(): number {
@@ -31,7 +31,8 @@ export class StatusBarUsageTracker {
     const usages: TokenUsageStats[] = [];
     for (const [runId, state] of this.status.getAllRunStates()) {
       if (!isInFlightPhase(state.phase)) continue;
-      usages.push(...this.snapshots.getRunUsage(runId).values());
+      const run = this.session.runView(runId);
+      if (run) usages.push(run.usage);
     }
     return sumUsageStats(usages);
   }

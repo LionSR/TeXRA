@@ -878,7 +878,7 @@ describe('runRegistry', () => {
       expect(registry.getHandle(runId)).toBeUndefined();
       await vi.waitFor(async () => {
         await expect(
-          Effect.runPromise(store.readMeta()),
+          Effect.runPromise(store.readRunEnd()),
         ).resolves.toMatchObject({
           outcome: RUN_OUTCOME.CANCELLED,
         });

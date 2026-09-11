@@ -7,7 +7,6 @@ import type {
   OutputFileInfo,
   ReadonlyRoundIndexed,
 } from '@shared/schemas';
-import type { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import {
   scanRunDirForOutputs,
@@ -18,13 +17,12 @@ import type { LatexRunDiscoveryPort } from './runDiscovery';
 /**
  * When the caller didn't supply `outputsByRound`, look up the most recent
  * run whose `agent + model + inputFile` match the request and pull
- * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
+ * its recorded `OutputFileInfo[]` from the session's fold. Returns null
  * when no matching run exists.
  */
 export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
   function* (
     discovery: LatexRunDiscoveryPort,
-    snapshots: Pick<RunSnapshotStore, 'read'>,
     query: {
       agent: string;
       model: string;
@@ -60,11 +58,9 @@ export const discoverLatestRunOutputs = Effect.fn('discoverLatestRunOutputs')(
     );
 
     for (const candidate of candidates) {
-      // The run id addresses its snapshot directly; identity is never rebuilt
+      // The run id addresses its view directly; identity is never rebuilt
       // from agent/model configuration.
-      const { outputFilesByRound: rounds } = yield* snapshots.read(
-        candidate.id,
-      );
+      const rounds = yield* discovery.readRunOutputs(candidate.id);
       if (Object.keys(rounds).length > 0) {
         return { runId: candidate.id, rounds };
       }

@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getRunRecords } from '@agent/storage';
 import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
@@ -16,9 +15,9 @@ beforeEach(() => {
 
 const readParentRunId = (runId: RunId) =>
   Effect.runPromise(
-    getRunRecords(session, runId)
-      .readMeta()
-      .pipe(Effect.map((meta) => meta?.parentRunId)),
+    session
+      .readView([])
+      .pipe(Effect.map((view) => view.runs.get(runId)?.parentId ?? undefined)),
   );
 
 describe('persisted parent edge', () => {

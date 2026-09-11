@@ -1,6 +1,6 @@
 /**
- * `<stream-conversation>`: the body of the selected stream. A switch on the
- * stream's `category` and `identity.kind` over plain properties; the three
+ * `<run-conversation>`: the body of the selected run. A switch on the
+ * run's `category` and `identity.kind` over plain properties; the three
  * bodies take the same four records and nothing is provided by context.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
@@ -14,7 +14,7 @@ import './ToolUseRunContent';
 import './WorkflowRunContent';
 import './ProcessRunContent';
 
-@customElement('stream-conversation')
+@customElement('run-conversation')
 export class RunConversation extends LitElement {
   static override styles = css`
     :host {
@@ -34,9 +34,9 @@ export class RunConversation extends LitElement {
       color: var(--wa-color-text-normal);
     }
 
-    tool-use-stream-content,
-    workflow-stream-content,
-    process-stream-content {
+    tool-use-run-content,
+    workflow-run-content,
+    process-run-content {
       display: flex;
       flex: 1 1 auto;
       flex-direction: column;
@@ -46,7 +46,7 @@ export class RunConversation extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) stream: RunView | null = null;
+  @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
@@ -54,40 +54,40 @@ export class RunConversation extends LitElement {
   @property({ type: Number }) nowMs: number | null = null;
 
   override render(): TemplateResult | typeof nothing {
-    const { stream, view, surface } = this;
-    if (!stream || !view || !surface) return nothing;
+    const { run, view, surface } = this;
+    if (!run || !view || !surface) return nothing;
 
-    if (stream.identity.kind === 'process') {
-      return html`<process-stream-content
-        .stream=${stream}
+    if (run.identity.kind === 'process') {
+      return html`<process-run-content
+        .run=${run}
         .view=${view}
         .surface=${surface}
         .host=${this.host}
-      ></process-stream-content>`;
+      ></process-run-content>`;
     }
 
-    switch (stream.category) {
+    switch (run.category) {
       case 'toolUse':
-        return html`<tool-use-stream-content
-          .stream=${stream}
+        return html`<tool-use-run-content
+          .run=${run}
           .view=${view}
           .surface=${surface}
           .host=${this.host}
           .nowMs=${this.nowMs}
-        ></tool-use-stream-content>`;
+        ></tool-use-run-content>`;
       case 'workflow':
-        return html`<workflow-stream-content
-          .stream=${stream}
+        return html`<workflow-run-content
+          .run=${run}
           .view=${view}
           .surface=${surface}
           .nowMs=${this.nowMs}
-        ></workflow-stream-content>`;
+        ></workflow-run-content>`;
     }
   }
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'stream-conversation': RunConversation;
+    'run-conversation': RunConversation;
   }
 }

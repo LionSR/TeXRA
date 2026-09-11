@@ -9,10 +9,11 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import type {
-  SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
-  UsageRoute,
+import {
+  isEmptyUsage,
+  type SubscriptionUsageProvider,
+  type SubscriptionUsageSnapshot,
+  type UsageRoute,
 } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 import { isActivePhase } from '@shared/runs/runStatus';
@@ -30,7 +31,6 @@ import {
 } from '../state/cliState';
 import {
   ancestorPhaseLabel,
-  cumulativeUsageOf,
   sessionView,
   runPhaseOf,
   runViewOf,
@@ -105,7 +105,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const displayStatus = runPhaseOf(displayRun);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
-  const displayUsage = cumulativeUsageOf(displayRun);
+  const displayUsage =
+    displayRun && !isEmptyUsage(displayRun.usage)
+      ? displayRun.usage
+      : undefined;
   // Use root-session access facts only before any stream exists.
   const accessModel = displayRun?.model ?? sessionMeta.model;
 

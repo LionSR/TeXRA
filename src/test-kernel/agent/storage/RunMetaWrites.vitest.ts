@@ -39,10 +39,10 @@ describe('run metadata updates', () => {
       ),
     );
     expect(
-      await Effect.runPromise(getRunRecords(session, id).readMeta()),
+      (await Effect.runPromise(session.readView([id]))).runs.get(id),
     ).toMatchObject({
       description: 'A described session',
-      outcome: 'completed',
+      status: 'completed',
     });
   });
   it('keeps a driver outcome when host-exit finalization follows', async () => {
@@ -62,7 +62,7 @@ describe('run metadata updates', () => {
       }),
     );
     expect(
-      await Effect.runPromise(getRunRecords(session, id).readMeta()),
+      await Effect.runPromise(getRunRecords(session, id).readRunEnd()),
     ).toMatchObject({ outcome: 'completed' });
   });
 });

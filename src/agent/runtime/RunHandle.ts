@@ -123,7 +123,7 @@ export class RunHandle<
    * replacement handle, whose `startedAt` is stamped anew. This feeds the
    * roster's `ActiveChildInfo.startedAt` and the `executions` tool's `Started:`
    * line.
-   * Durable run creation time is `RunMeta.timestamp`.
+   * Durable run creation time is `RunView.launchedAt`.
    */
   readonly startedAt = Date.now();
   /**

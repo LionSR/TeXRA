@@ -33,6 +33,7 @@ import { getRunContextRunId } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
+  AgentCategory,
   RunIdSchema,
   ToolError,
   type RunId,
@@ -41,7 +42,10 @@ import {
   type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
-import { isInFlightPhase } from '@shared/runs/runStatus';
+import {
+  isInFlightPhase,
+  isTerminalOutcomePhase,
+} from '@shared/runs/runStatus';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -183,7 +187,8 @@ function getRunningTodos(
   session: SessionHandle,
   handle: RunHandle,
 ): readonly TodoItem[] {
-  return session.snapshots.getWorkPlan(handle.runId).todos;
+  const run = session.runView(handle.runId);
+  return run?.category === AgentCategory.ToolUse ? run.todos : [];
 }
 
 interface SizedEntry {
@@ -452,9 +457,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         // fetch only the remaining durable details from run storage.
         const records = getRunRecords(context.session, runId);
         const todos = getRunningTodos(session, handle);
-        const [meta, children, report] = yield* Effect.all(
+        const run = session.runView(runId);
+        const [workflow, children, report] = yield* Effect.all(
           [
-            records.readMeta(),
+            records.readWorkflow(),
             readRunChildren(context.session, runId),
             records.readReport(),
           ],
@@ -468,13 +474,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         // reads it too and the same run cannot change category as it settles;
         // an agent run has no identity-derived category and keeps its mode.
         const category =
-          runDisplayCategory(meta?.identity, null) ?? handle.category;
+          runDisplayCategory(run?.identity, null) ?? handle.category;
         const lines = buildRunningSummaryLines(
           runId,
           handle,
           category,
           info,
-          meta,
+          run,
         );
 
         yield* this.appendSummaryTail(
@@ -486,7 +492,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           todos,
           report,
           {
-            workflow: meta?.workflow,
+            workflow: workflow ?? undefined,
             suppressReport: shouldSuppressAutoDeliveredSubagentReport(
               options,
               handle,
@@ -497,11 +503,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         return executed(lines.join('\n'));
       }
 
-      // Completed run: full KV fetch
+      // Completed run: the view's facts beside the private records.
       const records = getRunRecords(context.session, runId);
-      const [meta, record, children, todos, report] = yield* Effect.all(
+      const run = session.runView(runId);
+      const [workflow, record, children, todos, report] = yield* Effect.all(
         [
-          records.readMeta(),
+          records.readWorkflow(),
           records.readRunRecord(),
           readRunChildren(context.session, runId),
           readCompletedRunTodos(runId, session).pipe(
@@ -512,7 +519,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         { concurrency: 5 },
       );
 
-      if (!meta && !record) {
+      if (!run && !record) {
         const resumability = yield* deriveResumability(runId, context.session);
         if (resumability.kind !== 'checkpoint') {
           return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
@@ -524,16 +531,20 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       // Identity comes only from the stamped run row; without a row the
       // display falls back to the config.
-      const identity = meta?.identity;
+      const identity = run?.identity;
       const category = runDisplayCategory(identity, record);
-      const info = yield* getRunStatusInfo(runId, context.session, meta);
+      const info = yield* getRunStatusInfo(
+        runId,
+        context.session,
+        run && isTerminalOutcomePhase(run.status) ? run.status : null,
+      );
       const lines = buildCompletedSummaryLines(
         runId,
         record,
         identity,
         category,
         info,
-        meta,
+        run,
       );
 
       yield* this.appendSummaryTail(
@@ -544,7 +555,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         children,
         todos,
         report,
-        { workflow: meta?.workflow },
+        { workflow: workflow ?? undefined },
       );
 
       return executed(lines.join('\n'));
@@ -604,13 +615,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       Effect.forEach(
         children,
         (child) =>
-          getRunRecords(context.session, child.id)
-            .readMeta()
-            .pipe(
-              Effect.flatMap((meta) =>
-                formatChildLine(child, meta, context.session),
-              ),
-            ),
+          formatChildLine(
+            child,
+            context.session.runView(child.id),
+            context.session,
+          ),
         { concurrency: DURABLE_READ_CONCURRENCY },
       ),
   );
@@ -776,8 +785,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       // Filter out fields irrelevant to this agent's category. Identity comes
       // only from the stamped run row.
-      const meta = yield* records.readMeta();
-      const category = runDisplayCategory(meta?.identity, record);
+      const category = runDisplayCategory(
+        context.session.runView(runId)?.identity,
+        record,
+      );
       return executed(serializeFilteredConfig(record, category));
     },
   );
@@ -800,10 +811,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!conversation) {
       // Match the top-level run lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
-      const meta = yield* records.readMeta();
       const resumability = yield* deriveResumability(runId, context.session);
       const exists =
-        meta !== null ||
+        (yield* records.exists()) ||
         resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
@@ -857,11 +867,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // The handle only proves the run is live in this process; liveness
       // itself is resolved below, from facts that outlive this process.
       const handle = context.session.runs.getHandle(runId);
-      const meta = yield* getRunRecords(context.session, runId).readMeta();
-      if (!meta && !handle) {
+      const run = context.session.runView(runId);
+      if (!run && !handle) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
       }
-      if (meta?.identity?.kind !== 'process') {
+      if (run?.identity.kind !== 'process') {
         return executed(
           `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
             `Use /executions/${runId}/conversation for an agent run's message history.`,

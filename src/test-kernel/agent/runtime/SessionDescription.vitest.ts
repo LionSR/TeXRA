@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRunRecords } from '@agent/storage';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -107,10 +106,8 @@ describe('session description helpers', () => {
       '<agent-purpose>Corrects a draft</agent-purpose>',
     );
     expect(
-      (
-        await Effect.runPromise(
-          getRunRecords(session, 'a0b0c1' as RunId).readMeta(),
-        )
+      (await Effect.runPromise(session.readView(['a0b0c1' as RunId]))).runs.get(
+        'a0b0c1' as RunId,
       )?.description,
     ).toBe('Correcting derivation signs');
     await session.settlePublications();

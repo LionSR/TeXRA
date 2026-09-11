@@ -217,7 +217,6 @@ export class DesktopProgressFileActions {
     try {
       const { outcome } = await effectRuntime().runPromise(
         runLatexdiffForRun({
-          snapshots: this.host.session.snapshots,
           filesystem: nodeFilesystem,
           agent: scan?.agent ?? '',
           model: scan?.model ?? '',

@@ -135,13 +135,11 @@ export function createDesktopHostRequests(
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
-  const snapshots = session.snapshots;
-
   const requireOpenRun = (runId: RunId): void => {
     if (!SubscriptionRef.getUnsafe(session.view).runs.has(runId)) {
       throw new Unavailable({
         runId,
-        reason: 'The stream is no longer open.',
+        reason: 'The run is no longer open.',
       });
     }
   };
@@ -162,7 +160,7 @@ export function createDesktopHostRequests(
     showInfo: (message) => host.showInfoMessage(message),
     showWarning: (message) => host.showWarningMessage(message),
   });
-  const { snapshotPort } = runActions;
+  const { runOutputs } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
     const workspacePath = options.workspacePath;
@@ -227,8 +225,8 @@ export function createDesktopHostRequests(
 
   /**
    * The run context a diff of an accepted file pair reads its per-round
-   * outputs from: the stream the sheet was opened on. Frozen here, not read
-   * later: `getOutputFiles` returns the store's live record (#11402), and
+   * outputs from: the run the sheet was opened on. Frozen here, not read
+   * later: `getOutputFiles` reads the view's current level (#11402), and
    * this context crosses several awaits before anything enumerates it.
    */
   async function getLatexdiffRunContext(
@@ -238,7 +236,7 @@ export function createDesktopHostRequests(
     const config = await effectRuntime().runPromise(
       runActions.readConfig(runId),
     );
-    const outputsByRound = cloneRoundIndexed(snapshots.getOutputFiles(runId));
+    const outputsByRound = cloneRoundIndexed(runOutputs.getOutputFiles(runId));
     const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
       ? {
           agent: config.agent,
@@ -262,7 +260,7 @@ export function createDesktopHostRequests(
   }
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
-    state: snapshotPort,
+    state: runOutputs,
     host: {
       compareFiles: (baseFile, editedFile) =>
         fileActions.compareFiles(baseFile, editedFile),
@@ -364,7 +362,7 @@ export function createDesktopHostRequests(
   }
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: snapshotPort,
+    state: runOutputs,
     runDiff: runWorkflowDiff,
     runFileOperation: runWorkflowFileOperation,
   });
@@ -572,9 +570,6 @@ export function createDesktopHostRequests(
         return done;
       }
       case 'openTaskStorage':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.runId]),
-        );
         await workflowFileActions.openTaskStorage(request.runId);
         return done;
       case 'exportTranscript':
@@ -594,9 +589,6 @@ export function createDesktopHostRequests(
         await effectRuntime().runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.runId]),
-        );
         await effectRuntime().runPromise(
           runActions.runCompileFixer(request.runId),
         );

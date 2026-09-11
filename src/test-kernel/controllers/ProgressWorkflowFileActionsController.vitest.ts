@@ -51,7 +51,6 @@ function createDeps(
 
   return {
     state: {
-      getRunMetadata: () => ({}),
       getOutputFiles: () => ({}),
     },
     host,

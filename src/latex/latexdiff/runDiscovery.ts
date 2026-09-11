@@ -1,4 +1,8 @@
-import type { RunId } from '@shared/schemas';
+import type {
+  OutputFileInfo,
+  ReadonlyRoundIndexed,
+  RunId,
+} from '@shared/schemas';
 import type { Effect } from 'effect';
 
 /**
@@ -16,4 +20,8 @@ interface LatexAgentRunEntry {
 
 export interface LatexRunDiscoveryPort {
   listAgentRuns(): Effect.Effect<readonly LatexAgentRunEntry[], Error>;
+  /** One run's recorded output files by round, from the session's fold. */
+  readRunOutputs(
+    runId: RunId,
+  ): Effect.Effect<ReadonlyRoundIndexed<OutputFileInfo>, Error>;
 }

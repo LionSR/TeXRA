@@ -1,9 +1,9 @@
 /**
- * The transcript of one stream, on the fold's transcript slice. It keeps one
- * `<task-group-list>` per recently shown stream so a switch back restores
+ * The transcript of one run, on the fold's transcript slice. It keeps one
+ * `<task-group-list>` per recently shown run so a switch back restores
  * scroll and render windows, and it maps the file, spill, and label links
  * inside rows to `host-request` arms. Group expansion is the surface's
- * (`Surface.groups`): the list reads the stream's map and every toggle is
+ * (`Surface.groups`): the list reads the run's map and every toggle is
  * dispatched as a `SurfaceAction`, never kept here.
  */
 import { LRUCache } from 'lru-cache';
@@ -25,7 +25,7 @@ import { logStyles } from '../styles/logStyles';
 import type { TaskGroupList } from './TaskGroupList';
 
 interface CachedRun {
-  stream: RunView;
+  run: RunView;
   ref: Ref<TaskGroupList>;
 }
 
@@ -33,7 +33,7 @@ interface CachedRun {
 export class LogList extends LitElement {
   static override styles = [designTokens, ...logStyles];
 
-  @property({ attribute: false }) stream: RunView | null = null;
+  @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
 
   private static readonly MAX_CACHED_STREAMS = 5;
@@ -56,21 +56,21 @@ export class LogList extends LitElement {
   }
 
   protected override willUpdate(): void {
-    const stream = this.stream;
-    const runId = stream?.id ?? null;
+    const run = this.run;
+    const runId = run?.id ?? null;
     if (runId !== this.activeRunId) {
       this.activeRunId = runId;
       this.shouldScrollToBottom = true;
     }
-    if (!stream) {
+    if (!run) {
       if (this.runCache.size > 0) this.runCache.clear();
       return;
     }
-    this.getOrCreateEntry(stream.id).stream = stream;
+    this.getOrCreateEntry(run.id).run = run;
   }
 
   override render(): TemplateResult {
-    if (!this.stream) {
+    if (!this.run) {
       return html`<task-group-list
         role="log"
         aria-label="Run activity"
@@ -85,21 +85,21 @@ export class LogList extends LitElement {
       this.runCache.rentries() as Iterable<[RunId, CachedRun]>,
       ([id]) => id,
       ([id, data]) => {
-        const stream = data.stream;
-        const terminal = stream.identity.kind === 'process';
+        const run = data.run;
+        const terminal = run.identity.kind === 'process';
         return html`
           <task-group-list
             ${ref(data.ref)}
             role=${terminal ? nothing : 'log'}
-            aria-label=${terminal ? nothing : `Activity for ${stream.label}`}
+            aria-label=${terminal ? nothing : `Activity for ${run.label}`}
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeRunId}
             .runId=${id}
-            .transcript=${stream.transcript}
+            .transcript=${run.transcript}
             .hasRuns=${true}
-            .runStatus=${stream.status}
-            .durableOutcome=${stream.durableOutcome}
-            .isToolUse=${stream.category === 'toolUse'}
+            .runStatus=${run.status}
+            .durableOutcome=${run.durableOutcome}
+            .isToolUse=${run.category === 'toolUse'}
             .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}
           ></task-group-list>
@@ -129,7 +129,7 @@ export class LogList extends LitElement {
     const entry = this.runCache.get(runId);
     if (entry) return entry;
     const created: CachedRun = {
-      stream: this.stream!,
+      run: this.run!,
       ref: createRef<TaskGroupList>(),
     };
     this.runCache.set(runId, created);

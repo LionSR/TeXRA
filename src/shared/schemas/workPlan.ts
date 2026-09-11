@@ -13,7 +13,7 @@ export function planSummaryLine(objective: string): string {
 }
 
 /** Raw work-plan field types; callers apply their own fallback policy. */
-export const WorkPlanSnapshotShape = {
+const WorkPlanSnapshotShape = {
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
   planSummary: z.string().nullable(),

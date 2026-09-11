@@ -117,16 +117,16 @@ function runTabsTemplate(
   options: { topLevelOnly: boolean },
 ): TemplateResult {
   return html`<div data-session=${project.display.key}>
-    <stream-tabs
+    <run-tabs
       .view=${project.view}
       .surface=${project.surface}
       .topLevelOnly=${options.topLevelOnly}
-    ></stream-tabs>
+    ></run-tabs>
   </div>`;
 }
 
 /**
- * Where the selected stream's children are. The whole tree is the Subagents
+ * Where the selected run's children are. The whole tree is the Subagents
  * tab's, and this control is what opens that tab; it belongs to the shown
  * project alone, since the workbench beside the rail is that project's. While the
  * tab holds the tree the section is flat, and under a workflow run the note
@@ -140,8 +140,8 @@ function childRunsAccess(
 ): TemplateResult | typeof nothing {
   const { view, surface } = project;
   const selected = resolveSelected(view, surface);
-  const stream = selected === null ? undefined : view.runs.get(selected);
-  const rootId = stream?.ancestors[0]?.id ?? stream?.id;
+  const run = selected === null ? undefined : view.runs.get(selected);
+  const rootId = run?.ancestors[0]?.id ?? run?.id;
   const root = rootId === undefined ? undefined : view.runs.get(rootId);
   if (root === undefined || root.rollup.total === 0) return nothing;
   const { total } = root.rollup;
@@ -150,7 +150,7 @@ function childRunsAccess(
     ${
       options.flattened && root.category === 'workflow'
         ? html`<div class="task-workflow-calls-note">
-            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child runs`},
+            ${total === 1 ? 'The 1 call is a child run' : `The ${total} calls are child runs`},
             reachable from the board. They never appear here.
           </div>`
         : nothing
@@ -175,7 +175,7 @@ function childRunsAccess(
 }
 
 /**
- * One section per open project: the row, then that project's own stream tree
+ * One section per open project: the row, then that project's own run tree
  * beneath it unless the user folded the section shut (`Shell.collapsed`).
  * The row chooses the project; the chevron folds the section; the close
  * control beside them is the one place a project is closed from. The file

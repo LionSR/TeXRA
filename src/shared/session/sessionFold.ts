@@ -73,6 +73,7 @@ import {
   isTranscriptEvent,
   ownerPid,
   runIdentityDisplayName,
+  emptyUsageStats,
   sumUsageStats,
   type AggregateId,
   type FoldInput,
@@ -83,6 +84,7 @@ import {
   type StreamLogEntry,
   type RunId,
   type TaskGroup,
+  type TokenUsageStats,
   type TextChunk,
   type TranscriptSubscription,
   type WorkflowDeclaredPlan,
@@ -290,6 +292,10 @@ interface SessionIndexes {
    *  finalizes, the run ends, the run is removed, or its transcript
    *  tier is evicted. */
   readonly inflight: Map<string, string>;
+  /** Per run, the latest `usage` row of each reporting run: what
+   *  `RunView.usage` totals, kept here so a redelivered row for one
+   *  reporter replaces its entry instead of counting twice. */
+  readonly usage: Map<RunId, Record<string, TokenUsageStats>>;
   /** This process's local truth, the snapshot the next one diffs against:
    *  a fold input, never durable. */
   local: LocalRuntimeState;
@@ -309,6 +315,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       claims: new Map(),
       latest: new Map(),
       inflight: new Map(),
+      usage: new Map(),
       local: { self: [], dead: [], unreadable: [] },
     };
     SESSION_INDEXES.set(view.runs, indexes);
@@ -498,6 +505,7 @@ function createRun(
     statusDetail: null,
     ...runStatusCopy(status),
     createdAt: event.commit,
+    launchedAt: event.at,
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
@@ -515,7 +523,7 @@ function createRun(
     readOnly: false,
     forceExpanded: false,
     group: 'recent' as const,
-    usage: {},
+    usage: emptyUsageStats(),
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
@@ -563,7 +571,9 @@ function setRun(view: SessionView, run: RunView): void {
 function dropRun(view: SessionView, run: RunView): void {
   writableMap(view, 'runs').delete(run.id);
   reindexOwner(view, run.id, run.ownerId, null);
-  sessionIndexesOf(view).ended.delete(run.id);
+  const indexes = sessionIndexesOf(view);
+  indexes.ended.delete(run.id);
+  indexes.usage.delete(run.id);
   countGroups(view, run.group, undefined);
 }
 
@@ -792,7 +802,7 @@ function isWorkflowScriptRun(run: RunView): boolean {
 }
 
 function childProgressOf(child: RunView): ChildRunProgress {
-  const totals = sumUsageStats(Object.values(child.usage));
+  const totals = child.usage;
   return {
     ...(child.runStartedAt === null
       ? {}
@@ -813,11 +823,9 @@ function childProgressChanged(prev: RunView, next: RunView): boolean {
   ) {
     return true;
   }
-  if (prev.usage === next.usage) return false;
-  const before = sumUsageStats(Object.values(prev.usage));
-  const after = sumUsageStats(Object.values(next.usage));
   return (
-    before.outputTokens !== after.outputTokens || before.cost !== after.cost
+    prev.usage.outputTokens !== next.usage.outputTokens ||
+    prev.usage.cost !== next.usage.cost
   );
 }
 
@@ -1351,6 +1359,7 @@ function wrongArm(run: RunView, event: DisplaySessionEvent): never {
 /** The event's own arm applied to its run (topology, session slices, and
  *  the transcript tier are handled by the caller). */
 function applyOwnArm(
+  view: SessionView,
   run: RunView,
   event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
 ): RunView {
@@ -1414,11 +1423,12 @@ function applyOwnArm(
     }
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
-    case 'usage':
-      return {
-        ...run,
-        usage: { ...run.usage, [event.runId]: event.usage },
-      };
+    case 'usage': {
+      const { usage } = sessionIndexesOf(view);
+      const reporters = { ...usage.get(run.id), [event.runId]: event.usage };
+      usage.set(run.id, reporters);
+      return { ...run, usage: sumUsageStats(Object.values(reporters)) };
+    }
     case 'context.state':
       return {
         ...run,
@@ -1658,7 +1668,7 @@ function foldDurable(
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
   applySessionSlices(view, runId, event);
-  const own = applyOwnArm(before, event);
+  const own = applyOwnArm(view, before, event);
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).

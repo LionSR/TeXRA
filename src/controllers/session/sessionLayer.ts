@@ -8,8 +8,8 @@
  * publications, the fold, the session inputs, the three local sources, and
  * the owner-liveness prober) and the `SessionHandle` built over them, whose
  * request handler admits on that graph. The handle layer opens the root's
- * transcript store and its snapshot store over that log and hands both to
- * the handle. Every opener (the hosts' default session,
+ * transcript store over that log and hands it to the handle. Every opener
+ * (the hosts' default session,
  * the desktop's papers, the SDK) resolves its root here, so opening a root
  * twice returns one handle, and the map is the one owner of its lifetime:
  * an open borrows, `close` settles and releases, and the runtime's disposal
@@ -71,7 +71,6 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -371,7 +370,6 @@ const sessionHandleLayer = (
             new SessionHandle({
               ...key.open,
               transcripts,
-              snapshots: new RunSnapshotStore(eventLog),
               graph,
             }),
         ),

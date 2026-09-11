@@ -16,7 +16,7 @@ const runId = 'a0b0c0' as RunId;
 function subscribeOverTestSession() {
   const session = createTestSession();
   publishTestRunStart(session, runId);
-  const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
+  const tracker = new StatusBarUsageTracker(session.status, session);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
   const dispose = subscribeStatusBarSessionEvents({
@@ -58,7 +58,7 @@ describe('subscribeStatusBarSessionEvents', () => {
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('projects run usage the session snapshot store accumulated', async () => {
+  it('projects run usage the session view accumulated', async () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
@@ -67,8 +67,8 @@ describe('subscribeStatusBarSessionEvents', () => {
     emitUsage(session);
     await session.settlePublications();
 
-    // The snapshot store subscribed at session construction is the one
-    // accumulator; the tracker's total is its per-run sum for the run.
+    // The session fold is the one accumulator; the tracker's total is the
+    // run's `RunView.usage` total.
     expect(tracker.totalUsage.inputTokens).toBe(20);
     expect(tracker.totalUsage.outputTokens).toBe(40);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.02);

@@ -1,9 +1,5 @@
 import { z } from 'zod';
 
-import { RunIdSchema } from './identifiers';
-import { RunIdentitySchema } from './runIdentity';
-import { WorkflowRunSnapshotSchema } from './workflowRunSnapshot';
-
 export const CLI_RUN_STATUS = {
   COMPLETED: 'completed',
   INTERRUPTED: 'interrupted',
@@ -15,7 +11,7 @@ export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
  * run end", decided exactly once at the run-lifecycle boundary. Current
- * production writers use these values for terminal run, group-end, and stream
+ * production writers use these values for terminal run, group-end, and run
  * state. `CliRunStatus` remains an injective persisted-metadata projection.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
@@ -30,8 +26,6 @@ export const RUN_OUTCOME = {
 export const RunOutcomeSchema = z.enum(RUN_OUTCOME);
 export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
-export const RUN_META_SCHEMA_VERSION = 1;
-
 /** Runtime support declared by the launch source, independent of UI policy. */
 export const USER_FOLLOW_UP_SUPPORT = {
   UNSUPPORTED: 'unsupported',
@@ -41,31 +35,6 @@ export const USER_FOLLOW_UP_SUPPORT = {
 
 export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
 export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
-
-/** Core run metadata that remains readable without workflow observability. */
-const RunMetaCoreSchema = z.object({
-  schemaVersion: z.literal(RUN_META_SCHEMA_VERSION).prefault(1),
-  timestamp: z.string(),
-  /** The launching run, from `run.start.parent`; absent for a root or a detached child. */
-  parentRunId: RunIdSchema.optional(),
-  /** Canonical terminal outcome, derived from the `run.end` row; dies with
-   *  the meta fold in S4. */
-  outcome: RunOutcomeSchema.optional(),
-  /** What kind of run this run is. Registration declares it at birth. */
-  identity: RunIdentitySchema,
-  /** Runtime behavior declared by the run source, not UI visibility. */
-  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
-  /** AI-generated summary of what the session aimed to accomplish. */
-  description: z.string().optional(),
-});
-
-/** Run metadata stored alongside config at launch time. */
-export const RunMetaSchema = RunMetaCoreSchema.extend({
-  /** Canonical run state for a detached workflow run. */
-  workflow: WorkflowRunSnapshotSchema.optional(),
-});
-
-export type RunMeta = z.infer<typeof RunMetaSchema>;
 
 /**
  * The live phase vocabulary. Membership questions are answered by the
@@ -109,7 +78,7 @@ export const RunSubstateSchema = z.enum(RUN_SUBSTATE);
 export type RunSubstate = z.infer<typeof RunSubstateSchema>;
 
 /**
- * Wire-level lifecycle status of a stream that has no phase in this process:
+ * Wire-level lifecycle status of a run that has no phase in this process:
  * its run lease is held by another TeXRA process, or its run state
  * could not be read at startup. Not a `RunPhase`: phases are facts about
  * runs live here. `RunView.statusDetail` carries the reason; renderers
@@ -118,7 +87,7 @@ export type RunSubstate = z.infer<typeof RunSubstateSchema>;
 export const RUN_LIFECYCLE_UNAVAILABLE = 'unavailable' as const;
 
 /**
- * Wire-level lifecycle status of a stream with no run recorded yet. `as const`
+ * Wire-level lifecycle status of a run with no lifecycle recorded yet. `as const`
  * is load-bearing: a bare `const` gives a *widening* literal type, which
  * widens back to `string` inside an object literal.
  */

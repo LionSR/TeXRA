@@ -721,13 +721,13 @@ return await agent('Second')`;
 
     expect(workflowCallEvent(events, 'First', 'completed')?.call).toMatchObject(
       {
-        totalCostUsd: 0.05,
+        costUsd: 0.05,
       },
     );
     expect(
       workflowCallEvent(events, 'Second', 'completed')?.call,
     ).toMatchObject({
-      totalCostUsd: 0.05,
+      costUsd: 0.05,
     });
 
     clearStoreCache();
@@ -738,7 +738,7 @@ return await agent('Second')`;
 
     expect(
       workflowCallEvent(replay.events, 'First', 'cached')?.call,
-    ).not.toHaveProperty('totalCostUsd');
+    ).not.toHaveProperty('costUsd');
   });
 
   it('enriches live finish lines with the reported model and duration', async () => {
@@ -767,7 +767,7 @@ return await agent('Draft')`,
         model: 'deepseekT',
         childRunId: 'draft@deepseekT#abcdef',
         durationMs: expect.any(Number),
-        totalCostUsd: 0.02,
+        costUsd: 0.02,
       },
     );
     const draftEvents = events.filter(
@@ -855,7 +855,7 @@ return await agent('Late skip')`,
       reason: 'user',
       model: 'kimiK2',
       durationMs: expect.any(Number),
-      totalCostUsd: 0.04,
+      costUsd: 0.04,
     });
     expect(activities).toContain('Running: Late skip');
     expect(activities).toContainEqual(
@@ -974,7 +974,7 @@ return await agent('Abort', { phase: 'Run' })`,
         error: 'fatal runner error',
         model: 'abort-model',
         durationMs: expect.any(Number),
-        totalCostUsd: 0.06,
+        costUsd: 0.06,
       },
     });
     expect(events).toContainEqual({
@@ -1026,7 +1026,7 @@ return 'guest success'`,
         stageId: phaseId,
         call: {
           error: 'The workflow ended before this call completed.',
-          totalCostUsd: 0.03,
+          costUsd: 0.03,
           childRunId: 'orphaned@model#abcdef',
         },
       });

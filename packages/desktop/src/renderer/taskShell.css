@@ -483,7 +483,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   min-height: 0;
 }
 
-.task-sidebar-sessions > stream-tabs {
+.task-sidebar-sessions > run-tabs {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -1161,7 +1161,7 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   font-weight: var(--font-weight-medium);
 }
 
-.task-subagents > stream-tabs {
+.task-subagents > run-tabs {
   display: flex;
   min-width: 0;
   --background-color: transparent;

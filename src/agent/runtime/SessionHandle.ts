@@ -36,9 +36,10 @@ import {
   Cause,
   Effect,
   Exit,
+  Option,
   Semaphore,
+  Stream,
   SubscriptionRef,
-  type Stream,
 } from 'effect';
 
 import type {
@@ -79,7 +80,12 @@ import {
   type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
+import { fold } from '@shared/session/sessionFold';
+import {
+  emptySessionView,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import {
   isRunningGroupEntry,
@@ -91,7 +97,6 @@ import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
-import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { throwAggregated } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -207,12 +212,6 @@ export class SessionHandle {
   readonly roots: WorkspaceRoots;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
-  /** Session-owned per-stream sidecar store for runs launched in this session. */
-  readonly snapshots: RunSnapshotStore;
-  /** The store's projection of the durable facts, called inside `publish`. */
-  private readonly applySnapshotEvent: (
-    event: SessionEvent,
-  ) => Effect.Effect<void>;
   private readonly graph: SessionGraph;
   private disposed = false;
   private readonly publicationGate = Semaphore.makeUnsafe(1);
@@ -245,7 +244,6 @@ export class SessionHandle {
     init: SessionHandleInit &
       Pick<SessionHandle, 'transcripts'> & {
         readonly roots: WorkspaceRoots;
-        readonly snapshots: RunSnapshotStore;
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
@@ -283,11 +281,6 @@ export class SessionHandle {
     });
 
     this.status = status;
-    // The sidecar store is a session artifact exactly like `transcripts`: the
-    // session projects its own run events into it, so no host has to
-    // construct or attach one of its own.
-    this.snapshots = init.snapshots;
-    this.applySnapshotEvent = this.snapshots.attachSessionEvents();
     this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = new ModelRetryGate();
@@ -596,7 +589,50 @@ export class SessionHandle {
     );
   }
 
-  /** Internal typed metadata accessors read the database, never the display fold. */
+  /**
+   * One run of {@link view}'s current level, or undefined when the view
+   * holds no such run: the synchronous read for a caller on a settled
+   * session (a host request, a tool inside a live run). Its transcript-tier
+   * facts are complete only while some port subscribes the run; a reader
+   * that needs the whole history of a run nobody holds takes
+   * {@link readView}.
+   */
+  runView(runId: RunId): RunView | undefined {
+    return SubscriptionRef.getUnsafe(this.view).runs.get(runId);
+  }
+
+  /**
+   * The view folded cold from the log as of this call (one run model, R1:
+   * the one fold, over a one-shot read): the listing tier of every run and
+   * the whole history of the runs named. For a reader outside the live
+   * view's residency: a one-shot backend read of a run no port holds, or a
+   * read that must not race the live fold's first replay.
+   */
+  readView(runIds: readonly RunId[]): Effect.Effect<SessionView> {
+    return this.graph
+      .inputs(
+        runIds.map((id) => ({
+          id: qualifyAggregateId('run', id),
+          fromSeq: 0,
+        })),
+        0,
+      )
+      .pipe(
+        Stream.runHead,
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.die(new Error('Session input read produced no replay')),
+            onSome: (replay) =>
+              Effect.succeed(
+                fold(emptySessionView(this.roots.storage), replay),
+              ),
+          }),
+        ),
+      );
+  }
+
+  /** Private record reads (`run.record`, `run.report`, ...) read the database's latest row of each type, never the display fold. */
   readRunRecords(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.runRecords(runId);
   }
@@ -641,7 +677,6 @@ export class SessionHandle {
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
     return this.transcripts.acceptCommitted(event).pipe(
-      Effect.andThen(this.applySnapshotEvent(event)),
       Effect.andThen(
         Effect.sync(() => {
           // Host notifications and runtime waiters belong to the authoring process.

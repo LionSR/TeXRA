@@ -204,7 +204,7 @@ export class ChatExportController {
 
       const filename = generateExportFilename(
         {
-          timestamp: trace.meta?.timestamp ?? new Date().toISOString(),
+          timestamp: new Date(trace.meta.launchedAt).toISOString(),
           config: trace.config,
         },
         'html',

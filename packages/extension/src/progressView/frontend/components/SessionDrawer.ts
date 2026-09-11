@@ -1,6 +1,6 @@
 /**
  * The Sessions drawer (PRD 12.1): a slide-over with a scrim, headed by the
- * project name with search and close, the real `<stream-tabs>` in group
+ * project name with search and close, the real `<run-tabs>` in group
  * sections as its body, and "Open sessions in editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.
  *
@@ -164,11 +164,11 @@ export class SessionDrawer extends LitElement {
           </wa-input>
         </div>
         <div class="drawer-body">
-          <stream-tabs
+          <run-tabs
             sections
             .view=${this.view}
             .surface=${this.surface}
-          ></stream-tabs>
+          ></run-tabs>
         </div>
         <div class="drawer-footer">
           <wa-button

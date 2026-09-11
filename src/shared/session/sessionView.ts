@@ -27,7 +27,6 @@ import {
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
   RunOutcomeSchema,
-  RunUsageMapSchema,
   RUN_LIFECYCLE_READY,
   RunPhaseSchema,
   RunStageSchema,
@@ -35,6 +34,7 @@ import {
   RunIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
+  TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
   type RunId,
@@ -123,6 +123,9 @@ const RunViewCommonSchema = z.object({
   /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */
   createdAt: CommitOrdinalSchema,
+  /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
+   *  host prints. `createdAt` orders; this never does. */
+  launchedAt: z.int().positive(),
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
@@ -152,7 +155,9 @@ const RunViewCommonSchema = z.object({
    *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: RunGroupSchema,
-  usage: RunUsageMapSchema,
+  /** The run's metered total across every `usage` row it has folded, one
+   *  entry per reporting run kept in the fold's private index. */
+  usage: TokenUsageStatsSchema,
   /** The newest thinking row is still streaming. */
   thinkingActive: z.boolean(),
   /** A context compaction is in progress. */

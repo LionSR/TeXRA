@@ -1,5 +1,5 @@
-// The Subagents workbench tab: the selected stream's root subtree, drawn by
-// the same `stream-tabs` the rail uses. Navigation only: an approval stays in
+// The Subagents workbench tab: the selected run's root subtree, drawn by
+// the same `run-tabs` the rail uses. Navigation only: an approval stays in
 // the child's own request panel, and selecting a row there is the one way in.
 
 import { html, nothing, type TemplateResult } from 'lit';
@@ -12,7 +12,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 export interface SubagentsPaneModel {
   readonly view: SessionView;
   readonly surface: Surface;
-  /** The stream whose family the tab shows; null when nothing is selected. */
+  /** The run whose family the tab shows; null when nothing is selected. */
   readonly selected: RunId | null;
 }
 
@@ -43,11 +43,11 @@ export function subagentsPaneTemplate(
           `,
         )}
       </div>
-      <stream-tabs
+      <run-tabs
         .view=${model.view}
         .surface=${model.surface}
         .root=${rootId}
-      ></stream-tabs>
+      ></run-tabs>
       <div class="task-subagents-note">
         Approvals stay in the child's request panel; this tab only navigates.
       </div>

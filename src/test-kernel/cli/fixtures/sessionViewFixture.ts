@@ -59,7 +59,6 @@ export function makeRunView(over: RunViewOverrides): RunView {
   });
   const common = {
     id,
-    runId: `${over.id}-exec`,
     identity: { kind: 'agent' as const, agent: 'agent' },
     isRemote: false,
     ownerId: null,
@@ -77,6 +76,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     statusLabel: copy.statusLabel,
     tone: copy.tone,
     createdAt: 1,
+    launchedAt: 1,
     runStartedAt: null,
     lastTimestamp: null,
     conversationProgress: { toolCallCount: 0 },
@@ -94,7 +94,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     readOnly: false,
     forceExpanded: false,
     group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
-    usage: {},
+    usage: { inputTokens: 0, outputTokens: 0, cost: 0 },
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,

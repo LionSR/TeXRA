@@ -43,7 +43,6 @@ import {
   getRunStore,
   getRunRecords,
   runEndFromEvents,
-  runMetaFromEvents,
   type ChildRecord,
 } from './RunKVStore';
 import {
@@ -99,14 +98,13 @@ export const registerRun = Effect.fn('registerRun')(function* (
   const registration = yield* Effect.exit(
     Effect.gen(function* () {
       const records = getRunRecords(session, runId);
-      const prior = yield* records.readMeta();
-      if (prior !== null)
-        releaseClaims = yield* session.acquireRunClaims(runId);
+      const prior = yield* records.exists();
+      if (prior) releaseClaims = yield* session.acquireRunClaims(runId);
       // The database refuses a parent that is closed or has no `run.start`;
       // this read only words the refusal before the transaction opens.
       if (
         options.parentRunId !== undefined &&
-        (yield* getRunRecords(session, options.parentRunId).readMeta()) === null
+        !(yield* getRunRecords(session, options.parentRunId).exists())
       )
         return yield* Effect.fail(
           new Error(`Parent run ${options.parentRunId} is unavailable.`),
@@ -119,7 +117,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         ? pinned.agentCategory
         : (options.category ?? AgentCategory.ToolUse);
       const events: SessionEventDraft[] = [];
-      if (prior === null) {
+      if (!prior) {
         events.push({
           type: 'run.start',
           aggregateId: target,
@@ -354,8 +352,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) => {
       const target = aggregateId('run', runId);
-      const meta = runMetaFromEvents(rows, runId);
-      if (!meta) throw new Error(`Run metadata not found for ${runId}`);
       const start = rows.find(
         (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
           row.type === 'run.start' && row.aggregateId === target,
@@ -449,7 +445,7 @@ export const readRunChildren = Effect.fn('readRunChildren')(function* (
   if (closed.has(parent.aggregateId)) return [];
   // A `run.detach` severs the edge the child's `run.start` recorded, so a
   // detached child is no longer listed under its former parent: the same
-  // rule `runMetaFromEvents` and the session fold apply.
+  // rule the session fold applies.
   const detached = new Set(
     rows
       .filter((row) => row.type === 'run.detach')

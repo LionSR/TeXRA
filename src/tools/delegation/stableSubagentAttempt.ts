@@ -180,7 +180,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     stableStorageOperation(session, () => store.listKeys()),
     stableStorageOperation(session, () => readStableSubagentAttempt(store)),
     getRunRecords(session, runId).readResultMeta(),
-    getRunRecords(session, runId).readMeta(),
+    getRunRecords(session, runId).exists(),
     getRunRecords(session, runId).readRunEnd(),
   ]).pipe(
     Effect.mapError(
@@ -191,8 +191,8 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
         ),
     ),
   );
-  const [keys, attempt, resultMeta, meta, runEnd] = persisted;
-  if (keys.length === 0 && meta === null && resultMeta === null)
+  const [keys, attempt, resultMeta, exists, runEnd] = persisted;
+  if (keys.length === 0 && !exists && resultMeta === null)
     return { kind: 'absent' };
   if (
     !attempt ||
@@ -222,10 +222,9 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     // failed and the parent's failure-time retryable write was refused as
     // lease-lost); repair the marker here, under the inactive-lease fence
     // so a live child's still-held lease keeps refusing the write.
-    const [turnState, meta] = yield* Effect.all([
-      stableStorageOperation(session, () => store.readTurnState()),
-      getRunRecords(session, runId).readMeta(),
-    ]).pipe(
+    const turnState = yield* stableStorageOperation(session, () =>
+      store.readTurnState(),
+    ).pipe(
       Effect.mapError(
         (cause) =>
           new SubagentReconciliationError(
@@ -236,7 +235,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     );
     const settledEvidence =
       turnState?.lastCompletedTurn !== undefined ||
-      meta?.outcome === RUN_OUTCOME.COMPLETED;
+      runEnd?.outcome === RUN_OUTCOME.COMPLETED;
     if (!settledEvidence) {
       const repair = yield* stableStorageOperation(session, () =>
         runWithInactiveRunLease(runId, () =>

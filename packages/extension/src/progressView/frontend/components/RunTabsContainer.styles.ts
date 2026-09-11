@@ -1,7 +1,7 @@
 // Third-party imports
 import { css } from 'lit';
 
-/** Styles for the <stream-tabs> list container. */
+/** Styles for the <run-tabs> list container. */
 export const runTabsContainerStyles = css`
   :host {
     display: flex;
@@ -46,7 +46,7 @@ export const runTabsContainerStyles = css`
   }
 
   /* Recursive child stream nesting — indentation alone carries the
-     hierarchy (child rows also render a nested-stream chevron). */
+     hierarchy (child rows also render a nested-run chevron). */
   .child-runs {
     padding-inline-start: var(--wa-space-xs, 12px);
     margin-inline-start: var(--wa-space-2xs);

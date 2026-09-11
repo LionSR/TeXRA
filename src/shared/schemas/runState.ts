@@ -12,7 +12,7 @@ import { RunPhaseSchema } from './run';
 // verbatim, and renderers key icons and clickability on `identity.kind`
 // instead of tool-name sniffing or a roster-side kind union.
 
-export const ActiveChildInfoSchema = z.object({
+const ActiveChildInfoSchema = z.object({
   /** The child's run id. */
   childRunId: RunIdSchema,
   /** What owns the child run — every roster emitter declares it. */

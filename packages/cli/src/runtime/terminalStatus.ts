@@ -84,11 +84,11 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
     reportReadFailure?: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
     return yield* getRunRecords(session, result.runId)
-      .readMeta()
+      .readRunEnd()
       .pipe(
-        Effect.map((meta) => ({
-          outcome: meta?.outcome ?? result.outcome,
-          outcomePersisted: meta?.outcome !== undefined,
+        Effect.map((end) => ({
+          outcome: end === null ? result.outcome : end.outcome,
+          outcomePersisted: end !== null,
         })),
         Effect.catch((error) =>
           Effect.sync(() => {

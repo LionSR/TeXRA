@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 import {
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -53,7 +54,6 @@ import {
   resetCliState,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
-import type { StreamArtifactReader } from '@cli/chat/tui/commands/handlers/sessionCommands';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -75,7 +75,6 @@ import {
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { RunView } from '@shared/session/sessionView';
-import { DatabaseReadFailed } from '@shared/session/database';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import {
@@ -100,6 +99,13 @@ function ensureRun(
   syncSeededView();
 }
 beforeAll(bindTestSessionView);
+// `/plan` reads the focused run off the session's own fold, `/status` off the
+// TUI's projection of it; one seeded map answers both.
+beforeEach(() => {
+  vi.spyOn(defaultSession(), 'runView').mockImplementation((id) =>
+    seeded.get(id),
+  );
+});
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
   seeded.clear();
@@ -108,6 +114,20 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
+/** The focused run's work plan as the fold states it. */
+function seedWorkPlan(
+  runId: RunId,
+  plan: Plan | null,
+  todos: readonly TodoItem[],
+): void {
+  ensureRun(runId);
+  seeded.set(runId, {
+    ...makeRunView({ id: runId }),
+    plan,
+    todos: [...todos],
+  } as RunView);
+  syncSeededView();
+}
 function seedChildRoster(
   parentRunId: RunId,
   rows: readonly ActiveChildInfo[],
@@ -217,36 +237,6 @@ function silentOutput(): SlashCommandOutput {
   return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
 }
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-} {
-  let resolve: (value: T) => void = () => undefined;
-  let reject: (reason?: unknown) => void = () => undefined;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-function workPlanSnapshots(
-  read: (runId: RunId) => {
-    readonly plan: Plan | null;
-    readonly todos: readonly TodoItem[];
-  },
-  preload: StreamArtifactReader['preload'] = () => Effect.void,
-): StreamArtifactReader {
-  return {
-    preload: vi.fn(preload),
-    getWorkPlan: (runId) => {
-      const { plan, todos } = read(runId);
-      return { plan, todos: [...todos], planSummary: null };
-    },
-  };
-}
-
 /** A sign-in mock whose promise rejects when its abort signal fires. */
 /**
  * A sign-in program that never completes on its own and records whether the
@@ -314,12 +304,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('opens a live work-plan reader for the focused stream', async () => {
-    let canonical = { plan: null, todos: [] } as {
-      plan: Plan | null;
-      todos: readonly TodoItem[];
-    };
-    const snapshots = workPlanSnapshots(() => canonical);
-    registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
+    registerBuiltinSlashCommands();
     const context = createContext();
 
     await handleTuiSlashCommand('/plan', context);
@@ -333,191 +318,20 @@ describe('handleTuiSlashCommand', () => {
       'The focused session has no work plan.',
     );
 
-    canonical = {
-      plan: { objective: 'Check every case.' },
-      todos: [
-        {
-          content: 'Check the base case',
-          activeForm: 'Checking the base case',
-          status: 'in_progress',
-        },
-      ],
-    };
+    seedWorkPlan(runId, { objective: 'Check every case.' }, [
+      {
+        content: 'Check the base case',
+        activeForm: 'Checking the base case',
+        status: 'in_progress',
+      },
+    ]);
     await handleTuiSlashCommand('/plan', context);
-    expect(snapshots.preload).toHaveBeenCalledTimes(2);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
     activeRunId.set('another-stream' as RunId);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
     expect(localEntries()).toEqual([]);
     closeForegroundReader();
-  });
-
-  it('waits for canonical hydration before deciding a focused plan is empty', async () => {
-    const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const runId = 'historical-plan' as RunId;
-    registerBuiltinSlashCommands({
-      workPlanSnapshots: workPlanSnapshots(
-        () => ({
-          plan: { objective: 'Hydrated historical objective.' },
-          todos: [],
-        }),
-        () =>
-          Effect.tryPromise({
-            try: () => preload,
-            catch: (cause) =>
-              new DatabaseReadFailed({ path: ':memory:', cause }),
-          }),
-      ),
-    });
-    ensureRun(runId);
-    activeRunId.set(runId);
-
-    const dispatched = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({
-      kind: 'workPlan',
-      runId,
-      loading: true,
-    });
-    expect(transientNotice.get()).toBeUndefined();
-
-    resolvePreload();
-    await dispatched;
-
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
-  });
-
-  it('lets a newer plan request win when preloads resolve in reverse order', async () => {
-    const runA = 'plan-a' as RunId;
-    const runB = 'plan-b' as RunId;
-    const resolvers = new Map<RunId, () => void>();
-    const snapshots = workPlanSnapshots(
-      (runId) => {
-        return runId === runB
-          ? { plan: { objective: 'Plan B.' }, todos: [] }
-          : { plan: null, todos: [] };
-      },
-      ([runId]) =>
-        Effect.promise(
-          () =>
-            new Promise<void>((resolve) => {
-              resolvers.set(runId!, resolve);
-            }),
-        ),
-    );
-    registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
-    ensureRun(runA);
-    ensureRun(runB);
-
-    activeRunId.set(runA);
-    const requestA = handleTuiSlashCommand('/plan', createContext());
-    activeRunId.set(runB);
-    const requestB = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({
-      kind: 'workPlan',
-      runId: runB,
-      loading: true,
-    });
-
-    resolvers.get(runB)?.();
-    await requestB;
-    expect(foregroundReader.get()).toEqual({
-      kind: 'workPlan',
-      runId: runB,
-    });
-    expect(transientNotice.get()).toBeUndefined();
-
-    resolvers.get(runA)?.();
-    await requestA;
-    expect(foregroundReader.get()).toEqual({
-      kind: 'workPlan',
-      runId: runB,
-    });
-    expect(transientNotice.get()).toBeUndefined();
-  });
-
-  it('lets a newer no-focus request cancel pending ownership', async () => {
-    const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const runId = 'superseded-loading-plan' as RunId;
-    registerBuiltinSlashCommands({
-      workPlanSnapshots: workPlanSnapshots(
-        () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
-        () =>
-          Effect.tryPromise({
-            try: () => preload,
-            catch: (cause) =>
-              new DatabaseReadFailed({ path: ':memory:', cause }),
-          }),
-      ),
-    });
-    ensureRun(runId);
-    activeRunId.set(runId);
-
-    const first = handleTuiSlashCommand('/plan', createContext());
-    activeRunId.set(undefined);
-    await handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toBeUndefined();
-    expect(transientNotice.get()?.text).toBe('No focused session.');
-
-    resolvePreload();
-    await first;
-    expect(foregroundReader.get()).toBeUndefined();
-    expect(transientNotice.get()?.text).toBe('No focused session.');
-  });
-
-  it('does not reopen a loading plan reader after Escape', async () => {
-    const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const runId = 'escape-loading-plan' as RunId;
-    registerBuiltinSlashCommands({
-      workPlanSnapshots: workPlanSnapshots(
-        () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
-        () =>
-          Effect.tryPromise({
-            try: () => preload,
-            catch: (cause) =>
-              new DatabaseReadFailed({ path: ':memory:', cause }),
-          }),
-      ),
-    });
-    ensureRun(runId);
-    activeRunId.set(runId);
-
-    const dispatched = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({ loading: true, runId });
-    closeForegroundReader();
-    resolvePreload();
-    await dispatched;
-
-    expect(foregroundReader.get()).toBeUndefined();
-    expect(transientNotice.get()).toBeUndefined();
-  });
-
-  it('closes a loading reader and reports a current preload error', async () => {
-    const { promise: preload, reject: rejectPreload } = deferred<void>();
-    const runId = 'error-loading-plan' as RunId;
-    registerBuiltinSlashCommands({
-      workPlanSnapshots: workPlanSnapshots(
-        () => ({ plan: null, todos: [] }),
-        () =>
-          Effect.tryPromise({
-            try: () => preload,
-            catch: (cause) =>
-              new DatabaseReadFailed({ path: ':memory:', cause }),
-          }),
-      ),
-    });
-    ensureRun(runId);
-    activeRunId.set(runId);
-
-    const dispatched = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({ loading: true, runId });
-    rejectPreload(new Error('historical sidecar unreadable'));
-    await dispatched;
-
-    expect(foregroundReader.get()).toBeUndefined();
-    expect(transientNotice.get()?.text).toBe(
-      'Could not load workflow artifacts: historical sidecar unreadable',
-    );
   });
 
   it('opens memory list and preview output in the reference pane', async () => {
@@ -1047,12 +861,10 @@ describe('handleTuiSlashCommand', () => {
     ensureRun(runId, {
       status: RUN_PHASE.WAITING,
       usage: {
-        'stream-access-run': {
-          inputTokens: 1_000,
-          outputTokens: 100,
-          cost: 0,
-          usageRoute: 'api-key',
-        },
+        inputTokens: 1_000,
+        outputTokens: 100,
+        cost: 0,
+        usageRoute: 'api-key',
       },
     });
 

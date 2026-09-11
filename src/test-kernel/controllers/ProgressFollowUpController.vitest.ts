@@ -99,7 +99,6 @@ function createCompileFailure(
 }
 
 const emptyFollowUpState: ProgressFollowUpState = {
-  getRunMetadata: () => ({}),
   getOutputFiles: () => ({}),
   getCompileFailures: () => ({}),
 };

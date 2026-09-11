@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { RunSnapshotSchema, type RunId, AgentCategory } from '@shared/schemas';
+import { emptyUsageStats, type RunId, AgentCategory } from '@shared/schemas';
 import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 
 const RUN_ID = 'ab0001' as RunId;
@@ -17,15 +17,19 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       workingDirectory: '/workspace',
     }),
     meta: {
-      schemaVersion: 1,
-      timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
+      launchedAt: 1_767_225_600_000,
+      description: null,
+      outcome: null,
+      conversationProgress: { toolCallCount: 0 },
+      usage: emptyUsageStats(),
+      todos: [],
+      plan: null,
+      outputs: {},
+      missingOutputs: {},
+      compileFailures: {},
     },
     entries: [],
-    snapshot: RunSnapshotSchema.parse({
-      runId: RUN_ID,
-      status: 'running',
-    }),
     ...overrides,
   };
 }
@@ -45,9 +49,7 @@ describe('injectStandaloneTrace', () => {
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
     const t = trace({
       meta: {
-        schemaVersion: 1,
-        timestamp: '2026-01-01T00:00:00.000Z',
-        identity: { kind: 'agent', agent: 'assistant' },
+        ...trace().meta,
         description: '</script><img src=x onerror=alert(1)>',
       },
     });

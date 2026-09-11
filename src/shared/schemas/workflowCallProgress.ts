@@ -56,7 +56,7 @@ export type WorkflowPlanMarker = z.infer<typeof WorkflowPlanMarkerSchema>;
 
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   durationMs: z.number().nonnegative().optional(),
-  totalCostUsd: z.number().nonnegative().optional(),
+  costUsd: z.number().nonnegative().optional(),
 });
 
 const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({

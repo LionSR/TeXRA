@@ -347,7 +347,7 @@ export function beginWorkPlanReaderRequest(
   return request;
 }
 
-export function workPlanReaderRequestIsCurrent(
+function workPlanReaderRequestIsCurrent(
   request: WorkPlanReaderRequest,
 ): boolean {
   const target = FOREGROUND_READER.get();

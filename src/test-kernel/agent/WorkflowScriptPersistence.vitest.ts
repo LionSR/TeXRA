@@ -166,8 +166,8 @@ describe('workflow-script persistence', () => {
         Promise.resolve().then(() => writeWorkflowRunSnapshot(runId, workflow)),
       ).rejects.toThrow();
       await expect(
-        Effect.runPromise(getRunRecords(session, runId).readMeta()),
-      ).resolves.toMatchObject({ workflow: undefined });
+        Effect.runPromise(getRunRecords(session, runId).readWorkflow()),
+      ).resolves.toBeNull();
     },
   );
 
@@ -201,20 +201,20 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     );
 
     const persisted = await Effect.runPromise(
-      getRunRecords(session, runId).readMeta(),
+      getRunRecords(session, runId).readWorkflow(),
     );
-    expect(persisted?.workflow?.calls[0]).toMatchObject({
+    expect(persisted?.calls[0]).toMatchObject({
       status: 'cancelled',
     });
-    expect(persisted?.workflow?.calls[0]).not.toHaveProperty('error');
-    if (!persisted?.workflow) throw new Error('Expected persisted workflow');
+    expect(persisted?.calls[0]).not.toHaveProperty('error');
+    if (!persisted) throw new Error('Expected persisted workflow');
 
     const runner = vi.fn(async () => 'resumed result');
     const relaunched = await runPersistedWorkflowScript({
       store,
       checkpointId: 'cancelled-compatibility',
       script: cancelledScript,
-      initialSnapshot: persisted.workflow,
+      initialSnapshot: persisted,
       runAgent: runner,
     });
 
@@ -366,10 +366,8 @@ return [first, second]`;
       JSON.parse(JSON.stringify(resumed.snapshot)),
     );
     await expect(
-      Effect.runPromise(getRunRecords(session, runId).readMeta()),
-    ).resolves.toMatchObject({
-      workflow: persistedSnapshot,
-    });
+      Effect.runPromise(getRunRecords(session, runId).readWorkflow()),
+    ).resolves.toMatchObject(persistedSnapshot);
   });
 
   it('preserves completed task-plan call files across resume hydrate', async () => {

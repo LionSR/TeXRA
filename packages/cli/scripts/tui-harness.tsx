@@ -126,7 +126,6 @@ import {
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
-  cumulativeUsageOf,
   currentView,
   focusedChildAcceptsFollowUps,
   runningChildCount,
@@ -1815,7 +1814,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: cumulativeUsageOf(run)?.usageRoute,
+        usageRoute: run?.usage.usageRoute,
       }),
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: view.policy.get(runId)?.bypasses,
@@ -1949,7 +1948,6 @@ registerBuiltinSlashCommands({
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
-  workPlanSnapshots: defaultSession().snapshots,
   getConfigStores: platformSettingsStores,
   onError: (error) => {
     appendHarnessAssistantTranscript(
