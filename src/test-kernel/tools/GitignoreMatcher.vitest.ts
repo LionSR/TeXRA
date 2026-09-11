@@ -10,7 +10,6 @@ const fsState = vi.hoisted(() => ({
   homeDirectory: undefined as string | undefined,
   workspaceFiles: new Map<string, string>(),
   workspaceReadErrors: new Map<string, Error>(),
-  workspaceReadCounts: new Map<string, number>(),
   absoluteFiles: new Map<string, string>(),
   absoluteReadErrors: new Map<string, Error>(),
   reset(): void {
@@ -18,7 +17,6 @@ const fsState = vi.hoisted(() => ({
     this.homeDirectory = undefined;
     this.workspaceFiles.clear();
     this.workspaceReadErrors.clear();
-    this.workspaceReadCounts.clear();
     this.absoluteFiles.clear();
     this.absoluteReadErrors.clear();
   },
@@ -53,10 +51,6 @@ vi.mock('@utils/files/workspaceFS', () => {
         fsState.workspaceFiles.has(relativePath.replace(/^\/+/, '')),
       read: async (relativePath: string) => {
         const normalized = relativePath.replace(/^\/+/, '');
-        fsState.workspaceReadCounts.set(
-          normalized,
-          (fsState.workspaceReadCounts.get(normalized) ?? 0) + 1,
-        );
         return readFrom(
           fsState.workspaceFiles,
           fsState.workspaceReadErrors,
@@ -155,35 +149,18 @@ describe('getGitignoreMatcher', () => {
     await expect(loadMatcher()).rejects.toBe(constructionError);
   });
 
-  it('retries after a failed shared load attempt', async () => {
-    const error = errnoError('EACCES', 'Temporarily unavailable');
-    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
-    fsState.workspaceReadErrors.set('.gitignore', error);
+  it('rereads the ignore policy on every call', async () => {
     vi.resetModules();
     const { getGitignoreMatcher } = await import('@tools/gitignore');
+    fsState.workspaceFiles.set('.gitignore', 'dist/\n');
+    const before = await Effect.runPromise(getGitignoreMatcher());
 
-    const failedCalls = await Promise.allSettled([
-      Effect.runPromise(getGitignoreMatcher()),
-      Effect.runPromise(getGitignoreMatcher()),
-    ]);
+    fsState.workspaceFiles.set('.gitignore', 'build/\n');
+    const after = await Effect.runPromise(getGitignoreMatcher());
 
-    for (const result of failedCalls) {
-      expect(result.status).toBe('rejected');
-      if (result.status === 'rejected') {
-        expect(result.reason).toBe(error);
-      }
-    }
-    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(1);
-
-    fsState.workspaceReadErrors.delete('.gitignore');
-    const [matcher, concurrentMatcher] = await Promise.all([
-      Effect.runPromise(getGitignoreMatcher()),
-      Effect.runPromise(getGitignoreMatcher()),
-    ]);
-
-    expect(matcher).toBe(concurrentMatcher);
-    expect(matcher.ignores('dist')).toBe(true);
-    expect(fsState.workspaceReadCounts.get('.gitignore')).toBe(2);
+    expect(before.ignores('dist')).toBe(true);
+    expect(after.ignores('dist')).toBe(false);
+    expect(after.ignores('build')).toBe(true);
   });
 
   it('preserves directory-only rules for bare directory entries', async () => {
