@@ -12,10 +12,10 @@
  * markup, so the Lit and Ink layers are the only per-host code left.
  */
 import {
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   type NormalizedToolUse,
   type ProposalFileGroup,
-  type ToolUseStatus,
+  type ToolCallStatus,
 } from '@shared/schemas';
 import {
   executionsSubagentSummary,
@@ -170,7 +170,7 @@ export interface ToolRowModel {
   readonly userInstruction?: TranscriptText;
   readonly showOutput: boolean;
   readonly outputSuppression?: ToolOutputSuppression;
-  readonly status?: ToolUseStatus;
+  readonly status?: ToolCallStatus;
   readonly isError: boolean;
   readonly isUserFeedback: boolean;
   readonly isInProgress: boolean;
@@ -327,9 +327,9 @@ export function toolRowModel(
     showOutput: suppression === undefined,
     ...(suppression ? { outputSuppression: suppression } : {}),
     ...(normalized.status ? { status: normalized.status } : {}),
-    isError: normalized.isError,
+    isError: normalized.status === TOOL_CALL_STATUS.FAILED,
     isUserFeedback: normalized.isUserFeedback,
-    isInProgress: normalized.status === TOOL_USE_STATUS.IN_PROGRESS,
+    isInProgress: normalized.status === TOOL_CALL_STATUS.IN_PROGRESS,
     ...(normalized.exitCode !== undefined
       ? { exitCode: normalized.exitCode }
       : {}),

@@ -703,7 +703,6 @@ describe('completedRunArchive facade', () => {
           toolName: 'read_file',
           input: { path: 'missing.tex' },
           output: { error: 'File not found.' },
-          isError: true,
           status: 'failed',
         },
       }),

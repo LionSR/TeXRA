@@ -58,7 +58,7 @@ import {
   RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
   type InquiryThreadId,
@@ -843,10 +843,9 @@ function makeLongToolOutput(): NormalizedToolUse {
     ).join('\n'),
     userInstructionText: '',
     input: { command: 'python3 enumerate_triples.py' },
-    isError: false,
     isUserFeedback: false,
     headerSummary: 'python3 enumerate_triples.py',
-    status: TOOL_USE_STATUS.COMPLETED,
+    status: TOOL_CALL_STATUS.COMPLETED,
   };
 }
 
@@ -867,7 +866,6 @@ function harnessToolEntry(
       input: toolUse.input,
       output: toolUse.outputText,
       summary: toolUse.headerSummary,
-      isError: toolUse.isError,
       status: toolUse.status,
     },
   };
@@ -902,10 +900,9 @@ function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
         outputText: '',
         userInstructionText: '',
         input: { path: 'README.md' },
-        isError: false,
         isUserFeedback: false,
         headerSummary: 'Read README.md',
-        status: TOOL_USE_STATUS.COMPLETED,
+        status: TOOL_CALL_STATUS.COMPLETED,
       },
       3,
     ),
@@ -952,8 +949,7 @@ function seedLiveToolOnlyTranscript(): void {
         input,
         output: '',
         summary,
-        isError: false,
-        status: TOOL_USE_STATUS.COMPLETED,
+        status: TOOL_CALL_STATUS.COMPLETED,
       },
     });
   }
@@ -976,10 +972,9 @@ function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
       outputText: message,
       userInstructionText: '',
       input: { command },
-      isError: true,
       isUserFeedback: false,
       headerSummary: command,
-      status: TOOL_USE_STATUS.COMPLETED,
+      status: TOOL_CALL_STATUS.FAILED,
     }),
   ];
 }

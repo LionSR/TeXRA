@@ -16,7 +16,7 @@ vi.mock('@agent/workflowScript/persistence', async (importOriginal) => ({
   runPersistedWorkflowScript: mocks.runPersistedWorkflowScript,
 }));
 
-function snapshot(status: 'planned' | 'running', markerFree = false) {
+function snapshot(status: 'declared' | 'running') {
   const timestamp = '2026-08-15T20:00:00.000Z';
   const active = status === 'running';
   return WorkflowRunSnapshotSchema.parse({
@@ -27,10 +27,7 @@ function snapshot(status: 'planned' | 'running', markerFree = false) {
         id: 'retry-review',
         label: 'Retry review',
         status,
-        ...(active &&
-          (markerFree
-            ? { agent: 'historical-agent' }
-            : { issued: true, kind: 'document' })),
+        ...(active && { kind: 'document', agent: 'historical-agent' }),
         attempts: [],
         files: { input: [], context: [], media: [] },
         timestamps: { createdAt: timestamp, updatedAt: timestamp },
@@ -41,9 +38,9 @@ function snapshot(status: 'planned' | 'running', markerFree = false) {
 }
 
 describe('workflow-script projection failure recovery', () => {
-  it('projects a marker-free issued call after a fold fails before projection', async () => {
-    const construction = snapshot('planned');
-    const running = snapshot('running', true);
+  it('projects an issued call after a fold fails before projection', async () => {
+    const construction = snapshot('declared');
+    const running = snapshot('running');
     mocks.runPersistedWorkflowScript.mockImplementationOnce(
       async (options: PersistedWorkflowScriptRunOptions) => {
         options.onTransition?.(construction);
@@ -83,6 +80,7 @@ describe('workflow-script projection failure recovery', () => {
       id: 'retry-review',
       label: 'Retry review',
       status: 'running',
+      kind: 'document',
       agent: 'historical-agent',
       files: { input: [], context: [], media: [] },
       attemptId: expect.any(String),
@@ -90,7 +88,7 @@ describe('workflow-script projection failure recovery', () => {
   });
 
   it("retains a retried call's attempt number when the backstop terminalizes it", async () => {
-    const construction = snapshot('planned');
+    const construction = snapshot('declared');
     const running = snapshot('running');
     for (const state of [construction, running]) {
       const call = state.calls[0];

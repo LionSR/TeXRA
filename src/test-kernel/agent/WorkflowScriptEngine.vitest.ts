@@ -242,7 +242,7 @@ return await agent('Inspect src', { id: 'core' })`,
       {
         id: 'core',
         label: 'Audit core',
-        status: 'stageBlocked',
+        status: 'declared',
       },
     ]);
     expect(runner.mock.calls[0][0].options).toMatchObject({

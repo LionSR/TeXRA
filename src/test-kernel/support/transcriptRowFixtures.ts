@@ -17,7 +17,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
   type StreamLogEntry,
@@ -48,10 +48,9 @@ function toolUseFixture(
     outputText: '',
     userInstructionText: '',
     input: {},
-    isError: false,
     isUserFeedback: false,
     headerSummary: '',
-    status: TOOL_USE_STATUS.COMPLETED,
+    status: TOOL_CALL_STATUS.COMPLETED,
     ...toolUse,
   };
 }

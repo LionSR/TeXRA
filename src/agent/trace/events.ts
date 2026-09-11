@@ -25,9 +25,6 @@ type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
   ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
   : never;
 
-/** Status assigned to a tool call when it completes. */
-export type ToolStatus = TraceArm<'tool.end'>['status'];
-
 /**
  * StreamKind identifies what a streaming message represents. Subscribers
  * key on it for render decisions. Generic string so host taxonomies

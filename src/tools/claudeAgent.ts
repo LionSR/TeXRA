@@ -380,10 +380,14 @@ function handleToolResults(
       }),
       ...(isError && {
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
-        isError: true,
       }),
     };
-    endToolUseCard(logger, ref, { ...baseLog, ...update });
+    endToolUseCard(
+      logger,
+      ref,
+      { ...baseLog, ...update },
+      isError ? 'failed' : 'completed',
+    );
     refs.delete(id);
   }
 }

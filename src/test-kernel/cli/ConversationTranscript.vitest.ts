@@ -43,7 +43,7 @@ import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/transcript';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   type NormalizedToolUse,
   type RunOutcome,
   type RunPhase,
@@ -195,7 +195,7 @@ describe('CLI conversation transcript', () => {
     const user = entry('u1', 'user', 'go', true);
     const assistant = entry('a1', 'assistant', 'working', false);
     const tool = {
-      ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED),
+      ...toolEntry('t1', TOOL_CALL_STATUS.COMPLETED),
       finalized: true,
     };
 
@@ -333,7 +333,7 @@ describe('CLI conversation transcript', () => {
   });
 
   it('falls back when a malformed tool entry cannot be estimated', () => {
-    const base = toolEntry('tool', TOOL_USE_STATUS.IN_PROGRESS);
+    const base = toolEntry('tool', TOOL_CALL_STATUS.IN_PROGRESS);
     const malformedTool = {
       ...base.toolUse,
       toolName: {} as string,
@@ -463,7 +463,7 @@ describe('CLI conversation transcript', () => {
     expect(userLayout.lines).toHaveLength(2);
     expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
 
-    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'one\ntwo');
+    const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'one\ntwo');
     const toolLayout = transcriptEntryLayout(tool, { width: 80 });
     expect(toolLayout).toMatchObject({
       columns: 80,
@@ -492,7 +492,7 @@ describe('CLI conversation transcript', () => {
   });
 
   it('budgets live rich tool rows without reflowing their display lines', () => {
-    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'ok', {
+    const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'ok', {
       input: { command: 'x'.repeat(80) },
     });
     const liveLayout = transcriptEntryLayout(tool, {
@@ -510,7 +510,7 @@ describe('CLI conversation transcript', () => {
   });
 
   it('keeps bounded rich display rows unwrapped', () => {
-    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
+    const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'x'.repeat(40));
     const live = transcriptEntryLayout(tool, { mode: 'live', width: 20 });
     const bounded = boundedTranscriptEntryLayout(
       transcriptEntryLayout(tool, { mode: 'bounded', width: 20 }),
@@ -684,7 +684,7 @@ describe('CLI conversation transcript', () => {
     const tool = {
       ...toolEntry(
         't1',
-        TOOL_USE_STATUS.COMPLETED,
+        TOOL_CALL_STATUS.COMPLETED,
         Array.from({ length: 20 }, (_, index) => `line ${index}`).join('\n'),
       ),
       settlementSeqNo: 0,
@@ -914,7 +914,7 @@ describe('CLI conversation transcript', () => {
     const user = entry('u1', 'user', 'go', true);
     const assistant = entry('a1', 'assistant', 'working', false);
     const tool = {
-      ...settled(toolEntry('t1', TOOL_USE_STATUS.COMPLETED)),
+      ...settled(toolEntry('t1', TOOL_CALL_STATUS.COMPLETED)),
     };
     const settledAssistant = settled(assistant);
     const emptyCursor = {
@@ -1035,7 +1035,7 @@ describe('CLI conversation transcript', () => {
     // suffix once; a repaint rebuilds from `orderedStaticTranscriptEntries`,
     // so both must agree or rows swap places across the repaint.
     const rows = [
-      { ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED), settlementSeqNo: 20 },
+      { ...toolEntry('t1', TOOL_CALL_STATUS.COMPLETED), settlementSeqNo: 20 },
       { ...entry('a1', 'assistant', 'done', true), settlementSeqNo: 10 },
     ];
     const oracle = orderedStaticTranscriptEntries(
@@ -1065,13 +1065,13 @@ describe('CLI conversation transcript', () => {
     // the new suffix alone would print [A, B, C] where the oracle says
     // [B, A, C], so the scan must hand back to the oracle instead.
     const a = {
-      ...toolEntry('a', TOOL_USE_STATUS.COMPLETED),
+      ...toolEntry('a', TOOL_CALL_STATUS.COMPLETED),
       settlementSeqNo: 20,
     };
-    const running = toolEntry('c', TOOL_USE_STATUS.IN_PROGRESS);
+    const running = toolEntry('c', TOOL_CALL_STATUS.IN_PROGRESS);
     const c = {
       ...running,
-      status: TOOL_USE_STATUS.COMPLETED,
+      status: TOOL_CALL_STATUS.COMPLETED,
       settlementSeqNo: 30,
     };
     const b = {

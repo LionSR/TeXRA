@@ -46,7 +46,7 @@ import type {
   TodoItem,
   ToolResult,
   ToolUseLog,
-  ToolUseStatus,
+  ToolCallStatus,
 } from '@shared/schemas';
 import {
   CodexSandboxModeSchema,
@@ -185,7 +185,7 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
 
 function buildCodexLiveToolLog(
   item: ThreadItem,
-  status: ToolUseStatus,
+  status: ToolCallStatus,
 ): ToolUseLog | null {
   switch (item.type) {
     case 'command_execution':
@@ -221,7 +221,7 @@ function updateCodexLiveToolLog(
 
 function publishCodexItemProgress(params: {
   item: ThreadItem;
-  status: ToolUseStatus;
+  status: ToolCallStatus;
   childRunId: RunId;
   logger: AgentTrace;
   refs: Map<string, ToolUseCardRef>;

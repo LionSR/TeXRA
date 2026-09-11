@@ -42,7 +42,7 @@ function recordingSnapshots(): {
 }
 
 describe('workflow run observability', () => {
-  it('keeps later tasks stage-blocked, advances stages monotonically, and skips unreached work', async () => {
+  it('keeps later tasks declared, advances stages monotonically, and skips unreached work', async () => {
     const { snapshots, onSnapshot } = recordingSnapshots();
     const result = await runWorkflowScript({
       script: `${META}phase('Draft')
@@ -56,7 +56,7 @@ return 'done'`,
       snapshots.some(
         (snapshot) =>
           snapshot.calls.find((call) => call.id === 'review')?.status ===
-          'stageBlocked',
+          'declared',
       ),
     ).toBe(true);
     // Drain-time cloning: every delivered snapshot is its own isolated copy.

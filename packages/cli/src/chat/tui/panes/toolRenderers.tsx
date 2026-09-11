@@ -24,7 +24,7 @@ import {
   TODO_PENDING,
   TOOL_OUTPUT_CORNER,
 } from '@cli/tui/ui/glyphs';
-import { TOOL_USE_STATUS } from '@shared/schemas';
+import { TOOL_CALL_STATUS } from '@shared/schemas';
 import {
   toolHeaderPreview,
   transcriptText,
@@ -159,7 +159,9 @@ function labeledLines(
 
 function toolStatusColor(model: ToolRow['model']): string | undefined {
   if (model.isError) return COLOR_ERROR;
-  return model.status === TOOL_USE_STATUS.COMPLETED ? COLOR_SUCCESS : undefined;
+  return model.status === TOOL_CALL_STATUS.COMPLETED
+    ? COLOR_SUCCESS
+    : undefined;
 }
 
 /** The failure block: the error text when there is one, and a bare marker when
@@ -350,7 +352,7 @@ function buildStyledLines(
   const showNoOutput =
     model.outputSuppression === 'empty' &&
     !model.isError &&
-    model.status === TOOL_USE_STATUS.COMPLETED &&
+    model.status === TOOL_CALL_STATUS.COMPLETED &&
     (isBashKind || isMcpToolName(toolUse.toolName));
 
   const compactOutput: ToolDisplayLine[] = [];

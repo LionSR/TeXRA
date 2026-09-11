@@ -8,7 +8,7 @@ import type {
   CodexTurnToolInput,
   TokenUsageStats,
   ToolUseLog,
-  ToolUseStatus,
+  ToolCallStatus,
 } from '@shared/schemas';
 import {
   CODEX_FILE_CHANGE_TOOL,
@@ -36,12 +36,20 @@ type CodexCommandToolLogOptions = Pick<
   CommandExecutionItem,
   'command' | 'aggregated_output' | 'exit_code' | 'status'
 >;
+/** The card status of a Codex item: live while it runs, then its outcome. */
+function codexCardStatus(inProgress: boolean, failed: boolean): ToolCallStatus {
+  if (inProgress) return 'in_progress';
+  return failed ? 'failed' : 'completed';
+}
+
 /** Normalize Codex command execution events for the native bash tool card. */
 export function buildCodexCommandToolLog(
   options: CodexCommandToolLogOptions,
 ): ToolUseLog {
-  const toolStatus: ToolUseStatus =
-    options.status === 'in_progress' ? 'in_progress' : 'completed';
+  const isError =
+    options.status === 'failed' ||
+    (options.exit_code != null && options.exit_code !== 0);
+  const toolStatus = codexCardStatus(options.status === 'in_progress', isError);
   const command = options.command.trim();
   const exitInfo =
     options.exit_code == null
@@ -49,10 +57,7 @@ export function buildCodexCommandToolLog(
       : `exit ${options.exit_code}`;
   const output =
     options.aggregated_output.trimEnd() ||
-    (toolStatus === 'completed' ? `(${exitInfo})` : '');
-  const isError =
-    options.status === 'failed' ||
-    (options.exit_code != null && options.exit_code !== 0);
+    (toolStatus === 'in_progress' ? '' : `(${exitInfo})`);
 
   return {
     toolName: 'bash',
@@ -62,10 +67,7 @@ export function buildCodexCommandToolLog(
     ),
     input: { command: options.command },
     ...(output && { output }),
-    ...(isError && {
-      error: `Command failed (${exitInfo})`,
-      isError: true,
-    }),
+    ...(isError && { error: `Command failed (${exitInfo})` }),
     status: toolStatus,
   };
 }
@@ -104,11 +106,8 @@ export function buildCodexFileChangeToolLog(
       changes: dedupedChanges,
       patchStatus: item.status,
     } satisfies CodexFileChangeToolInput,
-    ...(item.status === 'failed' && {
-      error: 'Patch apply failed',
-      isError: true,
-    }),
-    status: 'completed',
+    ...(item.status === 'failed' && { error: 'Patch apply failed' }),
+    status: item.status === 'failed' ? 'failed' : 'completed',
   };
 }
 
@@ -128,11 +127,8 @@ export function buildCodexMcpToolLog(item: McpToolCallItem): ToolUseLog {
     toolName: buildMcpToolName(item.server, item.tool),
     input: item.arguments,
     output,
-    ...(item.error && {
-      error: item.error.message,
-      isError: true,
-    }),
-    status: item.status === 'in_progress' ? 'in_progress' : 'completed',
+    ...(item.error && { error: item.error.message }),
+    status: codexCardStatus(item.status === 'in_progress', item.error != null),
   };
 }
 
@@ -149,7 +145,7 @@ export function buildCodexThreadToolLog(event: ThreadStartedEvent): ToolUseLog {
 
 export function buildCodexTodoToolLog(
   item: TodoListItem,
-  status: ToolUseStatus,
+  status: ToolCallStatus,
 ): ToolUseLog {
   const completedCount = item.items.filter((todo) => todo.completed).length;
   const totalCount = item.items.length;
@@ -201,14 +197,11 @@ export function buildCodexTurnToolLog(options?: {
     toolName: CODEX_TURN_TOOL,
     summary: codexTurnSummary(state),
     input,
-    // A failed turn is always an error card so the progress view shows failure
+    // A failed turn is a failed card so the progress view shows failure
     // chrome; the error message is attached when the caller has one (turn.failed
     // / stream error) but omitted for abort or an early stream end.
-    ...(state === 'failed' && {
-      isError: true,
-      ...(options?.error && { error: options.error }),
-    }),
-    status: state === 'running' ? 'in_progress' : 'completed',
+    ...(state === 'failed' && options?.error && { error: options.error }),
+    status: codexCardStatus(state === 'running', state === 'failed'),
   };
 }
 

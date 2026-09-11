@@ -11,14 +11,13 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { RunOutcome } from '@shared/schemas';
+import type { RunOutcome, ToolCallStatus } from '@shared/schemas';
 
 import type {
   AgentEvent,
   ContextStateData,
   ResponseFinalizedEvent,
   StreamKind,
-  ToolStatus,
   UsageReport,
 } from './events';
 
@@ -163,7 +162,7 @@ export interface AgentTrace {
     options?: StagedEmitOptions,
   ): void;
   toolEnd(
-    input: { logId: string; status: ToolStatus; result?: unknown },
+    input: { logId: string; status: ToolCallStatus; result?: unknown },
     options?: StagedEmitOptions,
   ): void;
   domain(input: DomainEventInput): void;

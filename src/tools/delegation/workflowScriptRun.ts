@@ -51,33 +51,6 @@ type WorkflowScriptRunWithProgressOptions = Omit<
   readonly onActivity?: (line: string) => void;
 };
 
-/**
- * Card status for one snapshot call. A plan stub the script has not issued is
- * `declared` whatever stage gate it sits behind; an issued call reports its
- * own queue/attempt state, so a host can show real concurrency (running vs.
- * queued) instead of one undifferentiated "planned".
- */
-function projectWorkflowCallStatus(
-  call: Pick<WorkflowRunCall, 'status' | 'issued'>,
-): WorkflowCallProgress['status'] {
-  switch (call.status) {
-    case WORKFLOW_CALL_STATUS.PLANNED:
-      return call.issued ? 'planned' : 'declared';
-    case WORKFLOW_CALL_STATUS.STAGE_BLOCKED:
-      return 'declared';
-    case WORKFLOW_CALL_STATUS.QUEUED:
-      return 'queued';
-    case WORKFLOW_CALL_STATUS.RUNNING:
-      return 'running';
-    case WORKFLOW_CALL_STATUS.COMPLETED:
-    case WORKFLOW_CALL_STATUS.CACHED:
-    case WORKFLOW_CALL_STATUS.SKIPPED:
-    case WORKFLOW_CALL_STATUS.FAILED:
-    case WORKFLOW_CALL_STATUS.CANCELLED:
-      return call.status;
-  }
-}
-
 interface PhaseHandleState {
   readonly handle: StageHandle;
   failed: boolean;
@@ -284,7 +257,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     call: WorkflowRunCall,
     snapshot: WorkflowRunSnapshot,
   ): WorkflowCallProgress => {
-    const status = projectWorkflowCallStatus(call);
+    const { status } = call;
     const phase = stageTitleFor(snapshot, call);
     // The latest attempt describes this card only once it has begun: a
     // re-queued call has not pushed its next attempt yet, and a cached or
@@ -304,18 +277,15 @@ export async function runPersistedWorkflowScriptWithProgress(
       call.attempts.length > 0 ||
       call.timestamps.startedAt !== undefined;
     const includeFiles =
-      call.issued === true ||
-      (call.status !== WORKFLOW_CALL_STATUS.PLANNED &&
-        call.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED &&
-        call.status !== WORKFLOW_CALL_STATUS.SKIPPED) ||
+      (status !== WORKFLOW_CALL_STATUS.DECLARED &&
+        status !== WORKFLOW_CALL_STATUS.SKIPPED) ||
       hasInvocationFacts;
     const identity = {
       id: call.id,
       label: call.label,
       ...(phase !== undefined ? { phase } : {}),
       ...(call.childRunId !== undefined ? { childRunId: call.childRunId } : {}),
-      // Project only invocation facts the snapshot owns. Historical issued
-      // calls may carry any subset and predate both explicit markers.
+      // Project only invocation facts the snapshot owns.
       ...(call.kind !== undefined && { kind: call.kind }),
       ...(call.agent !== undefined && { agent: call.agent }),
       ...(call.model !== undefined && { model: call.model }),
@@ -350,19 +320,12 @@ export async function runPersistedWorkflowScriptWithProgress(
               reason: 'user',
               ...terminalMetadata(call),
             };
+      case WORKFLOW_CALL_STATUS.DECLARED:
       case WORKFLOW_CALL_STATUS.PLANNED:
-        return {
-          ...identity,
-          status: call.issued === true ? 'planned' : 'declared',
-        };
-      case WORKFLOW_CALL_STATUS.STAGE_BLOCKED:
-        return { ...identity, status: 'declared' };
       case WORKFLOW_CALL_STATUS.QUEUED:
-        return { ...identity, status: 'queued' };
       case WORKFLOW_CALL_STATUS.RUNNING:
-        return { ...identity, status: 'running' };
       case WORKFLOW_CALL_STATUS.CACHED:
-        return { ...identity, status: 'cached' };
+        return { ...identity, status: call.status };
     }
   };
 
@@ -391,7 +354,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     if (!constructionEmissionSeen) {
       constructionEmissionSeen = true;
       for (const call of snapshot.calls) {
-        const status = projectWorkflowCallStatus(call);
+        const { status } = call;
         if (
           isTerminalWorkflowCallStatus(status) ||
           call.attempts.length > 0 ||
@@ -463,16 +426,16 @@ export async function runPersistedWorkflowScriptWithProgress(
         const last = projectedCalls.get(call.id);
         // A retry re-queues a running call; the card follows it to `queued`
         // because that wait is real when another call took the freed slot.
-        const status = projectWorkflowCallStatus(call);
+        const { status } = call;
         const baseline = last ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
-          // A reset historical call is current only once `issueCall` stamps
-          // it issued by this attempt (hydration clears the stamp), which
+          // A reset historical call is current only once `issueCall` issues
+          // it in this attempt (hydration resets it to declared), which
           // cannot collapse when hydration and reissue share a clock tick.
           // Sweep-only terminalization of an omitted call therefore stays
           // silent.
-          if (baseline.status === 'declared') {
-            if (!call.issued) continue;
+          if (baseline.status === WORKFLOW_CALL_STATUS.DECLARED) {
+            if (status === WORKFLOW_CALL_STATUS.DECLARED) continue;
           } else if (
             baseline.status === status &&
             baseline.childRunId === call.childRunId
@@ -481,13 +444,22 @@ export async function runPersistedWorkflowScriptWithProgress(
           }
           hydratedBaseline.delete(call.id);
         }
-        // A declared card exists only under an open phase: the engine flips
-        // stage-blocked plan entries to planned the moment their phase opens,
-        // so the card is emitted then, and a phase the run never reaches has
-        // its entries swept to not-reached — emitted under the header the
-        // stage loop above opens for them. A card whose group does not exist
-        // yet is thereby unrepresentable.
-        if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
+        // A declared card exists only under an open phase: a plan entry
+        // behind a stage the run has not entered waits for its phase to open,
+        // and a phase the run never reaches has its entries swept to
+        // not-reached — emitted under the header the stage loop above opens
+        // for them. A card whose group does not exist yet is thereby
+        // unrepresentable.
+        if (
+          status === WORKFLOW_CALL_STATUS.DECLARED &&
+          snapshot.stages.some(
+            (stage) =>
+              stage.id === call.stageId &&
+              stage.lifecycle === WORKFLOW_RUN_LIFECYCLE.WAITING,
+          )
+        ) {
+          continue;
+        }
         const runChanged =
           call.childRunId !== undefined && last?.childRunId !== call.childRunId;
         // The host resolves agent and model after the card first appears;

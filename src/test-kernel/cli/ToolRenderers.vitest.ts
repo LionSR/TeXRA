@@ -163,7 +163,7 @@ describe('ToolUseRow edit patch rendering', () => {
         { command: 'npm test' },
         {
           errorText: 'Command failed (exit 2)',
-          isError: true,
+          status: 'failed',
           outputText: numberedLines(20),
           exitCode: 2,
         },

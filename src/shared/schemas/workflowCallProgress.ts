@@ -2,8 +2,11 @@ import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
 import {
+  TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_KIND,
+  WORKFLOW_CALL_STATUS,
   WorkflowCallFilesSchema,
+  type WorkflowCallStatus,
 } from './workflowRunSnapshot';
 
 export const WorkflowCallIdentitySchema = z.strictObject({
@@ -95,41 +98,41 @@ const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
  */
 const WorkflowCallSkippedProgressSchema = z.discriminatedUnion('reason', [
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('skipped'),
+    status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
     reason: z.literal('not-reached'),
   }),
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('skipped'),
+    status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
     reason: z.literal('user'),
     ...WorkflowCallTerminalMetadataSchema.shape,
   }),
 ]);
 
+/** The card projection of a persisted call; same status vocabulary. */
 export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
-  /** A `meta.tasks` plan label the script has not issued as a call. */
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('declared'),
+    status: z.literal(WORKFLOW_CALL_STATUS.DECLARED),
   }),
   /** Issued by the script; not yet queued for a concurrency slot. */
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('planned'),
+    status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
   }),
   /** Issued and waiting for one of the run's concurrency slots. */
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('queued'),
+    status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
   }),
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('running'),
+    status: z.literal(WORKFLOW_CALL_STATUS.RUNNING),
   }),
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('completed'),
+    status: z.literal(WORKFLOW_CALL_STATUS.COMPLETED),
     ...WorkflowCallTerminalMetadataSchema.shape,
   }),
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('cached'),
+    status: z.literal(WORKFLOW_CALL_STATUS.CACHED),
   }),
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('cancelled'),
+    status: z.literal(WORKFLOW_CALL_STATUS.CANCELLED),
     // Cancelled is terminal but not a failure, so it intentionally omits the
     // `error` field carried by `failed`; renderers surface it as a stopped
     // state rather than as an exception.
@@ -137,14 +140,17 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   }),
   WorkflowCallSkippedProgressSchema,
   WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('failed'),
+    status: z.literal(WORKFLOW_CALL_STATUS.FAILED),
     error: z.string().min(1),
     ...WorkflowCallTerminalMetadataSchema.shape,
   }),
 ]);
 
 export type WorkflowCallProgress = z.infer<typeof WorkflowCallProgressSchema>;
-type WorkflowCallLiveStatus = 'declared' | 'planned' | 'queued' | 'running';
+type WorkflowCallLiveStatus = Exclude<
+  WorkflowCallStatus,
+  'completed' | 'cached' | 'cancelled' | 'skipped' | 'failed'
+>;
 export type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
   { readonly status: WorkflowCallLiveStatus }
@@ -157,21 +163,9 @@ export type WorkflowCallLiveProgress = Extract<
 
 /** One lifecycle predicate shared by persistence and transcript projections. */
 export function isTerminalWorkflowCallStatus(
-  status: WorkflowCallProgress['status'],
+  status: WorkflowCallStatus,
 ): status is WorkflowCallTerminalProgress['status'] {
-  switch (status) {
-    case 'declared':
-    case 'planned':
-    case 'queued':
-    case 'running':
-      return false;
-    case 'completed':
-    case 'cached':
-    case 'cancelled':
-    case 'skipped':
-    case 'failed':
-      return true;
-  }
+  return TERMINAL_WORKFLOW_CALL_STATUSES.has(status);
 }
 
 export function isTerminalWorkflowCallProgress(
@@ -213,4 +207,4 @@ export const WORKFLOW_TASK_STATUS_LABEL = {
   skipped: 'Skipped',
   cancelled: 'Cancelled',
   failed: 'Failed',
-} as const satisfies Record<WorkflowCallProgress['status'], string>;
+} as const satisfies Record<WorkflowCallStatus, string>;

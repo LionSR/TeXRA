@@ -113,7 +113,7 @@ export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
         label: compactWorkflowText(call.label),
         phaseId: compactWorkflowText(call.stageId),
         phaseTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
-        ...(call.issued && { issued: true, kind: call.kind }),
+        kind: call.kind,
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {

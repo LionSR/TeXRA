@@ -8,7 +8,7 @@ import {
   setCliToolEnabled,
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
-import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
+import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
@@ -41,7 +41,7 @@ function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
   return [
     formatToolEnablementForTui(tool),
     formatToolDetectionForTui(tool.detected),
-    toolStatusLabel(tool.status, tool.statusLabel),
+    toolDependencyStatusLabel(tool.status, tool.statusLabel),
   ]
     .filter((part): part is string => part !== undefined)
     .join(' · ');

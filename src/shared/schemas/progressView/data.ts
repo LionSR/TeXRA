@@ -53,16 +53,18 @@ export const UserMessagePayloadSchema = z.object({
   workflowSummary: WorkflowScriptDeliverySummarySchema.optional(),
 });
 
-export const TOOL_USE_STATUS = {
+/**
+ * The one status of a tool call: carried by `tool.end`, folded onto the
+ * card, and read by every renderer. A failed call is `failed`; there is no
+ * side-channel error flag beside it.
+ */
+export const TOOL_CALL_STATUS = {
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
   FAILED: 'failed',
 } as const;
-
-export type ToolUseStatus =
-  (typeof TOOL_USE_STATUS)[keyof typeof TOOL_USE_STATUS];
-
-const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
+export const ToolCallStatusSchema = z.enum(TOOL_CALL_STATUS);
+export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
 
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
@@ -71,9 +73,8 @@ export const ToolUseLogSchema = z.object({
   spillPath: z.string().optional(),
   summary: z.string().optional(),
   error: z.string().optional(),
-  isError: z.boolean().optional(),
   userInstruction: z.string().optional(),
-  status: ToolUseStatusSchema.optional(),
+  status: ToolCallStatusSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
@@ -90,10 +91,9 @@ export type NormalizedToolUse = {
   exitCode?: number;
   userInstructionText: string;
   input: unknown;
-  isError: boolean;
   isUserFeedback: boolean;
   headerSummary: string;
-  status?: ToolUseStatus;
+  status?: ToolCallStatus;
 };
 
 // ============================================================

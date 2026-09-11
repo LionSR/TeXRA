@@ -22,7 +22,7 @@ import {
   partitionDuplicateCalls,
 } from '@agent/core/flows/toolCallParsing';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import type { FileLocation, ToolResult } from '@shared/schemas';
+import type { FileLocation, ToolCallStatus, ToolResult } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -410,7 +410,6 @@ export class ToolUseDispatchNode extends BaseNode<
               result.status === 'error'
                 ? result.error
                 : (result.output ?? 'Tool run cancelled.'),
-            isError: true,
           },
           'failed',
         );
@@ -459,8 +458,10 @@ export class ToolUseDispatchNode extends BaseNode<
       input: parsedInput ?? call.raw,
       ...(Object.keys(logOutput).length > 0 ? { output: logOutput } : {}),
       ...(editedFiles.length > 0 ? { files: editedFiles } : {}),
-      isError: extracted.sanitizedResult.status === 'error',
     };
+    // The card's status is the tool result's outcome, written once here.
+    const status: ToolCallStatus =
+      extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
 
     // Update in-progress log (slow tools) or create new log (fast tools)
     // Both use the groupId captured at run start for consistency
@@ -469,11 +470,12 @@ export class ToolUseDispatchNode extends BaseNode<
         options.logger,
         { logId: logRef.logId, groupId: logRef.groupId },
         toolUseLog,
+        status,
       );
     } else {
       emitToolUseCard(
         options.logger,
-        { ...toolUseLog, status: 'completed' },
+        { ...toolUseLog, status },
         logRef.groupId,
       );
     }

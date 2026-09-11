@@ -13,7 +13,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { createLog } from '@logger/logUtils';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunOutcome,
+  type ToolCallStatus,
+} from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -22,7 +26,6 @@ import type {
   AgentEvent,
   ContextStateData,
   StreamKind,
-  ToolStatus,
   UsageReport,
 } from './events';
 import type {
@@ -175,7 +178,7 @@ export class TraceEmitter implements AgentTrace {
   }
 
   toolEnd(
-    input: { logId: string; status: ToolStatus; result?: unknown },
+    input: { logId: string; status: ToolCallStatus; result?: unknown },
     options: StagedEmitOptions = {},
   ): void {
     this.emit({

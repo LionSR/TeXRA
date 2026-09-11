@@ -117,53 +117,7 @@ describe('workflow-script persistence', () => {
   });
 
   it.each([
-    ['live queued', 'active', 'queued', false],
-    ['terminal completed', 'completed', 'completed', true],
-  ] as const)(
-    'reads a marker-free historical %s call',
-    async (_name, lifecycle, status, terminal) => {
-      const store = getRunStore(runId);
-      const timestamp = '2026-08-30T00:00:00.000Z';
-      const timestamps = {
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        ...(terminal && { completedAt: timestamp }),
-      };
-      await writeWorkflowRunSnapshot(
-        runId,
-        WorkflowRunSnapshotSchema.parse(
-          {
-            timestamp,
-            workflow: {
-              lifecycle,
-              stages: [],
-              calls: [
-                {
-                  id: 'historical-call',
-                  label: 'Historical call',
-                  agent: 'legacy-agent',
-                  files: { input: [], context: [], media: [] },
-                  attempts: [],
-                  status,
-                  timestamps,
-                },
-              ],
-              timestamps,
-            },
-          }.workflow,
-        ),
-      );
-
-      await expect(
-        Effect.runPromise(getRunRecords(session, runId).readMeta()),
-      ).resolves.toMatchObject({
-        workflow: { calls: [{ status }] },
-      });
-    },
-  );
-
-  it.each([
-    ['explicit issue without kind', { issued: true, kind: undefined }],
+    ['issued call without kind', { kind: undefined }],
     [
       'live call with completedAt',
       {
@@ -189,7 +143,6 @@ describe('workflow-script persistence', () => {
           {
             id: 'current-call',
             label: 'Current call',
-            issued: true,
             kind: 'document',
             files: { input: [], context: [], media: [] },
             attempts: [],

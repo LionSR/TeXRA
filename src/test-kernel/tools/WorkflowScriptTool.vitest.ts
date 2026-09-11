@@ -897,6 +897,7 @@ return null`;
         {
           id: 'interrupted',
           label: 'Interrupted call',
+          kind: 'document' as const,
           files: { input: [], context: [], media: [] },
           attempts: [
             {

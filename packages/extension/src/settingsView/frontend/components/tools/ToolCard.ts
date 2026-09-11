@@ -33,7 +33,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
+import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('tool-card')
@@ -241,7 +241,10 @@ export class ToolCard extends LitElement {
   };
 
   private renderAvailableStatusIcon(): TemplateResult {
-    const label = toolStatusLabel(this.item.status, this.item.statusLabel);
+    const label = toolDependencyStatusLabel(
+      this.item.status,
+      this.item.statusLabel,
+    );
 
     return html`
       <span
@@ -259,7 +262,7 @@ export class ToolCard extends LitElement {
   // all read neutral; the icon carries the distinction.
   private renderStatusBadge(): TemplateResult {
     const { status } = this.item;
-    const label = toolStatusLabel(status, this.item.statusLabel);
+    const label = toolDependencyStatusLabel(status, this.item.statusLabel);
 
     return html`
       <wa-tag class="tool-badge" variant="neutral" size="s">
