@@ -18,6 +18,7 @@ import {
 } from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -50,6 +51,7 @@ beforeEach(() => {
       Layer.mergeAll(
         testHttpClientLayer,
         Layer.mock(UpdateCheckRecords, {}),
+        fakeProcessServices(),
         inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),

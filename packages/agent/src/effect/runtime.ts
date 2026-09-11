@@ -29,6 +29,7 @@ import {
 import {
   disposeProcessRuntime,
   installProcessRuntime,
+  processServicesLayer,
 } from '@controllers/session/sessionLayer';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import {
@@ -37,6 +38,7 @@ import {
 } from '@platform/workspaceRoots';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
 import { makeSessions, Sessions } from './sessions.js';
@@ -54,7 +56,24 @@ export interface AgentPlatform extends Platform {
 export interface AgentRuntime {
   readonly platform: AgentPlatform;
   readonly roots: WorkspaceRoots;
+  /**
+   * The process services over this platform, as the process runtime holds
+   * them. The package's `Sessions` programs run on the embedder's runtime,
+   * so a launch there is given these explicitly rather than carrying them
+   * on the public API's types.
+   */
+  readonly services: ReturnType<typeof processServicesLayer>;
 }
+
+/**
+ * The package's setup capabilities: its runs are headless, like the CLI's,
+ * and it starts no interactive sign-in of its own, so a setup tool that asks
+ * for one is told it did not complete.
+ */
+const PACKAGE_SETUP: SetupPlatformShape = {
+  host: 'cli',
+  signIn: async () => false,
+};
 
 /** One composition's hold on the composed process: what it reads, and the
  *  end of its claim on what it found or installed. */
@@ -123,6 +142,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
         'The agent package is already using another platform in this process.',
     });
   }
+  const processServices = {
+    secrets: () => platform.secrets,
+    appState: () => platform.globalState,
+    setup: PACKAGE_SETUP,
+  };
   if (!sessionOwnerInstalled()) {
     // The process-wide installations, once for the life of the process.
     if (!active) {
@@ -136,11 +160,12 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // pending read: the owner's map builds synchronously over it, so an
     // open registers its root before the opener's first await and only the
     // entry's build waits.
-    installProcessRuntime(
-      nodeProcesses.selfIdentity(),
-      () => platform.storage.getGlobalStoragePath(),
-      () => platform.storage.getGlobalStoragePath(),
-    );
+    installProcessRuntime({
+      processStart: nodeProcesses.selfIdentity(),
+      globalStorage: () => platform.storage.getGlobalStoragePath(),
+      updateCheckStorage: () => platform.storage.getGlobalStoragePath(),
+      ...processServices,
+    });
     if (!active) {
       initNodeAgentRuntime(platform.lifecycle);
     }
@@ -149,7 +174,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   holds += 1;
   let held = true;
   return {
-    runtime: { platform, roots: platform.roots },
+    runtime: {
+      platform,
+      roots: platform.roots,
+      services: processServicesLayer(processServices),
+    },
     release: Effect.suspend(() => {
       if (!held) return Effect.void;
       held = false;

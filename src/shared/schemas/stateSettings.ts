@@ -1191,7 +1191,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Memory ---------------------------------------------------------------
   // Every host's runtime honors the key through the `memory` entry of
-  // `SharedToolInjectionRegistry`, but only the settings view renders it; the
+  // `AGENT_TOOL_INJECTIONS`, but only the settings view renders it; the
   // CLI has no `/config` row for it.
   surfacedSetting({
     key: GlobalStateKey.MEMORY_ENABLED,

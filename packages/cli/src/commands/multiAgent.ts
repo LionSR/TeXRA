@@ -47,7 +47,10 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/executeCli';
+import {
+  type CliRunServices,
+  executeCliToolUseConfig,
+} from '../runtime/executeCli';
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -117,7 +120,7 @@ async function runMultiAgentShow(
 export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   context: CliContext,
   init: MultiAgentRunInit,
-): Effect.fn.Return<number, Error> {
+): Effect.fn.Return<number, Error, CliRunServices> {
   const instruction = yield* Effect.tryPromise({
     try: () => resolveFileBackedInstruction(init, context.cwd),
     catch: ensureError,

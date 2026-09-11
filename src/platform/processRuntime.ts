@@ -6,13 +6,29 @@
  * Promise-facing methods; inside, cancellation is fiber interruption.
  * Installed like the process roots: exactly once, by the entry.
  */
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { SetupPlatform } from '@tools/setup/platform';
 import type { ManagedRuntime } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
+import type { AppState } from './interfaces';
+import type { Secrets } from './secrets';
+
+/**
+ * The runtime over the process-lifetime services every entry provides: the
+ * four cohort-A tags beside the records and the HTTP client, merged once in
+ * `installProcessRuntime`'s `services` layer.
+ */
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  HttpClient.HttpClient | InquiryRecords | UpdateCheckRecords,
+  | HttpClient.HttpClient
+  | InquiryRecords
+  | UpdateCheckRecords
+  | Secrets
+  | AppState
+  | SetupPlatform
+  | ToolInjections,
   never
 >;
 

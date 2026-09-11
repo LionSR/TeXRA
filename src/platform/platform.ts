@@ -87,8 +87,3 @@ export function platform(): Readonly<Platform> {
 export function tryPlatform(): Readonly<Platform> | null {
   return _platform;
 }
-
-/** Get global state if the platform has been initialized. */
-export function tryGlobalState(): StateStore | null {
-  return _platform?.globalState ?? null;
-}

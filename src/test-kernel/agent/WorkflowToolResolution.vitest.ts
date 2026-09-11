@@ -10,12 +10,12 @@ import {
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   AgentCategory,
   type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
+import { platform } from '@platform/platform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -103,6 +103,7 @@ async function observeWorkflowTools({
           prompt: PROMPT,
           logger,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
+          globalState: platform().globalState,
           userVarChannels: { MODEL: CONFIG.model },
           modelCell,
           toolPolicy: createToolPolicy({
@@ -124,10 +125,6 @@ async function observeWorkflowTools({
 describe('workflow tool resolution', () => {
   it('passes canonical filtered registry contracts to the reflection handler', async () => {
     const warn = vi.fn<typeof noopTrace.warn>();
-    const sharedInjections = vi.spyOn(SharedToolInjectionRegistry, 'list');
-    sharedInjections.mockReturnValue([
-      { toolName: 'plan', shouldInject: () => true },
-    ]);
     const setting = AgentWorkflowSettingSchema.parse({
       rounds: 1,
       tools: [
@@ -152,7 +149,6 @@ describe('workflow tool resolution', () => {
     expect(warn).toHaveBeenCalledWith(
       'Declared tool not found in registry: missing_workflow_tool',
     );
-    expect(sharedInjections).not.toHaveBeenCalled();
   });
 
   it('passes no tools to a model without function calling', async () => {

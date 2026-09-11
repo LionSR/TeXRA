@@ -31,6 +31,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { platform } from '@platform/platform';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
@@ -90,6 +91,7 @@ async function runPersistedReflectionFlow(
         prompt: PROMPT,
         logger,
         parentStage: logger.openStage('Reflection flow recovery test'),
+        globalState: platform().globalState,
         userVarChannels: { MODEL: CONFIG.model },
         modelCell,
         toolPolicy: createToolPolicy(),

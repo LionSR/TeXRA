@@ -51,6 +51,7 @@ import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
   type CliConfigExecuteOptions,
+  type CliRunServices,
 } from '../runtime/executeCli';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
@@ -93,7 +94,7 @@ interface WorkflowRunInit {
 export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
   context: CliContext,
   init: WorkflowRunInit,
-): Effect.fn.Return<number, Error> {
+): Effect.fn.Return<number, Error, CliRunServices> {
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
@@ -206,7 +207,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly runId?: RunId;
       readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
     },
-  ): Effect.fn.Return<number, Error> {
+  ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* Effect.tryPromise({
       try: initializeCliTranscriptSession,
       catch: ensureError,

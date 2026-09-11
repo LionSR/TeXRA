@@ -58,9 +58,11 @@ export interface ExternalToolCheckResult {
 /** Last check results — the only source for availability answers. */
 let lastResults: ExternalToolCheckResult[] | null = null;
 
-/** Read the current set of disabled tool names from persisted Settings state. */
-export function getDisabledToolNames(): ReadonlySet<string> {
-  const disabledIds = getDisabledToolIds();
+/** The disabled tool names, from the process global state the caller holds. */
+export function getDisabledToolNames(
+  globalState: StateStore,
+): ReadonlySet<string> {
+  const disabledIds = getDisabledToolIds(globalState);
   const disabled = new Set<string>();
   for (const def of EXTERNAL_TOOL_DEFS) {
     if (!disabledIds.has(def.id)) continue;

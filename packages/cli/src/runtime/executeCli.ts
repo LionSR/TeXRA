@@ -55,6 +55,12 @@ import type { CliContext } from './cliContext';
 type RunAgentWorkflowOutput = NonNullable<
   RunAgentOptions['openWorkflowOutput']
 >;
+
+/**
+ * The process services a headless run requires (the ones `runAgent` reads),
+ * derived rather than named so the host imports no agent-internal module.
+ */
+export type CliRunServices = Effect.Services<ReturnType<typeof runAgent>>;
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
   tryCommitPublication: () => boolean,
@@ -125,7 +131,7 @@ export function executeCliConfig<
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliConfigExecuteOptions<C> = {},
-): Effect.Effect<CliConfigExecuteResult<C>, Error> {
+): Effect.Effect<CliConfigExecuteResult<C>, Error, CliRunServices> {
   return Effect.gen(function* () {
     const {
       expectedCategory,
@@ -252,7 +258,8 @@ export function executeCliRequest(
       result: ExecuteAgentResult;
     }
   | { ok: false; exitCode: CliExitCode },
-  Error
+  Error,
+  CliRunServices
 > {
   return Effect.gen(function* () {
     // Transcript persistence is a launch prerequisite for every headless run.
@@ -505,7 +512,7 @@ export function executeCliRequest(
       },
     );
     const openWorkflowOutput = options.openWorkflowOutput;
-    const invoke = (): Effect.Effect<ExecuteAgentResult, Error> =>
+    const invoke = (): ReturnType<typeof runAgent> =>
       runAgent(request, {
         session,
         enforceCategory: options.enforceCategory,

@@ -27,6 +27,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -108,6 +109,7 @@ describe('desktop agent directory bootstrap', () => {
             Layer.mergeAll(
               testHttpClientLayer,
               Layer.mock(UpdateCheckRecords, {}),
+              fakeProcessServices(),
               inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
               ),

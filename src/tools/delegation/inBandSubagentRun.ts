@@ -28,7 +28,9 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
+import type { AppState } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -165,7 +167,11 @@ const executeInBand = Effect.fn('executeInBand')(
     mode: PersistenceMode,
     runId: RunId,
     stableAttempt?: StableSubagentAttempt,
-  ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
+  ): Effect.fn.Return<
+    InBandSubagentDeliveryResult,
+    Error,
+    ToolInjections | AppState
+  > {
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
@@ -441,7 +447,11 @@ export const executeStableSubagentInBand = Effect.fn(
 )(
   function* (
     options: StableInBandSubagentRunOptions,
-  ): Effect.fn.Return<InBandSubagentRunResult, Error> {
+  ): Effect.fn.Return<
+    InBandSubagentRunResult,
+    Error,
+    ToolInjections | AppState
+  > {
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const reservation = yield* Effect.acquireRelease(
@@ -513,7 +523,11 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
   'executeSubagentForDeliveryInBand',
 )(function* (
   options: InBandSubagentDeliveryOptions,
-): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
+): Effect.fn.Return<
+  InBandSubagentDeliveryResult,
+  Error,
+  ToolInjections | AppState
+> {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(
     options,

@@ -22,12 +22,13 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import type { StateStore } from '@platform/interfaces';
 import { aggregateId } from '@shared/schemas';
 import type {
   RetryErrorInfo,
@@ -98,8 +99,10 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
    * otherwise keep naming the model the run started with.
    */
   onModelChanged: (model: string) => void;
-  /** Runtime feature registry for auto-injected tools. */
-  toolInjections?: ToolInjectionRegistry;
+  /** The process's conditional tool injections (`ToolInjections`). */
+  toolInjections: ToolInjections['Service'];
+  /** The process global state (`AppState`): the user's disabled-tool set. */
+  globalState: StateStore;
   /** Caller-supplied tools available only to this run. */
   tools?: readonly ITool[];
   /** Reports whether terminal finalization should retain the resume record. */
@@ -189,6 +192,7 @@ export async function runToolUseFlow(
     approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
     runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
+    globalState: input.globalState,
   });
   const overlayTools: ITool[] = [];
   const overlayNames = new Set<string>();

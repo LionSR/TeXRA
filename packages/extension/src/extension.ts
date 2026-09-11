@@ -100,11 +100,11 @@ import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -121,6 +121,39 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const log = createLog('extension');
+
+// Shared by the `Platform` tool-availability port and the setup platform's
+// extensions port, which both answer the same question.
+const isVscodeExtensionInstalled = (id: string) =>
+  vscode.extensions.getExtension(id) !== undefined;
+
+/**
+ * The extension's setup capabilities, provided as the `SetupPlatform` service
+ * by `initVscodePlatform`. Every member is a closure over VS Code's own APIs,
+ * so the value exists before any activation state does.
+ */
+const vscodeSetupPlatform: SetupPlatformShape = {
+  host: 'extension',
+  signIn: async () =>
+    (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
+    true,
+  commands: {
+    invoke: (cmd, ...args) =>
+      Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
+  },
+  extensions: {
+    isInstalled: isVscodeExtensionInstalled,
+    install: async (id) => {
+      await vscode.commands.executeCommand(
+        'workbench.extensions.installExtension',
+        id,
+      );
+    },
+  },
+  terminal: {
+    runCommand: (args) => runTerminalCommand(args),
+  },
+};
 const authLog = createLog('SupabaseAuthProvider');
 
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -154,11 +187,17 @@ async function initVscodePlatform(
   // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  installProcessRuntime(
-    await nodeProcesses.selfIdentity(),
-    () => storage.getGlobalStoragePath(),
-    () => storage.getGlobalStoragePath(),
-  );
+  // Both process stores exist before the runtime here: VS Code hands the
+  // extension its SecretStorage and Memento at activation.
+  const secrets = new VscodeSecrets(context);
+  installProcessRuntime({
+    processStart: await nodeProcesses.selfIdentity(),
+    globalStorage: () => storage.getGlobalStoragePath(),
+    updateCheckStorage: () => storage.getGlobalStoragePath(),
+    secrets: () => secrets,
+    appState: () => context.globalState,
+    setup: vscodeSetupPlatform,
+  });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
@@ -168,7 +207,6 @@ async function initVscodePlatform(
       ),
     ),
   );
-  const secrets = new VscodeSecrets(context);
   initPlatform(
     createNodePlatform({
       globalState: context.globalState,
@@ -486,10 +524,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
-  // Shared by the `Platform` tool-availability port and the setup platform's
-  // extensions port, which both answer the same question.
-  const isVscodeExtensionInstalled = (id: string) =>
-    vscode.extensions.getExtension(id) !== undefined;
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
   const secrets = await initVscodePlatform(
@@ -632,28 +666,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerFileDecorations(context);
 
   setLeanLanguageServices(vscodeLeanLanguageServices);
-  setSetupPlatform({
-    host: 'extension',
-    signIn: async () =>
-      (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
-      true,
-    commands: {
-      invoke: (cmd, ...args) =>
-        Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
-    },
-    extensions: {
-      isInstalled: isVscodeExtensionInstalled,
-      install: async (id) => {
-        await vscode.commands.executeCommand(
-          'workbench.extensions.installExtension',
-          id,
-        );
-      },
-    },
-    terminal: {
-      runCommand: (args) => runTerminalCommand(args),
-    },
-  });
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.

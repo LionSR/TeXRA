@@ -6,9 +6,11 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
+import type { AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
@@ -188,13 +190,15 @@ export function createWorkflowScriptAgentRunner(
       costUsd: number | undefined,
     ) => void;
   },
-): (invocation: WorkflowAgentInvocation) => Effect.Effect<RunEnd, Error> {
+): (
+  invocation: WorkflowAgentInvocation,
+) => Effect.Effect<RunEnd, Error, ToolInjections | AppState> {
   const { runScope } = parent;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
       invocation: WorkflowAgentInvocation,
-    ): Effect.fn.Return<RunEnd, Error> {
+    ): Effect.fn.Return<RunEnd, Error, ToolInjections | AppState> {
       const logicalRunId = deriveRunId({
         checkpointId,
         key: invocation.key,

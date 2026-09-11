@@ -8,7 +8,6 @@ import {
   tryDefaultSession,
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
@@ -32,19 +31,21 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { setSetupPlatform } from '@tools/setup/platform';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { installCliProcessRuntime } from './cliProcessRuntime';
+import {
+  bindCliGlobalState,
+  installCliProcessRuntime,
+} from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
   flushTextStderr,
   writeTextStderr,
 } from './logSinks';
-import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
+import { initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
@@ -302,6 +303,9 @@ export async function initCliPlatform(
         };
       }),
     );
+    // The store the process runtime's `AppState` reads from here on: it opened
+    // on that runtime, so it could not be threaded into the install above.
+    bindCliGlobalState(stateStores.globalState);
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
@@ -401,14 +405,6 @@ export async function initCliPlatform(
     initializeCliSupabaseAuth(cliPlatformLog);
     supabaseAuthInitialized = true;
   }
-
-  setSetupPlatform({
-    host: 'cli',
-    signIn: async () => {
-      await signInCliSupabase({ openBrowser: true });
-      return SupabaseClient.isAuthenticated();
-    },
-  });
 
   initializeBundledPrompts(context.resourcesPath);
 

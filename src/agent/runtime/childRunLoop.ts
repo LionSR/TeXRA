@@ -159,7 +159,7 @@ interface ChildRunPort {
  * Failed turns release session ownership before routing/waking the parent;
  * interrupted turns release ownership but skip parent delivery entirely.
  */
-export interface ChildRunStrategy<TTurn> {
+export interface ChildRunStrategy<TTurn, R = never> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
 
@@ -196,11 +196,16 @@ export interface ChildRunStrategy<TTurn> {
    */
   readonly deliveryMode?: 'persistOnly';
 
-  /** Produce the first turn's outcome. Throws on hard failure. */
+  /**
+   * Produce the first turn's outcome. Throws on hard failure. `R` names the
+   * process services a turn reads (the native strategy's engine turns read
+   * `ToolInjections` and `AppState`); the loop forwards it to its caller,
+   * where the process runtime provides them.
+   */
   launch(
     ports: ChildRunPorts,
     signal: AbortSignal,
-  ): Effect.Effect<TTurn, Error>;
+  ): Effect.Effect<TTurn, Error, R>;
 
   /**
    * Produce the next turn's outcome from the queued follow-up batch. Throws
@@ -215,7 +220,7 @@ export interface ChildRunStrategy<TTurn> {
     followUps: readonly FollowUpQueueBatchItem[],
     ports: ChildRunPorts,
     signal: AbortSignal,
-  ): Effect.Effect<TTurn, Error>;
+  ): Effect.Effect<TTurn, Error, R>;
 
   /** True when `turn` ends this child's run; no further turns follow. */
   isTerminal(turn: TTurn): boolean;
@@ -287,7 +292,7 @@ export interface ChildRunStrategy<TTurn> {
   releaseSessionOwnership?(): void;
 }
 
-export interface ChildRunLoopParams<TTurn> {
+export interface ChildRunLoopParams<TTurn, R = never> {
   readonly session: SessionHandle;
   /**
    * Presentation/lifecycle wrapper for agent-CLI child runs. Native
@@ -302,7 +307,7 @@ export interface ChildRunLoopParams<TTurn> {
    *  attaches its interrupt handler under, before the first turn runs. */
   readonly runId: RunId;
   readonly agentName: string;
-  readonly strategy: ChildRunStrategy<TTurn>;
+  readonly strategy: ChildRunStrategy<TTurn, R>;
   /**
    * Roll this child's final cost into the parent's usage totals. Omitted by
    * agent-CLI callers (no cost concept today); native delegation passes its
@@ -420,13 +425,13 @@ type TurnAttempt<TTurn> =
  * maps to `interrupted` (the caller breaks), a thrown call to `failed`, and a
  * returned turn to `completed` (carrying its application-level error flag).
  */
-function attemptTurn<TTurn>(
-  strategy: ChildRunStrategy<TTurn>,
-  runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error>,
+function attemptTurn<TTurn, R>(
+  strategy: ChildRunStrategy<TTurn, R>,
+  runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
   loop: ChildRunInterruptible,
   logger: AgentTrace,
   startedAt: number,
-): Effect.Effect<TurnAttempt<TTurn>> {
+): Effect.Effect<TurnAttempt<TTurn>, never, R> {
   return Effect.gen(function* () {
     const attempt = yield* Effect.exit(
       Effect.gen(function* () {
@@ -550,8 +555,8 @@ function persistTurnStateBestEffort(
  * Either may return `undefined` after detachment, which must skip delivery
  * entirely rather than silently falling back to the old parent.
  */
-function resolveDeliveryTarget<TTurn>(
-  strategy: ChildRunStrategy<TTurn>,
+function resolveDeliveryTarget<TTurn, R>(
+  strategy: ChildRunStrategy<TTurn, R>,
   resolveChildRunTarget: () => RunId | undefined,
 ): RunId | undefined {
   return strategy.resolveDeliveryTarget
@@ -596,9 +601,10 @@ function warnDetachedChildDelivery(logger: AgentTrace, runId: RunId): void {
  */
 const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   TTurn,
+  R,
 >(params: {
   session: SessionHandle;
-  strategy: ChildRunStrategy<TTurn>;
+  strategy: ChildRunStrategy<TTurn, R>;
   runId: RunId;
   logger: AgentTrace;
   turn: TTurn | null;
@@ -782,9 +788,9 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
  * Setup completes before the returned fiber takes responsibility for the run.
  * The launcher handles setup failures; the fiber owns terminal cleanup.
  */
-export function startChildRunLoop<TTurn>(
-  params: ChildRunLoopParams<TTurn>,
-): Effect.Effect<Fiber.Fiber<void, Error>, Error> {
+export function startChildRunLoop<TTurn, R = never>(
+  params: ChildRunLoopParams<TTurn, R>,
+): Effect.Effect<Fiber.Fiber<void, Error>, Error, R> {
   return Effect.gen(function* () {
     const runSession = params.session;
     const budget = params.budgeted
@@ -939,8 +945,8 @@ export function startChildRunLoop<TTurn>(
     // every detached native child turn; and nowhere above or below (design:
     // .agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md).
     const gateTurn = (
-      base: (signal: AbortSignal) => Effect.Effect<TTurn, Error>,
-    ): ((signal: AbortSignal) => Effect.Effect<TTurn, Error>) =>
+      base: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
+    ): ((signal: AbortSignal) => Effect.Effect<TTurn, Error, R>) =>
       budget === undefined
         ? base
         : (signal) =>
@@ -963,7 +969,7 @@ export function startChildRunLoop<TTurn>(
     let runStarted = false;
     const run = Effect.gen(function* () {
       runStarted = true;
-      let runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error> = (
+      let runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R> = (
         signal,
       ) => strategy.launch(ports, signal);
       let turnIndex = 0;

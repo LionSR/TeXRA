@@ -43,6 +43,7 @@ import {
   type StateSlicesSnapshot,
   AgentCategory,
 } from '@shared/schemas';
+import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createProcessSession,
@@ -332,6 +333,7 @@ async function runPersistedFlow(
           runScope,
           setting: TOOL_USE_SETTING,
           prompt: TOOL_USE_PROMPT,
+          globalState: platform().globalState,
           logger: noopTrace,
           userVarChannels,
           modelCell,

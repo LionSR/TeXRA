@@ -139,10 +139,7 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from './desktopWindowTitle.js';
-import {
-  initializeDesktopSetupAuth,
-  registerDesktopSetupSignIn,
-} from './desktopSetupAuth.js';
+import { registerDesktopSetupSignIn } from './desktopSetupAuth.js';
 import {
   checkForDesktopUpdate,
   DESKTOP_RELEASES_PAGE_URL,
@@ -622,7 +619,6 @@ function createWindow(options: {
       teamSignInPending = false;
     }
   };
-  initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = () =>
     activeProject().root ?? app.getPath('home');

@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
+import { platform } from '@platform/platform';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
@@ -127,6 +128,7 @@ async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
     registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
+    globalState: platform().globalState,
   });
 }
 

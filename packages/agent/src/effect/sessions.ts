@@ -317,6 +317,7 @@ function admitInput(
  */
 function start(
   session: RuntimeSessionHandle,
+  services: AgentRuntime['services'],
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
@@ -399,6 +400,10 @@ function start(
               tools: input.tools,
             },
           ).pipe(
+            // The launch runs on the embedder's runtime; the process
+            // services it reads are the composed process's, given here so
+            // the public `Sessions` types carry none of them.
+            Effect.provide(services),
             Effect.mapError(
               (cause) =>
                 new RunFailure({ cause, message: toErrorMessage(cause) }),
@@ -491,10 +496,13 @@ let readerPorts = 0;
 
 /** The session as this package works on it: a pure function of the owner's
  *  handle, holding nothing the owner already holds. */
-function sessionOf(handle: RuntimeSessionHandle): Session {
+function sessionOf(
+  handle: RuntimeSessionHandle,
+  services: AgentRuntime['services'],
+): Session {
   return {
     roots: handle.roots,
-    start: (input) => start(handle, input),
+    start: (input) => start(handle, services, input),
     request: (request) => handle.requests.request(request),
     view: { changes: handle.viewChanges },
     subscribe: (interests) =>
@@ -524,10 +532,12 @@ export function makeSessions(
           },
           interactions: HEADLESS_HOST,
         }),
-        sessionOf,
+        (handle) => sessionOf(handle, runtime.services),
       ),
     close: (roots?: WorkspaceRoots, signal?: AbortSignal) =>
       closeOwnedSession((roots ?? runtime.roots).storage, signal),
-    list: Effect.map(listOwnedSessions(), (handles) => handles.map(sessionOf)),
+    list: Effect.map(listOwnedSessions(), (handles) =>
+      handles.map((handle) => sessionOf(handle, runtime.services)),
+    ),
   };
 }

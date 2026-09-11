@@ -20,6 +20,7 @@ import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import { AppState, type StateStore } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   type ModelHandlerCompatibilityKey,
@@ -64,6 +65,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
+import { ToolInjections } from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
@@ -124,6 +126,9 @@ async function launchToolUseRun(
   shared: SubagentRunOptions & {
     readonly setting: AgentToolUseSetting;
     readonly onFollowUpConsumed?: () => void;
+    /** The process services the Effect-typed caller read before this Promise seam. */
+    readonly toolInjections: ToolInjections['Service'];
+    readonly globalState: StateStore;
   },
   variant: ToolUseLaunchVariant,
 ): Promise<AgentRuntimeFlowResult> {
@@ -133,6 +138,8 @@ async function launchToolUseRun(
       ...ctx,
       onRoundFinalized: createUsageRecordingCallback(ctx),
       setting: shared.setting,
+      toolInjections: shared.toolInjections,
+      globalState: shared.globalState,
       // A child (a run with a parent) takes the subagent prompt and may park
       // at WAITING for its loop; the fresh launch and the resume both read
       // the same edge.
@@ -234,12 +241,14 @@ function buildLifecycleOptions(
 async function runReflectionAgent(
   ctx: AgentLaunchContext,
   setting: AgentWorkflowSetting,
+  globalState: StateStore,
 ): Promise<WorkflowFlowResult> {
   const { runId } = ctx.runScope;
   const result = await runReflectionFlow({
     ...ctx,
     onRoundFinalized: createUsageRecordingCallback(ctx),
     setting,
+    globalState,
   });
   return {
     outcome: result.outcome,
@@ -379,7 +388,11 @@ export function executeAgent(
     parentRunId: RunId;
     session: SessionHandle;
   },
-): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
+): Effect.Effect<
+  AgentFlowResult | WaitingToolUseFlowResult,
+  Error,
+  ToolInjections | AppState
+>;
 export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
@@ -387,7 +400,7 @@ export function executeAgent(
     parentRunId?: undefined;
     session: SessionHandle;
   },
-): Effect.Effect<AgentFlowResult, Error>;
+): Effect.Effect<AgentFlowResult, Error, ToolInjections | AppState>;
 
 /**
  * Low-level run runner for an already-registered run. Fresh
@@ -399,13 +412,17 @@ export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, ToolInjections | AppState> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
         runInSession(options.session, () => assertOwnedRunLease(runId)),
       catch: ensureError,
     });
+    // Read here, on the Effect side of the lifecycle's Promise seam: the
+    // flow drivers below resolve the run's tools from these.
+    const toolInjections = yield* ToolInjections;
+    const globalState = yield* AppState;
     const isSubagent = options.parentRunId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
       definition,
@@ -488,11 +505,15 @@ export function executeAgent(
                         ctx,
                         handle,
                         lifecycle,
-                        { ...options, setting },
+                        { ...options, setting, toolInjections, globalState },
                         { kind: 'fresh', onIdle: options.onIdle },
                       );
                     }
-                    const result = await runReflectionAgent(ctx, setting);
+                    const result = await runReflectionAgent(
+                      ctx,
+                      setting,
+                      globalState,
+                    );
                     if (result.error) return result;
                     const outputOutcome =
                       await options.openWorkflowOutput?.(result);
@@ -553,6 +574,8 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
+    const toolInjections = yield* ToolInjections;
+    const globalState = yield* AppState;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
         // The parent edge as the fold holds it (`run.start.parent`, severed
@@ -614,7 +637,13 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     ctx,
                     handle,
                     lifecycle,
-                    { ...options, setting, parentRunId },
+                    {
+                      ...options,
+                      setting,
+                      parentRunId,
+                      toolInjections,
+                      globalState,
+                    },
                     {
                       kind: 'resume',
                       resume,
@@ -699,7 +728,7 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
 export function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, ToolInjections | AppState> {
   return options.session.runs.launchRun(
     resume.runId,
     resumeToolUseTurn(resume, options),

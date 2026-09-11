@@ -89,6 +89,13 @@ async function loadSupabaseAuth() {
       import('@shared/session/sessionEvents'),
       import('@platform/defaults/nodeProcesses'),
     ]);
+  const [{ Secrets }, { AppState }, { SetupPlatform }, { ToolInjections }] =
+    await Promise.all([
+      import('@platform/secrets'),
+      import('@platform/interfaces'),
+      import('@tools/setup/platform'),
+      import('@agent/runtime/toolInjection'),
+    ]);
   const { createFakePlatform } = await import('@test/support/FakePlatform');
   const storage = createFakePlatform().storage;
   initProcessRuntime(
@@ -99,6 +106,13 @@ async function loadSupabaseAuth() {
         inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),
+        // The process services over this suite's platform mock: the auth run
+        // edge reads none of them, so a member call is a test error that
+        // surfaces through the mock.
+        Secrets.layer(() => mocks.platform().secrets),
+        AppState.layer(() => mocks.platform().globalState),
+        SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
+        ToolInjections.layer([]),
       ),
     ),
   );

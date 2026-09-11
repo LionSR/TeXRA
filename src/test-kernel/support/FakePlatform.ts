@@ -22,6 +22,7 @@ import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
   fileTypeFor,
@@ -521,13 +522,15 @@ export interface FakePlatformOptions {
 }
 
 /**
- * Overrides for one fake host: the process platform's ports plus the two
+ * Overrides for one fake host: the process platform's ports, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
- * hand-built state store). The workspace and storage paths come from
- * `FakePlatformOptions`.
+ * hand-built state store), and the setup platform a setup-tool suite
+ * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<Platform> &
-  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>>;
+  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>> & {
+    readonly setup?: SetupPlatformShape;
+  };
 
 /** The workspace roots a fake host installs beside its platform. */
 export function createFakeWorkspaceRoots(

@@ -2,8 +2,8 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
+import { Context, Layer, type Effect } from 'effect';
 import type { RunId } from '@shared/schemas';
-import type { Effect } from 'effect';
 
 // ---------------------------------------------------------------------------
 // Disposable
@@ -58,6 +58,29 @@ export interface ConfigProvider {
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
   update(key: string, value: unknown): PromiseLike<void>;
+}
+
+/**
+ * The process's global state store as an Effect service
+ * (`@texra/platform/AppState`, injection plan §5 row 2), provided once by the
+ * composition root through `installProcessRuntime`. The shape stays the
+ * synchronous `StateStore`; Effect-typing it is its own step.
+ *
+ * `layer` takes the store as a thunk for the same reason `Secrets.layer`
+ * does: the runtime builds its layer at its first run, which in the desktop
+ * and CLI roots is the program that opens this store. The service resolves
+ * the thunk on each member call; the thunk closes over the root's own local.
+ */
+export class AppState extends Context.Service<AppState, StateStore>()(
+  '@texra/platform/AppState',
+) {
+  static layer(store: () => StateStore): Layer.Layer<AppState> {
+    return Layer.succeed(AppState)({
+      get: <T>(key: string, defaultValue?: T): T =>
+        store().get<T>(key, defaultValue),
+      update: (key, value) => store().update(key, value),
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
