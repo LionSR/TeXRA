@@ -128,6 +128,19 @@ describe('desktop app log', () => {
     expect(snapshot.text).toContain(`${workspacePath}.archive\\paper.tex`);
   });
 
+  it('redacts a workspace path whose backslashes are doubled by JSON encoding', async () => {
+    const workspacePath = 'C:\\work\\project';
+    await writeDesktopLog(
+      `${JSON.stringify({ level: 'INFO', message: `Opened ${workspacePath}\\paper.tex` })}\n`,
+    );
+    const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+    const snapshot = readDesktopLogSnapshot({ workspacePath });
+
+    expect(snapshot.text).toContain('[path]\\\\paper.tex');
+    expect(snapshot.text).not.toContain('work');
+  });
+
   it('redacts descendants of a separator-terminated workspace root', async () => {
     await writeDesktopLog('Opened C:\\Users\\alice\\paper.tex');
     const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
