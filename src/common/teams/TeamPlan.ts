@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { hostPort } from '@common/hostPort';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -18,7 +19,6 @@ import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
-import { hostPort } from '@common/hostPort';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { capitalize } from '@utils/text/stringUtils';
 
