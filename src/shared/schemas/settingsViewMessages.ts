@@ -811,16 +811,7 @@ function agentCommand<T extends string>(command: T) {
 }
 
 // Provider key inbound messages (settings-only)
-// Keep the outer optional: callers may omit apiKey so the host can prompt.
-const SubmittedApiKeySchema = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => v || undefined);
-
-const SetProviderKeyMessageSchema = providerCommand(
-  CMD.SET_PROVIDER_KEY,
-).extend({ apiKey: SubmittedApiKeySchema });
+const SetProviderKeyMessageSchema = providerCommand(CMD.SET_PROVIDER_KEY);
 
 const RemoveProviderKeyMessageSchema = providerCommand(CMD.REMOVE_PROVIDER_KEY);
 
