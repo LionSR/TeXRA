@@ -3,8 +3,14 @@
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
 
-import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
-import pDefer from 'p-defer';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Option,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import PQueue from 'p-queue';
 
 import { RunLeaseActiveError, getRunRecords } from '@agent/storage';
@@ -584,16 +590,18 @@ export function createChatSessionController(
     const runId = generateRunId();
     ownRun(runId);
 
-    const {
-      promise: claimedRunPromise,
-      resolve: resolveRunPromise,
-      reject: rejectRunPromise,
-    } = pDefer<void>();
-    // Native launch may resolve its stream on this turn. Claim first so
-    // marking the run pending cannot erase the claimed run or a reentrant
-    // stop.
-    session.markRunPending(claimedRunPromise);
-    session.runId = runId;
+    // The slot has to be claimed before the chain that settles it exists, so
+    // the claim holds a `Deferred` the run chain completes and hands the slot
+    // the `Promise<void>` the exit drain awaits. Awaiting the deferred is a
+    // plain suspension, so a run parked at the WAIT node leaves the promise
+    // pending exactly as before.
+    const claimedRun = Deferred.makeUnsafe<void, unknown>();
+     // Native launch may resolve its stream on this turn. Claim first so
+     // marking the run pending cannot erase that run or a reentrant stop.
+     session.markRunPending(
+       effectRuntime().runPromise(Deferred.await(claimedRun)),
+     );
+     session.runId = runId;
     void effectRuntime()
       .runPromise(
         recoverRun(
@@ -644,7 +652,10 @@ export function createChatSessionController(
         ),
       )
       .finally(finalize)
-      .then(resolveRunPromise, rejectRunPromise);
+      .then(
+        () => Deferred.doneUnsafe(claimedRun, Effect.void),
+        (error: unknown) => Deferred.doneUnsafe(claimedRun, Effect.fail(error)),
+      );
   };
 
   // -----------------------------------------------------------------------
@@ -658,12 +669,12 @@ export function createChatSessionController(
     // tryResumeRun() (or another resume()) can never observe this call
     // suspended between "checked available" and "claimed", and race in to
     // claim the same slot out from under it.
-    const {
-      promise: claimedRunPromise,
-      resolve: resolveRunPromise,
-      reject: rejectRunPromise,
-    } = pDefer<void>();
-    if (!session.tryClaimRootRunSlot(claimedRunPromise)) {
+    const claimedRun = Deferred.makeUnsafe<void, unknown>();
+    if (
+      !session.tryClaimRootRunSlot(
+        effectRuntime().runPromise(Deferred.await(claimedRun)),
+      )
+    ) {
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -688,7 +699,7 @@ export function createChatSessionController(
         restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(reason);
         session.markRunCompleted();
-        resolveRunPromise();
+        Deferred.doneUnsafe(claimedRun, Effect.void);
       };
       if (!config || !meta) {
         refuseResume(`Run not found: ${id}`);
@@ -801,7 +812,10 @@ export function createChatSessionController(
       // rehydration completes. `resume()`'s own returned promise still
       // settles here, before the run finishes, fire-and-forget per the
       // interface contract.
-      runChain.then(resolveRunPromise, rejectRunPromise);
+      runChain.then(
+        () => Deferred.doneUnsafe(claimedRun, Effect.void),
+        (error: unknown) => Deferred.doneUnsafe(claimedRun, Effect.fail(error)),
+      );
     });
     await effectRuntime().runPromise(
       recoverRun(attemptResume, (error) => {
@@ -809,7 +823,7 @@ export function createChatSessionController(
         restoreInterruptedRecovery(supersededRecovery);
         reportRunFailure(error);
         session.markRunCompleted();
-        resolveRunPromise();
+        Deferred.doneUnsafe(claimedRun, Effect.void);
       }),
     );
   };
@@ -838,11 +852,10 @@ export function createChatSessionController(
     if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
       return Promise.resolve(false);
     }
-    const {
-      promise: runPromise,
-      resolve: resolveRun,
-      reject: rejectRun,
-    } = pDefer<boolean>();
+    const autoResumeRun = Deferred.makeUnsafe<boolean, unknown>();
+    const runPromise = effectRuntime().runPromise(
+      Deferred.await(autoResumeRun),
+    );
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below, see tryClaimRootRunSlot and the matching comment
     // in resume().
@@ -935,7 +948,11 @@ export function createChatSessionController(
       );
     };
 
-    void runResume().then(resolveRun, rejectRun);
+    void runResume().then(
+      (started) => Deferred.doneUnsafe(autoResumeRun, Effect.succeed(started)),
+      (error: unknown) =>
+        Deferred.doneUnsafe(autoResumeRun, Effect.fail(error)),
+    );
 
     return runPromise;
   };

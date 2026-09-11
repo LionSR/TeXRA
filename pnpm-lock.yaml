@@ -693,9 +693,6 @@ importers:
       node-pty:
         specifier: ^1.0.0
         version: 1.1.0
-      p-defer:
-        specifier: ^4.0.1
-        version: 4.0.1
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -892,9 +889,6 @@ importers:
       openai:
         specifier: ^7.10.0
         version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
-      p-map:
-        specifier: ^7.0.7
-        version: 7.0.7
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -1068,9 +1062,6 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
-      async-mutex:
-        specifier: ^0.5.0
-        version: 0.5.0
       diff:
         specifier: ^9.0.0
         version: 9.0.0
