@@ -12,6 +12,7 @@ import {
   missingAgentMessage,
   parseCliAgentCategoryFilter,
   resolveCliAgent,
+  resolveCliDefaultOutputFiles,
   type CliAgentListOptions,
 } from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -71,10 +72,19 @@ export async function showAgent(
     return CliExitCode.Usage;
   }
 
+  // A failed remote-definition load (the loader logs it) must not take down a
+  // display command that otherwise has catalog data to show.
+  const defaultOutputFiles = await resolveCliDefaultOutputFiles(entry).catch(
+    () => entry.defaultOutputFiles ?? [],
+  );
+  const details = defaultOutputFiles.length
+    ? { ...entry, defaultOutputFiles: [...defaultOutputFiles] }
+    : entry;
+
   emitCliResult(context, {
-    json: entry,
-    ndjson: { kind: 'agent', agent: entry },
-    text: formatCliAgentDetails(entry),
+    json: details,
+    ndjson: { kind: 'agent', agent: details },
+    text: formatCliAgentDetails(entry, defaultOutputFiles),
   });
   return CliExitCode.Success;
 }

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import type { AgentEntry } from '@agent/index';
 import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type {
@@ -229,14 +228,14 @@ function expectedInputOutputFiles(
 }
 
 export function expectedOutputFilesForOutputDir(
-  agent: AgentEntry | undefined,
+  defaultOutputFiles: readonly string[] | undefined,
   inputFiles: readonly string[],
   /** The path this run materialized stdin to, when it read stdin. */
   stdinInputPath?: string,
 ): readonly string[] {
-  const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
-  return defaultOutputFiles.length > 0
-    ? defaultOutputFiles
+  const declaredOutputFiles = (defaultOutputFiles ?? []).filter(Boolean);
+  return declaredOutputFiles.length > 0
+    ? declaredOutputFiles
     : expectedInputOutputFiles(inputFiles, stdinInputPath);
 }
 

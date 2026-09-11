@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     finalizeRun: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
+    loadRemoteAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
     deriveResumability: vi.fn(),
     writeResultMeta: vi.fn(),
@@ -87,6 +88,10 @@ vi.mock('@cli/commands/_helpers/output', async (importOriginal) => ({
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+}));
+
+vi.mock('@agent/remote/RemoteAgentLoader', () => ({
+  loadRemoteAgent: mocks.loadRemoteAgent,
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({
@@ -545,6 +550,51 @@ describe('CLI workflow run command', () => {
           compileFailures: [],
         }),
       );
+    });
+  });
+
+  it('resolves declared default outputs from the remote agent definition', async () => {
+    await withTempDir('texra-workflow-', async (root) => {
+      // A remote catalog entry comes from the agent listing, which carries no
+      // defaultOutputFiles; the run must load the definition to resolve them
+      // (#12162).
+      mocks.resolveCliLaunchAgent.mockResolvedValue({
+        name: 'remote-polish',
+        category: AgentCategory.Workflow,
+        source: 'remote',
+        path: '',
+      });
+      mocks.loadRemoteAgent.mockResolvedValue({
+        settings: { defaultOutputFiles: ['build/paper.tex'] },
+        prompts: {},
+      });
+      const generated = await writeGeneratedOutput(root);
+      const outputSummary = runOutputSummary(
+        generated,
+        path.join(root, 'build', 'paper.tex'),
+      );
+      mockWorkflowRun(
+        workflowRun('exec-remote', { outputs: [outputSummary] }),
+        true,
+      );
+
+      const exitCode = await runWorkflow(
+        { agent: 'remote-polish', outputDir: 'out' },
+        createRunCommandCliContext({ cwd: root }),
+      );
+
+      expect(exitCode).toBe(0);
+      expect(mocks.loadRemoteAgent).toHaveBeenCalledWith('remote-polish');
+      expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
+        cli: {
+          outputFile: undefined,
+          outputDirectory: path.join(root, 'out'),
+          expectedOutputFiles: ['build/paper.tex'],
+        },
+      });
+      await expect(
+        fs.readFile(path.join(root, 'out', 'build', 'paper.tex'), 'utf8'),
+      ).resolves.toBe('polished');
     });
   });
 

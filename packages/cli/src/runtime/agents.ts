@@ -205,6 +205,23 @@ export async function resolveCliLaunchAgent(
   );
 }
 
+/**
+ * Read the default output files declared by an agent's current definition.
+ * Remote catalog entries come from the agent listing, which carries no
+ * `defaultOutputFiles`; load the remote definition to resolve them. Local
+ * entries already carry the scanned value, and a remote entry refreshed by an
+ * earlier load this session skips the fetch.
+ */
+export async function resolveCliDefaultOutputFiles(
+  entry: AgentEntry,
+): Promise<readonly string[]> {
+  if (entry.source !== 'remote' || entry.defaultOutputFiles?.length) {
+    return entry.defaultOutputFiles ?? [];
+  }
+  const { loadRemoteAgent } = await import('@agent/remote/RemoteAgentLoader');
+  return (await loadRemoteAgent(entry.name)).settings.defaultOutputFiles;
+}
+
 export async function loadCliAgentList(
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
@@ -246,7 +263,10 @@ export function formatCliAgentList(
     .join('\n');
 }
 
-export function formatCliAgentDetails(entry: AgentEntry): string {
+export function formatCliAgentDetails(
+  entry: AgentEntry,
+  defaultOutputFiles: readonly string[],
+): string {
   const lines: string[] = [
     `name: ${entry.name}`,
     `category: ${entry.category}`,
@@ -259,7 +279,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
   }
   const metadataFields: readonly [string, readonly string[] | undefined][] = [
     ['tools', entry.tools],
-    ['defaultOutputFiles', entry.defaultOutputFiles],
+    ['defaultOutputFiles', defaultOutputFiles],
   ];
   const metadataLines = metadataFields.flatMap(([label, values]) =>
     values?.length ? [`${label}: ${values.join(', ')}`] : [],
