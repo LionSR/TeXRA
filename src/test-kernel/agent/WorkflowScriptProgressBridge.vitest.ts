@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
-import {
-  WorkflowRunAbortError,
-  type WorkflowAgentInvocation,
-  type WorkflowScriptControl,
-} from '@agent/workflowScript';
+import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
+import type {
+  WorkflowAgentInvocation,
+  WorkflowScriptControl,
+} from '@agent/workflowScript/types';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -256,7 +256,7 @@ return await agent('Rewrite', {
       {
         fingerprintAgentDependencies: async () => 'fingerprint',
         runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report?.({
+          invocation.report({
             agent: invocation.options.agentName,
             model: invocation.options.model ?? 'gemini37f',
           });
@@ -694,7 +694,7 @@ return await agent('Second')`;
     // into the run snapshot and stamps it on the terminal event.
     await runScript(trace, 'live-cost', script, {
       runAgent: async (invocation: WorkflowAgentInvocation) => {
-        invocation.report?.({ costUsd: 0.05 });
+        invocation.report({ costUsd: 0.05 });
         return 'done';
       },
     });
@@ -731,11 +731,11 @@ return await agent('Second')`;
 return await agent('Draft')`,
       {
         runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report?.({ model: 'deepseekT' });
-          invocation.report?.({
+          invocation.report({ model: 'deepseekT' });
+          invocation.report({
             childRunId: 'draft@deepseekT#abcdef' as RunId,
           });
-          invocation.report?.({ costUsd: 0.02 });
+          invocation.report({ costUsd: 0.02 });
           return 'done';
         },
         onActivity,
@@ -804,7 +804,7 @@ return await agent('Draft')`;
 return await agent('Late skip')`,
       {
         runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report?.({
+          invocation.report({
             model: 'kimiK2',
             childRunId: 'da7e5c1b' as RunId,
             costUsd: 0.04,
@@ -939,7 +939,7 @@ return await pending`,
 return await agent('Abort', { phase: 'Run' })`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.report?.({ model: 'abort-model', costUsd: 0.06 });
+            invocation.report({ model: 'abort-model', costUsd: 0.06 });
             throw new WorkflowRunAbortError('fatal runner error');
           },
           onActivity,
@@ -986,7 +986,7 @@ agent('Orphaned', { phase: 'Run' })
 return 'guest success'`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.report?.({
+            invocation.report({
               childRunId: 'orphaned@model#abcdef' as RunId,
               costUsd: 0.03,
             });

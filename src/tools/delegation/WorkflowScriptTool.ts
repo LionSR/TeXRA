@@ -4,11 +4,9 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunStore, getRunRecords } from '@agent/storage';
-import {
-  deriveWorkflowScriptCheckpointId,
-  parseWorkflowScript,
-  readWorkflowScriptCheckpoint,
-} from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
+import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
+import { readWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { runInSession, withRunContext } from '@agent/runtime/RunContext';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { RunLeaseActiveError } from '@agent/storage/runLease';

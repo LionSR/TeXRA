@@ -6,10 +6,10 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WorkflowAgentInvocation } from '@agent/workflowScript';
+import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
+import type { AgentFinalResult } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
@@ -197,6 +197,7 @@ function invocation(
     prompt: 'Draft the section.',
     options,
     signal: new AbortController().signal,
+    report: vi.fn(),
   };
 }
 
@@ -207,9 +208,7 @@ interface InBandRunOptions {
 }
 
 /** The merged attempt-facts channel the runner reports every fact through. */
-type AttemptFacts = Parameters<
-  NonNullable<WorkflowAgentInvocation['report']>
->[0];
+type AttemptFacts = Parameters<WorkflowAgentInvocation['report']>[0];
 
 function reportSpy(): ReturnType<typeof vi.fn<(facts: AttemptFacts) => void>> {
   return vi.fn<(facts: AttemptFacts) => void>();

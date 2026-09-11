@@ -16,13 +16,10 @@ import type {
   AgentFlowCategory,
   AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import {
-  buildAgentFinalResult,
-  type AgentFinalResult,
-  type ResultDiffSummary,
-} from '@agent/runtime/AgentFinalResult';
+import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
+import type { AgentFinalResult, ResultDiffSummary } from '@shared/schemas';
 import {
   runStorageFilePath,
   type RunId,

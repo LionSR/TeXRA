@@ -4,16 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
-import {
-  deriveWorkflowScriptCheckpointId,
-  runPersistedWorkflowScript,
-  type WorkflowAgentInvocation,
-  type WorkflowAgentRunner,
-} from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
+import { runPersistedWorkflowScript } from '@agent/workflowScript/persistence';
+import type {
+  WorkflowAgentInvocation,
+  WorkflowAgentRunner,
+} from '@agent/workflowScript/types';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
+import type { AgentFinalResult } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -460,9 +460,9 @@ function controllableRunAgent(config: {
       // spend on progress surfaces). The fake mirrors that pairing.
       reportCost = (cost) => {
         hooks.onCost(invocation, cost);
-        invocation.report?.({ costUsd: cost });
+        invocation.report({ costUsd: cost });
       };
-      invocation.report?.({ childRunId: execId });
+      invocation.report({ childRunId: execId });
       gateFor(thisAttempt).resolve();
       const attemptCost = config.attemptCosts?.[thisAttempt - 1];
       if (attemptCost !== undefined) reportCost(attemptCost);

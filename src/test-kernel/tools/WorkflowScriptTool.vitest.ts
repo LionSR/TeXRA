@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { getRunStore, getRunRecords } from '@agent/storage';
 import { RunLeaseActiveError } from '@agent/storage/runLease';

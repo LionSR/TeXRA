@@ -14,22 +14,22 @@ import { Cause, Effect, Exit } from 'effect';
  */
 
 // Local imports
+import type { AgentTrace } from '@agent/trace';
+import type { RunKVStore } from '@agent/storage';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
   WorkflowJournalEntry,
   WorkflowScriptRunResult,
   WorkflowScriptRunOptions,
-} from '@agent/workflowScript';
-import type { AgentTrace } from '@agent/trace';
-import type { RunKVStore } from '@agent/storage';
+} from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
-import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
+import { AgentFinalResultSchema } from '@shared/schemas';
 import type {
   RunId,
   WorkflowRunSnapshot,

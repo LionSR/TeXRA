@@ -2,13 +2,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  parseWorkflowScript,
-  WorkflowRunAbortError,
-  type WorkflowAgentInvocation,
-  type WorkflowScriptControl,
-  type WorkflowScriptRunResult,
-} from '@agent/workflowScript';
+import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
+import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
+import type {
+  WorkflowAgentInvocation,
+  WorkflowScriptControl,
+  WorkflowScriptRunResult,
+} from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
@@ -76,6 +76,7 @@ function sandboxBridge(overrides: Partial<SandboxBridge> = {}): SandboxBridge {
     syncFns: {},
     argsJson: undefined,
     filesJson: EMPTY_FILES_JSON,
+    realmPrelude: '',
     ...overrides,
   };
 }
@@ -741,7 +742,7 @@ return [cached, live]`,
       runWorkflowScript({
         script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
         runAgent: async (invocation) => {
-          invocation.report?.({ model: 'checkpoint-model' });
+          invocation.report({ model: 'checkpoint-model' });
           await delay(5);
           return 'completed child';
         },
@@ -1024,7 +1025,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         invocations.push(invocation);
-        invocation.report?.({
+        invocation.report({
           childRunId: childRunIdFor(invocation.index, invocations.length),
         });
         if (invocations.length === 2) resolve('fresh result');
@@ -1738,7 +1739,7 @@ while (true) {}`,
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
         runAgent: async (invocation) => {
-          invocation.report?.({ model: 'serialization-model' });
+          invocation.report({ model: 'serialization-model' });
           return () => undefined;
         },
         onSnapshot: (snapshot) => {
@@ -1880,7 +1881,7 @@ return 'done'`,
   it('stops the workflow when a runner surfaces the run abort', async () => {
     const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     const runner = (invocation: WorkflowAgentInvocation) => {
-      invocation.report?.({ model: 'abort-model' });
+      invocation.report({ model: 'abort-model' });
       const abortError = new Error('runner observed abort');
       abortError.name = 'WorkflowRunAbortError';
       return Promise.reject(abortError);
@@ -2078,7 +2079,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         started.add(invocation.index);
-        invocation.report?.({
+        invocation.report({
           model: 'skip-model',
           childRunId: childRunIdFor(invocation.index),
         });
@@ -2130,7 +2131,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       (invocation: WorkflowAgentInvocation) =>
         new Promise<string>((_resolve, reject) => {
           rejectOnAbort(invocation, reject);
-          invocation.report?.({
+          invocation.report({
             childRunId: childRunIdFor(invocation.index),
           });
           control(childRunIdFor(invocation.index), 'skip');
@@ -2157,7 +2158,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       new Promise<string>((resolve, reject) => {
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
-        invocation.report?.({
+        invocation.report({
           childRunId: childRunIdFor(invocation.index, attempt),
         });
         releases.push(() => resolve(`attempt-${attempt}`));
@@ -2199,7 +2200,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         rejectOnAbort(invocation, reject);
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
-        invocation.report?.({
+        invocation.report({
           childRunId: childRunIdFor(invocation.index, attempt),
         });
         releases.push(() => resolve(`attempt-${attempt}`));
@@ -2234,7 +2235,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         rejectOnAbort(invocation, reject);
         // A durable-recovery runner re-attaches the known child id for
         // navigation, then keeps resolving asynchronously (readMeta gap).
-        invocation.report?.({
+        invocation.report({
           childRunId: recoveredId,
           recovered: true,
         });
@@ -2294,7 +2295,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     let attempts = 0;
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
       attempts += 1;
-      invocation.report?.({
+      invocation.report({
         model: 'retry-model',
         childRunId: childRunIdFor(invocation.index, attempts),
       });
@@ -2385,7 +2386,7 @@ await agent('draft instruction', { id: 'draft' })
 return 'done'`,
       runAgent: async (invocation) => {
         // One report carrying every fact the host resolved must land them all.
-        invocation.report?.({
+        invocation.report({
           agent: 'writer',
           model: 'model-a',
           childRunId: 'abcdef123456' as RunId,

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   WorkflowAgentInvocation,
   WorkflowScriptControl,
-} from '@agent/workflowScript';
+} from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
@@ -104,7 +104,7 @@ return null`,
 phase('Work')
 return await agent('work', { id: 'work-call' })`,
       runAgent: async (invocation) => {
-        invocation.report?.({ childRunId: 'aaaaaaaaaaaa' as RunId });
+        invocation.report({ childRunId: 'aaaaaaaaaaaa' as RunId });
         return 'done';
       },
       onSnapshot,
@@ -210,7 +210,7 @@ return await parallel([
 return await agent('retry secret', { label: 'Retry task' })`,
       runAgent: async (invocation) => {
         attempts += 1;
-        invocation.report?.({
+        invocation.report({
           childRunId: (attempts === 1
             ? 'aaaaaaaaaaaa'
             : 'bbbbbbbbbbbb') as RunId,
@@ -256,7 +256,7 @@ return await agent('retry secret', { label: 'Retry task' })`,
 return await agent('skip secret', { label: 'Skip task' })`,
       runAgent: async (invocation) => {
         skipStarted = true;
-        invocation.report?.({
+        invocation.report({
           childRunId: 'cccccccccccc' as RunId,
         });
         return new Promise((_resolve, reject) =>

@@ -10,11 +10,6 @@ import {
   type AgentFinalResult,
   type ResultDiffSummary,
 } from '@shared/schemas';
-export {
-  AgentFinalResultSchema,
-  type AgentFinalResult,
-  type ResultDiffSummary,
-} from '@shared/schemas';
 
 type AgentFinalResultSource =
   | {

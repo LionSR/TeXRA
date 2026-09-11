@@ -30,7 +30,7 @@ export interface SandboxHostBridge {
   /** JSON payload for the immutable, role-separated `files` global. */
   filesJson: string;
   /** Trusted realm-side orchestration primitives installed before the body. */
-  realmPrelude?: string;
+  realmPrelude: string;
 }
 
 export interface SandboxOptions {
@@ -373,10 +373,11 @@ export async function runScriptInSandbox(
     const deliver = evaluate(context, BRIDGE_PRELUDE, 'workflow-bridge.js');
     try {
       evaluateAndDispose(context, DETERMINISM_PRELUDE, 'workflow-prelude.js');
-      const { realmPrelude } = bridge;
-      if (realmPrelude !== undefined) {
-        evaluateAndDispose(context, realmPrelude, 'workflow-orchestration.js');
-      }
+      evaluateAndDispose(
+        context,
+        bridge.realmPrelude,
+        'workflow-orchestration.js',
+      );
 
       let bodyThunk: QuickJSHandle;
       try {

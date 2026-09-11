@@ -2,16 +2,14 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import {
-  WorkflowRunAbortError,
-  type WorkflowAgentInvocation,
-} from '@agent/workflowScript';
+import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
+import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
+import type { AgentFinalResult } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
@@ -218,7 +216,7 @@ export function createWorkflowScriptAgentRunner(
         signal: invocation.signal,
         onActiveRunId: (runId) => {
           activeRunId = runId;
-          invocation.report?.({ childRunId: runId });
+          invocation.report({ childRunId: runId });
         },
         prepare: () =>
           Effect.gen(function* () {
@@ -231,7 +229,7 @@ export function createWorkflowScriptAgentRunner(
               );
             // Surface the resolved child model so the engine can attach it to
             // this call's `agent:end` progress event.
-            invocation.report?.({
+            invocation.report({
               model: configPayload.model,
               agent: agentName,
             });
@@ -266,7 +264,7 @@ export function createWorkflowScriptAgentRunner(
                 // failed/cancelled/retried attempt still shows what it consumed
                 // even when run never reaches the success path below.
                 if (totalCostUsd !== undefined) {
-                  invocation.report?.({ costUsd: totalCostUsd });
+                  invocation.report({ costUsd: totalCostUsd });
                 }
               },
             };
@@ -279,7 +277,7 @@ export function createWorkflowScriptAgentRunner(
         // supplied the result. The recovered marker keeps the id out of the
         // engine's skip/retry map; the recovered result is authoritative and
         // must stay uncontrollable.
-        invocation.report?.({
+        invocation.report({
           childRunId: completed.runId,
           recovered: true,
         });
@@ -291,7 +289,7 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt; the interrupted snapshot may
       // already hold the same cost on a closed prior attempt.
       if (!recovered) {
-        invocation.report?.({ costUsd: result.cost });
+        invocation.report({ costUsd: result.cost });
       }
       if (result.outcome !== 'completed') {
         throw new Error(
