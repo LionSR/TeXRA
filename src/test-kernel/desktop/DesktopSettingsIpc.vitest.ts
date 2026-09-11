@@ -2,7 +2,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runInSession } from '@agent/runtime';
-import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -621,8 +620,10 @@ describe('desktop settings IPC', () => {
   it('persists model settings through global state', async () => {
     const workspaceState = new FakeStateStore();
     const globalState = new FakeStateStore({
-      [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
-      [GlobalStateKey.MODEL_LIST_VERSION]: MODEL_LIST_VERSION,
+      [GlobalStateKey.MODEL_SELECTION]: {
+        enabledExtras: ['gpt55'],
+        disabledDefaults: [],
+      },
       [GlobalStateKey.HELPER_MODEL]: 'gpt55',
     });
 
@@ -650,9 +651,10 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'sonnet46T',
-    ]);
+    expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      enabledExtras: [],
+      disabledDefaults: [],
+    });
     expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
       DEFAULT_HELPER_MODEL,
     );

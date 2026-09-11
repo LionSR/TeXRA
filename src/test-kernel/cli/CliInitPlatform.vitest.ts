@@ -1,7 +1,6 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -9,7 +8,6 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
-import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -220,21 +218,6 @@ function stubGlobalState(
   return { get: vi.fn(get), update: vi.fn() };
 }
 
-/** Stubs global-state reads so MODEL_LIST_VERSION is current, one model is
- *  enabled, and two Copilot route models are stale — the fixture shared by
- *  the Copilot-route-invalidation and project-config-degradation tests. */
-function stubStaleCopilotRouteModels(): void {
-  mocks.cliGlobalState.get.mockImplementation((key: string) => {
-    if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
-    if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
-    if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
-      return ['gemini36f', 'gemini31p'];
-    }
-    return undefined;
-  });
-  mocks.cliGlobalState.update.mockResolvedValue(undefined);
-}
-
 /**
  * Each signal-ownership test must observe installation from a clean slate:
  * `installCliShutdownSignalHandlers` guards on an idempotent, module-level
@@ -333,53 +316,8 @@ describe('CLI platform init', () => {
     }
   });
 
-  it('reconciles the enabled-model list on first platform init', async () => {
-    // The enabled-model list lives in shared `~/.texra` state; the CLI used to
-    // be the one host that never reconciled it, so a CLI-only user kept
-    // retired models until some other host ran.
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-
-    await initCliPlatform(cliContext({ installSignalHandlers: false }));
-
-    expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
-      GlobalStateKey.MODEL_LIST_VERSION,
-      MODEL_LIST_VERSION,
-    );
-  });
-
-  it('invalidates and logs when only Copilot route preferences are cleared', async () => {
-    expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-    stubStaleCopilotRouteModels();
-    const stderrWrite = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation(() => true);
-
-    try {
-      await initCliPlatform(
-        cliContext({ quietLogs: false, installSignalHandlers: false }),
-      );
-
-      expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
-        GlobalStateKey.COPILOT_ROUTE_MODELS,
-        ['gemini31p'],
-      );
-      expect(stderrWrite).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Cleared stale Copilot route preferences: [gemini36f]',
-        ),
-        expect.any(Function),
-      );
-    } finally {
-      stderrWrite.mockRestore();
-      mocks.cliGlobalState.get.mockReset();
-      mocks.cliGlobalState.update.mockReset();
-    }
-  });
-
   it('shows one project-config degradation warning with its cause in quiet mode', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    stubStaleCopilotRouteModels();
     mocks.openTexraConfigStores.mockImplementationOnce(
       (_storage: unknown, _cwd: string, warn: (message: string) => void) =>
         Effect.sync(() => {

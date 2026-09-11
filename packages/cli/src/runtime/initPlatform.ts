@@ -14,7 +14,6 @@ import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
-import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -345,30 +344,6 @@ export async function initCliPlatform(
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
     installTexraAccountProbes();
-
-    // Reconcile the persisted enabled-models list against the current curated
-    // defaults, as the extension and desktop hosts do at startup. The list
-    // lives in shared `~/.texra` state. Preferred defaults reconcile when
-    // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
-    await effectRuntime().runPromise(
-      refreshModelListAndLog(stateStores.globalState).pipe(
-        Effect.tap(({ messages }) =>
-          Effect.sync(() => {
-            for (const message of messages)
-              logAt('info', 'cli.models', message);
-          }),
-        ),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            logAt(
-              'error',
-              'cli.models',
-              `Failed to refresh model list: ${toErrorMessage(error)}`,
-            );
-          }),
-        ),
-      ),
-    );
 
     // Seed first-install defaults (e.g. disabled tools) before anything
     // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync

@@ -26,7 +26,7 @@
       "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
       "src/agent/runtime/AgentRunLifecycle.ts": 1,
       "src/agent/runtime/ModelFactory.ts": 3,
-      "src/agent/runtime/helperModelName.ts": 2,
+      "src/agent/runtime/helperModelName.ts": 1,
       "src/auth/oauth/sessionAccess.ts": 2,
       "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts": 1,
       "src/controllers/onboarding/setupLaunch.ts": 1,

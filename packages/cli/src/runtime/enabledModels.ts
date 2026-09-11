@@ -1,6 +1,6 @@
 /**
- * CLI projection of the enabled-models catalog. The list itself
- * (`GlobalStateKey.ENABLED_MODELS`) is owned by `@model/computeModelOptions` —
+ * CLI projection of the enabled-models catalog. The selection itself
+ * (`GlobalStateKey.MODEL_SELECTION`) is owned by `@model/computeModelOptions` —
  * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
  * "at least one enabled" and "never enable a retired model" invariants for
  * every host. This module only resolves CLI argument spellings and shapes the

@@ -411,35 +411,53 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
 }
 
 /**
+ * The user's picker choices as a delta over {@link DEFAULT_MODELS}, so a change
+ * to the curated defaults reaches every user while a default they turned off
+ * stays off and a model they turned on stays on.
+ */
+interface ModelSelection {
+  readonly enabledExtras: readonly string[];
+  readonly disabledDefaults: readonly string[];
+}
+
+function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
+  return state.get<ModelSelection>(GlobalStateKey.MODEL_SELECTION, {
+    enabledExtras: [],
+    disabledDefaults: [],
+  });
+}
+
+/** Retired models drop out here, so no startup pass sweeps persisted state. */
+function enabledModelsOf(selection: ModelSelection): readonly string[] {
+  const disabled = new Set(selection.disabledDefaults);
+  return [
+    ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
+    ...selection.enabledExtras.filter(
+      (model) => !DEFAULT_MODELS.includes(model),
+    ),
+  ].filter((model) => !isRetiredModel(model));
+}
+
+/**
  * The models the pickers show — the single reader of
- * `GlobalStateKey.ENABLED_MODELS` for every host.
+ * `GlobalStateKey.MODEL_SELECTION` for every host.
  *
- * Normalizes an empty or `null` persisted list to {@link DEFAULT_MODELS}:
- * `.get`'s fallback only fires on `undefined`, so a stored `[]` would
- * otherwise survive all the way to an empty picker with no way back out from
- * the UI, and a stored `null` would throw on `.length`.
+ * When every enabled extra has retired and every default is off, the picker
+ * would be empty with no way back out from the UI; it shows the defaults.
  */
 export function getEnabledModels(
   state: Pick<StateStore, 'get'> = platform().globalState,
 ): readonly string[] {
-  const enabled = state.get<readonly string[]>(
-    GlobalStateKey.ENABLED_MODELS,
-    DEFAULT_MODELS,
-  );
-  return enabled != null && enabled.length > 0 ? enabled : DEFAULT_MODELS;
+  const enabled = enabledModelsOf(readModelSelection(state));
+  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
 }
 
 /**
- * Enable or disable one model. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
- * startup reconciliation in `modelListRefresh.ts`.
+ * Enable or disable one model — the only writer of
+ * `GlobalStateKey.MODEL_SELECTION`.
  *
- * Two invariants, previously enforced only on the CLI path:
- *  - at least one model stays enabled — an empty list leaves the user with an
- *    empty picker and (for non-Codex users) no way to re-enable anything;
- *  - a retired model can be removed but never enabled — removal has to stay
- *    possible so a model retired while enabled is not stuck in the list.
- *
- * Throws on either violation; callers surface the message.
+ * Two invariants: at least one model stays enabled, and a retired model is
+ * never enabled. Throws on either violation; callers surface the message.
  */
 export async function setModelEnabled(input: {
   readonly model: string;
@@ -452,18 +470,29 @@ export async function setModelEnabled(input: {
   }
 
   const current = getEnabledModels(state);
-  let next: readonly string[];
-  if (input.enabled) {
-    next = current.includes(input.model) ? current : [...current, input.model];
-  } else {
-    next = current.filter((model) => model !== input.model);
-    if (next.length === 0) {
-      throw new Error(
-        'At least one model must stay enabled. Enable another model before disabling this one.',
-      );
-    }
+  const selection = readModelSelection(state);
+  const without = (models: readonly string[]) =>
+    models.filter((model) => model !== input.model);
+  const next: ModelSelection = DEFAULT_MODELS.includes(input.model)
+    ? {
+        ...selection,
+        disabledDefaults: input.enabled
+          ? without(selection.disabledDefaults)
+          : [...without(selection.disabledDefaults), input.model],
+      }
+    : {
+        ...selection,
+        enabledExtras: input.enabled
+          ? [...without(selection.enabledExtras), input.model]
+          : without(selection.enabledExtras),
+      };
+  const nextEnabled = enabledModelsOf(next);
+  if (nextEnabled.length === 0) {
+    throw new Error(
+      'At least one model must stay enabled. Enable another model before disabling this one.',
+    );
   }
-  await state.update(GlobalStateKey.ENABLED_MODELS, [...next]);
+  await state.update(GlobalStateKey.MODEL_SELECTION, next);
 
   // If the helper model was just removed, pin the built-in default. Do not
   // fall back to the first remaining picker model — that is a premium default,
@@ -478,7 +507,7 @@ export async function setModelEnabled(input: {
     await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
   }
 
-  return next;
+  return nextEnabled;
 }
 
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */

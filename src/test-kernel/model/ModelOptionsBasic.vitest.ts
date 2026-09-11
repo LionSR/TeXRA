@@ -4,12 +4,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - model
 import {
-  computeModelListVersion,
   DEFAULT_MODELS,
   isDeprecatedModel,
   isRetiredModel,
-  MODEL_LIST_VERSION,
-  PREFERRED_DEFAULT_MODELS,
   resolveDefaultModels,
 } from '@model/modelOptionsBasic';
 import {
@@ -72,55 +69,5 @@ describe('resolveDefaultModels', () => {
   it('keeps every preferred pick when none are retired or deprecated', () => {
     const preferred = ['opus5T', 'gemini31p'];
     expect(resolveDefaultModels(preferred)).toEqual(preferred);
-  });
-});
-
-describe('computeModelListVersion', () => {
-  it('changes when the resolved default set changes', () => {
-    const before = computeModelListVersion(['opus5T', 'gemini31p']);
-    const afterAdd = computeModelListVersion(['opus5T', 'gemini31p', 'gpt55']);
-    const afterRemove = computeModelListVersion(['opus5T']);
-
-    expect(afterAdd).not.toBe(before);
-    expect(afterRemove).not.toBe(before);
-  });
-
-  it('is order-independent (only set membership drives reconciliation)', () => {
-    expect(computeModelListVersion(['opus5T', 'gemini31p'])).toBe(
-      computeModelListVersion(['gemini31p', 'opus5T']),
-    );
-  });
-
-  it('does not change when a non-preferred catalogue model retires', () => {
-    const activeCatalogue = [
-      ['preferred', {}],
-      ['optional', {}],
-    ] as const;
-    const retiredCatalogue = [
-      ['preferred', {}],
-      ['optional', { retired: true }],
-    ] as const;
-
-    expect(computeModelListVersion(['preferred'], activeCatalogue)).toBe(
-      computeModelListVersion(['preferred'], retiredCatalogue),
-    );
-  });
-
-  it('distinguishes deprecated and retired preferred models', () => {
-    expect(
-      computeModelListVersion(
-        ['preferred'],
-        [['preferred', { deprecated: true }]],
-      ),
-    ).not.toBe(
-      computeModelListVersion(
-        ['preferred'],
-        [['preferred', { retired: true }]],
-      ),
-    );
-  });
-
-  it('never lands in the pre-#7191 hand-bumped range (1-21), so every existing install reconciles exactly once on upgrade', () => {
-    expect(MODEL_LIST_VERSION).toBeGreaterThan(21);
   });
 });

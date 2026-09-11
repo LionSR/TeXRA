@@ -6,7 +6,6 @@ import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -48,7 +47,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { ElectronSecrets } from './electronSecrets.js';
@@ -195,28 +193,6 @@ export async function initializeElectronPlatform(
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     effectRuntime().runPromise(UsageLogService.dispose()),
-  );
-
-  // Reconcile the persisted enabled-models list against the current curated
-  // defaults, as the extension and CLI hosts do at startup. Preferred defaults
-  // reconcile when MODEL_LIST_VERSION changes; retired entries and stale
-  // Copilot route preferences are swept on every startup. Runs here so it is
-  // upstream of the settings view's first model-list paint.
-  await effectRuntime().runPromise(
-    refreshModelListAndLog(globalStateStore).pipe(
-      Effect.tap(({ messages }) =>
-        Effect.sync(() => {
-          for (const message of messages) console.info(`[desktop] ${message}`);
-        }),
-      ),
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          console.error(
-            `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
-          );
-        }),
-      ),
-    ),
   );
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
