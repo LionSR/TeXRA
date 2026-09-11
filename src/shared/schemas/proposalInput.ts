@@ -72,6 +72,14 @@ export function extractionShorthandToolConfig(
   return overrides;
 }
 
+function warnProposalParseFailure(toolName: string, message: string): void {
+  console.warn(
+    `[proposalInput] Could not reconstruct a proposal for delegation tool ` +
+      `"${toolName}"; the "Restore setup" link will be unavailable for this ` +
+      `logged call: ${message}`,
+  );
+}
+
 /**
  * Parse raw delegation/proposal tool input into a canonical {@link AgentProposal},
  * or `null` when the tool is not proposal-bearing or the input fails validation.
@@ -88,19 +96,25 @@ export function parseDelegationToolInput(
   const spread = isObject(input) ? input : {};
 
   if (category === AgentCategory.ToolUse) {
-    return LenientToolUseProposalSchema.nullable()
-      .catch(null)
-      .parse({
-        agentCategory: AgentCategory.ToolUse,
-        ...spread,
-      });
+    const result = LenientToolUseProposalSchema.safeParse({
+      agentCategory: AgentCategory.ToolUse,
+      ...spread,
+    });
+    if (!result.success) {
+      warnProposalParseFailure(toolName, result.error.message);
+      return null;
+    }
+    return result.data;
   }
 
-  return LenientWorkflowProposalSchema.nullable()
-    .catch(null)
-    .parse({
-      agentCategory: AgentCategory.Workflow,
-      ...spread,
-      toolConfig: extractionShorthandToolConfig(spread),
-    });
+  const result = LenientWorkflowProposalSchema.safeParse({
+    agentCategory: AgentCategory.Workflow,
+    ...spread,
+    toolConfig: extractionShorthandToolConfig(spread),
+  });
+  if (!result.success) {
+    warnProposalParseFailure(toolName, result.error.message);
+    return null;
+  }
+  return result.data;
 }
