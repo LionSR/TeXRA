@@ -43,7 +43,6 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
-import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -411,7 +410,7 @@ export class SessionComposer extends LitElement {
   }
 
   private handleInput = (event: Event): void => {
-    this.setText(getTextareaValue(event.target as HTMLElement));
+    this.setText((event.target as HTMLTextAreaElement).value);
   };
 
   private handleKeydown = (event: KeyboardEvent): void => {
@@ -483,8 +482,14 @@ export class SessionComposer extends LitElement {
       // host answers (`sessionSurfaces.settleHost`).
       const pending = added.map(({ fileName }) => ({ fileName, path: null }));
       if (target && this.isConnected) {
-        insertTextAtCursor(target, insert);
-        this.setText(getTextareaValue(target), {
+        // setRangeText fires no input event, so the draft is set explicitly.
+        target.setRangeText(
+          insert,
+          target.selectionStart,
+          target.selectionEnd,
+          'end',
+        );
+        this.setText(target.value, {
           images: [...this.draft.images, ...pending],
         });
       } else {
