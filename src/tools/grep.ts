@@ -77,10 +77,7 @@ const CHANNEL = 'GrepTool';
 // failure boundary to a dependency default or killing rg after one page.
 const GREP_MAX_BUFFER_CHARS = 100_000_000;
 
-export function buildArguments(
-  input: GrepInput,
-  outputMode: OutputMode,
-): string[] {
+function buildArguments(input: GrepInput, outputMode: OutputMode): string[] {
   const args: string[] = ['--color=never'];
 
   // Output mode flags
