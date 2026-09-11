@@ -26,6 +26,13 @@ import type {
   ProgressPermissionKind,
   RunId,
 } from '@shared/schemas';
+import {
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
+  APPROVE_SESSION_ACTION,
+  approvalDecisionArms,
+  type PermissionDecision,
+  sessionBypassRequest,
+} from '@shared/session/approvalDecision';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever } from '@utils/core';
@@ -338,44 +345,59 @@ function issue(runId: RunId, ...requests: RuntimeRequest[]): void {
   );
 }
 
-function bypassRequest(
+/** The runtime requests `arms` names, in the order they name them. */
+function issueArms(
   runId: RunId,
-  bypass: ApprovalBypassKind | undefined,
-): RuntimeRequest[] {
-  if (bypass === undefined) return [];
-  return [
-    {
-      kind: 'policy.set',
-      change: { field: 'bypass', runId, bypass, enabled: true },
-    },
-  ];
+  arms: readonly { readonly runtime: RuntimeRequest }[],
+): void {
+  issue(runId, ...arms.map((arm) => arm.runtime));
 }
 
-function rejection(decision: ApprovalDecision): {
+/**
+ * The TUI decision in the shared vocabulary's terms: the bag the modals hand
+ * over is host-neutral plus the bypass the card named, and a bypass on an
+ * accepted decision IS one of that vocabulary's actions. A refusal's
+ * provenance (queue failure, policy denial, typed text) collapses into the
+ * one `feedback` string the protocol carries.
+ */
+function rejectDecision(decision: ApprovalDecision): {
   readonly action: 'reject';
-  readonly feedback: string | null;
+  readonly feedback: string | undefined;
 } {
+  const { rejectionCause, rejectionReason, userMessage } = decision;
   return {
     action: 'reject',
-    feedback:
-      decision.rejectionCause ??
-      decision.rejectionReason ??
-      decision.userMessage ??
-      null,
+    feedback: rejectionCause ?? rejectionReason ?? userMessage,
   };
 }
 
-type DecisionOf<K extends RuntimeRequest['kind']> =
-  Extract<RuntimeRequest, { kind: K }> extends { decision: infer D }
-    ? D
-    : never;
+function bashDecision(decision: ApprovalDecision): PermissionDecision<'bash'> {
+  if (!decision.accepted) return rejectDecision(decision);
+  return {
+    action: decision.bypass === 'bash' ? APPROVE_SESSION_ACTION : 'approve',
+  };
+}
 
-function planDecision(decision: ApprovalDecision): DecisionOf<'decision.plan'> {
-  if (!decision.accepted) return rejection(decision);
+function proposalDecision(
+  decision: ApprovalDecision,
+): PermissionDecision<'proposal'> {
+  if (!decision.accepted) return rejectDecision(decision);
+  return {
+    action:
+      decision.bypass === 'superYolo'
+        ? APPROVE_ALL_DELEGATED_WORK_ACTION
+        : 'approve',
+  };
+}
+
+function planDecision(
+  decision: ApprovalDecision,
+): PermissionDecision<'planApproval'> {
+  if (!decision.accepted) return rejectDecision(decision);
   if (decision.planAction === 'approve_and_goal') {
     return {
       action: 'approve_and_goal',
-      autoApproveAll: decision.goalAutoApproveAll ?? null,
+      autoApproveAll: decision.goalAutoApproveAll,
     };
   }
   return { action: 'approve' };
@@ -383,11 +405,11 @@ function planDecision(decision: ApprovalDecision): DecisionOf<'decision.plan'> {
 
 function userQuestionDecision(
   decision: ApprovalDecision,
-): DecisionOf<'decision.userQuestion'> {
+): PermissionDecision<'userQuestion'> {
   if (decision.accepted && decision.userQuestionAnswers) {
     return { action: 'submit', answers: decision.userQuestionAnswers };
   }
-  if (decision.rejectionCause !== undefined) return rejection(decision);
+  if (decision.rejectionCause !== undefined) return rejectDecision(decision);
   return {
     action: 'skip',
     feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
@@ -395,9 +417,10 @@ function userQuestionDecision(
 }
 
 /**
- * Apply one decision: the hook-settled kinds resolve their latch, the rest
- * become `decision.*` requests (PRD 8.2), each preceded by the `policy.set`
- * the modal's bypass choice names.
+ * Apply one decision: the three kinds a host hook answers resolve their
+ * latch, the rest become the `decision.*` requests the shared vocabulary
+ * names (PRD 8.2), each preceded by the `policy.set` the modal's bypass
+ * choice names.
  */
 function decideRequest(
   request: AttentionRequest,
@@ -406,68 +429,44 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const approvalId = request.requestId;
   switch (payload.kind) {
     case 'toolEdit':
     case 'retry':
     case 'externalInquiry':
       if (decision.accepted && decision.bypass === 'toolEdit') {
-        issue(runId, ...bypassRequest(runId, decision.bypass));
+        issue(runId, sessionBypassRequest(runId, 'toolEdit'));
       }
       settleHost(request.requestId, decision);
       return;
     case 'bash':
-      issue(
+      issueArms(
         runId,
-        ...bypassRequest(
-          runId,
-          decision.accepted ? decision.bypass : undefined,
-        ),
-        {
-          kind: 'decision.bash',
-          runId,
-          approvalId,
-          decision: decision.accepted
-            ? { action: 'approve' }
-            : rejection(decision),
-        },
+        approvalDecisionArms<'bash'>(payload, bashDecision(decision)),
       );
       return;
     case 'planApproval':
-      issue(runId, {
-        kind: 'decision.plan',
+      issueArms(
         runId,
-        approvalId,
-        decision: planDecision(decision),
-      });
-      return;
-    case 'proposal': {
-      const delegated = decision.accepted && decision.bypass === 'superYolo';
-      issue(
-        runId,
-        ...bypassRequest(
-          runId,
-          decision.accepted ? decision.bypass : undefined,
-        ),
-        {
-          kind: 'decision.proposal',
-          runId,
-          approvalId,
-          decision: decision.accepted
-            ? { action: 'approve' }
-            : rejection(decision),
-        },
+        approvalDecisionArms<'planApproval'>(payload, planDecision(decision)),
       );
-      if (delegated) approveQueuedDelegatedWorkForRun(runId);
       return;
-    }
-    case 'userQuestion':
-      issue(runId, {
-        kind: 'decision.userQuestion',
+    case 'proposal':
+      issueArms(
         runId,
-        approvalId,
-        decision: userQuestionDecision(decision),
-      });
+        approvalDecisionArms<'proposal'>(payload, proposalDecision(decision)),
+      );
+      if (decision.accepted && decision.bypass === 'superYolo') {
+        approveQueuedDelegatedWorkForRun(runId);
+      }
+      return;
+    case 'userQuestion':
+      issueArms(
+        runId,
+        approvalDecisionArms<'userQuestion'>(
+          payload,
+          userQuestionDecision(decision),
+        ),
+      );
       return;
   }
   assertNever(payload, 'Unhandled approval payload kind');

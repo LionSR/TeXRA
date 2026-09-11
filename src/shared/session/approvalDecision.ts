@@ -146,7 +146,7 @@ type RuntimeOnlyPermissionKind = Exclude<PermissionKind, 'toolEdit' | 'retry'>;
 
 /** Enable a session-wide bypass on one stream: the field-level mutation the
  *  approval authority applies, not a snapshot. */
-function sessionBypassRequest(
+export function sessionBypassRequest(
   runId: RunId,
   bypass: ApprovalBypassKind,
 ): Extract<RuntimeRequest, { kind: 'policy.set' }> {

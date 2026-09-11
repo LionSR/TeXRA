@@ -104,7 +104,7 @@ export const reraiseAgentCliCallFailure = <A, R>(
  * Publish a turn's token usage to the progress UI for an agent-CLI child run.
  * Shared by the codex and claudeAgent session strategies.
  */
-function publishAgentCliStreamUsage(
+function publishAgentCliUsage(
   runId: RunId,
   usage: TokenUsageStats,
   logger: AgentTrace,
@@ -343,7 +343,7 @@ export const launchAgentCliSession = Effect.fn(
         [
           params.launchedLine,
           `Run ID: ${runId}`,
-          `Stream tab: ${childRun.childRunId}`,
+          `Run: ${childRun.childRunId}`,
           params.followUpLine,
         ].join('\n'),
         params.summary,
@@ -630,7 +630,7 @@ export function startAgentCliLoop<TTurn>(
       publishUsage: (turn) => {
         const usage = buildUsageStats(turn);
         if (usage) {
-          publishAgentCliStreamUsage(runId, usage, logger);
+          publishAgentCliUsage(runId, usage, logger);
         }
       },
       formatDelivery: (turn, wallTimeMs) =>
