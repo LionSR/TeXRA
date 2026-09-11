@@ -1190,8 +1190,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- Memory ---------------------------------------------------------------
-  // Every host's runtime honors the key through `registerAgentFeatures()`, but
-  // only the settings view renders it; the CLI has no `/config` row for it.
+  // Every host's runtime honors the key through the `memory` entry of
+  // `SharedToolInjectionRegistry`, but only the settings view renders it; the
+  // CLI has no `/config` row for it.
   surfacedSetting({
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: z.boolean().prefault(true),
@@ -1199,7 +1200,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/features.ts'),
+    honoredBy: everyHost('src/agent/runtime/toolInjection.ts'),
     surfaces: { settingsView: 'memory' },
   }),
 

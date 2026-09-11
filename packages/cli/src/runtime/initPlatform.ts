@@ -355,10 +355,10 @@ export async function initCliPlatform(
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }
-    // Register the shared Node-host agent runtime: memory + goal tool
-    // injections and the direct Lean language services (errors surface via the
-    // Tools dashboard if `lake` isn't on PATH).
-    initNodeAgentRuntime(lifecycle, stateStores.globalState);
+    // Register the shared Node-host agent runtime: the direct Lean language
+    // services (errors surface via the Tools dashboard if `lake` isn't on
+    // PATH).
+    initNodeAgentRuntime(lifecycle);
 
     // Kill agent-spawned OS children before the process dies, exactly as the
     // extension and desktop hosts do. Background `bash` runs are spawned

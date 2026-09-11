@@ -8,7 +8,6 @@ import PQueue from 'p-queue';
 // Local imports
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
-import { registerAgentFeatures } from '@agent/features';
 import {
   agentResponseTextConnector,
   defaultSession,
@@ -545,7 +544,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );
-  registerAgentFeatures(context.globalState);
   // The same Node-host skill wiring the CLI and desktop use, so
   // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
   // without this call `loadRuntimeSkillCatalog` always sees zero sources and

@@ -16,7 +16,6 @@
     ],
     "extension": [
       "@agent/core/state/runRequests",
-      "@agent/features",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/review",

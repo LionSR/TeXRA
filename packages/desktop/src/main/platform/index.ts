@@ -207,9 +207,9 @@ export async function initializeElectronPlatform(
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 
-  // Register the shared Node-host agent runtime: memory + goal tool injections
-  // and the direct Lean language services (lake env lean --server).
-  initNodeAgentRuntime(lifecycle, globalStateStore);
+  // Register the shared Node-host agent runtime: the direct Lean language
+  // services (lake env lean --server).
+  initNodeAgentRuntime(lifecycle);
   // Goal continuation and follow-up polish read the same bundled templates as
   // the extension; one call registers every row of the prompt table, so
   // desktop cannot wire one prompt and forget another the way it once did.
