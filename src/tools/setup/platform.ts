@@ -1,9 +1,9 @@
 /**
  * VS Code-free platform adapter for setup tools.
  *
- * Setup tools live in the `@tools/*` VS Code-free zone. Their credential
- * capabilities are programs over the `Secrets` service; hosts provide only
- * the capabilities that actually vary, as the `SetupPlatform` service.
+ * Setup tools live in the `@tools/*` VS Code-free zone. Each reads its
+ * credentials from the `Secrets` service directly; hosts provide only the
+ * capabilities that actually vary, as the `SetupPlatform` service.
  *
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
@@ -17,63 +17,9 @@ import { getCodexStatus } from '@auth/codex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { hostPort } from '@common/hostPort';
 import type { TerminalRunner } from '@hosts/uiHosts';
-import { createLog } from '@logger/logUtils';
-import {
-  API_PROVIDERS,
-  apiKeySecretName,
-  hasUsableApiKey,
-  lookupApiKeyOrigin,
-  type ApiKeyOrigin,
-  type ApiProvider,
-} from '@model/apiProviders';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
-import { Secrets } from '@platform/secrets';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
-
-const credentialLog = createLog('Setup Credentials');
-
-/** Per-provider API key surface: programs over the `Secrets` service. */
-interface SetupSecretsAdapter {
-  deleteApiKey(provider: ApiProvider): Effect.Effect<void, unknown, Secrets>;
-  /**
-   * Whether a usable key is resolved for the provider (secret storage, then
-   * environment; blank values already filtered — see `hasUsableApiKey` in
-   * `@model/apiProviders`). Named for the launch/retry-readiness call sites
-   * here, which want the "is this actually usable" framing.
-   */
-  hasUsableApiKey(
-    provider: ApiProvider,
-  ): Effect.Effect<boolean, unknown, Secrets>;
-  /** Whether a usable key comes from TeXRA secrets, the environment, or neither. */
-  apiKeyOrigin(
-    provider: ApiProvider,
-  ): Effect.Effect<ApiKeyOrigin, unknown, Secrets>;
-  /**
-   * Unlike `hasUsableApiKey`, only reports persisted entries — ignores
-   * environment-variable-backed keys. Needed by `unset_api_key` so the
-   * agent doesn't claim to have removed a key that still comes from
-   * `PROVIDER_API_KEY` in the user's shell.
-   */
-  storedApiKeyExists(
-    provider: ApiProvider,
-  ): Effect.Effect<boolean, unknown, Secrets>;
-  /** True when any credential can launch a setup model right now. */
-  anyUsableCredentialExists(): Effect.Effect<boolean, unknown, Secrets>;
-  gitHubTokenExists(): Effect.Effect<
-    'secret' | 'env' | 'none',
-    unknown,
-    Secrets
-  >;
-  /** List of provider names known to TeXRA. */
-  providers: readonly ApiProvider[];
-  /**
-   * All persisted secret key names. Values are never returned — only names.
-   */
-  listStoredKeys(): Effect.Effect<readonly string[], unknown, Secrets>;
-}
 
 /** Per-command surface. */
 interface SetupCommandAdapter {
@@ -145,55 +91,6 @@ export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(
     return { authenticated: true, email: user?.email };
   },
 );
-
-/** Value-free credential capability exposed to setup tools. */
-export const setupSecrets: SetupSecretsAdapter =
-  Object.freeze<SetupSecretsAdapter>({
-    providers: API_PROVIDERS,
-    deleteApiKey: Effect.fn('setupSecrets.deleteApiKey')(function* (
-      provider: ApiProvider,
-    ) {
-      const secrets = yield* Secrets;
-      yield* hostPort(() => secrets.delete(apiKeySecretName(provider)));
-    }),
-    hasUsableApiKey: Effect.fn('setupSecrets.hasUsableApiKey')(function* (
-      provider: ApiProvider,
-    ) {
-      const secrets = yield* Secrets;
-      return yield* hostPort(() => hasUsableApiKey(secrets, provider));
-    }),
-    apiKeyOrigin: Effect.fn('setupSecrets.apiKeyOrigin')(function* (
-      provider: ApiProvider,
-    ) {
-      const secrets = yield* Secrets;
-      return yield* hostPort(() => lookupApiKeyOrigin(secrets, provider));
-    }),
-    storedApiKeyExists: Effect.fn('setupSecrets.storedApiKeyExists')(function* (
-      provider: ApiProvider,
-    ) {
-      const secrets = yield* Secrets;
-      const keys = yield* hostPort(() => secrets.listStoredKeys());
-      return keys.includes(apiKeySecretName(provider));
-    }),
-    anyUsableCredentialExists: Effect.fn(
-      'setupSecrets.anyUsableCredentialExists',
-    )(function* () {
-      const secrets = yield* Secrets;
-      return yield* hostPort(() =>
-        hasUsableSetupCredential(secrets, credentialLog.warn),
-      );
-    }),
-    gitHubTokenExists: Effect.fn('setupSecrets.gitHubTokenExists')(
-      function* () {
-        const secrets = yield* Secrets;
-        return yield* hostPort(() => resolveGitHubTokenSource(secrets));
-      },
-    ),
-    listStoredKeys: Effect.fn('setupSecrets.listStoredKeys')(function* () {
-      const secrets = yield* Secrets;
-      return yield* hostPort(() => secrets.listStoredKeys());
-    }),
-  });
 
 /** Subscription access reported separately from provider API keys. */
 export const getChatGptSubscriptionStatus = Effect.fn(

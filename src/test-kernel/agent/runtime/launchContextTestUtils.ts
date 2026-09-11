@@ -17,9 +17,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import type { RunId } from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
-import { AgentCategory } from '@shared/schemas';
 import { testModelCell } from '../modelCellTestUtils';
 
 /** The zero-priced OpenAI model every runtime fixture bills against. */
@@ -78,6 +78,8 @@ export function createTestLaunchContext({
     config,
     setting,
     prompt: AgentPromptSchema.parse({}),
+    // The launch stores a real run carries; no fixture reads through them.
+    stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
     runScope: createRunScope({
       runId,
       session,

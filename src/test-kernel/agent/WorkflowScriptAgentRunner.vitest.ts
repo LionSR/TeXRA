@@ -10,6 +10,7 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -22,7 +23,9 @@ function createWorkflowScriptAgentRunner(
 ) {
   const runner = createNativeWorkflowScriptAgentRunner(...args);
   return (invocation: WorkflowAgentInvocation) =>
-    Effect.runPromise(runner(invocation));
+    Effect.runPromise(
+      Effect.provide(runner(invocation), fakeProcessServices()),
+    );
 }
 
 function fingerprintWorkflowAgentDependencies(

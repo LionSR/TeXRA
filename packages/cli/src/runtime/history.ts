@@ -17,6 +17,7 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
@@ -155,8 +156,10 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
   return RunIdSchema.safeParse(raw).data;
 }
 
-export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
-  const session = await initializeCliTranscriptSession();
+export async function listCliHistoryEntries(
+  stores: ModelOptionStores,
+): Promise<CliHistoryEntry[]> {
+  const session = await initializeCliTranscriptSession(stores);
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
@@ -177,10 +180,11 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
 }
 
 export async function readCliHistoryDetails(
+  stores: ModelOptionStores,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const session = await initializeCliTranscriptSession();
+  const session = await initializeCliTranscriptSession(stores);
   const store = getRunRecords(session, id);
   const [
     run,
@@ -320,9 +324,10 @@ type CliHistoryExportInputResult =
  * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
+  stores: ModelOptionStores,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
-  const session = await initializeCliTranscriptSession();
+  const session = await initializeCliTranscriptSession(stores);
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
     await effectRuntime().runPromise(loadChatExportInput(id, session));
   if (exportInput) return { status: 'ok', exportInput };

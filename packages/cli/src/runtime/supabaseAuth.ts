@@ -23,7 +23,6 @@ import {
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -87,6 +86,7 @@ const deferredAuthLog: SupabaseSessionLog = {
 };
 
 export function initializeCliSupabaseAuth(
+  secrets: PlatformSecrets,
   log?: SupabaseSessionLog,
 ): SupabaseSessionCoordinator {
   // The auth subsystem's run edge lives at this host entry (PRD R1), installed
@@ -94,7 +94,6 @@ export function initializeCliSupabaseAuth(
   // process runtime.
   installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
   activeAuthLog = log ?? activeAuthLog;
-  const secrets = platform().secrets;
   if (!coordinator || coordinatorSecrets !== secrets) {
     coordinator = createHostAuthCoordinator({
       secrets,
@@ -105,10 +104,25 @@ export function initializeCliSupabaseAuth(
   return coordinator;
 }
 
+/**
+ * The coordinator the CLI composition root built. The secret store it is
+ * keyed on is the root's own, threaded in above, so a Promise-facing auth
+ * surface reached before `initCliPlatform` has run says so instead of
+ * reconstructing a coordinator from a store it would have to look up.
+ */
+function cliAuthCoordinator(): SupabaseSessionCoordinator {
+  if (!coordinator) {
+    throw new Error(
+      'CLI Supabase auth is not initialized: initializeCliSupabaseAuth() runs at the CLI composition root.',
+    );
+  }
+  return coordinator;
+}
+
 export async function signInCliSupabase(
   options: CliLoginOptions = {},
 ): Promise<SupabaseSession> {
-  const authCoordinator = initializeCliSupabaseAuth();
+  const authCoordinator = cliAuthCoordinator();
   const callbackServer = await effectRuntime().runPromise(
     startLoopbackCallbackServer(authCoordinator),
   );
@@ -220,7 +234,7 @@ interface CliDeviceLoginOptions {
 export const signInCliSupabaseDeviceCode = Effect.fn(
   'supabaseAuth.signInCliSupabaseDeviceCode',
 )(function* (options: CliDeviceLoginOptions = {}) {
-  const authCoordinator = initializeCliSupabaseAuth();
+  const authCoordinator = cliAuthCoordinator();
   const authorization = yield* requestDeviceAuthorization();
   options.onDeviceCode?.(authorization);
   const exchange = yield* pollForDeviceSession(authorization);
@@ -234,7 +248,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 });
 
 export async function signOutCliSupabase(): Promise<void> {
-  const authCoordinator = initializeCliSupabaseAuth();
+  const authCoordinator = cliAuthCoordinator();
   await runAuthProgram(authCoordinator.clearSession());
   await refreshRemoteAgentCatalogAfterSignOut(
     () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
@@ -243,7 +257,7 @@ export async function signOutCliSupabase(): Promise<void> {
 }
 
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
-  const authCoordinator = initializeCliSupabaseAuth();
+  const authCoordinator = cliAuthCoordinator();
 
   // Classify the stored session instead of asking "is there a token": a
   // GoTrue outage leaves the session stored and usable once the service

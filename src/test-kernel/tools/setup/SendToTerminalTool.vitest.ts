@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it, beforeAll } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Local imports
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
@@ -14,7 +14,6 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
-import { setSetupPlatform } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -31,16 +30,13 @@ import { createFakeSetupPlatform } from './fixtures';
  * `BASH_APPROVAL_CONFIG_KEY`, so behaviour stays identical to "no platform
  * registered" unless a test also checks the approval flag.
  */
-async function installApprovalSkippingPlatform(): Promise<void> {
-  const stubConfig: ConfigProvider = {
-    get: <T>(key: string, defaultValue?: T): T =>
-      key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
-    update: async () => {},
-    inspect: () => undefined,
-    isExplicitlySet: () => false,
-  };
-  await installPlatform({}, { config: stubConfig });
-}
+const approvalSkippingConfig: ConfigProvider = {
+  get: <T>(key: string, defaultValue?: T): T =>
+    key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
+  update: async () => {},
+  inspect: () => undefined,
+  isExplicitlySet: () => false,
+};
 
 interface RunRecord {
   name: string;
@@ -48,32 +44,34 @@ interface RunRecord {
   timeoutMs: number;
 }
 
-function setupTool(
+async function setupTool(
   result: TerminalRunResult = {
     exitCode: 0,
     output: 'installed perl 5.38.2\n',
     timedOut: false,
   },
-): { tool: SendToTerminalTool; runs: RunRecord[] } {
+): Promise<{ tool: SendToTerminalTool; runs: RunRecord[] }> {
   const runs: RunRecord[] = [];
-  setSetupPlatform(
-    createFakeSetupPlatform({
-      terminal: {
-        async runCommand(args) {
-          runs.push(args);
-          return result;
+  await installPlatform(
+    {},
+    {
+      config: approvalSkippingConfig,
+      setup: createFakeSetupPlatform({
+        terminal: {
+          async runCommand(args) {
+            runs.push(args);
+            return result;
+          },
         },
-      },
-    }),
+      }),
+    },
   );
   return { tool: new SendToTerminalTool(), runs };
 }
 
 describe('SendToTerminalTool', () => {
-  beforeAll(() => installApprovalSkippingPlatform());
-
-  it('advertises the host terminal capture limit', () => {
-    const { tool } = setupTool();
+  it('advertises the host terminal capture limit', async () => {
+    const { tool } = await setupTool();
     const description = tool.definition.description;
     assert.ok(description);
     assert.ok(
@@ -82,7 +80,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('runs the command and returns exit code + captured output', async () => {
-    const { tool, runs } = setupTool();
+    const { tool, runs } = await setupTool();
 
     const result = await tool.call({
       command: 'sudo apt-get install -y perl',
@@ -97,7 +95,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('always prepends TeXRA: to a caller-supplied label', async () => {
-    const { tool, runs } = setupTool();
+    const { tool, runs } = await setupTool();
 
     await tool.call({
       command: 'sudo apt-get install -y perl',
@@ -108,7 +106,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('reports a non-zero exit code clearly to the agent', async () => {
-    const { tool } = setupTool({
+    const { tool } = await setupTool({
       exitCode: 100,
       output: 'E: Unable to locate package fakepkg\n',
       timedOut: false,
@@ -124,7 +122,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('reports a timeout without throwing', async () => {
-    const { tool } = setupTool({
+    const { tool } = await setupTool({
       exitCode: undefined,
       output: 'fetching...\n',
       timedOut: true,
@@ -140,7 +138,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('rejects commands containing newlines', async () => {
-    const { tool, runs } = setupTool();
+    const { tool, runs } = await setupTool();
 
     for (const command of [
       'sudo apt-get install -y perl\nrm -rf /tmp/leak',
@@ -162,7 +160,7 @@ describe('SendToTerminalTool', () => {
     // display preview and spill. Keep both sentinels inside the host result.
     const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
     const end = 'Setting up perl ... done\nEND_MARKER';
-    const { tool } = setupTool({
+    const { tool } = await setupTool({
       exitCode: 0,
       output: head + '\n' + end,
       timedOut: false,

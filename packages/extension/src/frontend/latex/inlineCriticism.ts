@@ -28,7 +28,6 @@ import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscrip
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { createLog } from '@logger/logUtils';
-import { tryGlobalState } from '@platform/platform';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -60,9 +59,14 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
   return vscode.DiagnosticSeverity.Hint;
 }
 
+/**
+ * The toggle reads the extension's own global state, taken from the context
+ * {@link registerInlineCriticism} was given. Before registration there is no
+ * state to read and the feature cannot be on, so the answer is `false`.
+ */
 export function isInlineCriticismEnabled(): boolean {
   return (
-    tryGlobalState()?.get<boolean>(
+    registration?.context.globalState.get<boolean>(
       GlobalStateKey.INLINE_CRITICISM_ENABLED,
       false,
     ) === true
@@ -215,15 +219,15 @@ export function registerInlineCriticism(
 export async function setInlineCriticismEnabled(
   enabled: boolean,
 ): Promise<void> {
-  await tryGlobalState()?.update(
-    GlobalStateKey.INLINE_CRITICISM_ENABLED,
-    enabled,
-  );
   if (!registration) {
     throw new Error(
       'setInlineCriticismEnabled called before registerInlineCriticism',
     );
   }
+  await registration.context.globalState.update(
+    GlobalStateKey.INLINE_CRITICISM_ENABLED,
+    enabled,
+  );
   if (enabled) enable(registration);
   else disable();
 }

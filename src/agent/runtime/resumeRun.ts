@@ -25,6 +25,7 @@ import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
 import type { AppState, RecoveryContinuation } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -137,7 +138,11 @@ export interface ResumeRunOptions extends Pick<
 export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, ToolInjections | AppState> {
+): Effect.fn.Return<
+  ResumeRunResult,
+  Error,
+  ToolInjections | AppState | Secrets
+> {
   const session = options.session ?? defaultSession();
   if (
     options.isCancellationRequested?.() === true ||
@@ -201,7 +206,11 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   runId: RunId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
-): Effect.fn.Return<ResumeRunResult, Error, ToolInjections | AppState> {
+): Effect.fn.Return<
+  ResumeRunResult,
+  Error,
+  ToolInjections | AppState | Secrets
+> {
   const session = options.session ?? defaultSession();
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
@@ -380,7 +389,11 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   resume: ToolUseResumeData,
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, ToolInjections | AppState> {
+): Effect.fn.Return<
+  ResumeRunResult,
+  Error,
+  ToolInjections | AppState | Secrets
+> {
   const runId = resume.runId;
   const runStatus = session.status;
   const followUpsQueue = session.followUps;

@@ -11,6 +11,7 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import {
@@ -54,7 +55,7 @@ interface DirectoryStat {
   isDirectory(): boolean;
 }
 
-interface DoctorDependencies {
+interface DoctorProbes {
   readonly nodeVersion?: string;
   readonly authProfile?: () => Promise<CliAuthProfile>;
   readonly modelAccessList?: () => Promise<readonly CliModelAccess[]>;
@@ -64,7 +65,16 @@ interface DoctorDependencies {
   readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
-type ResolvedDoctorDependencies = Required<DoctorDependencies>;
+interface DoctorDependencies extends DoctorProbes {
+  /**
+   * The stores model availability is computed from, handed over by the CLI
+   * root that just wired them. Absent exactly when platform init failed, and
+   * then `initError` below skips the model check entirely.
+   */
+  readonly stores?: ModelOptionStores;
+}
+
+type ResolvedDoctorDependencies = Required<DoctorProbes>;
 
 const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -387,7 +397,17 @@ export async function buildDoctorReport(
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? getCliAuthProfile,
-    modelAccessList: deps.modelAccessList ?? getCliModelAccessList,
+    modelAccessList:
+      deps.modelAccessList ??
+      (async (): Promise<readonly CliModelAccess[]> => {
+        const { stores } = deps;
+        if (!stores) {
+          throw new Error(
+            'Model availability needs the platform stores the CLI root holds; doctor was given neither stores nor a platform init error.',
+          );
+        }
+        return getCliModelAccessList({ stores });
+      }),
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,
     pathAccess: deps.pathAccess ?? access,

@@ -16,7 +16,10 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
 import {
   createTestSession,
@@ -26,6 +29,15 @@ import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
+
+/**
+ * The lifecycle program over the fake host's process services. The suite runs
+ * it on the default runtime rather than a process runtime, so the services it
+ * requires are provided here.
+ */
+function runFlow(...args: Parameters<typeof runFlowWithLifecycle>) {
+  return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
+}
 
 /**
  * Fresh logger + launch context, with the run's existence fact published and
@@ -90,9 +102,7 @@ describe('terminal result event', () => {
   it('emits exactly one completed result on a successful run', async () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
-      );
+      await Effect.runPromise(runFlow(ctx, async () => completedRun(ctx)));
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         output: { category: 'toolUse' },
@@ -124,7 +134,7 @@ describe('terminal result event', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => completedRun(ctx), { onRun }),
+          runFlow(ctx, async () => completedRun(ctx), { onRun }),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       await Promise.resolve();
@@ -140,7 +150,7 @@ describe('terminal result event', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, explodedRun, {
+          runFlow(ctx, explodedRun, {
             parentRunId: generateRunId(),
             onError: () => {
               throw new Error('delivery hook boom');
@@ -163,7 +173,7 @@ describe('terminal result event', () => {
 
     try {
       await expect(
-        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
+        Effect.runPromise(runFlow(ctx, explodedRun)),
       ).rejects.toThrow('model exploded');
 
       expectSingleResult(results, ctx, { outcome: 'failed' });
@@ -176,7 +186,7 @@ describe('terminal result event', () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => ({
+        runFlow(ctx, async () => ({
           outcome: RUN_OUTCOME.CANCELLED,
           runId: ctx.runScope.runId,
           output: { category: 'toolUse', response: '', files: [] },
@@ -192,7 +202,7 @@ describe('terminal result event', () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           throw new DOMException('Request aborted', 'AbortError');
         }),
       );
@@ -209,7 +219,7 @@ describe('terminal result event', () => {
     await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
     try {
       await expect(
-        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
+        Effect.runPromise(runFlow(ctx, explodedRun)),
       ).rejects.toThrow('model exploded');
       expectSingleResult(results, ctx, { outcome: 'failed' });
       expect(results[0].error?.kind).toBeDefined();
@@ -229,7 +239,7 @@ describe('terminal result event', () => {
     session.onResult(onResult);
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+        runFlow(ctx, async () => completedRun(ctx), {
           parentRunId,
         }),
       );

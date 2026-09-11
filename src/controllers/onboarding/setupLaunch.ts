@@ -17,7 +17,6 @@ import {
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { probeSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -139,8 +138,10 @@ export async function resolveSetupLaunchModel(
  * Desktop has no routing prompt, so OpenRouter is chosen only when the flag is
  * already on and an OpenRouter key exists.
  */
-export async function selectDesktopSetupModel(): Promise<string | null> {
-  const resolution = await resolveSetupLaunchModel(platform().secrets, false);
+export async function selectDesktopSetupModel(
+  secrets: PlatformSecrets,
+): Promise<string | null> {
+  const resolution = await resolveSetupLaunchModel(secrets, false);
   return resolution?.model ?? null;
 }
 
@@ -149,8 +150,10 @@ export async function selectDesktopSetupModel(): Promise<string | null> {
  * when no credential resolves to a runnable model. The message rides the same
  * `handleExecute` path the renderer's execute button uses.
  */
-export async function buildDesktopSetupExecuteMessage(): Promise<MainViewExecuteMessage | null> {
-  const model = await selectDesktopSetupModel();
+export async function buildDesktopSetupExecuteMessage(
+  secrets: PlatformSecrets,
+): Promise<MainViewExecuteMessage | null> {
+  const model = await selectDesktopSetupModel(secrets);
   if (!model) return null;
   return {
     agent: SETUP_AGENT_NAME,

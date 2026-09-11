@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
@@ -12,6 +12,7 @@ const CHANNEL = 'instruction';
 const log = createLog(CHANNEL);
 
 async function handleInstructionChoice(
+  store: StateStore,
   stateKey: string,
   showSuppress: boolean,
   actions: { title: string; callback: () => Thenable<void> | void }[],
@@ -20,7 +21,7 @@ async function handleInstructionChoice(
   if (!choice) return;
 
   if (showSuppress && choice === NEVER_REMIND) {
-    await platform().globalState.update(stateKey, true);
+    await store.update(stateKey, true);
     return;
   }
 
@@ -30,6 +31,7 @@ async function handleInstructionChoice(
 
 /** Show an instruction message that can be permanently dismissed. */
 export async function showInstructionWithSuppress(
+  store: StateStore,
   key: string,
   message: string,
   actions: { title: string; callback: () => Thenable<void> | void }[] = [],
@@ -38,7 +40,7 @@ export async function showInstructionWithSuppress(
 ): Promise<void> {
   const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-  if (showSuppress && platform().globalState.get<boolean>(stateKey)) {
+  if (showSuppress && store.get<boolean>(stateKey)) {
     return;
   }
 
@@ -51,7 +53,7 @@ export async function showInstructionWithSuppress(
     // `showInformationMessage` returns a Thenable, which has no `.catch`.
     void Promise.resolve(prompt)
       .then((choice) =>
-        handleInstructionChoice(stateKey, showSuppress, actions, choice),
+        handleInstructionChoice(store, stateKey, showSuppress, actions, choice),
       )
       .catch((error: unknown) => {
         log.warn(`Failed to settle instruction "${key}"`, {
@@ -61,7 +63,13 @@ export async function showInstructionWithSuppress(
     return;
   }
 
-  await handleInstructionChoice(stateKey, showSuppress, actions, await prompt);
+  await handleInstructionChoice(
+    store,
+    stateKey,
+    showSuppress,
+    actions,
+    await prompt,
+  );
 }
 
 /**
@@ -69,13 +77,16 @@ export async function showInstructionWithSuppress(
  * "Never remind again" option. Fires the install command on confirm and
  * warns on failure via {@link safeExecuteCommand}.
  */
-export async function promptExtensionInstall(opts: {
-  suppressKey: string;
-  message: string;
-  extensionId: string;
-  channel: string;
-}): Promise<void> {
-  await showInstructionWithSuppress(opts.suppressKey, opts.message, [
+export async function promptExtensionInstall(
+  store: StateStore,
+  opts: {
+    suppressKey: string;
+    message: string;
+    extensionId: string;
+    channel: string;
+  },
+): Promise<void> {
+  await showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
     {
       title: 'Install',
       callback: () =>

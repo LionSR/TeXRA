@@ -1,4 +1,4 @@
-import { Effect, Redacted } from 'effect';
+import { Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,32 +11,11 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
-  type ApiProvider,
 } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
-import { setSetupPlatform } from '@tools/setup/platform';
-
-const setupSecretsMocks = vi.hoisted(() => ({
-  deleteApiKey:
-    vi.fn<(provider: ApiProvider) => Effect.Effect<void, unknown>>(),
-  hasUsableApiKey:
-    vi.fn<(provider: ApiProvider) => Effect.Effect<boolean, unknown>>(),
-  storedApiKeyExists:
-    vi.fn<(provider: ApiProvider) => Effect.Effect<boolean, unknown>>(),
-}));
-
-vi.mock('@tools/setup/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
-  return {
-    ...actual,
-    setupSecrets: {
-      ...actual.setupSecrets,
-      ...setupSecretsMocks,
-    },
-  };
-});
 
 function createSecrets(
   initial: Record<string, string> = {},
@@ -71,38 +50,31 @@ function createSecrets(
   };
 }
 
-function setupApiKeyToolPlatform(
-  store: Map<string, string>,
-  envProviders: ReadonlySet<ApiProvider> = new Set(),
-): void {
-  setupSecretsMocks.deleteApiKey.mockImplementation((provider) =>
-    Effect.sync(() => {
-      store.delete(apiKeySecretName(provider));
-    }),
-  );
-  setupSecretsMocks.hasUsableApiKey.mockImplementation((provider) =>
-    Effect.sync(
-      () =>
-        (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
-        envProviders.has(provider),
-    ),
-  );
-  setupSecretsMocks.storedApiKeyExists.mockImplementation((provider) =>
-    Effect.sync(() => store.has(apiKeySecretName(provider))),
-  );
-  setSetupPlatform({
-    host: 'cli',
-    signIn: async () => false,
-    commands: {
-      async invoke() {},
+/**
+ * Install a fake host whose credential store is `secrets`, so `unset_api_key`
+ * reads and writes the same store the assertions do.
+ */
+async function setupApiKeyToolPlatform(
+  secrets: PlatformSecrets,
+): Promise<void> {
+  await installPlatform(
+    {},
+    {
+      secrets,
+      setup: {
+        host: 'cli',
+        signIn: async () => false,
+        commands: {
+          async invoke() {},
+        },
+      },
     },
-  });
+  );
 }
 
 describe('API provider key caches', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
-    for (const mock of Object.values(setupSecretsMocks)) mock.mockReset();
   });
 
   afterEach(() => {
@@ -235,10 +207,10 @@ describe('API provider key caches', () => {
   });
 
   it('unset_api_key invalidates stale stored-key lookups', async () => {
-    const { secrets, store } = createSecrets({
+    const { secrets } = createSecrets({
       [apiKeySecretName('openai')]: 'sk-test',
     });
-    setupApiKeyToolPlatform(store);
+    await setupApiKeyToolPlatform(secrets);
 
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('secret');
     await new UnsetApiKeyTool().call({ provider: 'openai' });
@@ -246,8 +218,29 @@ describe('API provider key caches', () => {
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
   });
 
+  it('removes a stored key whose value can no longer be read', async () => {
+    const { secrets, store } = createSecrets({
+      [apiKeySecretName('openai')]: 'sk-test',
+    });
+    // The persisted entry is listed but unreadable: the removal path keys off
+    // the stored key *names*, so it still has something to delete.
+    vi.spyOn(secrets, 'get').mockResolvedValue(undefined);
+    vi.spyOn(secrets, 'getStored').mockResolvedValue(undefined);
+    await setupApiKeyToolPlatform(secrets);
+
+    const result = await new UnsetApiKeyTool().call({ provider: 'openai' });
+
+    expect(result.status).toBe('executed');
+    expect(result.output).toContain('Removed stored API key');
+    expect(store.has(apiKeySecretName('openai'))).toBe(false);
+  });
+
   it('reports the canonical Kimi Code environment variable when unsetting', async () => {
-    setupApiKeyToolPlatform(new Map(), new Set<ApiProvider>(['kimiCode']));
+    const { secrets } = createSecrets(
+      {},
+      { [apiKeyEnvName('kimiCode')]: 'from-env' },
+    );
+    await setupApiKeyToolPlatform(secrets);
 
     const result = await new UnsetApiKeyTool().call({ provider: 'kimiCode' });
 

@@ -148,6 +148,31 @@ function latestDiagnostics(absolutePath: string): unknown[] | undefined {
   return mocks.diagnosticCollections.at(-1)?.items.get(absolutePath);
 }
 
+/**
+ * The slice of the extension context these two features use: the disposable
+ * list, and the memento the inline-criticism toggle is stored in (the feature
+ * reads and writes the toggle through the context it was registered with).
+ */
+function fakeExtensionContext(): {
+  subscriptions: Array<{ dispose(): unknown }>;
+  globalState: {
+    get(key: string, defaultValue: unknown): unknown;
+    update(key: string, value: unknown): Promise<void>;
+  };
+} {
+  const values = new Map<string, unknown>();
+  return {
+    subscriptions: [],
+    globalState: {
+      get: (key, defaultValue) =>
+        values.has(key) ? values.get(key) : defaultValue,
+      update: async (key, value) => {
+        values.set(key, value);
+      },
+    },
+  };
+}
+
 function disposeContext(context: {
   subscriptions: Array<{ dispose(): unknown }>;
 }) {
@@ -175,7 +200,7 @@ describe('output-file run fact frontend subscriptions', () => {
   it('badges run-fact output files and app-scoped workspace writes', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    const context = { subscriptions: [] };
+    const context = fakeExtensionContext();
     registerFileDecorations(
       context as unknown as VSCode.ExtensionContext,
       session,
@@ -216,7 +241,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    const context = { subscriptions: [] };
+    const context = fakeExtensionContext();
     registerInlineCriticism(
       context as unknown as VSCode.ExtensionContext,
       session,

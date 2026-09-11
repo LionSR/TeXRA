@@ -79,7 +79,7 @@ export function createExtensionCommandActions(
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: authSignOut,
     runSetupAssistant: async () => {
-      await launchSetupAssistant();
+      await launchSetupAssistant(secrets, context.globalState);
     },
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
@@ -104,7 +104,7 @@ export function createExtensionCommandActions(
     setApiKey: (provider) =>
       apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
-      agentHandleCreateAgentWithAI(context, category),
+      agentHandleCreateAgentWithAI(context, category, secrets),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>

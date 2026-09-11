@@ -154,12 +154,13 @@ export interface ModelInvocationConfig<TShared, TServices> {
 /**
  * Only the services this node reads: the model cell (handler and live provider
  * client), logger, setting (temperature/tools), config (model identity plus
- * `saveCycleDebug`'s log context), and the run scope (retry gate, abort signal,
- * and debug-log identity).
+ * `saveCycleDebug`'s log context), the run scope (retry gate, abort signal,
+ * and debug-log identity), and the run's secret/global-state stores (the
+ * Kimi Code fallback rebuilds a handler from them).
  */
 type InvocationServices = Pick<
   AgentCore,
-  'modelCell' | 'logger' | 'setting' | 'config' | 'runScope'
+  'modelCell' | 'logger' | 'setting' | 'config' | 'runScope' | 'stores'
 >;
 
 export class ModelInvocationNode<
@@ -235,6 +236,7 @@ export class ModelInvocationNode<
     const fallback = await createKimiCodeFallbackHandler(
       failedModel.config,
       failedModel.modelId,
+      this.services.stores,
       this.services.runScope.session.responseTextProcessing,
     );
     // A model switch is allowed while the retry panel waits, and the fallback

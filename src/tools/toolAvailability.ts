@@ -22,6 +22,7 @@ import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import {
@@ -125,7 +126,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 let inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null = null;
 let pendingRerun = false;
 export function runExternalToolChecks(): Effect.Effect<
-  ExternalToolCheckResult[]
+  ExternalToolCheckResult[],
+  never,
+  Secrets
 > {
   return Effect.suspend(() => {
     if (inflightProbe) {
@@ -156,14 +159,15 @@ const probeUntilSettled = Effect.gen(function* () {
   return results;
 });
 
-const runProbes: Effect.Effect<ExternalToolCheckResult[]> = Effect.suspend(() =>
-  // Same fan-out as the Promise.all this replaces: every group probes at once
-  // and no group's failure cancels a sibling, because each one resolves to a
-  // result of its own below.
-  Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
-    concurrency: 'unbounded',
-  }),
-);
+const runProbes: Effect.Effect<ExternalToolCheckResult[], never, Secrets> =
+  Effect.suspend(() =>
+    // Same fan-out as the Promise.all this replaces: every group probes at once
+    // and no group's failure cancels a sibling, because each one resolves to a
+    // result of its own below.
+    Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
+      concurrency: 'unbounded',
+    }),
+  );
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
   id,
@@ -173,7 +177,7 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
   check,
   statusLabel: getStatusLabel,
   detailCheck,
-}: ExternalToolDef): Effect.fn.Return<ExternalToolCheckResult, never> {
+}: ExternalToolDef): Effect.fn.Return<ExternalToolCheckResult, never, Secrets> {
   // Run check/status/detail from one shared probe result. Some groups
   // (Codex, Zotero, GitHub PR) touch async local state, so running the
   // callbacks independently can duplicate the same probe work.
@@ -222,12 +226,14 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
 
 function resolveOptionalStatus(
   getStatus:
-    | ((probeResult?: unknown) => Effect.Effect<string | undefined, unknown>)
+    | ((
+        probeResult?: unknown,
+      ) => Effect.Effect<string | undefined, unknown, Secrets>)
     | undefined,
   probeResult: unknown,
   toolName: string,
   field: string,
-): Effect.Effect<string | undefined> {
+): Effect.Effect<string | undefined, never, Secrets> {
   if (!getStatus) return Effect.succeed(undefined);
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>

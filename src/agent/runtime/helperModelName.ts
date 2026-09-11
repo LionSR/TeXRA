@@ -1,6 +1,6 @@
 import { getEnabledModels } from '@model/computeModelOptions';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -10,10 +10,14 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
  * built-in default applies. The built-in default is always accepted because it
  * is used for internal auxiliary tasks, not user-facing generation. The
  * Settings UI resolves the same chain over the same enabled list.
+ *
+ * `globalState` is the process global state the caller holds (the `AppState`
+ * service, or the store a host root threaded down), so the preference and the
+ * enabled list are read from one store.
  */
-export function getHelperModelName(): string {
+export function getHelperModelName(globalState: StateStore): string {
   return resolveEffectiveHelperModel(
-    platform().globalState.get<string>(GlobalStateKey.HELPER_MODEL),
-    getEnabledModels(),
+    globalState.get<string>(GlobalStateKey.HELPER_MODEL),
+    getEnabledModels(globalState),
   );
 }

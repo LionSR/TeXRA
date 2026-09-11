@@ -16,6 +16,7 @@ import {
   isKimiCodeSubscriptionRetryBlocked,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 describe('Kimi Code exclusivity single-source', () => {
   it('keeps the retry model-id gate aligned with the shared field predicate', () => {
@@ -48,6 +49,8 @@ describe('Kimi Code exclusivity single-source', () => {
 });
 
 describe('Kimi Code routing', () => {
+  const globalState = new FakeStateStore();
+
   it('keeps the direct Kimi Code route when OpenRouter is globally enabled', () => {
     expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimiCoding, false)).toBe(
       'kimiCode',
@@ -62,7 +65,11 @@ describe('Kimi Code routing', () => {
 
   it('uses the shared Kimi handler', () => {
     expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimiCoding, false),
+      resolveModelHandlerCompatibilityKey(
+        MODEL_CONFIGS.kimiCoding,
+        globalState,
+        false,
+      ),
     ).toBe('ModelHandlerKimi');
   });
 
@@ -74,11 +81,19 @@ describe('Kimi Code routing', () => {
     // direct (non-OpenRouter) session, which is why the resume path's
     // useOpenRouter=false is correct.
     expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false),
+      resolveModelHandlerCompatibilityKey(
+        MODEL_CONFIGS.kimi3,
+        globalState,
+        false,
+      ),
     ).toBe('ModelHandlerKimi');
-    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true)).toBe(
-      'ModelHandlerOpenRouterNative',
-    );
+    expect(
+      resolveModelHandlerCompatibilityKey(
+        MODEL_CONFIGS.kimi3,
+        globalState,
+        true,
+      ),
+    ).toBe('ModelHandlerOpenRouterNative');
   });
 
   it('does not divert other moonshot models off their normal routes', () => {

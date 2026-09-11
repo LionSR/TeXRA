@@ -38,6 +38,7 @@ import {
   type LifecycleHost,
 } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -235,13 +236,16 @@ export abstract class PollingSourceBase<
    * events. The base wraps every hook failure in `PollHookRejected` before
    * classifying it, so implementations may fail with the raw endpoint error.
    */
-  protected abstract pollOne(key: K, state: S): Effect.Effect<void, unknown>;
+  protected abstract pollOne(
+    key: K,
+    state: S,
+  ): Effect.Effect<void, unknown, Secrets>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,
-  ): Effect.Effect<void, PollHookRejected> {
+  ): Effect.Effect<void, PollHookRejected, Secrets> {
     return Effect.void;
   }
 
@@ -295,7 +299,7 @@ export abstract class PollingSourceBase<
     key: K,
     initState: () => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     return Effect.suspend(() => {
       let state = this.subscriptions.get(key);
       let created = false;
@@ -493,7 +497,7 @@ export abstract class PollingSourceBase<
    * keep a host process alive on its own. Its readings are the ambient
    * clock's, so `Clock.currentTimeMillis` inside a round is unaffected.
    */
-  private ensurePolling(): Effect.Effect<void> {
+  private ensurePolling(): Effect.Effect<void, never, Secrets> {
     return Effect.suspend(() => {
       this.registerShutdownIfNeeded();
       if (this.pollLoopStop) return Effect.void;

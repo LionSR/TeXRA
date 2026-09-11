@@ -31,6 +31,7 @@ import {
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
@@ -203,6 +204,7 @@ export function loginFromChat(
  */
 const logoutLines = (
   target: CliLogoutTarget,
+  secrets: PlatformSecrets,
 ): Effect.Effect<readonly string[]> =>
   Effect.gen(function* () {
     const lines: string[] = [];
@@ -257,7 +259,7 @@ const logoutLines = (
     }
 
     const overviewLines = yield* Effect.tryPromise({
-      try: () => loadCliModelAccessOverview(),
+      try: () => loadCliModelAccessOverview(secrets),
       catch: (cause) => ensureError(cause),
     }).pipe(
       Effect.match({
@@ -271,6 +273,7 @@ const logoutLines = (
 
 export async function logoutFromChat(
   input: string,
+  secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> {
   const target = parseCliLogoutTarget(input);
@@ -279,6 +282,6 @@ export async function logoutFromChat(
     return;
   }
 
-  const lines = await effectRuntime().runPromise(logoutLines(target));
+  const lines = await effectRuntime().runPromise(logoutLines(target, secrets));
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

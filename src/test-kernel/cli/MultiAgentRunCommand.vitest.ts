@@ -13,14 +13,21 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Effect } from 'effect';
+import { Effect, type Layer } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import {
+  fakeProcessServices,
+  installedHost,
+} from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+
+/** The process services the installed fake host provides to a run. */
+type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
@@ -90,7 +97,11 @@ vi.mock('@cli/runtime/executeCli', () => ({
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: (
     ...args: Parameters<
-      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
+        unknown,
+        unknown,
+        ProcessServices
+      >
     >
   ) =>
     Effect.tryPromise({
@@ -98,7 +109,9 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
         mocks.withExpandedRunInputs(
           ...args.slice(0, 4),
           (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(args[4](inputs)),
+            Effect.runPromise(
+              Effect.provide(args[4](inputs), fakeProcessServices()),
+            ),
         ),
       catch: ensureError,
     }),
@@ -109,7 +122,7 @@ const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 const { runMultiAgentPreset: nativeRun } =
   await import('@cli/commands/multiAgent');
 const runMultiAgentPreset = (...args: Parameters<typeof nativeRun>) =>
-  Effect.runPromise(nativeRun(...args));
+  Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
 const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
   await import('@cli/runtime/multiAgentRunPlan');
 
@@ -237,8 +250,11 @@ describe('CLI multi-agent run command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
+    // The CLI init hands its caller the platform's stores; the commands
+    // under test read `secrets`/`globalState` off what it returns.
+    const { platform } = installedHost();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],

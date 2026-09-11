@@ -23,6 +23,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { Disposable } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 
 import type { PollEventListener } from './PollingSourceBase';
@@ -36,7 +37,7 @@ interface PollingSourceLike<K extends string, Input> {
   subscribe(
     input: Input,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable>;
+  ): Effect.Effect<Disposable, never, Secrets>;
   updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
@@ -96,7 +97,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    * AsyncLocalStorage — so the owning session capture below happens with the
    * run's context exactly as the old synchronous `bind()` did.
    */
-  bind(runId: RunId, input: Input): Effect.Effect<boolean> {
+  bind(runId: RunId, input: Input): Effect.Effect<boolean, never, Secrets> {
     return Effect.suspend(() => {
       const key = this.opts.keyOf(input);
       // Capture the session HERE: the returned Effect runs inside the run's

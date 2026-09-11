@@ -24,10 +24,6 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { installPlatform } from '@test/support/setupPlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
-import {
-  __resetSetupPlatformForTests,
-  setSetupPlatform,
-} from '@tools/setup/platform';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 
 // Local file imports
@@ -50,6 +46,12 @@ function expectNoTeamState(): void {
   expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
 }
 
+/**
+ * The installed fake host's setup sign-in: a suite-level double the host is
+ * built with once, so a test steers sign-in without swapping hosts.
+ */
+const signIn = vi.fn<() => Promise<boolean>>();
+
 function mockCatalogAccess(canAccessCatalog: boolean): void {
   vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(
     canAccessCatalog,
@@ -58,8 +60,8 @@ function mockCatalogAccess(canAccessCatalog: boolean): void {
 }
 
 async function clearOnboardingState(): Promise<void> {
-  __resetSetupPlatformForTests();
-  setSetupPlatform(createFakeSetupPlatform());
+  signIn.mockReset();
+  signIn.mockResolvedValue(false);
   await workspaceRoots().workspaceState.update(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     undefined,
@@ -78,6 +80,7 @@ beforeAll(async () => {
     {},
     {
       fs: nodeFilesystem,
+      setup: createFakeSetupPlatform({ signIn }),
       agentDirectories: {
         custom: async () => '',
         builtIn: async () =>
@@ -176,9 +179,8 @@ describe('apply_team', () => {
   });
 
   it('uses the host setup sign-in capability before its forced retry', async () => {
-    const signIn = vi.fn(async () => true);
+    signIn.mockResolvedValue(true);
     mockCatalogAccess(false);
-    setSetupPlatform(createFakeSetupPlatform({ signIn }));
 
     const result = await applyTeam({
       teamId: 'starter',

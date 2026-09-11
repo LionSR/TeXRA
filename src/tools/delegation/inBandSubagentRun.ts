@@ -31,6 +31,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
 import type { AppState } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -88,7 +89,8 @@ interface StableInBandSubagentRunOptions {
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
   readonly prepare: () => Effect.Effect<
     Omit<InBandSubagentRunBaseOptions, 'signal'>,
-    Error
+    Error,
+    ToolInjections | AppState | Secrets
   >;
   /**
    * Fires once, just before a live attempt runs, with the run id that
@@ -170,7 +172,7 @@ const executeInBand = Effect.fn('executeInBand')(
   ): Effect.fn.Return<
     InBandSubagentDeliveryResult,
     Error,
-    ToolInjections | AppState
+    ToolInjections | AppState | Secrets
   > {
     const { config } = definition;
     const startedAt = Date.now();
@@ -450,7 +452,7 @@ export const executeStableSubagentInBand = Effect.fn(
   ): Effect.fn.Return<
     InBandSubagentRunResult,
     Error,
-    ToolInjections | AppState
+    ToolInjections | AppState | Secrets
   > {
     return yield* Effect.scoped(
       Effect.gen(function* () {
@@ -526,7 +528,7 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
 ): Effect.fn.Return<
   InBandSubagentDeliveryResult,
   Error,
-  ToolInjections | AppState
+  ToolInjections | AppState | Secrets
 > {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(

@@ -177,9 +177,9 @@ describe('coding-plan subscription runtime', () => {
       expect('usageRoute' in proxy ? proxy.usageRoute : undefined).toBe(
         usageRoute,
       );
-      await expect(activeSubscriptionUsageRoute('glm52')).resolves.toBe(
-        usageRoute,
-      );
+      await expect(
+        activeSubscriptionUsageRoute('glm52', platform().secrets),
+      ).resolves.toBe(usageRoute);
     },
   );
 
@@ -188,7 +188,7 @@ describe('coding-plan subscription runtime', () => {
       (runtime) => runtime.descriptor.id === 'kimiCode',
     );
 
-    await kimi?.restoreEnabled(true);
+    await kimi?.restoreEnabled(true, platform().globalState);
 
     expect(
       platform().globalState.get(GlobalStateKey.KIMI_CODE_PREFER, false),

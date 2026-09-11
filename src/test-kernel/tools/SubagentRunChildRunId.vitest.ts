@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import type { RunId } from '@shared/schemas';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
@@ -97,12 +98,15 @@ describe('executeSubagent child run launch', () => {
 
   function runDefaultSubagent() {
     return Effect.runPromise(
-      executeSubagent(
-        mocks.tryUseRunContext(),
-        mocks.getCurrentToolCallContext(),
-        defaultPayload,
-        'proof-checker',
-        orchestratorRunId,
+      Effect.provide(
+        executeSubagent(
+          mocks.tryUseRunContext(),
+          mocks.getCurrentToolCallContext(),
+          defaultPayload,
+          'proof-checker',
+          orchestratorRunId,
+        ),
+        fakeProcessServices(),
       ),
     );
   }

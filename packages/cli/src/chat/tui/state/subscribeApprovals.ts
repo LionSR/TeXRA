@@ -60,7 +60,8 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import {
   isCodingPlanQuotaRoute,
@@ -120,11 +121,23 @@ function maybeAutoSwitchRetry(
 }
 
 /**
+ * The process stores a retry's credential work reads: the secret store its
+ * key checks go through, and the global state a rolled-back coding-plan
+ * preference is written straight into. Both come from the chat session's
+ * caller, which holds them already.
+ */
+interface TuiApprovalStores {
+  readonly secrets: PlatformSecrets;
+  readonly state: StateStore;
+}
+
+/**
  * Create the typed approval pipeline for the active TUI session.
  */
 export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
+  stores: TuiApprovalStores,
 ): HostInteractions {
   // The two persisted access fields commit as one choice within this TUI
   // lifetime. Keeping the queue session-owned prevents stale work leaking
@@ -166,7 +179,11 @@ export function createTuiHostInteractions(
       return requestRetryInteraction(
         request,
         context,
-        { owner: interactionOwner, commitQueue: retryCredentialCommitQueue },
+        {
+          owner: interactionOwner,
+          commitQueue: retryCredentialCommitQueue,
+          stores,
+        },
         options,
       );
     },
@@ -275,7 +292,11 @@ function prepareRetryClient(
 async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
-  attachment: { readonly owner: object; readonly commitQueue: PQueue },
+  attachment: {
+    readonly owner: object;
+    readonly commitQueue: PQueue;
+    readonly stores: TuiApprovalStores;
+  },
   options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
   settleHostRequestsWhere(
@@ -319,7 +340,7 @@ async function requestRetryInteraction(
           if (provider) {
             try {
               personalApiKeyAvailable = await hasUsableApiKey(
-                platform().secrets,
+                attachment.stores.secrets,
                 provider,
               );
             } catch (error) {
@@ -373,6 +394,7 @@ async function requestRetryInteraction(
         prepareRetry: options?.prepareRetry,
         preparationSignal: reservation.signal,
         commitQueue: attachment.commitQueue,
+        stores: attachment.stores,
       });
       // Skipping the modal also skips its quota warning, and the switch
       // persists the plan preference as disabled. Announce it only after the
@@ -494,12 +516,13 @@ async function rollbackChangedSettings(
 function codingPlanRollbackConfig(
   runtime: CodingPlanSubscriptionRuntime,
   previous: boolean,
+  state: StateStore,
 ): RetrySettingRollbackConfig {
   return {
     writeStarted: true,
     needsRollback: () => runtime.getEnabled() !== previous,
     restore: async () => {
-      await runtime.restoreEnabled(previous);
+      await runtime.restoreEnabled(previous, state);
       bumpCodexPreferenceVersion();
       if (runtime.getEnabled() !== previous) {
         throw new Error(
@@ -618,6 +641,7 @@ async function switchRetryToPersonalCredentials(
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
     preparationSignal: AbortSignal;
     commitQueue: PQueue;
+    stores: TuiApprovalStores;
   },
 ): Promise<void> {
   const signal = options.preparationSignal;
@@ -629,7 +653,7 @@ async function switchRetryToPersonalCredentials(
     );
   }
   const keyExists = await runRetryTask(
-    () => apiKeyExistsUncached(platform().secrets, requestedProvider),
+    () => apiKeyExistsUncached(options.stores.secrets, requestedProvider),
     signal,
   );
   if (!keyExists) {
@@ -686,14 +710,22 @@ async function switchRetryToPersonalCredentials(
             throwWithRollbackFailures(
               error,
               await rollbackChangedSettings([
-                codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
+                codingPlanRollbackConfig(
+                  runtime,
+                  previousCodingPlanEnabled,
+                  options.stores.state,
+                ),
               ]),
             );
           }
           await applyRetryCredentialCommit(
             decision,
             signal,
-            codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
+            codingPlanRollbackConfig(
+              runtime,
+              previousCodingPlanEnabled,
+              options.stores.state,
+            ),
           );
         }),
       signal,

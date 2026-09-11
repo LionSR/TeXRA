@@ -129,7 +129,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initCliPlatform({ ...context, quietLogs: true }),
     catch: ensureError,
   });
@@ -183,7 +183,11 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat'),
+    try: () =>
+      selectCliRunModel(context, init.model, 'chat', {
+        secrets: services.secrets,
+        globalState: services.globalState,
+      }),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

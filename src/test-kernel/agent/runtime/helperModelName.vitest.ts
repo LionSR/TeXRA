@@ -4,7 +4,7 @@ import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
 
 describe('resolveEffectiveHelperModel', () => {
   it('returns the configured model when it is in the candidate list', () => {
@@ -34,6 +34,8 @@ describe('getHelperModelName', () => {
       },
     });
 
-    expect(getHelperModelName()).toBe(DEFAULT_HELPER_MODEL);
+    expect(getHelperModelName(installedHost().platform.globalState)).toBe(
+      DEFAULT_HELPER_MODEL,
+    );
   });
 });

@@ -44,6 +44,7 @@ import {
   createDeferred,
   waitForCondition as waitFor,
 } from '@test/support/asyncTestUtils';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import {
   loadInk,
   renderInteractive,
@@ -152,6 +153,9 @@ async function renderInkElement(element: unknown): Promise<InkRenderHandles> {
   return handles;
 }
 
+/** The secret store the rendered form writes through, as a host would pass it. */
+const formSecrets = new FakeSecrets();
+
 async function renderCliConfigForm(
   onError?: (error: unknown) => void,
 ): Promise<Awaited<ReturnType<typeof renderInkElement>>> {
@@ -159,6 +163,7 @@ async function renderCliConfigForm(
   return renderInkElement(
     React.createElement(CliConfigForm, {
       stores: makeFakeSettingsStores().stores,
+      secrets: formSecrets,
       onClose: () => undefined,
       onError,
     }),
@@ -207,7 +212,11 @@ async function renderConfigFormProps(): Promise<ConfigFormProps> {
 async function openConfigFormProps(
   stores = makeFakeSettingsStores().stores,
 ): Promise<ConfigFormProps> {
-  registerBuiltinSlashCommands({ getConfigStores: () => stores });
+  registerBuiltinSlashCommands({
+    secrets: new FakeSecrets(),
+    state: stores.globalState,
+    getConfigStores: () => stores,
+  });
   openCliSlashCommandForm('config', '');
   return renderConfigFormProps();
 }
@@ -337,6 +346,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
       await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
       expect(providerApiKeyRuntime.save).toHaveBeenCalledWith(
+        formSecrets,
         'openai',
         'sk-private-test-key',
       );
@@ -439,6 +449,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       await submitGitHubToken(rendered.stdin, rendered.stdout);
       await waitFor(() => githubTokenRuntime.save.mock.calls.length === 1);
       expect(githubTokenRuntime.save).toHaveBeenCalledWith(
+        formSecrets,
         'ghp_private-test-token',
       );
       expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
@@ -456,11 +467,14 @@ describe('CliConfigForm API-key status lifecycle', () => {
     );
     const { React } = await loadInk();
     const standalone = await renderInkElement(
-      React.createElement(ConfigApp, {}),
+      React.createElement(ConfigApp, { secrets: formSecrets }),
     );
 
+    const { stores } = makeFakeSettingsStores();
     registerBuiltinSlashCommands({
-      getConfigStores: () => makeFakeSettingsStores().stores,
+      secrets: new FakeSecrets(),
+      state: stores.globalState,
+      getConfigStores: () => stores,
     });
     openCliSlashCommandForm('config', '');
     const slash = await renderInkElement(
@@ -485,7 +499,11 @@ describe('/config slash command wiring', () => {
     // Seed the git-author config slot the CLI reads from.
     void config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
+    registerBuiltinSlashCommands({
+      secrets: new FakeSecrets(),
+      state: stores.globalState,
+      getConfigStores: () => stores,
+    });
     expect(openCliSlashCommandForm('config', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('config');
 
@@ -505,6 +523,8 @@ describe('/config slash command wiring', () => {
     const { stores, config } = makeFakeSettingsStores();
     const applied: TexraApprovalPolicy[] = [];
     registerBuiltinSlashCommands({
+      secrets: new FakeSecrets(),
+      state: stores.globalState,
       getConfigStores: () => stores,
       onApprovalPolicySelect: (policy) => {
         applied.push(policy);
@@ -536,6 +556,8 @@ describe('/config slash command wiring', () => {
     const { stores } = makeFakeSettingsStores();
     const events: string[] = [];
     registerBuiltinSlashCommands({
+      secrets: new FakeSecrets(),
+      state: stores.globalState,
       getConfigStores: () => stores,
       onError: () => {
         events.push('error');

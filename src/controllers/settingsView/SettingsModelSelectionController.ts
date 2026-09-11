@@ -20,8 +20,10 @@ import {
   computeModelOptionsData,
   getEnabledModels,
   setModelEnabled,
+  type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -39,6 +41,8 @@ import { byName } from '@utils/core';
 export interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
+  /** Provider credentials behind the availability decoration on each option. */
+  secrets: PlatformSecrets;
   getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
@@ -47,6 +51,7 @@ export interface SettingsModelSelectionControllerDeps {
    * shared `computeModelOptionsData` — the same source the CLI picker uses.
    */
   resolveModelOptions?: (
+    stores: ModelOptionStores,
     models: readonly string[],
   ) => Promise<ModelOptionData[]>;
 }
@@ -70,9 +75,8 @@ export class SettingsModelSelectionController {
       this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
     )();
     const preferredModels = new Set(
-      (
-        this.deps.getPreferredCopilotRouteModels ?? preferredCopilotRouteModels
-      )(),
+      this.deps.getPreferredCopilotRouteModels?.() ??
+        preferredCopilotRouteModels(this.deps.globalState),
     );
     return {
       models: await this.buildSelectionItems(routes, preferredModels),
@@ -180,7 +184,10 @@ export class SettingsModelSelectionController {
       .map((config) => config.name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
-    const optionsData = await resolveModelOptions(candidates);
+    const optionsData = await resolveModelOptions(
+      { secrets: this.deps.secrets, globalState: this.deps.globalState },
+      candidates,
+    );
 
     const items: ModelSelectionItem[] = [];
     for (const option of optionsData) {

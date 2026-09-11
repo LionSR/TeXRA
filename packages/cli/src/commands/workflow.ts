@@ -11,7 +11,9 @@ import {
   isTerminalPersistedCompileRejection,
   type AgentConfigPayload,
 } from '@agent/runtime';
+import { AppState } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
@@ -116,7 +118,7 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
     catch: ensureError,
   });
 
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initLocalCliPlatform(context),
     catch: ensureError,
   });
@@ -142,7 +144,11 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
         }
 
         const model = yield* Effect.tryPromise({
-          try: () => selectCliRunModel(context, init.model, 'run'),
+          try: () =>
+            selectCliRunModel(context, init.model, 'run', {
+              secrets: services.secrets,
+              globalState: services.globalState,
+            }),
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
@@ -208,8 +214,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
+    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
     const session = yield* Effect.tryPromise({
-      try: initializeCliTranscriptSession,
+      try: () => initializeCliTranscriptSession(stores),
       catch: ensureError,
     });
     let workflowResult: CliWorkflowRunResult | undefined;

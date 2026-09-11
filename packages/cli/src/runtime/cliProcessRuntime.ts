@@ -84,6 +84,15 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
  * Bind the global state store `initCliPlatform` opened as this process's
  * `AppState`. Called once, right after the store opens; a service read before
  * that throws rather than reading a default.
+ *
+ * This is the one interim of its kind, and it exists only because of the
+ * first-arrival latch above: `notifyCliUpdate` and `clone` install the
+ * runtime before `initCliPlatform` runs, so a thunk handed in at install
+ * time would belong to the wrong entry. It goes with the latch when the CLI
+ * gets its single composition root (injection plan §6 step 2), where the
+ * store is a local of that root and is threaded like every other host's.
+ * Until then: exactly one binder, no second `bind*` beside it, and no other
+ * process service registered this way.
  */
 export function bindCliGlobalState(store: StateStore): void {
   globalState = store;

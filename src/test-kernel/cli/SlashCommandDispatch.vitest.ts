@@ -76,6 +76,7 @@ import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { RunView } from '@shared/session/sessionView';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import {
   bindTestSessionView,
@@ -147,6 +148,12 @@ function seedChildRoster(
     });
   }
 }
+/**
+ * The process stores the built-in commands and the slash context read, the
+ * pair the chat entry point threads in from its own platform services.
+ */
+const stores = { secrets: new FakeSecrets(), state: new FakeStateStore() };
+
 function createSession(): TuiSession {
   return new TuiSession();
 }
@@ -189,6 +196,8 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
+    secrets: stores.secrets,
+    state: stores.state,
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
@@ -286,7 +295,7 @@ function expectAccessStatusText(text: string | undefined): void {
 
 describe('handleTuiSlashCommand', () => {
   it('opens reference commands without leaving transcript rows', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const context = createContext();
 
     await handleTuiSlashCommand('/tools', context);
@@ -304,7 +313,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('opens a live work-plan reader for the focused stream', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const context = createContext();
 
     await handleTuiSlashCommand('/plan', context);
@@ -398,19 +407,19 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     await expectFormOpens('/models', 'models');
   });
 
   it('opens /model as the active-model picker', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     await expectFormOpens('/model', 'model');
   });
 
   it('opens /approval status without an early transcript echo', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     await expectFormOpens('/approval status', 'approval');
 
@@ -418,7 +427,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('opens the masked provider-key form through /key and /keys', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const context = createContext();
 
     await expectFormOpens('/key', 'key', context);
@@ -428,7 +437,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('discards inline key arguments without recording the secret', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const secret = 'sk-private-test-value';
 
     await expectFormOpens(`/keys ${secret}`, 'key');
@@ -441,7 +450,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('keeps malformed and mistyped key commands out of the transcript', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const context = createContext();
     const malformedSecrets = [
       'sk-equals-private-value',
@@ -471,7 +480,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('leaves path-like equals input for the agent', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     expect(await handleTuiSlashCommand('/tmp=backup', createContext())).toBe(
       false,
@@ -482,7 +491,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('does not mistake ordinary key-prefixed commands for credential input', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     expect(
       await handleTuiSlashCommand('/keyboard shortcuts', createContext()),
@@ -494,7 +503,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('redacts arbitrary concatenated key input without forcing the key form', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const secret = 'keyArbitraryCredentialValue';
 
     expect(await handleTuiSlashCommand(`/${secret}`, createContext())).toBe(
@@ -505,7 +514,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('routes the normalized /apikey spelling to the protected form', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     await expectFormOpens('/apikey private-value', 'key');
 
@@ -513,7 +522,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     vi.stubEnv('SSH_TTY', '/dev/pts/3');
     vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
       Effect.succeed({
@@ -559,7 +568,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('derives /auth and /api status from the same access overview', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const overview = vi
       .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
       .mockResolvedValue([
@@ -586,9 +595,13 @@ describe('handleTuiSlashCommand', () => {
       .spyOn(providerApiKey, 'saveProviderApiKey')
       .mockResolvedValue(undefined);
 
-    const notice = await applyCliProviderApiKey('glm', 'glm-secret');
+    const notice = await applyCliProviderApiKey(
+      stores.secrets,
+      'glm',
+      'glm-secret',
+    );
 
-    expect(save).toHaveBeenCalledWith('glm', 'glm-secret');
+    expect(save).toHaveBeenCalledWith(stores.secrets, 'glm', 'glm-secret');
     expect(notice).toBe(
       "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
     );
@@ -617,7 +630,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
     const handled = await handleTuiSlashCommand('/logout all', createContext());
@@ -633,13 +646,13 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('opens an account-specific sign-out chooser for bare /logout', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     await expectFormOpens('/logout', 'logout');
   });
 
   it('signs out of only the requested account', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
     await handleTuiSlashCommand('/logout texra', createContext());
@@ -652,7 +665,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
     vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
       Effect.fail(new Error('Codex logout failed')),
@@ -668,7 +681,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
     vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
       Effect.succeed({ preferenceError: 'Config write failed' }),
@@ -688,7 +701,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('treats /quit as the canonical exit command without echoing it', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const requestInputExit = vi.fn();
 
@@ -707,7 +720,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('uses the provided process cwd when formatting /status resume hints', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const runId = 'stream-1' as RunId;
     session.runId = runId;
@@ -727,7 +740,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('reports active children while preserving an idle focused root status', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const rootRunId = 'stream-root' as RunId;
     const childRunId = 'stream-child' as RunId;
@@ -752,7 +765,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('counts only running children among mixed direct-children phases', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const rootRunId = 'stream-root' as RunId;
     const parentRunId = 'stream-parent' as RunId;
@@ -795,7 +808,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('does not count retained idle children as active background tasks', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const rootRunId = 'stream-root' as RunId;
     const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
@@ -823,7 +836,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('reports the owning workflow count while a background task is focused', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const session = createSession();
     const rootRunId = 'stream-root' as RunId;
     const focusedChildId = 'stream-focused-child' as RunId;
@@ -851,7 +864,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('reports the access route that produced the focused stream usage', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
     const session = createSession();
     const runId = 'stream-access' as RunId;
@@ -877,7 +890,7 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('surfaces status lookup failures without rejecting', async () => {
-    registerBuiltinSlashCommands();
+    registerBuiltinSlashCommands({ ...stores });
 
     const handled = await handleTuiSlashCommand(
       '/status',

@@ -10,13 +10,20 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Effect } from 'effect';
+import { Effect, type Layer } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import {
+  fakeProcessServices,
+  installedHost,
+} from '@test/support/setupPlatform';
+
+/** The process services the installed fake host provides to a run. */
+type ProcessServices = Layer.Success<ReturnType<typeof fakeProcessServices>>;
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
@@ -50,7 +57,11 @@ vi.mock('@cli/runtime/executeCli', () => ({
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: (
     ...args: Parameters<
-      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
+        unknown,
+        unknown,
+        ProcessServices
+      >
     >
   ) =>
     Effect.tryPromise({
@@ -58,7 +69,9 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
         mocks.withExpandedRunInputs(
           ...args.slice(0, 4),
           (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(args[4](inputs)),
+            Effect.runPromise(
+              Effect.provide(args[4](inputs), fakeProcessServices()),
+            ),
         ),
       catch: ensureError,
     }),
@@ -68,13 +81,16 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 // one call here serves every test below.
 const { runToolUseAgent: nativeRun } = await import('@cli/commands/agentsRun');
 const runToolUseAgent = (...args: Parameters<typeof nativeRun>) =>
-  Effect.runPromise(nativeRun(...args));
+  Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
 
 describe('CLI agents run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
+    // The CLI init hands its caller the platform's stores; the commands
+    // under test read `secrets`/`globalState` off what it returns.
+    const { platform } = installedHost();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.withExpandedRunInputs.mockImplementation(
       async (
         _inputSpecs: readonly string[],

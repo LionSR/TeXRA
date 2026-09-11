@@ -146,13 +146,18 @@ describe('desktop composition root and launch environment', () => {
           );
           const records = yield* openDesktopProjectRecords(profile, owner);
           const config = yield* JsonStore.open(join(profile, 'config.json'));
+          const host = createFakeHost({
+            storagePath: join(profile, 'no-project'),
+          });
           const registry = yield* openDesktopProjectRegistry({
             dataRoot: profile,
-            processRoots: createFakeHost({
-              storagePath: join(profile, 'no-project'),
-            }).roots,
+            processRoots: host.roots,
             globalConfigStore: config,
             records,
+            stores: {
+              secrets: host.platform.secrets,
+              globalState: host.platform.globalState,
+            },
             warn: vi.fn(),
           });
           yield* Effect.addFinalizer(() =>

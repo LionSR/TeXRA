@@ -12,6 +12,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -99,6 +100,19 @@ function createSession(): ReturnType<typeof createTestSession> {
   return session;
 }
 
+/**
+ * The two resume programs over the fake host's process services: the suite
+ * runs them on the default runtime rather than a process runtime, so the
+ * services they require are provided here.
+ */
+function resumeOne(...args: Parameters<typeof resumeRun>) {
+  return Effect.provide(resumeRun(...args), fakeProcessServices());
+}
+
+function resumeClaimedOne(...args: Parameters<typeof resumeClaimedRun>) {
+  return Effect.provide(resumeClaimedRun(...args), fakeProcessServices());
+}
+
 const executeWorkflow = vi.fn(async () => {
   throw new Error('tool-use fixtures never launch a workflow');
 });
@@ -135,7 +149,7 @@ describe('resumeRun tool-use queue ownership', () => {
         });
         runExistsMock.mockRejectedValueOnce(failure);
         expect(
-          yield* Effect.flip(resumeRun(RUN, { session, executeWorkflow })),
+          yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })),
         ).toBe(failure);
         expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
         expect(session.followUps.getAll(RUN)).toEqual(['Keep this input.']);
@@ -157,7 +171,7 @@ describe('resumeRun tool-use queue ownership', () => {
       });
 
       const resumed = yield* Effect.forkChild(
-        resumeClaimedRun(RUN, { session, executeWorkflow }),
+        resumeClaimedOne(RUN, { session, executeWorkflow }),
       );
       yield* Effect.promise(() => configRead.promise);
       expect(
@@ -189,7 +203,7 @@ describe('resumeRun tool-use queue ownership', () => {
       });
 
       const resumed = yield* Effect.forkChild(
-        resumeClaimedRun(RUN, { session, executeWorkflow }),
+        resumeClaimedOne(RUN, { session, executeWorkflow }),
       );
       yield* Effect.promise(() => existsRead.promise);
       expect(
@@ -210,7 +224,7 @@ describe('resumeRun tool-use queue ownership', () => {
         seedRecoverable(session, 'first');
 
         expect(
-          yield* resumeRun(RUN, {
+          yield* resumeOne(RUN, {
             session,
             executeWorkflow,
             onFollowUpQueueReady: () => {
@@ -248,14 +262,14 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       const first = yield* Effect.forkChild(
-        resumeRun(RUN, { session, executeWorkflow }),
+        resumeOne(RUN, { session, executeWorkflow }),
       );
       yield* Effect.promise(() =>
         vi.waitFor(() =>
           expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
         ),
       );
-      expect(yield* resumeRun(RUN, { session, executeWorkflow })).toEqual({
+      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
         failed: 'not_resumable',
       });
       barrier.resolve();
@@ -284,7 +298,7 @@ describe('resumeRun tool-use queue ownership', () => {
       });
 
       const resumed = yield* Effect.forkChild(
-        resumeRun(RUN, {
+        resumeOne(RUN, {
           session,
           recovery: submission.lease,
           executeWorkflow,
@@ -307,7 +321,7 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       expect(
-        (yield* Effect.flip(resumeRun(RUN, { session, executeWorkflow })))
+        (yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })))
           .message,
       ).toContain('failed');
       expect(session.followUps.getAll(RUN)).toEqual(['keep me']);
@@ -330,7 +344,7 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       const resuming = yield* Effect.forkChild(
-        resumeRun(RUN, { session, executeWorkflow }),
+        resumeOne(RUN, { session, executeWorkflow }),
       );
       yield* Effect.promise(() =>
         vi.waitFor(() =>
@@ -372,7 +386,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const recovery = submission.lease;
 
       expect(
-        yield* resumeRun(RUN, { session, recovery, executeWorkflow }),
+        yield* resumeOne(RUN, { session, recovery, executeWorkflow }),
       ).toEqual({
         started: true,
         delivered: true,
@@ -404,7 +418,7 @@ describe('resumeRun tool-use queue ownership', () => {
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
       expect(
-        yield* resumeRun(RUN, {
+        yield* resumeOne(RUN, {
           session,
           recovery: submission.lease,
           executeWorkflow,
@@ -419,7 +433,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = createSession();
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
-      expect(yield* resumeRun(RUN, { session, executeWorkflow })).toEqual({
+      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
@@ -439,7 +453,7 @@ describe('resumeRun tool-use queue ownership', () => {
         owner: { pid: 4321, processStart: null, hostname: 'other-host' },
       });
 
-      expect(yield* resumeRun(RUN, { session, executeWorkflow })).toEqual({
+      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
         failed: 'owned_elsewhere',
       });
       expect(session.status.holdState(RUN)).toContain('4321');
@@ -476,7 +490,7 @@ describe('resumeRun tool-use queue ownership', () => {
         });
         arrange();
 
-        expect(yield* resumeRun(RUN, { session, executeWorkflow })).toEqual({
+        expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
           failed: 'unusable_checkpoint',
         });
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
@@ -501,7 +515,7 @@ describe('resumeRun tool-use queue ownership', () => {
         );
 
         expect(
-          (yield* Effect.flip(resumeRun(RUN, { session, executeWorkflow })))
+          (yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })))
             .message,
         ).toContain('KV timeout');
       }),
@@ -519,7 +533,7 @@ describe('resumeRun tool-use queue ownership', () => {
         const onResumeResolved = vi.fn();
 
         expect(
-          yield* resumeRun(RUN, {
+          yield* resumeOne(RUN, {
             session,
             executeWorkflow,
             onResumeResolved,

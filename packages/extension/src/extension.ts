@@ -9,7 +9,7 @@ import PQueue from 'p-queue';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import {
-  agentResponseTextConnector,
+  createAgentResponseTextConnector,
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
@@ -54,7 +54,7 @@ import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTo
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import {
   clearVscodeLeanServerEntries,
-  vscodeLeanLanguageServices,
+  createVscodeLeanLanguageServices,
 } from '@frontend/lean/VscodeIntegration';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
@@ -281,7 +281,7 @@ function installUnhandledRejectionSurface(
   });
 }
 
-async function refreshApiKeyStatus() {
+async function refreshApiKeyStatus(secrets: PlatformSecrets) {
   if (!apiKeyStatusBarItem) {
     return;
   }
@@ -290,7 +290,7 @@ async function refreshApiKeyStatus() {
   // funnel, so ChatGPT subscription and direct API keys agree about whether the
   // first-run CTA should remain visible. Account sign-in is deliberately not in
   // that set: it serves the remote-agent catalog, not model access.
-  const exists = await hasAnyUsableSetupCredential();
+  const exists = await hasAnyUsableSetupCredential(secrets);
   if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
@@ -560,7 +560,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   const runtimeSession = initializeDefaultSession({
     responseTextProcessing: createTexraResponseTextProcessing(
-      agentResponseTextConnector,
+      createAgentResponseTextConnector({
+        secrets,
+        globalState: context.globalState,
+      }),
     ),
   });
   // `disposeStatusListener` and `statusBarItem` are owned solely by
@@ -651,7 +654,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
-  const progressViewProvider = new ProgressViewProvider(context);
+  const progressViewProvider = new ProgressViewProvider(context, secrets);
   await progressViewProvider.initialize();
 
   log.info('TeXRA extension activated');
@@ -660,12 +663,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(), 0);
+  setTimeout(() => void initializeLatexSupport(context.globalState), 0);
   registerCommands(context, progressViewProvider, secrets);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 
-  setLeanLanguageServices(vscodeLeanLanguageServices);
+  setLeanLanguageServices(
+    createVscodeLeanLanguageServices(context.globalState),
+  );
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.
@@ -744,7 +749,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `T | void` to cover abort via signal/timeout; we pass neither, so the
   // task always runs and resolves with `void`.
   const queueApiKeyStatusRefresh = (): Promise<void> =>
-    apiKeyStatusRefreshQueue.add(refreshApiKeyStatus) as Promise<void>;
+    apiKeyStatusRefreshQueue.add(() =>
+      refreshApiKeyStatus(secrets),
+    ) as Promise<void>;
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>
       log.error(`API key status refresh failed: ${toErrorMessage(err)}`),

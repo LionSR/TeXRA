@@ -19,7 +19,7 @@ import {
 } from '@agent/node/persistedFlow';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
-import type { StateStore } from '@platform/interfaces';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentFileLocation,
   AgentRunStateSnapshotSchema,
@@ -62,8 +62,6 @@ import type { ReflectionServices } from './ReflectionServices';
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
   parentStage: StageHandle;
-  /** The process global state (`AppState`): the user's disabled-tool set. */
-  globalState: StateStore;
 }
 
 /**
@@ -77,7 +75,7 @@ async function resolveWorkflowSettingTools(
   toolPolicy: ToolPolicy,
   logger: { warn: (msg: string) => void },
   supportsFunctionCalling: boolean,
-  globalState: StateStore,
+  stores: ModelOptionStores,
 ): Promise<AgentWorkflowSetting> {
   const tools = await resolveAgentTools({
     tools: setting.tools,
@@ -86,7 +84,7 @@ async function resolveWorkflowSettingTools(
     runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     // Workflow agents do not use the tool-use flow's conditional infrastructure.
     toolInjections: new ToolInjectionRegistry(),
-    globalState,
+    stores,
   });
   return { ...setting, tools: supportsFunctionCalling ? tools : [] };
 }
@@ -143,7 +141,7 @@ export async function runReflectionFlow(
     input.toolPolicy,
     logger,
     modelCell.handler.capabilities?.supportsFunctionCalling === true,
-    input.globalState,
+    input.stores,
   );
 
   let shared: ReflectionFlowShared | undefined;

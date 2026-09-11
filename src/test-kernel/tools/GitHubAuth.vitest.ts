@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installPlatform } from '@test/support/setupPlatform';
+import type { PlatformSecrets } from '@platform/secrets';
+import {
+  getGitHubToken,
+  GITHUB_TOKEN_STORAGE_KEY,
+  resolveGitHubTokenSource,
+} from '@tools/github/githubAuth';
 
 /** Secret/env fixture for one row of a token-precedence table. */
 interface TokenCase {
@@ -9,18 +14,30 @@ interface TokenCase {
   readonly processEnv?: Record<string, string>;
   /** Value persisted under `GITHUB_TOKEN_STORAGE_KEY`, if any. */
   readonly secret?: string;
-  /** Env the initialized platform reports through its secrets port. */
+  /** Env the secret store reports through its `getEnv` member. */
   readonly secretsEnv?: Record<string, string>;
 }
 
-async function installPlatformFor(
-  { secret, secretsEnv }: TokenCase,
-  storageKey: string,
-): Promise<void> {
-  await installPlatform({
-    secrets: secret === undefined ? {} : { [storageKey]: secret },
-    secretsEnv,
-  });
+/**
+ * The case's secret store as the port both readers take: the token flows
+ * through this object alone, never through `process.env`.
+ */
+function secretsFor({ secret, secretsEnv }: TokenCase): PlatformSecrets {
+  const stored = new Map<string, string>(
+    secret === undefined ? [] : [[GITHUB_TOKEN_STORAGE_KEY, secret]],
+  );
+  return {
+    get: async (key) => secretsEnv?.[key] ?? stored.get(key),
+    getStored: async (key) => stored.get(key),
+    set: async (key, value) => {
+      stored.set(key, value);
+    },
+    delete: async (key) => {
+      stored.delete(key);
+    },
+    listStoredKeys: async () => [...stored.keys()],
+    getEnv: (name) => secretsEnv?.[name],
+  };
 }
 
 function stubProcessEnv({ processEnv }: TokenCase): void {
@@ -30,7 +47,6 @@ function stubProcessEnv({ processEnv }: TokenCase): void {
 }
 
 beforeEach(() => {
-  vi.resetModules();
   vi.stubEnv('GITHUB_TOKEN', undefined);
   vi.stubEnv('GH_TOKEN', undefined);
 });
@@ -55,7 +71,7 @@ describe('getGitHubToken', () => {
       expected: 'gh-env-token',
     },
     {
-      name: 'prefers the platform secret when the platform is initialized',
+      name: 'prefers the persisted secret over environment fallbacks',
       processEnv: {
         GITHUB_TOKEN: 'github-env-token',
         GH_TOKEN: 'gh-env-token',
@@ -72,10 +88,9 @@ describe('getGitHubToken', () => {
   ])('$name', async (tokenCase) => {
     stubProcessEnv(tokenCase);
 
-    const githubAuth = await import('@tools/github/githubAuth');
-    await installPlatformFor(tokenCase, githubAuth.GITHUB_TOKEN_STORAGE_KEY);
-
-    await expect(githubAuth.getGitHubToken()).resolves.toBe(tokenCase.expected);
+    await expect(getGitHubToken(secretsFor(tokenCase))).resolves.toBe(
+      tokenCase.expected,
+    );
   });
 });
 
@@ -106,13 +121,8 @@ describe('resolveGitHubTokenSource', () => {
       expected: 'env',
     },
   ])('$name', async (tokenCase) => {
-    const githubAuth = await import('@tools/github/githubAuth');
-    await installPlatformFor(tokenCase, githubAuth.GITHUB_TOKEN_STORAGE_KEY);
-
-    const { platform } = await import('@platform/platform');
-
-    await expect(
-      githubAuth.resolveGitHubTokenSource(platform().secrets),
-    ).resolves.toBe(tokenCase.expected);
+    await expect(resolveGitHubTokenSource(secretsFor(tokenCase))).resolves.toBe(
+      tokenCase.expected,
+    );
   });
 });

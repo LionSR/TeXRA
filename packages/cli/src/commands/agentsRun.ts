@@ -57,7 +57,7 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     throw new CliUsageError('Provide --instruction or --instruction-file.');
   }
 
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initLocalCliPlatform(context),
     catch: ensureError,
   });
@@ -67,7 +67,11 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   });
 
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat'),
+    try: () =>
+      selectCliRunModel(context, init.model, 'chat', {
+        secrets: services.secrets,
+        globalState: services.globalState,
+      }),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

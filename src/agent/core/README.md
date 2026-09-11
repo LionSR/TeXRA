@@ -40,9 +40,10 @@ constants, not domain types:
 
 - `constants.ts` — shared preview/threshold constants.
 
-For bootstrap-tolerant state access before `initPlatform()` runs, use
-`tryWorkspaceState()` / `tryGlobalState()` from `@platform/platform` — they
-are the single home for all pre-init platform accessors.
+For the process's global state store, take the `AppState` service from
+`@platform/interfaces` (`yield* AppState` in Effect code, or thread the store
+in from the host's composition root). Workspace-scoped state comes from
+`workspaceRoots().workspaceState`.
 
 ## Importing
 

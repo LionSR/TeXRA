@@ -7,6 +7,7 @@ import {
   isPreferXaiSubscription,
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
+import type { StateStore } from '@platform/interfaces';
 import {
   isCodingPlanQuotaRoute,
   QUOTA_FALLBACK_ROUTES,
@@ -18,7 +19,15 @@ export interface QuotaFallbackRuntime {
   readonly descriptor: QuotaFallbackRoute;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
-  readonly restoreEnabled: (enabled: boolean) => Promise<void>;
+  /**
+   * Restore a captured preference. `state` is the process global state the
+   * caller holds, for the coding-plan routes that write the preference
+   * straight to it; the OAuth routes ignore it.
+   */
+  readonly restoreEnabled: (
+    enabled: boolean,
+    state: StateStore,
+  ) => Promise<void>;
 }
 
 async function setCodexEnabled(enabled: boolean): Promise<void> {

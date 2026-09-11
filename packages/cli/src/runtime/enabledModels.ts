@@ -5,10 +5,15 @@
  * "at least one enabled" and "never enable a retired model" invariants for
  * every host. This module only resolves CLI argument spellings and shapes the
  * rows `texra models enabled` and the `/models` form print.
+ *
+ * The global state store arrives from the caller (the CLI composition root's
+ * own `CliPlatformServices`, or the `AppState` service), so the read and the
+ * write that follows it hit the same store.
  */
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { StateStore } from '@platform/interfaces';
 import { getModelLabel } from '@shared/model/modelLabel';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
@@ -25,8 +30,10 @@ export interface CliEnabledModelRow {
  * Full catalog for enable/disable UIs: every non-retired CLI-supported model,
  * marked with whether it is currently enabled.
  */
-export function listCliEnabledModelCatalog(): readonly CliEnabledModelRow[] {
-  const enabled = new Set(getEnabledModels());
+export function listCliEnabledModelCatalog(
+  state: StateStore,
+): readonly CliEnabledModelRow[] {
+  const enabled = new Set(getEnabledModels(state));
   return knownCliModelIds()
     .filter((id) => !isRetiredModel(id))
     .map((id) => {
@@ -50,6 +57,7 @@ export function listCliEnabledModelCatalog(): readonly CliEnabledModelRow[] {
  * (`grok-4.5` → `grok45`) before handing the id to the shared writer.
  */
 export async function setCliModelEnabled(
+  state: StateStore,
   modelInput: string,
   enabled: boolean,
 ): Promise<{
@@ -64,6 +72,6 @@ export async function setCliModelEnabled(
     );
   }
 
-  const list = await setModelEnabled({ model, enabled });
+  const list = await setModelEnabled({ model, enabled, state });
   return { model, enabled: list.includes(model), list };
 }

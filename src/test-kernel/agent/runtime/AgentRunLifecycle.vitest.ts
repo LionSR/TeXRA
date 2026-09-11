@@ -40,7 +40,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import {
   clearRunStatusForTest,
   seedRunStatusForTest,
@@ -215,6 +218,15 @@ function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
   return parentStageId;
 }
 
+/**
+ * The lifecycle program over the fake host's process services. The suite runs
+ * it on the default runtime rather than a process runtime, so the services it
+ * requires are provided here.
+ */
+function runFlow(...args: Parameters<typeof runFlowWithLifecycle>) {
+  return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
+}
+
 describe('runFlowWithLifecycle', () => {
   // The run's category reaches the handle and the terminal `result` through
   // the one descriptor the lifecycle builds, so a workflow run reports
@@ -226,7 +238,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, async () => waitingResult(runId), {
           onRunEnd: stopSessionsForRun,
         }),
       );
@@ -264,9 +276,7 @@ describe('runFlowWithLifecycle', () => {
 
       try {
         await Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () =>
-            toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-          ),
+          runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
         );
 
         expect(
@@ -291,9 +301,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-        ),
+        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
       );
 
       const runConfigIndex = (await recorded.read()).findIndex(
@@ -324,7 +332,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
           return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
@@ -346,7 +354,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
           expect(runStatus.getSubstate(runId)).toBeUndefined();
           return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
@@ -369,7 +377,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
           expect(runStatus.getSubstate(runId)).toBeUndefined();
           expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
@@ -392,7 +400,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async () => {
             throw new DOMException('Request aborted', 'AbortError');
@@ -419,7 +427,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async () => {
             throw new Error('subagent failed');
@@ -445,7 +453,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async () => {
             expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
@@ -484,11 +492,9 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const running = Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-          { parentRunId: PARENT_RUN_ID },
-        ),
+        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED), {
+          parentRunId: PARENT_RUN_ID,
+        }),
       );
       await vi.waitFor(() => expect(parked.started()).toBe(true));
 
@@ -519,17 +525,13 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
-          {
-            parentRunId,
-            workflowPhase: 'Reduce',
-            onRun: async () => {
-              rosterEmissionsBeforeOnRun = rosters.rosters.length;
-            },
+        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED), {
+          parentRunId,
+          workflowPhase: 'Reduce',
+          onRun: async () => {
+            rosterEmissionsBeforeOnRun = rosters.rosters.length;
           },
-        ),
+        }),
       );
 
       const [firstRoster] = rosters.rosters;
@@ -550,7 +552,7 @@ describe('runFlowWithLifecycle', () => {
     const { runId, ctx } = lifecycleFixture();
 
     const result = await Effect.runPromise(
-      runFlowWithLifecycle(
+      runFlow(
         ctx,
         async () => {
           expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -586,7 +588,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async (handle) => {
             expect(ctx.runScope.signal.aborted).toBe(true);
@@ -629,7 +631,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async () => {
             throw new DOMException('Request aborted', 'AbortError');
@@ -674,7 +676,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           const stop = defaultSession().runs.kill(runId);
           expect(stop.accepted).toBe(true);
           await Effect.runPromise(stop.settlement);
@@ -707,7 +709,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
+        runFlow(
           ctx,
           async () => {
             const stop = defaultSession().runs.kill(runId);
@@ -747,7 +749,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, async () => waitingResult(runId), {
           parentRunId: PARENT_RUN_ID,
         }),
       );
@@ -815,7 +817,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, async () => waitingResult(runId), {
           onRunEnd: stopSessionsForRun,
         }),
       );
@@ -857,9 +859,7 @@ describe('runFlowWithLifecycle', () => {
 
       try {
         const result = await Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () =>
-            toolUseResult(runId, expected.outcome),
-          ),
+          runFlow(ctx, async () => toolUseResult(runId, expected.outcome)),
         );
 
         expect(result.outcome).toBe(expected.outcome);
@@ -891,7 +891,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => carriedResult, {
+        runFlow(ctx, async () => carriedResult, {
           parentRunId: PARENT_RUN_ID,
           onError,
         }),
@@ -923,7 +923,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           throw new DOMException('Request aborted', 'AbortError');
         }),
       );
@@ -955,7 +955,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => {
+          runFlow(ctx, async () => {
             throw new Error('model exploded');
           }),
         ),
@@ -986,7 +986,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => {
+          runFlow(ctx, async () => {
             expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
               true,
             );
@@ -1017,7 +1017,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => carriedResult, {
+        runFlow(ctx, async () => carriedResult, {
           parentRunId: PARENT_RUN_ID,
           onError,
         }),
@@ -1041,7 +1041,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => ({
+          runFlow(ctx, async () => ({
             outcome: RUN_OUTCOME.FAILED,
             runId,
             output: {
@@ -1088,7 +1088,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => ({
+          runFlow(ctx, async () => ({
             outcome: RUN_OUTCOME.FAILED,
             runId,
             output: { category: 'toolUse' as const, response: '', files: [] },

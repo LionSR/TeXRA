@@ -8,14 +8,18 @@ import { stat } from 'node:fs/promises';
 import { Effect } from 'effect';
 
 import {
-  agentResponseTextConnector,
+  createAgentResponseTextConnector,
   openSessionEffect,
   runInSession,
   type SessionHandle,
 } from '@agent/runtime';
 import { hostPort } from '@common/hostPort';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import {
+  createTexraResponseTextProcessing,
+  type ResponseTextProcessing,
+} from '@latex/texraResponseTextProcessing';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -65,6 +69,12 @@ interface DesktopProjectRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly records: DesktopProjectRecords;
+  /**
+   * The process secret store and global state the helper model behind the
+   * latex text-connector resolves against, threaded from the composition root
+   * that opened them.
+   */
+  readonly stores: ModelOptionStores;
   warn(message: string): void;
 }
 
@@ -141,10 +151,6 @@ export function readRememberedDesktopProjects(
   });
 }
 
-const responseTextProcessing = createTexraResponseTextProcessing(
-  agentResponseTextConnector,
-);
-
 /**
  * Stop every run the project still owns and wait for their drivers to settle
  * them (CANCELLED, flow record preserved for a later resume), so the session
@@ -181,6 +187,7 @@ async function stopProjectRuns(session: SessionHandle): Promise<void> {
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
+  responseTextProcessing: ResponseTextProcessing,
 ): Effect.Effect<DesktopProject, Error> {
   return Effect.gen(function* () {
     const session = yield* openSessionEffect({ roots, responseTextProcessing });
@@ -213,13 +220,22 @@ export function openDesktopProjectRegistry(
   options: DesktopProjectRegistryOptions,
 ): Effect.Effect<DesktopProjectRegistry, Error> {
   return Effect.gen(function* () {
+    // One connector for every project session: the helper model it asks
+    // resolves against the process stores the root opened, not per project.
+    const responseTextProcessing = createTexraResponseTextProcessing(
+      createAgentResponseTextConnector(options.stores),
+    );
     const projects = new Map<string, DesktopProject>();
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const listeners = new Set<() => void>();
     let activeRoot: string | undefined;
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(undefined, options.processRoots),
+      openProjectSession(
+        undefined,
+        options.processRoots,
+        responseTextProcessing,
+      ),
     );
     const notify = () => {
       for (const listener of [...listeners]) listener();
@@ -267,7 +283,7 @@ export function openDesktopProjectRegistry(
           // Acquire the session and install its registry owner before
           // interruption can leave this operation.
           return yield* Effect.uninterruptible(
-            openProjectSession(root, roots).pipe(
+            openProjectSession(root, roots, responseTextProcessing).pipe(
               Effect.tap((project) =>
                 Effect.sync(() => {
                   projects.set(root, project);

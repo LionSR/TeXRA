@@ -12,7 +12,7 @@ import { executed } from '@tools/core/result';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { SetupPlatform } from './platform';
 
 /**
  * Allowlist of VS Code extensions the setup agent may install.
@@ -41,7 +41,7 @@ type InstallVscodeExtensionInput = z.infer<
 
 const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
   function* (input: InstallVscodeExtensionInput) {
-    const platform = getSetupPlatform();
+    const platform = yield* SetupPlatform;
     const id = input.extensionId.trim();
 
     if (!ALLOWED_EXTENSIONS.has(id)) {

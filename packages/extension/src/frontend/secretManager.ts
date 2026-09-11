@@ -4,12 +4,8 @@ import {
   hasUsableApiKey as resolvedHasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  GITHUB_TOKEN_STORAGE_KEY,
-  resolveGitHubTokenSource,
-} from '@tools/github/githubAuth';
+import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import type * as vscode from 'vscode';
 
 export type { ApiProvider };
@@ -31,10 +27,6 @@ export class SecretManager {
   public static readonly API_PROVIDERS = API_PROVIDERS;
 
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
-
-  public static gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
-    return resolveGitHubTokenSource(platform().secrets);
-  }
 
   public static getApiProviderQuickPickItems(
     secrets: PlatformSecrets,

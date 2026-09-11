@@ -13,9 +13,26 @@ import {
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
 import type { QuotaFallbackRuntime } from '@model/quotaFallbackRoutes';
+import type { AppState } from '@platform/interfaces';
 import type { QuotaFallbackRoute } from '@shared/quotaFallbackRoutes';
 import type { RunId } from '@shared/schemas';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  installPlatform,
+} from '@test/support/setupPlatform';
+
+/**
+ * `it.effect` for this suite. Every controller entry point reads the process
+ * global state through `AppState`; the fake host installed for the test
+ * supplies it, so the services are provided per test rather than captured at
+ * collection time.
+ */
+function itHosted<A, E>(
+  name: string,
+  body: () => Effect.Effect<A, E, AppState>,
+): void {
+  it.effect(name, () => Effect.provide(body(), fakeProcessServices()));
+}
 
 const PROVIDERS = [
   'openai',
@@ -29,7 +46,7 @@ function testRuntime(
   >,
   getEnabled: () => boolean,
   setEnabled: (enabled: boolean) => Promise<void>,
-  restoreEnabled: (enabled: boolean) => Promise<void> = setEnabled,
+  restoreEnabled: QuotaFallbackRuntime['restoreEnabled'] = setEnabled,
 ): QuotaFallbackRuntime {
   return {
     descriptor: {
@@ -168,7 +185,7 @@ function createHarness(options: HarnessOptions = {}): {
 }
 
 describe('ProgressApiKeyRetryController', () => {
-  it.effect(
+  itHosted(
     'requires a changed usable key after upstream credit depletion',
     () =>
       Effect.gen(function* () {
@@ -191,7 +208,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect('does not retry when a depleted provider key was not changed', () =>
+  itHosted('does not retry when a depleted provider key was not changed', () =>
     Effect.gen(function* () {
       const harness = createHarness({
         keys: { anthropic: 'old-key' },
@@ -212,27 +229,25 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  it.effect(
-    'does not change routing after the retry request was replaced',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { anthropic: 'stored-key' },
-          retryPending: false,
-        });
+  itHosted('does not change routing after the retry request was replaced', () =>
+    Effect.gen(function* () {
+      const harness = createHarness({
+        keys: { anthropic: 'stored-key' },
+        retryPending: false,
+      });
 
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-a' as RunId,
-          requestId: 'retry:stale',
-          provider: 'anthropic',
-          exhaustionReason: 'copilot-subscription',
-        });
+      yield* harness.controller.useOwnApiKey({
+        stream: 'stream-a' as RunId,
+        requestId: 'retry:stale',
+        provider: 'anthropic',
+        exhaustionReason: 'copilot-subscription',
+      });
 
-        expect(harness.retries).toStrictEqual([]);
-      }),
+      expect(harness.retries).toStrictEqual([]);
+    }),
   );
 
-  it.effect(
+  itHosted(
     'accepts a changed key from any provider when depletion has no provider hint',
     () =>
       Effect.gen(function* () {
@@ -254,7 +269,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'restores routing when the exact retry disappears during the switch',
     () =>
       Effect.gen(function* () {
@@ -275,7 +290,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'disables the ChatGPT subscription and retries with the existing OpenAI key, no prompt',
     () =>
       Effect.gen(function* () {
@@ -298,7 +313,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'does not disable the subscription when no usable OpenAI key is available',
     () =>
       Effect.gen(function* () {
@@ -318,7 +333,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect('does not disable the GLM Coding Plan when it is already off', () =>
+  itHosted('does not disable the GLM Coding Plan when it is already off', () =>
     Effect.gen(function* () {
       const harness = createHarness({
         keys: { glm: 'stored-glm' },
@@ -337,7 +352,7 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  it.effect(
+  itHosted(
     'prepares an existing direct key for a fresh Copilot fallback without retrying in place',
     () =>
       Effect.gen(function* () {
@@ -370,7 +385,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'keeps a Copilot fallback on the OpenAI key instead of ChatGPT access',
     () =>
       Effect.gen(function* () {
@@ -391,7 +406,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'restores ChatGPT access when an eligible Copilot fallback does not start',
     () =>
       Effect.gen(function* () {
@@ -412,7 +427,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'keeps the global Copilot preference while scoping direct routing to the fallback launch',
     () =>
       Effect.gen(function* () {
@@ -433,7 +448,7 @@ describe('ProgressApiKeyRetryController', () => {
         );
         const harness = createHarness();
 
-        expect(prefersCopilotRoute('sonnet5')).toBe(true);
+        expect(prefersCopilotRoute('sonnet5', store)).toBe(true);
         const started = yield* harness.controller.runCopilotFallbackWithRouting(
           {
             stream: 'stream-a' as RunId,
@@ -445,7 +460,7 @@ describe('ProgressApiKeyRetryController', () => {
             expect(copilotRouteOverride).toBe('direct');
             // A concurrent launch still sees the user's standing preference; only
             // the replacement request receives the direct-route override.
-            expect(prefersCopilotRoute('sonnet5')).toBe(true);
+            expect(prefersCopilotRoute('sonnet5', store)).toBe(true);
             return Effect.succeed(true);
           },
         );
@@ -454,11 +469,11 @@ describe('ProgressApiKeyRetryController', () => {
         // The suppression is launch-scoped and process-local: the persisted
         // preference is never written, so a crash mid-launch cannot drop it.
         expect(persistedWrites).toEqual([]);
-        expect(prefersCopilotRoute('sonnet5')).toBe(true);
+        expect(prefersCopilotRoute('sonnet5', store)).toBe(true);
       }),
   );
 
-  it.effect(
+  itHosted(
     'reports the retry failure over a failed rollback restore, and the restore failure alone when the retry did not run',
     () =>
       Effect.gen(function* () {
@@ -499,71 +514,69 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
-    'serializes routing rollback across concurrent stream retries',
-    () =>
-      Effect.gen(function* () {
-        const firstTrigger = pDefer<boolean>();
-        let retryBPendingCheck = false;
-        const triggerOrder: string[] = [];
-        const harness = createHarness({
-          keys: { openai: 'stored-openai' },
-          isRetryPending: (_stream, requestId) => {
-            if (requestId === 'retry-b') retryBPendingCheck = true;
-            return true;
-          },
-          triggerRetry: (stream) =>
-            Effect.suspend(() => {
-              triggerOrder.push(stream);
-              return stream === 'stream-a'
-                ? Effect.promise(() => firstTrigger.promise)
-                : Effect.succeed(true);
-            }),
-        });
-
-        const first = yield* Effect.forkChild(
-          harness.controller.useOwnApiKey({
-            stream: 'stream-a' as RunId,
-            requestId: 'retry-a',
-            provider: 'openai',
-            exhaustionReason: 'chatgpt-subscription',
+  itHosted('serializes routing rollback across concurrent stream retries', () =>
+    Effect.gen(function* () {
+      const firstTrigger = pDefer<boolean>();
+      let retryBPendingCheck = false;
+      const triggerOrder: string[] = [];
+      const harness = createHarness({
+        keys: { openai: 'stored-openai' },
+        isRetryPending: (_stream, requestId) => {
+          if (requestId === 'retry-b') retryBPendingCheck = true;
+          return true;
+        },
+        triggerRetry: (stream) =>
+          Effect.suspend(() => {
+            triggerOrder.push(stream);
+            return stream === 'stream-a'
+              ? Effect.promise(() => firstTrigger.promise)
+              : Effect.succeed(true);
           }),
-        );
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(harness.chatGptSubscriptionValues).toStrictEqual([false]),
-          ),
-        );
-        const second = yield* Effect.forkChild(
-          harness.controller.useOwnApiKey({
-            stream: 'stream-b' as RunId,
-            requestId: 'retry-b',
-            provider: 'openai',
-            exhaustionReason: 'chatgpt-subscription',
-          }),
-        );
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(retryBPendingCheck).toBe(true)),
-        );
+      });
 
-        // Retry B is queued behind retry A; its routing transaction must not start
-        // while A's trigger is still pending.
-        expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
-        expect(triggerOrder).toStrictEqual(['stream-a']);
+      const first = yield* Effect.forkChild(
+        harness.controller.useOwnApiKey({
+          stream: 'stream-a' as RunId,
+          requestId: 'retry-a',
+          provider: 'openai',
+          exhaustionReason: 'chatgpt-subscription',
+        }),
+      );
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(harness.chatGptSubscriptionValues).toStrictEqual([false]),
+        ),
+      );
+      const second = yield* Effect.forkChild(
+        harness.controller.useOwnApiKey({
+          stream: 'stream-b' as RunId,
+          requestId: 'retry-b',
+          provider: 'openai',
+          exhaustionReason: 'chatgpt-subscription',
+        }),
+      );
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(retryBPendingCheck).toBe(true)),
+      );
 
-        firstTrigger.resolve(false);
-        yield* Fiber.join(first);
-        yield* Fiber.join(second);
-        expect(harness.chatGptSubscriptionValues).toStrictEqual([
-          false,
-          true,
-          false,
-        ]);
-        expect(triggerOrder).toStrictEqual(['stream-a', 'stream-b']);
-      }),
+      // Retry B is queued behind retry A; its routing transaction must not start
+      // while A's trigger is still pending.
+      expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
+      expect(triggerOrder).toStrictEqual(['stream-a']);
+
+      firstTrigger.resolve(false);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(harness.chatGptSubscriptionValues).toStrictEqual([
+        false,
+        true,
+        false,
+      ]);
+      expect(triggerOrder).toStrictEqual(['stream-a', 'stream-b']);
+    }),
   );
 
-  it.effect('refuses the API-key switch for a Kimi Code-exclusive model', () =>
+  itHosted('refuses the API-key switch for a Kimi Code-exclusive model', () =>
     Effect.gen(function* () {
       const harness = createHarness({ keys: { openai: 'stored-openai' } });
 
@@ -579,7 +592,7 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  it.effect(
+  itHosted(
     'rechecks retry identity after the routing queue admits the request',
     () =>
       Effect.gen(function* () {
@@ -607,7 +620,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'prompts for the kimiCode credential when an exclusive model rebinds on credit depletion',
     () =>
       Effect.gen(function* () {
@@ -639,7 +652,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'disables the Kimi Code preference for a dual-backend Kimi credit retry even when live routing would say not coding',
     () =>
       Effect.gen(function* () {
@@ -675,7 +688,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'leaves the Kimi Code preference untouched for a non-Kimi-Code kimi3 credit retry',
     () =>
       Effect.gen(function* () {
@@ -707,7 +720,7 @@ describe('ProgressApiKeyRetryController', () => {
       }),
   );
 
-  it.effect(
+  itHosted(
     'rechecks Copilot fallback retry identity after the routing queue admits it',
     () =>
       Effect.gen(function* () {

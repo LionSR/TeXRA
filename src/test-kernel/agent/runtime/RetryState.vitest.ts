@@ -38,6 +38,7 @@ import {
   attachManualRetryOnlyError,
   attachSdkErrorMetadata,
 } from '@common/errors/sdkError/errorMetadata';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
   AgentCategory,
@@ -48,7 +49,7 @@ import {
 import type { RunId } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { StreamLog } from '@shared/session/traceEntries';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
 import {
   clearRunStatusForTest,
   seedRunStatusForTest,
@@ -94,6 +95,7 @@ interface TestRetryServices {
     ModelCell,
     'getClient' | 'rebind' | 'route' | 'handler' | 'swap' | 'modelId'
   >;
+  stores: ModelOptionStores;
 }
 
 /** The client seam a retry node reads; scenarios stub the parts they drive. */
@@ -145,6 +147,12 @@ function retryServices(
     logger: noopTrace,
     setting: { temperature: 0 },
     modelCell: testRetryModelCell(),
+    // The run's stores, as the launch threads them: read from the host
+    // installed right now, because scenarios reinstall it per test.
+    stores: {
+      secrets: installedHost().platform.secrets,
+      globalState: installedHost().platform.globalState,
+    },
     ...overrides,
   };
 }

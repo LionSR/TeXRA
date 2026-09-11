@@ -22,13 +22,13 @@ import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { SetupPlatformShape } from '@tools/setup/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
   fileTypeFor,
   type FileTypeProbe,
 } from '@platform/defaults/fsEntryTypeBits';
 import { getCoreSettingDefault } from '@shared/schemas';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 function fakeFsError(code: string, message: string): Error {

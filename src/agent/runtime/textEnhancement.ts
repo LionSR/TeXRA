@@ -1,5 +1,6 @@
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -8,13 +9,21 @@ import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 
 const log = createLog('TextEnhancement');
 
+/**
+ * Polish `text` with the configured helper model.
+ *
+ * `stores` are the process secret store and global state the calling host
+ * already holds (the `Secrets` / `AppState` services), which the helper model
+ * is resolved against.
+ */
 export async function polishTextWithAI(
   text: string,
+  stores: ModelOptionStores,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
     const prompt = await renderPolishPrompt(text);
 
-    const helperResult = await createHelperModelKit();
+    const helperResult = await createHelperModelKit(stores);
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }

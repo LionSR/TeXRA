@@ -24,11 +24,11 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
-import type { StateStore } from '@platform/interfaces';
 import { aggregateId } from '@shared/schemas';
 import type {
   RetryErrorInfo,
@@ -101,8 +101,12 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
   onModelChanged: (model: string) => void;
   /** The process's conditional tool injections (`ToolInjections`). */
   toolInjections: ToolInjections['Service'];
-  /** The process global state (`AppState`): the user's disabled-tool set. */
-  globalState: StateStore;
+  /**
+   * The process secret store and global state (`Secrets` / `AppState`): the
+   * user's disabled-tool set, and the stores a mid-run model switch rebuilds
+   * its handler from.
+   */
+  stores: ModelOptionStores;
   /** Caller-supplied tools available only to this run. */
   tools?: readonly ITool[];
   /** Reports whether terminal finalization should retain the resume record. */
@@ -192,7 +196,7 @@ export async function runToolUseFlow(
     approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
     runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
-    globalState: input.globalState,
+    stores: input.stores,
   });
   const overlayTools: ITool[] = [];
   const overlayNames = new Set<string>();
@@ -295,7 +299,10 @@ export async function runToolUseFlow(
       // check. Keep the UI permissive rather than guessing their format here.
       return undefined;
     }
-    const nextKey = resolveModelHandlerCompatibilityKey(nextConfig);
+    const nextKey = resolveModelHandlerCompatibilityKey(
+      nextConfig,
+      input.stores.globalState,
+    );
     if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
     return activeKey === nextKey
       ? undefined
@@ -320,6 +327,7 @@ export async function runToolUseFlow(
 
     const nextHandler = (await createModelHandler(
       nextConfig,
+      input.stores,
       services.runScope.session.responseTextProcessing,
     )) as RunModelHandler;
     if (

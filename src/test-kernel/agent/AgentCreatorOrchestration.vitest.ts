@@ -12,6 +12,8 @@ import {
   type CreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
+import type { ModelOptionStores } from '@model/computeModelOptions';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +32,15 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
   validateAgentYamlContent: mocks.validateAgentYamlContent,
 }));
+
+/**
+ * The creator only forwards its stores to `createHelperModelKit`, which this
+ * suite mocks, so empty stores are enough to exercise the orchestration.
+ */
+const STORES: ModelOptionStores = {
+  secrets: new FakeSecrets(),
+  globalState: new FakeStateStore(),
+};
 
 const CONFIG: CreatorConfig = {
   workflow: {
@@ -165,7 +176,7 @@ describe('agent creator orchestration', () => {
       events.push('write');
     });
 
-    await runAgentCreator(CONFIG, 'workflow', ui);
+    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
 
     expect(ui.promptAgentName).toHaveBeenCalledWith('Workflow');
     expect(ui.promptDescription).toHaveBeenCalledWith(
@@ -199,7 +210,7 @@ describe('agent creator orchestration', () => {
       })
       .mockImplementationOnce(() => undefined);
 
-    await runAgentCreator(CONFIG, 'workflow', ui);
+    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
 
     expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);
     expect(fetchModel).toHaveBeenCalledTimes(2);
@@ -220,7 +231,7 @@ describe('agent creator orchestration', () => {
       new TypeError('synthetic network unavailable'),
     );
 
-    await runAgentCreator(CONFIG, 'workflow', ui);
+    await runAgentCreator(CONFIG, 'workflow', ui, STORES);
 
     expect(mocks.createHelperModelKit).toHaveBeenCalledTimes(2);
     expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);

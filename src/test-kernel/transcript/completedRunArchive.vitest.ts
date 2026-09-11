@@ -51,6 +51,7 @@ import {
   cliHistoryDetailNdjsonRecord,
 } from '@cli/runtime/history';
 import { createHostRunActions } from '@controllers/session/hostRunActions';
+import { Secrets } from '@platform/secrets';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LOG_LEVELS,
@@ -66,7 +67,11 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import {
   createProcessSession,
   createTestSession,
@@ -266,21 +271,29 @@ describe('completedRunArchive facade', () => {
     // event table, so every reader of it — the view's fold included, asserted
     // below — sees the redacted text; the private sidecars above stay exact.
     const runAgentRequest = vi.fn(async () => undefined);
-    const actions = createHostRunActions({
-      session: taskSession,
-      runAgentRequest,
-      loadModelOptions: async () => [],
-      promptForApiKey: async () => undefined,
-      showInfo: vi.fn(),
-      showWarning: vi.fn(),
-    });
+    const actions = await Effect.runPromise(
+      createHostRunActions({
+        session: taskSession,
+        runAgentRequest,
+        loadModelOptions: async () => [],
+        promptForApiKey: async () => undefined,
+        showInfo: vi.fn(),
+        showWarning: vi.fn(),
+      }).pipe(
+        Effect.provide(Secrets.layer(() => installedHost().platform.secrets)),
+      ),
+    );
     await Effect.runPromise(actions.runNew(runId));
     expect(runAgentRequest).toHaveBeenCalledWith({ config });
     const trace = await Effect.runPromise(assembleTrace(runId, taskSession));
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const details = await readCliHistoryDetails(runId);
+    const { secrets, globalState } = installedHost().platform;
+    const details = await readCliHistoryDetails(
+      { secrets, globalState },
+      runId,
+    );
     expect(details).not.toBeNull();
     if (!details) throw new Error('Expected history details');
     const publicRows = await Effect.runPromise(
@@ -643,7 +656,9 @@ describe('completedRunArchive facade', () => {
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
         );
-      }),
+        // The production resume path resolves tools from `ToolInjections`, a
+        // process service this program does not inherit from the test runtime.
+      }).pipe(Effect.provide(fakeProcessServices())),
   );
 
   it('reports none, with no conversation evidence, when the run has no transcript', async () => {

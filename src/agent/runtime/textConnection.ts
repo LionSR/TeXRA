@@ -7,6 +7,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 
 const CASE_CONNECTORS: Record<string, string> = {
   A: '',
@@ -34,35 +35,40 @@ const SYSTEM_PROMPT =
 /**
  * Agent-owned connector strategy for the latex response-text policy: asks the
  * configured helper model how two strings should be joined in a LaTeX
- * context. Hosts inject this through the latex-owned factory; it keeps the
- * helper-model call out of the latex layer.
+ * context. Hosts inject the result through the latex-owned factory; it keeps
+ * the helper-model call out of the latex layer.
+ *
+ * A {@link ResponseTextConnector} takes only the two strings, so the process
+ * stores the helper model is resolved against are bound here, at the host root
+ * that owns them, rather than looked up per call.
  */
-export const agentResponseTextConnector: ResponseTextConnector = async (
-  previous,
-  next,
-) => {
-  try {
-    const helperResult = await createHelperModelKit();
-    if (!helperResult.kit) {
-      log.debug(`Skipping connector helper call: ${helperResult.reason}`);
-      return DEFAULT_CONNECTOR;
-    }
+export function createAgentResponseTextConnector(
+  stores: ModelOptionStores,
+): ResponseTextConnector {
+  return async (previous, next) => {
+    try {
+      const helperResult = await createHelperModelKit(stores);
+      if (!helperResult.kit) {
+        log.debug(`Skipping connector helper call: ${helperResult.reason}`);
+        return DEFAULT_CONNECTOR;
+      }
 
-    const text = await runHelperModelCompletion(helperResult.kit, {
-      userPrompt: buildPrompt(previous, next),
-      systemPrompt: SYSTEM_PROMPT,
-    });
-    const choice = text.trim();
-    const connector = CASE_CONNECTORS[choice];
-    if (connector === undefined) {
-      log.debug(`Invalid choice: ${choice}. Defaulting to space.`);
+      const text = await runHelperModelCompletion(helperResult.kit, {
+        userPrompt: buildPrompt(previous, next),
+        systemPrompt: SYSTEM_PROMPT,
+      });
+      const choice = text.trim();
+      const connector = CASE_CONNECTORS[choice];
+      if (connector === undefined) {
+        log.debug(`Invalid choice: ${choice}. Defaulting to space.`);
+        return DEFAULT_CONNECTOR;
+      }
+      return connector;
+    } catch (err) {
+      const write =
+        classifyAgentError(err) === 'missing-api-key' ? log.debug : log.error;
+      write(`Error resolving text connector: ${getSdkErrorMessage(err)}`);
       return DEFAULT_CONNECTOR;
     }
-    return connector;
-  } catch (err) {
-    const write =
-      classifyAgentError(err) === 'missing-api-key' ? log.debug : log.error;
-    write(`Error resolving text connector: ${getSdkErrorMessage(err)}`);
-    return DEFAULT_CONNECTOR;
-  }
-};
+  };
+}

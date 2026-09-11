@@ -17,6 +17,7 @@ import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   CompactPickerKeyHints,
   FormFrame,
@@ -27,6 +28,12 @@ import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext'
 
 interface ModelListFormProps {
   readonly currentModel: string;
+  /**
+   * The secret store and global state the availability computation reads. Ink
+   * components run no Effect, so the process stores arrive as a prop from the
+   * surface that opened the form.
+   */
+  readonly stores: ModelOptionStores;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -54,7 +61,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
-    load: getCliModelAccessList,
+    load: () => getCliModelAccessList({ stores: props.stores }),
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>

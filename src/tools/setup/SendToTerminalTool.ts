@@ -16,7 +16,7 @@ import { executed } from '@tools/core/result';
 // Local file imports
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { SetupPlatform } from './platform';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
@@ -52,7 +52,7 @@ type SendToTerminalInput = z.infer<typeof SendToTerminalInputSchema>;
 const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   input: SendToTerminalInput,
 ) {
-  const terminal = getSetupPlatform().terminal;
+  const { terminal } = yield* SetupPlatform;
   if (!terminal) {
     return yield* Effect.fail(
       new ToolError(

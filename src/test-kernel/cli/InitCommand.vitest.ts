@@ -42,6 +42,7 @@ import {
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 function modelAccess(
@@ -90,7 +91,12 @@ describe('CLI init command', () => {
       .mockReturnValue([
         { name: 'assistant', category: AgentCategory.ToolUse },
       ]);
-    mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+    // The command threads the stores this call hands back into the model
+    // access list, so the mock returns the pair a real init would.
+    mocks.initCliPlatform.mockReset().mockResolvedValue({
+      secrets: new FakeSecrets(),
+      globalState: new FakeStateStore(),
+    });
     mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;

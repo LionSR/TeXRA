@@ -1,15 +1,14 @@
 /**
  * GitHub personal access token lookup.
  *
- * Host-neutral: reads from the platform secrets port (each host wires its own
- * secret store) with GitHub environment-variable fallbacks. The token is
+ * Host-neutral: reads from the secret store its caller hands it (each host
+ * wires its own) with GitHub environment-variable fallbacks. The token is
  * persisted under `github.token` (set via the Git settings tab, `/config` →
  * GitHub token, or CLI secrets),
  * while the conventional env vars are `GH_TOKEN` and `GITHUB_TOKEN`; hence the
- * explicit fallback. Because every host wires `platform().secrets`, GitHub
+ * explicit fallback. Because every host provides the `Secrets` service, GitHub
  * tools work in the CLI and desktop too, not just the extension.
  */
-import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
@@ -62,11 +61,9 @@ function getGitHubEnvToken(
   return undefined;
 }
 
-export async function getGitHubToken(): Promise<string | undefined> {
-  // Every caller runs post-init (tool status probes, GitHub client, setup
-  // commands), so an uninitialized platform here is a programming error and
-  // must throw instead of silently degrading to a process.env read.
-  const secrets = platform().secrets;
+export async function getGitHubToken(
+  secrets: PlatformSecrets,
+): Promise<string | undefined> {
   const stored = await secrets.get(GITHUB_TOKEN_STORAGE_KEY);
   return (
     normalizeGitHubToken(stored) ??

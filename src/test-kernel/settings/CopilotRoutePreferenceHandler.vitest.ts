@@ -85,7 +85,7 @@ import type {
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
 
 const GEMINI_PRO: LanguageModelInfo = {
   id: 'gemini-3.1-pro-preview',
@@ -124,11 +124,16 @@ type RefreshSurface = {
 const subscriptions: vscode.Disposable[] = [];
 
 function createHandler(): SettingsViewMessageHandler {
-  const handler = new SettingsViewMessageHandler({
-    subscriptions,
-    extensionPath: '/ext',
-    languageModelAccessInformation: { canSendRequest: mocks.canSendRequest },
-  } as unknown as vscode.ExtensionContext);
+  const { globalState, secrets } = installedHost().platform;
+  const handler = new SettingsViewMessageHandler(
+    {
+      subscriptions,
+      extensionPath: '/ext',
+      globalState,
+      languageModelAccessInformation: { canSendRequest: mocks.canSendRequest },
+    } as unknown as vscode.ExtensionContext,
+    secrets,
+  );
   vi.spyOn(
     handler as unknown as RefreshSurface,
     'sendModelSelectionData',
@@ -193,6 +198,7 @@ describe('Copilot route preference handler', () => {
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
         'gemini31p',
         true,
+        installedHost().platform.globalState,
       );
       expect(port.sendRequest).not.toHaveBeenCalled();
       expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
@@ -471,6 +477,7 @@ describe('Copilot route preference handler', () => {
     expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
       'gemini31p',
       false,
+      installedHost().platform.globalState,
     );
     expect(port.selectModels).not.toHaveBeenCalled();
     expect(mocks.selectChatModels).not.toHaveBeenCalled();

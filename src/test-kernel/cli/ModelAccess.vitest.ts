@@ -13,22 +13,17 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
-
-const getGLMCodingPlanMock = vi.hoisted(() => vi.fn());
-const getProviderEndpointMock = vi.hoisted(() => vi.fn());
-const getUseOpenRouterMock = vi.hoisted(() => vi.fn());
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
-}));
-
-vi.mock('@utils/config/providerConfig', () => ({
-  getGLMCodingPlan: getGLMCodingPlanMock,
-  getProviderEndpoint: getProviderEndpointMock,
-  getUseOpenRouter: getUseOpenRouterMock,
-  useChinaRegion: vi.fn(() => true),
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -51,6 +46,36 @@ vi.mock('llm-zoo', async (importOriginal) => {
 });
 
 const computeModelOptionsDataMock = vi.mocked(computeModelOptionsData);
+
+/**
+ * The GLM routing settings the status formatter reads, as the installed fake
+ * host's global state rather than a module mock of `@utils/config/providerConfig`:
+ * the read path (`resolveGlmRoute` -> `readPlatformSetting`) resolves its
+ * stores through the host, and the kernel's setup file installs one before
+ * this file's mocks are registered.
+ */
+const routingSettings = new FakeStateStore();
+
+setupPlatform({}, { globalState: routingSettings });
+
+async function seedGlmRouting(settings: {
+  readonly codingPlan?: boolean;
+  readonly providerEndpoint?: string;
+  readonly useOpenRouter?: boolean;
+}): Promise<void> {
+  await routingSettings.update(
+    GlobalStateKey.GLM_CODING_PLAN,
+    settings.codingPlan ?? false,
+  );
+  await routingSettings.update(
+    GlobalStateKey.ENDPOINT_GLM,
+    settings.providerEndpoint ?? '',
+  );
+  await routingSettings.update(
+    GlobalStateKey.USE_OPENROUTER,
+    settings.useOpenRouter ?? false,
+  );
+}
 
 function model(
   value: string,
@@ -91,12 +116,21 @@ type ResolveCliRunnableModelOptions = Parameters<
   typeof selectCliRunnableModel
 >[1];
 
+/**
+ * The process stores every access lookup reads, threaded in by the caller the
+ * way the CLI composition root threads its own.
+ */
+const stores: ModelOptionStores = {
+  secrets: new FakeSecrets(),
+  globalState: new FakeStateStore(),
+};
+
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],
   model: string,
-  options: Omit<ResolveCliRunnableModelOptions, 'accessList'>,
+  options: Omit<ResolveCliRunnableModelOptions, 'accessList' | 'stores'>,
 ) {
-  return selectCliRunnableModel(model, { ...options, accessList });
+  return selectCliRunnableModel(model, { ...options, accessList, stores });
 }
 
 const INTERACTIVE_RECOVERY = {
@@ -128,15 +162,13 @@ const GLM52_MISSING_KEY_ENTRY = model('glm52', {
 });
 
 function expectModelOptionsRequested(models: string[]): void {
-  expect(computeModelOptionsDataMock).toHaveBeenCalledWith(models);
+  expect(computeModelOptionsDataMock).toHaveBeenCalledWith(stores, models);
 }
 
 describe('CLI model access resolution', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     computeModelOptionsDataMock.mockReset();
-    getGLMCodingPlanMock.mockReturnValue(false);
-    getProviderEndpointMock.mockReturnValue('');
-    getUseOpenRouterMock.mockReturnValue(false);
+    await seedGlmRouting({});
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -311,11 +343,14 @@ describe('CLI model access resolution', () => {
     },
   ])(
     'formats model picker status: $name',
-    ({ entry, expected, codingPlan, providerEndpoint, useOpenRouter }) => {
-      if (codingPlan !== undefined)
-        getGLMCodingPlanMock.mockReturnValue(codingPlan);
-      getProviderEndpointMock.mockReturnValue(providerEndpoint ?? '');
-      getUseOpenRouterMock.mockReturnValue(useOpenRouter ?? false);
+    async ({
+      entry,
+      expected,
+      codingPlan,
+      providerEndpoint,
+      useOpenRouter,
+    }) => {
+      await seedGlmRouting({ codingPlan, providerEndpoint, useOpenRouter });
       expect(formatModelStatusForCli(entry)).toBe(expected);
     },
   );
@@ -469,6 +504,7 @@ describe('CLI model access resolution', () => {
       selectCliRunnableModel('haiku3', {
         fallbackReason: 'explicit-override',
         accessList: [],
+        stores,
       }),
     ).rejects.toThrow('Model "haiku3" is not available (retired).');
   });
@@ -519,7 +555,7 @@ describe('CLI model access resolution', () => {
       }),
     ]);
 
-    await expect(getCliModelAccessList()).resolves.toMatchObject([
+    await expect(getCliModelAccessList({ stores })).resolves.toMatchObject([
       {
         available: true,
         model: {
@@ -543,7 +579,7 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      getCliModelAccessList({ models: ['hiddenFixtureModel'] }),
+      getCliModelAccessList({ stores, models: ['hiddenFixtureModel'] }),
     ).resolves.toMatchObject([
       {
         available: false,
@@ -574,7 +610,7 @@ describe('CLI model access resolution', () => {
       }),
     ]);
 
-    const entries = await getCliModelAccessList();
+    const entries = await getCliModelAccessList({ stores });
 
     expect(entries).toMatchObject([
       { model: { value: 'sonnet46T' }, available: true },
@@ -597,9 +633,10 @@ describe('CLI model access resolution', () => {
     await expect(
       selectCliRunnableModel('HIDDENFIXTUREMODEL', {
         fallbackReason: 'explicit-override',
+        stores,
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
-    expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(2, [
+    expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(2, stores, [
       'hiddenFixtureModel',
     ]);
   });
@@ -616,6 +653,7 @@ describe('CLI model access resolution', () => {
       selectCliRunnableModel('hiddenFixtureModel', {
         fallbackReason: 'explicit-override',
         accessList: [missingKeyModel('deepseekT')],
+        stores,
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expectModelOptionsRequested(['hiddenFixtureModel']);
@@ -632,6 +670,7 @@ describe('CLI model access resolution', () => {
         ],
         {
           accessList: [model('sonnet46T')],
+          stores,
         },
       ),
     ).resolves.toEqual({ model: 'sonnet46T' });
@@ -650,6 +689,7 @@ describe('CLI model access resolution', () => {
     await expect(
       loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
         accessList: [model('sonnet46T')],
+        stores,
       }),
     ).resolves.toMatchObject({
       available: false,
@@ -684,6 +724,7 @@ describe('CLI model access resolution', () => {
     await expect(
       loadCliModelAccessEntry('User Facing Fixture', {
         accessList: [model('sonnet46T')],
+        stores,
       }),
     ).resolves.toMatchObject({
       available: false,
@@ -705,6 +746,7 @@ describe('CLI model access resolution', () => {
     await expect(
       selectCliRunnableModel('hiddenFixtureModel', {
         fallbackReason: 'explicit-override',
+        stores,
       }),
     ).rejects.toThrow(
       'Model "hiddenFixtureModel" is configured but has no option data.',

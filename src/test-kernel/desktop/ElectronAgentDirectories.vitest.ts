@@ -10,7 +10,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 // Local imports
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
+import { AppState, NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type {
   AgentDirectoriesPort,
@@ -149,12 +149,16 @@ describe('desktop agent directory bootstrap', () => {
       });
 
       return {
-        // The desktop entry runs this program on the process runtime; the
-        // harness hands the Effect to the test, which runs it on its own
-        // @effect/vitest runtime instead.
+        // The desktop entry runs this program on the process runtime, whose
+        // `AppState` is the store the entry opened; the harness hands the
+        // Effect to the test, which runs it on its own @effect/vitest runtime
+        // instead, so the harness provides its own store the same way.
         bootstrapNodeAgentDirectories: (
           options: NodeAgentDirectoryBootstrapOptions,
-        ) => bootstrapEffect(options),
+        ) =>
+          bootstrapEffect(options).pipe(
+            Effect.provide(AppState.layer(() => globalStateStore)),
+          ),
         agentDirectories: platform().agentDirectories,
         globalStateStore,
         resourcesPath,

@@ -5,7 +5,10 @@ import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
 } from '@controllers/settingsView/SettingsModelSelectionController';
-import { getEnabledModels } from '@model/computeModelOptions';
+import {
+  getEnabledModels,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
@@ -13,11 +16,12 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
 const resolveModelOptions = async (
+  _stores: ModelOptionStores,
   models: readonly string[],
 ): Promise<ModelOptionData[]> =>
   models
@@ -40,6 +44,7 @@ function createController(
 ): SettingsModelSelectionController {
   return new SettingsModelSelectionController({
     globalState: new FakeStateStore(),
+    secrets: new FakeSecrets(),
     resolveModelOptions,
     getCopilotRoutes: async () => new Map(),
     getPreferredCopilotRouteModels: () => [],
@@ -104,8 +109,8 @@ describe('SettingsModelSelectionController', () => {
 
   it('keeps Kimi K3 under Moonshot while preserving its effective route', async () => {
     const controller = createController({
-      resolveModelOptions: async (models) =>
-        (await resolveModelOptions(models)).map((option) =>
+      resolveModelOptions: async (stores, models) =>
+        (await resolveModelOptions(stores, models)).map((option) =>
           option.value === 'kimi3'
             ? {
                 ...option,

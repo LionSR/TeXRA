@@ -166,9 +166,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     private readonly options: DesktopCredentialSettingsControllerOptions,
   ) {
     this.subscriptionUsage =
-      options.subscriptionUsage ?? new SubscriptionUsageService();
+      options.subscriptionUsage ??
+      new SubscriptionUsageService({ secrets: options.secrets });
     this.modelSelectionController = new SettingsModelSelectionController({
       globalState: options.globalState,
+      secrets: options.secrets,
     });
     this.profileController = new SettingsProfileController({
       host: 'desktop',
@@ -178,6 +180,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
     });
     this.profileKeyController = new SettingsProfileKeyController({
+      secrets: options.secrets,
       prompt: {
         input: options.prompt.input,
         confirm: options.prompt.confirm,

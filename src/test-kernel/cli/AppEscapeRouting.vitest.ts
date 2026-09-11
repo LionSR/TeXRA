@@ -52,6 +52,7 @@ import type { TranscriptRow } from '@shared/transcript';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -261,6 +262,9 @@ function finishNestedHierarchyAndFocusRoot(): void {
 
 function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
   return {
+    // The status bar's subscription probe never runs in these key-routing
+    // suites; the App only requires the store to be present.
+    secrets: new FakeSecrets(),
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
     onWorkflowControl: vi.fn(),

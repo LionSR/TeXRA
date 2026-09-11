@@ -8,7 +8,7 @@
  * why a preferred route is unavailable.
  */
 
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
@@ -21,9 +21,9 @@ export type CopilotRouteOverride = 'direct';
  * Copilot discovery never matches a retired or deprecated base model, so a
  * preference for one could never resolve to a route; it drops out at read.
  */
-function copilotRouteModels(): readonly string[] {
-  return platform()
-    .globalState.get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, [])
+function copilotRouteModels(state: Pick<StateStore, 'get'>): readonly string[] {
+  return state
+    .get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, [])
     .filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
 }
 
@@ -31,29 +31,35 @@ function copilotRouteModels(): readonly string[] {
  * Persisted canonical model ids whose Copilot route the user prefers. Settings
  * needs the raw list so a model the editor no longer discovers still surfaces
  * its undo (#9659).
+ *
+ * `state` is the process global state the caller holds (the `AppState`
+ * service, or the store a host root threaded down).
  */
-export function preferredCopilotRouteModels(): readonly string[] {
-  return [...copilotRouteModels()];
+export function preferredCopilotRouteModels(
+  state: Pick<StateStore, 'get'>,
+): readonly string[] {
+  return [...copilotRouteModels(state)];
 }
 
 /** Whether the user prefers the Copilot route for this canonical base model. */
-export function prefersCopilotRoute(model: string): boolean {
-  return copilotRouteModels().includes(model);
+export function prefersCopilotRoute(
+  model: string,
+  state: Pick<StateStore, 'get'>,
+): boolean {
+  return copilotRouteModels(state).includes(model);
 }
 
 /** Persist (or clear) the Copilot route preference for one base model. */
 export async function setCopilotRoutePreference(
   model: string,
   preferred: boolean,
+  state: StateStore,
 ): Promise<void> {
-  const current = copilotRouteModels();
+  const current = copilotRouteModels(state);
   const next = preferred
     ? [...new Set([...current, model])]
     : current.filter((entry) => entry !== model);
-  await platform().globalState.update(
-    GlobalStateKey.COPILOT_ROUTE_MODELS,
-    next,
-  );
+  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
 }
 
 /**
@@ -64,8 +70,9 @@ export async function setCopilotRoutePreference(
  */
 export function copilotRouteUnavailableReason(
   model: string,
+  state: Pick<StateStore, 'get'>,
 ): string | undefined {
-  if (!prefersCopilotRoute(model)) return undefined;
+  if (!prefersCopilotRoute(model, state)) return undefined;
   const access = copilotRouteForModel(model)?.access;
   if (access === 'allowed') return undefined;
   switch (access) {

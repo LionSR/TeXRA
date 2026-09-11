@@ -36,6 +36,7 @@ import {
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   readOnboardingFlags,
@@ -179,6 +180,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     }
     return yield* runOnboardingFlow({
       globalState: services.globalState,
+      secrets: services.secrets,
       firstRun: true,
       colorEnabled: context.stdoutColorEnabled,
     });
@@ -199,6 +201,7 @@ export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
   return yield* runOnboardingFlow({
     globalState: services.globalState,
+    secrets: services.secrets,
     firstRun: false,
     colorEnabled,
   });
@@ -206,6 +209,8 @@ export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
 
 const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
   readonly globalState: StateStore;
+  /** The store a picked provider key is written to — the root's own. */
+  readonly secrets: PlatformSecrets;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Effect.fn.Return<CliOnboardingResult, Error> {
@@ -219,6 +224,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
       renderCliPrompt<OnboardingResolution>(
         (resolve) => (
           <OnboardingApp
+            secrets={options.secrets}
             pickerSubtitle={
               options.firstRun
                 ? 'No provider API key is configured. Choose how to power model calls:'
@@ -280,6 +286,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
 type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
 interface OnboardingAppProps {
+  readonly secrets: PlatformSecrets;
   readonly pickerSubtitle: string;
   readonly onResolve: (resolution: OnboardingResolution) => void;
 }
@@ -366,7 +373,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           setSaving(true);
           void effectRuntime().runPromise(
             Effect.tryPromise({
-              try: () => saveProviderApiKey(keyProvider, key),
+              try: () => saveProviderApiKey(props.secrets, keyProvider, key),
               catch: ensureError,
             }).pipe(
               Effect.tap(() =>

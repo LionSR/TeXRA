@@ -29,9 +29,10 @@ import {
 import {
   disposeProcessRuntime,
   installProcessRuntime,
-  processServicesLayer,
 } from '@controllers/session/sessionLayer';
+import type { StateStore } from '@platform/interfaces';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -57,22 +58,51 @@ export interface AgentRuntime {
   readonly platform: AgentPlatform;
   readonly roots: WorkspaceRoots;
   /**
-   * The process services over this platform, as the process runtime holds
-   * them. The package's `Sessions` programs run on the embedder's runtime,
-   * so a launch there is given these explicitly rather than carrying them
-   * on the public API's types.
+   * What the process services over this platform are built from, as the
+   * process runtime holds them. The package's `Sessions` programs run on the
+   * embedder's runtime, so a launch there is given those services explicitly
+   * rather than carrying them on the public API's types.
+   *
+   * The stores rather than the layer over them: a `Layer` here would name
+   * `ToolInjections`, whose declarations reach the tool registry and through
+   * it every provider SDK's types, and the package publishes no provider
+   * type. `processServicesLayer` builds the layer where it is used.
    */
-  readonly services: ReturnType<typeof processServicesLayer>;
+  readonly services: {
+    readonly secrets: () => PlatformSecrets;
+    readonly appState: () => StateStore;
+    readonly setup: SetupPlatformShape;
+  };
 }
 
 /**
- * The package's setup capabilities: its runs are headless, like the CLI's,
- * and it starts no interactive sign-in of its own, so a setup tool that asks
- * for one is told it did not complete.
+ * What the package answers a setup tool with: nothing, loudly. It is
+ * embedded in someone else's process, so it is none of the three product
+ * hosts `ToolHost` names and it has no sign-in flow of its own to start.
+ * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
+ * tools branch on a surface that is not there, and answering `signIn` with
+ * `false` would report a sign-in that can never happen as one that merely
+ * did not complete. Each member says so instead, on read, the way the test
+ * kernel's fake does — the same loud failure this package had before it
+ * provided `SetupPlatform` at all.
  */
+const NO_SETUP_PLATFORM =
+  'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
+
 const PACKAGE_SETUP: SetupPlatformShape = {
-  host: 'cli',
-  signIn: async () => false,
+  get host(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  signIn: () => Promise.reject(new Error(NO_SETUP_PLATFORM)),
+  get commands(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  get extensions(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  get terminal(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
 };
 
 /** One composition's hold on the composed process: what it reads, and the
@@ -177,7 +207,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     runtime: {
       platform,
       roots: platform.roots,
-      services: processServicesLayer(processServices),
+      services: processServices,
     },
     release: Effect.suspend(() => {
       if (!held) return Effect.void;

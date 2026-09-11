@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
-  preferredCopilotRouteModels,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -23,7 +25,7 @@ import type {
 } from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
 
 // The discovered-editor-model fixture must track an llm-zoo base model that
 // is active (neither deprecated nor retired) and Copilot-documented (carries
@@ -50,6 +52,12 @@ const GPT_56: LanguageModelInfo = {
   maxInputTokens: 128_000,
   access: 'allowed',
 };
+
+/** The installed fake host's stores, as the model-option readers take them. */
+function modelOptionStores(): ModelOptionStores {
+  const { secrets, globalState } = installedHost().platform;
+  return { secrets, globalState };
+}
 
 function languageModelPort(
   models: readonly LanguageModelInfo[],
@@ -183,14 +191,19 @@ describe('runtime model registry', () => {
     );
 
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteUnavailableReason('gemini31p')).toBeUndefined();
+    const { globalState } = installedHost().platform;
+    expect(
+      copilotRouteUnavailableReason('gemini31p', globalState),
+    ).toBeUndefined();
     // A preference for a model the editor does not offer cannot route.
-    expect(copilotRouteUnavailableReason('gpt56')).toMatch(
+    expect(copilotRouteUnavailableReason('gpt56', globalState)).toMatch(
       /does not currently/,
     );
 
-    await setCopilotRoutePreference('gemini31p', false);
-    expect(copilotRouteUnavailableReason('gemini31p')).toBeUndefined();
+    await setCopilotRoutePreference('gemini31p', false, globalState);
+    expect(
+      copilotRouteUnavailableReason('gemini31p', globalState),
+    ).toBeUndefined();
   });
 
   it('replaces route state after invalidation', async () => {
@@ -270,7 +283,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(['gemini31p']);
+    const options = await computeModelOptionsData(modelOptionStores(), [
+      'gemini31p',
+    ]);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -302,7 +317,10 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(undefined);
+    const options = await computeModelOptionsData(
+      modelOptionStores(),
+      undefined,
+    );
 
     expect(options.map((option) => option.value)).toEqual(['gpt55']);
   });
@@ -326,7 +344,10 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(undefined);
+    const options = await computeModelOptionsData(
+      modelOptionStores(),
+      undefined,
+    );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -351,7 +372,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(['gemini31p']);
+    const options = await computeModelOptionsData(modelOptionStores(), [
+      'gemini31p',
+    ]);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -371,7 +394,9 @@ describe('Copilot route in model pickers', () => {
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(['gemini31p']);
+    const options = await computeModelOptionsData(modelOptionStores(), [
+      'gemini31p',
+    ]);
 
     expect(options[0]).toEqual(
       expect.objectContaining({

@@ -2,7 +2,7 @@ import { LRUCache } from 'lru-cache';
 
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
@@ -63,13 +63,24 @@ export interface SubscriptionUsageCredentials {
   useGlmChina?(): boolean | Promise<boolean>;
 }
 
-interface SubscriptionUsageServiceInit {
+interface SubscriptionUsageServiceOptions {
   readonly http?: SubscriptionUsageHttp;
-  readonly credentials?: SubscriptionUsageCredentials;
   readonly now?: () => number;
   readonly cacheTtlMs?: number;
   readonly requestTimeoutMs?: number;
 }
+
+/**
+ * A caller supplies either the process secret store — the service then reads
+ * credentials through {@link defaultCredentials} — or a credential set of its
+ * own. One of the two is required, so there is no secret-store lookup left to
+ * fall back to.
+ */
+type SubscriptionUsageServiceInit = SubscriptionUsageServiceOptions &
+  (
+    | { readonly secrets: PlatformSecrets }
+    | { readonly credentials: SubscriptionUsageCredentials }
+  );
 
 interface SubscriptionUsageAdapter {
   /** Credential-derived request variant (today: the GLM region flag). */
@@ -79,22 +90,29 @@ interface SubscriptionUsageAdapter {
   ) => Promise<ParsedSubscriptionUsage | null>;
 }
 
-const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
-  async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
-    const coordinator = codexCoordinator();
-    if (!(await coordinator.loadSession())) return null;
-    const session = await coordinator.getFreshSession();
-    return {
-      accessToken: session.accessToken,
-      ...(session.accountId ? { accountId: session.accountId } : {}),
-    };
-  },
-  async loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
-    const key = await lookupApiKey(platform().secrets, provider);
-    return key === undefined ? undefined : exposeApiKey(key);
-  },
-  useGlmChina: () => useChinaRegion('glm'),
-});
+/** The credential readers over the secret store the caller holds. */
+function defaultCredentials(
+  secrets: PlatformSecrets,
+): SubscriptionUsageCredentials {
+  return Object.freeze({
+    async loadChatGpt(): Promise<ChatGptUsageCredential | null> {
+      const coordinator = codexCoordinator();
+      if (!(await coordinator.loadSession())) return null;
+      const session = await coordinator.getFreshSession();
+      return {
+        accessToken: session.accessToken,
+        ...(session.accountId ? { accountId: session.accountId } : {}),
+      };
+    },
+    async loadApiKey(
+      provider: 'kimiCode' | 'glm',
+    ): Promise<string | undefined> {
+      const key = await lookupApiKey(secrets, provider);
+      return key === undefined ? undefined : exposeApiKey(key);
+    },
+    useGlmChina: () => useChinaRegion('glm'),
+  });
+}
 
 /**
  * Read-only, host-neutral access to coding-plan usage. Results are short-lived,
@@ -123,9 +141,12 @@ export class SubscriptionUsageService {
     Promise<SubscriptionUsageSnapshot>
   >();
 
-  constructor(init: SubscriptionUsageServiceInit = {}) {
+  constructor(init: SubscriptionUsageServiceInit) {
     this.http = init.http ?? fetch;
-    this.credentials = init.credentials ?? DEFAULT_CREDENTIALS;
+    this.credentials =
+      'credentials' in init
+        ? init.credentials
+        : defaultCredentials(init.secrets);
     this.now = init.now ?? Date.now;
     this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;

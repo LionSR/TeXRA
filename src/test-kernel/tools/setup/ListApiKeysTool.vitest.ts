@@ -2,42 +2,28 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { beforeEach, describe, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 // Local imports
-import { apiKeySecretName } from '@model/apiProviders';
+import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
+import { platform } from '@platform/platform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
-
-const mocks = vi.hoisted(() => ({
-  listStoredKeys: vi.fn<() => Effect.Effect<readonly string[], unknown>>(),
-}));
-
-vi.mock('@tools/setup/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
-  return {
-    ...actual,
-    setupSecrets: {
-      ...actual.setupSecrets,
-      providers: ['anthropic', 'openai'],
-      listStoredKeys: mocks.listStoredKeys,
-    },
-  };
-});
 
 const tool = new ListApiKeysTool();
 
 type ToolCallResult = Awaited<ReturnType<ListApiKeysTool['call']>>;
 
-beforeEach(() => {
-  mocks.listStoredKeys.mockReset();
-});
+setupPlatform();
 
+/** Seed the fake host's credential store with exactly `keys`, then audit it. */
 async function callWithStoredKeys(
   keys: readonly string[],
 ): Promise<ToolCallResult> {
-  mocks.listStoredKeys.mockReturnValue(Effect.succeed(keys));
+  await installPlatform({
+    secrets: Object.fromEntries(keys.map((key) => [key, 'stored-value'])),
+  });
   const result = await tool.call({});
   assert.equal(result.status, 'executed');
   return result;
@@ -49,8 +35,8 @@ function outputOf(result: ToolCallResult): string {
 
 describe('list_api_keys tool', () => {
   it('reports unsupported enumeration instead of an empty store', async () => {
-    mocks.listStoredKeys.mockReturnValue(
-      Effect.fail(new Error('SecretStorage key enumeration is not supported')),
+    vi.spyOn(platform().secrets, 'listStoredKeys').mockRejectedValue(
+      new Error('SecretStorage key enumeration is not supported'),
     );
 
     const result = await tool.call({});
@@ -85,11 +71,11 @@ describe('list_api_keys tool', () => {
     assert.doesNotMatch(outputOf(result), /texra\.supabase\.session/);
   });
 
-  it('summary counts reflect platform.secrets.providers, not the global import', async () => {
+  it('counts stored provider keys against the full provider catalog', async () => {
     const result = await callWithStoredKeys([apiKeySecretName('anthropic')]);
     assert.equal(
       result.summary,
-      '1 stored secret: 1/2 persisted provider API keys',
+      `1 stored secret: 1/${API_PROVIDERS.length} persisted provider API keys`,
     );
   });
 

@@ -9,6 +9,7 @@ import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
@@ -27,10 +28,11 @@ const MODEL_ACCESS_USAGE =
  * "Saved the <provider> API key." confirmation line.
  */
 export async function applyCliProviderApiKey(
+  secrets: PlatformSecrets,
   provider: ApiProvider,
   key: string,
 ): Promise<string | undefined> {
-  await saveProviderApiKey(provider, key);
+  await saveProviderApiKey(secrets, provider, key);
   bumpCodexPreferenceVersion();
   const codingPlan = codingPlanForApiProvider(provider);
   if (!codingPlan) return undefined;
@@ -79,7 +81,7 @@ export function applyCliModelAccessInput(
     const normalized = routeInput.trim().toLowerCase();
 
     if (!normalized || normalized === 'status') {
-      const lines = await loadCliDetailedAccountStatusLines();
+      const lines = await loadCliDetailedAccountStatusLines(context.secrets);
       output.appendOutcome(lines.join('\n'));
       return;
     }
@@ -99,7 +101,9 @@ export function applyCliModelAccessInput(
   });
 }
 
-export async function showCliAuthStatus(): Promise<void> {
-  const lines = await loadCliDetailedAccountStatusLines();
+export async function showCliAuthStatus(
+  secrets: PlatformSecrets,
+): Promise<void> {
+  const lines = await loadCliDetailedAccountStatusLines(secrets);
   transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }

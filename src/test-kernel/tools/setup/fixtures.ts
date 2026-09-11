@@ -1,15 +1,15 @@
 // Local imports
 import type { TerminalRunResult } from '@hosts/uiHosts';
-import type { SetupPlatform } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 
 /**
- * Build a fully stubbed host-varying `SetupPlatform` for tool unit tests.
+ * Build a fully stubbed host-varying setup platform for tool unit tests.
  * Process-global credential, auth, model-access, and config behavior comes
  * from the shared platform and is tested through those canonical surfaces.
  */
 export function createFakeSetupPlatform(
-  overrides: Partial<SetupPlatform> = {},
-): SetupPlatform {
+  overrides: Partial<SetupPlatformShape> = {},
+): SetupPlatformShape {
   return {
     host: overrides.host ?? 'cli',
     signIn: overrides.signIn ?? (async () => false),

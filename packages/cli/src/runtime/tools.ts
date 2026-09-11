@@ -1,4 +1,5 @@
 // Local imports
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   EXTERNAL_TOOL_DEFS,
@@ -52,14 +53,21 @@ function noteForTool(
   );
 }
 
-export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
+/**
+ * `state` is the process global state the caller holds (the composition root's
+ * `CliPlatformServices`, or the `AppState` service), so the disabled-tool read
+ * and the toggle that follows it hit the same store.
+ */
+export async function readCliToolStatuses(
+  state: StateStore,
+): Promise<CliToolStatusRecord[]> {
   const checks = new Map(
     (await effectRuntime().runPromise(runExternalToolChecks())).map((r) => [
       r.id,
       r,
     ]),
   );
-  const disabledIds = getDisabledToolIds();
+  const disabledIds = getDisabledToolIds(state);
 
   return getCliToolDefs().map((def) => {
     // `runProbes` maps over the same EXTERNAL_TOOL_DEFS this filters, so the
@@ -88,9 +96,10 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
 }
 
 export async function readCliToolStatus(
+  state: StateStore,
   id: string,
 ): Promise<CliToolStatusRecord | undefined> {
-  return (await readCliToolStatuses()).find((record) => record.id === id);
+  return (await readCliToolStatuses(state)).find((record) => record.id === id);
 }
 
 function findCliToolDef(id: string): ExternalToolDef | undefined {
@@ -123,12 +132,13 @@ export function readCliToolGuide(
 }
 
 export async function setCliToolEnabled(
+  state: StateStore,
   id: string,
   enabled: boolean,
 ): Promise<boolean> {
   const def = findCliToolDef(id);
   if (!def?.toggleable) return false;
-  await setToolEnabled(id, enabled);
+  await setToolEnabled(id, enabled, state);
   return true;
 }
 

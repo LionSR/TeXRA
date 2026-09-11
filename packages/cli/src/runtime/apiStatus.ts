@@ -1,6 +1,6 @@
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { configuredApiKeyProviders } from '@model/apiProviders';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
@@ -26,8 +26,6 @@ import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */
 type SubscriptionUsageReader = Pick<SubscriptionUsageService, 'getUsage'>;
-
-const SubscriptionUsage = new SubscriptionUsageService();
 
 export function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
@@ -60,9 +58,11 @@ export interface CliModelAccessOverview {
 }
 
 /** Read both account sessions and the effective model-access route. */
-export async function loadCliModelAccessOverview(): Promise<CliModelAccessOverview> {
+export async function loadCliModelAccessOverview(
+  secrets: PlatformSecrets,
+): Promise<CliModelAccessOverview> {
   const [access, profile] = await Promise.all([
-    readCliModelAccessStatus(),
+    readCliModelAccessStatus(secrets),
     getCliAuthProfile(),
   ]);
   const lines = [
@@ -99,15 +99,18 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
-async function personalKeyProviders(): Promise<string[]> {
-  return configuredApiKeyProviders(platform().secrets);
+async function personalKeyProviders(
+  secrets: PlatformSecrets,
+): Promise<string[]> {
+  return configuredApiKeyProviders(secrets);
 }
 
 /** Compact status lines used by the launcher. */
 export async function loadCliApiStatus(
+  secrets: PlatformSecrets,
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
 ): Promise<readonly string[]> {
-  const configuredPersonalKeyProviders = await personalKeyProviders();
+  const configuredPersonalKeyProviders = await personalKeyProviders(secrets);
   const authLine = formatCliAuthStatusLine(profile);
 
   const personalKeysLine = formatPersonalApiKeysLine(
@@ -140,19 +143,23 @@ function formatModelPreferenceLine(
 
 /** Render each detailed account/access fact on its owning route. */
 export async function loadCliDetailedAccountStatusLines(
+  secrets: PlatformSecrets,
   options: {
     readonly subscriptionUsage?: SubscriptionUsageReader;
     readonly now?: number;
   } = {},
 ): Promise<string[]> {
   const [access, profile, providers] = await Promise.all([
-    readCliModelAccessStatus(),
+    readCliModelAccessStatus(secrets),
     getCliAuthProfile(),
-    personalKeyProviders(),
+    personalKeyProviders(secrets),
   ]);
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
-  // path. Ordinary chat startup and the status bar never call this service.
-  const usageReader = options.subscriptionUsage ?? SubscriptionUsage;
+  // path. Ordinary chat startup and the status bar never call this service, and
+  // every read below forces a refresh, so the service is built over the caller's
+  // secret store here rather than held as a module singleton.
+  const usageReader =
+    options.subscriptionUsage ?? new SubscriptionUsageService({ secrets });
   const [chatGptUsage, codingPlanUsageEntries] = await Promise.all([
     access.chatGptSignedIn
       ? usageReader.getUsage('chatgpt', { forceRefresh: true })

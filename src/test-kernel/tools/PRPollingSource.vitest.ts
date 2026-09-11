@@ -3,6 +3,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+// Local imports - platform
+import { Secrets } from '@platform/secrets';
+
+// Local imports - test support
+import { FakeSecrets } from '@test/support/FakePlatform';
+
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@tools/github/githubClient';
@@ -14,7 +20,7 @@ import {
 } from '@tools/github/PRPollingSource';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
-// Local imports - test support
+// Local imports - test fixtures
 import {
   createPRCurrentShaState,
   createPRSubscriptionState,
@@ -80,6 +86,13 @@ function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
     }),
   });
 }
+
+/**
+ * The process secret store `subscribe`'s polling reads its GitHub token from.
+ * The annotation fetch is mocked here, so no member is called; the layer
+ * satisfies the requirement the host root provides in production.
+ */
+const secretsLayer = Secrets.layer(() => new FakeSecrets());
 
 /** A source whose subscription states stay active for the whole drain. */
 function createDrainSource(): PRPollingSource {
@@ -248,6 +261,6 @@ describe('PRPollingSource annotation drain', () => {
       expect(listener).toHaveBeenCalledOnce();
       expect(listener.mock.calls[0][0]).toContain('[WARNING]');
       disposable.dispose();
-    }),
+    }).pipe(Effect.provide(secretsLayer)),
   );
 });

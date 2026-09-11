@@ -171,7 +171,10 @@ export async function runChat(
     quietLogs: true,
   });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession();
+  const runtimeSession = await initializeCliTranscriptSession({
+    secrets: services.secrets,
+    globalState: services.globalState,
+  });
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
@@ -226,6 +229,10 @@ export async function runChat(
   let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {
+      stores: {
+        secrets: services.secrets,
+        globalState: services.globalState,
+      },
       fallbackReason: defaults.modelSource,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         CHAT_STARTUP_MODEL_RECOVERY,
@@ -256,6 +263,8 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
+    secrets: services.secrets,
+    state: services.globalState,
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
@@ -398,6 +407,8 @@ export async function runChat(
     initialModelSource: defaults.modelSource,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
+    secrets: services.secrets,
+    state: services.globalState,
   });
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
@@ -444,6 +455,8 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    secrets: services.secrets,
+    state: services.globalState,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
@@ -478,6 +491,7 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
+      secrets={services.secrets}
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)
       }

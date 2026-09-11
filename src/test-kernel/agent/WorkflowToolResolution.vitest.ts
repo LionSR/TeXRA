@@ -10,16 +10,39 @@ import {
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
+import { platform } from '@platform/platform';
 import {
   AgentCategory,
   type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
-import { platform } from '@platform/platform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testModelCell } from './modelCellTestUtils';
+
+/**
+ * Workflow (reflection) runs resolve tools with no process injections: the
+ * flow hands `resolveAgentTools` its own empty registry. Capture the argument
+ * at the real seam so the invariant stays asserted.
+ */
+const observed = vi.hoisted(() => ({ injectedToolNames: [] as string[][] }));
+
+vi.mock('@agent/runtime/agentToolResolution', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/agentToolResolution')>();
+  return {
+    ...actual,
+    resolveAgentTools: (
+      input: Parameters<typeof actual.resolveAgentTools>[0],
+    ) => {
+      observed.injectedToolNames.push(
+        input.toolInjections.list().map((injection) => injection.toolName),
+      );
+      return actual.resolveAgentTools(input);
+    },
+  };
+});
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'workflow-tool-resolution',
@@ -86,6 +109,7 @@ async function observeWorkflowTools({
     signal: new AbortController().signal,
   });
   const observedTools: ToolDefinition[][] = [];
+  observed.injectedToolNames.length = 0;
   const modelCell = testModelCell(
     stopAfterToolObservationHandler(observedTools, supportsFunctionCalling),
     CONFIG.model,
@@ -103,7 +127,10 @@ async function observeWorkflowTools({
           prompt: PROMPT,
           logger,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
-          globalState: platform().globalState,
+          stores: {
+            secrets: platform().secrets,
+            globalState: platform().globalState,
+          },
           userVarChannels: { MODEL: CONFIG.model },
           modelCell,
           toolPolicy: createToolPolicy({
@@ -114,6 +141,7 @@ async function observeWorkflowTools({
         }),
     );
 
+    expect(observed.injectedToolNames).toEqual([[]]);
     expect(result.outcome).toBe('failed');
     expect(result.error?.message).toContain('Tool list observed');
     return observedTools;

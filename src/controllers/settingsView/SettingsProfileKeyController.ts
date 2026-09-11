@@ -5,9 +5,11 @@ import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 // Local imports - model
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 // Local imports - platform
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 
 interface SettingsProfileKeyControllerDeps {
+  /** The process secret store the host holds, where the keys are written. */
+  secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   externalOpener: Pick<ExternalOpener, 'openExternal'>;
   getProviderDisplayName(provider: string): string;
@@ -58,7 +60,7 @@ export class SettingsProfileKeyController {
       );
       if (!confirmed) return false;
 
-      await platform().secrets.delete(secretNameFor(provider));
+      await this.deps.secrets.delete(secretNameFor(provider));
       void this.deps.prompt.info(`${displayName} API key has been removed`);
       return true;
     });
@@ -76,7 +78,7 @@ export class SettingsProfileKeyController {
     apiKey: string,
   ): Promise<boolean> {
     const displayName = this.deps.getProviderDisplayName(provider);
-    await storeCredential(platform().secrets, {
+    await storeCredential(this.deps.secrets, {
       secretName: secretNameFor(provider),
       value: apiKey,
       kind: 'provider',

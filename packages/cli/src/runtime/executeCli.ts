@@ -19,8 +19,9 @@ import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { AppState, SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -264,8 +265,9 @@ export function executeCliRequest(
   return Effect.gen(function* () {
     // Transcript persistence is a launch prerequisite for every headless run.
     // This executes before runtime-host construction and before runAgent.
+    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
     const session = yield* Effect.tryPromise({
-      try: initializeCliTranscriptSession,
+      try: () => initializeCliTranscriptSession(stores),
       catch: ensureError,
     });
     session.setApprovalPolicy(runContext.approvalPolicy);

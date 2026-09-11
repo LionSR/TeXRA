@@ -49,6 +49,7 @@ import type {
 } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import type { AppState } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
   emptyRunEndOutput,
@@ -90,7 +91,11 @@ export interface AgentEngine {
   readonly resumeToolUseTurn: (
     resume: ToolUseResumeData,
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-  ) => Effect.Effect<AgentRuntimeFlowResult, Error, ToolInjections | AppState>;
+  ) => Effect.Effect<
+    AgentRuntimeFlowResult,
+    Error,
+    ToolInjections | AppState | Secrets
+  >;
 }
 
 let agentEngine: AgentEngine | undefined;
@@ -197,7 +202,10 @@ function bindAbortSignals(
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentRuntimeFlowResult, ToolInjections | AppState> {
+): ChildRunStrategy<
+  AgentRuntimeFlowResult,
+  ToolInjections | AppState | Secrets
+> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent`/`resumeToolUseTurn` never reject for a
@@ -223,7 +231,7 @@ export function createNativeSubagentStrategy(
     ) => Effect.Effect<
       AgentRuntimeFlowResult,
       Error,
-      ToolInjections | AppState
+      ToolInjections | AppState | Secrets
     >,
   ) {
     lastErr = undefined;

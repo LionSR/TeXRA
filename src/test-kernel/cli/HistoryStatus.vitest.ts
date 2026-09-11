@@ -29,7 +29,7 @@ import {
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installedHost, setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -51,6 +51,14 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
 
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
+
+// The process stores every history read needs, taken from the fake host this
+// suite installs.
+function historyStores() {
+  const { secrets, globalState } = installedHost().platform;
+  return { secrets, globalState };
+}
+
 beforeEach(() => {
   teardownDefaultSession();
   initializeDefaultSession({});
@@ -173,7 +181,7 @@ describe('CLI history status formatting', () => {
       const id = 'bad-f10' as RunId;
       await seedFlowRecord(id, config, agent, shared);
 
-      const details = await readCliHistoryDetails(id);
+      const details = await readCliHistoryDetails(historyStores(), id);
 
       expect(details?.hasFlowRecord).toBe(true);
       expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -204,7 +212,7 @@ describe('CLI history status formatting', () => {
       }),
     );
 
-    const details = await readCliHistoryDetails(id);
+    const details = await readCliHistoryDetails(historyStores(), id);
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -235,7 +243,7 @@ describe('CLI history status formatting', () => {
       cursor: { nextNodeId: 'start' },
     });
 
-    const details = await readCliHistoryDetails(id);
+    const details = await readCliHistoryDetails(historyStores(), id);
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);

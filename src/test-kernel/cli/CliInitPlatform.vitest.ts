@@ -8,6 +8,7 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -16,7 +17,6 @@ import {
   claudeAgentSessionsFor,
   codexThreadsFor,
 } from '@tools/agentCliSessionStores';
-import { effectRuntime } from '@platform/processRuntime';
 import { SetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';

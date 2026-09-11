@@ -61,7 +61,7 @@ import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { effectRuntime } from '@platform/processRuntime';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKeyOf,
@@ -133,7 +133,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     DEBOUNCE_OPTIONS_MS,
   );
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly secrets: PlatformSecrets,
+  ) {
     this.logger = createChannelTrace('ProgressViewProvider');
     const session = defaultSession();
     this.session = session;
@@ -152,7 +155,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = workspaceRoots();
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
-      globalState: platform().globalState,
+      globalState: context.globalState,
+      secrets,
       fileOptions: () => workspaceFileOptions(roots.workspace),
       readRecentCommits: async () => {
         const isGitRepo =
@@ -175,9 +179,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         })) ?? [],
       debugMode: isDebugModeEnabled,
       apiKeyBanner: async () => ({
-        visible: !(await hasUsableSetupCredential(
-          platform().secrets,
-          (message) => log.warn(message),
+        visible: !(await hasUsableSetupCredential(this.secrets, (message) =>
+          log.warn(message),
         )),
       }),
       dependencyBanner: async () => {
@@ -230,6 +233,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session,
       extensionPath: context.extensionPath,
       globalState: context.globalState,
+      secrets,
       snapshot: this.snapshot,
       draftRequests: new HostDraftRequests(),
       toolEditApprovals: this.toolEditApprovals,
@@ -245,7 +249,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // proposal, retry, question) stay parked in the runtime until the
     // view's approval row decides them.
     const detachHostInteractions = session.interactions.use({
-      ...createAgentPresentationHost(this),
+      ...createAgentPresentationHost(this, context.globalState),
       readDiagnostics: getLinterMessages,
       addCriticism: (payload) => ({
         accepted: pushManualCriticism(payload),
@@ -403,7 +407,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // welcome card for a user who has keys.
     let hasCredential = false;
     try {
-      hasCredential = await hasAnyUsableSetupCredential();
+      hasCredential = await hasAnyUsableSetupCredential(this.secrets);
     } catch (error) {
       log.warn(
         `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,

@@ -10,7 +10,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   makeTempDir,
@@ -71,13 +74,18 @@ describe('bootstrapPlatformAgentDirectories', () => {
     vi.restoreAllMocks();
   });
 
+  /** The bootstrap program over the fake host's process services: the suite
+   *  runs it on the `it.effect` runtime, not a process runtime. */
   function bootstrap(currentVersion: string | undefined = '1.0.0') {
-    return bootstrapPlatformAgentDirectories({
-      channel: 'test',
-      resourcesPath,
-      currentVersion,
-      versionStateKey: VERSION_STATE_KEY,
-    });
+    return Effect.provide(
+      bootstrapPlatformAgentDirectories({
+        channel: 'test',
+        resourcesPath,
+        currentVersion,
+        versionStateKey: VERSION_STATE_KEY,
+      }),
+      fakeProcessServices(),
+    );
   }
 
   it.effect('serializes concurrent copies into the same storage root', () =>

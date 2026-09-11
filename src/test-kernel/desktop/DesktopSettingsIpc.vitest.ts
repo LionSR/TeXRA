@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runInSession } from '@agent/runtime';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -35,7 +36,7 @@ import {
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const computeModelOptionsData = vi.hoisted(() =>
-  vi.fn(async (models: readonly string[] = []) =>
+  vi.fn(async (_stores: ModelOptionStores, models: readonly string[] = []) =>
     models.map((model) => ({ value: model, label: model })),
   ),
 );

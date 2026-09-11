@@ -14,6 +14,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -94,12 +95,17 @@ export function getDisplayedInstruction(
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, publishes the run's `run.description` row, which the meta fold
  * and every renderer read.
+ *
+ * `stores` are the process secret store and global state the run already
+ * holds (the `Secrets` / `AppState` services), which the helper model is
+ * resolved against.
  */
 export async function generateSessionDescription(
   runId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
+  stores: ModelOptionStores,
   signal?: AbortSignal,
 ): Promise<void> {
   try {
@@ -107,7 +113,7 @@ export async function generateSessionDescription(
     const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
-    const helperResult = await createHelperModelKit();
+    const helperResult = await createHelperModelKit(stores);
     signal?.throwIfAborted();
     if (!helperResult.kit) {
       warnWithoutRejecting(helperResult.reason);

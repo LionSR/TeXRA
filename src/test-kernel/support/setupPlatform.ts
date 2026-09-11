@@ -11,7 +11,6 @@
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
  */
-import type { Layer } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -28,6 +27,7 @@ import {
   type FakeHostOverrides,
   type FakePlatformOptions,
 } from './FakePlatform';
+import type { Layer } from 'effect';
 
 /**
  * A process platform and the workspace roots installed beside it, plus the
@@ -157,7 +157,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
-  // called: hosts change per test, the runtime does not.
+  // called: hosts change per test, the runtime does not. These four imports
+  // stay eager: the process runtime is built synchronously by
+  // `effectRuntime().runSync` callers, so a lazily imported (asynchronous)
+  // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
     Secrets.layer(() => installedHost().platform.secrets),
     AppState.layer(() => installedHost().platform.globalState),

@@ -2,8 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import { platform } from '@platform/platform';
+import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
@@ -123,12 +124,13 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 }
 
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
+  const { secrets, globalState } = platform();
   return resolveAgentTools({
     tools,
     registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
-    globalState: platform().globalState,
+    stores: { secrets, globalState },
   });
 }
 
@@ -234,7 +236,7 @@ describe('delegation model availability', () => {
         expect(failure.message).toContain(
           'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
         );
-      }),
+      }).pipe(Effect.provide(fakeProcessServices())),
   );
 
   it.effect('uses the parent model only when it is available', () =>
@@ -251,7 +253,7 @@ describe('delegation model availability', () => {
       expect(
         yield* selectAvailableDelegationModel({ parentModel: 'opus48T' }),
       ).toBe('deepseekT');
-    }),
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
 
   it.effect('rejects delegation when no models are currently available', () =>
@@ -265,7 +267,7 @@ describe('delegation model availability', () => {
       expect(failure.message).toContain(
         'No models are currently available for delegation. Review or configure model access before delegating.',
       );
-    }),
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
 });
 

@@ -12,6 +12,7 @@
 import { Cause, Effect } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import type { Secrets } from '@platform/secrets';
 
 import {
   AnnotationFetchBudget,
@@ -133,7 +134,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     sha: string,
     cache: CheckRunsCache | undefined,
     logger: AgentTrace,
-  ): Effect.fn.Return<FetchAllCheckRunsResult, unknown> {
+  ): Effect.fn.Return<FetchAllCheckRunsResult, unknown, Secrets> {
     const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
     // Seed a scratch cache we'll stage on the return value. We rebuild from
@@ -161,7 +162,8 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
         total: number | undefined;
         was304: boolean;
       },
-      unknown
+      unknown,
+      Secrets
     > {
       const pageEtag = cache?.pages.get(page)?.etag;
       const res = yield* ghGet<{
@@ -348,7 +350,7 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     logger: AgentTrace,
     budget: AnnotationFetchBudget,
     now?: number,
-  ): Effect.fn.Return<GhCheckAnnotation[], unknown> {
+  ): Effect.fn.Return<GhCheckAnnotation[], unknown, Secrets> {
     const annotations: GhCheckAnnotation[] = [];
     for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
       if (!(yield* budget.tryClaim(now))) {

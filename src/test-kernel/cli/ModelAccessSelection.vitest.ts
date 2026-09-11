@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -14,15 +14,12 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-
-/**
- * The HTTP client these programs took from the process runtime before the
- * suite ran them natively: the same layer `installFakeHost` merges in.
- */
-const withHttpClient = Effect.provide(testHttpClientLayer);
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
@@ -42,12 +39,31 @@ const mocks = vi.hoisted(() => ({
   writePlatformSetting: vi.fn(),
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    globalState: { update: mocks.updateGlobalState },
-    secrets: {},
-  }),
-}));
+/** The global-state writes this suite asserts on. */
+const updateGlobalState = vi.fn();
+
+/** A global state store whose writes the suite observes. */
+class ObservedStateStore extends FakeStateStore {
+  override async update(key: string, value: unknown): Promise<void> {
+    mocks.updateGlobalState(key, value);
+    await super.update(key, value);
+  }
+}
+
+const secrets = new FakeSecrets();
+const appState = new ObservedStateStore();
+
+/**
+ * The process services these programs took from the process runtime before
+ * the suite ran them natively: the same ports `installFakeHost` merges in.
+ */
+const withServices = Effect.provide(
+  Layer.mergeAll(
+    testHttpClientLayer,
+    Secrets.layer(() => secrets),
+    AppState.layer(() => appState),
+  ),
+);
 
 vi.mock('@auth/codex', () => ({
   getCodexStatus: mocks.getCodexStatus,
@@ -232,7 +248,7 @@ describe('CLI model access routes', () => {
     });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus()).resolves.toEqual(
+    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
       expectedAccessStatus({
         preferences: {
           chatGpt: 'on',
@@ -244,7 +260,7 @@ describe('CLI model access routes', () => {
     );
 
     mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-    await expect(readCliModelAccessStatus()).resolves.toEqual(
+    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
       expectedAccessStatus({
         preferences: {
           chatGpt: 'on',
@@ -260,7 +276,7 @@ describe('CLI model access routes', () => {
     );
     mocks.getPreferKimiCode.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus()).resolves.toEqual(
+    await expect(readCliModelAccessStatus(secrets)).resolves.toEqual(
       expectedAccessStatus(
         {
           preferences: {
@@ -273,7 +289,7 @@ describe('CLI model access routes', () => {
     );
 
     mocks.hasUsableApiKey.mockResolvedValue(false);
-    await expect(readCliModelAccessStatus()).resolves.toMatchObject({
+    await expect(readCliModelAccessStatus(secrets)).resolves.toMatchObject({
       codingPlans: { kimiCode: { preferred: true, keySet: false } },
     });
   });
@@ -299,7 +315,7 @@ describe('CLI model access routes', () => {
           message:
             'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
         });
-      }).pipe(withHttpClient),
+      }).pipe(withServices),
   );
 
   it.effect(
@@ -315,7 +331,7 @@ describe('CLI model access routes', () => {
         expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
         expect(result.message).toContain('No Kimi Code API key configured');
         expect(result.message).toContain('https://www.kimi.com/code/console');
-      }).pipe(withHttpClient),
+      }).pipe(withServices),
   );
 
   it.effect(
@@ -339,7 +355,7 @@ describe('CLI model access routes', () => {
           message:
             'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
         });
-      }).pipe(withHttpClient),
+      }).pipe(withServices),
   );
 
   it.effect(
@@ -355,7 +371,7 @@ describe('CLI model access routes', () => {
         expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
         expect(result.message).toContain('No GLM API key configured');
         expect(result.message).toContain('https://open.bigmodel.cn');
-      }).pipe(withHttpClient),
+      }).pipe(withServices),
   );
 
   it.effect('turns off GLM Coding Plan without requiring a key', () =>
@@ -373,7 +389,7 @@ describe('CLI model access routes', () => {
       expect(result).toEqual({
         message: 'Prefer GLM Coding Plan disabled for GLM models.',
       });
-    }).pipe(withHttpClient),
+    }).pipe(withServices),
   );
 
   it.effect('signs in when needed and enables ChatGPT without an API key', () =>
@@ -410,7 +426,7 @@ describe('CLI model access routes', () => {
       expect(result.message).toBe(
         'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
       );
-    }).pipe(withHttpClient),
+    }).pipe(withServices),
   );
 
   it.effect('turns off ChatGPT without changing the Kimi preference', () =>
@@ -437,7 +453,7 @@ describe('CLI model access routes', () => {
       expect(result).toEqual({
         message: 'Prefer ChatGPT subscription disabled for Codex models.',
       });
-    }).pipe(withHttpClient),
+    }).pipe(withServices),
   );
 
   it.effect(
@@ -452,7 +468,9 @@ describe('CLI model access routes', () => {
         mocks.getPreferKimiCode.mockReturnValue(true);
         mocks.hasUsableApiKey.mockResolvedValue(true);
 
-        const status = yield* Effect.promise(() => readCliModelAccessStatus());
+        const status = yield* Effect.promise(() =>
+          readCliModelAccessStatus(secrets),
+        );
         expect(status.preferences).toEqual({
           chatGpt: 'on',
           grok: 'off',
@@ -504,7 +522,7 @@ describe('CLI model access routes', () => {
         expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
         expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-      }).pipe(withHttpClient),
+      }).pipe(withServices),
   );
 
   it.effect('turns off a stale signed-out preference without signing in', () =>
@@ -515,7 +533,9 @@ describe('CLI model access routes', () => {
         target: 'global',
       });
 
-      const status = yield* Effect.promise(() => readCliModelAccessStatus());
+      const status = yield* Effect.promise(() =>
+        readCliModelAccessStatus(secrets),
+      );
       const selection = buildCliModelAccessItems({
         kind: 'loaded',
         access: status,
@@ -532,13 +552,15 @@ describe('CLI model access routes', () => {
 
       expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
       expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-    }).pipe(withHttpClient),
+    }).pipe(withServices),
   );
 
   it.effect('turns off a stale Kimi preference without requiring a key', () =>
     Effect.gen(function* () {
       mocks.getPreferKimiCode.mockReturnValue(true);
-      const status = yield* Effect.promise(() => readCliModelAccessStatus());
+      const status = yield* Effect.promise(() =>
+        readCliModelAccessStatus(secrets),
+      );
       const selection = buildCliModelAccessItems({
         kind: 'loaded',
         access: status,
@@ -559,6 +581,6 @@ describe('CLI model access routes', () => {
         false,
       );
       expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    }).pipe(withHttpClient),
+    }).pipe(withServices),
   );
 });

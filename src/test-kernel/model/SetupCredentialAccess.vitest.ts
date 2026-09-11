@@ -30,6 +30,12 @@ vi.mock('@model/apiProviders', () => ({
   hasUsableApiKey: mocks.hasUsableApiKey,
 }));
 
+// The kernel setup file installs a fake host, which loads
+// `@tools/setup/platform`; that module statically imports both the module
+// under test and `@model/apiProviders`, so both are already cached by the
+// time the mocks above register. Reset first so the import below re-executes
+// the subject against the mocked providers.
+vi.resetModules();
 const { hasUsableSetupCredential } =
   await import('@model/setupCredentialAccess');
 

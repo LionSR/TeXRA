@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import type { PlatformSecrets } from '@platform/secrets';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
@@ -32,22 +33,22 @@ async function loadBuildClaudeAgentEnv(): Promise<
     };
   });
 
-  vi.doMock('@platform/platform', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@platform/platform')>();
-    return {
-      ...actual,
-      platform: () => ({
-        secrets: {
-          async get(key: string) {
-            return secretStore.get(key);
-          },
-        },
-      }),
-    };
-  });
-
   return (await import('@tools/claudeAgentConfig')).buildClaudeAgentEnv;
 }
+
+/** The suite's secret store as the `Secrets` service the env builder reads. */
+const fakeSecrets: PlatformSecrets = {
+  get: async (key) => secretStore.get(key),
+  getStored: async (key) => secretStore.get(key),
+  set: async (key, value) => {
+    secretStore.set(key, value);
+  },
+  delete: async (key) => {
+    secretStore.delete(key);
+  },
+  listStoredKeys: async () => [...secretStore.keys()],
+  getEnv: (name) => process.env[name],
+};
 
 type BuildEnvOptions = Parameters<
   Awaited<ReturnType<typeof loadBuildClaudeAgentEnv>>
@@ -56,7 +57,14 @@ type BuildEnvOptions = Parameters<
 /** Reload the module under the current mocks and build the env in one step. */
 async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
-  return Effect.runPromise(buildClaudeAgentEnv(options));
+  // Imported after the reload so the tag is the instance the freshly
+  // imported module under test yields.
+  const { Secrets } = await import('@platform/secrets');
+  return Effect.runPromise(
+    buildClaudeAgentEnv(options).pipe(
+      Effect.provide(Secrets.layer(() => fakeSecrets)),
+    ),
+  );
 }
 
 function seedManagedSecret(): void {
@@ -93,7 +101,6 @@ describe('Claude Code CLI configuration', () => {
   afterEach(() => {
     vi.doUnmock('execa');
     vi.doUnmock('node:os');
-    vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
     for (const dir of cleanupDirs)

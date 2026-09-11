@@ -1,5 +1,8 @@
 // Local imports
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import { resolveGlmRoute } from '@model/glmRouting';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -52,24 +55,33 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'access-list-default': 'silent',
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
+/**
+ * `stores` is the secret store and global state the availability computation
+ * reads. Callers hold them already (the CLI composition root's
+ * `CliPlatformServices`, or the `Secrets` / `AppState` services), so nothing
+ * here looks a host up.
+ */
 interface CliModelAccessListOptions {
+  readonly stores: ModelOptionStores;
   readonly models?: readonly string[];
 }
 
 /**
  * Deliberately does NOT extend {@link CliModelAccessListOptions}:
- * `loadCliModelAccessList` calls `getCliModelAccessList()` with no arguments,
- * so a `models` filter passed here would be silently dropped. Keeping the
- * field off the type makes that unrepresentable rather than ignored.
+ * `loadCliModelAccessList` calls `getCliModelAccessList()` with the stores and
+ * nothing else, so a `models` filter passed here would be silently dropped.
+ * Keeping the field off the type makes that unrepresentable rather than
+ * ignored.
  */
 interface CliModelAccessEntryOptions {
+  readonly stores: ModelOptionStores;
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
 
 interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
-  'accessList'
+  'stores' | 'accessList'
 > {
   /** Decision reason that owns unavailable-model fallback behavior. */
   readonly fallbackReason?: RunModelDecisionReason;
@@ -183,9 +195,9 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
 }
 
 export async function getCliModelAccessList(
-  options: CliModelAccessListOptions = {},
+  options: CliModelAccessListOptions,
 ): Promise<CliModelAccess[]> {
-  const models = await computeModelOptionsData(options.models);
+  const models = await computeModelOptionsData(options.stores, options.models);
   return models.map(toCliModelAccess);
 }
 
@@ -293,12 +305,14 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
 async function loadCliModelAccessList(
   options: CliModelAccessEntryOptions,
 ): Promise<readonly CliModelAccess[]> {
-  return options.accessList ?? getCliModelAccessList();
+  return (
+    options.accessList ?? getCliModelAccessList({ stores: options.stores })
+  );
 }
 
 export async function loadCliModelAccessEntry(
   model: string,
-  options: CliModelAccessEntryOptions = {},
+  options: CliModelAccessEntryOptions,
 ): Promise<CliModelAccess | undefined> {
   const models = await loadCliModelAccessList(options);
   const trimmed = model.trim();
@@ -308,7 +322,9 @@ export async function loadCliModelAccessEntry(
   const hiddenModelId = resolveKnownCliModelId(trimmed);
   if (hiddenModelId == null) return undefined;
 
-  const hiddenModelOption = (await computeModelOptionsData([hiddenModelId]))[0];
+  const hiddenModelOption = (
+    await computeModelOptionsData(options.stores, [hiddenModelId])
+  )[0];
   if (!hiddenModelOption) {
     throw new Error(
       `Model "${hiddenModelId}" is configured but has no option data.`,
@@ -384,6 +400,7 @@ export async function selectCliRunnableModel(
   const hiddenEntries = await Promise.allSettled(
     requestedModels.map((model) =>
       loadCliModelAccessEntry(model, {
+        stores: options.stores,
         accessList: models,
       }),
     ),

@@ -5,7 +5,6 @@ import { describe, it } from 'vitest';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { installPlatform } from '@test/support/setupPlatform';
 
 async function createController(options?: {
   inputResponses?: readonly (string | undefined)[];
@@ -42,10 +41,9 @@ async function createController(options?: {
     deleted.push(key);
     await originalDelete(key);
   };
-  await installPlatform({}, { secrets });
-
   return {
     controller: new SettingsProfileKeyController({
+      secrets,
       prompt: hosts.prompt,
       externalOpener: hosts.externalOpener,
       getProviderDisplayName: (provider) =>

@@ -13,7 +13,11 @@ import {
   RUN_OUTCOME,
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
-import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
+import {
+  createFakeHost,
+  fakeProcessServices,
+  installFakeHost,
+} from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTempDirPlatform,
@@ -165,12 +169,29 @@ async function loadExecuteCli() {
     ...runtime,
     executeCliRequest: (
       ...args: Parameters<typeof runtime.executeCliRequest>
-    ) => Effect.runPromise(runtime.executeCliRequest(...args)),
+    ) =>
+      Effect.runPromise(
+        Effect.provide(
+          runtime.executeCliRequest(...args),
+          fakeProcessServices(),
+        ),
+      ),
     executeCliConfig: (...args: Parameters<typeof runtime.executeCliConfig>) =>
-      Effect.runPromise(runtime.executeCliConfig(...args)),
+      Effect.runPromise(
+        Effect.provide(
+          runtime.executeCliConfig(...args),
+          fakeProcessServices(),
+        ),
+      ),
     executeCliToolUseConfig: (
       ...args: Parameters<typeof runtime.executeCliToolUseConfig>
-    ) => Effect.runPromise(runtime.executeCliToolUseConfig(...args)),
+    ) =>
+      Effect.runPromise(
+        Effect.provide(
+          runtime.executeCliToolUseConfig(...args),
+          fakeProcessServices(),
+        ),
+      ),
   };
 }
 

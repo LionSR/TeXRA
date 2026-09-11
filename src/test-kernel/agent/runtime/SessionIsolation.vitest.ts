@@ -26,7 +26,10 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -222,16 +225,19 @@ describe('session isolation', () => {
 
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
-          // Mid-run: the handle is registered in session B's registry only.
-          expect(sessionB.runs.getHandle(runId)).toBeDefined();
-          expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
-          return {
-            outcome: RUN_OUTCOME.COMPLETED,
-            runId,
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
-          };
-        }),
+        Effect.provide(
+          runFlowWithLifecycle(ctx, async () => {
+            // Mid-run: the handle is registered in session B's registry only.
+            expect(sessionB.runs.getHandle(runId)).toBeDefined();
+            expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+            return {
+              outcome: RUN_OUTCOME.COMPLETED,
+              runId,
+              output: emptyRunEndOutput(AgentCategory.ToolUse),
+            };
+          }),
+          fakeProcessServices(),
+        ),
       );
 
       // After completion the run session untracked it; default never saw it.

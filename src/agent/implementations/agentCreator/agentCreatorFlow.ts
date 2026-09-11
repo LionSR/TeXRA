@@ -17,6 +17,7 @@ import {
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
@@ -356,13 +357,14 @@ async function generateAgentYaml(
   config: CreatorConfig,
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
+  stores: ModelOptionStores,
 ): Promise<string> {
   let lastValidationError: string | undefined;
 
   try {
     return await pRetry(
       async () => {
-        const helperResult = await createHelperModelKit();
+        const helperResult = await createHelperModelKit(stores);
         if (!helperResult.kit) {
           throw new Error(helperResult.reason);
         }
@@ -429,11 +431,19 @@ async function generateAgentYaml(
   }
 }
 
-/** Run the complete agent-creation wizard, stopping without side effects when cancelled. */
+/**
+ * Run the complete agent-creation wizard, stopping without side effects when
+ * cancelled.
+ *
+ * `stores` are the process secret store and global state (`Secrets` /
+ * `AppState`) the host command already holds; the helper model that drafts the
+ * YAML is resolved against them.
+ */
 export async function runAgentCreator(
   config: CreatorConfig,
   category: AgentCategory,
   ui: AgentCreatorUI,
+  stores: ModelOptionStores,
 ): Promise<void> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = await ui.promptAgentName(categoryLabel);
@@ -454,7 +464,7 @@ export async function runAgentCreator(
   );
   if (!blueprint) return;
 
-  const yamlContent = await generateAgentYaml(config, blueprint, ui);
+  const yamlContent = await generateAgentYaml(config, blueprint, ui, stores);
   await AbsoluteFS.write(blueprint.filePath, yamlContent);
   ui.showCreatedInfo(blueprint.filePath);
   await ui.promptAddToConfig(agentName, category);

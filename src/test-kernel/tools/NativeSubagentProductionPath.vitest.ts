@@ -305,7 +305,7 @@ async function launchWaitingChild(options: {
     }),
   );
   await expect(
-    Effect.runPromise(
+    effectRuntime().runPromise(
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
@@ -331,7 +331,7 @@ async function launchWaitingChild(options: {
   };
   const launch = await runAsParentOwner(() =>
     withRunContext(parentContext, () =>
-      Effect.runPromise(
+      effectRuntime().runPromise(
         executeSubagent(
           parentContext,
           undefined,

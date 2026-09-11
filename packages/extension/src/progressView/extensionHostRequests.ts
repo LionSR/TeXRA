@@ -57,6 +57,7 @@ import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameMa
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -104,6 +105,8 @@ export interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   readonly extensionPath: string;
   readonly globalState: vscode.Memento;
+  /** The process secret store the extension root holds (model availability). */
+  readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;
   readonly draftRequests: HostDraftRequests;
   readonly toolEditApprovals: ToolEditApprovalController;
@@ -154,7 +157,11 @@ const showError = async (message: string): Promise<void> => {
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
-  const { session, snapshot, toolEditApprovals } = options;
+  const { session, snapshot, toolEditApprovals, secrets, globalState } =
+    options;
+  // The view's handle on the process runtime, taken once here rather than
+  // re-fetched at each of the request arms below.
+  const runtime = effectRuntime();
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
@@ -175,16 +182,18 @@ export function createExtensionHostRequests(
     });
   }
 
-  const runActions = createHostRunActions({
-    session,
-    runAgentRequest,
-    loadModelOptions: () => computeModelOptionsData(),
-    promptForApiKey: async (provider) => {
-      await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
-    },
-    showInfo,
-    showWarning,
-  });
+  const runActions = runtime.runSync(
+    createHostRunActions({
+      session,
+      runAgentRequest,
+      loadModelOptions: () => computeModelOptionsData({ secrets, globalState }),
+      promptForApiKey: async (provider) => {
+        await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
+      },
+      showInfo,
+      showWarning,
+    }),
+  );
 
   const { runOutputs } = runActions;
 
@@ -224,7 +233,7 @@ export function createExtensionHostRequests(
       },
     },
     sendFollowUp: (runId, text) =>
-      effectRuntime().runPromise(runActions.sendFollowUp(runId, text)),
+      runtime.runPromise(runActions.sendFollowUp(runId, text)),
   });
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
@@ -257,7 +266,7 @@ export function createExtensionHostRequests(
   }
 
   async function exportTranscript(runId: RunId): Promise<void> {
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       exportRunTranscript(runId, {
         pickFormat: async () =>
           (
@@ -367,7 +376,7 @@ export function createExtensionHostRequests(
           'Choose one of the open workspace folders as the working directory.',
       });
     }
-    const prepared = await effectRuntime().runPromise(
+    const prepared = await runtime.runPromise(
       prepareSurfaceLaunch(request, {
         showInfoMessage: showInfo,
         chooseTeamAvailability: async (unavailableNames) => {
@@ -498,7 +507,7 @@ export function createExtensionHostRequests(
           );
         }
         if (await WorkspaceFS.exists(parsed.sourcePath)) {
-          await effectRuntime().runPromise(snapshot.refreshFiles);
+          await runtime.runPromise(snapshot.refreshFiles);
           return { kind: 'files', paths: [parsed.sourcePath] };
         }
         void showInfo(
@@ -569,8 +578,8 @@ export function createExtensionHostRequests(
   async function refreshAfterCredentialChange(): Promise<void> {
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-      effectRuntime().runPromise(snapshot.refreshCatalogs),
-      effectRuntime().runPromise(snapshot.refreshAuth),
+      runtime.runPromise(snapshot.refreshCatalogs),
+      runtime.runPromise(snapshot.refreshAuth),
       options.refreshOnboardingFunnel(),
     ]);
   }
@@ -642,27 +651,23 @@ export function createExtensionHostRequests(
         return done;
       case 'restoreIntoLauncher':
         await restoreIntoLauncher(
-          await effectRuntime().runPromise(
-            runActions.restoreState(request.runId),
-          ),
+          await runtime.runPromise(runActions.restoreState(request.runId)),
         );
         return done;
       case 'resume':
-        await effectRuntime().runPromise(runActions.resume(request.runId));
+        await runtime.runPromise(runActions.resume(request.runId));
         return done;
       case 'runNew':
-        await effectRuntime().runPromise(runActions.runNew(request.runId));
+        await runtime.runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
-        await effectRuntime().runPromise(
-          runActions.runCompileFixer(request.runId),
-        );
+        await runtime.runPromise(runActions.runCompileFixer(request.runId));
         return done;
       case 'useOwnApiKey':
-        await effectRuntime().runPromise(runActions.useOwnApiKey(request));
+        await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowRunActions.diffStream(request.runId, config);
@@ -670,7 +675,7 @@ export function createExtensionHostRequests(
       }
       case 'pack':
       case 'clean': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowRunActions.runFileOperation(
@@ -686,7 +691,7 @@ export function createExtensionHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return effectRuntime().runPromise(draftRequests.handle(request, port));
+        return runtime.runPromise(draftRequests.handle(request, port));
       case 'popOut':
         await options.popOutToEditor();
         return done;
@@ -697,10 +702,10 @@ export function createExtensionHostRequests(
         await runCommand('texra.showDashboard');
         return done;
       case 'refreshCommits':
-        await effectRuntime().runPromise(snapshot.refreshCommits);
+        await runtime.runPromise(snapshot.refreshCommits);
         return done;
       case 'refreshFiles':
-        await effectRuntime().runPromise(snapshot.refreshFiles);
+        await runtime.runPromise(snapshot.refreshFiles);
         return done;
       case 'openSettings':
         switch (request.section) {
@@ -759,7 +764,7 @@ export function createExtensionHostRequests(
         });
         return done;
       case 'fileAction': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowFileActions.handle(request, config);
@@ -786,7 +791,7 @@ export function createExtensionHostRequests(
         return done;
       case 'recheckDependencies':
         await checkCoreDependencies(true);
-        await effectRuntime().runPromise(snapshot.refreshHostBanners);
+        await runtime.runPromise(snapshot.refreshHostBanners);
         return done;
       case 'openInstallGuide': {
         const docsCommand = getToolDocsCommand(request.tool);

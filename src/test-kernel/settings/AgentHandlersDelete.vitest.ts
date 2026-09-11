@@ -11,7 +11,10 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  installedHost,
+} from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   deleteFile: vi.fn(async () => undefined),
@@ -125,6 +128,7 @@ function createHandlers(): AgentHandlers {
       postMessageToActiveWebview: vi.fn(),
     },
     mocks.refreshAfterAgentMutation,
+    installedHost().platform.globalState,
   );
 }
 

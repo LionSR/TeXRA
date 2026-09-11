@@ -7,16 +7,19 @@ import { hostPort } from '@common/hostPort';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
+  apiKeySecretName,
+  hasUsableApiKey,
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { getSetupPlatform, setupSecrets } from './platform';
+import { SetupPlatform } from './platform';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -30,7 +33,8 @@ type UnsetApiKeyInput = z.infer<typeof UnsetApiKeyInputSchema>;
 const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   input: UnsetApiKeyInput,
 ) {
-  const platform = getSetupPlatform();
+  const platform = yield* SetupPlatform;
+  const secrets = yield* Secrets;
   const provider = input.provider.trim();
   if (!isApiProvider(provider)) {
     return yield* Effect.fail(
@@ -41,12 +45,14 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   }
   const envVar = apiKeyEnvName(provider);
 
-  const storedExists = yield* setupSecrets.storedApiKeyExists(provider);
-  if (!storedExists) {
+  // Only a persisted entry counts here: an environment-backed key is
+  // reported below instead, since `delete` cannot touch it.
+  const storedKeys = yield* hostPort(() => secrets.listStoredKeys());
+  if (!storedKeys.includes(apiKeySecretName(provider))) {
     // If no persisted entry exists but a *usable* (non-blank) key
     // is still reported, it's coming from the `<PROVIDER>_API_KEY`
     // env var — `deleteApiKey` can't touch that, so be explicit.
-    const envExists = yield* setupSecrets.hasUsableApiKey(provider);
+    const envExists = yield* hostPort(() => hasUsableApiKey(secrets, provider));
     if (envExists) {
       return executed(
         `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear: unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
@@ -59,7 +65,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     );
   }
 
-  yield* setupSecrets.deleteApiKey(provider);
+  yield* hostPort(() => secrets.delete(apiKeySecretName(provider)));
   // Mirror the manual `texra.setApiKey` command ordering: drop the cached
   // key lookups so models that just lost their credential stop appearing
   // selectable, then refresh the status surfaces.
@@ -78,7 +84,9 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
 
   // A shell env var can shadow the deletion — flag that so the agent can
   // tell the user why the key still appears to exist after removal.
-  const stillPresent = yield* setupSecrets.hasUsableApiKey(provider);
+  const stillPresent = yield* hostPort(() =>
+    hasUsableApiKey(secrets, provider),
+  );
   if (stillPresent) {
     return executed(
       `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,

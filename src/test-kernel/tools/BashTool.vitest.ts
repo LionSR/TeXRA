@@ -58,7 +58,11 @@ import {
   clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  installedHost,
+  installPlatform,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
@@ -193,6 +197,12 @@ function roundServices(opts: {
     fileService: new TaskRunFileService('deadbeef' as RunId),
     toolRegistry: opts.toolRegistry,
     onRoundFinalized: () => {},
+    // The process stores a launch threads into the round, taken from the
+    // fake host this suite installs.
+    stores: {
+      secrets: installedHost().platform.secrets,
+      globalState: installedHost().platform.globalState,
+    },
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   };

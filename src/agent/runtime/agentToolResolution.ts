@@ -27,8 +27,10 @@
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import type { StateStore } from '@platform/interfaces';
+import {
+  computeModelOptionsData,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import type { ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -59,8 +61,12 @@ interface ResolveAgentToolsInput {
    * service, or a caller-owned list for a flow that injects its own.
    */
   toolInjections: ToolInjections['Service'];
-  /** The process global state (`AppState`): the user's disabled-tool set. */
-  globalState: StateStore;
+  /**
+   * The process secret store and global state (`Secrets` / `AppState`): the
+   * user's disabled-tool set, and the provider keys behind the delegation
+   * roster's model availability.
+   */
+  stores: ModelOptionStores;
 }
 
 /**
@@ -73,13 +79,14 @@ interface ResolveAgentToolsInput {
  */
 async function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
+  stores: ModelOptionStores,
 ): Promise<readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return undefined;
   }
 
   try {
-    const models = await computeModelOptionsData();
+    const models = await computeModelOptionsData(stores);
     return availableModelNamesFromOptions(models);
   } catch (err) {
     // Couldn't load model options — skip the delegation annotation rather than
@@ -107,10 +114,10 @@ export async function resolveAgentTools({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections,
-  globalState,
+  stores,
 }: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
-  const disabled = getDisabledToolNames(globalState);
+  const disabled = getDisabledToolNames(stores.globalState);
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
 
@@ -160,8 +167,10 @@ export async function resolveAgentTools({
     }
   }
 
-  const availableModelNames =
-    await availableDelegationModelNamesForTools(resolved);
+  const availableModelNames = await availableDelegationModelNamesForTools(
+    resolved,
+    stores,
+  );
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames),
   );

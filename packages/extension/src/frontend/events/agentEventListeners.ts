@@ -18,6 +18,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
+import type { StateStore } from '@platform/interfaces';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
@@ -72,6 +73,7 @@ const INSTRUCTION_ACTION_VIEW: Record<
 };
 
 async function handleRequestShowInstruction(
+  globalState: StateStore,
   payload: RequestShowInstructionPayload,
 ): Promise<void> {
   const actions = (payload.actions ?? []).map((token) => {
@@ -88,6 +90,7 @@ async function handleRequestShowInstruction(
     // dismisses it. The "never remind again" path returns without rendering:
     // the user opted out of this notice.
     await showInstructionWithSuppress(
+      globalState,
       payload.key,
       payload.message,
       actions,
@@ -196,11 +199,13 @@ async function handleRequestEnsureProgressView(
  */
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
+  globalState: StateStore,
 ): Pick<SessionHostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
       requestOpenFile: handleRequestOpenFile,
-      requestShowInstruction: handleRequestShowInstruction,
+      requestShowInstruction: (payload) =>
+        handleRequestShowInstruction(globalState, payload),
       showAgentConfigBanner: (payload) =>
         handleShowAgentConfigBanner(payload, progressViewProvider),
       requestShowError: handleRequestShowError,

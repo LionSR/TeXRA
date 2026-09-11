@@ -8,6 +8,7 @@ import {
   setCliToolEnabled,
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
+import type { StateStore } from '@platform/interfaces';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -16,6 +17,12 @@ import { AsyncListForm } from './_shared/ListForm';
 
 interface ToolsListFormProps {
   readonly availableRows?: number;
+  /**
+   * The global state the disabled-tool read and the toggle both write. Ink
+   * components run no Effect, so the process store arrives as a prop from the
+   * surface that opened the form.
+   */
+  readonly state: StateStore;
   readonly onClose: () => void;
 }
 
@@ -50,7 +57,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       title="/tools"
       compactTitle="/tools · Toggle available external integrations."
       loadingLabel="Checking tool integrations..."
-      load={readCliToolStatuses}
+      load={() => readCliToolStatuses(props.state)}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,
@@ -68,7 +75,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       onSelect={(id, { data: tools, reload }) => {
         const tool = tools.find((candidate) => candidate.id === id);
         if (!tool || tool.enabled == null) return;
-        void setCliToolEnabled(id, !tool.enabled)
+        void setCliToolEnabled(props.state, id, !tool.enabled)
           .then(reload)
           .catch((error: unknown) => {
             setTransientNotice(toErrorMessage(error));

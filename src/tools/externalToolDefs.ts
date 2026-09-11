@@ -18,6 +18,7 @@ import { Effect } from 'effect';
 import { hostPort } from '@common/hostPort';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { Secrets } from '@platform/secrets';
 import type { ToolCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
@@ -78,17 +79,19 @@ export interface ExternalToolDef {
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
   /** Optional shared probe result passed to check/status/detail callbacks. */
-  readonly probe?: () => Effect.Effect<unknown, unknown>;
+  readonly probe?: () => Effect.Effect<unknown, unknown, Secrets>;
   /** Returns true if the external dependency is available. */
-  readonly check: (probeResult?: unknown) => Effect.Effect<boolean, unknown>;
+  readonly check: (
+    probeResult?: unknown,
+  ) => Effect.Effect<boolean, unknown, Secrets>;
   /** Optional detailed status string resolved at check time (shown below description). */
   readonly detailCheck?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown>;
+  ) => Effect.Effect<string | undefined, unknown, Secrets>;
   /** Optional short status label for the dashboard badge. */
   readonly statusLabel?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown>;
+  ) => Effect.Effect<string | undefined, unknown, Secrets>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -150,7 +153,9 @@ interface GitHubPRPrerequisites {
 
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   function* () {
-    const tokenPresent = (yield* hostPort(getGitHubToken)) !== undefined;
+    const secrets = yield* Secrets;
+    const tokenPresent =
+      (yield* hostPort(() => getGitHubToken(secrets))) !== undefined;
     const inGitRepo = yield* hostPort(isGitRepository);
     return { tokenPresent, inGitRepo };
   },
@@ -158,7 +163,7 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
 
 function resolveGitHubPRPrerequisites(
   probeResult: unknown,
-): Effect.Effect<GitHubPRPrerequisites, unknown> {
+): Effect.Effect<GitHubPRPrerequisites, unknown, Secrets> {
   // The probe runs in-process and its result is handed straight back here, so
   // the shape is structurally guaranteed; only a failed probe (probeResult
   // undefined) needs the re-probe fallback.
@@ -282,8 +287,8 @@ function probeSdkBinaryStatus(config: {
  * callbacks, and those callbacks stay pure functions of the resolved value.
  */
 function prerequisitesChecks<T>(config: {
-  probe: () => Effect.Effect<T, unknown>;
-  resolve: (probeResult: unknown) => Effect.Effect<T, unknown>;
+  probe: () => Effect.Effect<T, unknown, Secrets>;
+  resolve: (probeResult: unknown) => Effect.Effect<T, unknown, Secrets>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
@@ -663,8 +668,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       const claudePath = status.binaryPath;
 
       const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
+      const secrets = yield* Secrets;
       const keyOrigin = yield* hostPort(() =>
-        lookupApiKeyOrigin(platform().secrets, 'anthropic'),
+        lookupApiKeyOrigin(secrets, 'anthropic'),
       ).pipe(
         Effect.catch(() =>
           Effect.succeed(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),

@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import { platform } from '@platform/platform';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -35,7 +35,10 @@ describe('tool-use tool resolution', () => {
       registry: getDefaultToolRegistry(),
       logger,
       toolInjections,
-      globalState: platform().globalState,
+      stores: {
+        secrets: platform().secrets,
+        globalState: platform().globalState,
+      },
       ...options,
     });
     return tools.map((tool) => tool.name);
@@ -51,7 +54,10 @@ describe('tool-use tool resolution', () => {
       registry,
       logger,
       toolInjections,
-      globalState: platform().globalState,
+      stores: {
+        secrets: platform().secrets,
+        globalState: platform().globalState,
+      },
       runtimeUnavailableTools,
       approvalPromptsUnavailable: false,
     });

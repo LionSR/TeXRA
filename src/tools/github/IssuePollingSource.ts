@@ -17,6 +17,7 @@
 import { Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import {
   formatIssueClosed,
   formatIssueComment,
@@ -94,7 +95,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = issueKeyToString(issue);
     return this.register(key, () => createInitialState(issue), onEvent);
   }
@@ -110,7 +111,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, unknown, Secrets> {
     return this.pollIssue(state);
   }
 

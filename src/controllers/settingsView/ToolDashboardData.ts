@@ -11,6 +11,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import { AppState } from '@platform/interfaces';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
@@ -174,7 +175,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
 
     const results = cachedResults ?? (yield* runExternalToolChecks());
 
-    const disabledIds = getDisabledToolIds();
+    const disabledIds = getDisabledToolIds(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findExternalToolDef(id);

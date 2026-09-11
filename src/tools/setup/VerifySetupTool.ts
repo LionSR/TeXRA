@@ -3,14 +3,20 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
+import { createLog } from '@logger/logUtils';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { getSetupPlatform, setupSecrets } from './platform';
+import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
+
+const credentialLog = createLog('Setup Credentials');
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z
@@ -26,7 +32,8 @@ type VerifySetupInput = z.infer<typeof VerifySetupInputSchema>;
 const verify = Effect.fn('VerifySetupTool.execute')(function* (
   input: VerifySetupInput,
 ) {
-  const platform = getSetupPlatform();
+  const platform = yield* SetupPlatform;
+  const secrets = yield* Secrets;
 
   if (input.tool != null) {
     const name = input.tool.trim();
@@ -75,7 +82,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      setupSecrets.anyUsableCredentialExists(),
+      hostPort(() => hasUsableSetupCredential(secrets, credentialLog.warn)),
     ],
     { concurrency: 'unbounded' },
   );

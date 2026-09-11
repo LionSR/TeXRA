@@ -402,7 +402,7 @@ export async function initCliPlatform(
   }
 
   if (!supabaseAuthInitialized) {
-    initializeCliSupabaseAuth(cliPlatformLog);
+    initializeCliSupabaseAuth(services.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
 
