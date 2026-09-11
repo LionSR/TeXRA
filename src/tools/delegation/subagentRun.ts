@@ -122,8 +122,8 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   // this tool call has returned. Subagents count toward parent usage totals
   // only — they never drive the loop.
   const recordSubagentCost = callContext?.hooks?.recordSubagentCost;
-  const recordCost = (totalCostUsd: number | undefined): void => {
-    recordSubagentCost?.(totalCostUsd ?? 0);
+  const recordCost = (costUsd: number | undefined): void => {
+    recordSubagentCost?.(costUsd ?? 0);
   };
 
   const delegationAgentScope =

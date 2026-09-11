@@ -1,8 +1,9 @@
 /**
  * Runtime validation for trace data loaded from `trace.json` or
- * `window.__TEXRA_TRACE__`. The shared document schema owns the format,
- * including snapshot-version handling: a missing `schemaVersion` is a legacy
- * omission, a future one is rejected rather than normalized.
+ * `window.__TEXRA_TRACE__`. The document is a projection of the run's
+ * `RunView` plus its transcript entries, and the shared `TraceDocumentSchema`
+ * owns that format: a document written by an older export fails the parse
+ * loudly below rather than being normalized.
  */
 import { z } from 'zod';
 

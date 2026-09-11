@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  readRunMeta: vi.fn(),
+  readView: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
@@ -52,19 +52,6 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
     }),
 }));
 
-// The resumed run reads its parent edge off the persisted `run.start`, so the
-// lineage fixture is the run's metadata read.
-vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/RunKVStore')>()),
-  getRunRecords: (...args: unknown[]) => ({
-    readMeta: () =>
-      Effect.tryPromise({
-        try: () => mocks.readRunMeta(...args),
-        catch: ensureError,
-      }),
-  }),
-}));
-
 vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
   runReflectionFlow: vi.fn(),
 }));
@@ -91,6 +78,7 @@ import {
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import { emptySessionView } from '@shared/session/sessionView';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -121,6 +109,13 @@ const LANE_SESSION = {
   acquireRunClaims: () => Effect.succeed(Effect.void),
   graph: { releaseRunClaims: mocks.releaseRunClaims },
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
+  // The resumed run reads its parent edge off the session's cold fold, so the
+  // lineage fixture is that read.
+  readView: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.readView(...args),
+      catch: ensureError,
+    }),
   status: {},
   flushArtifacts: vi.fn(async () => {}),
   settlePublications: vi.fn(async () => {}),
@@ -135,9 +130,6 @@ function resumeToolUseFromResumeData(
     resumeOnLane(resume, { session: LANE_SESSION, ...options }),
   );
 }
-
-/** The launching run a child fixture's persisted `run.start` names. */
-const PARENT_RUN = 'aa00parent' as RunId;
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(runId: RunId): AgentLaunchContext {
@@ -175,7 +167,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
     mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     mocks.releaseRunClaims.mockReturnValue(Effect.void);
-    mocks.readRunMeta.mockReset().mockResolvedValue({});
+    mocks.readView.mockReset().mockResolvedValue(emptySessionView('resume'));
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -188,9 +180,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('resolves run lineage before activating the resume stream', async () => {
-    const storageError = new Error('run metadata unavailable');
+    const storageError = new Error('run lineage unavailable');
     const snapshot = createToolUseResumeData({ runId: 'e8048' as RunId });
-    mocks.readRunMeta.mockRejectedValueOnce(storageError);
+    mocks.readView.mockRejectedValueOnce(storageError);
 
     await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
       storageError,
@@ -214,7 +206,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
   it('rejects a resumed launch that is not a tool-use agent', async () => {
     const resume = createToolUseResumeData();
-    mocks.readRunMeta.mockResolvedValueOnce({});
     // The guard runs inside the lifecycle so its failure ends the started
     // stream; the mocked lifecycle only has to run the body.
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -260,7 +251,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     };
 
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-    mocks.readRunMeta.mockResolvedValueOnce({});
     mocks.runFlowWithLifecycle.mockImplementationOnce(
       async (
         _context: unknown,
@@ -328,7 +318,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     const runId = 'e9421-model' as RunId;
     const ctx = buildResumeContext(runId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-    mocks.readRunMeta.mockResolvedValueOnce({});
     mocks.runToolUseFlow.mockImplementationOnce(
       async (input: ModelSwitchingFlowInput) => {
         input.onModelChanged('next-model');

@@ -33,13 +33,10 @@ function runOfEvent(view: SessionView, id: RunId): RunView {
   return run;
 }
 
-async function mountHeader(
-  view: SessionView,
-  stream: RunView,
-): Promise<Mounted> {
-  const element = await mountComponent<RunHeader>('stream-header', {
+async function mountHeader(view: SessionView, run: RunView): Promise<Mounted> {
+  const element = await mountComponent<RunHeader>('run-header', {
     view,
-    stream,
+    run,
   });
   const surfaceActions: SurfaceAction[] = [];
   const requests: (RuntimeRequest | HostRequest)[] = [];
@@ -65,7 +62,7 @@ function expectAnchoredTooltip(element: RunHeader, anchorId: string): void {
   ).toBeTruthy();
 }
 
-describe('stream-header over the fold', () => {
+describe('run-header over the fold', () => {
   it('renders the ancestors path for a child and selects the ancestor on activation', async () => {
     const view = fanOutView();
     const child = runOfEvent(view, CHILD);
@@ -82,11 +79,11 @@ describe('stream-header over the fold', () => {
     expect(surfaceActions).toEqual([{ kind: 'select', runId: ROOT }]);
   });
 
-  it('dispatches the stop arm from the toolbar of a running stream', async () => {
+  it('dispatches the stop arm from the toolbar of a running run', async () => {
     const view = fanOutView();
-    const stream = runOfEvent(view, ROOT);
-    expect(stream.group).toBe('running');
-    const { element, requests } = await mountHeader(view, stream);
+    const run = runOfEvent(view, ROOT);
+    expect(run.group).toBe('running');
+    const { element, requests } = await mountHeader(view, run);
 
     const stop = element.shadowRoot?.querySelector<HTMLElement>(
       `#${ELEMENT_IDS.STOP_STREAM_BTN}`,

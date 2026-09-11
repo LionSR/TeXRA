@@ -75,7 +75,6 @@ import {
   showCliSessionStatus,
   showCliSlashCommandHelp,
   showCliWorkPlan,
-  type StreamArtifactReader,
 } from './handlers/sessionCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -276,7 +275,6 @@ export function registerBuiltinSlashCommands(options?: {
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
-  workPlanSnapshots?: StreamArtifactReader;
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
@@ -632,7 +630,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Read the focused session work plan',
     category: 'session',
     echo: 'never',
-    handler: () => showCliWorkPlan(options?.workPlanSnapshots),
+    handler: () => showCliWorkPlan(),
   });
   registerSlashCommand({
     name: 'goal',

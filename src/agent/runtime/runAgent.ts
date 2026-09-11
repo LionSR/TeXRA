@@ -105,11 +105,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
-  const prior = shouldRegister
+  // A resumed run's prior terminal fact: what a launch that fails before its
+  // lifecycle starts restores, so the run does not read as still running.
+  const priorEnd = shouldRegister
     ? null
-    : yield* getRunRecords(runSession, runId).readMeta();
-  if (!shouldRegister && !prior)
-    return yield* Effect.fail(new Error(`Run metadata not found for ${runId}`));
+    : yield* getRunRecords(runSession, runId).readRunEnd();
+  if (!shouldRegister && !(yield* getRunRecords(runSession, runId).exists()))
+    return yield* Effect.fail(new Error(`Run not found: ${runId}`));
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
     [executeAgentOptions.launchSignal],
@@ -176,7 +178,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
               ...executeAgentOptions,
               launchSignal,
               session: runSession,
-              resumed: prior !== null,
+              resumed: !shouldRegister,
               onRun: async (handle) => {
                 lifecycleStarted = true;
                 await callerOnRun?.(handle);
@@ -191,7 +193,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           failures.push(error);
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
-            : prior?.outcome;
+            : priorEnd?.outcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
             const finalization = yield* Effect.exit(
               finalizeRun(runSession, {

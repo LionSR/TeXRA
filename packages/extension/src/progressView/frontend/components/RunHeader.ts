@@ -72,7 +72,7 @@ const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
-/** A stream this process cannot act on: read and export only. */
+/** A run this process cannot act on: read and export only. */
 const READ_ONLY_BUTTONS = new Set<string>([
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
@@ -119,17 +119,17 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
   neutral: 'is-ready',
 };
 
-/** Which toolbar buttons a stream's state licenses. */
+/** Which toolbar buttons a run's state licenses. */
 function enabledToolbarButtons(
-  stream: RunView,
+  run: RunView,
   displayKey: RunStatusDisplayKey | undefined,
 ): ReadonlySet<string> | undefined {
-  if (stream.readOnly) return READ_ONLY_BUTTONS;
-  if (stream.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
+  if (run.readOnly) return READ_ONLY_BUTTONS;
+  if (run.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
   return displayKey ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey] : undefined;
 }
 
-@customElement('stream-header')
+@customElement('run-header')
 export class RunHeader extends LitElement {
   static override styles = [
     designTokens,
@@ -173,7 +173,7 @@ export class RunHeader extends LitElement {
         max-width: 100%;
       }
 
-      #activeStreamName {
+      #activeRunName {
         flex: 1;
         min-width: 8ch;
         margin: 0;
@@ -370,7 +370,7 @@ export class RunHeader extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) stream: RunView | null = null;
+  @property({ attribute: false }) run: RunView | null = null;
   /** For the per-run policy snapshot behind the bypass toggles. */
   @property({ attribute: false }) view: SessionView | null = null;
 
@@ -378,26 +378,26 @@ export class RunHeader extends LitElement {
     successTitle: 'Copied!',
   });
 
-  private runContextText(stream: RunView): string {
-    if (stream.category !== 'workflow') return '';
+  private runContextText(run: RunView): string {
+    if (run.category !== 'workflow') return '';
     return formatWorkflowRunContext({
       run: {
-        label: stream.label,
-        model: stream.model ?? undefined,
-        modelLabel: stream.modelLabel ?? undefined,
-        runId: stream.id,
-        description: stream.description ?? undefined,
+        label: run.label,
+        model: run.model ?? undefined,
+        modelLabel: run.modelLabel ?? undefined,
+        runId: run.id,
+        description: run.description ?? undefined,
       },
-      files: stream.files,
-      compileFailures: stream.compileFailures,
+      files: run.files,
+      compileFailures: run.compileFailures,
     });
   }
 
   /** The arm each toolbar button dispatches. */
-  private dispatchToolbar(button: ProgressToolbarButton, stream: RunView) {
-    const runId = stream.id;
+  private dispatchToolbar(button: ProgressToolbarButton, run: RunView) {
+    const runId = run.id;
     if (button.bypassKind !== undefined) {
-      const enabled = !this.bypassActive(stream, button.bypassKind);
+      const enabled = !this.bypassActive(run, button.bypassKind);
       this.dispatchEvent(
         SessionUiEvents.runtime({
           kind: 'policy.set',
@@ -456,34 +456,34 @@ export class RunHeader extends LitElement {
   }
 
   private bypassActive(
-    stream: RunView,
+    run: RunView,
     kind: NonNullable<ProgressToolbarButton['bypassKind']>,
   ): boolean {
-    return this.view?.policy.get(stream.id)?.bypasses[kind] === true;
+    return this.view?.policy.get(run.id)?.bypasses[kind] === true;
   }
 
   override render(): TemplateResult | typeof nothing {
-    const stream = this.stream;
-    if (!stream) return nothing;
+    const run = this.run;
+    if (!run) return nothing;
     const { displayKey } = progressHeaderStatus(
-      stream.status,
-      stream.substate ?? undefined,
+      run.status,
+      run.substate ?? undefined,
     );
-    const statusLabel = stream.statusLabel;
+    const statusLabel = run.statusLabel;
     const goal: GoalState =
-      stream.category === 'toolUse' ? stream.goal : { active: false };
-    const identity = stream.identity;
-    // An agent run takes its category's chrome; a legacy stream with no
-    // identity, a process, or a workflow container takes the neutral one.
+      run.category === 'toolUse' ? run.goal : { active: false };
+    const identity = run.identity;
+    // An agent run takes its category's chrome; a process or a workflow
+    // container takes the neutral one.
     const toolbarButtons =
-      identity?.kind === 'agent'
-        ? TOOLBAR_BUTTONS[stream.category]
+      identity.kind === 'agent'
+        ? TOOLBAR_BUTTONS[run.category]
         : NEUTRAL_TOOLBAR;
     // Resume, Run new, and Restore reach the host's `nativeAgentRun` gate,
     // which admits a plain agent identity and nothing else.
     const isNativeAgentRun = isPlainAgentIdentity(identity);
-    const enabledButtons = enabledToolbarButtons(stream, displayKey);
-    const runContext = this.runContextText(stream);
+    const enabledButtons = enabledToolbarButtons(run, displayKey);
+    const runContext = this.runContextText(run);
     const toolbarButtonViews = toolbarButtons.map((btn) => {
       const hidden = NATIVE_AGENT_ONLY_BUTTONS.has(btn.id) && !isNativeAgentRun;
       const isCopyRunContext = btn.localAction === 'copyRunContext';
@@ -492,8 +492,7 @@ export class RunHeader extends LitElement {
         !enabledButtons?.has(btn.id) ||
         (isCopyRunContext && runContext === '');
       const isActive =
-        btn.bypassKind !== undefined &&
-        this.bypassActive(stream, btn.bypassKind);
+        btn.bypassKind !== undefined && this.bypassActive(run, btn.bypassKind);
       const copied = isCopyRunContext && this.copyRunContext.state.copied;
       const restingTooltip =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -513,7 +512,7 @@ export class RunHeader extends LitElement {
           void this.copyRunContext.copy(runContext);
           return;
         }
-        this.dispatchToolbar(btn, stream);
+        this.dispatchToolbar(btn, run);
       };
       const { button, tooltip } = renderIconActionButtonParts({
         id: btn.id,
@@ -541,19 +540,19 @@ export class RunHeader extends LitElement {
     });
     const shownButtons = toolbarButtonViews.filter((view) => !view.hidden);
     const progressTitle = getProgressBadgeTitle(
-      stream.conversationProgress,
-      stream.stage ?? undefined,
+      run.conversationProgress,
+      run.stage ?? undefined,
     );
 
     return html`
       <div class="log-header">
         <div class="header-left">
-          ${this.renderAncestors(stream)}
-          <h1 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME} data-stream=${stream.id}>
-            ${stream.label}
+          ${this.renderAncestors(run)}
+          <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
+            ${run.label}
           </h1>
-          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-            >${stream.description ?? stream.label} · ${stream.id}</wa-tooltip
+          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
+            >${run.description ?? run.label} · ${run.id}</wa-tooltip
           >
           <span
             id=${ELEMENT_IDS.STATUS_INDICATOR}
@@ -561,20 +560,20 @@ export class RunHeader extends LitElement {
             aria-label=${statusLabel}
             class=${classMap({
               'status-indicator': true,
-              [TONE_INDICATOR_CLASS[stream.tone]]: true,
+              [TONE_INDICATOR_CLASS[run.tone]]: true,
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${stream.statusDetail ?? statusLabel}
+            ${run.statusDetail ?? statusLabel}
           </wa-tooltip>
           <span class="status-label" aria-hidden="true">${statusLabel}</span>
-          ${this.renderRunElapsed(stream)} ${this.renderGoalChip(goal)}
-          ${this.renderProgressBadge(stream.conversationProgress, stream.stage)}
+          ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
+          ${this.renderProgressBadge(run.conversationProgress, run.stage)}
         </div>
         <div class="header-actions">
           <wa-button-group
             id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
-            label="Stream actions"
+            label="Run actions"
           >
             ${repeat(
               toolbarButtonViews,
@@ -605,7 +604,7 @@ export class RunHeader extends LitElement {
               variant="neutral"
               size="s"
               type="button"
-              aria-label="Stream actions"
+              aria-label="Run actions"
               >${waIcon('ellipsis')}</wa-button
             >
             <div class="header-overflow-status">
@@ -618,7 +617,7 @@ export class RunHeader extends LitElement {
             )}
           </wa-dropdown>
           <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}
-            >Stream actions</wa-tooltip
+            >Run actions</wa-tooltip
           >
         </div>
       </div>
@@ -642,13 +641,13 @@ export class RunHeader extends LitElement {
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
-  private renderRunElapsed(stream: RunView): TemplateResult | typeof nothing {
-    if (stream.runStartedAt === null || stream.group === 'recent') {
+  private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
+    if (run.runStartedAt === null || run.group === 'recent') {
       return nothing;
     }
     return html`<tool-timer
       id=${ELEMENT_IDS.RUN_ELAPSED}
-      .startTime=${stream.runStartedAt}
+      .startTime=${run.runStartedAt}
     ></tool-timer>`;
   }
 
@@ -680,10 +679,10 @@ export class RunHeader extends LitElement {
   }
 
   /** The full ancestors path, root first, each segment a link to that
-   *  stream. Laid out nearest-first in the DOM (see the styles). */
-  private renderAncestors(stream: RunView): TemplateResult | typeof nothing {
-    if (stream.ancestors.length === 0) return nothing;
-    const nearestFirst = [...stream.ancestors].reverse();
+   *  run. Laid out nearest-first in the DOM (see the styles). */
+  private renderAncestors(run: RunView): TemplateResult | typeof nothing {
+    if (run.ancestors.length === 0) return nothing;
+    const nearestFirst = [...run.ancestors].reverse();
     return html`
       <nav class="ancestors" aria-label="Parent sessions">
         ${repeat(
@@ -718,6 +717,6 @@ export class RunHeader extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'stream-header': RunHeader;
+    'run-header': RunHeader;
   }
 }

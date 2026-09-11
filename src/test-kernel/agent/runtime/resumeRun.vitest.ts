@@ -30,6 +30,9 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 const getRunStoreMock = vi.hoisted(() => vi.fn());
+// `getRunRecords().exists()` answers "the log still lists this run"; the KV
+// store double's `exists(key)` is the separate checkpoint-file probe.
+const runExistsMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/RunKVStore')>()),
   getRunStore: getRunStoreMock,
@@ -41,14 +44,15 @@ vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
           try: () => store.readConfig(),
           catch: ensureError,
         }),
-      readMeta: () =>
-        Effect.tryPromise({ try: () => store.readMeta(), catch: ensureError }),
+      exists: () =>
+        Effect.tryPromise({ try: () => runExistsMock(), catch: ensureError }),
     };
   },
 }));
 
 // The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: the store double answers only `readConfig`/`readMeta`/`exists`.
+// not seed: the store double answers only `readConfig` and the checkpoint
+// probe `exists`; the run's own existence is `runExistsMock`.
 const classifyRunMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/runClassification', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
@@ -105,9 +109,9 @@ describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
     getRunStoreMock.mockReset().mockReturnValue({
       readConfig: async () => snapshot().agentConfig,
-      readMeta: async () => ({ runId: RUN }),
       exists: async () => false,
     });
+    runExistsMock.mockReset().mockResolvedValue(true);
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
     inspectRunLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
@@ -131,13 +135,7 @@ describe('resumeRun tool-use queue ownership', () => {
           path: ':memory:',
           cause: new Error('Corrupt record'),
         });
-        getRunStoreMock.mockReturnValueOnce({
-          readConfig: async () => snapshot().agentConfig,
-          readMeta: async () => {
-            throw failure;
-          },
-          exists: async () => false,
-        });
+        runExistsMock.mockRejectedValueOnce(failure);
         expect(
           yield* Effect.flip(resumeRun(RUN, { session, executeWorkflow })),
         ).toBe(failure);
@@ -157,7 +155,6 @@ describe('resumeRun tool-use queue ownership', () => {
           configRead.resolve();
           return config.promise;
         },
-        readMeta: async () => ({ runId: RUN }),
         exists: async () => false,
       });
 
@@ -186,26 +183,22 @@ describe('resumeRun tool-use queue ownership', () => {
   it.live('preserves raced input when the run has no persisted record', () =>
     Effect.gen(function* () {
       const session = createSession();
-      const meta = createDeferred<null>();
-      const metaRead = createDeferred<void>();
-      getRunStoreMock.mockReturnValueOnce({
-        readConfig: async () => snapshot().agentConfig,
-        readMeta: () => {
-          metaRead.resolve();
-          return meta.promise;
-        },
-        exists: async () => false,
+      const exists = createDeferred<boolean>();
+      const existsRead = createDeferred<void>();
+      runExistsMock.mockImplementationOnce(() => {
+        existsRead.resolve();
+        return exists.promise;
       });
 
       const resumed = yield* Effect.forkChild(
         resumeClaimedRun(RUN, { session, executeWorkflow }),
       );
-      yield* Effect.promise(() => metaRead.promise);
+      yield* Effect.promise(() => existsRead.promise);
       expect(
         session.followUps.submit(RUN, { text: 'raced' }, 'recoverable'),
       ).toEqual({ kind: 'queued' });
 
-      meta.resolve(null);
+      exists.resolve(false);
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(session.followUps.getAll(RUN)).toEqual(['raced']);
     }),
@@ -289,7 +282,7 @@ describe('resumeRun tool-use queue ownership', () => {
         createDeferred<ReturnType<typeof snapshot>['agentConfig']>();
       getRunStoreMock.mockReturnValueOnce({
         readConfig: () => config.promise,
-        readMeta: async () => ({ runId: RUN }),
+        exists: async () => false,
       });
 
       const resumed = yield* Effect.forkChild(
@@ -408,7 +401,6 @@ describe('resumeRun tool-use queue ownership', () => {
           ...snapshot().agentConfig,
           agentCategory: AgentCategory.Workflow,
         }),
-        readMeta: async () => ({ runId: RUN }),
         exists: async () => false,
       });
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
@@ -482,7 +474,6 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = createSession();
         getRunStoreMock.mockReturnValue({
           readConfig: async () => snapshot().agentConfig,
-          readMeta: async () => ({ runId: RUN }),
           exists: async () => true,
         });
         arrange();
@@ -505,7 +496,6 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = createSession();
         getRunStoreMock.mockReturnValue({
           readConfig: async () => snapshot().agentConfig,
-          readMeta: async () => ({ runId: RUN }),
           exists: async () => true,
         });
         retrieveSessionResumeDataMock.mockRejectedValueOnce(

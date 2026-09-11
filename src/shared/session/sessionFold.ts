@@ -60,7 +60,7 @@
 
 import {
   aggregateTarget,
-  mergeRounds,
+  nonEmptyRounds,
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
@@ -73,6 +73,7 @@ import {
   isTranscriptEvent,
   ownerPid,
   runIdentityDisplayName,
+  emptyUsageStats,
   sumUsageStats,
   type AggregateId,
   type FoldInput,
@@ -498,6 +499,7 @@ function createRun(
     statusDetail: null,
     ...runStatusCopy(status),
     createdAt: event.commit,
+    launchedAt: event.at,
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
@@ -515,7 +517,7 @@ function createRun(
     readOnly: false,
     forceExpanded: false,
     group: 'recent' as const,
-    usage: {},
+    usage: emptyUsageStats(),
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
@@ -792,7 +794,7 @@ function isWorkflowScriptRun(run: RunView): boolean {
 }
 
 function childProgressOf(child: RunView): ChildRunProgress {
-  const totals = sumUsageStats(Object.values(child.usage));
+  const totals = child.usage;
   return {
     ...(child.runStartedAt === null
       ? {}
@@ -813,11 +815,9 @@ function childProgressChanged(prev: RunView, next: RunView): boolean {
   ) {
     return true;
   }
-  if (prev.usage === next.usage) return false;
-  const before = sumUsageStats(Object.values(prev.usage));
-  const after = sumUsageStats(Object.values(next.usage));
   return (
-    before.outputTokens !== after.outputTokens || before.cost !== after.cost
+    prev.usage.outputTokens !== next.usage.outputTokens ||
+    prev.usage.cost !== next.usage.cost
   );
 }
 
@@ -1415,10 +1415,16 @@ function applyOwnArm(
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
     case 'usage':
-      return {
-        ...run,
-        usage: { ...run.usage, [event.runId]: event.usage },
-      };
+      // `usage` is a latest-only listing key, so a cold read delivers exactly
+      // one row per run: the row must be — and is — the run's cumulative
+      // total, published by the single reporter for that run (`UsageMonitor`
+      // for a model-driven run, the agent-CLI loop for its own child run).
+      // The newest row therefore replaces the total; summing here would
+      // double-count every earlier round an aggregate replay brings on top of
+      // the listing row. The one-element sum normalizes the extended payload
+      // (`elapsedTime`, `percentageCached`, `toolUseTokens`) down to the
+      // view's `TokenUsageStats` shape.
+      return { ...run, usage: sumUsageStats([event.usage]) };
     case 'context.state':
       return {
         ...run,
@@ -1443,33 +1449,23 @@ function applyOwnArm(
       return run.category === AgentCategory.ToolUse
         ? { ...run, goal: event.state }
         : wrongArm(run, event);
+    // The three round-keyed facts are latest-only listing keys, so a cold
+    // read delivers exactly one row of each per run and the commit guard
+    // drops the earlier rows an aggregate replay brings: each row carries
+    // the run's whole map (the producer holds it in `OutputState`), and the
+    // newest row therefore replaces the map rather than merging into it.
     case 'addOutputFiles':
       return run.category === AgentCategory.Workflow
-        ? {
-            ...run,
-            files: mergeRounds(run.files, event.filesByRound, 'drop'),
-          }
-        : {
-            ...run,
-            outputs: mergeRounds(run.outputs, event.filesByRound, 'drop'),
-          };
+        ? { ...run, files: nonEmptyRounds(event.filesByRound) }
+        : { ...run, outputs: nonEmptyRounds(event.filesByRound) };
     case 'updateMissingOutputs':
-      return {
-        ...run,
-        missingOutputs: mergeRounds(
-          run.missingOutputs,
-          event.filesByRound,
-          'keep',
-        ),
-      };
+      // An empty round here is a fact, not an absence: the round was checked
+      // and nothing was missing.
+      return { ...run, missingOutputs: { ...event.filesByRound } };
     case 'updateCompileFailures':
       return {
         ...run,
-        compileFailures: mergeRounds(
-          run.compileFailures,
-          event.filesByRound,
-          'drop',
-        ),
+        compileFailures: nonEmptyRounds(event.filesByRound),
       };
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,

@@ -25,9 +25,10 @@ import {
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
   type RunId,
-  type RunMeta,
   type HistoryRunStatus,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import {
   listRunGeneratedFiles,
@@ -96,7 +97,8 @@ export interface CliHistoryEntry {
 interface CliHistoryDetails {
   readonly id: RunId;
   readonly status: HistoryRunStatus;
-  readonly meta: RunMeta | null;
+  /** The run's launch facts as the session's fold holds them. */
+  readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
   readonly config: AgentConfig | null;
   readonly result: ReturnType<typeof unwrapResultMeta> | null;
   readonly report: string | null;
@@ -181,7 +183,7 @@ export async function readCliHistoryDetails(
   const session = await initializeCliTranscriptSession();
   const store = getRunRecords(session, id);
   const [
-    meta,
+    run,
     config,
     resultMeta,
     runEnd,
@@ -196,7 +198,7 @@ export async function readCliHistoryDetails(
     Effect.gen(function* () {
       const values = yield* Effect.all(
         [
-          store.readMeta(),
+          session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
           store.readConfig(),
           store.readResultMeta(),
           store.readRunEnd(),
@@ -224,7 +226,10 @@ export async function readCliHistoryDetails(
             id,
             checkpointPresent: values[8],
             agentCategory: values[1].agentCategory,
-            outcome: values[0]?.outcome,
+            outcome:
+              values[0] && isTerminalOutcomePhase(values[0].status)
+                ? values[0].status
+                : undefined,
           },
           session,
         ));
@@ -252,7 +257,7 @@ export async function readCliHistoryDetails(
   );
 
   if (
-    !meta &&
+    !run &&
     !config &&
     !conversationPreview &&
     !fullConversation &&
@@ -263,8 +268,18 @@ export async function readCliHistoryDetails(
   }
   return redactDisplayValue({
     id,
-    status: resolveHistoryRunStatus({ resumable, outcome: meta?.outcome }),
-    meta,
+    status: resolveHistoryRunStatus({
+      resumable,
+      outcome:
+        run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
+    }),
+    run: run
+      ? {
+          launchedAt: run.launchedAt,
+          parentId: run.parentId,
+          description: run.description,
+        }
+      : null,
     config,
     result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
     report,
@@ -308,10 +323,10 @@ export async function readCliHistoryExportInput(
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
   const session = await initializeCliTranscriptSession();
-  const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
+  const { run, config, conversation, hasTranscriptEvidence, exportInput } =
     await effectRuntime().runPromise(loadChatExportInput(id, session));
   if (exportInput) return { status: 'ok', exportInput };
-  if (!meta && !config && !conversation && !hasTranscriptEvidence) {
+  if (!run && !config && !conversation && !hasTranscriptEvidence) {
     return { status: 'not_found' };
   }
   return { status: 'incomplete' };
@@ -521,11 +536,10 @@ export function formatInvalidExportFormatText(raw: string): string {
 }
 
 /**
- * Frozen-NDJSON status projection (proposal gate G): the public NDJSON stream
- * keeps the pre-consolidation vocabulary — terminal outcomes emit as
- * `CliRunStatus` ('completed' | 'interrupted' | 'error') while
- * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
- * output keeps `HistoryRunStatus`.
+ * The one rename the NDJSON history records keep: a terminal outcome is
+ * spelled as `CliRunStatus` ('completed' | 'interrupted' | 'error'), the
+ * word the CLI contract promises, while 'resumable'/'unknown' pass through
+ * unchanged. Internal and human-readable output keeps `HistoryRunStatus`.
  */
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
@@ -561,14 +575,14 @@ export function cliHistoryDetailNdjsonRecord(
 export function formatCliHistoryDetailsText(
   details: CliHistoryDetails,
 ): string {
-  const { config, meta } = details;
+  const { config, run } = details;
   const model = details.currentModel ?? config?.model;
   const teamPreset = teamPresetId(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
   const lines = [
     `Run: ${details.id}`,
     `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
-    `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
+    `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,
   ];
@@ -583,8 +597,8 @@ export function formatCliHistoryDetailsText(
   }
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
   if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
-  if (meta?.parentRunId) lines.push(`Parent: ${meta.parentRunId}`);
-  if (meta?.description) lines.push(`Description: ${meta.description}`);
+  if (run?.parentId) lines.push(`Parent: ${run.parentId}`);
+  if (run?.description) lines.push(`Description: ${run.description}`);
   if (details.result) {
     lines.push(`Result: ${JSON.stringify(details.result)}`);
   }

@@ -22,7 +22,7 @@ function root(usage?: TokenUsageStats): RunView {
   return makeRunView({
     id: ROOT,
     label: 'main',
-    usage: usage ? { 'root-usage': usage } : {},
+    ...(usage ? { usage } : {}),
   });
 }
 
@@ -267,13 +267,11 @@ describe('collectResumeUsage', () => {
       child({
         id: 'rev' as RunId,
         usage: {
-          'rev-usage': {
-            inputTokens: 40,
-            outputTokens: 8,
-            cost: 0.3,
-            cacheReadInputTokens: 3,
-            reasoningTokens: 5,
-          } as TokenUsageStats,
+          inputTokens: 40,
+          outputTokens: 8,
+          cost: 0.3,
+          cacheReadInputTokens: 3,
+          reasoningTokens: 5,
         },
       }),
     ]);

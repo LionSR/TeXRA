@@ -747,7 +747,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const statusBarSession = defaultSession();
   const statusBarUsageTracker = new StatusBarUsageTracker(
     statusBarSession.status,
-    statusBarSession.snapshots,
+    statusBarSession,
   );
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;

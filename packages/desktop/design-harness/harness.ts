@@ -1,5 +1,5 @@
 // Design harness: renders the proposed shell layouts with the real TeXRA
-// components (stream-tabs, stream-header, follow-up-input) and Web Awesome
+// components (run-tabs, run-header, follow-up-input) and Web Awesome
 // controls on fixture data. Untracked; screenshots feed the design canvas.
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';

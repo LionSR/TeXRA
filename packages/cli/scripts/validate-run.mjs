@@ -986,24 +986,34 @@ prompts:
     );
     assertSuccess(result, 'texra agents run workflow script NDJSON');
     const records = parseNdjson(result.stdout, 'workflow-script run NDJSON');
+    assert(
+      records.every((record) => record.contract === 2),
+      'every NDJSON line should carry the version-2 contract stamp',
+    );
     // A run id is opaque: the workflow-script child is the roster row its
-    // parent reports under the workflow-script tool name, never a name
-    // parsed out of the id.
+    // parent reports with the workflow identity, never a name parsed out of
+    // the id.
     const workflowChildIds = new Set(
       records.flatMap((record) =>
-        record.kind === 'progress' && record.event === 'updateActiveSubagents'
+        record.kind === 'progress' && record.event === 'run.children'
           ? (record.payload?.children ?? [])
-              .filter((child) => child.toolName === 'delegate_multi_agents')
-              .map((child) => child.childStreamId)
+              .filter((child) => child.identity?.kind === 'multiAgentWorkflow')
+              .map((child) => child.childRunId)
           : [],
       ),
     );
+    // A progress record carries the session row: its run is the `run`
+    // aggregate key, `["run", <run id>]`.
+    const runIdOf = (record) => {
+      const [kind, id] = JSON.parse(record.payload.aggregateId);
+      return kind === 'run' ? id : undefined;
+    };
     const workflowCompletedIndex = records.findIndex(
       (record) =>
         record.kind === 'progress' &&
-        record.event === 'updateStreamStatus' &&
-        workflowChildIds.has(record.payload?.streamId) &&
-        record.payload?.status === 'completed',
+        record.event === 'run.end' &&
+        workflowChildIds.has(runIdOf(record)) &&
+        record.payload?.outcome === 'completed',
     );
     const parentResultIndex = records.findIndex(
       (record) => record.kind === 'agent-result',
@@ -1012,7 +1022,7 @@ prompts:
       workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
       'workflow-script run should wait for and return the terminal child report to the headless parent',
     );
-    const childId = records[workflowCompletedIndex].payload.streamId;
+    const childId = runIdOf(records[workflowCompletedIndex]);
     const history = run(
       process.execPath,
       [

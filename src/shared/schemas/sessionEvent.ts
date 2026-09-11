@@ -294,8 +294,8 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunStartDraftSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
-   * item 8): the frozen NDJSON `setActiveStream` line projects from this and
-   * from nothing else. `run.start` is the creation fact and happens once.
+   * item 8); the CLI projection writes it verbatim as a `run.activate`
+   * progress record. `run.start` is the creation fact and happens once.
    */
   durable('run.activate', {
     category: AgentCategorySchema,

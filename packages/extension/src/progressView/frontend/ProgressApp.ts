@@ -3,7 +3,7 @@
  * It is the root, the only element that holds the three records, and it
  * renders exactly one of two states from `resolveSelected`: the New task
  * empty state (hero, the context disclosure, the Active now strip, the
- * expanded composer) or the selected stream's conversation. The Sessions
+ * expanded composer) or the selected run's conversation. The Sessions
  * drawer, the docked list of the wide editor tab, the Tools sheet, and the
  * header overflow hang off the same element.
  *
@@ -110,13 +110,13 @@ export class ProgressApp extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
   };
 
-  private stopRun(stream: RunView): void {
+  private stopRun(run: RunView): void {
     this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'run.stop', runId: stream.id }),
+      SessionUiEvents.runtime({ kind: 'run.stop', runId: run.id }),
     );
   }
 
-  private handleOverflow(value: string, stream: RunView | null): void {
+  private handleOverflow(value: string, run: RunView | null): void {
     const item = value as OverflowItem;
     switch (item) {
       case 'popOut':
@@ -146,10 +146,8 @@ export class ProgressApp extends LitElement {
       }
       case 'pack':
       case 'clean':
-        if (!stream) return;
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: item, runId: stream.id }),
-        );
+        if (!run) return;
+        this.dispatchEvent(SessionUiEvents.host({ kind: item, runId: run.id }));
         return;
     }
   }
@@ -158,7 +156,7 @@ export class ProgressApp extends LitElement {
     const { view, surface, host } = this;
     if (!view || !surface || !host) return nothing;
     const selected = resolveSelected(view, surface);
-    const stream = selected === null ? null : (view.runs.get(selected) ?? null);
+    const run = selected === null ? null : (view.runs.get(selected) ?? null);
     const docked = this.placement === 'editor';
 
     return html`
@@ -166,10 +164,10 @@ export class ProgressApp extends LitElement {
         class=${classMap({
           shell: true,
           'is-editor': docked,
-          'has-stream': stream !== null,
+          'has-run': run !== null,
         })}
       >
-        ${this.renderHeader(stream, host, surface)}
+        ${this.renderHeader(run, host, surface)}
         <div class="shell-body">
           ${docked ? this.renderDockedList(view, surface) : nothing}
           <main class="reading">
@@ -177,14 +175,14 @@ export class ProgressApp extends LitElement {
               ${this.renderRequestError()}
             </div>
             ${
-              stream
-                ? html`<stream-conversation
-                    .stream=${stream}
+              run
+                ? html`<run-conversation
+                    .run=${run}
                     .view=${view}
                     .surface=${surface}
                     .host=${host}
                     .nowMs=${this.nowMs}
-                  ></stream-conversation>`
+                  ></run-conversation>`
                 : this.renderEmptyState(view, surface, host)
             }
           </main>
@@ -260,17 +258,17 @@ export class ProgressApp extends LitElement {
   }
 
   private renderHeader(
-    stream: RunView | null,
+    run: RunView | null,
     host: HostSnapshot,
     surface: Surface,
   ): TemplateResult {
     const canStop =
-      stream !== null &&
-      !stream.readOnly &&
-      (stream.group === 'running' || stream.group === 'waiting');
+      run !== null &&
+      !run.readOnly &&
+      (run.group === 'running' || run.group === 'waiting');
     // One 38px row. Docked wide (the editor tab past 720px), the row is a
     // 300px + 1fr grid: the dock cell carries the project name and New task,
-    // the reading cell the stream's actions; the sidebar and the narrow tab
+    // the reading cell the run's actions; the sidebar and the narrow tab
     // show the sessions button and the title in one cell.
     return html`
       <header class="shell-header">
@@ -296,7 +294,7 @@ export class ProgressApp extends LitElement {
             onClick: this.toggleDrawer,
           })}
           <span class="shell-title header-main-title"
-            >${stream ? host.project.name : 'New task'}</span
+            >${run ? host.project.name : 'New task'}</span
           >
           <span class="spacer"></span>
           ${
@@ -307,7 +305,7 @@ export class ProgressApp extends LitElement {
                   label: 'Stop',
                   tooltip: 'Stop',
                   className: 'stop-button',
-                  onClick: () => this.stopRun(stream),
+                  onClick: () => this.stopRun(run),
                 })
               : nothing
           }
@@ -318,7 +316,7 @@ export class ProgressApp extends LitElement {
             tooltip: 'New task',
             onClick: this.selectNew,
           })}
-          ${this.renderOverflow(stream, host)}
+          ${this.renderOverflow(run, host)}
         </div>
       </header>
     `;
@@ -326,9 +324,9 @@ export class ProgressApp extends LitElement {
 
   /** The overflow in both states, so Open dashboard and the Tools sheet
    *  have one home reachable from the New-task state; the debug section
-   *  needs a stream's output. */
+   *  needs a run's output. */
   private renderOverflow(
-    stream: RunView | null,
+    run: RunView | null,
     host: HostSnapshot,
   ): TemplateResult {
     const inEditor = this.placement === 'editor';
@@ -340,7 +338,7 @@ export class ProgressApp extends LitElement {
           const item = (event as CustomEvent<{ item?: { value?: unknown } }>)
             .detail?.item;
           const value = typeof item?.value === 'string' ? item.value : '';
-          this.handleOverflow(value, stream);
+          this.handleOverflow(value, run);
         }}
       >
         <wa-button
@@ -381,7 +379,7 @@ export class ProgressApp extends LitElement {
           Count</wa-dropdown-item
         >
         ${
-          host.debugMode && stream
+          host.debugMode && run
             ? html`<wa-divider></wa-divider>
                 <wa-dropdown-item value="pack"
                   >${waIcon('box-archive', { slot: 'icon' })}Pack output to
@@ -426,7 +424,7 @@ export class ProgressApp extends LitElement {
             ${waIcon('magnifying-glass', { slot: 'start' })}
           </wa-input>
         </div>
-        <stream-tabs sections .view=${view} .surface=${surface}></stream-tabs>
+        <run-tabs sections .view=${view} .surface=${surface}></run-tabs>
       </aside>
     `;
   }
@@ -570,11 +568,11 @@ export class ProgressApp extends LitElement {
           activeNow
             ? html`<section class="active-now" aria-label="Active now">
                 <div class="active-label">Active now</div>
-                <stream-tabs
+                <run-tabs
                   activeOnly
                   .view=${view}
                   .surface=${surface}
-                ></stream-tabs>
+                ></run-tabs>
               </section>`
             : nothing
         }
@@ -587,7 +585,7 @@ export class ProgressApp extends LitElement {
           class="launch-composer"
           .view=${view}
           .surface=${surface}
-          .stream=${null}
+          .run=${null}
           .host=${host}
         ></session-composer>
       </div>

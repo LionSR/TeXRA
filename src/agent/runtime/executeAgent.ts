@@ -555,8 +555,12 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const runSession = options.session;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        const meta = yield* getRunRecords(runSession, resume.runId).readMeta();
-        const parentRunId = meta?.parentRunId;
+        // The parent edge as the fold holds it (`run.start.parent`, severed
+        // by a later `run.detach`), read cold so a resume racing the live
+        // fold's first replay still sees it.
+        const parentRunId =
+          (yield* runSession.readView([])).runs.get(resume.runId)?.parentId ??
+          undefined;
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
           enforceCategory: true,

@@ -18,7 +18,7 @@ function boundedTotal(total: number | undefined): { total?: number } {
  * defaults to 0; a non-positive `total` is treated as unknown) that every
  * stage consumer previously cloned inline.
  */
-export function roundStageFromStageStart(
+function roundStageFromStageStart(
   event: StageStartLike,
 ): RoundStage | undefined {
   if (event.kind !== 'round') return undefined;

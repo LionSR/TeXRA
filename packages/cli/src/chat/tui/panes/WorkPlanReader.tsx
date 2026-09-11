@@ -15,6 +15,7 @@ import {
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import {
+  AgentCategory,
   TODO_STATUS,
   type Plan,
   type RunId,
@@ -120,8 +121,11 @@ export function WorkPlanReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const snapshots = loading ? undefined : tryDefaultSession()?.snapshots;
-  const workPlan = snapshots?.getWorkPlan(runId);
+  const run = loading ? undefined : tryDefaultSession()?.runView(runId);
+  const workPlan =
+    run?.category === AgentCategory.ToolUse
+      ? { plan: run.plan, todos: run.todos }
+      : undefined;
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;

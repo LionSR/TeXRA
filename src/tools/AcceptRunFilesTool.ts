@@ -144,8 +144,7 @@ Parameters map directly to subagent-result delivery attributes:
         });
         if (
           directory === undefined &&
-          (yield* getRunRecords(session, input.execution_id).readMeta()) ===
-            null
+          !(yield* getRunRecords(session, input.execution_id).exists())
         )
           return yield* Effect.fail(
             new ToolError(

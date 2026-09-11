@@ -729,12 +729,12 @@ describe('Sessions owner', () => {
       }),
   );
 
-  // #12017's ownership fence must not reach the fold: the snapshot store is
-  // an in-memory reading of the shared table, and its synchronous accessors
-  // are the runtime's answer for any run, including one another process
-  // owns.
+  // #12017's ownership fence: a committed row another process authored is
+  // accepted like any other, and only its local side effects are fenced.
+  // (That the fold itself keeps a foreign-owned run is stated over the
+  // recorded log in the fold suite.)
   it.live(
-    "folds another process's committed facts without firing local side effects",
+    "accepts another process's committed facts without firing local side effects",
     () =>
       Effect.gen(function* () {
         const session = open('/workspace/owner/foreign-fold');
@@ -774,10 +774,6 @@ describe('Sessions owner', () => {
             at: 0,
             seq: 3,
             commit: 3,
-          });
-          expect(session.snapshots.hasProvenance(foreign)).toBe(true);
-          expect(session.snapshots.getRunMetadata(foreign)).toMatchObject({
-            description: 'a run in another process',
           });
           // Host presentation of a terminal result stays with the process
           // that authored it.

@@ -6,29 +6,41 @@ import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { RUN_PHASE, type RunId, type TokenUsageStats } from '@shared/schemas';
 import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
+import { CHILD, fanOutView } from '@test/shared/session/fanOutScenario';
 
 const runA = 'aaaaaa' as RunId;
 const runB = 'bbbbbb' as RunId;
+const FAN_OUT_VIEW = fanOutView();
+
+/** A folded run, borrowed from the recorded fan-out so the stub states a
+ *  real `RunView`; only the metered total matters to the tracker. */
+function runViewWithUsage(runId: RunId, usage: TokenUsageStats): RunView {
+  const folded = FAN_OUT_VIEW.runs.get(CHILD);
+  if (!folded) throw new Error('fan-out fixture has no child run');
+  return { ...folded, id: runId, usage };
+}
 
 /**
  * The tracker holds no state: it projects from the session status plane and
- * the per-run usage accumulated by the snapshot store, stubbed here as the
- * `getRunUsage` read the real store serves.
+ * the metered total the session view carries for each run
+ * (`RunView.usage`), stubbed here as the `runView` read the real session
+ * serves.
  */
 function trackerOverStatusPlane(): {
   status: RunStatusMachine;
-  usageByRun: Map<RunId, Map<string, TokenUsageStats>>;
+  runViews: Map<RunId, RunView>;
   tracker: StatusBarUsageTracker;
 } {
   const status = new RunStatusMachine(
     () => {},
     () => {},
   );
-  const usageByRun = new Map<RunId, Map<string, TokenUsageStats>>();
+  const runViews = new Map<RunId, RunView>();
   const tracker = new StatusBarUsageTracker(status, {
-    getRunUsage: (runId) => usageByRun.get(runId) ?? new Map(),
+    runView: (runId) => runViews.get(runId),
   });
-  return { status, usageByRun, tracker };
+  return { status, runViews, tracker };
 }
 
 function startRun(status: RunStatusMachine, runId: RunId): void {
@@ -36,19 +48,21 @@ function startRun(status: RunStatusMachine, runId: RunId): void {
 }
 
 function setRunUsage(
-  usageByRun: Map<RunId, Map<string, TokenUsageStats>>,
+  runViews: Map<RunId, RunView>,
   runId: RunId,
-  runs: Record<string, TokenUsageStats>,
+  usage: TokenUsageStats,
 ): void {
-  usageByRun.set(runId, new Map(Object.entries(runs)));
+  runViews.set(runId, runViewWithUsage(runId, usage));
 }
 
 describe('StatusBarUsageTracker', () => {
   it('reports zero usage for runs without a known in-flight status', () => {
-    const { usageByRun, tracker } = trackerOverStatusPlane();
+    const { runViews, tracker } = trackerOverStatusPlane();
 
-    setRunUsage(usageByRun, runA, {
-      'run-a': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
+    setRunUsage(runViews, runA, {
+      cost: 0.01,
+      inputTokens: 10,
+      outputTokens: 20,
     });
 
     expect(tracker.totalUsage.cost).toBe(0);
@@ -56,16 +70,19 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.outputTokens).toBe(0);
   });
 
-  it('sums the accumulated per-run usage of every in-flight run', () => {
-    const { status, usageByRun, tracker } = trackerOverStatusPlane();
+  it('sums the metered total of every in-flight run', () => {
+    const { status, runViews, tracker } = trackerOverStatusPlane();
     startRun(status, runA);
     startRun(status, runB);
-    setRunUsage(usageByRun, runA, {
-      'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
-      'run-2': { cost: 0.02, inputTokens: 30, outputTokens: 40 },
+    setRunUsage(runViews, runA, {
+      cost: 0.03,
+      inputTokens: 40,
+      outputTokens: 60,
     });
-    setRunUsage(usageByRun, runB, {
-      'run-3': { cost: 0.04, inputTokens: 5, outputTokens: 6 },
+    setRunUsage(runViews, runB, {
+      cost: 0.04,
+      inputTokens: 5,
+      outputTokens: 6,
     });
 
     expect(tracker.activeRunCount).toBe(2);
@@ -75,10 +92,12 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('keeps counting a run that waits for follow-up input', () => {
-    const { status, usageByRun, tracker } = trackerOverStatusPlane();
+    const { status, runViews, tracker } = trackerOverStatusPlane();
     startRun(status, runA);
-    setRunUsage(usageByRun, runA, {
-      'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
+    setRunUsage(runViews, runA, {
+      cost: 0.01,
+      inputTokens: 10,
+      outputTokens: 20,
     });
 
     status.transition(runA, RUN_PHASE.WAITING, RUN_TRANSITION_CAUSE.WAIT);
@@ -91,10 +110,12 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('drops a run from the total once it reaches a final status', () => {
-    const { status, usageByRun, tracker } = trackerOverStatusPlane();
+    const { status, runViews, tracker } = trackerOverStatusPlane();
     startRun(status, runA);
-    setRunUsage(usageByRun, runA, {
-      'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
+    setRunUsage(runViews, runA, {
+      cost: 0.01,
+      inputTokens: 10,
+      outputTokens: 20,
     });
 
     status.transition(
@@ -106,8 +127,8 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.activeRunCount).toBe(0);
     expect(tracker.totalUsage.cost).toBe(0);
 
-    // Resuming re-enters flight, and the store-accumulated usage — including
-    // the earlier runs' — is projected again.
+    // Resuming re-enters flight, and the view's accumulated total is
+    // projected again.
     status.transition(runA, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.RESUME);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);

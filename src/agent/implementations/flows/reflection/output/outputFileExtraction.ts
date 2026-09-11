@@ -9,7 +9,6 @@
  * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
  */
 
-import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import {
   fileLocationDisplayPath,
   OUTPUT_DOCUMENTS_TAG,
@@ -22,10 +21,12 @@ import { replaceInputCommands } from './fileMapping';
 import { tryOperation } from './outputOperations';
 import {
   ensureRoundData,
+  reportMissingOutputs,
   withOutputStage,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
+
 import type { XmlOutputManager } from './XmlOutputManager';
 
 /**
@@ -99,7 +100,7 @@ async function handleNoOutputs(
       },
     );
   }
-  reportMissingOutputs(deps.logger, {
+  reportMissingOutputs(state, deps.logger, {
     round: currRound,
     missing: [],
     xmlFile: outputLocation.absolutePath,

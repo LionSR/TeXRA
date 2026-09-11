@@ -22,15 +22,13 @@ import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ResultMetaSchema,
-  RunMetaSchema,
   aggregateId,
-  RUN_META_SCHEMA_VERSION,
   type ResultMeta,
   type RunEnd,
   type SessionEvent,
   type SessionEventDraft,
   type RunId,
-  type RunMeta,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -193,62 +191,6 @@ export function runEndFromEvents(
   return lifecycle?.type === 'run.end' ? lifecycle : null;
 }
 
-/** Fold the named metadata records for one run from one database prefix. */
-export function runMetaFromEvents(
-  rows: readonly SessionEvent[],
-  runId: RunId,
-): RunMeta | null {
-  const id = aggregateId('run', runId);
-  const start = rows.find(
-    (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-      row.type === 'run.start' && row.aggregateId === id,
-  );
-  if (
-    !start ||
-    rows.some((row) => row.aggregateId === id && row.type === 'run.removed')
-  )
-    return null;
-  const description = rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'run.description',
-  );
-  const workflow = rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'run.workflow',
-  );
-  // The parent edge: `run.start.parent`, severed by a later `run.detach`.
-  const detached = rows.some(
-    (row) => row.aggregateId === id && row.type === 'run.detach',
-  );
-  return RunMetaSchema.parse({
-    schemaVersion: RUN_META_SCHEMA_VERSION,
-    timestamp: new Date(start.at).toISOString(),
-    identity: start.identity ?? undefined,
-    userFollowUpSupport: start.userFollowUpSupport,
-    parentRunId:
-      detached || start.parent === null ? undefined : start.parent.id,
-    outcome: runEndFromEvents(rows, runId)?.outcome,
-    description:
-      description?.type === 'run.description'
-        ? description.description
-        : undefined,
-    workflow: workflow?.type === 'run.workflow' ? workflow.workflow : undefined,
-  });
-}
-
-/** Read the current configuration from the same committed prefix as metadata. */
-export function runRecordFromEvents(
-  rows: readonly SessionEvent[],
-  runId: RunId,
-): RunRecord | null {
-  if (!runMetaFromEvents(rows, runId)) return null;
-  const id = aggregateId('run', runId);
-  const event = rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'run.record',
-  );
-  return event?.type === 'run.record'
-    ? RunRecordSchema.parse(event.record)
-    : null;
-}
-
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
@@ -274,12 +216,22 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         );
       }),
     );
-  const metaOf = (rows: readonly SessionEvent[]) =>
-    runMetaFromEvents(rows, runId);
-  const recordOf = (rows: readonly SessionEvent[]) =>
-    runRecordFromEvents(rows, runId);
+  /** The latest `run.record` row; the database reads a closed run as absent. */
+  const recordOf = (rows: readonly SessionEvent[]): RunRecord | null => {
+    const event = rows.findLast(
+      (row) => row.aggregateId === id && row.type === 'run.record',
+    );
+    return event?.type === 'run.record'
+      ? RunRecordSchema.parse(event.record)
+      : null;
+  };
   return {
-    readMeta: (): Effect.Effect<RunMeta | null, Error> => read(metaOf),
+    /** The run has a `run.start` the database still lists: absent, or
+     *  closed by its tombstone, reads false. */
+    exists: (): Effect.Effect<boolean, Error> =>
+      read((rows) =>
+        rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
+      ),
     readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
     readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
       read((rows) => {
@@ -292,6 +244,14 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           (row) => row.aggregateId === id && row.type === 'run.report',
         );
         return event?.type === 'run.report' ? event.report : null;
+      }),
+    /** The committed snapshot of a workflow-script run, for reopening it. */
+    readWorkflow: (): Effect.Effect<WorkflowRunSnapshot | null, Error> =>
+      read((rows) => {
+        const event = rows.findLast(
+          (row) => row.aggregateId === id && row.type === 'run.workflow',
+        );
+        return event?.type === 'run.workflow' ? event.workflow : null;
       }),
     readWorkspaceFiles: (): Effect.Effect<string[], Error> =>
       read((rows) => {

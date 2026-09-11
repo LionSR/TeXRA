@@ -8,8 +8,8 @@
  * publications, the fold, the session inputs, the three local sources, and
  * the owner-liveness prober) and the `SessionHandle` built over them, whose
  * request handler admits on that graph. The handle layer opens the root's
- * transcript store and its snapshot store over that log and hands both to
- * the handle. Every opener (the hosts' default session,
+ * transcript store over that log and hands it to the handle. Every opener
+ * (the hosts' default session,
  * the desktop's papers, the SDK) resolves its root here, so opening a root
  * twice returns one handle, and the map is the one owner of its lifetime:
  * an open borrows, `close` settles and releases, and the runtime's disposal
@@ -71,7 +71,6 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -127,13 +126,13 @@ class Session extends Context.Service<Session, SessionHandle>()(
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   const owners = new Set<OwnerId>();
-  for (const stream of view.runs.values()) {
+  for (const run of view.runs.values()) {
     if (
-      stream.ownerId !== null &&
-      stream.ownerId !== self &&
-      !isTerminalOutcomePhase(stream.status)
+      run.ownerId !== null &&
+      run.ownerId !== self &&
+      !isTerminalOutcomePhase(run.status)
     ) {
-      owners.add(stream.ownerId);
+      owners.add(run.ownerId);
     }
   }
   return [...owners].sort();
@@ -141,7 +140,7 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
 
 /**
  * The liveness prober (PRD 5.2, contract C5): every owner the view names
- * on a non-terminal stream other than this process, proved by
+ * on a non-terminal run other than this process, proved by
  * `kill(pid, 0)` plus the start-identity check per distinct owner, never
  * per run. Probed whenever that owner set changes and on an interval
  * between changes. Alive and unprovable owners hold their runs; only an
@@ -371,7 +370,6 @@ const sessionHandleLayer = (
             new SessionHandle({
               ...key.open,
               transcripts,
-              snapshots: new RunSnapshotStore(eventLog),
               graph,
             }),
         ),

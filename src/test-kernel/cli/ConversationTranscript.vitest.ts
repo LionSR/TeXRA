@@ -67,9 +67,9 @@ import {
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
 
-const STREAM_ID = 'cli-test-stream' as RunId;
-const ROOT_STREAM = 'root-stream' as RunId;
-const CHILD_STREAM = 'claude@agent-sdk#1' as RunId;
+const RUN_ID = 'cli-test-run' as RunId;
+const ROOT_RUN = 'root-run' as RunId;
+const CHILD_RUN = 'child-run' as RunId;
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
@@ -1116,9 +1116,9 @@ describe('CLI conversation transcript', () => {
     );
   });
 
-  it('only feeds the root scrollback stream, not background subagents', () => {
+  it('only feeds the root scrollback run, not background subagents', () => {
     const items = buildStaticTranscriptItems({
-      source: rootChildSource(ROOT_STREAM, 'do x', 'done'),
+      source: rootChildSource(ROOT_RUN, 'do x', 'done'),
       meta: SESSION_META,
     }).items;
 
@@ -1127,8 +1127,8 @@ describe('CLI conversation transcript', () => {
 
   it('keeps background children out of the root scrollback owner', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeRunId: CHILD_STREAM,
-      rootRunId: ROOT_STREAM,
+      activeRunId: CHILD_RUN,
+      rootRunId: ROOT_RUN,
       scopedTranscript: false,
     });
     const items = buildStaticTranscriptItems({
@@ -1142,15 +1142,15 @@ describe('CLI conversation transcript', () => {
 
     expect(scrollbackTarget).toEqual({
       ownerKey: 'root',
-      runId: ROOT_STREAM,
+      runId: ROOT_RUN,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 
   it('uses the focused child as the static scrollback owner in scoped view', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeRunId: CHILD_STREAM,
-      rootRunId: ROOT_STREAM,
+      activeRunId: CHILD_RUN,
+      rootRunId: ROOT_RUN,
       scopedTranscript: true,
     });
     const items = buildStaticTranscriptItems({
@@ -1163,19 +1163,19 @@ describe('CLI conversation transcript', () => {
     }).items;
 
     expect(scrollbackTarget).toEqual({
-      ownerKey: `run:${CHILD_STREAM}`,
-      runId: CHILD_STREAM,
+      ownerKey: `run:${CHILD_RUN}`,
+      runId: CHILD_RUN,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);
   });
 
-  it('keeps the root static owner stable while the root stream resolves', () => {
+  it('keeps the root static owner stable while the root run resolves', () => {
     expect(
       staticScrollbackTarget({
-        activeRunId: STREAM_ID,
+        activeRunId: RUN_ID,
         rootRunId: undefined,
       }),
-    ).toEqual({ ownerKey: 'root', runId: STREAM_ID });
+    ).toEqual({ ownerKey: 'root', runId: RUN_ID });
     expect(
       staticScrollbackTarget({
         activeRunId: CLI_LOCAL_RUN_ID,
@@ -1184,7 +1184,7 @@ describe('CLI conversation transcript', () => {
     ).toEqual({ ownerKey: 'root', runId: CLI_LOCAL_RUN_ID });
     expect(
       staticScrollbackTarget({
-        activeRunId: STREAM_ID,
+        activeRunId: RUN_ID,
         rootRunId: 'resolved-root' as RunId,
       }),
     ).toEqual({ ownerKey: 'root', runId: 'resolved-root' });
@@ -1377,15 +1377,15 @@ function rootChildSource(
   rootText: string,
   childText: string,
 ): StaticScrollbackSource {
-  if (scrollbackRunId === ROOT_STREAM) {
+  if (scrollbackRunId === ROOT_RUN) {
     return sourceOf([entry('u1', 'user', rootText, true)]);
   }
-  if (scrollbackRunId === CHILD_STREAM) {
+  if (scrollbackRunId === CHILD_RUN) {
     return sourceOf([entry('a1', 'assistant', childText, true)]);
   }
   return sourceOf(undefined);
 }
-/** Static scrollback for a single-stream transcript of `entries`. */
+/** Static scrollback for a single-run transcript of `entries`. */
 function staticItems(
   entries: readonly TranscriptRow[],
   options: {

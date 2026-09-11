@@ -14,22 +14,18 @@ import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
- * Cache-miss tokens for this round, resolved once for both consumers of
- * per-round usage:
- * - UI display omits the field entirely when the provider didn't report it
- *   (never shows a guessed number), and also when it's exactly zero.
- * - Backend billing always needs a real number, so it falls back to the
- *   derived estimate (input minus cache-read) when the provider is silent.
+ * Cache-miss tokens billed for this round. Backend billing always needs a
+ * real number, so it falls back to the derived estimate (input minus
+ * cache-read) when the provider is silent. Display never guesses: the
+ * published row carries the accumulator's reported total instead, and omits
+ * the field when no provider ever reported one.
  */
-function resolveRoundCacheMissTokens(
+function billedRoundCacheMissTokens(
   reported: number | undefined,
   roundInputTokens: number,
   roundCacheReadTokens: number,
-): { display: number | undefined; billing: number } {
-  return {
-    display: reported && reported > 0 ? reported : undefined,
-    billing: reported ?? Math.max(0, roundInputTokens - roundCacheReadTokens),
-  };
+): number {
+  return reported ?? Math.max(0, roundInputTokens - roundCacheReadTokens);
 }
 
 /**
@@ -82,6 +78,11 @@ type UsageMonitorRunKind = 'workflow' | 'tool-use';
  *
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
+ *
+ * The two consumers want different grains and get them from one call: the
+ * session's `usage` row carries the run's cumulative totals (a snapshot, since
+ * a listing read delivers only the newest row per run), while the backend is
+ * billed per round.
  */
 export class UsageMonitor {
   /**
@@ -123,16 +124,14 @@ export class UsageMonitor {
       const latestUsage = stateGlobal.usageAccumulator.latestUsage;
       if (!latestUsage) return;
 
-      // Per-round usage - sent to both UI (for accumulation) and backend analytics
+      // Per-round usage - billed to the backend, which accounts per round.
       const roundInputTokens = latestUsage.inputTokens;
       const roundOutputTokens = latestUsage.outputTokens;
       const roundCacheReadTokens = latestUsage.cachedInputTokens ?? 0;
-      const roundCacheCreationTokens = latestUsage.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage.reasoningTokens ?? 0;
       const roundCost = latestUsage.cost;
-      const toolUseTokens = latestUsage.toolUsePromptTokens ?? 0;
       const usageRoute = latestUsage.usageRoute ?? 'api-key';
-      const roundCacheMissTokens = resolveRoundCacheMissTokens(
+      const roundCacheMissTokens = billedRoundCacheMissTokens(
         latestUsage.cacheMissInputTokens,
         roundInputTokens,
         roundCacheReadTokens,
@@ -149,28 +148,36 @@ export class UsageMonitor {
         totals,
       );
 
-      // Build payload for UI
+      // The `usage` row is a snapshot fact, not a delta: `usage` is a
+      // latest-only listing key, so a cold read delivers exactly one row per
+      // run and the fold replaces the run's total with it. Every field here
+      // is therefore the run's total so far, read off the accumulator —
+      // `elapsedTime` and `percentageCached` already were.
       const payload: ExtendedTokenUsageStats = {
-        inputTokens: roundInputTokens,
-        outputTokens: roundOutputTokens,
-        cost: roundTo(roundCost, 3),
+        inputTokens: totals.totalInputTokens,
+        outputTokens: totals.totalOutputTokens,
+        cost: roundTo(totals.totalCost, 3),
         elapsedTime: roundTo(stateGlobal.totalResponseTimeMs / 1000, 1),
-        ...(roundCacheReadTokens > 0 && {
-          cacheReadInputTokens: roundCacheReadTokens,
+        ...(totals.totalCacheReadInputTokens > 0 && {
+          cacheReadInputTokens: totals.totalCacheReadInputTokens,
         }),
-        ...(roundCacheMissTokens.display !== undefined && {
-          cacheMissInputTokens: roundCacheMissTokens.display,
+        // Only reported cache-miss tokens reach the totals, so a zero here
+        // means no provider ever reported one: omit rather than guess.
+        ...(totals.totalCacheMissInputTokens > 0 && {
+          cacheMissInputTokens: totals.totalCacheMissInputTokens,
         }),
-        ...(roundCacheCreationTokens > 0 && {
-          cacheCreationInputTokens: roundCacheCreationTokens,
+        ...(totals.totalCacheCreationInputTokens > 0 && {
+          cacheCreationInputTokens: totals.totalCacheCreationInputTokens,
         }),
         ...(supportsCaching && {
           percentageCached: roundTo(percentageCached, 2),
         }),
         ...(capabilities.supportsReasoning && {
-          reasoningTokens: roundReasoningTokens,
+          reasoningTokens: totals.totalReasoningTokens,
         }),
-        ...(toolUseTokens > 0 && { toolUseTokens }),
+        ...(totals.totalToolUsePromptTokens > 0 && {
+          toolUseTokens: totals.totalToolUsePromptTokens,
+        }),
         usageRoute,
       };
 
@@ -193,7 +200,7 @@ export class UsageMonitor {
           inputTokens: roundInputTokens,
           outputTokens: roundOutputTokens,
           cachedInputTokens: roundCacheReadTokens,
-          cacheMissInputTokens: roundCacheMissTokens.billing,
+          cacheMissInputTokens: roundCacheMissTokens,
           reasoningTokens: roundReasoningTokens,
           cost: roundCost,
           usageRoute,

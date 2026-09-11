@@ -544,8 +544,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     const completedTaskCosts: number[] = [];
     logger.subscribe((event) => {
       if (event.type === 'workflow.call' && event.call.status === 'completed') {
-        if (event.call.totalCostUsd !== undefined) {
-          completedTaskCosts.push(event.call.totalCostUsd);
+        if (event.call.costUsd !== undefined) {
+          completedTaskCosts.push(event.call.costUsd);
         }
       }
     });

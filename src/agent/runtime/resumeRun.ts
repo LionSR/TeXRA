@@ -211,11 +211,11 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       releaseUnstartedRecovery(session, suppliedRecovery, provisional);
   };
   const store = getRunRecords(session, runId);
-  const [config, meta] = yield* Effect.all([
+  const [config, exists] = yield* Effect.all([
     store.readConfig(),
-    store.readMeta(),
+    store.exists(),
   ]).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
-  if (!config || !meta) {
+  if (!config || !exists) {
     abandonSupplied();
     return REFUSED;
   }

@@ -431,7 +431,6 @@ async function handleRunLatexdiff(
           const session = defaultSession();
           return effectRuntime().runPromise(
             runLatexdiffForRun({
-              snapshots: session.snapshots,
               filesystem: nodeFilesystem,
               ...config,
               outputsByRound,

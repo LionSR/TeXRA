@@ -169,13 +169,12 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
 
     await expect
       .poll(async () =>
-        currentLaunch!.page.locator('stream-tab').evaluateAll((tabs) =>
+        currentLaunch!.page.locator('run-tab').evaluateAll((tabs) =>
           tabs.map((tab) => ({
-            runId: (tab as HTMLElement & { stream: { id: string } }).stream.id,
-            status: (tab as HTMLElement & { stream: { status: string } }).stream
+            runId: (tab as HTMLElement & { run: { id: string } }).run.id,
+            status: (tab as HTMLElement & { run: { status: string } }).run
               .status,
-            group: (tab as HTMLElement & { stream: { group: string } }).stream
-              .group,
+            group: (tab as HTMLElement & { run: { group: string } }).run.group,
           })),
         ),
       )

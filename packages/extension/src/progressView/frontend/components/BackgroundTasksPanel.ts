@@ -1,10 +1,10 @@
 /**
- * The dispatch card (board E2): what a stream has fanned out, in its
+ * The dispatch card (board E2): what a run has fanned out, in its
  * conversation prelude. A `<wa-details>` headed "Dispatched N subagents"
  * with the parent's `rollup` as badges and "since <time>" from the earliest
  * child still running (the fold clears `runStartedAt` when a run ends, so a
- * settled fan-out carries no since), one row per child stream (nested children
- * indented under theirs), the inquiry threads the stream opened, and a
+ * settled fan-out carries no since), one row per child run (nested children
+ * indented under theirs), the inquiry threads the run opened, and a
  * "Waiting on N subagents" line while any run. The `inquiries` scope is the
  * same card over the inquiry threads alone (the workflow body, whose run
  * board already lists every call). Every row is a child of the fold: label,
@@ -47,7 +47,7 @@ import {
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
 
-/** The card's key in `Surface.groups` for its stream. */
+/** The card's key in `Surface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
@@ -233,8 +233,8 @@ export class BackgroundTasksPanel extends LitElement {
     `,
   ];
 
-  /** The dispatching stream: its `childIds` are the rows. */
-  @property({ attribute: false }) stream: RunView | null = null;
+  /** The dispatching run: its `childIds` are the rows. */
+  @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   /** The card's open state lives here (`groups`, key `dispatch`). */
   @property({ attribute: false }) surface: Surface | null = null;
@@ -245,10 +245,10 @@ export class BackgroundTasksPanel extends LitElement {
    *  whose run board already lists every call). */
   @property() scope: 'all' | 'inquiries' = 'all';
 
-  private childrenOf(stream: RunView): RunView[] {
+  private childrenOf(run: RunView): RunView[] {
     const view = this.view;
     if (!view) return [];
-    return stream.childIds
+    return run.childIds
       .map((id) => view.runs.get(id))
       .filter((child): child is RunView => child !== undefined);
   }
@@ -262,24 +262,24 @@ export class BackgroundTasksPanel extends LitElement {
     return runs.flatMap((child) =>
       descendantRuns(view, child.id, { includeRoot: true })
         .map((id) => view.runs.get(id))
-        .filter((stream): stream is RunView => stream !== undefined),
+        .filter((run): run is RunView => run !== undefined),
     );
   }
 
-  private inquiriesOf(stream: RunView): InquiryThreadUpdatedEvent[] {
+  private inquiriesOf(run: RunView): InquiryThreadUpdatedEvent[] {
     return (this.view?.inquiries ?? []).filter(
-      (thread) => thread.parentRunId === stream.id,
+      (thread) => thread.parentRunId === run.id,
     );
   }
 
   override render(): TemplateResult | typeof nothing {
-    const stream = this.stream;
-    if (!stream) return nothing;
-    const children = this.scope === 'all' ? this.childrenOf(stream) : [];
-    const inquiries = this.inquiriesOf(stream);
+    const run = this.run;
+    if (!run) return nothing;
+    const children = this.scope === 'all' ? this.childrenOf(run) : [];
+    const inquiries = this.inquiriesOf(run);
     if (children.length === 0 && inquiries.length === 0) return nothing;
 
-    const { rollup } = stream;
+    const { rollup } = run;
     // When the fan-out began: the earliest descendant still running, over
     // the set `rollup.running` counts. The fold clears `runStartedAt` on a
     // terminal status, so a settled fan-out has no start to name and the
@@ -305,7 +305,7 @@ export class BackgroundTasksPanel extends LitElement {
                   >`
                 : nothing
             }${
-              stream.approval === 'descendant'
+              run.approval === 'descendant'
                 ? html`<wa-badge variant="warning" pill
                     >${waIcon('triangle-exclamation')}</wa-badge
                   >`
@@ -318,7 +318,7 @@ export class BackgroundTasksPanel extends LitElement {
                   >`
             }`;
     const open =
-      this.surface?.groups.get(stream.id)?.get(DISPATCH_GROUP_KEY) !== false;
+      this.surface?.groups.get(run.id)?.get(DISPATCH_GROUP_KEY) !== false;
 
     return html`
       <wa-details
@@ -356,12 +356,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleToggle(event: Event): void {
-    dispatchGroupToggle(
-      this,
-      event,
-      this.stream?.id ?? null,
-      DISPATCH_GROUP_KEY,
-    );
+    dispatchGroupToggle(this, event, this.run?.id ?? null, DISPATCH_GROUP_KEY);
   }
 
   private renderChildren(

@@ -48,10 +48,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliToolUseConfig } from '../runtime/executeCli';
-import {
-  cliRunResultPayload,
-  toolUseResultText,
-} from '../runtime/terminalStatus';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface MultiAgentRunInit {
@@ -252,7 +249,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
             source: plan.preset.source,
           },
           rootAgent: rootAgent.name,
-          result: cliRunResultPayload(run.result),
+          result: run.result,
         };
         emitCliResult(runContext, {
           json: payload,

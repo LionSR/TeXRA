@@ -13,7 +13,7 @@ import './SessionComposer';
 
 const RUN_ENDED_MESSAGE = 'This run has ended.';
 
-@customElement('tool-use-stream-content')
+@customElement('tool-use-run-content')
 export class ToolUseRunContent extends BaseRunContent {
   static override styles = [
     conversationContentStyles,
@@ -25,23 +25,20 @@ export class ToolUseRunContent extends BaseRunContent {
   ];
 
   override render(): TemplateResult | typeof nothing {
-    const stream = this.stream;
-    if (!stream || stream.category !== 'toolUse') return nothing;
+    const run = this.run;
+    if (!run || run.category !== 'toolUse') return nothing;
     // The follow-up line shows while the run can still take one, which is
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
-    const showComposer = acceptsFollowUp(stream);
+    const showComposer = acceptsFollowUp(run);
     return html`
-      <stream-header .stream=${stream} .view=${this.view}></stream-header>
+      <run-header .run=${run} .view=${this.view}></run-header>
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
-          <todo-list
-            .todos=${stream.todos}
-            .collapseKey=${stream.id}
-          ></todo-list>
-          <plan-view .plan=${stream.plan} .collapseKey=${stream.id}></plan-view>
+          <todo-list .todos=${run.todos} .collapseKey=${run.id}></todo-list>
+          <plan-view .plan=${run.plan} .collapseKey=${run.id}></plan-view>
           <background-tasks-panel
-            .stream=${stream}
+            .run=${run}
             .view=${this.view}
             .surface=${this.surface}
             .nowMs=${this.nowMs}
@@ -49,14 +46,14 @@ export class ToolUseRunContent extends BaseRunContent {
         </div>
         ${this.renderLog()}
         <div class="conversation-column conversation-epilogue">
-          ${this.renderUsagePanel(stream)}
+          ${this.renderUsagePanel(run)}
         </div>
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">
           <session-banners
             .banners=${this.host.banners}
-            .sessionType=${stream.category}
+            .sessionType=${run.category}
           ></session-banners>
           <div
             class=${
@@ -67,14 +64,14 @@ export class ToolUseRunContent extends BaseRunContent {
             role="status"
             aria-atomic="true"
           >
-            ${showComposer ? nothing : (stream.statusDetail ?? RUN_ENDED_MESSAGE)}
+            ${showComposer ? nothing : (run.statusDetail ?? RUN_ENDED_MESSAGE)}
           </div>
           ${
             showComposer
               ? html`<session-composer
                   .view=${this.view}
                   .surface=${this.surface}
-                  .stream=${stream}
+                  .run=${run}
                   .host=${this.host}
                 ></session-composer>`
               : nothing
@@ -87,6 +84,6 @@ export class ToolUseRunContent extends BaseRunContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'tool-use-stream-content': ToolUseRunContent;
+    'tool-use-run-content': ToolUseRunContent;
   }
 }

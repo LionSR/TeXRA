@@ -40,7 +40,6 @@ const tempDirs = useTempDirs();
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
-  readMeta: vi.fn(),
   readChildren: vi.fn(),
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
@@ -69,11 +68,6 @@ vi.mock('@agent/storage/RunKVStore', async () => {
         readRunRecord: () =>
           Effect.tryPromise({
             try: () => mocks.readConfig(),
-            catch: ensureError,
-          }),
-        readMeta: () =>
-          Effect.tryPromise({
-            try: () => mocks.readMeta(),
             catch: ensureError,
           }),
         readReport: () =>
@@ -134,11 +128,6 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
-const toolUseMeta = {
-  timestamp: '2026-06-15T09:36:02.345Z',
-  category: 'toolUse',
-} as const;
-
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */
 async function withTempStorage(run: () => Promise<void>): Promise<void> {
   await withTempDir('texra-exec-storage-', async (root) => {
@@ -159,7 +148,6 @@ describe('ExecutionsTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listRuns.mockResolvedValue([]);
-    mocks.readMeta.mockResolvedValue(null);
     mocks.readTurnState.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
@@ -192,10 +180,6 @@ describe('ExecutionsTool', () => {
       session.runs.track(handle);
       seedRunStatusForTest(session.status, childRunId, {
         phase: RUN_PHASE.WAITING,
-      });
-      mocks.readMeta.mockResolvedValue({
-        ...toolUseMeta,
-        parentRunId: 'parent123',
       });
       mocks.readReport.mockResolvedValue(
         '<subagent-result>full report</subagent-result>',
@@ -277,8 +261,6 @@ describe('ExecutionsTool', () => {
           },
         ]);
         await session.settlePublications();
-        mocks.readMeta.mockResolvedValue(toolUseMeta);
-
         const [summary, todos] = await withRunContext(
           createRunContext({ runId: parentRunId, session }),
           () =>
@@ -311,11 +293,6 @@ describe('ExecutionsTool', () => {
       try {
         publishTestRunStart(session, runId);
         await session.settlePublications();
-        mocks.readMeta.mockResolvedValue({
-          ...toolUseMeta,
-          identity: { kind: 'agent', agent: 'review' },
-          parentRunId: 'parent123',
-        });
         mocks.readConfig.mockResolvedValue(config);
         mocks.readReport.mockResolvedValue(
           '<subagent-result>full report</subagent-result>',
@@ -446,7 +423,6 @@ describe('ExecutionsTool', () => {
           },
         ]);
         await session.settlePublications();
-        mocks.readMeta.mockResolvedValue(toolUseMeta);
         mocks.readConfig.mockResolvedValue(config);
         const result = await withRunContext(
           createRunContext({ runId, session }),

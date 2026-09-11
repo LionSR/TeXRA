@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
-import {
-  ContextManagementDataSchema,
-  RUN_PHASE,
-  RunSnapshotSchema,
-} from '@shared/schemas';
+import { ContextManagementDataSchema } from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
 const usageFixture = {
@@ -76,31 +72,5 @@ describe('ContextManagementDataSchema', () => {
     expect(() =>
       ContextManagementDataSchema.parse({ ...base, action: 'clear_tool_uses' }),
     ).toThrow();
-  });
-});
-
-describe('RunSnapshotSchema.status — canonical phases only', () => {
-  // The retired 7-value RunStatus vocabulary is no longer normalized at the
-  // parse boundary: an archived trace.json export still carrying it fails
-  // loudly rather than being collapsed into a RunPhase.
-  it.each(['initializing', 'resuming', 'error', 'stopped', 'ready'])(
-    'rejects the retired status "%s"',
-    (retired) => {
-      expect(() =>
-        RunSnapshotSchema.parse({
-          runId: 'abc123def456',
-          status: retired,
-        }),
-      ).toThrow();
-    },
-  );
-
-  it('passes a canonical phase through unchanged', () => {
-    const result = RunSnapshotSchema.parse({
-      runId: 'abc123def457',
-      status: RUN_PHASE.RUNNING,
-    });
-
-    expect(result.status).toBe(RUN_PHASE.RUNNING);
   });
 });

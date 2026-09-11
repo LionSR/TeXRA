@@ -15,16 +15,11 @@ import {
   toRepoPath,
 } from '../support/repoScan';
 
-const CLI_NDJSON_MODULE = 'packages/cli/src/runtime/cliNdjsonProgressEvents.ts';
-const CLI_NDJSON_ALIAS = '@cli/runtime/cliNdjsonProgressEvents';
-
 const CLI_PROJECTION_MODULE =
   'packages/cli/src/runtime/sessionProgressSubscription.ts';
 
-const ALLOWED_PRODUCTION_IMPORTERS = [CLI_PROJECTION_MODULE] as const;
-
-// The projection module is the single production importer of the NDJSON
-// vocabulary, so its own importers are part of the same containment chain.
+// The projection is the one writer of `kind: "progress"` NDJSON records, so
+// its importers are the containment chain for headless output.
 const ALLOWED_CLI_PROJECTION_IMPORTERS = [
   'packages/cli/src/runtime/executeCli.ts',
   'src/test-kernel/cli/CliSessionProgressSubscription.vitest.ts',
@@ -34,32 +29,23 @@ const ALLOWED_CLI_PROJECTION_IMPORTERS = [
 
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-function scanFiles(excludeTestKernel: boolean): string[] {
-  return ALL_HOST_PRODUCTION_ROOTS.flatMap((root) =>
-    sourceFilesUnder(resolve(REPO_ROOT, root), {
-      missingDirReturnsEmpty: true,
-      repoRelative: true,
-      excludeTestKernel,
-    }),
-  );
-}
-
-const PRODUCTION_FILES = scanFiles(true);
-const ALL_SOURCE_FILES = scanFiles(false);
+const ALL_SOURCE_FILES = ALL_HOST_PRODUCTION_ROOTS.flatMap((root) =>
+  sourceFilesUnder(resolve(REPO_ROOT, root), {
+    missingDirReturnsEmpty: true,
+    repoRelative: true,
+    excludeTestKernel: false,
+  }),
+);
 const SOURCE_TEXT_BY_FILE = new Map<string, string>();
 const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
-
-function resolveCliAlias(specifier: string): string | null {
-  if (specifier === CLI_NDJSON_ALIAS) return CLI_NDJSON_MODULE;
-  if (!specifier.startsWith('@cli/')) return null;
-  return `packages/cli/src/${specifier.slice('@cli/'.length)}`;
-}
 
 function resolveRepoRelativeImport(
   importer: string,
   specifier: string,
 ): string | null {
-  if (specifier.startsWith('@cli/')) return resolveCliAlias(specifier);
+  if (specifier.startsWith('@cli/')) {
+    return `packages/cli/src/${specifier.slice('@cli/'.length)}`;
+  }
   if (!specifier.startsWith('.')) return null;
   return toRepoPath(join(dirname(importer), specifier));
 }
@@ -103,29 +89,11 @@ function importsModule(file: string, targetModule: string): boolean {
 }
 
 describe('agent runtime progress-event vocabulary boundary', () => {
-  it.each<{
-    name: string;
-    modulePath: string;
-    allowedImporters: readonly string[];
-    /** Test suites are in scope only where they appear in the allowlist. */
-    scanTests?: boolean;
-  }>([
-    {
-      name: 'keeps the CLI compatibility vocabulary NDJSON-projection only',
-      modulePath: CLI_NDJSON_MODULE,
-      allowedImporters: ALLOWED_PRODUCTION_IMPORTERS,
-    },
-    {
-      name: 'keeps the CLI projection scoped to headless NDJSON output',
-      modulePath: CLI_PROJECTION_MODULE,
-      allowedImporters: ALLOWED_CLI_PROJECTION_IMPORTERS,
-      scanTests: true,
-    },
-  ])('$name', ({ modulePath, allowedImporters, scanTests }) => {
-    const importers = (scanTests ? ALL_SOURCE_FILES : PRODUCTION_FILES)
-      .filter((file) => importsModule(file, modulePath))
-      .toSorted();
+  it('keeps the CLI projection scoped to headless NDJSON output', () => {
+    const importers = ALL_SOURCE_FILES.filter((file) =>
+      importsModule(file, CLI_PROJECTION_MODULE),
+    ).toSorted();
 
-    expect(importers).toEqual([...allowedImporters].toSorted());
+    expect(importers).toEqual([...ALLOWED_CLI_PROJECTION_IMPORTERS].toSorted());
   });
 });

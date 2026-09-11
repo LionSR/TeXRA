@@ -18,7 +18,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 // A run may have generated files even when no output facts were recorded.
 const mocks = vi.hoisted(() => ({
   findRunDir: vi.fn(),
-  read: vi.fn(),
+  readRunOutputs: vi.fn(),
 }));
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
@@ -26,7 +26,6 @@ vi.mock('@utils/files/runStorageFs', async (importActual) => ({
   findRunDir: mocks.findRunDir,
 }));
 
-const snapshots = { read: mocks.read };
 const { discoverLatestRunOutputs } =
   await import('@latex/latexdiff/outputDiscovery');
 const { scanRunDirForOutputs } =
@@ -45,7 +44,10 @@ function matchingRun(id: RunId) {
 function discoveryWith(
   entries: readonly ReturnType<typeof matchingRun>[],
 ): LatexRunDiscoveryPort {
-  return { listAgentRuns: () => Effect.succeed(entries) };
+  return {
+    listAgentRuns: () => Effect.succeed(entries),
+    readRunOutputs: mocks.readRunOutputs,
+  };
 }
 
 const MATCHING_QUERY = {
@@ -60,7 +62,7 @@ describe('discoverLatestRunOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    mocks.read.mockReturnValue(Effect.succeed({ outputFilesByRound: {} }));
+    mocks.readRunOutputs.mockReturnValue(Effect.succeed({}));
   });
 
   afterEach(async () => {
@@ -68,7 +70,7 @@ describe('discoverLatestRunOutputs', () => {
   });
 
   it.effect(
-    'falls back to an on-disk run-dir scan when the run snapshot is empty',
+    'falls back to an on-disk run-dir scan when the run recorded no outputs',
     () =>
       Effect.gen(function* () {
         const runDir = yield* Effect.promise(async () => {
@@ -90,7 +92,6 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          snapshots,
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -107,33 +108,30 @@ describe('discoverLatestRunOutputs', () => {
   );
 
   it.effect(
-    'reads the snapshot under the run id instead of rebuilding an identity from configuration (#9590 A1)',
+    'reads the run outputs under the run id instead of rebuilding an identity from configuration (#9590 A1)',
     () =>
       Effect.gen(function* () {
         const discovery = discoveryWith([
           matchingRun('exec-registered' as RunId),
         ]);
         const rounds = { 0: [] };
-        mocks.read.mockReturnValue(
-          Effect.succeed({ outputFilesByRound: rounds }),
-        );
+        mocks.readRunOutputs.mockReturnValue(Effect.succeed(rounds));
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          snapshots,
           MATCHING_QUERY,
           'test',
           platform().fs,
         );
 
-        expect(mocks.read).toHaveBeenCalledWith('exec-registered');
+        expect(mocks.readRunOutputs).toHaveBeenCalledWith('exec-registered');
         expect(result).toEqual({ runId: 'exec-registered', rounds });
         expect(mocks.findRunDir).not.toHaveBeenCalled();
       }),
   );
 
   it.effect(
-    'returns null when neither the snapshot nor the run directory has outputs',
+    'returns null when neither the recorded outputs nor the run directory has outputs',
     () =>
       Effect.gen(function* () {
         const emptyDir = yield* Effect.promise(() =>
@@ -145,7 +143,6 @@ describe('discoverLatestRunOutputs', () => {
 
         const result = yield* discoverLatestRunOutputs(
           discovery,
-          snapshots,
           MATCHING_QUERY,
           'test',
           platform().fs,
@@ -161,12 +158,12 @@ describe('discoverLatestRunOutputs', () => {
       Effect.gen(function* () {
         const discovery: LatexRunDiscoveryPort = {
           listAgentRuns: () => Effect.fail(new Error('run index unreadable')),
+          readRunOutputs: mocks.readRunOutputs,
         };
 
         const failure = yield* Effect.flip(
           discoverLatestRunOutputs(
             discovery,
-            snapshots,
             MATCHING_QUERY,
             'test',
             platform().fs,

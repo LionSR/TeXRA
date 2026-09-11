@@ -6,28 +6,13 @@ import type { FileLocation } from './output';
 import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
 
 /**
- * Shared output-file, usage, and host-presentation payloads.
- * Session state is defined by SessionEvent; payload shapes retained only for
- * public CLI NDJSON output belong to the CLI's compatibility table.
+ * Shared output-file and host-presentation payloads. Session state is
+ * defined by SessionEvent.
  */
 
 export interface AddOutputFilesPayload {
   runId: RunId;
   filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
-}
-
-export interface UpdateMissingOutputsPayload {
-  runId: RunId;
-  filesByRound: z.infer<
-    typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
-  >;
-}
-
-export interface UpdateCompileFailuresPayload {
-  runId: RunId;
-  filesByRound: z.infer<
-    typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
-  >;
 }
 
 /**

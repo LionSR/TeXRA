@@ -53,13 +53,11 @@ function roundMap(): RoundIndexed<OutputFileInfo> {
 
 const runDiscovery: LatexRunDiscoveryPort = {
   listAgentRuns: () => Effect.succeed([]),
+  readRunOutputs: () => Effect.succeed({}),
 };
-
-const snapshots = { read: vi.fn() };
 
 const baseRequest = {
   filesystem: { readDirectory: vi.fn(), isSymlink: vi.fn() },
-  snapshots,
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
@@ -170,7 +168,6 @@ describe('runLatexdiffForRun', () => {
       expect(result.runId).toBe('def456');
       expect(mocks.discoverLatestRunOutputs).toHaveBeenCalledWith(
         runDiscovery,
-        snapshots,
         {
           agent: 'revise',
           model: 'claude-opus-4-8',

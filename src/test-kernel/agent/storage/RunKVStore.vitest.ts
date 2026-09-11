@@ -99,13 +99,13 @@ describe('canonical run records', () => {
         ]);
         expect(
           yield* Effect.all([
-            records.readMeta(),
+            records.exists(),
             records.readRunRecord(),
             records.readReport(),
             records.readWorkspaceFiles(),
             records.readResultMeta(),
           ]),
-        ).toEqual([null, null, null, [], null]);
+        ).toEqual([false, null, null, [], null]);
         const retained = yield* Stream.runCollect(
           session.events.aggregate(aggregateId('run', runId), 1),
         );
@@ -130,7 +130,7 @@ describe('canonical run records', () => {
       timestamp: 'old file',
     });
     const result = await run(
-      getRunRecords(reader, runId).readMeta().pipe(Effect.result),
+      getRunRecords(reader, runId).readRunRecord().pipe(Effect.result),
     );
     expect(result).toMatchObject({ _tag: 'Failure', failure: malformed });
   });

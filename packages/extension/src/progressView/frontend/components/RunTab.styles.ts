@@ -1,7 +1,7 @@
 // Third-party imports
 import { css } from 'lit';
 
-/** Styles for the individual <stream-tab> row. */
+/** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
   :host {
     display: block;
@@ -21,23 +21,23 @@ export const runTabStyles = css`
     max-width: 100%;
     gap: var(--wa-space-3xs);
     border-inline-start: var(--border-medium) solid
-      var(--stream-status-rail-color, var(--stream-status-color, transparent));
+      var(--run-status-rail-color, var(--run-status-color, transparent));
     box-sizing: border-box;
     overflow: hidden;
   }
 
   /* The fold spells the tone (G4); the row only maps it to a hue. */
   .tab-container.tone-running {
-    --stream-status-color: var(--color-success);
+    --run-status-color: var(--color-success);
   }
 
   .tab-container.tone-danger {
-    --stream-status-color: var(--color-error);
+    --run-status-color: var(--color-error);
   }
 
   .tab-container.tone-warning {
-    --stream-status-color: var(--color-warning);
-    --stream-status-rail-color: var(--color-warning);
+    --run-status-color: var(--color-warning);
+    --run-status-rail-color: var(--color-warning);
   }
 
   .tab-container.tone-success .tab-status-icon {
@@ -50,8 +50,8 @@ export const runTabStyles = css`
 
   /* Pending approval — solid orange start rail. */
   .tab-container.has-pending-approval {
-    --stream-status-color: var(--color-warning);
-    --stream-status-rail-color: var(--color-chart-orange);
+    --run-status-color: var(--color-warning);
+    --run-status-rail-color: var(--color-chart-orange);
   }
 
   .tab-select-tooltip-anchor {
@@ -114,7 +114,7 @@ export const runTabStyles = css`
     inline-size: 1em;
     min-inline-size: 1em;
     block-size: 1em;
-    color: var(--stream-status-color, var(--color-text-muted));
+    color: var(--run-status-color, var(--color-text-muted));
   }
 
   .tab-status-label {
@@ -143,7 +143,7 @@ export const runTabStyles = css`
   }
 
   .tab-meta .remote-agent,
-  .tab-meta .stream-kind {
+  .tab-meta .run-kind {
     margin-inline-start: var(--wa-space-2xs);
   }
 
@@ -225,7 +225,7 @@ export const runTabStyles = css`
       .tone-warning,
       .has-pending-approval
     ) {
-    --stream-status-rail-color: currentColor;
+    --run-status-rail-color: currentColor;
   }
 
   /*
@@ -283,7 +283,7 @@ export const runTabStyles = css`
     color: var(--color-text-secondary);
   }
 
-  .nested-stream-icon {
+  .nested-run-icon {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
     flex-shrink: 0;
@@ -361,18 +361,18 @@ export const runTabStyles = css`
 
   @media (forced-colors: active) {
     .tab-container:is(.tone-running, .tone-warning, .has-pending-approval) {
-      --stream-status-color: Highlight;
-      --stream-status-rail-color: Highlight;
+      --run-status-color: Highlight;
+      --run-status-rail-color: Highlight;
     }
 
     .tab-container.tone-danger {
-      --stream-status-color: CanvasText;
-      --stream-status-rail-color: CanvasText;
+      --run-status-color: CanvasText;
+      --run-status-rail-color: CanvasText;
     }
 
     .tab-container:is(.tone-success, .tone-neutral) {
-      --stream-status-color: GrayText;
-      --stream-status-rail-color: transparent;
+      --run-status-color: GrayText;
+      --run-status-rail-color: transparent;
     }
 
     /* System selection colors override authored status hues. The focused
@@ -388,7 +388,7 @@ export const runTabStyles = css`
         .tone-warning,
         .has-pending-approval
       ) {
-      --stream-status-rail-color: HighlightText;
+      --run-status-rail-color: HighlightText;
     }
 
     .tab-container.is-active * {

@@ -8,7 +8,9 @@ import {
   createOutputState,
   ensureRoundData,
   type OutputDependencies,
+  type OutputState,
 } from '@agent/implementations/flows/reflection/output/outputState';
+
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import type { FileLocation, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -32,6 +34,8 @@ interface XmlManagerOptions {
   /** Run-relative names of the files a similarity fallback may match against. */
   baseFiles?: string[];
   logger?: AgentTrace;
+  /** The round map a missing-output report records into and republishes. */
+  outputState?: OutputState;
 }
 
 /**
@@ -72,6 +76,7 @@ function createXmlManager(
     } as unknown as AgentConfig,
     logger,
     new TaskRunFileService(RUN_ID),
+    options.outputState ?? createOutputState(),
   );
 }
 

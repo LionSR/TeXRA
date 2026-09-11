@@ -57,12 +57,7 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
 import { type WorkflowPopupView } from '../state/cliState';
-import {
-  cumulativeUsageOf,
-  killableRunId,
-  sessionView,
-  runViewOf,
-} from '../state/sessionView';
+import { killableRunId, sessionView, runViewOf } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 
 // Local imports - sibling panes
@@ -320,7 +315,7 @@ export function WorkflowPopup({
 
   const identity = stream?.identity ?? undefined;
   const name = identity ? runIdentityDisplayName(identity) : 'Workflow';
-  const cost = cumulativeUsageOf(stream)?.cost;
+  const cost = stream && stream.usage.cost > 0 ? stream.usage.cost : undefined;
   const title = [
     name,
     formatWorkflowTally(model.tally),

@@ -1122,7 +1122,6 @@ describe('CLI run progress renderer', () => {
       const detach = attachCliSessionProgressProjection({
         events: session.events,
         now: () => session.now(),
-        view: session.view,
         runs: {
           onChildActivity: (listener) => {
             roster = listener;
@@ -1149,22 +1148,21 @@ describe('CLI run progress renderer', () => {
     expect(records).toEqual([
       expect.objectContaining({
         kind: 'progress',
-        event: 'updateActiveSubagents',
-        // The frozen public row shape: `kind` discriminant, no `identity`,
-        // and the 0.40 wire keys (`parentStreamId`, `executionId`,
-        // `childStreamId`).
+        event: 'run.children',
+        // The roster rows go out verbatim: the child's run id and identity
+        // under their own names.
         payload: {
-          parentStreamId: 'parent-stream',
+          runId: 'parent-stream',
           children: [
             {
-              kind: 'subagent',
-              executionId: 'child-stream',
+              childRunId: 'child-stream',
               agentName: 'review',
+              identity: { kind: 'agent', agent: 'review' },
               status: 'running',
-              childStreamId: 'child-stream',
             },
           ],
         },
+        contract: 2,
       }),
     ]);
   });

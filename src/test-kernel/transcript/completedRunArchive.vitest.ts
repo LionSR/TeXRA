@@ -81,9 +81,7 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
   readCompletedRunTodos,
-  RunSnapshotStore,
 } from '@transcript';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const tempDirs = useTempDirs();
 
@@ -97,9 +95,8 @@ function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
 
 /** Publish the run's existence the way registration does. */
 async function stampRun(runId: RunId): Promise<void> {
-  if (
-    !(await Effect.runPromise(getRunRecords(taskSession, runId).readMeta()))
-  ) {
+  const view = await Effect.runPromise(taskSession.readView([runId]));
+  if (!view.runs.has(runId)) {
     publishTestRunStart(taskSession, runId);
     await taskSession.settlePublications();
   }
@@ -266,11 +263,8 @@ describe('completedRunArchive facade', () => {
     expect(await Effect.runPromise(records.readConfig())).toEqual(config);
     expect(await Effect.runPromise(records.readReport())).toBe(content);
     // The run's one `run.description` row is redacted on the way into the
-    // event table, so every reader of it — the meta fold included — sees the
-    // redacted text; the private sidecars above stay exact.
-    const meta = await Effect.runPromise(records.readMeta());
-    expect(meta?.description).not.toContain(secret);
-    expect(meta?.description).toContain('[redacted]');
+    // event table, so every reader of it — the view's fold included, asserted
+    // below — sees the redacted text; the private sidecars above stay exact.
     const runAgentRequest = vi.fn(async () => undefined);
     const actions = createHostRunActions({
       session: taskSession,
@@ -360,7 +354,7 @@ describe('completedRunArchive facade', () => {
       );
       expect(
         exports.map((result) => ({
-          description: result.meta?.description,
+          description: result.run?.description,
           agent: result.config?.agent,
           instruction: result.exportInput?.config.instruction,
           nodes: result.exportInput?.nodes,
@@ -664,11 +658,9 @@ describe('completedRunArchive facade', () => {
     ).toEqual([]);
   });
 
-  it('reads a registered run without a sidecar scan, even when its transcript is empty (#9590 A1)', async () => {
+  it('reads a registered run whose transcript is empty', async () => {
     const runId = 'abc907abc907' as RunId;
     await stampRun(runId);
-
-    const scan = vi.spyOn(RunSnapshotStore.prototype, 'listPersistedRuns');
 
     const conversationResult = await readCompletedRunConversation(runId);
     expect(conversationResult).toEqual({
@@ -680,8 +672,6 @@ describe('completedRunArchive facade', () => {
     expect(
       await Effect.runPromise(readCompletedRunTodos(runId, taskSession)),
     ).toEqual([]);
-
-    expect(scan).not.toHaveBeenCalled();
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {

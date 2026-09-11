@@ -4,7 +4,6 @@
  * read from the committed event prefix.
  */
 export { createRunTrace, type RunTrace } from './runTrace';
-export { RunSnapshotStore } from './RunSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {

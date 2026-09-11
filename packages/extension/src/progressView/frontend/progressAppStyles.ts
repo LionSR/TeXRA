@@ -126,7 +126,7 @@ export const progressAppStyles = css`
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  .dock stream-tabs {
+  .dock run-tabs {
     flex: 1;
     min-height: 0;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
@@ -258,7 +258,7 @@ export const progressAppStyles = css`
     color: var(--color-text-secondary);
   }
 
-  .active-now stream-tabs {
+  .active-now run-tabs {
     flex: 0 1 auto;
     min-height: 0;
   }

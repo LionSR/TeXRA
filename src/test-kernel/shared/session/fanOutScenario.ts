@@ -794,7 +794,7 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
   };
   const terminal = {
     ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
-    ...(entry.costUsd === undefined ? {} : { totalCostUsd: entry.costUsd }),
+    ...(entry.costUsd === undefined ? {} : { costUsd: entry.costUsd }),
   };
   switch (entry.status) {
     case 'failed':

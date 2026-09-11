@@ -70,7 +70,7 @@ const SESSION_HINT_COPY: Record<
   toolUse: {
     lede: 'Conversational.',
     body: 'Reads, edits, and searches in a running dialogue you steer turn by turn.',
-    time: 'Turns stream back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
+    time: 'Turns run back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
   },
   orchestrator: {
     lede: 'Orchestrator.',
@@ -341,8 +341,8 @@ export class SessionComposer extends LitElement {
 
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
-  /** The stream a follow-up goes to; null is the expanded launch state. */
-  @property({ attribute: false }) stream: RunView | null = null;
+  /** The run a follow-up goes to; null is the expanded launch state. */
+  @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
   @state() private announcement = '';
@@ -350,13 +350,13 @@ export class SessionComposer extends LitElement {
   @query('textarea') private textArea?: HTMLTextAreaElement;
 
   private get compact(): boolean {
-    return this.stream !== null;
+    return this.run !== null;
   }
 
   private get draft(): Draft {
-    const stream = this.stream;
-    if (!stream) return EMPTY_DRAFT;
-    return this.surface?.drafts.get(stream.id) ?? EMPTY_DRAFT;
+    const run = this.run;
+    if (!run) return EMPTY_DRAFT;
+    return this.surface?.drafts.get(run.id) ?? EMPTY_DRAFT;
   }
 
   private get text(): string {
@@ -366,7 +366,7 @@ export class SessionComposer extends LitElement {
   }
 
   private get recordingTarget(): RunId | 'launch' {
-    return this.stream?.id ?? 'launch';
+    return this.run?.id ?? 'launch';
   }
 
   private get recording(): boolean {
@@ -380,8 +380,8 @@ export class SessionComposer extends LitElement {
   }
 
   private setText(text: string, patch: Partial<Draft> = {}): void {
-    const stream = this.stream;
-    if (stream) {
+    const run = this.run;
+    if (run) {
       // A draft's images are the `[name]` chips its text still carries: a
       // chip the user deleted takes its image with it, so the send reads the
       // draft as it stands.
@@ -391,7 +391,7 @@ export class SessionComposer extends LitElement {
       this.dispatchEvent(
         SessionUiEvents.surface({
           kind: 'draft',
-          runId: stream.id,
+          runId: run.id,
           patch: { text, images },
         }),
       );
@@ -505,8 +505,8 @@ export class SessionComposer extends LitElement {
   };
 
   private replyToParent(parentId: RunId): void {
-    const stream = this.stream;
-    if (!stream) return;
+    const run = this.run;
+    if (!run) return;
     const draft = this.draft;
     this.dispatchEvent(
       SessionUiEvents.surface({
@@ -518,7 +518,7 @@ export class SessionComposer extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'draft',
-        runId: stream.id,
+        runId: run.id,
         patch: EMPTY_DRAFT,
       }),
     );
@@ -764,17 +764,15 @@ export class SessionComposer extends LitElement {
     `;
   }
 
-  private renderRouting(stream: RunView): TemplateResult {
-    const parent = stream.parentId
-      ? this.view?.runs.get(stream.parentId)
-      : undefined;
+  private renderRouting(run: RunView): TemplateResult {
+    const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;
     // The link moves the draft to the parent, or the line states that the
     // parent takes no replies (a workflow-script run has no chat).
     const parentAcceptsFollowUps =
       parent !== undefined && parent.followUpSupport !== 'unsupported';
     return html`<div class="routing">
       ${waIcon('code-branch')}
-      <span class="routing-target">Goes to ${stream.label}</span>
+      <span class="routing-target">Goes to ${run.label}</span>
       ${
         parent === undefined
           ? nothing
@@ -831,24 +829,20 @@ export class SessionComposer extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const stream = this.stream;
-    if (stream && stream.followUpSupport === 'unsupported') return nothing;
+    const run = this.run;
+    if (run && run.followUpSupport === 'unsupported') return nothing;
     const compact = this.compact;
-    const readOnly = stream?.readOnly === true;
-    const queued = stream
-      ? (this.view?.queuedFollowUps.get(stream.id) ?? [])
-      : [];
+    const readOnly = run?.readOnly === true;
+    const queued = run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : [];
     const text = this.text;
     // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
-    // (`canSendFollowUp`); the launcher has no stream and no draft images,
+    // (`canSendFollowUp`); the launcher has no run and no draft images,
     // so its own Run turns on the instruction alone.
-    const canSend = stream
-      ? canSendFollowUp(stream, this.draft)
-      : text.trim() !== '';
+    const canSend = run ? canSendFollowUp(run, this.draft) : text.trim() !== '';
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`
-      ${stream ? this.renderRouting(stream) : nothing}
+      ${run ? this.renderRouting(run) : nothing}
       ${
         queued.length > 0
           ? html`<queued-follow-ups .messages=${queued}></queued-follow-ups>`
@@ -901,7 +895,7 @@ export class SessionComposer extends LitElement {
               label: 'Polish',
               tooltip: 'Polish with AI',
               busy: this.surface?.polishing.has(
-                this.stream?.id ?? `launch:${this.surface.launch.sessionType}`,
+                this.run?.id ?? `launch:${this.surface.launch.sessionType}`,
               ),
               disabled: readOnly || text.trim() === '',
               onClick: this.polish,
@@ -938,13 +932,11 @@ export class SessionComposer extends LitElement {
               appearance: 'filled',
               variant: 'brand',
               size: compact ? 'm' : 'l',
-              busy:
-                this.stream !== null &&
-                this.surface?.sending.has(this.stream.id),
+              busy: this.run !== null && this.surface?.sending.has(this.run.id),
               disabled:
                 !canSend ||
-                (this.stream !== null &&
-                  (this.surface?.sending.has(this.stream.id) ?? false)),
+                (this.run !== null &&
+                  (this.surface?.sending.has(this.run.id) ?? false)),
               onClick: this.send,
             })}</span
           >

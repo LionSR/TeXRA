@@ -18,13 +18,21 @@ import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  AgentCategory,
+  emptyRunEndOutput,
+  MESSAGE_TYPES,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+} from '@shared/schemas';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   readConversation: vi.fn(),
   readWorkspaceFiles: vi.fn(),
-  readMeta: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
   readReport: vi.fn(),
@@ -43,7 +51,6 @@ vi.mock('@agent/storage', async () => {
       readConfig: () => Effect.tryPromise(() => mocks.readConfig()),
       readWorkspaceFiles: () =>
         Effect.tryPromise(() => mocks.readWorkspaceFiles()),
-      readMeta: () => Effect.tryPromise(() => mocks.readMeta()),
       readResultMeta: () => Effect.tryPromise(() => mocks.readResultMeta()),
       readRunEnd: () => Effect.tryPromise(() => mocks.readRunEnd()),
       readReport: () => Effect.tryPromise(() => mocks.readReport()),
@@ -168,13 +175,54 @@ function mockToolCallConversation(
   );
 }
 
-// No persisted config, meta, conversation, or flow state: the run id
-// resolves to nothing unless the test re-mocks one of these afterwards.
+// No persisted config, conversation, or flow state, and no run in the
+// session's view: the run id resolves to nothing unless the test re-mocks one
+// of these afterwards, or publishes the run's facts.
 function mockNothingPersisted(): void {
   mocks.readConfig.mockResolvedValue(null);
   mocks.readConversation.mockResolvedValue(null);
-  mocks.readMeta.mockResolvedValue(null);
   mocks.exists.mockResolvedValue(false);
+}
+
+/**
+ * Publish the run's listing facts into the process session, which is where
+ * `history` reads them from (the fold's `RunView`, one run model R3). Returns
+ * the session so a caller can read back a fact the publisher stamps, such as
+ * `launchedAt`.
+ */
+async function publishRunFacts(
+  runId: RunId,
+  facts: {
+    parent?: RunId;
+    description?: string;
+    outcome?: RunOutcome;
+  } = {},
+): Promise<SessionHandle> {
+  const { defaultSession } = await import('@agent/runtime/SessionHandle');
+  const session = defaultSession();
+  if (facts.parent) publishTestRunStart(session, facts.parent);
+  publishTestRunStart(session, runId, { parent: facts.parent ?? null });
+  if (facts.description !== undefined) {
+    session.publish([
+      {
+        type: 'run.description',
+        aggregateId: aggregateId('run', runId),
+        description: facts.description,
+      },
+    ]);
+  }
+  if (facts.outcome) {
+    session.publish([
+      {
+        type: 'run.end',
+        aggregateId: aggregateId('run', runId),
+        outcome: facts.outcome,
+        output: emptyRunEndOutput(AgentCategory.ToolUse),
+      },
+    ]);
+  }
+  await session.settlePublications();
+  return session;
 }
 
 // A completed agent-run listing row for the default `config`, with overrides
@@ -235,7 +283,6 @@ describe('CLI history runtime', () => {
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
-    mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readRunEnd.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
@@ -304,10 +351,8 @@ describe('CLI history runtime', () => {
   });
 
   it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      identity: { kind: 'agent', agent: 'correct' },
-      outcome: 'cancelled',
+    await publishRunFacts('c1c1c1' as RunId, {
+      outcome: RUN_OUTCOME.CANCELLED,
     });
 
     const details = await readCliHistoryDetails('c1c1c1' as RunId);
@@ -420,7 +465,7 @@ describe('CLI history runtime', () => {
     expect(parseHistoryListLimit(undefined)).toBeUndefined();
   });
 
-  it('returns null for ids without persisted metadata, config, or flow state', async () => {
+  it('returns null for ids without a run view, config, or flow state', async () => {
     mockNothingPersisted();
 
     await expect(readCliHistoryDetails('deadbe' as RunId)).resolves.toBeNull();
@@ -439,12 +484,8 @@ describe('CLI history runtime', () => {
     });
     await session.settlePublications();
     mockNothingPersisted();
-    // The metadata stamped at registration plus the diagnostic-only
-    // transcript row prove the run exists even though it yields no
-    // conversation.
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-    });
+    // The run's own `run.start` plus the diagnostic-only transcript row
+    // prove the run exists even though it yields no conversation.
 
     await expect(readCliHistoryDetails(runId)).resolves.toMatchObject({
       id: runId,
@@ -781,16 +822,15 @@ describe('CLI history runtime', () => {
   });
 
   it('still shows a child run asked for by explicit id', async () => {
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:01:00.000Z',
-      parentRunId: 'root',
-      terminalStatus: 'completed',
+    await publishRunFacts('de1e6a' as RunId, {
+      parent: 'f00707' as RunId,
+      outcome: RUN_OUTCOME.COMPLETED,
     });
 
     const details = await readCliHistoryDetails('de1e6a' as RunId);
 
     expect(details?.id).toBe('de1e6a');
-    expect(formatCliHistoryDetailsText(details!)).toContain('Parent: root');
+    expect(formatCliHistoryDetailsText(details!)).toContain('Parent: f00707');
   });
 
   it('uses the stored report instead of duplicating conversation preview text', async () => {
@@ -888,7 +928,8 @@ describe('CLI history runtime', () => {
   });
 
   describe('history export (--export / --assets-dir)', () => {
-    it('builds export input from the stored config, conversation, and meta', async () => {
+    it('builds export input from the stored config, conversation, and run facts', async () => {
+      const runId = 'a1a1a1' as RunId;
       mocks.readConversation.mockResolvedValue([
         {
           kind: 'user-message',
@@ -896,17 +937,21 @@ describe('CLI history runtime', () => {
         },
         { kind: 'assistant-text', text: 'Done.' },
       ]);
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-05-18T08:00:00.000Z',
+      const session = await publishRunFacts(runId, {
         description: 'Polish pass',
       });
+      // The export stamps the run's own launch time, which the publisher
+      // stamped on `run.start`.
+      const launchedAt = (
+        await Effect.runPromise(session.readView([]))
+      ).runs.get(runId)?.launchedAt;
 
-      const result = await readCliHistoryExportInput('a1a1a1' as RunId);
+      const result = await readCliHistoryExportInput(runId);
 
       expect(result).toEqual({
         status: 'ok',
         exportInput: {
-          timestamp: '2026-05-18T08:00:00.000Z',
+          timestamp: new Date(launchedAt!).toISOString(),
           description: 'Polish pass',
           config: {
             agent: 'correct',

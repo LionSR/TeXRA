@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { RunId } from './identifiers';
-
 /**
  * A plan is a plain objective document: what to achieve, the intended
  * approach, and a verifiable stopping condition. It deliberately has no
@@ -22,13 +20,3 @@ export const PlanSchema = z.strictObject({
     ),
 });
 export type Plan = z.infer<typeof PlanSchema>;
-
-/**
- * Payload for a plan update. Declared as a plain type, not a schema: nothing
- * ever parses it — producers build the shape and consumers read it — so a Zod
- * schema would own no boundary.
- */
-export interface UpdatePlanPayload {
-  runId: RunId;
-  plan: Plan | null;
-}

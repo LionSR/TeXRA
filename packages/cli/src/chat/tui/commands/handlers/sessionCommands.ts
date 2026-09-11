@@ -15,10 +15,8 @@ import {
   openInfoPane,
   sessionMeta,
   setTransientNotice,
-  workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
 import {
-  cumulativeUsageOf,
   currentView,
   runningChildCount,
   runViewOf,
@@ -30,20 +28,12 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
-import type { RunSnapshotStore } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
 import { type SlashCommandContext } from './slashContext';
-
-/** What the work-plan reader loads and reads from the snapshot store. */
-export type StreamArtifactReader = Pick<
-  RunSnapshotStore,
-  'preload' | 'getWorkPlan'
->;
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -59,9 +49,8 @@ export function showCliGoalModeHelp(): void {
   openInfoPane('/goal', GOAL_MODE_HELP);
 }
 
-export async function showCliWorkPlan(
-  snapshots: StreamArtifactReader = defaultSession().snapshots,
-): Promise<void> {
+/** Open the focused run's work plan from the view it is rendered from. */
+export function showCliWorkPlan(): void {
   const runId = activeRunIdSignal.get();
   if (!runId) {
     cancelPendingWorkPlanReaderRequest();
@@ -70,27 +59,15 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(runId);
-  await effectRuntime().runPromise(
-    snapshots.preload([runId]).pipe(
-      Effect.match({
-        onFailure: (error) => {
-          if (!cancelWorkPlanReaderRequest(request)) return;
-          setTransientNotice(
-            `Could not load workflow artifacts: ${toErrorMessage(error)}`,
-          );
-        },
-        onSuccess: () => {
-          if (!workPlanReaderRequestIsCurrent(request)) return;
-          const workPlan = snapshots.getWorkPlan(runId);
-          if (workPlan.plan !== null || workPlan.todos.length > 0) {
-            finishWorkPlanReaderRequest(request);
-          } else if (cancelWorkPlanReaderRequest(request)) {
-            setTransientNotice('The focused session has no work plan.');
-          }
-        },
-      }),
-    ),
-  );
+  const run = defaultSession().runView(runId);
+  if (
+    run?.category === AgentCategory.ToolUse &&
+    (run.plan !== null || run.todos.length > 0)
+  ) {
+    finishWorkPlanReaderRequest(request);
+  } else if (cancelWorkPlanReaderRequest(request)) {
+    setTransientNotice('The focused session has no work plan.');
+  }
 }
 
 function activeSkillNamesFor(runId: RunId | undefined): readonly string[] {
@@ -108,15 +85,15 @@ export async function showCliSessionStatus(
   const meta = sessionMeta.get();
   const view = currentView();
   const activeRunId = activeRunIdSignal.get();
-  const stream = runViewOf(view, activeRunId);
-  // The children a status line counts: the active stream's, else its
+  const run = runViewOf(view, activeRunId);
+  // The children a status line counts: the active run's, else its
   // parent's (a focused leaf reports its siblings' activity).
   const countedParent =
-    stream && stream.childIds.length === 0 && stream.parentId
-      ? runViewOf(view, stream.parentId)
-      : stream;
+    run && run.childIds.length === 0 && run.parentId
+      ? runViewOf(view, run.parentId)
+      : run;
   const activeChildSessions = runningChildCount(view, countedParent);
-  const model = stream?.model ?? (meta.model || context.initialModel);
+  const model = run?.model ?? (meta.model || context.initialModel);
   const prospectiveRoute = await activeSubscriptionUsageRoute(model);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
@@ -124,18 +101,18 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: cumulativeUsageOf(stream)?.usageRoute,
+        usageRoute: run?.usage.usageRoute,
         prospectiveRoute,
       }),
       approvalBypasses:
         activeRunId === undefined
           ? undefined
           : view.policy.get(activeRunId)?.bypasses,
-      statusLabel: stream?.statusLabel,
+      statusLabel: run?.statusLabel,
       activeChildSessions,
       goal: activeRunId ? GoalStore.getForRun(activeRunId) : undefined,
       activeSkills: activeSkillNamesFor(activeRunId),
-      sessionId: stream ? context.session.runId : undefined,
+      sessionId: run ? context.session.runId : undefined,
       commandName: context.cliContext.commandName,
       cwd: context.cliContext.cwd,
       processCwd: context.processCwd,

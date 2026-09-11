@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { RunId } from './identifiers';
-
 export const TODO_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
@@ -22,13 +20,3 @@ export const TodoItemSchema = z.strictObject({
     .describe('Present continuous form for display during run'),
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
-
-/**
- * Payload for a todo update. Declared as a plain type, not a schema: nothing
- * ever parses it — producers build the shape and consumers read it — so a Zod
- * schema would own no boundary (same rule as `UpdatePlanPayload` in `plan.ts`).
- */
-export interface UpdateTodosPayload {
-  runId: RunId;
-  todos: TodoItem[];
-}

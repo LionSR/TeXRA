@@ -28,7 +28,9 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import {
+  emptyUsageStats,
   RUN_OUTCOME,
+  sumUsageStats,
   ToolError,
   type RunId,
   type TokenUsageStats,
@@ -101,8 +103,12 @@ export const reraiseAgentCliCallFailure = <A, R>(
   );
 
 /**
- * Publish a turn's token usage to the progress UI for an agent-CLI child run.
- * Shared by the codex and claudeAgent session strategies.
+ * Publish the child run's token usage to the progress UI. Shared by the codex
+ * and claudeAgent session strategies.
+ *
+ * `usage` is the child run's cumulative total, never one turn's delta: the
+ * session's `usage` row is a latest-only listing key, so a cold read delivers
+ * one row per run and the fold replaces the run's total with it.
  */
 function publishAgentCliUsage(
   runId: RunId,
@@ -595,6 +601,8 @@ export function startAgentCliLoop<TTurn>(
     // captured here (rather than threaded through the loop contract) since
     // `formatDelivery`/`formatError` run strictly after the turn that set it.
     let lastPrompt = initialPrompt;
+    /** The child run's spend across every turn this loop has run. */
+    let cumulativeUsage: TokenUsageStats = emptyUsageStats();
     const runTurn = (
       followUps: readonly FollowUpQueueBatchItem[],
       ports: ChildRunPorts,
@@ -629,9 +637,11 @@ export function startAgentCliLoop<TTurn>(
       },
       publishUsage: (turn) => {
         const usage = buildUsageStats(turn);
-        if (usage) {
-          publishAgentCliUsage(runId, usage, logger);
-        }
+        if (!usage) return;
+        // Each provider reports only the turn it just ran, so the loop holds
+        // the child run's running total and publishes that.
+        cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
+        publishAgentCliUsage(runId, cumulativeUsage, logger);
       },
       formatDelivery: (turn, wallTimeMs) =>
         formatDelivery(turn, wallTimeMs, lastPrompt),

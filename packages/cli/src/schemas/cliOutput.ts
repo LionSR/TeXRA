@@ -4,8 +4,11 @@
  * Every headless command emits one JSON object per line through
  * {@link emitCliResult} (a few stream records directly via `writeNdjsonStdout`).
  * Each record is tagged with a `kind` discriminator and carries a command-
- * specific payload; a `ts` ISO timestamp is stamped on the way out. This file
- * is the single source of truth for that wire shape:
+ * specific payload; the two keys of {@link CliNdjsonLineStampSchema} — a `ts`
+ * ISO timestamp and the {@link CLI_NDJSON_CONTRACT} version (`contract`) —
+ * are stamped on the way out, after the record's own keys so `kind` stays
+ * first. This file is the single source of truth for that wire shape: a line
+ * is one member of the union below plus that stamp.
  *
  * - The {@link CliNdjsonRecord} type is derived from the schema, so the
  *   `ndjson` argument of every `emitCliResult` call is checked against the
@@ -22,6 +25,27 @@
 
 // Third-party imports
 import { z } from 'zod';
+
+/**
+ * The two keys every line carries beyond the record a command builds: `ts`,
+ * appended by `emitCliResult` unless the record set its own, and `contract`,
+ * appended by the NDJSON sink. Declared here so the wire shape of a line is
+ * this stamp over one member of the `kind` union below.
+ */
+const CliNdjsonLineStampSchema = z.object({
+  contract: z.literal(2),
+  ts: z.string(),
+});
+
+/**
+ * The CLI output contract version, stamped on every NDJSON line as
+ * `contract` (`version` is the `texra version` record's own field). Version 2
+ * is 1.0's: `kind: "progress"` records carry a session row verbatim (`event`
+ * is the row's `type`, `payload` the rest of it), results carry `runId`, and
+ * `CliRunStatus` is the only renamed vocabulary.
+ */
+export const CLI_NDJSON_CONTRACT =
+  CliNdjsonLineStampSchema.shape.contract.value;
 
 /** A payload field carried verbatim from the command (already shaped upstream). */
 const payload = z.unknown();

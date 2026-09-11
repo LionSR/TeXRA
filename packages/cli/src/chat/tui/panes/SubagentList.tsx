@@ -12,11 +12,7 @@ import { formatStageLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
-import {
-  cumulativeUsageOf,
-  killableRunId,
-  runPhaseOf,
-} from '../state/sessionView';
+import { killableRunId, runPhaseOf } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -113,7 +109,8 @@ function SessionRow({
   const metadataText = metadataColumn
     ? childRowMetadataText({
         elapsed,
-        outputTokens: cumulativeUsageOf(run)?.outputTokens,
+        outputTokens:
+          run.usage.outputTokens > 0 ? run.usage.outputTokens : undefined,
         toolCallCount: run.conversationProgress.toolCallCount,
       })
     : undefined;

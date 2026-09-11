@@ -19,7 +19,8 @@ import {
   aggregateId,
   emptyRunEndOutput,
   type RunId,
-  type RunMeta,
+  type RunIdentity,
+  type RunOutcome,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
@@ -40,13 +41,16 @@ function config(
 }
 
 let session: SessionHandle;
-async function writeMetadata(
-  id: RunId,
-  meta: Omit<RunMeta, 'schemaVersion'>,
-): Promise<void> {
-  const existing = await Effect.runPromise(
-    getRunRecords(session, id).readMeta(),
-  );
+/** The run facts a listing row is built from, as the rows that carry them. */
+type SeededRunFacts = {
+  readonly timestamp: string;
+  readonly identity: RunIdentity;
+  readonly parentRunId?: RunId;
+  readonly description?: string;
+  readonly outcome?: RunOutcome;
+};
+async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
+  const existing = await Effect.runPromise(getRunRecords(session, id).exists());
   if (!existing) {
     const clock = vi
       .spyOn(Date, 'now')

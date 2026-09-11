@@ -13,7 +13,11 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { RUN_OUTCOME, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import {
+  emptyRunEndOutput,
+  RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
+} from '@shared/schemas';
 import type { RunId, WorkflowScriptFiles } from '@shared/schemas';
 import {
   DELEGATION_TOOL_CATEGORY,
@@ -194,7 +198,7 @@ async function writeWorkspaceScript(
   await WorkspaceFS.write(path, content);
 }
 
-/** Point the run's persisted report and outcome at scripted values. */
+/** Point the run's persisted report and terminal fact at scripted values. */
 function mockPersistedReport(
   name: string,
   report: string,
@@ -202,8 +206,8 @@ function mockPersistedReport(
 ): void {
   const store = getRunRecords(currentSession(), runIdFor(name));
   vi.spyOn(store, 'readReport').mockReturnValue(Effect.succeed(report));
-  vi.spyOn(store, 'readMeta').mockReturnValue(
-    Effect.succeed({ outcome } as never),
+  vi.spyOn(store, 'readRunEnd').mockReturnValue(
+    Effect.succeed({ outcome, output: emptyRunEndOutput('workflow') }),
   );
 }
 
@@ -712,10 +716,11 @@ return null`;
     await Effect.runPromise(
       store.writeReport('stale success from the prior attempt'),
     );
-    vi.spyOn(store, 'readMeta').mockReturnValue(
+    vi.spyOn(store, 'readRunEnd').mockReturnValue(
       Effect.succeed({
         outcome: RUN_OUTCOME.FAILED,
-      } as never),
+        output: emptyRunEndOutput('workflow'),
+      }),
     );
 
     // The default resolved completion writes no report, matching an
@@ -922,15 +927,10 @@ return null`;
       },
     };
     const callOrder: string[] = [];
-    const readStrict = vi.spyOn(store, 'readMeta').mockImplementation(() =>
+    const readStrict = vi.spyOn(store, 'readWorkflow').mockImplementation(() =>
       Effect.sync(() => {
-        callOrder.push('readMeta');
-        return {
-          schemaVersion: 1,
-          timestamp: '2026-08-01T00:00:00.000Z',
-          identity: { kind: 'agent', agent: 'assistant' },
-          workflow: priorWorkflow,
-        };
+        callOrder.push('readWorkflow');
+        return priorWorkflow;
       }),
     );
     mocks.registerRun.mockImplementation(() =>
@@ -942,7 +942,7 @@ return null`;
     const result = await callTool();
 
     expect(result.status).toBe('executed');
-    expect(callOrder).toEqual(['readMeta', 'registerRun']);
+    expect(callOrder).toEqual(['readWorkflow', 'registerRun']);
     // Strategy must receive the pre-register snapshot, not a post-wipe read.
     expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(priorWorkflow);
     readStrict.mockRestore();

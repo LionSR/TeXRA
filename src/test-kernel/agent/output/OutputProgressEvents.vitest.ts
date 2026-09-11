@@ -207,11 +207,14 @@ describe('output progress events', () => {
       );
 
       expect(transition).toBe('default');
+      // The row is the run's whole map, not the round just finished: a cold
+      // fold keeps only the newest row, so round 1 has to ride along.
       expect(traceEventsOfType(events, 'addOutputFiles')).toMatchObject([
         {
-          filesByRound: { 2: [fileInfo] },
+          filesByRound: { 1: [restoredFileInfo], 2: [fileInfo] },
         },
       ]);
+
       expect(hostEvents).toEqual([
         {
           event: 'requestOpenFile',
@@ -448,6 +451,10 @@ describe('output progress events', () => {
     const projected = createRecordedRuntime('stream:processor');
     const { events, logger } = projected;
     const state = createOutputState();
+    // An earlier round already reported a missing file: the row this round
+    // publishes carries the run's whole map, since a cold fold keeps only
+    // the newest row of the type.
+    ensureRoundData(state, round - 1).missingOutputs = ['earlier.tex'];
     const xmlManager = {
       splitScratchpadMultipleOutputXml: split,
     } as unknown as XmlOutputManager;
@@ -463,9 +470,10 @@ describe('output progress events', () => {
 
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
-          filesByRound: { [round]: [] },
+          filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] },
         },
       ]);
+
       expect(state.rounds.get(round)?.outputs).toEqual([]);
     } finally {
       projected.dispose();

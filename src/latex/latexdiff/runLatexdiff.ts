@@ -24,7 +24,6 @@ import type {
   RoundIndexed,
 } from '@shared/schemas';
 
-import type { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import {
   runLatexdiffFromMetadata,
   runLatexdiffViaWorkspaceScan,
@@ -73,7 +72,6 @@ export interface RunLatexdiffForRunParams {
   readonly inputFile: string;
   /** Agent-owned run listing injected by hosts (metadata auto-discovery). */
   readonly runDiscovery: LatexRunDiscoveryPort;
-  readonly snapshots: Pick<RunSnapshotStore, 'read'>;
   readonly filesystem: RunOutputFilesystem;
   readonly outputFiles?: string[];
   /** Run to scope output discovery to (progress-toolbar invocations). */
@@ -153,7 +151,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     if (!outputsByRound && !runId) {
       const discovered = yield* discoverLatestRunOutputs(
         runDiscovery,
-        params.snapshots,
         {
           agent,
           model,

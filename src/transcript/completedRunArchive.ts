@@ -6,6 +6,7 @@ import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmen
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
 import {
+  AgentCategory,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_CALL_STATUS,
@@ -18,14 +19,14 @@ import {
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
 
-/** Read completed tasks from the session's committed run fold. */
+/** Read completed tasks from the session's fold of the run's committed rows. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
     runId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const snapshot = yield* session.snapshots.read(runId);
-    return snapshot.todos;
+    const run = (yield* session.readView([runId])).runs.get(runId);
+    return run?.category === AgentCategory.ToolUse ? run.todos : [];
   },
 );
 

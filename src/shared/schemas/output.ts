@@ -265,6 +265,13 @@ export const RoundOutputSchema = z.strictObject({
   rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
+  /** The expected output files this round did not produce, as last reported.
+   *  Persisted with the round so a resumed run still publishes the whole
+   *  run's missing-output map on its next `updateMissingOutputs` row. */
+  missingOutputs: z
+    .string()
+    .array()
+    .prefault(() => []),
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 

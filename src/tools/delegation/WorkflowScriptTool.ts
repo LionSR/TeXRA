@@ -435,20 +435,17 @@ Durability: the journal is keyed by meta.name and the agent field within this se
 
         // Preserve the committed workflow snapshot when reopening this named run.
         const runStore = getRunRecords(runScope.session, runId);
-        const priorMeta = yield* runStore
-          .readMeta()
-          .pipe(
-            Effect.mapError((error) =>
-              workflowScriptToolError(
-                new ToolError(
-                  `Failed to launch workflow script '${meta.name}': prior workflow run snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
-                ),
-                scriptPath,
+        const initialSnapshot = yield* runStore.readWorkflow().pipe(
+          Effect.map((snapshot) => snapshot ?? undefined),
+          Effect.mapError((error) =>
+            workflowScriptToolError(
+              new ToolError(
+                `Failed to launch workflow script '${meta.name}': prior workflow run snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
               ),
+              scriptPath,
             ),
-          );
-        const initialSnapshot = priorMeta?.workflow;
-
+          ),
+        );
         const runResult = Effect.gen(function* () {
           const launched = yield* Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
@@ -626,16 +623,16 @@ Durability: the journal is keyed by meta.name and the agent field within this se
 
           if (parent.stopAfterCycle) {
             yield* Fiber.join(runCompletion);
-            const [report, runMeta] = yield* Effect.all([
+            const [report, runEnd] = yield* Effect.all([
               runStore.readReport(),
-              runStore.readMeta(),
+              runStore.readRunEnd(),
             ]);
             if (!report) {
               throw new Error(
                 `Workflow script '${meta.name}' completed without a persisted report.`,
               );
             }
-            if (runMeta?.outcome !== RUN_OUTCOME.COMPLETED) {
+            if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) {
               return errorResult(report, {
                 summary: `Workflow script '${meta.name}' failed`,
               });

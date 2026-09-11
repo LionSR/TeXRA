@@ -85,7 +85,7 @@ export const designTokens: CSSResult = css`
     --height-control: var(--wa-height-control, 24px);
     --height-control-compact: var(--wa-height-control-compact, 22px);
     /* Shared height for the Progress view's pane headers — the conversation
-       header and the stream-tabs rail header pin to this so the two panes
+       header and the run-tabs rail header pin to this so the two panes
        start their content at the same baseline (and match the desktop rail). */
     --height-header: var(--wa-height-header, 34px);
     --height-button: var(--wa-height-button, 30px);

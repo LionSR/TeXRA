@@ -99,8 +99,8 @@ export function createRunProgressRenderer(
 }
 
 /**
- * The run a headless renderer describes: the stream of the named run,
- * or the first top-level stream created after the renderer attached (the
+ * The run a headless renderer describes: the run of the named run,
+ * or the first top-level run created after the renderer attached (the
  * view cursor it read then). Claimed once by each renderer; a child's later
  * appearance never moves it.
  */
@@ -401,19 +401,19 @@ function isMultiRound(rounds: number | undefined): rounds is number {
 
 interface WorkflowPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
-   *  stream created after attach: the output prints the workflow runs
+   *  run created after attach: the output prints the workflow runs
    *  under it. */
   readonly runId?: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
 
-/** The lines one workflow-script stream's view level says: phase headings,
+/** The lines one workflow-script run's view level says: phase headings,
  *  task lines, log lines, and its outcome, keyed by the row they come from. */
-function workflowPlainLines(stream: RunView): ReadonlyMap<string, string> {
+function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
   const lines = new Map<string, string>();
-  const run = stream.transcript.run;
-  for (const phase of run?.phases ?? []) {
+  const model = run.transcript.run;
+  for (const phase of model?.phases ?? []) {
     if (phase.opened) {
       lines.set(
         `phase:${phase.key}`,
@@ -421,7 +421,7 @@ function workflowPlainLines(stream: RunView): ReadonlyMap<string, string> {
       );
     }
   }
-  for (const row of stream.transcript.rows) {
+  for (const row of run.transcript.rows) {
     if (row.kind === 'workflowTask') {
       lines.set(row.id, row.line);
     } else if (
@@ -434,12 +434,12 @@ function workflowPlainLines(stream: RunView): ReadonlyMap<string, string> {
     }
   }
   if (
-    isTerminalOutcomePhase(stream.status) &&
-    stream.identity?.kind === 'multiAgentWorkflow'
+    isTerminalOutcomePhase(run.status) &&
+    run.identity?.kind === 'multiAgentWorkflow'
   ) {
     lines.set(
       'outcome',
-      `${WORKFLOW_TASK_STATUS_LABEL[stream.status]}: ${stream.identity.workflowName}`,
+      `${WORKFLOW_TASK_STATUS_LABEL[run.status]}: ${run.identity.workflowName}`,
     );
   }
   return lines;
@@ -447,7 +447,7 @@ function workflowPlainLines(stream: RunView): ReadonlyMap<string, string> {
 
 /**
  * The plain-text workflow progress of `texra run` (text output): what
- * `transcript.run` and the stream's rows say, printed as they change
+ * `transcript.run` and the run's rows say, printed as they change
  * between consecutive view levels (PRD 10.3), for the workflow runs in
  * the launched run's subtree. A line prints when its entry is new or
  * reads differently than at the previous level; nothing here folds, gates,
@@ -465,10 +465,10 @@ export function attachWorkflowPlainOutput(
     options.beforeWrite?.();
     options.writeLine(line);
   };
-  const printStream = (stream: RunView): void => {
-    const before = previous.get(stream.id);
-    const lines = workflowPlainLines(stream);
-    previous.set(stream.id, lines);
+  const printRun = (run: RunView): void => {
+    const before = previous.get(run.id);
+    const lines = workflowPlainLines(run);
+    previous.set(run.id, lines);
     for (const [id, line] of lines) {
       if (before?.get(id) !== line) write(line);
     }
@@ -489,21 +489,21 @@ export function attachWorkflowPlainOutput(
       rootedIds === undefined
         ? []
         : [...view.runs.values()].filter(
-            (stream) =>
-              stream.identity?.kind === 'multiAgentWorkflow' &&
-              rootedIds.has(stream.id),
+            (run) =>
+              run.identity?.kind === 'multiAgentWorkflow' &&
+              rootedIds.has(run.id),
           );
-    const key = workflows.map((stream) => stream.id).join('\0');
+    const key = workflows.map((run) => run.id).join('\0');
     if (key !== subscribed) {
       subscribed = key;
       effectRuntime().runFork(
         session.setTranscriptSubscriptions(
           'workflow-plain-output',
-          workflows.map((stream) => ({ id: stream.id, fromSeq: 0 })),
+          workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
         ),
       );
     }
-    for (const stream of workflows) printStream(stream);
+    for (const run of workflows) printRun(run);
   });
   return () => {
     detach();

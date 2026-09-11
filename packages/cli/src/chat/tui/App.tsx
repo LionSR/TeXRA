@@ -91,7 +91,7 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-// Jump-to-waiting: surface the newly focused stream's pending approval right
+// Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
 function focusRunAndPromoteApprovals(runId: RunId): void {
   const view = currentView();
@@ -107,9 +107,9 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
 /** Labels for child executions whose label differs from the id. */
 function runLabelsOf(view: SessionView): RunLabels {
   const labels = new Map<string, string>();
-  for (const stream of view.runs.values()) {
-    if (stream.parentId !== null && stream.label !== stream.id) {
-      labels.set(stream.id, stream.label);
+  for (const run of view.runs.values()) {
+    if (run.parentId !== null && run.label !== run.id) {
+      labels.set(run.id, run.label);
     }
   }
   return labels;
@@ -127,11 +127,11 @@ export interface AppProps {
     runId: RunId,
     action: WorkflowControlAction,
   ) => void;
-  /** Whether bare Escape may stop the identified focused stream. */
+  /** Whether bare Escape may stop the identified focused run. */
   readonly canInterruptRun: (runId: RunId) => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
-  /** Stop only the focused stream captured by bare Escape. */
+  /** Stop only the focused run captured by bare Escape. */
   readonly onInterruptRun: (runId: RunId) => void;
   readonly onStaticTranscriptChange?: () => void;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
@@ -292,9 +292,9 @@ export function App(props: AppProps): React.JSX.Element {
   }, [childListValues]);
   const focusSession = (runId: RunId): void => {
     dispatchChildListSelection({ kind: 'focusRun', runId });
-    const stream = view.runs.get(runId)!;
-    if (stream.group === 'interrupted' && stream.resumeEligible) {
-      props.onSubmit(`/resume ${stream.id}`);
+    const run = view.runs.get(runId)!;
+    if (run.group === 'interrupted' && run.resumeEligible) {
+      props.onSubmit(`/resume ${run.id}`);
     } else {
       focusRunAndPromoteApprovals(runId);
     }
@@ -338,8 +338,8 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null;
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
-        const stream = runViewOf(view, foregroundReader.runId);
-        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
+        const run = runViewOf(view, foregroundReader.runId);
+        const label = run ? runLabelOf(run) : foregroundReader.runId;
         return (
           <TranscriptReader
             availableRows={availableRows}
@@ -385,8 +385,8 @@ export function App(props: AppProps): React.JSX.Element {
       }
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
-        const stream = runViewOf(view, foregroundReader.runId);
-        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
+        const run = runViewOf(view, foregroundReader.runId);
+        const label = run ? runLabelOf(run) : foregroundReader.runId;
         return (
           <WorkPlanReader
             availableRows={availableRows}
@@ -454,7 +454,7 @@ export function App(props: AppProps): React.JSX.Element {
       return true;
     }
     // `bareEscapeActive` already proved `canInterruptRun(runId)` for a
-    // parentless stream: `parentRun` never stores an undefined value, so
+    // parentless run: `parentRun` never stores an undefined value, so
     // once `.get()` returned undefined the `has` disjunct is false too.
     escapeInterruptStateRef.current.onInterruptRun(runId);
     return true;
@@ -480,7 +480,7 @@ export function App(props: AppProps): React.JSX.Element {
 
   // Shared tail of both bare-Escape trigger sites below: defer through the
   // meta-chord disambiguation window when one may be in flight, otherwise
-  // handle the escape immediately. Bare Esc must give a numbered stream-focus
+  // handle the escape immediately. Bare Esc must give a numbered run-focus
   // chord a chance to resolve while that binding is on screen; `Alt`-chord
   // platforms are unaffected, since their Esc+key sequences arrive as one
   // burst, resolved synchronously by `metaChordInput`.
@@ -590,7 +590,7 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Esc/Alt 1-9 focuses a stream directly in the persistent list order.
+    // Esc/Alt 1-9 focuses a run directly in the persistent list order.
     const metaInput = metaChordInput(input, key);
     if (metaInput) {
       handleMetaShortcut(metaInput);

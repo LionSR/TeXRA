@@ -186,10 +186,10 @@ export function createExtensionHostRequests(
     showWarning,
   });
 
-  const { snapshotPort } = runActions;
+  const { runOutputs } = runActions;
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
-    state: snapshotPort,
+    state: runOutputs,
     host: {
       compareFiles: (baseFile, editedFile) =>
         runCommand(
@@ -228,7 +228,7 @@ export function createExtensionHostRequests(
   });
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: snapshotPort,
+    state: runOutputs,
     runDiff: async (request) => {
       await runCommand('texra.runLatexdiff', request);
     },
@@ -635,9 +635,6 @@ export function createExtensionHostRequests(
         return done;
       }
       case 'openTaskStorage':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.runId]),
-        );
         await workflowFileActions.openTaskStorage(request.runId);
         return done;
       case 'exportTranscript':
@@ -657,9 +654,6 @@ export function createExtensionHostRequests(
         await effectRuntime().runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.runId]),
-        );
         await effectRuntime().runPromise(
           runActions.runCompileFixer(request.runId),
         );

@@ -34,11 +34,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
 
     const store = getRunRecords(session, reference.runId);
-    const [meta, resultMeta] = yield* Effect.all([
-      store.readMeta(),
+    const [runEnd, resultMeta] = yield* Effect.all([
+      store.readRunEnd(),
       store.readResultMeta(),
     ]);
-    if (meta?.parentRunId !== parentRunId) {
+    if (session.runView(reference.runId)?.parentId !== parentRunId) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
@@ -48,7 +48,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     if (
       resultMeta?.producer !== 'subagent' ||
       resultMeta.output.category !== 'workflow' ||
-      meta?.outcome !== RUN_OUTCOME.COMPLETED
+      runEnd?.outcome !== RUN_OUTCOME.COMPLETED
     ) {
       return yield* Effect.fail(
         new Error(

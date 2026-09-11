@@ -60,12 +60,12 @@ describe('run registration and finalization', () => {
       ).toMatchObject({
         workingDirectory: workingDirectory ?? '/workspace/root',
       });
-      expect(await run(getRunRecords(session, runId).readMeta())).toMatchObject(
-        {
-          identity: options.identity,
-          userFollowUpSupport: 'nativeInteractive',
-        },
-      );
+      expect(
+        (await run(session.readView([runId]))).runs.get(runId),
+      ).toMatchObject({
+        identity: options.identity,
+        followUpSupport: 'nativeInteractive',
+      });
       expect(await getRunStore(runId).listKeys()).toEqual([]);
     },
   );
@@ -79,7 +79,7 @@ describe('run registration and finalization', () => {
     expect(await runInSession(session, () => inspectRunLease(runId))).toEqual({
       status: 'free',
     });
-    expect(await run(getRunRecords(session, runId).readMeta())).toBeNull();
+    expect(await run(getRunRecords(session, runId).exists())).toBe(false);
   });
 
   it.each([false, true])(
@@ -120,7 +120,7 @@ describe('run registration and finalization', () => {
       Effect.die(new Error('consumer failed')),
     );
     await expect(register()).rejects.toThrow();
-    expect(await run(getRunRecords(session, runId).readMeta())).not.toBeNull();
+    expect(await run(getRunRecords(session, runId).exists())).toBe(true);
     await expect(
       run(getRunRecords(session, runId).writeReport('unowned')),
     ).rejects.toThrow();

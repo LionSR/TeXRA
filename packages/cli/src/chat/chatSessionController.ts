@@ -63,7 +63,6 @@ import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { RunSnapshotStore } from '@transcript';
 import { generateRunId, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
@@ -231,8 +230,6 @@ export interface ChatSessionControllerInit {
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: PQueue;
 
-  /** Per-stream sidecar persistence store. */
-  readonly snapshotStore: RunSnapshotStore;
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly initialModelSource: RunModelDecisionReason;
@@ -292,7 +289,6 @@ export function createChatSessionController(
     getSessionContext,
     disposables,
     followUpQueue,
-    snapshotStore,
     initialAgent,
     initialModel,
     initialModelSource,
@@ -689,9 +685,9 @@ export function createChatSessionController(
       // Workflow runs resume headless through `texra resume`, not inside a
       // chat.
       const store = getRunRecords(runtimeSession, id);
-      const [config, meta] = yield* Effect.all([
+      const [config, exists] = yield* Effect.all([
         store.readConfig(),
-        store.readMeta(),
+        store.exists(),
       ]);
       // Refusal tail every early exit below shares: put back what the
       // synchronous prologue superseded, surface the reason, settle the slot.
@@ -701,7 +697,7 @@ export function createChatSessionController(
         session.markRunCompleted();
         Deferred.doneUnsafe(claimedRun, Effect.void);
       };
-      if (!config || !meta) {
+      if (!config || !exists) {
         refuseResume(`Run not found: ${id}`);
         return;
       }
@@ -752,14 +748,11 @@ export function createChatSessionController(
         if (session.stopRequested) interruptActiveRun();
 
         await effectRuntime().runPromise(
-          runtimeSession.transcripts
-            .ensureLoaded(id)
-            .pipe(Effect.andThen(snapshotStore.load([id]))),
+          runtimeSession.transcripts.ensureLoaded(id),
         );
-        // The load re-establishes this stream's work-plan provenance in the
-        // store, which is what an open `/plan` reader re-reads to clear its
-        // failure-time mask. The transcript itself is the fold's: the TUI
-        // subscribes the stream's aggregate and renders `transcript.rows`.
+        // The transcript and the work plan are the fold's: the TUI
+        // subscribes the run's aggregate and renders `transcript.rows`, and
+        // an open `/plan` reader reads the same `RunView`.
         focusRun(id);
       };
 
@@ -887,11 +880,14 @@ export function createChatSessionController(
             runtimeSession.followUps.notifySent(recovery.runId);
         }
 
-        yield* snapshotStore.preload([runId]);
         const config = yield* getRunRecords(runtimeSession, runId).readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
-        const parentRunId = snapshotStore.getParentRunId(runId);
+        // The parent edge as the fold holds it, read cold: a resume at
+        // startup must not race the live fold's first replay.
+        const parentRunId = (yield* runtimeSession.readView([])).runs.get(
+          runId,
+        )?.parentId;
 
         const sessionContext = getSessionContext();
         adoptRunConfig(config, 'history');

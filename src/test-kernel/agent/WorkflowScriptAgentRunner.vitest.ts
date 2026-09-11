@@ -51,7 +51,6 @@ const mocks = vi.hoisted(() => ({
   workspaceToAbsolute: vi.fn(),
   realpath: vi.fn(),
   absoluteReadBytes: vi.fn(),
-  readRunMeta: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -84,7 +83,6 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getRunRecords: vi.fn(() => ({ readMeta: mocks.readRunMeta })),
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
@@ -271,7 +269,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
-    mocks.readRunMeta.mockReturnValue(Effect.succeed(undefined));
     mocks.executeStableSubagentInBand.mockImplementation(
       inBandRunReturning(result),
     );

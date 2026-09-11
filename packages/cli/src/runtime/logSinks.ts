@@ -6,7 +6,10 @@ import { Writable } from 'node:stream';
 import { Effect } from 'effect';
 
 // Local imports
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import {
+  CLI_NDJSON_CONTRACT,
+  type CliNdjsonRecord,
+} from '@cli/schemas/cliOutput';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -291,8 +294,11 @@ export class NdjsonStdoutSink implements LogSink {
     this.writeRecord({ kind: 'log', ...record });
   }
 
-  writeRecord(record: CliNdjsonRecord): void {
+  writeRecord(unstamped: CliNdjsonRecord): void {
     if (this.isClosed()) return;
+    // Appended, never prepended: line-oriented consumers anchor on the
+    // record's leading `{"kind":`.
+    const record = { ...unstamped, contract: CLI_NDJSON_CONTRACT };
     const runtime = tryProcessRuntime();
     if (!runtime) {
       // No-runtime edge (`texra version --output-format ndjson` builds no

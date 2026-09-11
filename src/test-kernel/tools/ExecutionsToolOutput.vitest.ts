@@ -551,11 +551,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('file-tail'));
     assert.ok(output.length < 20_000);
     assert.ok(
-      (
-        await Effect.runPromise(
-          getRunRecords(defaultSession(), runId).readMeta(),
-        )
-      )?.workflow,
+      await Effect.runPromise(
+        getRunRecords(defaultSession(), runId).readWorkflow(),
+      ),
     );
   });
 

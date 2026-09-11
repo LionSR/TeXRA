@@ -436,7 +436,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
         status: 'completed',
         model: 'gpt56',
         durationMs: 12_000,
-        totalCostUsd: 0.03,
+        costUsd: 0.03,
       },
     });
 
@@ -452,7 +452,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
         status: 'completed',
         model: 'gpt56',
         durationMs: 12_000,
-        totalCostUsd: 0.03,
+        costUsd: 0.03,
       },
     });
   });

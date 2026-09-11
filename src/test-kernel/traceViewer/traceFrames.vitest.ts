@@ -1,7 +1,5 @@
-import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -9,36 +7,21 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  emptyUsageStats,
   LOG_LEVELS,
-  MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  RUN_PHASE,
-  RunSnapshotSchema,
   StreamLogEntrySchema,
   type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createTempDirPlatform,
-  useTempDirs,
-} from '@test/support/tempDirPlatform';
 import type { TraceDocument } from '@transcript';
-import { assembleTrace } from '@transcript';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
-
-const tempDirs = useTempDirs();
-
-setupPlatform(() => createTempDirPlatform('texra-replay-trace-', tempDirs));
 
 /** The view the fold reaches over the trace's listing and transcript rows,
  *  with the transcript tier subscribed for the run's stream. */
@@ -62,8 +45,6 @@ function foldTrace(trace: TraceDocument) {
   return view.runs.get(trace.runId);
 }
 
-type TraceEntry = TraceDocument['entries'][number];
-
 function parseConfig(category: AgentCategory): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'correct',
@@ -72,49 +53,37 @@ function parseConfig(category: AgentCategory): AgentConfig {
   });
 }
 
-// Fills in the level/messageType boilerplate every stage row shares; groupId
-// is omitted entirely (not set to undefined) when absent, matching real
-// archived traces.
-function stageEntry(
-  entry: Pick<
-    TraceEntry,
-    'seqNo' | 'id' | 'type' | 'timestamp' | 'text' | 'data'
-  > &
-    Partial<Pick<TraceEntry, 'groupId'>>,
-): TraceEntry {
-  const { groupId, ...rest } = entry;
-  return StreamLogEntrySchema.parse({
-    ...rest,
-    level: LOG_LEVELS.INFO,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    ...(groupId === undefined ? {} : { groupId }),
-  });
-}
-
-function legacyTrace(
-  snapshotStatus: string | undefined,
+/** A trace document over the run's folded facts, as `assembleTrace` writes it. */
+function traceDocument(
+  outcome: RunOutcome | null,
   category: AgentCategory = AgentCategory.Workflow,
+  meta: Partial<TraceDocument['meta']> = {},
 ): TraceDocument {
   const runId = 'abc123' as RunId;
   return {
     runId,
     config: parseConfig(category),
     meta: {
-      schemaVersion: 1,
-      timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
+      launchedAt: 1_767_225_600_000,
+      description: null,
+      outcome,
+      conversationProgress: { toolCallCount: 0 },
+      usage: emptyUsageStats(),
+      todos: [],
+      plan: null,
+      outputs: {},
+      missingOutputs: {},
+      compileFailures: {},
+      ...meta,
     },
     entries: [],
-    snapshot: RunSnapshotSchema.parse({
-      runId,
-      status: snapshotStatus,
-    }),
   };
 }
 
-describe('traceEvents legacy-status fallback (issue #7188)', () => {
+describe('traceFrame replays the document through the one fold', () => {
   it('replays workflow content without tool-use state', () => {
-    const trace = legacyTrace(undefined);
+    const trace = traceDocument(null);
     trace.entries.push(
       StreamLogEntrySchema.parse({
         id: 'archived-log',
@@ -144,21 +113,15 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   });
 
   it('replays tool-use content without workflow output state', () => {
-    const workflow = legacyTrace(undefined);
-    const trace: TraceDocument = {
-      ...workflow,
-      config: parseConfig(AgentCategory.ToolUse),
-      snapshot: RunSnapshotSchema.parse({
-        runId: workflow.runId,
-        todos: [
-          {
-            content: 'Replay the plan',
-            status: 'pending',
-            activeForm: 'Replaying the plan',
-          },
-        ],
-      }),
-    };
+    const trace = traceDocument(null, AgentCategory.ToolUse, {
+      todos: [
+        {
+          content: 'Replay the plan',
+          status: 'pending',
+          activeForm: 'Replaying the plan',
+        },
+      ],
+    });
 
     const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
@@ -169,205 +132,32 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(replayed).not.toHaveProperty('files');
   });
 
-  it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
-    const runId = 'abc124' as RunId;
-    const config = parseConfig(AgentCategory.Workflow);
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    await session.settlePublications();
-    await Effect.runPromise(
-      getRunRecords(session, runId).writeRunRecord(config),
-    );
-    session.publish([
-      {
-        type: 'stage.start',
-        aggregateId: qualifyAggregateId('run', runId),
-        id: 'terminal-stage',
-        label: 'Legacy run',
-      },
-      {
-        type: 'stage.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        id: 'terminal-stage',
-        status: 'failed',
-      },
-    ]);
-    await session.settlePublications();
-    const result = await Effect.runPromise(assembleTrace(runId, session));
-    session.dispose();
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.meta?.outcome).toBeUndefined();
-    expect(result.trace.snapshot.status).toBeUndefined();
-
-    expect(foldTrace(result.trace)?.status).toBe('failed');
-  });
-
-  it('ignores nested group-end status when the root run stage never closed', () => {
-    const trace: TraceDocument = {
-      ...legacyTrace(undefined),
-      entries: [
-        stageEntry({
-          seqNo: 1,
-          id: 'root-run',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          timestamp: 100,
-          text: 'Run',
-          data: { status: 'running' },
-        }),
-        stageEntry({
-          seqNo: 2,
-          id: 'inner-round',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          timestamp: 110,
-          groupId: 'root-run',
-          text: 'Round',
-          data: { status: 'running' },
-        }),
-        stageEntry({
-          seqNo: 3,
-          id: 'inner-round',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          timestamp: 120,
-          groupId: 'root-run',
-          text: 'Round',
-          data: { status: RUN_PHASE.COMPLETED, endTime: 120 },
-        }),
-      ],
-    };
-
-    // No terminal fact: an exported trace with no producer folds as an
-    // interrupted run, never as a finished one.
-    expect(foldTrace(trace)?.durableOutcome).toBeNull();
-  });
-
-  it('ignores a cleanly-closed tool-use round when the root run stage never closed (issue #7267)', () => {
-    // Tool-use rounds (ToolUseCycleNode) are opened without an ambient
-    // parent stage — runFlowWithLifecycle never wraps flow run in the
-    // root "Run:" stage's `within(...)` — so a round's GROUP_END row carries
-    // `groupId: undefined`, the same "no parent" shape as the root run
-    // stage's own GROUP_END. Only `data.kind` (preserved through the
-    // stage.end merge by TexraTranscriptRecorder) tells them apart.
-    const trace: TraceDocument = {
-      ...legacyTrace(undefined, AgentCategory.ToolUse),
-      entries: [
-        stageEntry({
-          seqNo: 1,
-          id: 'root-run',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          timestamp: 100,
-          text: 'Run: correct',
-          data: { status: 'running', kind: 'run' },
-          // No matching GROUP_END: the root run stage never closed (crash
-          // mid-run), so this entry stays a GROUP_START forever.
-        }),
-        stageEntry({
-          seqNo: 2,
-          id: 'r0',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          timestamp: 120,
-          // No groupId — the bug: rounds have no ambient parent, so this is
-          // indistinguishable from a root stage by groupId alone.
-          text: 'r0',
-          data: { status: RUN_PHASE.COMPLETED, endTime: 120, kind: 'round' },
-        }),
-      ],
-    };
-
-    // No terminal fact: an exported trace with no producer folds as an
-    // interrupted run, never as a finished one.
-    expect(foldTrace(trace)?.durableOutcome).toBeNull();
-  });
-
-  it('ignores a cleanly-closed tool-use round with no data.kind at all — archived before the stage.end kind fix (issue #7291)', () => {
-    // Traces archived before TexraTranscriptRecorder started re-attaching
-    // `kind` to `stage.end` (this same effort, #7267) have GROUP_END rows
-    // with NO `data.kind` whatsoever: `store.update` replaces `data`
-    // wholesale, so the round's `kind: 'round'` tag from stage.start never
-    // made it onto its GROUP_END row. `data.kind` alone can't tell this
-    // legacy round's end apart from the legacy root run's end (crash
-    // mid-run) — the fallback must key on entry ordering instead (see
-    // `findRootStageId`): the root run's stage entry is always the first
-    // top-level ("no parent") stage entry in the trace, since the round
-    // only starts after the root run stage has already opened. Labels are
-    // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
-    // to prove the fallback doesn't key on label text either.
-    const trace: TraceDocument = {
-      ...legacyTrace(undefined, AgentCategory.ToolUse),
-      entries: [
-        stageEntry({
-          seqNo: 1,
-          id: 'root-run',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          timestamp: 100,
-          text: 'Legacy run',
-          // Legacy trace predates stage kinds entirely, so even the
-          // GROUP_START row carries no `kind`.
-          data: { status: 'running' },
-          // No matching GROUP_END: the root run stage never closed (crash
-          // mid-run), so this entry stays a GROUP_START forever.
-        }),
-        stageEntry({
-          seqNo: 2,
-          id: 'r0',
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          timestamp: 120,
-          // No groupId — rounds have no ambient parent, so this is
-          // indistinguishable from a root stage by groupId alone.
-          text: 'Round 0',
-          // No `kind` — the legacy shape this fix must handle: the round
-          // closed cleanly before TexraTranscriptRecorder preserved `kind`
-          // across the stage.end merge, so this row has only its entry
-          // position (second top-level stage entry, opened after root) to
-          // distinguish it from root.
-          data: { status: RUN_PHASE.COMPLETED, endTime: 120 },
-        }),
-      ],
-    };
-
-    // No terminal fact: an exported trace with no producer folds as an
-    // interrupted run, never as a finished one.
-    expect(foldTrace(trace)?.durableOutcome).toBeNull();
-  });
-
-  // The point of these regressions is that a terminal snapshot status must
-  // not silently become READY. The retired 7-value vocabulary ('error',
-  // 'stopped', …) is no longer normalized at the parse boundary, so only the
-  // canonical phases are exercised here.
   it.each([
-    { snapshotStatus: 'failed', expected: 'failed' },
-    { snapshotStatus: 'completed', expected: 'completed' },
+    { outcome: 'failed', expected: 'failed' },
+    { outcome: 'completed', expected: 'completed' },
   ] as const)(
-    'derives "$expected" from snapshot.status "$snapshotStatus" instead of defaulting to ready',
-    ({ snapshotStatus, expected }) => {
-      const trace = legacyTrace(snapshotStatus);
-
-      const replayed = foldTrace(trace);
+    'folds meta.outcome "$outcome" to the terminal status "$expected"',
+    ({ outcome, expected }) => {
+      const replayed = foldTrace(traceDocument(outcome));
       expect(replayed?.status).toBe(expected);
       expect(replayed?.durableOutcome).toBe(expected);
     },
   );
 
-  it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
-    const trace = legacyTrace(undefined);
-
+  it('reports no durable outcome when meta.outcome is null', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
-    expect(foldTrace(trace)?.durableOutcome).toBeNull();
+    expect(foldTrace(traceDocument(null))?.durableOutcome).toBeNull();
   });
 
   it('projects a process export instruction into the fold command', () => {
-    const runId = 'abc125' as RunId;
     const trace: TraceDocument = {
-      runId,
+      ...traceDocument(null),
       config: { name: 'bash', instruction: 'ls -la' },
       meta: {
-        schemaVersion: 1,
-        timestamp: '2026-01-01T00:00:00.000Z',
+        ...traceDocument(null).meta,
         identity: { kind: 'process', tool: 'bash' },
       },
-      entries: [],
-      snapshot: RunSnapshotSchema.parse({ runId }),
     };
 
     expect(foldTrace(trace)?.command).toBe('ls -la');

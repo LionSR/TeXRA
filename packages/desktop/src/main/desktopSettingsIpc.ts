@@ -61,17 +61,17 @@ export interface DesktopSettingsUiHost extends Pick<
 > {
   openPath(filePath: string): Promise<void>;
   /**
-   * Select the stream as the window's active stream. `'unavailable'` covers a
+   * Select the run as the window's active run. `'unavailable'` covers a
    * presentation that could not be reached at all; the reveal is then reported
    * through {@link DesktopSettingsUiHost.onError} rather than here.
    */
-  /** Select a stream in the shown paper's surface: `missing` when the view
+  /** Select a run in the shown paper's surface: `missing` when the view
    *  no longer holds it, `unavailable` when no paper is shown. */
   revealRun(runId: RunId): Promise<'revealed' | 'missing' | 'unavailable'>;
   /**
-   * Display label for a stream, used by the Git tab to name each subscription's
+   * Display label for a run, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
-   * which case the raw stream id is shown.
+   * which case the raw run id is shown.
    */
   getRunLabel(runId: RunId): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
@@ -402,15 +402,13 @@ export function createDesktopSettingsIpc(
 
   /**
    * Jump from a settings entry (a goal, a PR subscription) to the run that owns
-   * it. A stream deleted since the entry was written has nothing to show, so
+   * it. A run deleted since the entry was written has nothing to show, so
    * say so instead of leaving the click with no visible effect.
    */
   async function revealRun(runId: RunId): Promise<void> {
     const result = await options.ui.revealRun(runId);
     if (result === 'missing') {
-      await options.ui.showInfoMessage(
-        'The agent stream is no longer available.',
-      );
+      await options.ui.showInfoMessage('The agent run is no longer available.');
     }
   }
 
@@ -457,7 +455,7 @@ export function createDesktopSettingsIpc(
     ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
-    // secret prompt, the browser hand-off, and the stream reveal differ here.
+    // secret prompt, the browser hand-off, and the run reveal differ here.
     getGitHubTokenStatus: postGitHubTokenStatus,
     setGitHubToken,
     removeGitHubToken,

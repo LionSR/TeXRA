@@ -7,21 +7,23 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
+  RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import { createLog } from '@logger/logUtils';
 import {
+  AgentCategory,
   aggregateTarget,
   type SessionEvent,
   type RunId,
   type RunIdentity,
   type RunOutcome,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { runMetaFromEvents, runRecordFromEvents } from './RunKVStore';
 import { checkpointExists } from './resumability';
 const log = createLog('RunListing');
 const RUN_STORAGE_CONCURRENCY = 32;
@@ -98,51 +100,61 @@ export function isUserVisibleRun(
   return isAgentRunEntry(entry) && entry.parentRunId === undefined;
 }
 
-/** Group one committed listing prefix by run without scanning other runs during each fold. */
-function groupRunRows(
+/** The latest `run.record` row of each run in one committed listing. */
+function recordRows(
   rows: readonly SessionEvent[],
-): Map<RunId, SessionEvent[]> {
-  const runs = new Map<RunId, SessionEvent[]>();
+): Map<RunId, Extract<SessionEvent, { type: 'run.record' }>> {
+  const records = new Map<
+    RunId,
+    Extract<SessionEvent, { type: 'run.record' }>
+  >();
   for (const row of rows) {
+    if (row.type !== 'run.record') continue;
     const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    // Creation precedes every other row of its run in the committed prefix.
-    if (row.type === 'run.start') runs.set(target.id, []);
-    runs.get(target.id)?.push(row);
+    if (target.kind === 'run') records.set(target.id, row);
   }
-  return runs;
+  return records;
 }
 
-/** Read current run identities and metadata from one committed listing. */
+/**
+ * Every run the session's fold lists, with its private record: the view
+ * folded cold from the log (one run model, R1) beside the same listing's
+ * `run.record` rows, which never enter the display fold.
+ */
 export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<RunListingEntry[], Error> {
-  const runs = groupRunRows(yield* session.readRecordListing());
+  const [view, listing] = yield* Effect.all([
+    session.readView([]),
+    session.readRecordListing(),
+  ]);
+  const records = recordRows(listing);
   const results = yield* Effect.forEach(
-    runs,
-    ([id, rows]) =>
+    view.runs.values(),
+    (run) =>
       Effect.gen(function* (): Effect.fn.Return<RunListingEntry | null, Error> {
-        const [meta, record] = yield* Effect.try({
-          try: () =>
-            [
-              runMetaFromEvents(rows, id),
-              runRecordFromEvents(rows, id),
-            ] as const,
+        const id = run.id;
+        const record = yield* Effect.try({
+          try: () => {
+            const row = records.get(id);
+            return row === undefined ? null : RunRecordSchema.parse(row.record);
+          },
           catch: ensureError,
         });
         const checkpointPresent = yield* checkpointExists(id, session);
-        if (!meta) return null;
 
         const base: RunListingBase = {
           id,
-          timestamp: meta.timestamp,
-          parentRunId: meta.parentRunId,
-          outcome: meta.outcome,
-          description: meta.description,
+          timestamp: new Date(run.launchedAt).toISOString(),
+          ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
+          ...(isTerminalOutcomePhase(run.status)
+            ? { outcome: run.status }
+            : {}),
+          ...(run.description === null ? {} : { description: run.description }),
           checkpointPresent,
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
-        const identity = meta.identity;
+        const identity = run.identity;
         if (!record) return { ...base, kind: 'incomplete' };
         if (identity.kind === 'agent') {
           // An agent row's record is always an AgentConfig; anything else is
@@ -154,7 +166,9 @@ export const listRuns = Effect.fn('listRuns')(function* (
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
-            log.warn(`Skipping corrupt run ${id}: ${toErrorMessage(error)}`);
+            log.warn(
+              `Skipping corrupt run ${run.id}: ${toErrorMessage(error)}`,
+            );
             return null;
           }),
         ),
@@ -187,6 +201,16 @@ export function createLatexRunDiscovery(
             inputFiles: entry.record.inputFiles,
           })),
         ),
+      ),
+    readRunOutputs: (runId) =>
+      session.readView([runId]).pipe(
+        Effect.map((view) => {
+          const run = view.runs.get(runId);
+          if (run === undefined) return {};
+          return run.category === AgentCategory.Workflow
+            ? run.files
+            : run.outputs;
+        }),
       ),
   };
 }

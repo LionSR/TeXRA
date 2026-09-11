@@ -396,7 +396,6 @@ export async function runChat(
     getSessionContext: currentSessionContext,
     disposables,
     followUpQueue,
-    snapshotStore: runtimeSession.snapshots,
     initialAgent: agent,
     initialModel: model,
     initialModelSource: defaults.modelSource,
@@ -471,7 +470,6 @@ export async function runChat(
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
-    workPlanSnapshots: runtimeSession.snapshots,
     getConfigStores: platformSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));

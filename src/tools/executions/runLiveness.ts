@@ -5,12 +5,12 @@ import { Effect } from 'effect';
  * "No handle in this process" is not liveness. A run this shell never
  * launched, one another TeXRA process owns, and one whose owner crashed all
  * look identical from the registry, so a missing handle (or a missing
- * `meta.outcome`) can never on its own justify telling a model that a run
+ * `run.end` row) can never on its own justify telling a model that a run
  * finished — or that it is still running. The ladder below asks the cheapest
  * durable fact that can decide the question, and stops there:
  *
  * 1. a handle in this process — the registry's phase is the live truth;
- * 2. a persisted `meta.outcome` — the run recorded how it ended, which is its
+ * 2. the `run.end` row's outcome — the run recorded how it ended, which is its
  *    own durable fact and outranks a lease this process is merely slow to
  *    release (#8093);
  * 3. a lease a live foreign owner holds, or one this process holds with no run
@@ -49,7 +49,7 @@ import { getRunStore, getRunRecords } from '@agent/storage/RunKVStore';
 import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
-import type { RunId, RunMeta, RunOutcome, RunPhase } from '@shared/schemas';
+import type { RunId, RunOutcome, RunPhase } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunLiveness');
@@ -74,15 +74,15 @@ export type RunLiveness =
 type LiveRunStatusInfo = RunStatusInfo & { status: RunPhase };
 
 /**
- * The run's metadata row as a caller that just read it holds it: `null`
- * when the read found none. `undefined` (the argument omitted) means the
- * caller has none and this module reads it, so "row present without an
- * outcome" never costs a second read.
+ * The run's recorded outcome as a caller that just read it holds it: `null`
+ * when the read found no terminal row. `undefined` (the argument omitted)
+ * means the caller has none and this module reads it, so "run present
+ * without an outcome" never costs a second read.
  *
  * Only a row read for this same request may be passed: an older snapshot would
  * let two surfaces disagree about how one run ended.
  */
-export type KnownRunMeta = Pick<RunMeta, 'outcome'> | null;
+export type KnownRunOutcome = RunOutcome | null;
 
 /** `runLeaseHeldMessage`'s copy, as a clause a sentence can continue with. */
 function heldElsewhereReason(owner: LeaseOwnerRecord): string {
@@ -99,7 +99,7 @@ const OWNED_HERE_REASON = "held by this process's lease with no live run";
 export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   runId: RunId,
   session: SessionHandle,
-  knownMeta?: KnownRunMeta,
+  knownOutcome?: KnownRunOutcome,
 ): Effect.fn.Return<RunLiveness> {
   const { runs } = session;
   const handle = runs.getHandle(runId);
@@ -110,16 +110,16 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     RunLiveness,
     unknown
   > {
-    const meta =
-      knownMeta === undefined
-        ? yield* getRunRecords(session, runId).readMeta()
-        : knownMeta;
+    const outcome =
+      knownOutcome === undefined
+        ? ((yield* getRunRecords(session, runId).readRunEnd())?.outcome ?? null)
+        : knownOutcome;
     // A recorded outcome is the run's own fact, not the lease's: a finished
     // child untracks its handle and writes the outcome long before its loop
     // releases the run lease, and the parent reads the run inside
     // exactly that window (#8093).
-    if (meta?.outcome !== undefined) {
-      return { kind: 'settled', outcome: meta.outcome };
+    if (outcome !== null) {
+      return { kind: 'settled', outcome };
     }
     const lease = yield* Effect.tryPromise({
       try: () => runInSession(session, () => inspectRunLease(runId)),

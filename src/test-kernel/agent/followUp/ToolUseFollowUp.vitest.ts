@@ -23,10 +23,6 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     readRunRecords: () => Effect.succeed([]),
     status: { clearHold: () => {}, markUnavailable: () => {} },
     followUps: new ToolUseFollowUpQueue(),
-    snapshots: {
-      preload: () => Effect.void,
-      getRunMetadata: () => ({}),
-    },
   } as unknown as SessionHandle;
 }
 

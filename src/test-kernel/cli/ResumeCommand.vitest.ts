@@ -18,7 +18,7 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
-import type { RunId, RunMeta } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -95,16 +95,9 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.Workflow,
 });
 
-const STAMPED_META: RunMeta = {
-  schemaVersion: 1,
-  timestamp: '2026-07-31T00:00:00.000Z',
-  identity: { kind: 'agent', agent: 'planner' },
-};
-
 /** Reset and seed the real (fake-platform-backed) run store. */
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
-  readonly meta?: RunMeta;
   readonly checkpoint?: boolean;
 }): Promise<void> {
   const session = createProcessSession();
@@ -154,7 +147,7 @@ async function run(context: CliContext, id: RunId = RUN_ID) {
 }
 
 async function stubWorkflowResume(config: AgentConfig): Promise<void> {
-  await seedRunRecord({ config, meta: STAMPED_META });
+  await seedRunRecord({ config });
   mocks.retrieveSessionResumeData.mockResolvedValue({
     type: 'workflow',
     agentConfig: config,
@@ -166,7 +159,7 @@ describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    await seedRunRecord({ config: TOOL_USE_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: TOOL_USE_CONFIG });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'correct',
       category: AgentCategory.Workflow,
@@ -201,7 +194,7 @@ describe('runResumeCommand', () => {
   });
 
   it('resumes a workflow run headless under its persisted run id', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.retrieveSessionResumeData.mockResolvedValue({
       type: 'workflow',
       agentConfig: WORKFLOW_CONFIG,
@@ -280,7 +273,7 @@ describe('runResumeCommand', () => {
   });
 
   it('reports a missing workflow agent as a usage error', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.resolveCliLaunchAgent.mockRejectedValue(
       new CliUsageError('Agent not found: correct.'),
     );
@@ -316,7 +309,7 @@ describe('runResumeCommand', () => {
   });
 
   it('reports an unknown run id as a usage error', async () => {
-    await seedRunRecord({ config: null, meta: STAMPED_META });
+    await seedRunRecord({ config: null });
 
     await expect(run(cliContext())).resolves.toBe(2);
 
@@ -329,7 +322,6 @@ describe('runResumeCommand', () => {
   it('reports a run with no checkpoint as finished', async () => {
     await seedRunRecord({
       config: TOOL_USE_CONFIG,
-      meta: STAMPED_META,
       checkpoint: false,
     });
 
@@ -377,7 +369,7 @@ describe('runResumeCommand', () => {
   // advertises a row from that file alone, so what the user is told is that
   // the saved state could not be loaded, never that the run finished.
   it('separates an unusable checkpoint from a run that finished', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
@@ -391,7 +383,7 @@ describe('runResumeCommand', () => {
   // A transient failure over a checkpoint that is still on disk says nothing
   // about the record, so it stays the operational error it was.
   it('reports a transient resume-state load failure as an operational error', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
     await expect(run(cliContext())).resolves.toBe(1);
@@ -406,7 +398,7 @@ describe('runResumeCommand', () => {
   // listing advertised from the file alone, so it earns the unusable-state
   // refusal instead of an internal retrieval message.
   it('refuses a checkpoint whose record cannot be resumed as unusable state', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.retrieveSessionResumeData.mockRejectedValue(
       new PersistedFlowStateError(RUN_ID, 'unsupported-record'),
     );

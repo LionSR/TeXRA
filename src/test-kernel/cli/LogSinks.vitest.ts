@@ -45,7 +45,10 @@ describe('NdjsonStdoutSink', () => {
     sink.writeRecord(records[1]);
     await sink.flush();
 
-    expect(lines.map((line) => JSON.parse(line))).toEqual(records);
+    // The sink stamps the contract version last, so `kind` stays the first key.
+    expect(lines.map((line) => JSON.parse(line))).toEqual(
+      records.map((record) => ({ ...record, contract: 2 })),
+    );
   });
 
   it('preserves order across logger and public-record writes', async () => {
@@ -60,8 +63,8 @@ describe('NdjsonStdoutSink', () => {
     });
     sink.writeRecord({
       kind: 'progress',
-      event: 'updateStreamStatus',
-      payload: { runId: 'stream-1', status: 'working' },
+      event: 'status',
+      payload: { aggregateId: '["run","run-1"]', phase: 'running' },
     });
     emit('drain');
     await sink.flush();

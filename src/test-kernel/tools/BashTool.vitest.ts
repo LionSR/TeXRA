@@ -733,7 +733,7 @@ describe('BashTool', () => {
     // rather than a completed run with a silently missing result.
     await vi.waitFor(async () => {
       assert.equal(
-        (await Effect.runPromise(records.readMeta()))?.outcome,
+        (await Effect.runPromise(records.readRunEnd()))?.outcome,
         RUN_OUTCOME.FAILED,
       );
     });
@@ -802,7 +802,7 @@ describe('BashTool', () => {
     const records = getRunRecords(defaultSession(), runId);
     await vi.waitFor(async () => {
       assert.equal(
-        (await Effect.runPromise(records.readMeta()))?.outcome,
+        (await Effect.runPromise(records.readRunEnd()))?.outcome,
         RUN_OUTCOME.CANCELLED,
       );
     });

@@ -1,13 +1,14 @@
 // #9590 Stage 5 store public-surface budget ratchet (proof obligation 10).
-// The two transcript stores' public method counts are pinned by a checked-in
+// The transcript store's public method count is pinned by a checked-in
 // baseline: equal is allowed, growth fails, and a genuine reduction should
 // shrink config/ratchets/store-public-surface-baseline.json in the same PR.
 // Counting is caller-honest per the issue's correction: each public method is
 // one contract unit, while every field exposed by a configured aggregate
-// snapshot getter is one unit. Replacing five getters with getRunMetadata thus
-// keeps five caller-visible units instead of gaming the method count down to
-// one. Making a projection target private (writer-only transcript mutation,
-// event-fed snapshot projection) genuinely reduces reachability.
+// getter is one unit, so replacing several getters with one aggregate cannot
+// game the method count down. Making a projection target private
+// (writer-only transcript mutation) genuinely reduces reachability. The
+// snapshot store this once budgeted beside it was deleted by the one run
+// model (S4): readers take the session's own fold.
 // Clones the checked-in-baseline + AST-scanning
 // vitest pattern from hostAgentDeepImportRatchet.vitest.ts.
 
@@ -26,7 +27,6 @@ const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
 const STORES = {
   StreamLogStore: 'src/transcript/StreamLogStore.ts',
-  RunSnapshotStore: 'src/transcript/RunSnapshotStore.ts',
 } as const;
 
 type StoreName = keyof typeof STORES;

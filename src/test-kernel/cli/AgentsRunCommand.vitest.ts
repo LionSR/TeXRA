@@ -160,7 +160,7 @@ describe('CLI agents run command', () => {
     expect(config?.instruction).toContain('Assess the proof concisely.');
     const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json).toEqual({
-      executionId: 'run-1',
+      runId: 'run-1',
       outcome: RUN_OUTCOME.COMPLETED,
       output: {
         category: AgentCategory.ToolUse,
@@ -170,12 +170,13 @@ describe('CLI agents run command', () => {
       workingDirectory: '/tmp/project',
     });
     // `outcome` is the only terminal fact the headless JSON publishes, what the
-    // run produced rides `output`, and the run id keeps its frozen 0.40 wire key.
+    // run produced rides `output`, and the run id is `runId`: the result is
+    // the run's result, not a renamed copy of it.
     expect(Object.keys(emission?.json ?? {})).toEqual([
+      'runId',
       'outcome',
       'output',
       'workingDirectory',
-      'executionId',
     ]);
     expect(emission?.ndjson).toEqual({
       kind: 'agent-result',

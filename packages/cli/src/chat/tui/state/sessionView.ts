@@ -13,15 +13,12 @@ import { SubscriptionRef } from 'effect';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
-  isEmptyUsage,
   isPlainAgentIdentity,
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
-  sumUsageStats,
   USER_FOLLOW_UP_SUPPORT,
   type RunPhase,
   type RunId,
-  type TokenUsageStats,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import {
@@ -39,7 +36,7 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 /**
  * Bridge a session's view level into the TUI's signal; returns the unbind.
  * The only meeting point between Effect and the components (PRD 7.5): the
- * view's change stream bridged onto the process runtime by `toSignal`.
+ * view's change run bridged onto the process runtime by `toSignal`.
  */
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
@@ -82,35 +79,35 @@ export function runViewOf(
 }
 
 /** The run to stop when a child is still running or waiting. */
-export function killableRunId(stream: RunView | undefined): RunId | undefined {
-  return stream &&
-    stream.parentId !== null &&
-    (stream.group === 'running' || stream.group === 'waiting')
-    ? stream.id
+export function killableRunId(run: RunView | undefined): RunId | undefined {
+  return run &&
+    run.parentId !== null &&
+    (run.group === 'running' || run.group === 'waiting')
+    ? run.id
     : undefined;
 }
 
-/** Whether a focused child stream takes the composer's follow-ups (PRD 10.1). */
-export function focusedChildAcceptsFollowUps(stream: RunView): boolean {
+/** Whether a focused child run takes the composer's follow-ups (PRD 10.1). */
+export function focusedChildAcceptsFollowUps(run: RunView): boolean {
   return (
-    stream.followUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
-    isPlainAgentIdentity(stream.identity) &&
-    stream.category === AgentCategory.ToolUse &&
-    isInFlightPhase(stream.status)
+    run.followUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
+    isPlainAgentIdentity(run.identity) &&
+    run.category === AgentCategory.ToolUse &&
+    isInFlightPhase(run.status)
   );
 }
 
-/** The name a stream goes by on this surface: `main` for a root, the
+/** The name a run goes by on this surface: `main` for a root, the
  *  fold's label below it. */
-export function runLabelOf(stream: RunView): string {
-  return stream.parentId === null ? 'main' : stream.label;
+export function runLabelOf(run: RunView): string {
+  return run.parentId === null ? 'main' : run.label;
 }
 
-/** The stream's phase: undefined before the first `status` folds. */
-export function runPhaseOf(stream: RunView | undefined): RunPhase | undefined {
-  return stream === undefined || stream.status === RUN_LIFECYCLE_READY
+/** The run's phase: undefined before the first `status` folds. */
+export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
+  return run === undefined || run.status === RUN_LIFECYCLE_READY
     ? undefined
-    : stream.status;
+    : run.status;
 }
 
 /**
@@ -121,14 +118,14 @@ export function runPhaseOf(stream: RunView | undefined): RunPhase | undefined {
  */
 export function runningChildCount(
   view: SessionView,
-  stream: RunView | undefined,
+  run: RunView | undefined,
 ): number {
-  return (stream?.childIds ?? []).filter(
+  return (run?.childIds ?? []).filter(
     (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   ).length;
 }
 
-/** Whether the root or any stream under it is in the RUNNING phase. */
+/** Whether the root or any run under it is in the RUNNING phase. */
 export function anyRunRunning(
   view: SessionView,
   rootRunId: RunId | undefined,
@@ -136,15 +133,6 @@ export function anyRunRunning(
   return descendantRuns(view, rootRunId, { includeRoot: true }).some(
     (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   );
-}
-
-/** The run's usage across its executions; undefined when nothing was metered. */
-export function cumulativeUsageOf(
-  stream: RunView | undefined,
-): TokenUsageStats | undefined {
-  if (!stream) return undefined;
-  const total = sumUsageStats(Object.values(stream.usage));
-  return isEmptyUsage(total) ? undefined : total;
 }
 
 /** The nearest ancestor's workflow-phase heading, for a child's location. */

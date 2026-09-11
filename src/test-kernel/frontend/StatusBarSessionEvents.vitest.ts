@@ -16,7 +16,7 @@ const runId = 'a0b0c0' as RunId;
 function subscribeOverTestSession() {
   const session = createTestSession();
   publishTestRunStart(session, runId);
-  const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
+  const tracker = new StatusBarUsageTracker(session.status, session);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
   const dispose = subscribeStatusBarSessionEvents({
@@ -27,11 +27,17 @@ function subscribeOverTestSession() {
   return { session, tracker, onStatusChanged, onUsageChanged, dispose };
 }
 
-function emitUsage(session: SessionHandle): void {
+/** Publish the run's spend so far. A `usage` row is a cumulative snapshot,
+ *  never a round's delta, so `round` scales one row's totals. */
+function emitUsage(session: SessionHandle, round = 1): void {
   session.publishRunEvent(runId, {
     type: 'usage',
     runId,
-    usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+    usage: {
+      inputTokens: 10 * round,
+      outputTokens: 20 * round,
+      cost: 0.01 * round,
+    },
   });
 }
 
@@ -58,17 +64,17 @@ describe('subscribeStatusBarSessionEvents', () => {
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('projects run usage the session snapshot store accumulated', async () => {
+  it('projects the run total the newest usage row carries', async () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     session.status.transition(runId, RUN_PHASE.RUNNING, 'lifecycle');
-    emitUsage(session);
-    emitUsage(session);
+    emitUsage(session, 1);
+    emitUsage(session, 2);
     await session.settlePublications();
 
-    // The snapshot store subscribed at session construction is the one
-    // accumulator; the tracker's total is its per-run sum for the run.
+    // Each row is the run's cumulative total, so the tracker reads the
+    // newest row's totals, not the two rows summed.
     expect(tracker.totalUsage.inputTokens).toBe(20);
     expect(tracker.totalUsage.outputTokens).toBe(40);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.02);

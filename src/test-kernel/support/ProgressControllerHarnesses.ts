@@ -132,12 +132,11 @@ export function createProgressWorkflowRunActionsHarness(
   return {
     controller: new ProgressWorkflowRunActionsController({
       state: {
-        // The controller takes its config from the caller; the run id is the
-        // stream itself, so the metadata slice carries nothing it reads.
-        getRunMetadata: () => ({}),
-        getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},
-        getKnownWorkspaceOutputPaths: (stream) =>
-          new Set(options.knownWorkspaceOutputs?.get(stream) ?? []),
+        // The controller takes its config from the caller, so the harness
+        // only answers the run's outputs.
+        getOutputFiles: (runId) => options.outputs?.get(runId) ?? {},
+        getKnownWorkspaceOutputPaths: (runId) =>
+          new Set(options.knownWorkspaceOutputs?.get(runId) ?? []),
       },
       runDiff: async (request) => {
         diffs.push(request);

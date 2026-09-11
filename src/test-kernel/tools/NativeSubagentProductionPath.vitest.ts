@@ -736,7 +736,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // How the run ended is the `run.end` row's fact, not the manifest's: the
     // stop cancelled the run while turn 1's output stands as its latest.
     await expect(
-      Effect.runPromise(getRunRecords(session, runId).readMeta()),
+      Effect.runPromise(getRunRecords(session, runId).readRunEnd()),
     ).resolves.toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
 
     // /report and /result distinguish the interrupted turn from the latest

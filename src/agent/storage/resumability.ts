@@ -77,14 +77,14 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const metaResult = yield* getRunRecords(session, runId)
-    .readMeta()
+  const endResult = yield* getRunRecords(session, runId)
+    .readRunEnd()
     .pipe(Effect.result);
-  if (metaResult._tag === 'Failure') {
-    const error = metaResult.failure;
+  if (endResult._tag === 'Failure') {
+    const error = endResult.failure;
     const malformed = error instanceof z.ZodError;
     log.debug(
-      `Failed to read run metadata for ${runId}: ${toErrorMessage(error)}`,
+      `Failed to read the terminal record for ${runId}: ${toErrorMessage(error)}`,
     );
     return {
       kind: 'unreadable',
@@ -94,7 +94,8 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
         : `run metadata could not be read (${toErrorMessage(error)})`,
     };
   }
-  const metaFields = { outcome: metaResult.success?.outcome };
+  const outcome = endResult.success?.outcome;
+  const metaFields = outcome === undefined ? {} : { outcome };
   const checkpoint = yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () => getRunStore(runId).read(flowKey(runId))),

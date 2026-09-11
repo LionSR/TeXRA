@@ -10,8 +10,7 @@ export const MultipleDocumentFileTypeSchema = z.enum([
 export type MultipleDocumentFileType = z.infer<
   typeof MultipleDocumentFileTypeSchema
 >;
-export const MULTIPLE_DOCUMENT_FILE_TYPES =
-  MultipleDocumentFileTypeSchema.options;
+const MULTIPLE_DOCUMENT_FILE_TYPES = MultipleDocumentFileTypeSchema.options;
 
 /** Narrows a broader file-type value (e.g. `ExtendedDocumentFileType`) to `MultipleDocumentFileType`. */
 export function isMultipleDocumentFileType(

@@ -1,10 +1,10 @@
 /**
- * The run board of a workflow-script stream: one phase strip, the phase's
+ * The run board of a workflow-script run: one phase strip, the phase's
  * rows in the model's attention-first order, the run's tally, and the
  * controls a run without a chat offers instead of a composer.
  *
- * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
- * runs the model joins by row, the stream's `readOnly` and
+ * Reads `run.transcript.run` (the fold's `workflowRunModel`), the child
+ * runs the model joins by row, the run's `readOnly` and
  * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
  * surface's phase, groups, and focus. Dispatches `workflow.control` and `run.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
@@ -56,7 +56,6 @@ import {
 } from '@utils/text/stringUtils';
 
 // Local imports - progress view
-import { totalRunUsage } from '../usageTotals';
 import { workflowRunBoardStyles } from './WorkflowRunBoard.styles';
 
 // Side-effect imports - register Web Awesome components
@@ -166,7 +165,7 @@ function groupKey(phaseKey: string, group: WorkflowRowGroup): string {
 export class WorkflowRunBoard extends LitElement {
   static override styles = [designTokens, workflowRunBoardStyles];
 
-  @property({ attribute: false }) stream!: WorkflowRunView;
+  @property({ attribute: false }) run!: WorkflowRunView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
   /** The host's clock; null shows no elapsed time. */
@@ -174,34 +173,34 @@ export class WorkflowRunBoard extends LitElement {
   /** The desktop's headline: the tally leads the strip instead of closing
    *  the board. */
   @property({ type: Boolean, reflect: true }) summary = false;
-  private get run(): WorkflowRunModel | null {
-    return this.stream.transcript.run;
+  private get model(): WorkflowRunModel | null {
+    return this.run.transcript.run;
   }
 
   /** The run has a durable outcome: nothing on the board can act any more,
    *  and the strip paints closed. */
   private get settled(): boolean {
-    return this.stream.durableOutcome !== null;
+    return this.run.durableOutcome !== null;
   }
 
   /** Skip, retry, and kill act only on a run this process owns that is
    *  still open. */
   private get canControl(): boolean {
-    return !this.stream.readOnly && !this.settled;
+    return !this.run.readOnly && !this.settled;
   }
 
   /** The child a card opened, when the model resolved one. */
   private childOf(rowId: string): RunView | undefined {
-    const childId = this.run?.childRunOf.get(rowId);
+    const childId = this.model?.childRunOf.get(rowId);
     return childId === undefined ? undefined : this.view.runs.get(childId);
   }
 
-  /** The stream under `stream` that is asking: itself on `own`, else the
+  /** The run under `run` that is asking: itself on `own`, else the
    *  first descendant the fold marked, following `descendant` down. */
-  private askingRun(stream: RunView): RunView | undefined {
-    if (stream.approval === 'own') return stream;
-    if (stream.approval !== 'descendant') return undefined;
-    for (const childId of stream.childIds) {
+  private askingRun(run: RunView): RunView | undefined {
+    if (run.approval === 'own') return run;
+    if (run.approval !== 'descendant') return undefined;
+    for (const childId of run.childIds) {
       const child = this.view.runs.get(childId);
       const asking = child === undefined ? undefined : this.askingRun(child);
       if (asking) return asking;
@@ -230,7 +229,7 @@ export class WorkflowRunBoard extends LitElement {
   }
 
   private expandedGroups(phaseKey: string): ReadonlySet<WorkflowRowGroup> {
-    const groups = this.surface.groups.get(this.stream.id);
+    const groups = this.surface.groups.get(this.run.id);
     const expanded = new Set<WorkflowRowGroup>();
     for (const group of ['finished', 'queued', 'declared'] as const) {
       if (groups?.get(groupKey(phaseKey, group)) === true) expanded.add(group);
@@ -289,7 +288,7 @@ export class WorkflowRunBoard extends LitElement {
   // -- events --------------------------------------------------------------
 
   /** Skip and retry act on one call, so the request names that call's own
-   *  child stream: `Retry failed` fires one per failed row and each row
+   *  child run: `Retry failed` fires one per failed row and each row
    *  keeps its own answer instead of N sharing the run's slot. */
   private control(rowId: string, action: 'skip' | 'retry'): void {
     const child = this.childOf(rowId);
@@ -297,7 +296,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'workflow.control',
-        runId: this.stream.id,
+        runId: this.run.id,
         childRunId: child.id,
         action,
       }),
@@ -312,7 +311,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'phase',
-        runId: this.stream.id,
+        runId: this.run.id,
         phase: event.detail.name,
       }),
     );
@@ -322,7 +321,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'group',
-        runId: this.stream.id,
+        runId: this.run.id,
         key,
         expanded,
       }),
@@ -333,14 +332,14 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'run.stop',
-        runId: this.stream.id,
+        runId: this.run.id,
       }),
     );
   }
 
   /** Every failed card with a child to retry, in phase order. */
   private failedRows(): readonly { phase: string; row: WorkflowTaskRow }[] {
-    return (this.run?.phases ?? []).flatMap((phase) =>
+    return (this.model?.phases ?? []).flatMap((phase) =>
       phase.tasks
         .filter((row) => row.call.status === 'failed')
         .map((row) => ({ phase: phase.key, row })),
@@ -363,7 +362,7 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.surface({
         kind: 'phase',
-        runId: this.stream.id,
+        runId: this.run.id,
         phase: next.phase,
       }),
     );
@@ -388,8 +387,8 @@ export class WorkflowRunBoard extends LitElement {
 
   /** `↓41k · $1.84 · 38m`: what the run has produced and spent so far. */
   private renderUsage(): TemplateResult {
-    const usage = totalRunUsage(this.stream.usage);
-    const { runStartedAt } = this.stream;
+    const usage = this.run.usage;
+    const { runStartedAt } = this.run;
     const parts = [
       usage.outputTokens > 0
         ? `↓${formatCompactTokenCount(usage.outputTokens)}`
@@ -402,8 +401,8 @@ export class WorkflowRunBoard extends LitElement {
     return html`<span class="quiet">${parts.join(' · ')}</span>`;
   }
 
-  private renderSummary(run: WorkflowRunModel): TemplateResult {
-    const { tally } = run;
+  private renderSummary(model: WorkflowRunModel): TemplateResult {
+    const { tally } = model;
     return html`<div class="summary">
       <wa-badge variant="neutral" appearance="outlined" pill
         >${tally.done} / ${tally.total}</wa-badge
@@ -415,9 +414,9 @@ export class WorkflowRunBoard extends LitElement {
     </div>`;
   }
 
-  private renderTally(run: WorkflowRunModel): TemplateResult {
+  private renderTally(model: WorkflowRunModel): TemplateResult {
     return html`<div class="tally">
-      <span>${formatWorkflowTally(run.tally)}</span>
+      <span>${formatWorkflowTally(model.tally)}</span>
       <span>·</span>
       ${this.renderUsage()}
     </div>`;
@@ -458,7 +457,7 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** A waiting card opens the stream that is asking; a failed one retries
+  /** A waiting card opens the run that is asking; a failed one retries
    *  or skips. */
   private renderActions(
     row: WorkflowTaskRow,
@@ -508,7 +507,7 @@ export class WorkflowRunBoard extends LitElement {
    *  keeps the attempt, the elapsed time while it runs, and its tokens. */
   private rowMeta(row: WorkflowTaskRow): readonly string[] {
     const { call } = row;
-    const live = this.run?.liveOf.get(row.id);
+    const live = this.model?.liveOf.get(row.id);
     return [
       call.attemptNumber === undefined
         ? undefined
@@ -529,7 +528,7 @@ export class WorkflowRunBoard extends LitElement {
     const child = this.childOf(row.id);
     const approval = this.approvalOf(row.id);
     const waiting = approval !== undefined;
-    // A card opens its child; a waiting card opens the stream asking, which
+    // A card opens its child; a waiting card opens the run asking, which
     // is the child or one of its descendants.
     const target = approval?.runId ?? child?.id;
     const meta = this.rowMeta(row);
@@ -656,8 +655,8 @@ export class WorkflowRunBoard extends LitElement {
   }
 
   /** The runtime's refusal of a request this surface made, in the runtime's
-   *  words; the next request on that stream clears it (`Surface.rejected`).
-   *  Kill answers on the run's stream, skip and retry on the call's. */
+   *  words; the next request on that run clears it (`Surface.rejected`).
+   *  Kill answers on the run's run, skip and retry on the call's. */
   private renderRejection(error: SurfaceRefusal): TemplateResult {
     switch (error._tag) {
       case 'NotOwner':
@@ -680,7 +679,7 @@ export class WorkflowRunBoard extends LitElement {
   private renderControls(): TemplateResult {
     const failed = this.failedRows().length;
     const disabled = !this.canControl;
-    const rejected = this.surface.rejected.get(this.stream.id);
+    const rejected = this.surface.rejected.get(this.run.id);
     return html`<div
       class=${classMap({ controls: true, settled: this.settled })}
     >
@@ -722,29 +721,29 @@ export class WorkflowRunBoard extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const run = this.run;
-    if (!run) return nothing;
-    const active = resolvePhase(this.surface, this.stream.id, run.phases);
-    return html`${this.summary ? this.renderSummary(run) : nothing}
+    const model = this.model;
+    if (!model) return nothing;
+    const active = resolvePhase(this.surface, this.run.id, model.phases);
+    return html`${this.summary ? this.renderSummary(model) : nothing}
       <wa-tab-group
         class=${classMap({ phases: true, settled: this.settled })}
         active=${active ?? nothing}
         @wa-tab-show=${this.handleTabShow}
       >
         ${repeat(
-          run.phases,
+          model.phases,
           (phase) => phase.key,
           (phase) => this.renderTab(phase),
         )}
         ${repeat(
-          run.phases,
+          model.phases,
           (phase) => phase.key,
           (phase) => this.renderPhase(phase, phase.key === active),
         )}
       </wa-tab-group>
-      ${this.summary ? nothing : this.renderTally(run)}
+      ${this.summary ? nothing : this.renderTally(model)}
       ${
-        this.stream.followUpSupport === 'unsupported'
+        this.run.followUpSupport === 'unsupported'
           ? this.renderControls()
           : nothing
       }`;

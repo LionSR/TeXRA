@@ -478,9 +478,9 @@ describe('child run progress events', () => {
             Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
           ).toBe(true);
           expect(startLoop).not.toHaveBeenCalled();
-          expect((yield* getRunRecords(session, id).readMeta())?.outcome).toBe(
-            RUN_OUTCOME.CANCELLED,
-          );
+          expect(
+            (yield* getRunRecords(session, id).readRunEnd())?.outcome,
+          ).toBe(RUN_OUTCOME.CANCELLED);
           expect(
             yield* Effect.promise(() =>
               runInSession(session, () => inspectRunLease(id)),

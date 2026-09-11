@@ -53,41 +53,41 @@ const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
   neutral: 'circle',
 };
 
-function buildTooltip(stream: RunView): string {
+function buildTooltip(run: RunView): string {
   const modelDisplay =
-    stream.identity.kind === 'agent' && stream.model
-      ? (stream.modelLabel ?? stream.model)
+    run.identity.kind === 'agent' && run.model
+      ? (run.modelLabel ?? run.model)
       : undefined;
-  const worktree = stream.worktree;
+  const worktree = run.worktree;
   const worktreeDisplay = worktree
     ? `Worktree: ${worktree.branch ?? getBasename(worktree.workingDirectory)}`
     : undefined;
   const mainLine = [
-    stream.label,
-    `Status: ${stream.approval === 'none' ? stream.statusLabel : 'Approval required'}`,
+    run.label,
+    `Status: ${run.approval === 'none' ? run.statusLabel : 'Approval required'}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
   ]
     .filter(Boolean)
     .join(' · ');
   const parts = [mainLine];
-  if (stream.description) parts.push(stream.description);
-  if (stream.statusDetail) parts.push(stream.statusDetail);
+  if (run.description) parts.push(run.description);
+  if (run.statusDetail) parts.push(run.statusDetail);
   // The opaque id stays in the accessible name: it is what tells two
   // parallel runs of the same agent apart.
-  parts.push(stream.id);
-  if (stream.lastTimestamp) {
-    const lastSeen = formatRelativeTime(stream.lastTimestamp);
+  parts.push(run.id);
+  if (run.lastTimestamp) {
+    const lastSeen = formatRelativeTime(run.lastTimestamp);
     if (lastSeen) parts.push(`Last activity ${lastSeen}`);
   }
   return parts.join('\n');
 }
 
-function runDecorator(stream: RunView) {
-  const kind = stream.identity.kind;
+function runDecorator(run: RunView) {
+  const kind = run.identity.kind;
   return kind === 'multiAgentWorkflow' || kind === 'process'
     ? AGENT_DECORATORS.streamKinds[kind]
-    : getAgentCategoryDecorator(stream.category);
+    : getAgentCategoryDecorator(run.category);
 }
 
 // =============================================================================
@@ -95,15 +95,15 @@ function runDecorator(stream: RunView) {
 // =============================================================================
 
 /**
- * One stream row. Re-renders only when its own `.stream` ref or a flag
- * changes; the fold replaces a stream's value only when that stream changes,
+ * One run row. Re-renders only when its own `.run` ref or a flag
+ * changes; the fold replaces a run's value only when that run changes,
  * so rows of untouched runs skip rendering on every update.
  */
-@customElement('stream-tab')
+@customElement('run-tab')
 class RunTab extends LitElement {
   static override styles = [designTokens, focusRingStyles, runTabStyles];
 
-  @property({ attribute: false }) stream!: RunView;
+  @property({ attribute: false }) run!: RunView;
   @property({ type: Boolean }) active = false;
   /** Children are shown beneath this row. */
   @property({ type: Boolean, reflect: true }) expanded = false;
@@ -113,77 +113,75 @@ class RunTab extends LitElement {
   private decorator = getAgentCategoryDecorator('toolUse');
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('stream')) this.decorator = runDecorator(this.stream);
+    if (changed.has('run')) this.decorator = runDecorator(this.run);
   }
 
   override render(): TemplateResult {
-    const stream = this.stream;
-    const pendingApproval = stream.approval !== 'none';
+    const run = this.run;
+    const pendingApproval = run.approval !== 'none';
     const statusGlyph = pendingApproval
       ? 'triangle-exclamation'
-      : TONE_ICONS[stream.tone];
+      : TONE_ICONS[run.tone];
     const accessibleStatusLabel = pendingApproval
       ? 'Approval required'
-      : stream.statusLabel;
-    const runTitle = stream.description || stream.label;
+      : run.statusLabel;
+    const runTitle = run.description || run.label;
     const childCountLabel = formatResultCount(
-      stream.rollup.total,
+      run.rollup.total,
       BACKGROUND_TASK.countNoun,
     );
     const childToggleLabel = this.expanded
       ? BACKGROUND_TASK.collapseAction
       : childCountLabel;
     const metaAgentName =
-      stream.identity.kind === 'agent' && stream.description
-        ? stream.label
-        : undefined;
+      run.identity.kind === 'agent' && run.description ? run.label : undefined;
     // The rollup is the row's own fact: the rail carries it with no
     // disclosure at all (W2), and a tree row hides it while open.
-    const showRollup = stream.rollup.total > 0 && !this.expanded;
+    const showRollup = run.rollup.total > 0 && !this.expanded;
 
     return html`
       <div
         class=${classMap({
           'tab-container': true,
           'is-active': this.active,
-          [`tone-${stream.tone}`]: true,
+          [`tone-${run.tone}`]: true,
           'has-pending-approval': pendingApproval,
-          'is-read-only': stream.readOnly,
+          'is-read-only': run.readOnly,
         })}
       >
         ${
           this.expandable
             ? html`<wa-button
-                  id="stream-tab-expand-button"
+                  id="run-tab-expand-button"
                   class="action-icon-button tab-expand"
                   appearance="plain"
                   variant="neutral"
                   size="s"
                   type="button"
-                  data-stream=${stream.id}
+                  data-run=${run.id}
                   data-action="toggle-children"
                   aria-label=${childToggleLabel}
                   aria-expanded=${this.expanded ? 'true' : 'false'}
                   >${waIcon('chevron-right')}</wa-button
-                ><wa-tooltip for="stream-tab-expand-button"
+                ><wa-tooltip for="run-tab-expand-button"
                   >${childToggleLabel}</wa-tooltip
                 >`
             : nothing
         }
         <div class="tab-select-tooltip-anchor">
           <button
-            id="stream-tab-select-button"
+            id="run-tab-select-button"
             class="tab focus-ring-inset"
-            data-stream=${stream.id}
+            data-run=${run.id}
             data-action="select"
-            aria-label=${buildTooltip(stream)}
+            aria-label=${buildTooltip(run)}
           >
             <div class="tab-header">
-              <span id="stream-tab-title" class="tab-title"
+              <span id="run-tab-title" class="tab-title"
                 >${
-                  stream.parentId
+                  run.parentId
                     ? waIcon('chevron-right', {
-                        className: 'nested-stream-icon',
+                        className: 'nested-run-icon',
                       })
                     : nothing
                 }${runTitle}</span
@@ -192,11 +190,11 @@ class RunTab extends LitElement {
                 showRollup
                   ? html`<span class="tab-rollup" aria-label=${childCountLabel}
                       ><wa-badge variant="neutral" appearance="outlined" pill
-                        >${stream.rollup.total}</wa-badge
+                        >${run.rollup.total}</wa-badge
                       >${
-                        stream.rollup.running > 0
+                        run.rollup.running > 0
                           ? html`<wa-badge variant="success" pill
-                              >${stream.rollup.running}</wa-badge
+                              >${run.rollup.running}</wa-badge
                             >`
                           : nothing
                       }</span
@@ -204,7 +202,7 @@ class RunTab extends LitElement {
                   : nothing
               }
               <span
-                id="stream-tab-status"
+                id="run-tab-status"
                 class="tab-status"
                 role="img"
                 aria-label=${accessibleStatusLabel}
@@ -212,24 +210,22 @@ class RunTab extends LitElement {
                 ${waIcon(statusGlyph, { className: 'tab-status-icon' })}
               </span>
             </div>
-            <div id="stream-tab-meta" class="tab-meta">
+            <div id="run-tab-meta" class="tab-meta">
               ${
                 metaAgentName
                   ? html`<span class="agent-name">${metaAgentName}</span>`
                   : nothing
               }
               ${
-                stream.worktree
-                  ? html`<worktree-chip
-                      .info=${stream.worktree}
-                    ></worktree-chip>`
+                run.worktree
+                  ? html`<worktree-chip .info=${run.worktree}></worktree-chip>`
                   : nothing
               }
               ${
-                stream.lastTimestamp
+                run.lastTimestamp
                   ? html`<wa-relative-time
                       class="last-active"
-                      .date=${new Date(stream.lastTimestamp)}
+                      .date=${new Date(run.lastTimestamp)}
                       format="narrow"
                       sync
                     ></wa-relative-time>`
@@ -237,71 +233,69 @@ class RunTab extends LitElement {
               }
               <span class="model"
                 >${
-                  stream.identity.kind === 'agent'
-                    ? (stream.modelLabel ?? stream.model ?? '')
+                  run.identity.kind === 'agent'
+                    ? (run.modelLabel ?? run.model ?? '')
                     : ''
                 }</span
               >
-              ${waIcon(this.decorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
+              ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
               ${when(
-                stream.isRemote,
+                run.isRemote,
                 () => html`
-                  ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
+                  ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'run-tab-remote', className: 'remote-agent' })}
                 `,
               )}
             </div>
             ${
-              stream.statusDetail
-                ? html`<div class="tab-detail">${stream.statusDetail}</div>`
+              run.statusDetail
+                ? html`<div class="tab-detail">${run.statusDetail}</div>`
                 : nothing
             }
           </button>
-          <wa-tooltip for="stream-tab-status"
-            >${accessibleStatusLabel}</wa-tooltip
-          >
+          <wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>
         </div>
-        <wa-tooltip for="stream-tab-kind"
+        <wa-tooltip for="run-tab-kind"
           >${
-            stream.identity.kind === 'agent'
+            run.identity.kind === 'agent'
               ? `Category: ${this.decorator.label}`
               : this.decorator.label
           }</wa-tooltip
         >${when(
-          stream.isRemote,
+          run.isRemote,
           () =>
-            html`<wa-tooltip for="stream-tab-remote"
+            html`<wa-tooltip for="run-tab-remote"
               >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
             >`,
         )}
         ${
-          stream.group === 'interrupted' && !stream.readOnly
+          run.group === 'interrupted' && !run.readOnly
             ? html`<wa-button
-                id="stream-tab-resume-button"
+                id="run-tab-resume-button"
                 class="tab-resume"
                 appearance="outlined"
                 variant="brand"
                 size="s"
                 type="button"
-                data-stream=${stream.id}
+                data-run=${run.id}
                 data-action="resume"
                 >${waIcon('forward-step', { slot: 'start' })} Resume</wa-button
               >`
             : nothing
         }
         <wa-button
-          id="stream-tab-delete-button"
+          id="run-tab-delete-button"
           class="action-icon-button tab-delete"
           appearance="plain"
           variant="neutral"
           size="s"
           type="button"
           aria-label=${`Delete ${runTitle}`}
-          data-stream=${stream.id}
+          data-run=${run.id}
           data-action="delete"
         >
           ${waIcon('xmark')}
         </wa-button>
-        <wa-tooltip for="stream-tab-delete-button">Delete</wa-tooltip>
+        <wa-tooltip for="run-tab-delete-button">Delete</wa-tooltip>
       </div>
     `;
   }
@@ -311,7 +305,7 @@ class RunTab extends LitElement {
 // RunTabs: the list
 // =============================================================================
 
-@customElement('stream-tabs')
+@customElement('run-tabs')
 export class RunTabs extends LitElement {
   static override styles = [
     designTokens,
@@ -360,45 +354,45 @@ export class RunTabs extends LitElement {
     return this.view?.runs.get(id);
   }
 
-  private matchesSearch(stream: RunView, needle: string): boolean {
+  private matchesSearch(run: RunView, needle: string): boolean {
     if (needle === '') return true;
     return (
-      stream.label.toLowerCase().includes(needle) ||
-      (stream.description?.toLowerCase().includes(needle) ?? false) ||
-      stream.childIds.some((id) => {
+      run.label.toLowerCase().includes(needle) ||
+      (run.description?.toLowerCase().includes(needle) ?? false) ||
+      run.childIds.some((id) => {
         const child = this.runOfEvent(id);
         return child !== undefined && this.matchesSearch(child, needle);
       })
     );
   }
 
-  private isExpanded(stream: RunView): boolean {
-    if (stream.forceExpanded) return true;
-    return this.surface?.expanded.get(stream.id) === true;
+  private isExpanded(run: RunView): boolean {
+    if (run.forceExpanded) return true;
+    return this.surface?.expanded.get(run.id) === true;
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
    *  none and carries the rollup alone (W2); the drawer and the Subagents
    *  pane show every child, a workflow run's calls included, so a call's
    *  own subagents stay reachable under their parent (issue decision). */
-  private childrenOf(stream: RunView): RunView[] {
+  private childrenOf(run: RunView): RunView[] {
     if (this.topLevelOnly) return [];
-    return stream.childIds
+    return run.childIds
       .map((id) => this.runOfEvent(id))
       .filter((child): child is RunView => child !== undefined);
   }
 
-  private renderNode(stream: RunView, selected: RunId | null): TemplateResult {
-    const children = this.childrenOf(stream);
+  private renderNode(run: RunView, selected: RunId | null): TemplateResult {
+    const children = this.childrenOf(run);
     const expandable = children.length > 0;
-    const expanded = expandable && this.isExpanded(stream);
+    const expanded = expandable && this.isExpanded(run);
     return html`
-      <stream-tab
-        .stream=${stream}
-        ?active=${stream.id === selected}
+      <run-tab
+        .run=${run}
+        ?active=${run.id === selected}
         ?expandable=${expandable}
         ?expanded=${expanded}
-      ></stream-tab>
+      ></run-tab>
       ${
         expandable
           ? html`<div class="child-runs" ?hidden=${!expanded}>
@@ -421,8 +415,8 @@ export class RunTabs extends LitElement {
       ids,
       (id) => id,
       (id) => {
-        const stream = this.runOfEvent(id);
-        return stream ? this.renderNode(stream, selected) : nothing;
+        const run = this.runOfEvent(id);
+        return run ? this.renderNode(run, selected) : nothing;
       },
     )}`;
   }
@@ -435,26 +429,26 @@ export class RunTabs extends LitElement {
     const rootRun = this.root === null ? undefined : this.runOfEvent(this.root);
     const top = (rootRun ? [rootRun.id] : (view?.order ?? []))
       .map((id) => this.runOfEvent(id))
-      .filter((stream): stream is RunView => stream !== undefined)
-      .filter((stream) => !this.activeOnly || stream.group !== 'recent')
-      .filter((stream) => this.matchesSearch(stream, needle));
+      .filter((run): run is RunView => run !== undefined)
+      .filter((run) => !this.activeOnly || run.group !== 'recent')
+      .filter((run) => this.matchesSearch(run, needle));
 
     let body: TemplateResult;
     if (!this.sections) {
       body = this.renderRows(
-        top.map((stream) => stream.id),
+        top.map((run) => run.id),
         selected,
       );
     } else {
       body = html`${RUN_GROUP_ORDER.map((group) => {
-        const rows = top.filter((stream) => stream.group === group);
+        const rows = top.filter((run) => run.group === group);
         if (rows.length === 0) return nothing;
         return html`<div class="group-heading group-${group}">
             <span>${RUN_GROUP_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
           ${this.renderRows(
-            rows.map((stream) => stream.id),
+            rows.map((run) => run.id),
             selected,
           )}`;
       })}`;
@@ -483,16 +477,16 @@ export class RunTabs extends LitElement {
   private handleTabClick(event: MouseEvent): void {
     const actionElement = getComposedPathElement<HTMLElement>(
       event,
-      '[data-stream][data-action]',
+      '[data-run][data-action]',
     );
     if (!(actionElement instanceof HTMLElement)) return;
 
-    // The action element lives in the row's own `stream-tab`, whose `stream`
+    // The action element lives in the row's own `run-tab`, whose `run`
     // is the typed view: the id is read from it, never re-parsed from the DOM.
-    const tab = getComposedPathElement<RunTab>(event, 'stream-tab');
-    const stream = tab?.stream;
-    if (!stream) return;
-    const runId = stream.id;
+    const tab = getComposedPathElement<RunTab>(event, 'run-tab');
+    const run = tab?.run;
+    if (!run) return;
+    const runId = run.id;
     const { action } = actionElement.dataset;
 
     switch (action) {
@@ -512,7 +506,7 @@ export class RunTabs extends LitElement {
           SessionUiEvents.surface({
             kind: 'expand',
             runId,
-            expanded: !this.isExpanded(stream),
+            expanded: !this.isExpanded(run),
           }),
         );
         break;

@@ -11,7 +11,7 @@ import {
 import { usageCostLabel } from '@shared/copy/modelAccess';
 import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
-import { cumulativeUsageOf, runViewOf } from './sessionView';
+import { runViewOf } from './sessionView';
 
 export interface ResumeTarget {
   readonly runId: string;
@@ -70,8 +70,8 @@ export function collectResumeUsage(
   for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: true,
   })) {
-    const usage = cumulativeUsageOf(runViewOf(view, runId));
-    if (usage) usages.push(usage);
+    const run = runViewOf(view, runId);
+    if (run) usages.push(run.usage);
   }
   const total = sumUsageStats(usages);
   return isEmptyUsage(total) ? undefined : total;

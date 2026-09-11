@@ -8,8 +8,8 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import {
   aggregateId,
-  CLI_RUN_STATUS,
   emptyRunEndOutput,
+  emptyUsageStats,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -46,7 +46,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   });
 }
 
-/** A parseable trace payload; overrides shape each legacy/malformed case. */
+/** A parseable trace payload; overrides shape each malformed case. */
 function trace(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -54,12 +54,19 @@ function trace(
     runId: 'abcdef',
     config: config(),
     meta: {
-      schemaVersion: 1,
-      timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
+      launchedAt: Date.UTC(2026, 0, 1),
+      description: null,
+      outcome: null,
+      conversationProgress: { toolCallCount: 0 },
+      usage: emptyUsageStats(),
+      todos: [],
+      plan: null,
+      outputs: {},
+      missingOutputs: {},
+      compileFailures: {},
     },
     entries: [],
-    snapshot: { runId: 'abcdef' },
     ...overrides,
   };
 }
@@ -106,20 +113,20 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.runId).toBe(runId);
-    expect(parsed.data.meta?.outcome).toBe('completed');
+    expect(parsed.data.meta.outcome).toBe('completed');
     expect(parsed.data.entries).toHaveLength(1);
 
     // parseTraceData must accept the same real document without throwing.
     expect(() => parseTraceData(result.trace)).not.toThrow();
   });
 
-  it('applies source config defaults to legacy traces', () => {
-    const legacyConfig: Partial<AgentConfig> = config();
-    delete legacyConfig.agent;
-    delete legacyConfig.model;
-    delete legacyConfig.instruction;
+  it('applies source config defaults to a partial run record', () => {
+    const partialConfig: Partial<AgentConfig> = config();
+    delete partialConfig.agent;
+    delete partialConfig.model;
+    delete partialConfig.instruction;
 
-    const parsed = TraceDataSchema.parse(trace({ config: legacyConfig }));
+    const parsed = TraceDataSchema.parse(trace({ config: partialConfig }));
 
     expect(parsed.config).toMatchObject({
       agent: 'correct',
@@ -128,47 +135,11 @@ describe('trace-viewer TraceDataSchema', () => {
     });
   });
 
-  it('normalizes legacy run metadata', () => {
-    const parsed = TraceDataSchema.parse(
-      trace({
-        meta: {
-          timestamp: '2026-07-05T00:00:00.000Z',
-          identity: { kind: 'agent', agent: 'assistant' },
-          terminalStatus: CLI_RUN_STATUS.ERROR,
-          delegationDepth: 2,
-        },
-      }),
-    );
-    // Legacy residue (`delegationDepth`, the retired `terminalStatus`) is
-    // stripped at the parse boundary; `outcome` is the one terminal fact and
-    // is never derived from residue here.
-    expect(parsed.meta).not.toHaveProperty('delegationDepth');
-    expect(parsed.meta).not.toHaveProperty('terminalStatus');
-    expect(parsed.meta?.outcome).toBeUndefined();
-  });
-
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {
     const malformed = { totally: 'not a trace' };
 
     expect(() => parseTraceData(malformed)).toThrowError(
       /does not match the expected schema/,
-    );
-  });
-
-  it('rejects a trace snapshot stamped with an incompatible schema version', () => {
-    const incompatible = trace({
-      snapshot: {
-        schemaVersion: 999,
-        runId: 'abcdef',
-        outputFilesByRound: {},
-        missingOutputsByRound: {},
-        compileFailuresByRound: {},
-      },
-    });
-
-    expectTraceRejected(incompatible);
-    expect(() => parseTraceData(incompatible)).toThrowError(
-      /incompatible TeXRA version/,
     );
   });
 
