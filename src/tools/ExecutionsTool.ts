@@ -29,9 +29,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import {
-  getRunContextRunId,
-} from '@agent/runtime/RunContext';
+import { getRunContextRunId } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
