@@ -1083,7 +1083,6 @@
     "mutative": "^1.3.0",
     "nanoid": "^6.0.1",
     "openai": "^7.10.0",
-    "p-map": "^7.0.7",
     "p-queue": "^9.3.3",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
