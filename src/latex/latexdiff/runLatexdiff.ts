@@ -15,7 +15,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   RunIdSchema,
   OutputFileInfoSchema,
-  parsePersistedRoundIndexed,
+  roundIndexedRecord,
 } from '@shared/schemas';
 import type {
   RunId,
@@ -43,21 +43,25 @@ import type {
 } from './types';
 
 /**
- * Normalize arbitrary command payload metadata into the canonical round
- * record. VS Code commands can be invoked with any argument shape, so this
- * routes through the same canonical parse entry used for persisted
- * round-indexed data: malformed rounds/items are dropped rather than
- * crashing the command handler.
+ * Validate a command payload's round outputs against the canonical record.
+ * VS Code commands can be invoked with any argument shape: a malformed
+ * payload is warned about and yields `null`, which sends the run to output
+ * discovery instead.
  */
 export function normalizeRunLatexdiffOutputsByRound(
   value: unknown,
 ): RoundIndexed<OutputFileInfo> | null {
-  const rounds = parsePersistedRoundIndexed(
-    'latexdiffOutputsByRound',
-    value,
-    OutputFileInfoSchema,
-  );
-  return Object.keys(rounds).length > 0 ? rounds : null;
+  if (value == null) return null;
+  const result = roundIndexedRecord(OutputFileInfoSchema).safeParse(value);
+  if (!result.success) {
+    console.warn(
+      `[latexdiff] Ignoring malformed outputsByRound payload: ${result.error.message}`,
+    );
+    return null;
+  }
+  return Object.values(result.data).some((files) => files.length > 0)
+    ? result.data
+    : null;
 }
 
 /** How the round outputs fed to the diff engine were resolved. */

@@ -240,7 +240,7 @@ describe('runLatexdiffForRun diagnostics', () => {
 });
 
 describe('normalizeRunLatexdiffOutputsByRound', () => {
-  it('keeps non-empty round-record entries, dropping empty rounds', () => {
+  it('keeps a valid round record', () => {
     const first = createOutputFile({ round: 1 });
     const second = createOutputFile({ round: 2 });
 
@@ -250,33 +250,21 @@ describe('normalizeRunLatexdiffOutputsByRound', () => {
         1: [first],
         3: [],
       }),
-    ).toEqual({ 1: [first], 2: [second] });
+    ).toEqual({ 1: [first], 2: [second], 3: [] });
   });
 
   it('falls back to null for malformed command payloads', () => {
+    const valid = createOutputFile({ round: 1 });
     expect(normalizeRunLatexdiffOutputsByRound('not-rounds')).toBeNull();
     expect(normalizeRunLatexdiffOutputsByRound(null)).toBeNull();
     expect(normalizeRunLatexdiffOutputsByRound([1, 2, 3])).toBeNull();
-  });
-
-  it('drops malformed items within an otherwise-valid round record', () => {
-    const valid = createOutputFile({ round: 1 });
-
     expect(
       normalizeRunLatexdiffOutputsByRound({
         1: [valid, { not: 'an output file' }],
       }),
-    ).toEqual({ 1: [valid] });
-  });
-
-  it('drops non-integer round keys while retaining valid rounds', () => {
-    const valid = createOutputFile({ round: 1 });
-
+    ).toBeNull();
     expect(
-      normalizeRunLatexdiffOutputsByRound({
-        '1.5': [createOutputFile({ round: 1.5 })],
-        1: [valid],
-      }),
-    ).toEqual({ 1: [valid] });
+      normalizeRunLatexdiffOutputsByRound({ '1.5': [valid], 1: [valid] }),
+    ).toBeNull();
   });
 });

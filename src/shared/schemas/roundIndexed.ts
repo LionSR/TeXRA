@@ -15,8 +15,6 @@
 
 import { z } from 'zod';
 
-import { formatZodIssuesMessage } from './toolResult';
-
 /**
  * Round number → items for that round. Runtime keys are strings (JSON), so a
  * `Record<string, T[]>` (e.g. a parsed {@link roundIndexedRecord}) is
@@ -40,18 +38,9 @@ export type ReadonlyRoundIndexed<T> = {
 };
 
 /**
- * Coerces and validates round keys from string record keys: non-negative
- * safe integers only. Rounds never go negative (round 0 is the first), and
- * every consumer that reads a `RoundIndexed<T>` record via plain
- * `Object.keys()`/`for...in` enumeration (rather than {@link
- * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
- * canonical non-negative-integer-string keys enumerate in ascending numeric
- * order — that guarantee does NOT hold for negative or non-integer keys.
- * {@link RoundKeyStringSchema} accepts anything this schema can COERCE (see
- * its own note), so a record straight off the wire is not guaranteed to hold
- * canonical keys: iterate with {@link roundIndexedEntries}, or re-key through
- * `Number(round)` the way {@link cloneRoundIndexed} and
- * {@link parsePersistedRoundIndexed} do, which restores the ordering.
+ * Coerces a round number out of a string (a filename's `_r{n}` capture):
+ * non-negative safe integers only. Rounds never go negative (round 0 is the
+ * first).
  */
 export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
@@ -70,36 +59,17 @@ export const RoundKeySchema = z.coerce.number().int().nonnegative();
 export const RoundNumberSchema = z.int().nonnegative();
 
 /**
- * A JSON object key that {@link RoundKeySchema} can coerce to a valid round
- * number. It is derived from the same schema that
- * {@link parsePersistedRoundIndexed} applies directly to each salvaged key,
- * so a key like `"1e5"` (scientific notation, which `RoundKeySchema` coerces
- * to round `100000`) is accepted or rejected identically by canonical record
- * schemas and persisted-file parsing instead of drifting between a strict
- * `/^\d+$/`-style regex in one place and looser numeric coercion in another.
- * That deliberate width (#7532) is why acceptance is NOT canonicality: this
- * schema also admits `" 1"`, `"1.0"`, `"0x10"` and `""`, which the record
- * keeps verbatim while any re-keying path folds them onto their canonical
- * twin. Producers must therefore key by `String(round)`; readers must not
- * assume enumeration order without re-keying.
- */
-export const RoundKeyStringSchema = z
-  .string()
-  .refine((key) => RoundKeySchema.safeParse(key).success, {
-    message: 'Round key must be a non-negative integer',
-  });
-
-/**
  * Schema factory for the canonical record: `{ "0": T[], "1": T[], … }`.
- * Trusted-input role (IPC messages, live state, snapshots): callers attach
- * their own field policy (`.prefault({})`, `.optional()`). Untrusted persisted
- * files go through {@link parsePersistedRoundIndexed} instead. Keys are
- * validated against {@link RoundKeyStringSchema}, which admits every
- * coercible key rather than only canonical ones — see its note before relying
- * on enumeration order.
+ * Callers attach their own field policy (`.prefault({})`, `.optional()`).
+ * Keys must be canonical round strings (`String(round)`: no sign, fraction,
+ * exponent or leading zero), so a validated record enumerates in ascending
+ * round order per the ES2015+ integer-key rule.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(RoundKeyStringSchema, z.array(valueSchema));
+  return z.record(
+    z.string().regex(/^(0|[1-9]\d*)$/, 'Round key must be a round number'),
+    z.array(valueSchema),
+  );
 }
 
 /**
@@ -135,60 +105,6 @@ export function cloneRoundIndexed<T>(
     clone[Number(round)] = [...items];
   }
   return clone;
-}
-
-// ============================================================================
-// Persisted-file parse entry
-// ============================================================================
-
-/**
- * Parse an untrusted round-indexed value (a persisted record, or a VS Code
- * command payload of any shape) into the canonical record.
- *
- * Salvage semantics: round keys are coerced integers (anything else is
- * skipped), malformed items are dropped LOUDLY (warned, never silently
- * swallowed), empty rounds are omitted, and a genuinely corrupt top-level
- * value degrades to an empty record with a warning. A missing file
- * (`undefined`) is silently empty. Every failure path returns a FRESH object:
- * consumers (e.g. `RunSnapshotStore`) hold the result by reference and
- * mutate it, so a shared fallback instance would leak rounds across runs.
- */
-export function parsePersistedRoundIndexed<T>(
-  kind: string,
-  raw: unknown,
-  itemSchema: z.ZodType<T>,
-): RoundIndexed<T> {
-  if (raw === undefined) return {};
-
-  const result = z.record(z.string(), z.unknown()).safeParse(raw);
-  if (!result.success) {
-    console.warn(
-      `[roundIndexed] Ignoring malformed ${kind} (not a round-keyed record); treating as empty.`,
-    );
-    return {};
-  }
-
-  const rounds: RoundIndexed<T> = {};
-  for (const [key, value] of Object.entries(result.data)) {
-    const round = RoundKeySchema.safeParse(key);
-    if (!round.success) continue;
-    if (!Array.isArray(value)) {
-      console.warn(
-        `[roundIndexed] Dropping non-array round "${key}" in ${kind}.`,
-      );
-      continue;
-    }
-    const items = value.flatMap((item) => {
-      const parsed = itemSchema.safeParse(item);
-      if (parsed.success) return [parsed.data];
-      console.warn(
-        `[roundIndexed] Dropping malformed ${kind} entry: ${formatZodIssuesMessage(parsed.error.issues)}`,
-      );
-      return [];
-    });
-    if (items.length > 0) rounds[round.data] = items;
-  }
-  return rounds;
 }
 
 /**
