@@ -851,7 +851,6 @@ function validateEffortDefault<E extends string>(
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
     protocol: z.literal('minimax-chat'),
-    outputMode: z.enum(['complete', 'incremental']),
     reasoningSplit: z.boolean(),
     defaults: MiniMaxControlsSchema.omit({
       toolChoice: true,
@@ -1086,7 +1085,6 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
   z.discriminatedUnion('protocol', [
     PreparedInputSchema.extend({
       protocol: z.literal('minimax-chat'),
-      outputMode: z.enum(['complete', 'incremental']),
       controls: MiniMaxControlsSchema.readonly(),
     }).readonly(),
     EditorOriginSchema.extend({

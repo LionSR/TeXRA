@@ -165,86 +165,41 @@ const MiniMaxEnvelopeSchema = z.object({
   output_sensitive_type: z.int().optional(),
   output_sensitive_int: z.int().optional(),
 });
-const MiniMaxCompletionSchema = z.strictObject({
-  ...MiniMaxEnvelopeSchema.shape,
-  id: z.string().min(1),
-  model: z.string().min(1),
-  created: z.int(),
-  object: z.literal('chat.completion'),
-  choices: z
-    .array(
-      z.strictObject({
-        index: z.literal(0),
-        finish_reason: z.enum([
-          'stop',
-          'length',
-          'content_filter',
-          'tool_calls',
-        ]),
-        message: z.strictObject({
-          role: z.literal('assistant'),
-          content: z.string(),
-          name: z.string().optional(),
-          // Current ordinary examples report an empty placeholder, not audio output.
-          audio_content: z.literal('').optional(),
-          reasoning_content: z.string().optional(),
-          reasoning_details: z
-            .array(
-              z.strictObject({
-                type: z.string().optional(),
-                id: z.string().optional(),
-                format: z.string().optional(),
-                index: z.int().optional(),
-                text: z.string().optional(),
-              }),
-            )
-            .optional(),
-          tool_calls: z
-            .array(
-              z.strictObject({
-                id: z.string().min(1),
-                type: z.literal('function'),
-                index: z.int().optional(),
-                function: z.strictObject({
-                  name: z.string().min(1),
-                  arguments: z.string(),
-                }),
-              }),
-            )
-            .optional(),
-        }),
-      }),
-    )
-    .length(1),
-  // MiniMax documents partial receipts; no principal count is manufactured.
-  usage: z
-    .strictObject({
-      prompt_tokens: z.int().nonnegative().optional(),
-      completion_tokens: z.int().nonnegative().optional(),
-      total_tokens: z.int().nonnegative().optional(),
-      total_characters: z.int().nonnegative().optional(),
-      prompt_tokens_details: z
-        .strictObject({ cached_tokens: z.int().nonnegative().optional() })
-        .optional(),
-      completion_tokens_details: z
-        .strictObject({ reasoning_tokens: z.int().nonnegative().optional() })
-        .optional(),
-    })
+// MiniMax documents partial receipts; no principal count is manufactured.
+const MiniMaxUsageSchema = z.strictObject({
+  prompt_tokens: z.int().nonnegative().optional(),
+  completion_tokens: z.int().nonnegative().optional(),
+  total_tokens: z.int().nonnegative().optional(),
+  total_characters: z.int().nonnegative().optional(),
+  prompt_tokens_details: z
+    .strictObject({ cached_tokens: z.int().nonnegative().optional() })
+    .optional(),
+  completion_tokens_details: z
+    .strictObject({ reasoning_tokens: z.int().nonnegative().optional() })
     .optional(),
 });
-// Incremental routes use the provider's delta grammar, never prefix guessing.
+const MiniMaxReasoningDetailsSchema = z
+  .array(
+    z.strictObject({
+      type: z.string().optional(),
+      id: z.string().optional(),
+      format: z.string().optional(),
+      index: z.int().optional(),
+      text: z.string().optional(),
+    }),
+  )
+  .optional();
+// MiniMax routes use the provider's delta grammar, never prefix guessing.
 const MiniMaxChunkSchema = ChunkSchema.extend({
   ...MiniMaxEnvelopeSchema.omit({ id: true, model: true }).shape,
-  usage: MiniMaxCompletionSchema.shape.usage.nullable(),
+  usage: MiniMaxUsageSchema.optional().nullable(),
   choices: z
     .array(
       ChunkSchema.shape.choices.element.extend({
         delta: ReasoningChunkSchema.shape.choices.element.shape.delta.extend({
           name: z.string().optional(),
           audio_content: z.literal('').optional(),
-          reasoning_details:
-            MiniMaxCompletionSchema.shape.choices.element.shape.message.shape
-              .reasoning_details,
+          reasoning_details: MiniMaxReasoningDetailsSchema,
         }),
       }),
     )
@@ -303,7 +258,7 @@ const miniMaxFailure = (
 };
 
 const miniMaxUsage = (
-  receipt: z.infer<typeof MiniMaxCompletionSchema>['usage'],
+  receipt: z.infer<typeof MiniMaxUsageSchema> | undefined,
 ): TurnResult['usage'] =>
   receipt === undefined
     ? null
@@ -615,8 +570,7 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
   if (turn.protocol === 'minimax-chat') {
     if (
       config.protocol !== 'minimax-chat' ||
-      turn.controls.reasoningSplit !== config.reasoningSplit ||
-      turn.outputMode !== config.outputMode
+      turn.controls.reasoningSplit !== config.reasoningSplit
     ) {
       return yield* new ModelError({
         kind: 'unsupported',
@@ -624,14 +578,8 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
           'The prepared MiniMax format does not match the selected response route.',
       });
     }
-    const { stream_options: _streamOptions, ...completeParameters } =
-      parameters;
     return {
-      ...completeParameters,
-      stream: turn.outputMode === 'incremental',
-      ...(turn.outputMode === 'incremental'
-        ? { stream_options: parameters.stream_options }
-        : {}),
+      ...parameters,
       max_tokens: turn.controls.maxOutputTokens,
       reasoning_split: turn.controls.reasoningSplit,
       ...(turn.controls.stopSequences.length > 0
@@ -913,9 +861,6 @@ export function openaiChatModel(
         system: parsed.data.system,
         messages: parsed.data.messages,
         tools,
-        ...(config.protocol === 'minimax-chat'
-          ? { outputMode: config.outputMode }
-          : {}),
       };
       const maxOutputTokens =
         parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens;
@@ -1149,186 +1094,6 @@ export function openaiChatModel(
           }
           reader = source.body.getReader();
           const body = reader;
-          if (
-            turn.protocol === 'minimax-chat' &&
-            turn.outputMode === 'complete'
-          ) {
-            // Complete mode owns this same reader, but never interprets JSON as SSE.
-            const decoder = new TextDecoder('utf-8', { fatal: true });
-            let text = '';
-            while (true) {
-              const next = yield* Effect.tryPromise({
-                try: () => body.read(),
-                catch: openaiFailure,
-              });
-              text += yield* Effect.try({
-                try: () =>
-                  next.done
-                    ? decoder.decode()
-                    : decoder.decode(next.value, { stream: true }),
-                catch: (cause) =>
-                  new ModelError({
-                    kind: 'malformed-output',
-                    message: 'MiniMax returned invalid UTF-8 completion data.',
-                    cause,
-                  }),
-              });
-              if (next.done) break;
-            }
-            const raw: unknown = yield* Effect.try({
-              try: () => JSON.parse(text),
-              catch: (cause) =>
-                new ModelError({
-                  kind: 'malformed-output',
-                  message: 'MiniMax returned malformed completion JSON.',
-                  cause,
-                }),
-            });
-            const envelope = MiniMaxEnvelopeSchema.safeParse(raw);
-            if (!envelope.success) {
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'MiniMax returned malformed completion metadata.',
-                cause: envelope.error,
-              });
-            }
-            responseId = envelope.data.id === '' ? undefined : envelope.data.id;
-            returnedModel =
-              envelope.data.model === '' ? undefined : envelope.data.model;
-            const detection = miniMaxDetection(envelope.data);
-            const rejection = miniMaxFailure(
-              envelope.data,
-              origin,
-              source.status,
-              raw,
-            );
-            if (rejection !== undefined) return yield* rejection;
-            const decoded = MiniMaxCompletionSchema.safeParse(raw);
-            if (!decoded.success) {
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'MiniMax returned malformed or unsupported completion content.',
-                cause: decoded.error,
-              });
-            }
-            const completion = decoded.data;
-            const choice = completion.choices[0];
-            const message = choice.message;
-            if (
-              (choice.finish_reason === 'tool_calls') !==
-              (message.tool_calls?.length ?? 0) > 0
-            ) {
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'MiniMax reported contradictory tool calls and completion reason.',
-              });
-            }
-            const content: TurnResult['content'][number][] = [];
-            if (
-              message.reasoning_content !== undefined ||
-              message.reasoning_details !== undefined
-            ) {
-              content.push({
-                kind: 'reasoning',
-                summary: [],
-                evidence: {
-                  kind: 'minimax-reasoning',
-                  ...(message.reasoning_content !== undefined
-                    ? { plain: message.reasoning_content }
-                    : {}),
-                  ...(message.reasoning_details !== undefined
-                    ? { details: message.reasoning_details }
-                    : {}),
-                },
-              });
-            }
-            content.push({
-              kind: 'message',
-              content: [{ kind: 'text', text: message.content }],
-              ...(message.name !== undefined ||
-              message.audio_content !== undefined
-                ? {
-                    evidence: {
-                      kind: 'minimax-message' as const,
-                      ...(message.name !== undefined
-                        ? { name: message.name }
-                        : {}),
-                      ...(message.audio_content !== undefined
-                        ? { audioContent: message.audio_content }
-                        : {}),
-                    },
-                  }
-                : {}),
-            });
-            for (const call of message.tool_calls ?? []) {
-              const args: unknown = yield* Effect.try({
-                try: () => JSON.parse(call.function.arguments),
-                catch: (cause) =>
-                  new ModelError({
-                    kind: 'malformed-output',
-                    message: 'MiniMax returned malformed tool arguments.',
-                    cause,
-                  }),
-              });
-              const parsedArguments = JsonObjectSchema.safeParse(args);
-              if (!parsedArguments.success) {
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'MiniMax tool arguments must be supported JSON objects.',
-                  cause: parsedArguments.error,
-                });
-              }
-              content.push({
-                kind: 'local-call',
-                providerCallId: call.id,
-                name: call.function.name,
-                argumentsText: call.function.arguments,
-                arguments: parsedArguments.data,
-                ...(call.index !== undefined
-                  ? {
-                      evidence: {
-                        kind: 'minimax-function-call' as const,
-                        index: call.index,
-                      },
-                    }
-                  : {}),
-              });
-            }
-            const receipt = completion.usage;
-            const result = TurnResultSchema.safeParse({
-              kind: 'http',
-              providerResponseId: completion.id,
-              requestedOrigin: origin,
-              returnedModel: completion.model,
-              modelFingerprint: null,
-              content,
-              finishReason: choice.finish_reason.replaceAll('_', '-'),
-              // Detection flags do not establish that the provider filtered a reply.
-              ...(Object.keys(detection).length > 0
-                ? { finishEvidence: { kind: 'minimax', ...detection } }
-                : {}),
-              usage: miniMaxUsage(receipt),
-            });
-            if (!result.success) {
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'MiniMax returned an inconsistent completed response.',
-                cause: result.error,
-              });
-            }
-            return Stream.fromArray<TurnEvent>([
-              {
-                kind: 'identified',
-                providerResponseId: completion.id,
-                requestedOrigin: origin,
-                returnedModel: completion.model,
-              },
-              { kind: 'completed', result: result.data },
-            ]);
-          }
           let fingerprint: string | null = null;
           let finishReason: TurnResult['finishReason'] | undefined;
           let usage: TurnResult['usage'] = null;
@@ -1346,7 +1111,7 @@ export function openaiChatModel(
           let miniMaxAudio: '' | undefined;
           let miniMaxContentSeen = false;
           let miniMaxEvidence: ReturnType<typeof miniMaxDetection> = {};
-          let miniMaxReceipt: z.infer<typeof MiniMaxCompletionSchema>['usage'];
+          let miniMaxReceipt: z.infer<typeof MiniMaxUsageSchema> | undefined;
           let activePhase: 'reasoning' | 'text' | undefined;
           let receivedSentinel = false;
           const content: Array<{ kind: 'text' | 'refusal'; text: string }> = [];
@@ -1523,7 +1288,7 @@ export function openaiChatModel(
                   if (chunk.usage != null) {
                     // Validated by MiniMaxChunkSchema for this selected protocol.
                     const receipt = chunk.usage as NonNullable<
-                      z.infer<typeof MiniMaxCompletionSchema>['usage']
+                      z.infer<typeof MiniMaxUsageSchema> | undefined
                     >;
                     miniMaxReceipt = {
                       ...miniMaxReceipt,
