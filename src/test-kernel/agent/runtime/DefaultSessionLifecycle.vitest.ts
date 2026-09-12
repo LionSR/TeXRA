@@ -144,8 +144,9 @@ describe('default session lifecycle', () => {
     'retains its opening roots until the owner closes it after a host swap',
     () =>
       Effect.gen(function* () {
-        const { initializeDefaultSession, teardownDefaultSession } =
-          yield* Effect.promise(() => importSessionRuntime());
+        const { initializeDefaultSession } = yield* Effect.promise(() =>
+          importSessionRuntime(),
+        );
         const { installPlatform } = yield* Effect.promise(
           () => import('@test/support/setupPlatform'),
         );
@@ -175,7 +176,7 @@ describe('default session lifecycle', () => {
           });
           expect(yield* listSessions()).toEqual([]);
         } finally {
-          teardownDefaultSession();
+          yield* closeSession(originalStorage);
         }
       }),
   );
