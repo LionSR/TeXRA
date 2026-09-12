@@ -1,11 +1,10 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
-import type { RunView } from '@shared/session/sessionView';
+import type { ConversationProgress, RunFlow } from '@shared/schemas';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
-
-/** The loop position the fold carries for a run (`RunView.flow`). */
-type RunFlow = NonNullable<RunView['flow']>;
 
 /**
  * Render progress badge with the loop position and tool call count.
@@ -15,7 +14,7 @@ export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
   flow: RunFlow | null,
 ): TemplateResult | typeof nothing {
-  const flowLabel = compactFlowLabel(flow);
+  const flowLabel = formatFlowPositionLabel(flowPosition(flow));
   const tools = progress?.toolCallCount ?? 0;
   if (!flowLabel && tools <= 0) return nothing;
 
@@ -48,20 +47,11 @@ export function getProgressBadgeTitle(
   return parts.length > 0 ? parts.join(', ') : undefined;
 }
 
-/** The loop's position in the compact form the status surfaces share: the
- *  round a reflection run is on, else the turn a tool-use run is on. A step
- *  that carries neither coordinate has no position to paint. */
-function compactFlowLabel(flow: RunFlow | null): string | undefined {
-  if (flow == null) return undefined;
-  if (flow.round != null) return formatRoundStageLabel({ index: flow.round });
-  if (flow.turn != null) return `t${flow.turn + 1}`;
-  return undefined;
-}
-
-/** Spelled-out counterpart of the compact position label. */
+/** Spelled-out counterpart of the compact position label, on the same
+ *  family-selected coordinate. */
 function flowBadgeTitle(flow: RunFlow | null): string | undefined {
-  if (flow == null) return undefined;
-  if (flow.round != null) return `Round ${flow.round + 1}`;
-  if (flow.turn != null) return `Turn ${flow.turn + 1}`;
-  return undefined;
+  const position = flowPosition(flow);
+  if (position === undefined) return undefined;
+  const noun = position.kind === 'round' ? 'Round' : 'Turn';
+  return `${noun} ${position.index + 1}`;
 }

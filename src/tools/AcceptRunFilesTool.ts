@@ -171,11 +171,18 @@ Parameters map directly to subagent-result delivery attributes:
   original     ← <file original="...">`,
   schema: AcceptRunFilesInputSchema,
 }) {
-  protected execute(input: AcceptRunFilesInput): Promise<ToolResult> {
+  protected execute(
+    input: AcceptRunFilesInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     const session = currentSession();
     const runtime = effectRuntime();
+    // The call's signal is aborted when this tool call is interrupted, so
+    // handing it to every run of this call's Effects makes the approval waits
+    // below part of the run's cancellation: `openRequest` closes a pending
+    // request instead of leaving it approvable after the run stopped.
     const prepareFiles = AsyncLocalStorage.bind(() =>
-      this.acceptFiles(input, runtime),
+      this.acceptFiles(input, runtime, signal),
     );
     const findRunDirectory = AsyncLocalStorage.bind(() =>
       findExistingRunStoragePath(input.execution_id),
@@ -200,12 +207,14 @@ Parameters map directly to subagent-result delivery attributes:
           catch: (error) => error,
         });
       }).pipe(Effect.orDie),
+      { signal },
     );
   }
 
   private async acceptFiles(
     input: AcceptRunFilesInput,
     runtime: ReturnType<typeof effectRuntime>,
+    signal: AbortSignal | undefined,
   ): Promise<ToolResult> {
     const { execution_id: runId, files, strip_criticize } = input;
 
@@ -298,6 +307,7 @@ Parameters map directly to subagent-result delivery attributes:
           proposedContent: entry.proposedContent,
           sourceTool: 'accept_run_files',
         }),
+        { signal },
       );
 
       if (approval.action !== 'apply') {

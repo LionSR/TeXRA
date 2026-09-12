@@ -119,12 +119,39 @@ const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
 });
 
 /**
+ * The record of a turn an earlier attempt at this same decision already
+ * closed, or null when the turn was closed by something else (a follow-up
+ * reopened the thread and closed a later turn, a decision for a turn already
+ * superseded). Read only when the write found no open turn; the answer the
+ * continuation carries is on the closed turn itself, so nothing else has to
+ * be kept to re-deliver it.
+ */
+const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
+  function* (
+    threadId: InquiryThreadId,
+    turnIndex: number,
+  ): Effect.fn.Return<InquiryThreadRecord | null, Error, InquiryRecords> {
+    const records = yield* InquiryRecords;
+    const manifest = yield* records.readExternalInquiryThread(threadId);
+    if (!manifest || manifest.status === 'open') return null;
+    return manifest.turns.at(-1)?.turnIndex === turnIndex ? manifest : null;
+  },
+);
+
+/**
  * Record one inquiry decision on its thread and deliver the continuation to
  * the run that asked. The run either drains it at its next turn boundary or
  * resumes from the fold (`submitFollowUp` owns that choice); a run that
  * refuses it has nothing left to continue and the thread is archived as
  * such. A decision for a turn no longer open (a duplicate, a decision after a
  * follow-up reopened the thread) records nothing and delivers nothing.
+ *
+ * The one exception is the turn this decision itself closed on an earlier
+ * attempt that then failed before its continuation reached the run: the
+ * thread carries the answer and the request is still pending (the caller
+ * decides only pending requests), so the continuation is delivered from the
+ * record rather than reported as already done. Delivery is keyed on the turn,
+ * so an attempt that failed after the queue admitted it re-delivers nothing.
  */
 export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   function* (
@@ -151,10 +178,20 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
       event = 'dropped';
     }
     if (!manifest) {
-      logger.warn(
-        `Inquiry ${event === 'answered' ? 'answer' : 'drop'} ignored: thread ${threadId} has no open turn ${turnIndex}.`,
+      const closed = yield* closedByEarlierAttempt(threadId, turnIndex);
+      if (!closed) {
+        logger.warn(
+          `Inquiry ${event === 'answered' ? 'answer' : 'drop'} ignored: thread ${threadId} has no open turn ${turnIndex}.`,
+        );
+        return;
+      }
+      // What the thread says is what the run is told: the earlier attempt's
+      // record is the decision that stands, whatever this attempt asked for.
+      manifest = closed;
+      event = closed.status === 'answered' ? 'answered' : 'dropped';
+      logger.info(
+        `Inquiry ${threadId}: re-delivering the ${event} continuation for turn ${turnIndex}, recorded by an attempt that never delivered it.`,
       );
-      return;
     }
     const lastTurn = manifest.turns.at(-1);
     const parentRunId: RunId | null | undefined = manifest.parentRunId;
@@ -177,7 +214,14 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
           : undefined,
       stillOpen,
     });
-    const result = yield* submitFollowUp(parentRunId, text, { session });
+    // Keyed on the turn: the queue admits one continuation per inquiry turn,
+    // so re-delivering after a failure the queue never saw reaches the run
+    // and re-delivering after one it did is a no-op.
+    const result = yield* submitFollowUp(
+      parentRunId,
+      { text, deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}` },
+      { session },
+    );
     if (result.status === 'failed') {
       logger.warn(
         `Inquiry continuation for ${threadId}: run ${parentRunId} refused it (${result.reason}).`,

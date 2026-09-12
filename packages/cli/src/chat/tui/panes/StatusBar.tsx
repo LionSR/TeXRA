@@ -30,7 +30,7 @@ import {
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import {
-  ancestorRoundLabel,
+  ancestorPositionLabel,
   sessionView,
   runPhaseOf,
   runViewOf,
@@ -264,8 +264,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // same list the modal and the title read.
   const attention = attentionRequests(view);
 
-  // Nested-session location: the nearest workflow-script ancestor's open
-  // round, then the focused stream's label.
+  // Nested-session location: the nearest ancestor's open phase or loop
+  // position, then the focused stream's label.
   const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
     focusedRunId === undefined
@@ -274,7 +274,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const focusedRoundHeading =
     focusedRunId === undefined
       ? undefined
-      : ancestorRoundLabel(view, focusedRunId);
+      : ancestorPositionLabel(view, focusedRunId);
 
   const display = buildStatusBarDisplay({
     status: displayStatus,

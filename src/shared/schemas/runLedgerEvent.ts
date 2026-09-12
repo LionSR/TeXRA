@@ -98,6 +98,7 @@ export const RunFlowSchema = z.strictObject({
    *  two fields one word apart is a live foot-gun. */
   continuationIndex: z.int().nonnegative().nullish(),
 });
+export type RunFlow = z.infer<typeof RunFlowSchema>;
 
 export const FlowStepPayloadSchema = RunFlowSchema.extend({
   /** The loop's own terminal word. The canonical terminal fact stays

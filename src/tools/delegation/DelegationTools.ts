@@ -132,7 +132,10 @@ Optional auto-attach from the input LaTeX:
 - extractTikz=true: compile TikZ figures into standalone PDFs and attach.`,
   schema: WorkflowAgentInputSchema,
 }) {
-  protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
+  protected async execute(
+    input: WorkflowAgentInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     const agent = requireVisibleAgent('workflow', input.agent);
     const agentName = agent.name;
     const { runId, context } = requireLiveRun('delegate_workflow');
@@ -174,6 +177,9 @@ Optional auto-attach from the input LaTeX:
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
     return effectRuntime().runPromise(
       proposeAndExecute(
         currentSession(),
@@ -183,6 +189,7 @@ Optional auto-attach from the input LaTeX:
         agentName,
         runId,
       ),
+      { signal },
     );
   }
 }
@@ -252,7 +259,10 @@ Example (resume): execution_id=3f9a1c7e2b4d, instruction="Also fix the bibliogra
 Git worktree support: resolved from the active workspace at runtime.`,
   schema: DelegateAgentInputSchema,
 }) {
-  protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
+  protected async execute(
+    input: DelegateAgentInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     // Resume path: execution_id is set
     if (input.execution_id) {
       return effectRuntime().runPromise(
@@ -296,6 +306,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
     return effectRuntime().runPromise(
       proposeAndExecute(
         currentSession(),
@@ -305,6 +318,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         agentName,
         runId,
       ),
+      { signal },
     );
   }
 

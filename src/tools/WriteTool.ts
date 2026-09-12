@@ -68,7 +68,13 @@ export class WriteFileTool extends defineTool({
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
 }) {
-  protected execute(input: WriteInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(write(input));
+  protected execute(
+    input: WriteInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
+    return effectRuntime().runPromise(write(input), { signal });
   }
 }

@@ -269,11 +269,11 @@ These are enforced, not undocumented — each throws or degrades loudly rather
 than failing quietly:
 
 - **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. There is no interactive approval channel yet: the package attaches
-  one headless host to each session for its whole life, so concurrent runs on a
-  root never displace each other's host.
+  at launch. There is no interactive approval channel yet.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
-  denial with a reason instead.
+  denial with a reason instead: on each session the package opens it answers
+  every retry request with `request.decide`, the same door a host answers
+  through, for the life of that session.
 - **No resume.** `nodePlatform` reports no resumable runs; resuming a
   persisted tool-use session is host-side functionality today.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a

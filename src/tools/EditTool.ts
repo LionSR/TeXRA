@@ -98,7 +98,13 @@ export class EditFileTool extends defineTool({
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,
 }) {
-  protected execute(input: EditInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(edit(input));
+  protected execute(
+    input: EditInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
+    return effectRuntime().runPromise(edit(input), { signal });
   }
 }

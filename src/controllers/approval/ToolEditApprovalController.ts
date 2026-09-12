@@ -112,7 +112,8 @@ export class ToolEditApprovalController {
    * Every request this controller stages, in either phase. Membership ends
    * when the request is decided, so no separate settled flag can disagree
    * with the map: a staged request leaves on its `request.decided`, one with
-   * no preview the moment its decision is sent.
+   * no preview the moment its decision is sent, and it comes back if that
+   * decision never reached the runtime.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
   private disposed = false;
@@ -292,15 +293,27 @@ export class ToolEditApprovalController {
 
   /**
    * Decide a request that has no preview: the entry goes now, because there
-   * is nothing to hold until the fold answers, and a preview still staging
+   * is nothing to hold until the fold answers, a second action while the
+   * decision is in flight has nothing to act on, and a preview still staging
    * is disposed by the {@link present} call that finishes it.
+   *
+   * A decision the runtime never accepted puts an entry back, because the
+   * request is still open in the fold with its panel on screen and the user's
+   * next Approve or Reject has to find something to act on. It is a fresh
+   * entry, not the one {@link present} installed: a staging call still in
+   * flight must still find its own gone and dispose the preview it staged,
+   * rather than open a diff view on the strength of a failed decision.
    */
   private decideFromPayload(
     request: ToolEditApprovalRequest,
     decision: RequestDecision,
   ): void {
-    this.requests.delete(request.permission.requestId);
+    const { requestId } = request.permission;
+    this.requests.delete(requestId);
     void this.send(request, decision).then(undefined, (error: unknown) => {
+      if (!this.disposed && !this.requests.has(requestId)) {
+        this.requests.set(requestId, { phase: 'initializing', request });
+      }
       this.options.host.reportError(toErrorMessage(error));
     });
   }

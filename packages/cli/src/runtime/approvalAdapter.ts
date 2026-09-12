@@ -136,21 +136,27 @@ export function createHeadlessCliHostInteractions(
   /** The preview a tool edit's durable payload cannot carry. */
   const previews = new Map<string, ToolEditApprovalRequest>();
 
+  /** Write one decision, and say whether it landed: a refused write leaves
+   *  the request listed and unanswered, so reporting the refusal as a
+   *  settlement would park the run on a request this host never takes
+   *  again. */
   const decide = (
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
-  ): Effect.Effect<void> =>
+  ): Effect.Effect<boolean> =>
     session.requests
       .request({ kind: 'request.decide', runId, requestId, decision })
       .pipe(
         Effect.match({
-          onFailure: (error) =>
+          onFailure: (error) => {
             logWarning(
               'cli.approval',
               `The ${decision.action} decision for request ${requestId} was refused: ${toErrorMessage(error)}`,
-            ),
-          onSuccess: () => undefined,
+            );
+            return false;
+          },
+          onSuccess: () => true,
         }),
       );
 
@@ -171,7 +177,8 @@ export function createHeadlessCliHostInteractions(
     };
   };
 
-  /** One pending request, answered: policy first, then the prompt. */
+  /** One pending request, answered: policy first, then the prompt. Returns
+   *  whether the decision reached the ledger. */
   const answer = Effect.fn('approvalAdapter.answer')(function* (
     runId: RunId,
     payload: PermissionPayload,
@@ -265,7 +272,18 @@ export function createHeadlessCliHostInteractions(
         acted.add(pending.requestId);
         // Forked so one prompt does not hold the fold's tail: the context's
         // prompt lane still serializes the reads from stdin.
-        return Effect.forkChild(answer(pending.runId, pending.payload));
+        return Effect.forkChild(
+          answer(pending.runId, pending.payload).pipe(
+            // A refused write answered nobody: release the claim so the next
+            // view update prompts for the request again instead of filtering
+            // it out for the life of the process.
+            Effect.tap((landed) =>
+              Effect.sync(() => {
+                if (!landed) acted.delete(pending.requestId);
+              }),
+            ),
+          ),
+        );
       },
       { discard: true },
     ).pipe(

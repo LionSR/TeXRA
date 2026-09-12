@@ -4,6 +4,7 @@ import {
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
   type RoundStage,
+  type RunFlow,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
@@ -193,6 +194,57 @@ export function formatRoundStageLabel(
   if (stage === undefined) return undefined;
   const current = `r${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
+}
+
+/** Where a run's loop stands, in the coordinate its family counts in. */
+export interface FlowPosition {
+  readonly kind: 'round' | 'turn';
+  readonly index: number;
+}
+
+/**
+ * The coordinate a run's family counts its position in: a reflection run
+ * advances `round`, a tool-use run advances `turn` and leaves `round` at the
+ * zero it opened with. A renderer that reads `round` first therefore paints
+ * `r1` over every tool-use run for its whole life, which is why this rule has
+ * one home rather than one copy per surface. Both coordinates are zero-based
+ * on the row and render one-based.
+ */
+export function flowPosition(
+  flow: RunFlow | null | undefined,
+): FlowPosition | undefined {
+  if (flow == null) return undefined;
+  if (flow.family === 'reflection') {
+    return flow.round == null
+      ? undefined
+      : { kind: 'round', index: flow.round };
+  }
+  return flow.turn == null ? undefined : { kind: 'turn', index: flow.turn };
+}
+
+/** Compact position label: `r2` (or `r2/3` against a planned round total) for
+ *  a round, `t3` for a turn. A total counts planned rounds, so a turn ignores
+ *  it. */
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition>,
+  total?: number,
+): string;
+
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition> | undefined,
+  total?: number,
+): string | undefined;
+
+export function formatFlowPositionLabel(
+  position: Readonly<FlowPosition> | undefined,
+  total?: number,
+): string | undefined {
+  if (position === undefined) return undefined;
+  if (position.kind === 'turn') return `t${position.index + 1}`;
+  return formatRoundStageLabel({
+    index: position.index,
+    ...(total !== undefined ? { total } : {}),
+  });
 }
 
 /**

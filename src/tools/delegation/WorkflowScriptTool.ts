@@ -239,7 +239,10 @@ return await agent('Merge the corrected drafts.', {
 Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
-  protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {
+  protected async execute(
+    input: WorkflowScriptToolInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     const contexts = getCurrentToolContexts();
     if (contexts?.runContext?.kind !== 'launch') {
       throw new Error(
@@ -248,6 +251,9 @@ Durability: the journal is keyed by meta.name and the agent field within this se
     }
     const { runContext: parent, callContext } = contexts;
     const { runScope } = parent;
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
     return effectRuntime().runPromise(
       Effect.gen(function* () {
         let scriptPath: string;
@@ -663,6 +669,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           ),
         );
       }),
+      { signal },
     );
   }
 }
