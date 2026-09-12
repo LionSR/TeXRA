@@ -21,10 +21,7 @@ import {
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
-import {
-  createFakeKv,
-  createFakeRunRecords,
-} from '@test/support/FakeRunKVStore';
+import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTempDirPlatform,
@@ -70,20 +67,16 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
-  readTurnState: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listRuns: vi.fn(),
 }));
 
-vi.mock('@agent/storage/RunKVStore', async () => {
+vi.mock('@agent/storage/runRecords', async () => {
   const actual = await vi.importActual<
-    typeof import('@agent/storage/RunKVStore')
-  >('@agent/storage/RunKVStore');
+    typeof import('@agent/storage/runRecords')
+  >('@agent/storage/runRecords');
   return {
     ...actual,
-    getRunStore: vi.fn((id: RunId) =>
-      createFakeKv(id, { readTurnState: mocks.readTurnState }),
-    ),
     getRunRecords: vi.fn(() =>
       createFakeRunRecords({
         readConfig: () =>
@@ -174,7 +167,6 @@ describe('ExecutionsTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listRuns.mockResolvedValue([]);
-    mocks.readTurnState.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
@@ -506,26 +498,23 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Exercises the real listing so every reserved KV filename — including the
-  // child- and flow_ prefixed ones — stays out of the model-facing view.
-  it('filters internal KV metadata files out of /executions/{id}/files', async () => {
+  // Exercises the real listing: a run's records are rows, so the only files
+  // the model-facing view hides are the retired checkpoints of either kind,
+  // before and after the rename the first ledger append gives them.
+  it('filters retired checkpoints out of /executions/{id}/files', async () => {
     await withTempStorage(async () => {
       const runId = 'abc123' as RunId;
       const runDir = resolveRunStoragePath(runId);
       await StorageFS.ensureDir(runDir);
-      const kvFiles = [
-        'stable-subagent-attempt.json',
-        'stable-subagent-sequence-abc123.json',
+      const internalFiles = [
         'workflow-script-call-1.json',
-        // The retired engine's checkpoint, before and after the rename the
-        // first ledger append gives it.
         `flow_${runId}.json`,
         `flow_${runId}.json.superseded`,
       ];
-      for (const name of kvFiles) {
+      for (const name of internalFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }
-      const retiredKvFiles = [
+      const listedFiles = [
         'conversation.json',
         'todos.json',
         'meta.json',
@@ -534,8 +523,10 @@ describe('ExecutionsTool', () => {
         'workspace-files.json',
         'result-meta.json',
         'child-def456.json',
+        'stable-subagent-attempt.json',
+        'stable-subagent-sequence-abc123.json',
       ];
-      for (const name of retiredKvFiles) {
+      for (const name of listedFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }
       await StorageFS.write(path.join(runDir, 'output.tex'), 'generated');
@@ -545,18 +536,14 @@ describe('ExecutionsTool', () => {
       });
 
       expect(result.output).toContain('output.tex');
-      for (const name of retiredKvFiles) {
+      for (const name of listedFiles) {
         expect(result.output).toContain(name);
       }
-      for (const name of kvFiles) {
+      for (const name of internalFiles) {
         expect(result.output).not.toContain(name);
       }
     });
   });
-
-  // Every real KV entry is written as `{key}.json` (KVStore.keyToPath always
-  // appends the suffix), so a generated file whose basename collides with a
-  // reserved key name but carries no `.json` extension stays visible.
 
   it('reads recorded files inside a top-level workspace directory', async () => {
     await withTempDir('texra-exec-files-', async (workspace) => {

@@ -1,11 +1,15 @@
+import '@test/support/defaultSessionTestSetup';
+import { Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
+import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowScriptControl,
+  WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
 import {
   RUN_OUTCOME,
@@ -13,9 +17,8 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
+import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
-const runId = '7154aaaaaaaa' as RunId;
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',
@@ -55,26 +58,48 @@ function workflowCallEvent(
   );
 }
 
-type ScriptRunOptions = Parameters<
-  typeof runPersistedWorkflowScriptWithProgress
->[1];
+type ScriptRunOptions = Parameters<typeof projectWorkflowScriptProgress>[1];
 
 const LIFECYCLE_STATUSES = ['planned', 'running', 'completed'] as const;
 
-/** Run a script against this file's shared store; options override the defaults. */
+/**
+ * Project a run onto `trace` and run it against this file's session, the way
+ * the workflow-script strategy composes the two: the projection owns the
+ * engine's event and transition slots, and settles once the run has ended
+ * either way.
+ */
 function runScript(
   trace: TraceEmitter,
   checkpointId: string,
   script: string,
-  options: Partial<ScriptRunOptions> = {},
-): ReturnType<typeof runPersistedWorkflowScriptWithProgress> {
-  return runPersistedWorkflowScriptWithProgress(trace, {
-    store: getRunStore(runId),
+  options: Partial<Omit<ScriptRunOptions, 'session'>> = {},
+): Promise<WorkflowScriptRunResult> {
+  return runProjected(trace, {
     checkpointId,
     script,
     runAgent: async () => 'done',
     ...options,
   });
+}
+
+/** Run one projection over the file's session; the resume paths' entry. */
+function runProjected(
+  trace: TraceEmitter,
+  options: Omit<ScriptRunOptions, 'session'>,
+): Promise<WorkflowScriptRunResult> {
+  const projection = projectWorkflowScriptProgress(trace, {
+    session: currentSession(),
+    ...options,
+  });
+  return Effect.runPromise(
+    runPersistedWorkflowScript(projection.options).pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => {
+          projection.settle(Exit.isSuccess(exit));
+        }),
+      ),
+    ),
+  );
 }
 
 /** Collects activity-line strings reported through `onActivity`. */
@@ -102,8 +127,6 @@ function latestWorkflowCallEvents(
   }
   return [...byLogId.values()];
 }
-
-beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
   it('records the declared plan once, before any phase opens', async () => {
@@ -495,11 +518,9 @@ return await agent('Read', { phase: 'Review' })`;
       runAgent: async () => 'saved',
     });
 
-    clearStoreCache();
     const { trace, events } = recordingTrace();
     const runner = vi.fn(() => Promise.reject(new Error('must not run')));
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getRunStore(runId),
+    await runProjected(trace, {
       checkpointId: 'cached',
       runAgent: runner,
     });
@@ -517,7 +538,6 @@ return await agent('Read', { phase: 'Review' })`;
     const script = `${meta}
 phase('Review')
 return await agent('Read', { id: 'read' })`;
-    const store = () => getRunStore(runId);
     const first = await runScript(
       recordingTrace().trace,
       'twice-resumed',
@@ -525,26 +545,19 @@ return await agent('Read', { id: 'read' })`;
       { runAgent: async () => 'saved' },
     );
 
-    clearStoreCache();
     const runner = vi.fn(() => Promise.reject(new Error('must not run')));
-    const second = await runPersistedWorkflowScriptWithProgress(
-      recordingTrace().trace,
-      {
-        store: store(),
-        checkpointId: 'twice-resumed',
-        runAgent: runner,
-        initialSnapshot: first.snapshot,
-      },
-    );
+    const second = await runProjected(recordingTrace().trace, {
+      checkpointId: 'twice-resumed',
+      runAgent: runner,
+      initialSnapshot: first.snapshot,
+    });
     expect(second.snapshot.calls[0]?.status).toBe('cached');
 
     // The second resume hydrates an already-cached call. Re-issuing it must
     // still project a card: a host that starts watching here would otherwise
     // never see the call at all.
-    clearStoreCache();
     const { trace, events } = recordingTrace();
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: store(),
+    await runProjected(trace, {
       checkpointId: 'twice-resumed',
       runAgent: runner,
       initialSnapshot: second.snapshot,
@@ -576,7 +589,6 @@ return await agent('Retry review', { id: 'retry-review' })`;
       );
       expect(failed.snapshot.calls[0]?.status).toBe('failed');
 
-      clearStoreCache();
       const retry = recordingTrace();
       // Keep the exact same millisecond for constructor hydration and
       // issueCall: projection admission must use the explicit issue fact.
@@ -604,7 +616,6 @@ return await agent('Historical call', { id: 'historical' })`,
     );
     expect(failed.snapshot.calls[0]?.status).toBe('failed');
 
-    clearStoreCache();
     const retry = recordingTrace();
     await runScript(
       retry.trace,
@@ -621,7 +632,6 @@ return 'done'`,
     // call is reset to `declared`, then the settle sweep terminalizes it to
     // not-reached. That sweep is bookkeeping for the previous attempt, so it
     // must stay out of this attempt's cards.
-    clearStoreCache();
     const hydrated = recordingTrace();
     const resumed = await runScript(
       hydrated.trace,
@@ -730,7 +740,6 @@ return await agent('Second')`;
       costUsd: 0.05,
     });
 
-    clearStoreCache();
     const replay = recordingTrace();
     await runScript(replay.trace, 'live-cost', script, {
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
@@ -792,7 +801,6 @@ return await agent('Draft')`;
       runAgent: vi.fn(() => Promise.resolve('done')),
     });
 
-    clearStoreCache();
     const second = recordingTrace();
     await runScript(second.trace, 'relaunch-card-id', script, {
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),

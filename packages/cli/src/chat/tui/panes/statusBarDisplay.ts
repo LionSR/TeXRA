@@ -47,7 +47,7 @@ import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The approval bypass flags a stream's policy snapshot carries. */
+/** The approval bypass flags a run's policy snapshot carries. */
 export type BypassState = ApprovalPolicySnapshot['bypasses'];
 
 /** What the pending-interaction count names: approvals, questions, or both. */
@@ -120,26 +120,26 @@ interface StatusBarSegment {
 
 export interface StatusBarDisplayInput {
   readonly status: RunPhase | undefined;
-  /** The fold's label for `status` (G4, one table); undefined with no stream. */
+  /** The fold's label for `status` (G4, one table); undefined with no run. */
   readonly statusLabel: string | undefined;
   /** Liveness of the running turn — omitted entirely in tests/headless runs,
    *  same as each of its fields individually. */
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** The stream's policy snapshot bypasses; absent before `approval.policy` folds. */
+  /** The run's policy snapshot bypasses; absent before `approval.policy` folds. */
   readonly bypass?: BypassState;
   readonly queuedFollowUpMessages: readonly string[];
   /** Latest usage snapshot — read for `usageRoute` (which subscription quota
    *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
-  /** Run-authoritative context occupancy for the displayed stream
+  /** Run-authoritative context occupancy for the displayed run
    *  (`RunView.context`). */
   readonly contextState: ContextStateData | undefined;
   /** The displayed run's loop position (`RunView.flow`); undefined before
    *  its first step. */
   readonly flow: RunView['flow'] | undefined;
-  /** Retained and active direct subagents owned by the displayed stream. */
+  /** Retained and active direct subagents owned by the displayed run. */
   readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
   readonly runningSessions: number;
@@ -155,7 +155,7 @@ export interface StatusBarDisplayInput {
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
-  /** True when `status` belongs to a focused child/subagent stream rather
+  /** True when `status` belongs to a focused child/subagent run rather
    *  than the root session — see `statusBarRunTarget`. */
   readonly isChildRun?: boolean;
   /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
@@ -204,17 +204,17 @@ interface StatusBarShortcutsInput {
   readonly agentSelectionAvailable?: boolean;
   /** True when slash commands and text entry are actionable in this view. */
   readonly chatInputAvailable: boolean;
-  /** True when bare Escape can focus the active stream's immediate parent. */
+  /** True when bare Escape can focus the active run's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
-  /** True when Alt/Esc-1..9 has at least one stream target. */
+  /** True when Alt/Esc-1..9 has at least one run target. */
   readonly runFocusAvailable?: boolean;
   readonly modifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
-  /** True when the focused stream has output that can be printed in full. */
+  /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
 }
 
@@ -324,7 +324,7 @@ function locationSegment(
   };
 }
 
-// One status-bar slot carries the loop position this stream is at (mirrors
+// One status-bar slot carries the loop position this run is at (mirrors
 // the SubagentList row's `flowLabel`).
 function flowSegment(
   flow: RunView['flow'] | undefined,
@@ -857,7 +857,7 @@ interface StatusBarRunTarget {
 }
 
 /**
- * Which stream the status bar describes (the active stream when the view
+ * Which run the status bar describes (the active run when the view
  * holds it), and what Ctrl-C does there.
  */
 export function statusBarRunTarget({
@@ -954,7 +954,7 @@ export function buildStatusBarDisplay(
   ];
   const turn = input.turn;
 
-  // No stream yet: a child row has no status column, the root keeps its slot.
+  // No run yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
   const spinPrefix =
     isActivePhase(input.status) && turn?.runningFrame

@@ -20,7 +20,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {

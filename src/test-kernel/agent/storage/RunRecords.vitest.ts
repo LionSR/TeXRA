@@ -3,11 +3,7 @@ import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 import { z } from 'zod';
 
-import {
-  getRunRecords,
-  getRunStore,
-  isReservedKvKeyName,
-} from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { readRunChildren } from '@agent/storage/runLifecycle';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -122,13 +118,10 @@ describe('canonical run records', () => {
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
   });
 
-  it('preserves malformed-record failures instead of reading a legacy file or a default', async () => {
+  it('preserves malformed-record failures instead of a default', async () => {
     const malformed = new z.ZodError([]);
     const reader = Object.create(session) as typeof session;
     reader.readRunRecords = () => Effect.die(malformed);
-    await getRunStore(runId).write('meta', {
-      timestamp: 'old file',
-    });
     const result = await run(
       getRunRecords(reader, runId).readRunRecord().pipe(Effect.result),
     );

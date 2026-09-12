@@ -31,30 +31,22 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
     }),
 }));
 
-const getRunStoreMock = vi.hoisted(() => vi.fn());
-// `getRunRecords().exists()` answers "the log still lists this run"; the KV
-// store double's `exists(key)` is the separate checkpoint-file probe.
+// The two record reads the resume programs make: `readConfig()` is the run's
+// committed config row, `exists()` answers "the log still lists this run".
+const readConfigMock = vi.hoisted(() => vi.fn());
 const runExistsMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/RunKVStore')>()),
-  getRunStore: getRunStoreMock,
-  getRunRecords: () => {
-    const store = getRunStoreMock();
-    return {
-      readConfig: () =>
-        Effect.tryPromise({
-          try: () => store.readConfig(),
-          catch: ensureError,
-        }),
-      exists: () =>
-        Effect.tryPromise({ try: () => runExistsMock(), catch: ensureError }),
-    };
-  },
+vi.mock('@agent/storage/runRecords', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/runRecords')>()),
+  getRunRecords: () => ({
+    readConfig: () =>
+      Effect.tryPromise({ try: () => readConfigMock(), catch: ensureError }),
+    exists: () =>
+      Effect.tryPromise({ try: () => runExistsMock(), catch: ensureError }),
+  }),
 }));
 
 // The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: the store double answers only `readConfig` and the checkpoint
-// probe `exists`; the run's own existence is `runExistsMock`.
+// not seed: the records double answers only `readConfig` and `exists`.
 const classifyRunMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/runClassification', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
@@ -119,10 +111,7 @@ const executeWorkflow = vi.fn(async () => {
 
 describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
-    getRunStoreMock.mockReset().mockReturnValue({
-      readConfig: async () => snapshot().agentConfig,
-      exists: async () => false,
-    });
+    readConfigMock.mockReset().mockResolvedValue(snapshot().agentConfig);
     runExistsMock.mockReset().mockResolvedValue(true);
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
@@ -162,12 +151,9 @@ describe('resumeRun tool-use queue ownership', () => {
       const config =
         createDeferred<ReturnType<typeof snapshot>['agentConfig']>();
       const configRead = createDeferred<void>();
-      getRunStoreMock.mockReturnValueOnce({
-        readConfig: () => {
-          configRead.resolve();
-          return config.promise;
-        },
-        exists: async () => false,
+      readConfigMock.mockImplementationOnce(() => {
+        configRead.resolve();
+        return config.promise;
       });
 
       const resumed = yield* Effect.forkChild(
@@ -292,10 +278,7 @@ describe('resumeRun tool-use queue ownership', () => {
       }
       const config =
         createDeferred<ReturnType<typeof snapshot>['agentConfig']>();
-      getRunStoreMock.mockReturnValueOnce({
-        readConfig: () => config.promise,
-        exists: async () => false,
-      });
+      readConfigMock.mockImplementationOnce(() => config.promise);
 
       const resumed = yield* Effect.forkChild(
         resumeOne(RUN, {
@@ -408,12 +391,9 @@ describe('resumeRun tool-use queue ownership', () => {
       if (submission.kind !== 'queued' || !submission.lease) {
         throw new Error('recovery not claimed');
       }
-      getRunStoreMock.mockReturnValueOnce({
-        readConfig: async () => ({
-          ...snapshot().agentConfig,
-          agentCategory: AgentCategory.Workflow,
-        }),
-        exists: async () => false,
+      readConfigMock.mockResolvedValueOnce({
+        ...snapshot().agentConfig,
+        agentCategory: AgentCategory.Workflow,
       });
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
@@ -495,22 +475,18 @@ describe('resumeRun tool-use queue ownership', () => {
   // the host words it with the cause instead of telling the user to delete a
   // run whose saved state may be fine.
   it.live(
-    'propagates a transient retrieval failure over a present checkpoint',
+    'propagates a transient retrieval failure over a run the log still lists',
     () =>
       Effect.gen(function* () {
         const session = createSession();
-        getRunStoreMock.mockReturnValue({
-          readConfig: async () => snapshot().agentConfig,
-          exists: async () => true,
-        });
         retrieveSessionResumeDataMock.mockRejectedValueOnce(
-          new Error('KV timeout'),
+          new Error('record read timeout'),
         );
 
         expect(
           (yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })))
             .message,
-        ).toContain('KV timeout');
+        ).toContain('record read timeout');
       }),
   );
 

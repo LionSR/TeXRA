@@ -10,7 +10,6 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { getRunStore } from '@agent/storage';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';

@@ -2,13 +2,9 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  clearStoreCache,
-  deriveResumability,
-  finalizeRun,
-  getRunStore,
-} from '@agent/storage';
+import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   aggregateId,
   AgentCategory,
@@ -24,6 +20,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { StorageFS } from '@utils/files/storageFS';
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
 const OPENING_SNAPSHOT: FlowSnapshotPayload = {
@@ -47,7 +44,6 @@ describe('deriveResumability', () => {
 
   let session: SessionHandle;
   beforeEach(() => {
-    clearStoreCache();
     vi.restoreAllMocks();
     session = createProcessSession();
   });
@@ -68,10 +64,14 @@ describe('deriveResumability', () => {
 
   /** The retired engine's checkpoint, which this release never reads (R10). */
   async function writeLegacyFlowRecord(runId: RunId): Promise<void> {
-    await getRunStore(runId).write(`flow_${runId}`, {
-      shared: { messages: [] },
-      cursor: { nextNodeId: 'start' },
-    });
+    await StorageFS.ensureDir(resolveRunStoragePath(runId));
+    await StorageFS.write(
+      resolveRunStoragePath(runId, `flow_${runId}.json`),
+      JSON.stringify({
+        shared: { messages: [] },
+        cursor: { nextNodeId: 'start' },
+      }),
+    );
   }
 
   async function writeMeta(

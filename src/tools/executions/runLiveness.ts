@@ -32,7 +32,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';

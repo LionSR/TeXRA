@@ -727,15 +727,7 @@ describe('TUI request decisions', () => {
       }),
   );
 
-  // Skipped on a live defect, not a retired behaviour: the TUI host lands a
-  // personal-credential retry with `decidePendingRequest`, and
-  // `approvalDecisionArms` routes that same decision back to the
-  // `useOwnApiKey` host arm, so the switch re-enters itself forever and no
-  // `request.decided` is ever committed (the worker runs out of memory).
-  // packages/cli/src/chat/tui/state/subscribeApprovals.ts must land it the way
-  // hostRunActions' settleRetry does, as one `request.decide` runtime request;
-  // unskip these four with that fix.
-  it.effect.skip(
+  it.effect(
     'requires an explicit decision before switching a ChatGPT subscription retry to an API key',
     () =>
       Effect.gen(function* () {
@@ -776,15 +768,7 @@ describe('TUI request decisions', () => {
       }),
   );
 
-  // Skipped on a live defect, not a retired behaviour: the TUI host lands a
-  // personal-credential retry with `decidePendingRequest`, and
-  // `approvalDecisionArms` routes that same decision back to the
-  // `useOwnApiKey` host arm, so the switch re-enters itself forever and no
-  // `request.decided` is ever committed (the worker runs out of memory).
-  // packages/cli/src/chat/tui/state/subscribeApprovals.ts must land it the way
-  // hostRunActions' settleRetry does, as one `request.decide` runtime request;
-  // unskip these four with that fix.
-  it.effect.skip(
+  it.effect(
     'auto-switches a Kimi Code subscription limit to the stored Moonshot key',
     () =>
       Effect.gen(function* () {
@@ -878,34 +862,24 @@ describe('TUI request decisions', () => {
       }),
   );
 
-  // Skipped on a live defect, not a retired behaviour: the TUI host lands a
-  // personal-credential retry with `decidePendingRequest`, and
-  // `approvalDecisionArms` routes that same decision back to the
-  // `useOwnApiKey` host arm, so the switch re-enters itself forever and no
-  // `request.decided` is ever committed (the worker runs out of memory).
-  // packages/cli/src/chat/tui/state/subscribeApprovals.ts must land it the way
-  // hostRunActions' settleRetry does, as one `request.decide` runtime request;
-  // unskip these four with that fix.
-  it.effect.skip(
-    'auto-switches a GLM Coding Plan limit to the stored GLM key',
-    () =>
-      Effect.gen(function* () {
-        mocks.glmCodingPlan = true;
-        mocks.hasUsableApiKey.mockImplementation(
-          async (_secrets, provider: ApiProvider) => provider === 'glm',
-        );
-        tui();
+  it.effect('auto-switches a GLM Coding Plan limit to the stored GLM key', () =>
+    Effect.gen(function* () {
+      mocks.glmCodingPlan = true;
+      mocks.hasUsableApiKey.mockImplementation(
+        async (_secrets, provider: ApiProvider) => provider === 'glm',
+      );
+      tui();
 
-        const decision = yield* openRetry(glmCodingPlanRetry('glm-limit'));
+      const decision = yield* openRetry(glmCodingPlanRetry('glm-limit'));
 
-        expect(decision).toEqual(PERSONAL_KEY_RETRY);
-        expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
-          'glmCodingPlan',
-          false,
-        );
-        expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
-        yield* waitForNoApproval();
-      }),
+      expect(decision).toEqual(PERSONAL_KEY_RETRY);
+      expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
+        'glmCodingPlan',
+        false,
+      );
+      expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
+      yield* waitForNoApproval();
+    }),
   );
 
   it.effect('restores Kimi without overwriting a newer OpenRouter choice', () =>
@@ -942,15 +916,7 @@ describe('TUI request decisions', () => {
     }),
   );
 
-  // Skipped on a live defect, not a retired behaviour: the TUI host lands a
-  // personal-credential retry with `decidePendingRequest`, and
-  // `approvalDecisionArms` routes that same decision back to the
-  // `useOwnApiKey` host arm, so the switch re-enters itself forever and no
-  // `request.decided` is ever committed (the worker runs out of memory).
-  // packages/cli/src/chat/tui/state/subscribeApprovals.ts must land it the way
-  // hostRunActions' settleRetry does, as one `request.decide` runtime request;
-  // unskip these four with that fix.
-  it.effect.skip(
+  it.effect(
     'serializes coding-plan rollback ahead of a newer coding-plan switch',
     () =>
       Effect.gen(function* () {

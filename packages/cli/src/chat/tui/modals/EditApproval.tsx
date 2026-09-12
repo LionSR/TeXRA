@@ -8,6 +8,7 @@ import {
   MIN_MODAL_CONTENT_WIDTH,
 } from '@cli/tui/ui/theme';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -26,7 +27,6 @@ import {
   maxScrollableRowOffset,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { ToolEditApprovalPayload } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;

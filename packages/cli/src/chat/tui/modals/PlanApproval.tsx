@@ -11,6 +11,7 @@ import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
 import type { PlanApprovalPermission } from '@shared/schemas';
 import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import {
@@ -18,7 +19,6 @@ import {
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface PlanApprovalProps {
   readonly autoApproveAll: boolean;

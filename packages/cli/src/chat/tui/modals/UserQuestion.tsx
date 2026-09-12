@@ -28,13 +28,13 @@ import type {
   UserQuestionPrompt,
 } from '@shared/schemas';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
   userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface UserQuestionProps {
   readonly availableRows?: number;

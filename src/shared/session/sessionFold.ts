@@ -1523,8 +1523,10 @@ function applySessionSlices(
 ): void {
   switch (event.type) {
     case 'run.start':
-      // The initial snapshot rides the existence fact (PRD 6, item 2); a
-      // legacy import carries none and leaves the entry to `approval.policy`.
+      // The initial snapshot rides the existence fact (PRD 6, item 2). The
+      // one production writer (`runLifecycle.ts`) always stamps it; the trace
+      // viewer's synthetic envelope carries no policy and leaves the entry to
+      // `approval.policy`, which is why the field stays optional.
       if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }

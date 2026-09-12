@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   persistChildRunDelivery: vi.fn(),
   readConfig: vi.fn(),
-  writeTurnState: vi.fn(),
   resumeToolUseTurn: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
@@ -64,9 +63,6 @@ vi.mock('@agent/storage', () => ({
   finalizeRun: mocks.finalizeRun,
   getRunRecords: vi.fn(() => ({
     readConfig: mocks.readConfig,
-  })),
-  getRunStore: vi.fn(() => ({
-    writeTurnState: mocks.writeTurnState,
   })),
 }));
 
@@ -255,7 +251,6 @@ describe('NativeSubagentStrategy', () => {
     mocks.throwErrorFormatting = false;
     mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.persistChildRunDelivery.mockReturnValue(Effect.void);
-    mocks.writeTurnState.mockResolvedValue(undefined);
     mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   });
 
@@ -345,6 +340,9 @@ describe('NativeSubagentStrategy', () => {
 
   it('records a failed turn cost once through interactive loop settlement', async () => {
     const params = baseParams();
+    // The loop commits the child's `child.turn` rows, which its aggregate
+    // refuses until the run has begun.
+    publishTestRunStart(params.session, params.runId);
     const recordCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce(
       toolUseTurnResult('failed', params.runId, {
@@ -378,6 +376,7 @@ describe('NativeSubagentStrategy', () => {
 
   it('persists a typed result-only failure without formatting error prose', async () => {
     const params = { ...baseParams(), resultOnly: true };
+    publishTestRunStart(params.session, params.runId);
     const failure = new Error('provider failed');
     mocks.throwErrorFormatting = true;
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
@@ -816,6 +815,7 @@ describe('NativeSubagentStrategy', () => {
       parentRunId,
       interactions,
     };
+    publishTestRunStart(session, childRunId);
 
     mocks.executeAgent.mockResolvedValueOnce({
       outcome: 'completed',

@@ -120,10 +120,8 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     },
   });
   log.emit(runId, at, {
-    type: 'status',
-    phase: 'running',
-    cause: 'lifecycle',
-    runStartedAt: at,
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin' },
   });
 }
 
@@ -160,7 +158,7 @@ function conversationEvents({ approval = false } = {}) {
       parentRunId: RUN,
     });
     log.emit(RUN, NOW + 3000, {
-      type: 'approval.requested',
+      type: 'request.opened',
       requestId: 'smoke-tool-edit-approval',
       payload: {
         kind: 'toolEdit',
@@ -176,6 +174,7 @@ function conversationEvents({ approval = false } = {}) {
           isLatex: true,
         },
       },
+      thread: null,
     });
     log.entry(RUN, NOW + 3000, {
       id: 'msg-3',

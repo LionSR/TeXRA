@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import { getRunStore, getRunRecords } from '@agent/storage';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
+import { getRunRecords } from '@agent/storage';
+import {
+  deriveWorkflowScriptCheckpointId,
+  readWorkflowScriptCheckpoint,
+} from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
-import { readWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { runInSession, withRunContext } from '@agent/runtime/RunContext';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
@@ -322,14 +324,18 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           defaultAgent: defaultAgent.name,
           parentRunId: runScope.runId,
         });
-        const store = runInSession(runScope.session, () =>
-          getRunStore(runScope.runId),
-        );
+        const priorCheckpoint =
+          input.files == null
+            ? yield* readWorkflowScriptCheckpoint(
+                runScope.session,
+                checkpointId,
+              ).pipe(
+                Effect.mapError((error) =>
+                  workflowScriptToolError(error, scriptPath),
+                ),
+              )
+            : null;
         const files = yield* runPhase(async () => {
-          const priorCheckpoint =
-            input.files == null
-              ? await readWorkflowScriptCheckpoint(store, checkpointId)
-              : null;
           const parsedFiles = WorkflowScriptFilesSchema.parse(
             input.files ?? priorCheckpoint?.files ?? {},
           );
@@ -351,7 +357,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // fresh random id: a relaunch with the same meta.name regenerates the same
         // run id, so registration, stream, and grandchildren re-root at one stable
         // anchor and resume still replays completed calls (#8712). The journal
-        // itself stays on the orchestrator store, where the checkpoint lives.
+        // itself lives on the checkpoint aggregate, which outlives the run.
         const runId = deriveRunId({ checkpointId });
 
         // Captured now, while the launching tool call's ALS frame is live, so the
@@ -562,7 +568,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         session: runScope.session,
                         runId,
                         logger: childRun.logger,
-                        store,
+                        parentRunId: runScope.runId,
                         checkpointId,
                         script,
                         scriptPath,

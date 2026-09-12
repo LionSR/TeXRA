@@ -918,10 +918,9 @@ describe('createChatSessionController', () => {
           catch: ensureError,
         }),
     );
-    // A fake store, like every other resume test: the real store against
-    // this harness's storage-less platform now fails loudly (KVStore no
-    // longer converts I/O errors into misses), which resume() treats as a
-    // rehydration failure by contract.
+    // A fake records reader, like every other resume test: the real
+    // `getRunRecords` against this harness's storage-less platform fails
+    // loudly, which resume() treats as a rehydration failure by contract.
     const init = makeInit({ session });
     const ctrl = createChatSessionController(init);
 

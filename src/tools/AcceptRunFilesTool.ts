@@ -192,7 +192,7 @@ Parameters map directly to subagent-result delivery attributes:
         )
           return yield* Effect.fail(
             new ToolError(
-              `Run not found: ${input.execution_id}. Use /executions to list available executions.`,
+              `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
             ),
           );
         return yield* Effect.tryPromise({

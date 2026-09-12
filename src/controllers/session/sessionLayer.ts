@@ -301,8 +301,8 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
-        acquireRunClaims: (runId) =>
-          eventLog.acquireClaims([qualifyAggregateId('run', runId)]).pipe(
+        acquireClaims: (id) =>
+          eventLog.acquireClaims([id]).pipe(
             Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
             Effect.orDie,
           ),
@@ -319,6 +319,7 @@ const sessionHandleLayer = (
             .readRunChildren(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         recordListing: () => eventLog.readListing().pipe(Effect.orDie),
+        aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
         publishRegistration: (events) =>
@@ -867,9 +868,10 @@ export function installProcessRuntime({
  *
  * The runtime stays reachable for the whole of its own disposal. Its layer
  * finalizers are what release the open sessions, and they still publish
- * through `effectRuntime()` while they unwind -- `SessionHandle.unwind()`
- * disposes pending host interactions, whose `approval.resolved` facts go out
- * through `SessionHandle.publish`, which forks on this very runtime. Clearing
+ * through `effectRuntime()` while they unwind -- a session's release unwinds
+ * the handle and then awaits the publications that teardown left in flight
+ * (`SessionHandle.settlePublications`), each of which forks on this very
+ * runtime. Clearing
  * the reference first made those finalizers throw "not initialized" mid
  * shutdown. It is cleared afterwards, and only if this runtime is still the
  * installed one, so a replacement installed while this one unwound survives.
