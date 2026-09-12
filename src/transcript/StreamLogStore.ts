@@ -114,13 +114,16 @@ export class StreamLogStore {
       .pipe(Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []));
   }
 
-  hasAuthoritativeRun(runId: RunId) {
+  /** The run aggregate's committed events; empty when the run never existed
+   *  or is tombstoned. */
+  readEvents(runId: RunId) {
     return this.database
       .readAggregate(aggregateId('run', runId), 0)
       .pipe(
-        Effect.map(
-          (events) =>
-            events.length > 0 && events.at(-1)?.type !== 'run.removed',
+        Effect.map((events) =>
+          events.length === 0 || events.at(-1)?.type === 'run.removed'
+            ? []
+            : events,
         ),
       );
   }

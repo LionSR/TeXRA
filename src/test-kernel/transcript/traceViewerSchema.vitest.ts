@@ -9,15 +9,12 @@ import {
 import {
   aggregateId,
   emptyRunEndOutput,
-  emptyUsageStats,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   createTestSession,
   publishTestRunStart,
@@ -28,10 +25,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { assembleTrace } from '@transcript';
-import {
-  parseTraceData,
-  TraceDataSchema,
-} from '../../../packages/trace-viewer/src/traceDataSchema';
+import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
+import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
 
@@ -46,37 +41,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   });
 }
 
-/** A parseable trace payload; overrides shape each malformed case. */
-function trace(
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return {
-    runId: 'abcdef',
-    config: config(),
-    meta: {
-      identity: { kind: 'agent', agent: 'assistant' },
-      launchedAt: Date.UTC(2026, 0, 1),
-      description: null,
-      outcome: null,
-      conversationProgress: { toolCallCount: 0 },
-      usage: emptyUsageStats(),
-      todos: [],
-      plan: null,
-      outputs: {},
-      missingOutputs: {},
-      compileFailures: {},
-    },
-    entries: [],
-    steps: [],
-    ...overrides,
-  };
-}
-
-function expectTraceRejected(payload: unknown): void {
-  expect(TraceDataSchema.safeParse(payload).success).toBe(false);
-}
-
-describe('trace-viewer TraceDataSchema', () => {
+describe('trace-viewer TraceDocumentSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
   it('accepts a real trace document produced by assembleTrace', async () => {
@@ -110,30 +75,21 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
 
-    const parsed = TraceDataSchema.safeParse(result.trace);
+    const parsed = TraceDocumentSchema.safeParse(result.trace);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.runId).toBe(runId);
-    expect(parsed.data.meta.outcome).toBe('completed');
-    expect(parsed.data.entries).toHaveLength(1);
+    expect(parsed.data.events[0]?.type).toBe('run.start');
+    expect(parsed.data.events.some((event) => event.type === 'run.end')).toBe(
+      true,
+    );
+    // An export has no producer, so no row names one.
+    expect(parsed.data.events.every((event) => event.ownerId === null)).toBe(
+      true,
+    );
 
     // parseTraceData must accept the same real document without throwing.
     expect(() => parseTraceData(result.trace)).not.toThrow();
-  });
-
-  it('applies source config defaults to a partial run record', () => {
-    const partialConfig: Partial<AgentConfig> = config();
-    delete partialConfig.agent;
-    delete partialConfig.model;
-    delete partialConfig.instruction;
-
-    const parsed = TraceDataSchema.parse(trace({ config: partialConfig }));
-
-    expect(parsed.config).toMatchObject({
-      agent: 'correct',
-      model: DEFAULT_AGENT_MODEL,
-      instruction: '',
-    });
   });
 
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {
@@ -141,25 +97,6 @@ describe('trace-viewer TraceDataSchema', () => {
 
     expect(() => parseTraceData(malformed)).toThrowError(
       /does not match the expected schema/,
-    );
-  });
-
-  it('rejects a trace whose nested payload is malformed', () => {
-    // The per-row recovery reader is gone: a row that fails the canonical
-    // entry schema fails the whole parse instead of degrading to a generic row.
-    expectTraceRejected(
-      trace({
-        entries: [
-          {
-            seqNo: 1,
-            id: 'bad-group',
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-            level: LOG_LEVELS.INFO,
-            timestamp: 1,
-            data: { status: 'future-status', kind: 'run', total: 3 },
-          },
-        ],
-      }),
     );
   });
 });

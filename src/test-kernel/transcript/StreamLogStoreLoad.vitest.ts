@@ -101,7 +101,7 @@ describe('StreamLogStore event reads', () => {
         yield* database.appendAll([
           { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
-        expect(yield* store.hasAuthoritativeRun(RUN)).toBe(false);
+        expect(yield* store.readEvents(RUN)).toEqual([]);
         expect(yield* store.readEntries(RUN)).toEqual([]);
         yield* store.ensureLoaded(RUN);
         expect(store.has(RUN)).toBe(false);

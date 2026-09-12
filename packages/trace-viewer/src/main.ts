@@ -20,7 +20,7 @@ import type { TraceDocument } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTraceCut, trace } from './traceHostBridge';
-import { traceDisplayName } from './traceFrames';
+import { traceDisplayName, traceSteps, type TraceStep } from './traceFrames';
 
 /**
  * Last-resort error surface for a trace that fails to load or parse. A
@@ -45,7 +45,7 @@ function renderLoadError(err: unknown): void {
  *  prints. A row carries all three coordinates, the ones its family never
  *  advances included, so reading them all would label a tool-use turn with
  *  the round and cycle it never left. */
-function stepLabel(step: TraceDocument['steps'][number]): string {
+function stepLabel(step: TraceStep): string {
   const where = formatFlowPositionLabel(flowPosition(step.payload));
   return `${step.payload.family} ${step.payload.step}${where ? ` (${where})` : ''}`;
 }
@@ -62,10 +62,11 @@ function installScrubber(loaded: TraceDocument, remount: () => void): void {
   if (!scrubber || !slider || !readout) {
     throw new Error('The trace viewer HTML carries no scrubber');
   }
-  const last = loaded.steps.length - 1;
+  const steps = traceSteps(loaded);
+  const last = steps.length - 1;
   if (last < 0) return;
   const show = (index: number): void => {
-    const step = loaded.steps[index];
+    const step = steps[index];
     if (!step) return;
     readout.textContent = `Step ${index + 1} of ${last + 1}: ${stepLabel(step)}`;
   };

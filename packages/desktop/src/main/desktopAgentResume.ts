@@ -89,7 +89,8 @@ export class DesktopProcessResumeOwner {
             try: () => import('@tools/registry'),
             catch: ensureError,
           });
-          const exists = yield* session.transcripts.hasAuthoritativeRun(runId);
+          const exists =
+            (yield* session.transcripts.readEvents(runId)).length > 0;
           if (!exists) return false;
           return yield* resumeRunWithRefusalNotice(runId, {
             session,
