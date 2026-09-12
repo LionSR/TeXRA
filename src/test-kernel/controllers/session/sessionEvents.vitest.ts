@@ -1460,17 +1460,12 @@ describe('the C1 event table and the C6 publisher', () => {
         const failure = yield* Effect.flip(
           db.appendAll([
             {
-              type: 'transcript.entry',
+              type: 'log',
               aggregateId: runStart.aggregateId,
-              entry: {
-                seqNo: 1,
-                id: 'non-json',
-                type: 'log',
-                level: 'info',
-                timestamp: 1,
-                messageType: 'internal',
-                data: 1n,
-              },
+              level: 'info',
+              message: 'non-json',
+              messageType: 'internal',
+              data: 1n,
             },
           ]),
         );

@@ -65,7 +65,6 @@ const hostSnapshot = {
 function sessionLog() {
   const events = [];
   const seqs = new Map();
-  const entrySeqs = new Map();
   let commit = 0;
   const emit = (logicalId, at, body) => {
     const aggregateId = JSON.stringify(['run', logicalId]);
@@ -75,12 +74,7 @@ function sessionLog() {
     events.push({ aggregateId, seq, commit, ownerId: OWNER, at, ...body });
   };
   const entry = (runId, at, fields) => {
-    const seqNo = (entrySeqs.get(runId) ?? 0) + 1;
-    entrySeqs.set(runId, seqNo);
-    emit(runId, at, {
-      type: 'transcript.entry',
-      entry: { seqNo, level: 'info', timestamp: at, type: 'log', ...fields },
-    });
+    emit(runId, at, { type: 'log', level: 'info', ...fields });
   };
   return { events, emit, entry };
 }
@@ -137,14 +131,12 @@ function conversationEvents({ approval = false } = {}) {
     description: 'Check citation coverage and suggest BibTeX entries.',
   });
   log.entry(RUN, NOW, {
-    id: 'msg-1',
     messageType: 'userMessage',
-    text: 'hello world',
+    message: 'hello world',
   });
   log.entry(RUN, NOW + 1000, {
-    id: 'msg-2',
     messageType: 'modelResponse',
-    text: 'I will inspect the manuscript and report missing citations.',
+    message: 'I will inspect the manuscript and report missing citations.',
   });
   log.emit(RUN, NOW + 1500, {
     type: 'conversation.progress',
@@ -177,9 +169,9 @@ function conversationEvents({ approval = false } = {}) {
       thread: null,
     });
     log.entry(RUN, NOW + 3000, {
-      id: 'msg-3',
       messageType: 'modelResponse',
-      text: 'I found a one-line correction and need approval before editing main.tex.',
+      message:
+        'I found a one-line correction and need approval before editing main.tex.',
     });
   }
   return log.events;

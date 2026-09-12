@@ -89,18 +89,10 @@ const running: SessionEventDraft = {
  *  `rowId` paints into once its entry folds. */
 function streamingRow(runId: RunId, rowId: string): SessionEventDraft {
   return {
-    type: 'transcript.entry',
+    type: 'stream.start',
     aggregateId: qualifyAggregateId('run', runId),
-    entry: {
-      seqNo: 1,
-      id: rowId,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: 'info',
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      timestamp: 0,
-      text: '',
-      data: { status: 'running' },
-    },
+    id: rowId,
+    kind: MESSAGE_TYPES.MODEL_RESPONSE,
   };
 }
 
@@ -569,7 +561,18 @@ describe('session framer', () => {
       }).pipe(
         Effect.provide(
           Layer.merge(
-            runtimeGraph([runStart, waiting, streamingRow(RUN, 'row-1')]),
+            // The row opens while the loop is still between steps: a parked
+            // loop closes the transcript boundary, and a closed boundary
+            // opens no streaming row for the live text to paint into.
+            runtimeGraph([
+              runStart,
+              {
+                type: 'run.description',
+                aggregateId: qualifyAggregateId('run', RUN),
+                description: 'framing',
+              },
+              streamingRow(RUN, 'row-1'),
+            ]),
             WebviewSessions.layerNoDeps,
           ),
         ),

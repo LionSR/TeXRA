@@ -17,7 +17,6 @@ import {
   listingTypeOf,
   MESSAGE_TYPES,
   isTranscriptEvent,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   RunIdSchema,
   runIdentityDisplayName,
@@ -27,12 +26,9 @@ import {
   type OutputFileInfo,
   type SessionEvent,
   type SessionEventDraft,
-  type StreamLogEntry,
   type RunId,
-  type TaskGroup,
 } from '@shared/schemas';
 
-import { projectTranscriptRow, type TranscriptRow } from '@shared/transcript';
 import { foldRunState } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
@@ -43,7 +39,6 @@ import {
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import {
   workflowRunModel,
   type ChildRunProgress,
@@ -61,6 +56,7 @@ import {
   ROOT,
   ROOT_IDENTITY,
   ROOT_POLICY,
+  T,
   buildScenario,
   foldAll,
   local,
@@ -82,29 +78,6 @@ function roundMapsOf(view: SessionView, id: RunId) {
     throw new Error(`run ${id} is not a tool-use run`);
   const { outputs, missingOutputs, compileFailures } = run;
   return { outputs, missingOutputs, compileFailures };
-}
-
-/** Full replay through the production reducer (the resync path). */
-function taskGroupsOf(entries: readonly StreamLogEntry[]): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const index = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, index, entry);
-  }
-  return taskGroups;
-}
-
-/** Sequential projection keyed by id, the way a host upserts rows. */
-function rowsOf(entries: readonly StreamLogEntry[]): TranscriptRow[] {
-  const byId = new Map<string, TranscriptRow>();
-  for (const entry of entries) {
-    const row = projectTranscriptRow(entry, {
-      previousRow: byId.get(entry.id),
-      projectLifecycleToTaskGroups: true,
-    });
-    if (row) byId.set(entry.id, row);
-  }
-  return [...byId.values()];
 }
 
 const alive = local({ self: [OWNER] });
@@ -269,10 +242,60 @@ describe('sessionFold', () => {
     const root = runView(view, ROOT);
     const child = runView(view, CHILD);
 
-    expect(root.transcript.taskGroups).toStrictEqual(
-      taskGroupsOf(scenario.rootEntries),
-    );
-    expect(root.transcript.rows).toStrictEqual(rowsOf(scenario.rootEntries));
+    // The phase the stage pair opened and closed, and the one call card the
+    // workflow rows carry: what the shared group and row reducers make of
+    // the root's trace.
+    expect(root.transcript.taskGroups).toStrictEqual([
+      {
+        id: 'phase-Map',
+        name: 'Map',
+        startTime: T.root + 1,
+        status: 'completed',
+        kind: 'phase',
+        index: 0,
+        attemptId: 'attempt-1',
+        total: 1,
+        endTime: T.childDone + 2,
+      },
+    ]);
+    expect(root.transcript.rows).toStrictEqual([
+      {
+        id: 'phase-Map',
+        seqNo: 2,
+        timestamp: T.root + 1,
+        level: 'info',
+        settlementSeqNo: 2,
+        verbose: false,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        kind: 'phase',
+        heading: 'Map (1/1)',
+        phaseLabel: 'Map',
+        phaseIndex: 0,
+        phaseTotal: 1,
+      },
+      {
+        id: 'call-1',
+        seqNo: 3,
+        timestamp: T.root + 2,
+        level: 'info',
+        settlementSeqNo: 3,
+        verbose: false,
+        groupId: 'phase-Map',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        kind: 'workflowTask',
+        call: {
+          id: 'inspect',
+          label: 'inspect',
+          phase: 'Map',
+          attemptId: 'attempt-1',
+          childRunId: CHILD,
+          status: 'completed',
+        },
+        line: 'Finished: inspect',
+        statusLabel: 'Finished',
+        metadataParts: [],
+      },
+    ]);
     // The transcript tier retained the rows: the aggregate's newest seq.
     expect(view.folded.get(qualifyAggregateId('run', ROOT))).toBe(
       Math.max(
@@ -280,8 +303,7 @@ describe('sessionFold', () => {
           .filter(
             (e) =>
               e.aggregateId === qualifyAggregateId('run', ROOT) &&
-              (e.type === 'transcript.entry' ||
-                e.type === 'run.activate' ||
+              (e.type === 'run.activate' ||
                 e.type === 'run.end' ||
                 isTranscriptEvent(e)),
           )
@@ -487,20 +509,16 @@ describe('sessionFold', () => {
       to: number,
       text: string,
     ): FoldInput => ({ _tag: 'chunk', runId: CHILD, rowId, from, to, text });
-    const response = (
-      id: string,
-      text: string,
-      status: 'running' | 'completed',
-    ): FoldInput => {
-      log.entry(CHILD, 1501, {
-        id,
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-        text,
-        data: { status },
-      });
-      return tail(log.events.at(-1)!);
-    };
+    const opens = (id: string): FoldInput =>
+      tail(
+        log.emit(CHILD, 1501, {
+          type: 'stream.start',
+          id,
+          kind: MESSAGE_TYPES.MODEL_RESPONSE,
+        }),
+      );
+    const closes = (id: string, finalText: string): FoldInput =>
+      tail(log.emit(CHILD, 1501, { type: 'stream.end', id, finalText }));
     const started = log.events.map(tail);
     // A chunk can reach the fold before its row; a redelivered chunk and a
     // chunk below the text held are no-ops.
@@ -508,7 +526,7 @@ describe('sessionFold', () => {
       subscribe(CHILD),
       ...started,
       chunk('response-2', 0, 3, 'Ear'),
-      response('response-1', '', 'running'),
+      opens('response-1'),
       chunk('response-1', 0, 3, 'Hel'),
       chunk('response-1', 3, 5, 'lo'),
       chunk('response-1', 0, 3, 'Hel'),
@@ -522,15 +540,14 @@ describe('sessionFold', () => {
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();
     // The row that arrives after its chunks projects with them.
-    const view = fold(streaming, response('response-2', '', 'running'));
+    const view = fold(streaming, opens('response-2'));
     const second = runView(view, CHILD).transcript.rows[1];
     expect(second.kind === 'assistant' && second.text.full).toBe('Ear');
-    // An entry that folds carrying buffered text seeds the held text, so the
-    // bridge's re-delivery of that text from offset zero is a no-op and a
-    // later chunk extends it.
+    // A row's held text is the chunks' own: the first seeds it from offset
+    // zero and a later chunk extends it.
     const buffered = foldAll(
       [
-        response('response-3', 'Buf', 'running'),
+        opens('response-3'),
         chunk('response-3', 0, 3, 'Buf'),
         chunk('response-3', 3, 6, 'fer'),
       ],
@@ -543,7 +560,7 @@ describe('sessionFold', () => {
     // cannot reopen it; a replacement chunk truncates at `from`.
     const settled = foldAll(
       [
-        response('response-1', 'Hello world', 'completed'),
+        closes('response-1', 'Hello world'),
         chunk('response-1', 5, 7, '!!'),
         chunk('response-2', 0, 4, 'Late'),
       ],
@@ -583,7 +600,7 @@ describe('sessionFold', () => {
     const rootEntry = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
-        e.type === 'transcript.entry',
+        e.type === 'workflow.call',
     )!;
     // An aggregate read replaying an older activation, start, or row after
     // the tail folded the current one changes nothing, and the cursor stays.
@@ -910,25 +927,39 @@ describe('sessionFold', () => {
     const childBefore = runView(before, CHILD);
     const rowsBefore = childBefore.transcript.rows;
     const rowCount = rowsBefore.length;
+    const childSeq = before.folded.get(qualifyAggregateId('run', CHILD))!;
+    // The settled child takes a follow-up turn: its activation reopens the
+    // transcript boundary the terminal outcome closed, then one streaming
+    // row opens and its chunks extend it.
     const after = fold(before, [
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
-        seq: before.folded.get(qualifyAggregateId('run', CHILD))! + 1,
+        seq: childSeq + 1,
+        commit: 199,
+        ownerId: OWNER,
+        at: 3900,
+        type: 'run.activate',
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+      }),
+      tail({
+        aggregateId: qualifyAggregateId('run', CHILD),
+        seq: childSeq + 2,
         commit: 200,
         ownerId: OWNER,
         at: 4000,
-        type: 'transcript.entry',
-        entry: {
-          id: 'late',
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-          text: 'Late',
-          data: { status: 'running' },
-          seqNo: 999,
-          timestamp: 4000,
-          level: 'info',
-        },
+        type: 'stream.start',
+        id: 'late',
+        kind: MESSAGE_TYPES.MODEL_RESPONSE,
       }),
+      {
+        _tag: 'chunk',
+        runId: CHILD,
+        rowId: 'late',
+        from: 0,
+        to: 4,
+        text: 'Late',
+      },
       {
         _tag: 'chunk',
         runId: CHILD,
@@ -962,21 +993,14 @@ describe('sessionFold', () => {
       after,
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
-        seq: before.folded.get(qualifyAggregateId('run', CHILD))! + 2,
+        seq: childSeq + 3,
         commit: 201,
         ownerId: OWNER,
         at: 4100,
-        type: 'transcript.entry',
-        entry: {
-          id: 'settled',
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-          text: 'Done',
-          data: { status: 'completed' },
-          seqNo: 1000,
-          timestamp: 4100,
-          level: 'info',
-        },
+        type: 'log',
+        level: 'info',
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+        message: 'Done',
       }),
     );
     const childLogged = runView(logged, CHILD);

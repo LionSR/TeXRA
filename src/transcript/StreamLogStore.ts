@@ -44,8 +44,7 @@ function applyEvent(
   fold: ReturnType<typeof createTranscriptFold>,
   event: SessionEvent,
 ): void {
-  if (event.type === 'transcript.entry') log.record(event.entry);
-  else if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
+  if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
   else if (event.type === 'flow.step') {
     if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
     else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
