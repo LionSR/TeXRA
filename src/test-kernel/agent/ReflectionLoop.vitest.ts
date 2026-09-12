@@ -243,6 +243,7 @@ function testBoundModel(): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     routedOnKimiCode: false,
+    backgroundCapable: false,
   };
 }
 
@@ -379,6 +380,7 @@ function agentRunTestLayer(init: LoopInit) {
     Effect.gen(function* () {
       const model = yield* SynchronizedRef.make(testBoundModel());
       const logger = init.logger ?? new TraceEmitter();
+      const scope = yield* Effect.scope;
       const runScope = createRunScope({
         runId: init.runId,
         session: init.session,
@@ -410,6 +412,7 @@ function agentRunTestLayer(init: LoopInit) {
         finalToolName: null,
         structured: { value: undefined },
         model,
+        scope,
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),

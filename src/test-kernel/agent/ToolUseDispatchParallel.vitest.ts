@@ -13,7 +13,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { Effect, Fiber, Layer, Stream, SynchronizedRef } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream, SynchronizedRef } from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect } from 'vitest';
@@ -160,6 +160,7 @@ function boundModel(): BoundModel {
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
     routedOnKimiCode: false,
+    backgroundCapable: false,
   };
 }
 
@@ -236,6 +237,7 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
+    scope: Scope.makeUnsafe(),
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(

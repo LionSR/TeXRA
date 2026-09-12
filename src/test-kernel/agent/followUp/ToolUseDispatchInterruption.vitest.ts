@@ -57,9 +57,14 @@ const ORIGIN = {
   },
 } as const;
 
-/** A `Model` the harness never reaches: the invoker seam is faked above it. */
+/**
+ * A `Model` the harness never invokes: the invoker seam is faked above it.
+ * Compaction still probes the optional token counter, and this model offers
+ * none, so that one read answers `undefined` and the text heuristic decides.
+ */
 const unusedModel = new Proxy({} as Model, {
   get(_target, property) {
+    if (property === 'estimateInputTokens') return undefined;
     throw new Error(`The harness model has no ${String(property)}.`);
   },
 });
@@ -82,6 +87,7 @@ function testBoundModel(): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     routedOnKimiCode: false,
+    backgroundCapable: false,
   };
 }
 
@@ -199,6 +205,7 @@ function agentRunTestLayer(init: HarnessInit) {
     AgentRun,
     Effect.gen(function* () {
       const model = yield* SynchronizedRef.make(testBoundModel());
+      const scope = yield* Effect.scope;
       const logger = new TraceEmitter();
       const runScope = createRunScope({
         runId: init.runId,
@@ -231,6 +238,7 @@ function agentRunTestLayer(init: HarnessInit) {
         finalToolName: null,
         structured: { value: undefined },
         model,
+        scope,
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),

@@ -264,6 +264,7 @@ function scriptedBoundModel(
       config.name,
     ]),
     routedOnKimiCode: false,
+    backgroundCapable: false,
   };
 }
 

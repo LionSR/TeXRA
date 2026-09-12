@@ -13,7 +13,15 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, Exit, Fiber, Layer, Stream, SynchronizedRef } from 'effect';
+import {
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Scope,
+  Stream,
+  SynchronizedRef,
+} from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
@@ -215,6 +223,7 @@ function boundModel(
       'gpt54',
     ]),
     routedOnKimiCode: false,
+    backgroundCapable: false,
     ...overrides,
   };
 }
@@ -269,6 +278,7 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
+    scope: Scope.makeUnsafe(),
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
