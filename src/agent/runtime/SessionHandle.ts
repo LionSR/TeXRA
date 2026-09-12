@@ -166,8 +166,9 @@ export class SessionHandle {
   /**
    * Per-run run handles: registration, lookup, change listeners, and
    * subagent lineage. Hears every phase-moving row this process committed
-   * ({@link receiveCommittedEvent}), in commit order; the phase itself is
-   * the fold's (`RunView.status`), never a second map here.
+   * ({@link receiveFoldedEvent}), in commit order and only once the view has
+   * folded it; the phase itself is the fold's (`RunView.status`), never a
+   * second map here.
    */
   readonly runs: RunRegistry;
   /**
@@ -849,35 +850,47 @@ export class SessionHandle {
     return this.transcripts.acceptCommitted(event).pipe(
       Effect.andThen(
         Effect.sync(() => {
-          // Host notifications and runtime waiters belong to the authoring process.
+          // Host notifications belong to the authoring process.
           const { self } = SubscriptionRef.getUnsafe(this.graph.local);
           if (event.ownerId == null || !self.includes(event.ownerId)) return;
 
           const target = aggregateTarget(event.aggregateId);
-          if (target.kind !== 'run') return;
-          if (event.type === 'run.end') {
-            for (const listener of [...this.resultListeners]) {
-              try {
-                listener({ ...event, runId: target.id });
-              } catch (error) {
-                logger.warn('Session result listener threw', { data: error });
-              }
+          if (target.kind !== 'run' || event.type !== 'run.end') return;
+          for (const listener of [...this.resultListeners]) {
+            try {
+              listener({ ...event, runId: target.id });
+            } catch (error) {
+              logger.warn('Session result listener threw', { data: error });
             }
           }
-
-          // The rows that move a run's phase (one run model, 3.3): every
-          // activation, the park and the step that leaves it, the end.
-          const phaseMoved =
-            event.type === 'run.activate' ||
-            event.type === 'run.end' ||
-            (event.type === 'flow.step' &&
-              (event.payload.step === 'waiting' ||
-                event.payload.step === 'turn.begin'));
-          if (!phaseMoved) return;
-          this.runs.handleStatus(target.id);
         }),
       ),
     );
+  }
+
+  /**
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
+   * phase notification, which is why it is not on the raw tail above. A woken
+   * waiter and a refreshed child roster both read `RunView.status` from the
+   * view synchronously, so a notification ahead of the fold would hand them
+   * the phase the row just replaced.
+   */
+  receiveFoldedEvent(event: SessionEvent): void {
+    // Runtime waiters belong to the authoring process.
+    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
+    if (event.ownerId == null || !self.includes(event.ownerId)) return;
+    const target = aggregateTarget(event.aggregateId);
+    if (target.kind !== 'run') return;
+    // The rows that move a run's phase (one run model, 3.3): every
+    // activation, the park and the step that leaves it, the end.
+    const phaseMoved =
+      event.type === 'run.activate' ||
+      event.type === 'run.end' ||
+      (event.type === 'flow.step' &&
+        (event.payload.step === 'waiting' ||
+          event.payload.step === 'turn.begin'));
+    if (!phaseMoved) return;
+    this.runs.handleStatus(target.id);
   }
 
   /**

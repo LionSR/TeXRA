@@ -178,46 +178,13 @@ export const runPersistedWorkflowScript = Effect.fn(
       ...runOptions
     } = options;
     const target = checkpointAggregate(checkpointId);
-    const prior = yield* readWorkflowScriptCheckpoint(session, checkpointId);
-    // A named checkpoint outlives one tool call, and callers legitimately
-    // evolve the script between attempts (a model retrying after a timeout
-    // rarely reproduces its source byte-for-byte). Adopt the requested script
-    // and args, keep the journal: an entry replays only on a matching
-    // prompt/run-options hash, so drifted calls re-execute while
-    // presentation-only edits, unchanged calls, and calls that merely moved
-    // stay free. The aggregate keeps every key it has ever journaled: a crash
-    // resumes prior branches and newly completed work together.
-    const script = requestedScript ?? prior?.script;
-    if (script === undefined) {
-      return yield* Effect.fail(
-        new Error(
-          `Workflow checkpoint ${checkpointId} does not exist; a script is required for the first run.`,
-        ),
-      );
-    }
-    yield* Effect.try({
-      try: () => parseWorkflowScript(script),
-      catch: ensureError,
-    });
-    const encodedRequestedArgs = yield* Effect.try({
-      try: () => encodeJsonValue(requestedArgs),
-      catch: (error) =>
-        new Error(
-          `Workflow checkpoint ${checkpointId} arguments cannot be persisted.`,
-          { cause: error },
-        ),
-    });
-    const args =
-      Object.hasOwn(options, 'args') || prior === null
-        ? decodeJsonValue(encodedRequestedArgs)
-        : prior.args;
-    const files =
-      Object.hasOwn(options, 'files') || prior === null
-        ? yield* Effect.try({
-            try: () => WorkflowScriptFilesSchema.parse(requestedFiles ?? {}),
-            catch: ensureError,
-          })
-        : prior.files;
+    // Existence alone decides the claim step; nothing is derived from this
+    // read. An aggregate that exists has its claim taken over, one that does
+    // not is claimed by the script row the run body commits — and a process
+    // that creates it in this gap owns it, so that commit is refused rather
+    // than written behind its back.
+    const exists =
+      (yield* readWorkflowScriptCheckpoint(session, checkpointId)) !== null;
 
     // The process that first journals into a checkpoint claims its aggregate
     // (C5); a relaunch from another process takes the claim over after proving
@@ -228,14 +195,57 @@ export const runPersistedWorkflowScript = Effect.fn(
     // finished workflow leaves the journal free for the next process to resume
     // instead of holding it until this one exits.
     return yield* Effect.acquireUseRelease(
-      // An existing checkpoint's claim is taken over here; one that does not
-      // exist yet is claimed by the script row below, which creates its
-      // aggregate under this process.
-      prior === null
-        ? Effect.void
-        : Effect.asVoid(session.acquireClaims(target)),
+      exists ? Effect.asVoid(session.acquireClaims(target)) : Effect.void,
       () =>
         Effect.gen(function* () {
+          // The journal is read under the claim: a process that finished this
+          // checkpoint and released it just now has committed every entry it
+          // journaled before this read, so nothing it already did is replayed.
+          const prior = yield* readWorkflowScriptCheckpoint(
+            session,
+            checkpointId,
+          );
+          // A named checkpoint outlives one tool call, and callers legitimately
+          // evolve the script between attempts (a model retrying after a
+          // timeout rarely reproduces its source byte-for-byte). Adopt the
+          // requested script and args, keep the journal: an entry replays only
+          // on a matching prompt/run-options hash, so drifted calls re-execute
+          // while presentation-only edits, unchanged calls, and calls that
+          // merely moved stay free. The aggregate keeps every key it has ever
+          // journaled: a crash resumes prior branches and newly completed work
+          // together.
+          const script = requestedScript ?? prior?.script;
+          if (script === undefined) {
+            return yield* Effect.fail(
+              new Error(
+                `Workflow checkpoint ${checkpointId} does not exist; a script is required for the first run.`,
+              ),
+            );
+          }
+          yield* Effect.try({
+            try: () => parseWorkflowScript(script),
+            catch: ensureError,
+          });
+          const encodedRequestedArgs = yield* Effect.try({
+            try: () => encodeJsonValue(requestedArgs),
+            catch: (error) =>
+              new Error(
+                `Workflow checkpoint ${checkpointId} arguments cannot be persisted.`,
+                { cause: error },
+              ),
+          });
+          const args =
+            Object.hasOwn(options, 'args') || prior === null
+              ? decodeJsonValue(encodedRequestedArgs)
+              : prior.args;
+          const files =
+            Object.hasOwn(options, 'files') || prior === null
+              ? yield* Effect.try({
+                  try: () =>
+                    WorkflowScriptFilesSchema.parse(requestedFiles ?? {}),
+                  catch: ensureError,
+                })
+              : prior.files;
           // The script row lands before the run, so the journal always has the
           // source it replays against.
           yield* session

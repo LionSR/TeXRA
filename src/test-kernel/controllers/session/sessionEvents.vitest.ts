@@ -719,11 +719,17 @@ describe('Sessions owner', () => {
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
           // `run.end` carries the terminal phase, so the live run's end is a
-          // second status notification; the replay below must add none.
-          const statusCalls = handleStatus.mock.calls.length;
-          for (const event of committed)
-            yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
-          expect(handleStatus).toHaveBeenCalledTimes(statusCalls);
+          // second status notification, delivered once the view has folded
+          // it; the foreign-owned replay below must add none.
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(handleStatus).toHaveBeenCalledTimes(2)),
+          );
+          for (const event of committed) {
+            const foreign = { ...event, ownerId: OTHER };
+            yield* session.receiveCommittedEvent(foreign);
+            session.receiveFoldedEvent(foreign);
+          }
+          expect(handleStatus).toHaveBeenCalledTimes(2);
           expect(onResult).toHaveBeenCalledOnce();
         } finally {
           detachResult();

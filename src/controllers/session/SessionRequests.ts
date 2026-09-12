@@ -47,8 +47,20 @@ import {
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 const done: Outcome = { kind: 'done' };
+
+/**
+ * One in-process serial lane per request id. `decideRequest`'s checked append
+ * fences the row across processes, but the row alone: two surfaces of this
+ * process deciding one inquiry would both pass the pending check and both
+ * reach the thread record before either appended, so the loser's verdict
+ * could stand over an answer already recorded and delivered. The lane makes
+ * the pending check, the inquiry record and the append one operation per
+ * request.
+ */
+const decisionLanes = new Map<string, PerKeyLane>();
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
@@ -152,7 +164,10 @@ function settled(runId: RunId): Unavailable {
  * cross-project inquiry database, so it cannot share the run's transaction;
  * it is written first, because a process that exits in the gap then leaves
  * the request pending and answerable, rather than settled with nothing
- * recorded on the thread and no way to ask again.
+ * recorded on the thread and no way to ask again. Two surfaces of this
+ * process therefore cannot run this in parallel: the whole decision takes
+ * the request's lane ({@link decisionLanes}), so the second reads a request
+ * already decided instead of answering its thread behind the first.
  */
 function decide(
   session: SessionHandle,
@@ -195,19 +210,24 @@ function decide(
   const heldHere =
     admitted.ownerId !== null &&
     SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
-  return heldHere
-    ? answer
-    : Effect.acquireUseRelease(
-        session
-          .acquireClaims(qualifyAggregateId('run', req.runId))
-          .pipe(
-            Effect.mapError(
-              (): RequestError => new NotOwner({ runId: req.runId }),
+  return withPerKeyLane(
+    decisionLanes,
+    `${req.runId}/${req.requestId}`,
+  )(
+    heldHere
+      ? answer
+      : Effect.acquireUseRelease(
+          session
+            .acquireClaims(qualifyAggregateId('run', req.runId))
+            .pipe(
+              Effect.mapError(
+                (): RequestError => new NotOwner({ runId: req.runId }),
+              ),
             ),
-          ),
-        () => answer,
-        (release) => release.pipe(Effect.orDie),
-      );
+          () => answer,
+          (release) => release.pipe(Effect.orDie),
+        ),
+  );
 }
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */

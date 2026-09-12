@@ -99,8 +99,9 @@ type ManualCompactionRequestResult =
 /**
  * The registry reads a run's phase from the session's fold (`RunView.status`,
  * one run model, 3.3) and keeps no phase of its own; the session routes each
- * phase-moving row it committed through `handleStatus`, so the registry's
- * waiters and child rosters follow the one rail every renderer reads.
+ * phase-moving row it committed through `handleStatus` once the view has
+ * folded it, so the registry's waiters and child rosters follow the one rail
+ * every renderer reads and never read it a row behind.
  */
 interface RunRegistryInit {
   readonly runView: (runId: RunId) => RunView | undefined;
@@ -179,8 +180,10 @@ export class RunRegistry {
   /**
    * One phase-moving row this process committed (`run.activate`, the
    * `waiting` step and the step that leaves it, `run.end`), from the
-   * session's tail in commit order: notify waiters and refresh the child
-   * roster when a run's status changes (e.g. RUNNING to WAITING).
+   * session's fold-gated tail in commit order: notify waiters and refresh the
+   * child roster when a run's status changes (e.g. RUNNING to WAITING). Both
+   * read the new phase from the view here, which is why the caller delivers
+   * the row only once the view has folded it.
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
