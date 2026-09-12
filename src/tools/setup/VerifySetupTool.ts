@@ -6,9 +6,8 @@ import { z } from 'zod';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';
@@ -136,7 +135,7 @@ export class VerifySetupTool extends defineTool({
   description: `Verify installation status. With no input, runs a full check of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm or magick, texcount, latexdiff) and the LaTeX Workshop extension, returning a short plain-text report. With {"tool": "<name>"}, checks only that tool (falls back to a PATH search for names that don't have a known --version command). Use after running an install command to confirm it worked, or as the final step of a setup session.`,
   schema: VerifySetupInputSchema,
 }) {
-  protected execute(input: VerifySetupInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(verify(input));
+  protected execute(input: VerifySetupInput) {
+    return verify(input);
   }
 }

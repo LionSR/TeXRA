@@ -266,7 +266,10 @@ export function resolveAndFormat(
   path: WorkspacePathResolution;
   display: string;
 } {
-  const path = resolveWorkspaceRelativePath(targetPath, root);
+  const path = resolveWorkspaceRelativePath(
+    targetPath,
+    parseWorkingDirectory(root),
+  );
   const display = toPosixPath(path.relative);
   return { path, display };
 }

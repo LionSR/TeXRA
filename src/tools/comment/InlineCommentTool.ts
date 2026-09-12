@@ -8,7 +8,6 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -300,7 +299,7 @@ export class InlineCommentTool extends defineTool({
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,
 }) {
-  protected execute(input: InlineCommentInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(inlineComment(input));
+  protected execute(input: InlineCommentInput) {
+    return inlineComment(input);
   }
 }

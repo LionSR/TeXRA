@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
@@ -31,16 +30,12 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import {
-  getCurrentToolContexts,
-  type CurrentToolContexts,
-} from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import type {
   RunId,
   TodoItem,
@@ -479,37 +474,27 @@ export class CodexTool extends defineTool({
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
-  protected execute(
-    input: CodexInput,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
-    // The one run edge of this tool (PRD run-edge category b): the dispatch
-    // below is an Effect program, run once here on the process runtime. A
-    // collaborator's rejection is re-raised as its own cause; a `ToolError`
-    // stays a typed failure and `runPromise` rejects with it. The call's
-    // signal is its stop: aborted when this tool call is interrupted, it
-    // interrupts the fiber so a pending bash approval closes as cancelled
-    // instead of staying approvable after the run stopped.
-    return effectRuntime().runPromise(
-      reraiseAgentCliCallFailure(
-        this.run(
-          input,
-          currentSession(),
-          getCurrentToolContexts(),
-          AsyncLocalStorage.bind(requestBashApproval),
-        ),
-      ),
-      { signal },
-    );
+  protected execute(input: CodexInput) {
+    return Effect.gen({ self: this }, function* () {
+      const toolCall = yield* ToolCall;
+      if (!toolCall.run)
+        return yield* Effect.fail(
+          new ToolError('This tool requires an active agent session.'),
+        );
+      const session = toolCall.run.session;
+      return yield* reraiseAgentCliCallFailure(
+        this.run(input, session, toolCall, requestBashApproval),
+      );
+    });
   }
 
   private readonly run = Effect.fn('CodexTool.run')(function* (
     this: CodexTool,
     input: CodexInput,
     session: SessionHandle,
-    contexts: CurrentToolContexts | undefined,
+    toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
@@ -520,7 +505,7 @@ export class CodexTool extends defineTool({
 
     return yield* dispatchAgentCliTool({
       session,
-      contexts,
+      toolCall,
       requestApproval,
       agentName: 'codex',
       approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
@@ -553,7 +538,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, ToolCall> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = yield* agentCliCall(() =>
     runInSession(session, () =>

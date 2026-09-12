@@ -78,8 +78,8 @@ export interface WorkflowScriptCheckpoint {
   readonly journal: WorkflowJournalEntry[];
 }
 
-export interface PersistedWorkflowScriptRunOptions extends Omit<
-  WorkflowScriptRunOptions,
+export interface PersistedWorkflowScriptRunOptions<R = never> extends Omit<
+  WorkflowScriptRunOptions<R>,
   'script' | 'journal' | 'onJournalEntry'
 > {
   /** The session whose event table holds the checkpoint aggregate. */
@@ -165,12 +165,10 @@ export function readWorkflowScriptCheckpoint(
  * takes its checkpoint's lane, so overlapping calls on one id run in order
  * rather than replaying the same journal twice.
  */
-export const runPersistedWorkflowScript = Effect.fn(
-  'runPersistedWorkflowScript',
-)(
-  function* (
-    options: PersistedWorkflowScriptRunOptions,
-  ): Effect.fn.Return<WorkflowScriptRunResult, Error> {
+export function runPersistedWorkflowScript<R = never>(
+  options: PersistedWorkflowScriptRunOptions<R>,
+): Effect.Effect<WorkflowScriptRunResult, Error, R> {
+  return Effect.gen(function* () {
     const {
       session,
       checkpointId,
@@ -277,35 +275,35 @@ export const runPersistedWorkflowScript = Effect.fn(
           // The engine's callbacks each carry their session explicitly (the agent
           // runner frames its own run context; snapshots and journal rows publish
           // through the handle), so no ambient session frame wraps this call.
-          return yield* Effect.tryPromise({
-            try: () =>
-              runWorkflowScript({
-                ...runOptions,
-                script,
-                args,
-                files,
-                journal: prior?.journal,
-                // `...runOptions` carries the caller's own `onSnapshot`: snapshots
-                // belong to the detached run that owns their writes, while this
-                // checkpoint belongs to its orchestrator.
-                onJournalEntry: async (entry) => {
-                  // The session's ordered publisher, awaited to durability: a
-                  // refused or failed append rejects here and the engine fails the
-                  // run with a checkpoint fault rather than exposing the result to
-                  // the script.
-                  session.publish([
-                    {
-                      type: 'workflow.journal',
-                      aggregateId: target,
-                      key: entry.key,
-                      index: entry.index,
-                      result: encodeJsonValue(entry.result),
-                    },
-                  ]);
-                  await session.settlePublications();
-                },
+          return yield* runWorkflowScript({
+            ...runOptions,
+            script,
+            args,
+            files,
+            journal: prior?.journal,
+            // `...runOptions` carries the caller's own `onSnapshot`: snapshots
+            // belong to the detached run that owns their writes, while this
+            // checkpoint belongs to its orchestrator.
+            onJournalEntry: (entry) =>
+              Effect.gen(function* () {
+                // The session's ordered publisher, awaited to durability: a
+                // refused or failed append rejects here and the engine fails the
+                // run with a checkpoint fault rather than exposing the result to
+                // the script.
+                session.publish([
+                  {
+                    type: 'workflow.journal',
+                    aggregateId: target,
+                    key: entry.key,
+                    index: entry.index,
+                    result: encodeJsonValue(entry.result),
+                  },
+                ]);
+                yield* Effect.tryPromise({
+                  try: () => session.settlePublications(),
+                  catch: ensureError,
+                });
               }),
-            catch: ensureError,
           });
         }),
       // A release that fails leaves the claim standing: the next process reads
@@ -325,7 +323,5 @@ export const runPersistedWorkflowScript = Effect.fn(
             ),
           ),
     );
-  },
-  (self, options: PersistedWorkflowScriptRunOptions) =>
-    withPerKeyLane(checkpointLanes, options.checkpointId)(self),
-);
+  }).pipe(withPerKeyLane(checkpointLanes, options.checkpointId));
+}

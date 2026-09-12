@@ -11,8 +11,8 @@ import {
   getRunContextSession,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { FileStat } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
@@ -186,22 +186,14 @@ Directory listings are paginated: use offset/limit to page through results (defa
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
 }) {
-  /**
-   * The one run edge of this tool (PRD run-edge category b): every line of
-   * logic below is an Effect program, run once here on the process runtime.
-   * The two filesystem failures are re-raised as their own causes so a
-   * caller still sees the error the filesystem raised, exactly as the
-   * previous `await` chain did; a `ToolError` stays a typed failure and
-   * `runPromise` rejects with that instance.
-   */
-  protected execute(input: MemoryToolInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(
-      this.run(input).pipe(
-        Effect.catchTags({
-          MemoryEntryUnreadable: (error) => Effect.die(error.cause),
-          MemoryFileUnwritable: (error) => Effect.die(error.cause),
-        }),
-      ),
+  protected execute(
+    input: MemoryToolInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    return this.run(input).pipe(
+      Effect.catchTags({
+        MemoryEntryUnreadable: (error) => Effect.die(error.cause),
+        MemoryFileUnwritable: (error) => Effect.die(error.cause),
+      }),
     );
   }
 
@@ -292,7 +284,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private requireViewBeforeModify(
     inputPath: string,
     operation = 'editing',
-  ): ToolResult | null {
+  ): Effect.Effect<ToolResult | null, never, ToolServices> {
     return requireFileReadForEdit(
       inputPath,
       true,
@@ -349,7 +341,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const stats = yield* statMemoryEntry(resolvedPath);
     if (isDirectory(stats.type)) {
       const allEntries = yield* this.buildDirectoryListing(resolvedPath, stats);
-      recordToolFileRead(inputPath);
+      yield* recordToolFileRead(inputPath);
 
       const { page, start, end, total } = paginateToolListing(
         allEntries,
@@ -365,7 +357,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     }
 
     const { meta, content } = yield* readMemoryFile(resolvedPath);
-    recordToolFileRead(inputPath);
+    yield* recordToolFileRead(inputPath);
     const lines = splitContentLines(content);
     if (lines.length > MAX_VIEW_LINES) {
       return yield* Effect.fail(
@@ -408,7 +400,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     yield* ensureMemoryDir(MEMORY_STORAGE_DIR);
     yield* ensureMemoryDir(path.dirname(resolvedPath));
     yield* this.writeAttributed(resolvedPath, fileText);
-    recordToolFileRead(inputPath);
+    yield* recordToolFileRead(inputPath);
 
     return executed(
       `File created successfully at: ${inputPath}`,
@@ -433,7 +425,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     yield* this.requireEditableFile(resolvedPath, inputPath);
 
-    const readGate = this.requireViewBeforeModify(inputPath);
+    const readGate = yield* this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
     const { content, meta } = yield* readMemoryFile(resolvedPath);
@@ -450,7 +442,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const updated = replacement.content;
     yield* this.writeAttributed(resolvedPath, updated, meta);
-    recordToolFileRead(inputPath);
+    yield* recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
     const numbered = formatLinesWithNumbers(updatedLines);
@@ -470,7 +462,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const { display: inputPath, storage: resolvedPath } = loc;
     yield* this.requireEditableFile(resolvedPath, inputPath);
 
-    const readGate = this.requireViewBeforeModify(inputPath);
+    const readGate = yield* this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
     const { content, meta } = yield* readMemoryFile(resolvedPath);
@@ -492,7 +484,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     ];
 
     yield* this.writeAttributed(resolvedPath, updatedLines.join('\n'), meta);
-    recordToolFileRead(inputPath);
+    yield* recordToolFileRead(inputPath);
 
     return executed(
       `The file ${inputPath} has been edited.`,
@@ -512,7 +504,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const readGate = this.requireViewBeforeModify(inputPath, 'deleting');
+    const readGate = yield* this.requireViewBeforeModify(inputPath, 'deleting');
     if (readGate) return readGate;
 
     yield* deleteMemoryPath(resolvedPath);
@@ -537,7 +529,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const readGate = this.requireViewBeforeModify(oldPathInput, 'renaming');
+    const readGate = yield* this.requireViewBeforeModify(
+      oldPathInput,
+      'renaming',
+    );
     if (readGate) return readGate;
 
     const newExists = yield* memoryPathExists(resolvedNewPath);

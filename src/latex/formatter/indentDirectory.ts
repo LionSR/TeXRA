@@ -4,12 +4,11 @@ import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
-import { resolveLatexFormatter } from './texFormatter';
+import { resolveLatexFormatter, type LatexFormatter } from './texFormatter';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 
 const log = createLog(CHANNEL);
@@ -47,16 +46,16 @@ export type IndentLatexResult =
 export async function indentLatexFilesInDirectory(
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
+  workspaceRoot: string | undefined = WorkspaceFS.getPath(),
+  formatter: LatexFormatter | null = resolveLatexFormatter(),
 ): Promise<IndentLatexResult> {
   log.debug(`Starting LaTeX indentation process for directory: ${directory}`);
 
-  const formatter = resolveLatexFormatter();
   if (!formatter) {
     log.debug('LaTeX formatter disabled; skipping indentation');
     return { status: 'disabled', directory, count: 0 };
   }
-  const { id, configKey, run: runFormatter } = formatter;
-  const config = getConfig<string>(configKey, '');
+  const { id, configPath: config, run: runFormatter } = formatter;
   log.debug(`Formatter: ${id}, Config: ${config}`);
 
   if (config && !(await AbsoluteFS.exists(config))) {
@@ -72,7 +71,7 @@ export async function indentLatexFilesInDirectory(
   let indentedCount = 0;
 
   async function walkDirectory(dirPath: string): Promise<void> {
-    const entries = await WorkspaceFS.readDir(dirPath);
+    const entries = await AbsoluteFS.readDir(dirPath);
     for (const [name, type] of entries) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
         continue;
@@ -98,7 +97,7 @@ export async function indentLatexFilesInDirectory(
       log.debug(`Processing file: ${fullPath}`);
 
       try {
-        if (await runFormatter(fullPath)) {
+        if (await runFormatter(fullPath, workspaceRoot, config)) {
           log.info(`Successfully formatted: ${fullPath}`);
           indentedCount++;
         } else {
@@ -111,7 +110,10 @@ export async function indentLatexFilesInDirectory(
   }
 
   try {
-    await walkDirectory(directory);
+    const absoluteDirectory = path.isAbsolute(directory)
+      ? directory
+      : path.resolve(workspaceRoot ?? '.', directory);
+    await walkDirectory(absoluteDirectory);
 
     log.info(`${indentedCount} .tex files have been formatted in ${directory}`);
     return { status: 'formatted', directory, count: indentedCount };

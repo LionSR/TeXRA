@@ -1,14 +1,19 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
+
+import { it } from '@effect/vitest';
+// Test composition imports
 
 // Third-party imports
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import type { RunId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY, type ToolResult } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import * as execUtils from '@utils/system/execUtils';
@@ -49,30 +54,44 @@ describe('BashTool error feedback', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns foreground command failures in the model tool-result payload', async () => {
-    stubBashApprovalDisabled();
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
-      success: false,
-      stdout: 'stdout failure guidance',
-      stderr: 'stderr failure details',
-      timedOut: false,
-      exitCode: 2,
-    });
+  it.effect(
+    'returns foreground command failures in the model tool-result payload',
+    () =>
+      Effect.gen(function* () {
+        stubBashApprovalDisabled();
+        vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
+          success: false,
+          stdout: 'stdout failure guidance',
+          stderr: 'stderr failure details',
+          timedOut: false,
+          exitCode: 2,
+        });
 
-    const result = await new BashTool().call({ command: 'echo long' });
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('Command failed');
-    expect(result.error).toContain('stderr failure details');
-    expect(result.error).toContain('stdout failure guidance');
+        const result = yield* new BashTool().call({ command: 'echo long' });
+        expect(result.status).toBe('error');
+        expect(result.error).toContain('Command failed');
+        expect(result.error).toContain('stderr failure details');
+        expect(result.error).toContain('stdout failure guidance');
 
-    const output = toolUseOutput(result);
+        const output = toolUseOutput(result);
 
-    expect(output).toContain('Command failed');
-    expect(output).toContain('stderr failure details');
-    expect(output).toContain('stdout failure guidance');
-  });
+        expect(output).toContain('Command failed');
+        expect(output).toContain('stderr failure details');
+        expect(output).toContain('stdout failure guidance');
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'bash-tool' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it.each([
+  it.effect.each([
     {
       name: 'spawn failure',
       stderr: 'spawn missing-command ENOENT',
@@ -85,123 +104,226 @@ describe('BashTool error feedback', () => {
     },
   ])(
     'preserves $name fallback diagnostics without stream chunks',
-    async ({ stderr, exitCode }) => {
-      stubBashApprovalDisabled();
-      vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
-        success: false,
-        stdout: '',
-        stderr,
-        timedOut: false,
-        exitCode,
-      });
+    ({ stderr, exitCode }) =>
+      Effect.gen(function* () {
+        stubBashApprovalDisabled();
+        vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
+          success: false,
+          stdout: '',
+          stderr,
+          timedOut: false,
+          exitCode,
+        });
 
-      const result = await new BashTool().call({ command: 'missing-command' });
-      expect(result.status).toBe('error');
-      expect(result.error).toContain(stderr);
-    },
+        const result = yield* new BashTool().call({
+          command: 'missing-command',
+        });
+        expect(result.status).toBe('error');
+        expect(result.error).toContain(stderr);
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'bash-tool' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
   );
 
-  it('rejects shell-level backgrounding before command run', async () => {
-    stubBashApprovalDisabled();
-    const executeSpy = vi.spyOn(execUtils, 'executeCommand');
+  it.effect('rejects shell-level backgrounding before command run', () =>
+    Effect.gen(function* () {
+      stubBashApprovalDisabled();
+      const executeSpy = vi.spyOn(execUtils, 'executeCommand');
 
-    const result = await new BashTool().call({
-      command:
-        'nohup python verify_residual_order.py > verify_residual_order_run.log 2>&1 &\necho "PID: $!"',
-    });
+      const result = yield* new BashTool().call({
+        command:
+          'nohup python verify_residual_order.py > verify_residual_order_run.log 2>&1 &\necho "PID: $!"',
+      });
 
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('shell-level backgrounding');
-    expect(result.error).toContain('run_in_background: true');
-    expect(executeSpy).not.toHaveBeenCalled();
-  });
+      expect(result.status).toBe('error');
+      expect(result.error).toContain('shell-level backgrounding');
+      expect(result.error).toContain('run_in_background: true');
+      expect(executeSpy).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('does not reject ampersands in later shell command segments', async () => {
-    stubBashApprovalDisabled();
-    const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-      success: true,
-      stdout: 'done',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+  it.effect('does not reject ampersands in later shell command segments', () =>
+    Effect.gen(function* () {
+      stubBashApprovalDisabled();
+      const executeSpy = vi
+        .spyOn(execUtils, 'executeCommand')
+        .mockResolvedValue({
+          success: true,
+          stdout: 'done',
+          stderr: '',
+          timedOut: false,
+          exitCode: 0,
+        });
 
-    const result = await new BashTool().call({
-      command: 'nohup longtask; echo done &',
-    });
+      const result = yield* new BashTool().call({
+        command: 'nohup longtask; echo done &',
+      });
 
-    expect(result.status).toBe('executed');
-    expect(executeSpy).toHaveBeenCalledOnce();
-  });
+      expect(result.status).toBe('executed');
+      expect(executeSpy).toHaveBeenCalledOnce();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('reports an explicit approval rejection to the agent', async () => {
-    vi.mocked(requestBashApproval).mockReturnValueOnce(
-      Effect.succeed({ action: 'reject', feedback: 'No thanks.' }),
-    );
-    const rejected = await new BashTool().call({ command: 'echo rejected' });
-    expect(rejected.status).toBe('error');
-    expect(rejected.error).toContain('User rejected command');
-    expect(rejected.userInstruction).toBe('No thanks.');
-  });
+  it.effect('reports an explicit approval rejection to the agent', () =>
+    Effect.gen(function* () {
+      vi.mocked(requestBashApproval).mockReturnValueOnce(
+        Effect.succeed({ action: 'reject', feedback: 'No thanks.' }),
+      );
+      const rejected = yield* new BashTool().call({ command: 'echo rejected' });
+      expect(rejected.status).toBe('error');
+      expect(rejected.error).toContain('User rejected command');
+      expect(rejected.userInstruction).toBe('No thanks.');
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('does not present generated rejection guidance as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockReturnValueOnce(
-      Effect.succeed({ action: 'reject' }),
-    );
-    const rejected = await new BashTool().call({ command: 'echo rejected' });
+  it.effect(
+    'does not present generated rejection guidance as user feedback',
+    () =>
+      Effect.gen(function* () {
+        vi.mocked(requestBashApproval).mockReturnValueOnce(
+          Effect.succeed({ action: 'reject' }),
+        );
+        const rejected = yield* new BashTool().call({
+          command: 'echo rejected',
+        });
 
-    expect(rejected.status).toBe('error');
-    expect(rejected.error).toContain('Do not retry');
-    expect(rejected.userInstruction).toBeUndefined();
+        expect(rejected.status).toBe('error');
+        expect(rejected.error).toContain('Do not retry');
+        expect(rejected.userInstruction).toBeUndefined();
 
-    const output = toolUseOutput(rejected);
+        const output = toolUseOutput(rejected);
 
-    expect(output).toContain('Do not retry');
-    expect(output).not.toContain('User feedback:');
-  });
+        expect(output).toContain('Do not retry');
+        expect(output).not.toContain('User feedback:');
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'bash-tool' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it('does not present an approval-policy denial as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockReturnValueOnce(
-      Effect.succeed({
-        action: 'deny',
-        reason: 'Denied by TeXRA approval policy.',
-      }),
-    );
-    const rejected = await new BashTool().call({ command: 'echo rejected' });
+  it.effect('does not present an approval-policy denial as user feedback', () =>
+    Effect.gen(function* () {
+      vi.mocked(requestBashApproval).mockReturnValueOnce(
+        Effect.succeed({
+          action: 'deny',
+          reason: 'Denied by TeXRA approval policy.',
+        }),
+      );
+      const rejected = yield* new BashTool().call({ command: 'echo rejected' });
 
-    expect(rejected.status).toBe('error');
-    expect(rejected.error).toContain('Command denied');
-    expect(rejected.error).toContain('Denied by TeXRA approval policy.');
-    expect(rejected.error).not.toContain('User rejected command');
-    expect(rejected.userInstruction).toBeUndefined();
+      expect(rejected.status).toBe('error');
+      expect(rejected.error).toContain('Command denied');
+      expect(rejected.error).toContain('Denied by TeXRA approval policy.');
+      expect(rejected.error).not.toContain('User rejected command');
+      expect(rejected.userInstruction).toBeUndefined();
 
-    const output = toolUseOutput(rejected);
+      const output = toolUseOutput(rejected);
 
-    expect(output).toContain('Denied by TeXRA approval policy.');
-    expect(output).not.toContain('User feedback:');
-  });
+      expect(output).toContain('Denied by TeXRA approval policy.');
+      expect(output).not.toContain('User feedback:');
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('preserves policy-denial provenance when its reason is blank', async () => {
-    vi.mocked(requestBashApproval).mockReturnValueOnce(
-      Effect.succeed({ action: 'deny', reason: '   ' }),
-    );
-    const rejected = await new BashTool().call({ command: 'echo rejected' });
+  it.effect('preserves policy-denial provenance when its reason is blank', () =>
+    Effect.gen(function* () {
+      vi.mocked(requestBashApproval).mockReturnValueOnce(
+        Effect.succeed({ action: 'deny', reason: '   ' }),
+      );
+      const rejected = yield* new BashTool().call({ command: 'echo rejected' });
 
-    expect(rejected.error).toContain('Command denied');
-    expect(rejected.error).not.toContain('User rejected command');
-    expect(rejected.error).not.toContain('Do not retry');
-    expect(rejected.userInstruction).toBeUndefined();
-  });
+      expect(rejected.error).toContain('Command denied');
+      expect(rejected.error).not.toContain('User rejected command');
+      expect(rejected.error).not.toContain('Do not retry');
+      expect(rejected.userInstruction).toBeUndefined();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('does not present an automatic cancellation as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockReturnValueOnce(
-      Effect.succeed({ action: 'cancel', cause: 'Session disposed.' }),
-    );
-    const rejected = await new BashTool().call({ command: 'echo rejected' });
+  it.effect('does not present an automatic cancellation as user feedback', () =>
+    Effect.gen(function* () {
+      vi.mocked(requestBashApproval).mockReturnValueOnce(
+        Effect.succeed({ action: 'cancel', cause: 'Session disposed.' }),
+      );
+      const rejected = yield* new BashTool().call({ command: 'echo rejected' });
 
-    expect(rejected.error).toContain('Command cancelled');
-    expect(rejected.error).toContain('Session disposed.');
-    expect(rejected.error).not.toContain('User rejected command');
-    expect(rejected.userInstruction).toBeUndefined();
-  });
+      expect(rejected.error).toContain('Command cancelled');
+      expect(rejected.error).toContain('Session disposed.');
+      expect(rejected.error).not.toContain('User rejected command');
+      expect(rejected.userInstruction).toBeUndefined();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 });

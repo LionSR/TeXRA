@@ -4,7 +4,15 @@ import '@test/support/defaultSessionTestSetup';
 import { randomUUID } from 'node:crypto';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -35,6 +43,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -259,7 +268,11 @@ function agentRunTestLayer(init: HarnessInit) {
 }
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(invokerLayer(init.turns), followUpsLayer).pipe(
+  return Layer.mergeAll(
+    invokerLayer(init.turns),
+    followUpsLayer,
+    nativeToolTestLayer(),
+  ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
     Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
   );
@@ -267,27 +280,25 @@ function loopLayer(init: HarnessInit) {
 
 /** A barrier tool whose call never settles, so a stop catches it in flight. */
 function blockingTool(name: string) {
-  let started: () => void = () => {};
-  const startedPromise = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  const call = vi.fn(async () => {
-    started();
-    await new Promise(() => {});
-    return { status: 'executed' as const, output: `${name} done` };
-  });
+  const started = Deferred.makeUnsafe<void>();
+  const call = vi.fn(() =>
+    Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+  );
+
   return {
     call,
-    startedPromise,
+    started: Deferred.await(started),
     tool: { call, definition: { name } } as ITool,
   };
 }
 
 function executedTool(name: string) {
-  const call = vi.fn(async () => ({
-    status: 'executed' as const,
-    output: `${name} done`,
-  }));
+  const call = vi.fn(() =>
+    Effect.succeed({
+      status: 'executed' as const,
+      output: `${name} done`,
+    }),
+  );
   return { call, tool: { call, definition: { name } } as ITool };
 }
 
@@ -365,7 +376,7 @@ describe('tool dispatch interrupted mid-turn', () => {
             ),
           ),
         );
-        yield* Effect.promise(() => toolB.startedPromise);
+        yield* toolB.started;
         yield* Fiber.interrupt(fiber);
 
         // call-a settled before the stop, call-b was in flight, call-c is a
@@ -463,7 +474,7 @@ describe('tool dispatch interrupted mid-turn', () => {
             ),
           ),
         );
-        yield* Effect.promise(() => toolB.startedPromise);
+        yield* toolB.started;
         yield* Fiber.interrupt(fiber);
 
         // The first resume asks, and the prompt is closed under it.

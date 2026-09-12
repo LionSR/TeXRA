@@ -1,13 +1,7 @@
 import { Effect } from 'effect';
 
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   decideTexraApproval,
@@ -191,12 +185,18 @@ export function firstChangedLine(
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
     request: Omit<ToolEditApprovalRequest, 'permission'>,
-  ): Effect.fn.Return<ToolEditApprovalResult, Error> {
+  ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
-    const context = tryUseRunContext();
-    const session = currentSession();
-    const contextRunId = getRunContextRunId(context);
+    const call = yield* ToolCall;
+    const run = call.run;
+    if (!run) {
+      return yield* Effect.fail(
+        new Error('A tool-edit approval needs an active run.'),
+      );
+    }
+    const { session } = run;
+    const contextRunId = run.runId;
     const preparedRequest =
       request.runId || !contextRunId
         ? request
@@ -215,11 +215,11 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       policy: session.approvalPolicy,
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
-      canPresent: context?.approvalPromptsUnavailable !== true,
+      canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
     });
     if (decision === 'allow') return acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
-      context?.onApprovalPolicyDenial?.();
+      call.onApprovalPolicyDenial?.();
       return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
     }
     if (!runId) {
@@ -309,41 +309,53 @@ interface WriteApprovedContentResult {
  * as read after the operation succeeds, so every approved-write caller keeps
  * the later-edit guard in sync.
  */
-export async function writeApprovedContent(
-  path: string,
-  originalContent: string,
-  finalContent: string,
-): Promise<WriteApprovedContentResult> {
-  const exists = await WorkspaceFS.exists(path);
-  let baseContent = '';
-  let appliedContent = finalContent;
-  let shouldWrite = true;
+export const writeApprovedContent = Effect.fn('writeApprovedContent')(
+  function* (
+    path: string,
+    originalContent: string,
+    finalContent: string,
+  ): Effect.fn.Return<WriteApprovedContentResult, unknown, ToolCall> {
+    const call = yield* ToolCall;
+    const exists = yield* Effect.tryPromise({
+      try: () => call.inScope(() => WorkspaceFS.exists(path)),
+      catch: (cause) => cause,
+    });
+    let baseContent = '';
+    let appliedContent = finalContent;
+    let shouldWrite = true;
 
-  if (exists) {
-    // All content is already LF-normalized at the FS read boundary,
-    // so comparisons work directly without extra normalization.
-    const currentContent = await WorkspaceFS.read(path);
-    baseContent = currentContent;
+    if (exists) {
+      // All content is already LF-normalized at the FS read boundary,
+      // so comparisons work directly without extra normalization.
+      const currentContent = yield* Effect.tryPromise({
+        try: () => call.inScope(() => WorkspaceFS.read(path)),
+        catch: (cause) => cause,
+      });
+      baseContent = currentContent;
 
-    if (currentContent === finalContent || originalContent === finalContent) {
-      appliedContent = currentContent;
-      shouldWrite = false;
-    } else if (currentContent !== originalContent) {
-      const { content: patchedContent, results } = applyPatchToText(
-        originalContent,
-        finalContent,
-        currentContent,
-      );
-      appliedContent = results.every(Boolean) ? patchedContent : finalContent;
+      if (currentContent === finalContent || originalContent === finalContent) {
+        appliedContent = currentContent;
+        shouldWrite = false;
+      } else if (currentContent !== originalContent) {
+        const { content: patchedContent, results } = applyPatchToText(
+          originalContent,
+          finalContent,
+          currentContent,
+        );
+        appliedContent = results.every(Boolean) ? patchedContent : finalContent;
+      }
     }
-  }
 
-  if (shouldWrite) {
-    await WorkspaceFS.write(path, appliedContent);
-  }
-  recordToolFileRead(path);
-  return { appliedContent, baseContent };
-}
+    if (shouldWrite) {
+      yield* Effect.tryPromise({
+        try: () => call.inScope(() => WorkspaceFS.write(path, appliedContent)),
+        catch: (cause) => cause,
+      });
+    }
+    yield* recordToolFileRead(path);
+    return { appliedContent, baseContent };
+  },
+);
 
 /**
  * Append the unified user-adjustment diff note to a base output message, or

@@ -14,8 +14,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -223,9 +221,9 @@ export class ZoteroCollectionsTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
 }) {
-  protected execute(input: ZoteroCollectionsInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(listCollections(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(
+    input: ZoteroCollectionsInput,
+  ): Effect.Effect<ToolResult, unknown> {
+    return listCollections(input);
   }
 }

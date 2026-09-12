@@ -1,19 +1,13 @@
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   fileLocationDisplayPath,
   ToolError,
@@ -22,7 +16,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import {
-  currentToolRoot,
+  parseWorkingDirectory,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -56,6 +50,7 @@ interface OpenPdfPorts {
    * absolute run-storage path must resolve without ever asking for one.
    */
   readonly toolRoot: () => string | undefined;
+  readonly inScope: <A>(operation: () => A) => A;
   /**
    * The requested path's run-storage identity, resolved in the caller's turn:
    * the run-storage root is `workspaceRoots().storage`, which is per-session
@@ -110,21 +105,26 @@ export class OpenPdfTool extends defineTool({
     'Open a PDF file in the host PDF viewer. The tool accepts workspace-relative paths, working-directory-relative paths, and absolute run-storage paths.',
   schema: OpenPdfInputSchema,
 }) {
-  protected execute(input: OpenPdfInput): Promise<ToolResult> {
-    // The session and the run it belongs to are the calling turn's, so they
-    // are read here and handed to the program rather than from a fiber.
-    const runId = getRunContextRunId(tryUseRunContext());
+  protected readonly execute = Effect.fn('OpenPdfTool.call')(function* (
+    this: OpenPdfTool,
+    input: OpenPdfInput,
+  ) {
+    const call = yield* ToolCall;
+    const runId = call.run?.runId;
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
-      openPdf: currentSession().interactions.openPdf,
-      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      openPdf: call.run?.session.interactions.openPdf,
+      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
+      inScope: call.inScope,
       runStorageLocation:
         runId && trimmedPath
-          ? runStorageLocationFromAbsolutePath(trimmedPath, runId)
+          ? call.inScope(() =>
+              runStorageLocationFromAbsolutePath(trimmedPath, runId),
+            )
           : undefined,
     };
-    return effectRuntime().runPromise(openPdfProgram(ports, input));
-  }
+    return yield* openPdfProgram(ports, input);
+  });
 }
 
 const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
@@ -141,7 +141,9 @@ const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
       return ports.runStorageLocation;
     }
 
-    const resolved = resolveWorkspaceRelativePath(trimmed, ports.toolRoot());
+    const resolved = ports.inScope(() =>
+      resolveWorkspaceRelativePath(trimmed, ports.toolRoot()),
+    );
     return pathToLocation(resolved.absolute);
   },
 );

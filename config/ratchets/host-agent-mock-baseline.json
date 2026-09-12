@@ -92,11 +92,6 @@
       "specifier": "@agent/storage"
     },
     {
-      "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/RunContext"
-    },
-    {
       "file": "src/test-kernel/support/agentCatalogMock.ts",
       "form": "mock",
       "specifier": "@agent/index"

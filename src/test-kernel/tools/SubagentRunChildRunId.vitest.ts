@@ -2,17 +2,18 @@
 // start a child when the parent run context carries no session, and it reports
 // a detached run-loop rejection through the `childRunLoop` channel log.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import type { DelegationParent } from '@tools/delegation/proposalFlow';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   registerRun: vi.fn(),
-  tryUseRunContext: vi.fn(),
-  getCurrentToolCallContext: vi.fn(),
   childLoopError: vi.fn(),
 }));
 
@@ -65,22 +66,6 @@ vi.mock('@agent/storage/runLease', () => ({
   assertOwnedRunLease: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/RunContext', () => {
-  const readRunContextField = (context: any, field: string) =>
-    context?.kind === 'launch' ? context.runScope[field] : context?.[field];
-  return {
-    tryUseRunContext: mocks.tryUseRunContext,
-    runInSession: (_session: unknown, operation: () => unknown) => operation(),
-    getRunContextRunId: (context: any) => readRunContextField(context, 'runId'),
-    getRunContextSession: (context: any) =>
-      readRunContextField(context, 'session'),
-  };
-});
-
-vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
-  getCurrentToolCallContext: mocks.getCurrentToolCallContext,
-}));
-
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: vi.fn(),
 }));
@@ -96,18 +81,29 @@ describe('executeSubagent child run launch', () => {
     agentCategory: 'toolUse',
   } as never;
 
+  const parent: DelegationParent = {
+    model: 'gpt5',
+    tracker: new FileInteractionState(),
+    run: {
+      runId: 'parent-exec' as RunId,
+      session: { tag: 'parent-session' } as never,
+      toolPolicy: {
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: [],
+      },
+    },
+    inScope: (operation) => operation(),
+  };
+
   function runDefaultSubagent() {
-    return Effect.runPromise(
-      Effect.provide(
-        executeSubagent(
-          mocks.tryUseRunContext(),
-          mocks.getCurrentToolCallContext(),
-          defaultPayload,
-          'proof-checker',
-          orchestratorRunId,
-        ),
-        fakeProcessServices(),
+    return Effect.provide(
+      executeSubagent(
+        parent,
+        defaultPayload,
+        'proof-checker',
+        orchestratorRunId,
       ),
+      fakeProcessServices(),
     );
   }
 
@@ -115,46 +111,28 @@ describe('executeSubagent child run launch', () => {
     vi.clearAllMocks();
     mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.tryUseRunContext.mockReturnValue({
-      runId: 'parent-exec',
-      session: { tag: 'parent-session' },
-      approvalPromptsUnavailable: false,
-      runtimeUnavailableTools: [],
-      stopAfterCycle: false,
-    });
-    mocks.getCurrentToolCallContext.mockReturnValue(undefined);
   });
 
-  it('requires the run context to carry its owning session', async () => {
-    mocks.tryUseRunContext.mockReturnValue({
-      runId: 'parent-exec',
-      approvalPromptsUnavailable: false,
-      runtimeUnavailableTools: [],
-      stopAfterCycle: false,
-    });
+  it.effect(
+    'logs a detached run-loop rejection through the childRunLoop channel log',
+    () =>
+      Effect.gen(function* () {
+        const lateFailure = new Error('late subagent finalization failed');
+        mocks.startChildRunLoop.mockReturnValue(
+          Effect.forkDetach(Effect.fail(lateFailure)),
+        );
 
-    await expect(runDefaultSubagent()).resolves.toMatchObject({
-      status: 'error',
-      summary: 'Delegation session unavailable',
-      diagnostics: { type: 'missing_session' },
-    });
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {
-    const lateFailure = new Error('late subagent finalization failed');
-    mocks.startChildRunLoop.mockReturnValue(
-      Effect.forkDetach(Effect.fail(lateFailure)),
-    );
-
-    await expect(runDefaultSubagent()).resolves.toMatchObject({
-      status: 'executed',
-    });
-    await vi.waitFor(() => {
-      expect(mocks.childLoopError).toHaveBeenCalledWith(
-        "Subagent 'proof-checker' run loop failed after launch",
-        { data: lateFailure },
-      );
-    });
-  });
+        expect(yield* runDefaultSubagent()).toMatchObject({
+          status: 'executed',
+        });
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(mocks.childLoopError).toHaveBeenCalledWith(
+              "Subagent 'proof-checker' run loop failed after launch",
+              { data: lateFailure },
+            );
+          }),
+        );
+      }),
+  );
 });

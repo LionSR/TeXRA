@@ -113,6 +113,33 @@ describe('arXiv source download filenames', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
   it.live(
+    'uses the supplied project root when checking downloaded sources',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-project-', tempDirs),
+        );
+        const sourceDirectory = path.join(
+          workspaceRoot,
+          'References/2404.12175',
+        );
+        yield* Effect.promise(async () => {
+          await fs.mkdir(sourceDirectory, { recursive: true });
+          await fs.writeFile(
+            path.join(sourceDirectory, 'main.tex'),
+            'project source',
+          );
+        });
+        const result = yield* ArxivProcessor.downloadSource('2404.12175', {
+          workspaceRoot,
+          formatter: null,
+          autoIndent: false,
+        });
+        expect(result).toEqual({ path: sourceDirectory, alreadyExisted: true });
+      }),
+  );
+
+  it.live(
     'closes an interrupted body writer before deleting its partial download',
     () =>
       Effect.gen(function* () {

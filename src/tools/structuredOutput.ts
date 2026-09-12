@@ -1,10 +1,15 @@
+import { Effect } from 'effect';
 // Third-party imports
 import { z } from 'zod';
 
 // Internal imports
-import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry as IToolRegistry,
+} from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
+  ToolError,
   JsonValueSchema,
   type JsonValue,
   type ToolResult,
@@ -185,10 +190,10 @@ export function normalizeStructuredOutputSchema(
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
   capture: (value: JsonValue) => void,
-): ITool {
+): ITool<unknown, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
-  const GeneratedTool = defineTool({
+  const GeneratedTool = defineTool<unknown, never>({
     name: SUBMIT_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
@@ -206,19 +211,26 @@ export function buildTerminalTool(
       this.capture = capture;
     }
 
-    protected async execute(input: unknown): Promise<ToolResult> {
-      if (this.captured) {
-        throw new Error('submit_output can only be accepted once per run.');
-      }
-      const jsonValue = JsonValueSchema.parse(input);
-      this.captured = true;
-      this.capture(jsonValue);
-      return {
-        status: 'executed',
-        endTurn: true,
-        summary: 'Structured output captured.',
-        output: 'Structured output captured.',
-      };
+    protected execute(input: unknown): Effect.Effect<ToolResult, unknown> {
+      return Effect.try({
+        try: (): ToolResult => {
+          if (this.captured) {
+            throw new ToolError(
+              'submit_output can only be accepted once per run.',
+            );
+          }
+          const jsonValue = JsonValueSchema.parse(input);
+          this.captured = true;
+          this.capture(jsonValue);
+          return {
+            status: 'executed',
+            endTurn: true,
+            summary: 'Structured output captured.',
+            output: 'Structured output captured.',
+          };
+        },
+        catch: (error) => error,
+      });
     }
   }
 

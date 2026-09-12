@@ -1,24 +1,22 @@
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
 import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { glob } from 'glob';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
-  currentToolRoot,
+  parseWorkingDirectory,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
@@ -55,6 +53,7 @@ interface GlobMatchInfo {
 interface GlobPorts {
   readonly signal: AbortSignal | undefined;
   readonly toolRoot: () => string | undefined;
+  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGlob = Effect.fn('GlobTool.execute')(function* (
@@ -62,8 +61,12 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   input: GlobInput,
 ): Effect.fn.Return<ToolResult, unknown> {
   const root = ports.toolRoot();
-  const { path, display } = resolveAndFormat(input.path ?? undefined, root);
-  const gitignore = yield* getGitignoreMatcher();
+  const { path, display } = ports.inScope(() =>
+    resolveAndFormat(input.path ?? undefined, root),
+  );
+  const gitignore = yield* getGitignoreMatcher(
+    ports.inScope(() => WorkspaceFS.getPath()),
+  );
 
   const cancelSignal = ports.signal;
   const matches = yield* Effect.tryPromise({
@@ -97,7 +100,10 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     match: string,
   ): Effect.fn.Return<GlobMatchInfo | null, unknown> {
     const resolved = yield* Effect.try({
-      try: () => joinWorkspaceRelativePath(path.relative, match, root),
+      try: () =>
+        ports.inScope(() =>
+          joinWorkspaceRelativePath(path.relative, match, root),
+        ),
       catch: (err) =>
         new ToolError(
           `Match resolved outside the working directory: ${match} (${toErrorMessage(err)})`,
@@ -112,7 +118,9 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
       return null;
     }
 
-    return yield* hostPort(() => WorkspaceFS.stat(resolved.fsPath)).pipe(
+    return yield* hostPort(() =>
+      ports.inScope(() => WorkspaceFS.stat(resolved.fsPath)),
+    ).pipe(
       Effect.map((stat): GlobMatchInfo | null => ({
         relativePath,
         mtime: stat.mtime,
@@ -155,13 +163,16 @@ export class GlobTool extends defineTool({
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
 }) {
-  protected execute(input: GlobInput): Promise<ToolResult> {
-    // The working directory belongs to the calling turn, so it is bound here
-    // and handed to the program rather than read from a fiber.
+  protected readonly execute = Effect.fn('GlobTool.call')(function* (
+    this: GlobTool,
+    input: GlobInput,
+  ) {
+    const call = yield* ToolCall;
     const ports: GlobPorts = {
-      signal: getCurrentToolCallContext()?.signal,
-      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      signal: yield* Effect.abortSignal,
+      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
+      inScope: call.inScope,
     };
-    return effectRuntime().runPromise(runGlob(ports, input));
-  }
+    return yield* runGlob(ports, input);
+  });
 }

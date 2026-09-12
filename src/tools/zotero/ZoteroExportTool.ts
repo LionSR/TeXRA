@@ -10,8 +10,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -85,9 +83,9 @@ export class ZoteroExportTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
 }) {
-  protected execute(input: ZoteroExportInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(exportEntries(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(
+    input: ZoteroExportInput,
+  ): Effect.Effect<ToolResult, unknown> {
+    return exportEntries(input);
   }
 }

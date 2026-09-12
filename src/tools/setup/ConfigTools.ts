@@ -12,13 +12,11 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { effectRuntime } from '@platform/processRuntime';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
   ToolError,
   type StateSettingEntry,
-  type ToolResult,
 } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
@@ -78,15 +76,16 @@ export class ReadConfigTool extends defineTool({
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
 }) {
-  // Reading configuration is synchronous; there is no program to run.
-  protected async execute(input: ReadConfigInput): Promise<ToolResult> {
-    const value = texraScopedConfig.get(input.key);
-    const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    const description = settingByKey(input.key)?.description;
-    return executed(
-      `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
-      `Read ${input.key}`,
-    );
+  protected execute(input: ReadConfigInput) {
+    return Effect.sync(() => {
+      const value = texraScopedConfig.get(input.key);
+      const json = JSON.stringify(value, null, 2) ?? 'undefined';
+      const description = settingByKey(input.key)?.description;
+      return executed(
+        `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
+        `Read ${input.key}`,
+      );
+    });
   }
 }
 
@@ -149,7 +148,7 @@ ${ALLOWLIST_TEXT}
 Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
 }) {
-  protected execute(input: UpdateConfigInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(updateConfig(input));
+  protected execute(input: UpdateConfigInput) {
+    return updateConfig(input);
   }
 }

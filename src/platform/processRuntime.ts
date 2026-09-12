@@ -21,14 +21,17 @@ import type { Secrets } from './secrets';
  * four cohort-A tags beside the records and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer.
  */
-export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+export type ProcessServices =
   | HttpClient.HttpClient
   | InquiryRecords
   | UpdateCheckRecords
   | Secrets
   | AppState
   | SetupPlatform
-  | ToolInjections,
+  | ToolInjections;
+
+export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices,
   never
 >;
 

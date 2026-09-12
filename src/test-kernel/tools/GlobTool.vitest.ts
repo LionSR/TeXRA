@@ -1,15 +1,19 @@
 import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { errnoError } from '@test/support/fsTestUtils';
-import { withTempDir } from '@test/support/tempDirPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { GlobTool } from '@tools/glob';
 
 function failStatFor(
@@ -26,46 +30,68 @@ function failStatFor(
   });
 }
 
-async function withGlobWorkspace(
-  run: (workspacePath: string) => Promise<void>,
-): Promise<void> {
-  await withTempDir('texra-glob-tool-', async (workspacePath) => {
-    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
-    try {
-      await Promise.all(
-        [
-          'new.tex',
-          'old.tex',
-          'vanished.tex',
-          'blocked.tex',
-          'unreadable.tex',
-        ].map((name) => writeFile(path.join(workspacePath, name), name)),
-      );
-      await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
-      await utimes(path.join(workspacePath, 'old.tex'), 1, 1);
-      await utimes(path.join(workspacePath, 'new.tex'), 2, 2);
-      await run(workspacePath);
-    } finally {
-      vi.restoreAllMocks();
-      await installPlatform();
-    }
+function withGlobWorkspace(
+  run: (workspacePath: string) => Effect.Effect<void, unknown, ToolServices>,
+) {
+  return Effect.gen(function* () {
+    yield* withTempDirEffect('texra-glob-tool-', (workspacePath) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ workspacePath }, { fs: nodeFilesystem }),
+        );
+        try {
+          yield* Effect.promise(() =>
+            Promise.all(
+              [
+                'new.tex',
+                'old.tex',
+                'vanished.tex',
+                'blocked.tex',
+                'unreadable.tex',
+              ].map((name) => writeFile(path.join(workspacePath, name), name)),
+            ),
+          );
+          yield* Effect.promise(() =>
+            writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n'),
+          );
+          yield* Effect.promise(() =>
+            utimes(path.join(workspacePath, 'old.tex'), 1, 1),
+          );
+          yield* Effect.promise(() =>
+            utimes(path.join(workspacePath, 'new.tex'), 2, 2),
+          );
+          yield* run(workspacePath);
+        } finally {
+          vi.restoreAllMocks();
+          yield* Effect.promise(() => installPlatform());
+        }
+      }),
+    );
   });
 }
 
 describe('GlobTool match metadata', () => {
-  it('orders matches by modification time', async () => {
-    await withGlobWorkspace(async () => {
-      const result = await new GlobTool().call({ pattern: '{old,new}.tex' });
+  it.live('orders matches by modification time', () =>
+    Effect.gen(function* () {
+      yield* withGlobWorkspace(() =>
+        Effect.gen(function* () {
+          const result = yield* new GlobTool().call({
+            pattern: '{old,new}.tex',
+          });
 
-      expect(result.status).toBe('executed');
-      expect(result.output).toContain('new.tex');
-      expect(result.output).toContain('old.tex');
-      const output = result.output ?? '';
-      expect(output.indexOf('new.tex')).toBeLessThan(output.indexOf('old.tex'));
-    });
-  });
+          expect(result.status).toBe('executed');
+          expect(result.output).toContain('new.tex');
+          expect(result.output).toContain('old.tex');
+          const output = result.output ?? '';
+          expect(output.indexOf('new.tex')).toBeLessThan(
+            output.indexOf('old.tex'),
+          );
+        }),
+      );
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 
-  it.each([
+  it.live.each([
     {
       fileName: 'vanished.tex',
       error: errnoError('ENOENT', 'match disappeared'),
@@ -76,57 +102,76 @@ describe('GlobTool match metadata', () => {
     },
   ])(
     'omits a match whose metadata lookup fails with $error.code',
-    async ({ fileName, error }) => {
-      await withGlobWorkspace(async (workspacePath) => {
-        failStatFor(workspacePath, fileName, error);
+    ({ fileName, error }) =>
+      Effect.gen(function* () {
+        yield* withGlobWorkspace((workspacePath) =>
+          Effect.gen(function* () {
+            failStatFor(workspacePath, fileName, error);
 
-        const result = await new GlobTool().call({ pattern: fileName });
+            const result = yield* new GlobTool().call({ pattern: fileName });
 
-        expect(result).toMatchObject({ status: 'executed' });
-        expect(result.output).toContain('(no matches)');
-      });
-    },
+            expect(result).toMatchObject({ status: 'executed' });
+            expect(result.output).toContain('(no matches)');
+          }),
+        );
+      }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
-  it('surfaces operational stat failures through the tool boundary', async () => {
-    await withGlobWorkspace(async (workspacePath) => {
-      failStatFor(
-        workspacePath,
-        'unreadable.tex',
-        errnoError('EACCES', 'match is unreadable'),
+  it.live('surfaces operational stat failures through the tool boundary', () =>
+    Effect.gen(function* () {
+      yield* withGlobWorkspace((workspacePath) =>
+        Effect.gen(function* () {
+          failStatFor(
+            workspacePath,
+            'unreadable.tex',
+            errnoError('EACCES', 'match is unreadable'),
+          );
+
+          expect(
+            yield* new GlobTool().call({ pattern: 'unreadable.tex' }),
+          ).toMatchObject({
+            status: 'error',
+            error: 'match is unreadable',
+          });
+        }),
       );
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 
-      await expect(
-        new GlobTool().call({ pattern: 'unreadable.tex' }),
-      ).resolves.toMatchObject({
-        status: 'error',
-        error: 'match is unreadable',
-      });
-    });
-  });
+  it.live(
+    'does not pass unrestricted external paths to the workspace ignore matcher',
+    () =>
+      Effect.gen(function* () {
+        yield* withGlobWorkspace(() =>
+          Effect.gen(function* () {
+            yield* withTempDirEffect('texra-glob-external-', (externalPath) =>
+              Effect.gen(function* () {
+                const externalDistPath = path.join(externalPath, 'dist');
+                yield* Effect.promise(() => mkdir(externalDistPath));
+                yield* Effect.promise(() =>
+                  writeFile(
+                    path.join(externalDistPath, 'external.tex'),
+                    'external',
+                  ),
+                );
+                yield* Effect.promise(() =>
+                  workspaceRoots().workspaceState.update(
+                    WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+                    false,
+                  ),
+                );
 
-  it('does not pass unrestricted external paths to the workspace ignore matcher', async () => {
-    await withGlobWorkspace(async () => {
-      await withTempDir('texra-glob-external-', async (externalPath) => {
-        const externalDistPath = path.join(externalPath, 'dist');
-        await mkdir(externalDistPath);
-        await writeFile(
-          path.join(externalDistPath, 'external.tex'),
-          'external',
+                const result = yield* new GlobTool().call({
+                  pattern: '**/*.tex',
+                  path: externalPath,
+                });
+
+                expect(result).toMatchObject({ status: 'executed' });
+                expect(result.output).toContain('external.tex');
+              }),
+            );
+          }),
         );
-        await workspaceRoots().workspaceState.update(
-          WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-          false,
-        );
-
-        const result = await new GlobTool().call({
-          pattern: '**/*.tex',
-          path: externalPath,
-        });
-
-        expect(result).toMatchObject({ status: 'executed' });
-        expect(result.output).toContain('external.tex');
-      });
-    });
-  });
+      }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 });

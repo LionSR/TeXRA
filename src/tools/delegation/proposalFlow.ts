@@ -10,18 +10,15 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withRunContext, type RunContext } from '@agent/runtime/RunContext';
-import type { ToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
   AgentDelegationScope,
   RequestDecision,
-  RunId,
   ToolResult,
   ToolUseAgentProposal,
   WorkflowAgentProposal,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, ToolError } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
@@ -40,6 +37,25 @@ import {
 
 // Local file imports
 import { executeSubagent } from './subagentRun';
+
+/** Invocation capabilities required by a delegation tool after its entry check. */
+export interface DelegationParent extends ToolCallShape {
+  readonly model: string;
+  readonly run: NonNullable<ToolCallShape['run']>;
+}
+
+/** Narrow a generic tool call to the capabilities every delegation path needs. */
+export function requireDelegationParent(
+  toolName: string,
+  call: ToolCallShape,
+): DelegationParent {
+  if (!call.run || !call.model) {
+    throw new ToolError(
+      `${toolName} requires an active launched agent session.`,
+    );
+  }
+  return { ...call, run: call.run, model: call.model };
+}
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -168,13 +184,12 @@ interface DelegationProposalDecision {
 export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-    runId: RunId,
-    session: SessionHandle,
-    parentContext: RunContext | undefined,
+    parent: DelegationParent,
   ): Effect.fn.Return<
     DelegationProposalDecision,
     DatabaseNotOwner | DatabaseWriteFailed
   > {
+    const { session, runId } = parent.run;
     if (proposalApprovals(session).isBypassed(runId)) {
       return { result: { action: 'approve' }, autoApproved: true };
     }
@@ -187,7 +202,7 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     // proceed without one. `autoApproved: false` keeps the child on
     // inherited per-kind approval state, so `--approval-policy never` still
     // denies bash and edits downstream.
-    if (parentContext?.approvalPromptsUnavailable === true) {
+    if (parent.run.toolPolicy.approvalPromptsUnavailable === true) {
       return { result: { action: 'approve' }, autoApproved: false };
     }
 
@@ -206,32 +221,18 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
  * Otherwise, waits for user approval via the session's host interactions.
  */
 export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
-  session: SessionHandle,
-  parentContext: RunContext,
-  callContext: ToolCallContext | undefined,
+  parent: DelegationParent,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   agentName: string,
-  runId: RunId,
 ) {
-  const decision = yield* requestDelegationProposal(
-    proposal,
-    runId,
-    session,
-    parentContext,
-  );
+  const decision = yield* requestDelegationProposal(proposal, parent);
+  const { runId } = parent.run;
   if (decision.autoApproved) {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
-    return yield* executeSubagent(
-      parentContext,
-      callContext,
-      proposal,
-      agentName,
-      runId,
-      {
-        approvalMeta: { autoApproved: true },
-      },
-    );
+    return yield* executeSubagent(parent, proposal, agentName, runId, {
+      approvalMeta: { autoApproved: true },
+    });
   }
 
   const { result } = decision;
@@ -260,7 +261,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
       selectAvailableDelegationModel({
         requestedModel: result.model,
         parentModel: proposal.model,
-        withScope: <T>(read: () => T) => withRunContext(parentContext, read),
+        withScope: parent.inScope,
       }),
     );
     if (Exit.isFailure(modelExit)) {
@@ -277,8 +278,12 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? withRunContext(parentContext, () =>
-        getDelegationAgent(proposal.agentCategory, agentOverride),
+    ? parent.inScope(() =>
+        getDelegationAgent(
+          proposal.agentCategory,
+          agentOverride,
+          parent.delegationAgentScope ?? undefined,
+        ),
       )
     : undefined;
 
@@ -306,24 +311,17 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
     }),
   };
   const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
-  return yield* executeSubagent(
-    parentContext,
-    callContext,
-    effective,
-    effectiveAgentName,
-    runId,
-    {
-      approvalMeta: {
-        autoApproved: false,
-        ...(modelOverride && {
-          modelOverride,
-          requestedModel: proposal.model,
-        }),
-        ...(agentOverride && {
-          agentOverride,
-          requestedAgent: proposal.agent,
-        }),
-      },
+  return yield* executeSubagent(parent, effective, effectiveAgentName, runId, {
+    approvalMeta: {
+      autoApproved: false,
+      ...(modelOverride && {
+        modelOverride,
+        requestedModel: proposal.model,
+      }),
+      ...(agentOverride && {
+        agentOverride,
+        requestedAgent: proposal.agent,
+      }),
     },
-  );
+  });
 });

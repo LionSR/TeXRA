@@ -15,10 +15,10 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,
-  WorkflowAgentRunner,
   WorkflowJournalEntry,
   WorkflowScriptRunResult,
   WorkflowScriptRunOptions,
@@ -109,9 +109,11 @@ function formatWorkflowResult(result: unknown): string {
 
 export interface WorkflowScriptStrategyParams {
   readonly session: SessionHandle;
-  readonly fingerprintAgentDependencies: NonNullable<
-    WorkflowScriptRunOptions['fingerprintAgentDependencies']
-  >;
+  readonly fingerprintAgentDependencies: (
+    options: Parameters<
+      NonNullable<WorkflowScriptRunOptions['fingerprintAgentDependencies']>
+    >[0],
+  ) => Effect.Effect<string, Error>;
   /** The detached run's run id — echoed on the delivery envelope. */
   readonly runId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */
@@ -136,7 +138,9 @@ export interface WorkflowScriptStrategyParams {
   /** Snapshot read from the detached run metadata that receives subsequent writes. */
   readonly initialSnapshot?: WorkflowRunSnapshot;
   /** Persist the canonical snapshot on the detached run metadata. */
-  readonly onSnapshot?: (snapshot: WorkflowRunSnapshot) => Promise<void>;
+  readonly onSnapshot?: (
+    snapshot: WorkflowRunSnapshot,
+  ) => Effect.Effect<void, Error>;
   /** Persist-only when a headless caller awaits and returns the report itself. */
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
@@ -149,7 +153,9 @@ export interface WorkflowScriptStrategyParams {
       invocation: WorkflowAgentInvocation,
       costUsd: number | undefined,
     ) => void;
-  }) => WorkflowAgentRunner;
+  }) => (
+    invocation: WorkflowAgentInvocation,
+  ) => Effect.Effect<unknown, Error, AgentRunServices>;
 }
 
 /**
@@ -160,7 +166,7 @@ export interface WorkflowScriptStrategyParams {
  */
 export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,
-): ChildRunStrategy<WorkflowScriptRunResult> {
+): ChildRunStrategy<WorkflowScriptRunResult, AgentRunServices> {
   const runLog = createRunLogCollector();
 
   /**
@@ -280,67 +286,73 @@ export function createWorkflowScriptStrategy(
         // only source the failure path has for phase and task tallies, and by
         // construction never newer than the durable run record.
         let lastSnapshot: WorkflowRunSnapshot | undefined;
-        const projection = projectWorkflowScriptProgress(params.logger, {
-          session: params.session,
-          checkpointId: params.checkpointId,
-          parentRunId: params.parentRunId,
-          ...(params.initialSnapshot !== undefined && {
-            initialSnapshot: params.initialSnapshot,
-          }),
-          script: params.script,
-          ...(params.args != null && { args: params.args }),
-          ...(params.files !== undefined && {
-            files: params.files,
-          }),
-          signal,
-          // The session's child-run budget is the one owner of "how many at
-          // once": the engine's own default is a library fallback only.
-          concurrency: resolveChildRunConcurrencyBudget(),
-          runAgent,
-          // The one place a child's terminal fact becomes the documented
-          // agent() envelope: its output, flattened, beside the outcome and
-          // cost. The journal keeps the `RunEnd` itself.
-          toScriptValue: (value) => {
-            const parsed = RunEndSchema.safeParse(value);
-            if (!parsed.success) {
-              throw new Error(
-                `Workflow agent() result is not a run result: ${toErrorMessage(parsed.error)}`,
-                { cause: parsed.error },
-              );
-            }
-            const { outcome, error, usage, output } = parsed.data;
-            // agent() resolves only a completed child. Any other outcome
-            // is a failure, never an envelope a script could mistake
-            // for a result.
-            if (outcome !== 'completed') {
-              throw new Error(
-                `Workflow agent() result ended with ${outcome} outcome${error?.message ? `: ${error.message}` : ''}.`,
-                error ? { cause: error } : undefined,
-              );
-            }
-            return { ...output, outcome, cost: usage?.totalCost ?? 0 };
+        const projection = projectWorkflowScriptProgress<AgentRunServices>(
+          params.logger,
+          {
+            session: params.session,
+            checkpointId: params.checkpointId,
+            parentRunId: params.parentRunId,
+            ...(params.initialSnapshot !== undefined && {
+              initialSnapshot: params.initialSnapshot,
+            }),
+            script: params.script,
+            ...(params.args != null && { args: params.args }),
+            ...(params.files !== undefined && {
+              files: params.files,
+            }),
+            signal,
+            // The session's child-run budget is the one owner of "how many at
+            // once": the engine's own default is a library fallback only.
+            concurrency: resolveChildRunConcurrencyBudget(),
+            runAgent,
+            // The one place a child's terminal fact becomes the documented
+            // agent() envelope: its output, flattened, beside the outcome and
+            // cost. The journal keeps the `RunEnd` itself.
+            toScriptValue: (value) => {
+              const parsed = RunEndSchema.safeParse(value);
+              if (!parsed.success) {
+                throw new Error(
+                  `Workflow agent() result is not a run result: ${toErrorMessage(parsed.error)}`,
+                  { cause: parsed.error },
+                );
+              }
+              const { outcome, error, usage, output } = parsed.data;
+              // agent() resolves only a completed child. Any other outcome
+              // is a failure, never an envelope a script could mistake
+              // for a result.
+              if (outcome !== 'completed') {
+                throw new Error(
+                  `Workflow agent() result ended with ${outcome} outcome${error?.message ? `: ${error.message}` : ''}.`,
+                  error ? { cause: error } : undefined,
+                );
+              }
+              return { ...output, outcome, cost: usage?.totalCost ?? 0 };
+            },
+            fingerprintAgentDependencies: params.fingerprintAgentDependencies,
+            onActivity: runLog.add,
+            // This invocation's consumed results are the only entries its cost
+            // and delivery summary may claim. The engine fires after durable
+            // commit for live results and after validation for cache hits.
+            onJournalEntryConsumed: (entry) => {
+              attemptJournalByKey.set(entry.key, entry);
+            },
+            onSnapshot: (snapshot) =>
+              Effect.gen(function* () {
+                // Persist first: only a durably written snapshot may feed the
+                // delivery summary, otherwise a failed write leaves the summary
+                // reporting a newer state than /executions/{id} keeps.
+                if (params.onSnapshot) {
+                  yield* params.onSnapshot(snapshot);
+                }
+                lastSnapshot = snapshot;
+              }),
+            // The engine's control is already keyed by the grandchild run
+            // id a host targets, so the run registers it as-is.
+            onControl: (control) => {
+              unregisterControls = params.workflowControls.register(control);
+            },
           },
-          fingerprintAgentDependencies: params.fingerprintAgentDependencies,
-          onActivity: runLog.add,
-          // This invocation's consumed results are the only entries its cost
-          // and delivery summary may claim. The engine fires after durable
-          // commit for live results and after validation for cache hits.
-          onJournalEntryConsumed: (entry) => {
-            attemptJournalByKey.set(entry.key, entry);
-          },
-          onSnapshot: async (snapshot) => {
-            // Persist first: only a durably written snapshot may feed the
-            // delivery summary, otherwise a failed write leaves the summary
-            // reporting a newer state than /executions/{id} keeps.
-            await params.onSnapshot?.(snapshot);
-            lastSnapshot = snapshot;
-          },
-          // The engine's control is already keyed by the grandchild run
-          // id a host targets, so the run registers it as-is.
-          onControl: (control) => {
-            unregisterControls = params.workflowControls.register(control);
-          },
-        });
+        );
         const result = yield* Effect.exit(
           runPersistedWorkflowScript(projection.options).pipe(
             Effect.onExit((exit) =>

@@ -7,7 +7,7 @@
  * window is a duplicate that never executes.
  */
 import { Result } from 'effect';
-import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';

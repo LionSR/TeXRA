@@ -10,7 +10,7 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const BIB_CONTENT = `@article{alpha,
   title = {Alpha Paper},
@@ -27,10 +27,14 @@ describe('extractBibliography helpers', () => {
 
   it.effect('collects bibliography paths and citation keys', () =>
     Effect.gen(function* () {
-      const texPath = path.join('chapters', 'main.tex');
-      const expectedBibPath = path.join('chapters', 'references.bib');
+      const texPath = path.join('/workspace', 'chapters', 'main.tex');
+      const expectedBibPath = path.join(
+        '/workspace',
+        'chapters',
+        'references.bib',
+      );
 
-      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
+      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(`
       % comment
       \\documentclass{article}
       \\addbibresource[location=local]{references}
@@ -38,7 +42,7 @@ describe('extractBibliography helpers', () => {
       More citations \\nocite{gamma}
       % \\cite{ignored}
     `);
-      vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+      vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
         async (file) => file === expectedBibPath,
       );
 
@@ -59,11 +63,11 @@ describe('extractBibliography helpers', () => {
       Effect.gen(function* () {
         const texPath = 'paper.tex';
 
-        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
+        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(`
       \\bibliography{bib/one, bib/two.bib, } % trailing comma
       \\cite{first} \\cite{second, third}
     `);
-        vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+        vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
           async (file) => file === path.join('bib', 'two.bib'),
         );
 
@@ -86,7 +90,7 @@ describe('extractBibliography helpers', () => {
     'loads requested bibliography entries and reports missing keys',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
+        vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(BIB_CONTENT);
 
         const { entries, missingKeys } = yield* loadBibliographyEntries(
           ['references.bib'],
@@ -110,7 +114,7 @@ describe('extractBibliography helpers', () => {
 
   it.effect('loads all entries when nocite wildcard is present', () =>
     Effect.gen(function* () {
-      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
+      vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(BIB_CONTENT);
 
       const { entries, missingKeys } = yield* loadBibliographyEntries(
         ['references.bib'],

@@ -1,12 +1,18 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+
+// Third-party imports
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe } from 'vitest';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';
 
+// Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
 interface InvokeRecord {
@@ -34,89 +40,104 @@ async function setupTool(): Promise<{
   return { tool: new InvokeCommandTool(), invocations };
 }
 
+const invoke = (tool: InvokeCommandTool, input: unknown) =>
+  tool.call(input).pipe(Effect.provide(nativeToolTestLayer()));
+
 describe('InvokeCommandTool allowlist', () => {
-  it('rejects command arguments so credentials cannot reach the host', async () => {
-    const { tool, invocations } = await setupTool();
+  it.effect(
+    'rejects command arguments so credentials cannot reach the host',
+    () =>
+      Effect.gen(function* () {
+        const { tool, invocations } = yield* Effect.tryPromise(() =>
+          setupTool(),
+        );
+        const result = yield* invoke(tool, {
+          command: 'texra.setApiKey',
+          args: ['openai', 'sk-fake-secret-1234567890abcdef'],
+        });
 
-    const fakeSecret = 'sk-fake-secret-1234567890abcdef';
-    const result = await tool.call({
-      command: 'texra.setApiKey',
-      args: ['openai', fakeSecret],
-    } as never);
+        assert.equal(result.status, 'error');
+        assert.equal(invocations.length, 0);
+      }),
+  );
 
-    assert.equal(result.status, 'error');
-    assert.equal(invocations.length, 0);
-  });
+  it.effect('allows texra.setApiKey without model-supplied arguments', () =>
+    Effect.gen(function* () {
+      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
+      const result = yield* invoke(tool, { command: 'texra.setApiKey' });
 
-  it('allows texra.setApiKey without model-supplied arguments', async () => {
-    const { tool, invocations } = await setupTool();
+      assert.equal(result.status, 'executed');
+      assert.equal(invocations.length, 1);
+      assert.equal(invocations[0].command, 'texra.setApiKey');
+      assert.deepEqual(invocations[0].args, []);
+    }),
+  );
 
-    const result = await tool.call({ command: 'texra.setApiKey' });
+  it.effect('allows the TeXRA account sign-in command', () =>
+    Effect.gen(function* () {
+      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
+      yield* invoke(tool, { command: AUTH_COMMANDS.SIGN_IN });
 
-    assert.equal(result.status, 'executed');
-    assert.equal(invocations.length, 1);
-    assert.equal(invocations[0].command, 'texra.setApiKey');
-    assert.deepEqual(invocations[0].args, []);
-  });
+      assert.equal(invocations.length, 1);
+      assert.equal(invocations[0].command, AUTH_COMMANDS.SIGN_IN);
+    }),
+  );
 
-  it('allows the TeXRA account sign-in command', async () => {
-    const { tool, invocations } = await setupTool();
+  it.effect(
+    'rejects workbench.extensions.installExtension outside its dedicated tool',
+    () =>
+      Effect.gen(function* () {
+        const { tool, invocations } = yield* Effect.tryPromise(() =>
+          setupTool(),
+        );
+        const result = yield* invoke(tool, {
+          command: 'workbench.extensions.installExtension',
+        });
 
-    await tool.call({ command: AUTH_COMMANDS.SIGN_IN });
+        assert.equal(result.status, 'error');
+        assert.match(result.error ?? '', /not in the setup allowlist/);
+        assert.equal(invocations.length, 0);
+      }),
+  );
 
-    assert.equal(invocations.length, 1);
-    assert.equal(invocations[0].command, AUTH_COMMANDS.SIGN_IN);
-  });
+  it.effect('rejects arbitrary VS Code commands outside the allowlist', () =>
+    Effect.gen(function* () {
+      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
 
-  it('rejects workbench.extensions.installExtension (bypass for install_vscode_extension allowlist)', async () => {
-    const { tool, invocations } = await setupTool();
+      for (const command of [
+        'workbench.action.files.save',
+        'workbench.action.closeAllEditors',
+        'editor.action.deleteAllLines',
+        'workbench.action.terminal.sendSequence',
+        'texra.refreshApiKeyStatus',
+        'texra.refreshAllOptions',
+      ]) {
+        const result = yield* invoke(tool, { command });
+        assert.equal(result.status, 'error');
+      }
+      assert.equal(invocations.length, 0);
+    }),
+  );
 
-    const result = await tool.call({
-      command: 'workbench.extensions.installExtension',
-    });
+  it.effect('rejects empty or whitespace command names', () =>
+    Effect.gen(function* () {
+      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
+      const empty = yield* invoke(tool, { command: '' });
+      const blank = yield* invoke(tool, { command: '   ' });
 
-    assert.equal(result.status, 'error');
-    assert.match(
-      result.error ?? '',
-      /not in the setup allowlist/,
-      'error should mention allowlist',
-    );
-    assert.equal(invocations.length, 0, 'must not invoke the command');
-  });
+      assert.equal(empty.status, 'error');
+      assert.equal(blank.status, 'error');
+      assert.equal(invocations.length, 0);
+    }),
+  );
 
-  it('rejects arbitrary VS Code commands outside the allowlist', async () => {
-    const { tool, invocations } = await setupTool();
+  it.effect('trims surrounding whitespace before allowlist check', () =>
+    Effect.gen(function* () {
+      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
+      yield* invoke(tool, { command: '  texra.setApiKey  ' });
 
-    for (const cmd of [
-      'workbench.action.files.save',
-      'workbench.action.closeAllEditors',
-      'editor.action.deleteAllLines',
-      'workbench.action.terminal.sendSequence',
-      'texra.refreshApiKeyStatus',
-      'texra.refreshAllOptions',
-    ]) {
-      const result = await tool.call({ command: cmd });
-      assert.equal(result.status, 'error');
-    }
-    assert.equal(invocations.length, 0);
-  });
-
-  it('rejects empty/whitespace command names', async () => {
-    const { tool, invocations } = await setupTool();
-
-    const empty = await tool.call({ command: '' });
-    assert.equal(empty.status, 'error');
-    const blank = await tool.call({ command: '   ' });
-    assert.equal(blank.status, 'error');
-    assert.equal(invocations.length, 0);
-  });
-
-  it('trims surrounding whitespace before allowlist check', async () => {
-    const { tool, invocations } = await setupTool();
-
-    await tool.call({ command: '  texra.setApiKey  ' });
-
-    assert.equal(invocations.length, 1);
-    assert.equal(invocations[0].command, 'texra.setApiKey');
-  });
+      assert.equal(invocations.length, 1);
+      assert.equal(invocations[0].command, 'texra.setApiKey');
+    }),
+  );
 });

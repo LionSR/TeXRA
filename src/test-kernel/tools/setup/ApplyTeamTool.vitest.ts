@@ -2,16 +2,9 @@
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
@@ -23,6 +16,7 @@ import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { installPlatform } from '@test/support/setupPlatform';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 
@@ -35,10 +29,10 @@ function workspaceRoster(): AgentRosterSelection | undefined {
   );
 }
 
-function applyTeam(
-  input: Parameters<ApplyTeamTool['call']>[0],
-): ReturnType<ApplyTeamTool['call']> {
-  return new ApplyTeamTool().call(input);
+function applyTeam(input: Parameters<ApplyTeamTool['call']>[0]) {
+  return new ApplyTeamTool()
+    .call(input)
+    .pipe(Effect.provide(nativeToolTestLayer()));
 }
 
 function expectNoTeamState(): void {
@@ -100,99 +94,123 @@ afterEach(() => {
 describe('apply_team', () => {
   beforeEach(clearOnboardingState);
 
-  it('applies the starter team as the canonical workspace selection', async () => {
-    const result = await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'continue',
-    });
+  it.effect(
+    'applies the starter team as the canonical workspace selection',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* applyTeam({
+          teamId: 'starter',
+          unavailableAction: 'continue',
+        });
 
-    expect(result.status).toBe('executed');
-    expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
-  });
+        expect(result.status).toBe('executed');
+        expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
+      }),
+  );
 
-  it('records the user-level default team id', async () => {
-    await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'continue',
-    });
-    expect(getDefaultTeamId(platform().globalState)).toBe('starter');
+  it.effect('records the user-level default team id', () =>
+    Effect.gen(function* () {
+      yield* applyTeam({
+        teamId: 'starter',
+        unavailableAction: 'continue',
+      });
+      expect(getDefaultTeamId(platform().globalState)).toBe('starter');
 
-    await applyTeam({
-      teamId: 'physicist',
-      unavailableAction: 'continue',
-    });
-    expect(getDefaultTeamId(platform().globalState)).toBe('physicist');
-  });
+      yield* applyTeam({
+        teamId: 'physicist',
+        unavailableAction: 'continue',
+      });
+      expect(getDefaultTeamId(platform().globalState)).toBe('physicist');
+    }),
+  );
 
-  it('rejects an unknown teamId without writing any state', async () => {
-    const result = await applyTeam({ teamId: 'astrologer' });
+  it.effect('rejects an unknown teamId without writing any state', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({ teamId: 'astrologer' });
 
-    expect(result.status).toBe('error');
-    expectNoTeamState();
-  });
+      expect(result.status).toBe('error');
+      expectNoTeamState();
+    }),
+  );
 
-  it('performs no writes before an unresolved-team choice', async () => {
-    const result = await applyTeam({ teamId: 'starter' });
+  it.effect('performs no writes before an unresolved-team choice', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({ teamId: 'starter' });
 
-    expect(result.status).toBe('executed');
-    expect(result.output).toMatch(/Sign in to TeXRA/);
-    expectNoTeamState();
-  });
+      expect(result.status).toBe('executed');
+      expect(result.output).toMatch(/Sign in to TeXRA/);
+      expectNoTeamState();
+    }),
+  );
 
-  it('applies a preset declared local-only without prompting for sign-in', async () => {
-    const result = await applyTeam({
-      teamId: 'software-engineer',
-    });
+  it.effect(
+    'applies a preset declared local-only without prompting for sign-in',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* applyTeam({
+          teamId: 'software-engineer',
+        });
 
-    expect(result.status).toBe('executed');
-    expect(workspaceRoster()).toEqual({
-      kind: 'team',
-      teamId: 'software-engineer',
-    });
-  });
+        expect(result.status).toBe('executed');
+        expect(workspaceRoster()).toEqual({
+          kind: 'team',
+          teamId: 'software-engineer',
+        });
+      }),
+  );
 
-  it('cancels without writing roster or default-team state', async () => {
-    const result = await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'cancel',
-    });
+  it.effect('cancels without writing roster or default-team state', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({
+        teamId: 'starter',
+        unavailableAction: 'cancel',
+      });
 
-    expect(result.status).toBe('executed');
-    expect(result.output).toMatch(
-      /No roster or default-team state was written/,
-    );
-    expectNoTeamState();
-  });
+      expect(result.status).toBe('executed');
+      expect(result.output).toMatch(
+        /No roster or default-team state was written/,
+      );
+      expectNoTeamState();
+    }),
+  );
 
-  it('honors an explicit continuation when catalog access is available', async () => {
-    mockCatalogAccess(true);
+  it.effect(
+    'honors an explicit continuation when catalog access is available',
+    () =>
+      Effect.gen(function* () {
+        mockCatalogAccess(true);
 
-    const result = await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'continue',
-    });
+        const result = yield* applyTeam({
+          teamId: 'starter',
+          unavailableAction: 'continue',
+        });
 
-    expect(result.status).toBe('executed');
-    expect(result.summary).toMatch(/Applied the Starter roster/);
-    expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
-    expect(getDefaultTeamId(platform().globalState)).toBe('starter');
-  });
+        expect(result.status).toBe('executed');
+        expect(result.summary).toMatch(/Applied the Starter roster/);
+        expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
+        expect(getDefaultTeamId(platform().globalState)).toBe('starter');
+      }),
+  );
 
-  it('uses the host setup sign-in capability before its forced retry', async () => {
-    signIn.mockResolvedValue(true);
-    mockCatalogAccess(false);
+  it.effect(
+    'uses the host setup sign-in capability before its forced retry',
+    () =>
+      Effect.gen(function* () {
+        signIn.mockResolvedValue(true);
+        mockCatalogAccess(false);
 
-    const result = await applyTeam({
-      teamId: 'starter',
-      unavailableAction: 'sign-in',
-    });
+        const result = yield* applyTeam({
+          teamId: 'starter',
+          unavailableAction: 'sign-in',
+        });
 
-    expect(signIn).toHaveBeenCalledOnce();
-    expect(result.status).toBe('error');
-    expect(result).toHaveProperty(
-      'error',
-      expect.stringContaining('still unavailable after refreshing'),
-    );
-    expect(workspaceRoster()).toBeUndefined();
-  });
+        expect(signIn).toHaveBeenCalledOnce();
+        expect(result.status).toBe('error');
+        expect(result).toHaveProperty(
+          'error',
+          expect.stringContaining('still unavailable after refreshing'),
+        );
+        expect(workspaceRoster()).toBeUndefined();
+      }),
+  );
 });

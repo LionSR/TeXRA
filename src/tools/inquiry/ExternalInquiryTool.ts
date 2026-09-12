@@ -18,18 +18,12 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
@@ -41,7 +35,6 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
-import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
@@ -229,26 +222,26 @@ export class ExternalInquiryTool extends defineTool({
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
 }) {
-  protected execute(input: InquiryInput): Promise<ToolResult> {
-    // Capture the run owner before the shared Effect scheduler can yield.
-    const context = tryUseRunContext();
-    const runId = getRunContextRunId(context);
-    const signal = getCurrentToolCallContext()?.signal;
-    let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
-
-    switch (input.command) {
-      case 'ask':
-        requireInteractions('inquiry', context);
-        operation = this.executeAsk(input, runId, currentSession());
-        break;
-      case 'read':
-        operation = this.executeRead(input);
-        break;
-      case 'list':
-        operation = this.executeList(input, runId);
-        break;
-    }
-    return effectRuntime().runPromise(operation, { signal });
+  protected execute(input: InquiryInput) {
+    return Effect.gen({ self: this }, function* () {
+      const toolCall = yield* ToolCall;
+      const runId = toolCall.run?.runId;
+      switch (input.command) {
+        case 'ask':
+          if (!toolCall.run?.session.interactions) {
+            return yield* Effect.fail(
+              new ToolError(
+                'inquiry requires a session with host interactions.',
+              ),
+            );
+          }
+          return yield* this.executeAsk(input, runId, toolCall.run.session);
+        case 'read':
+          return yield* this.executeRead(input);
+        case 'list':
+          return yield* this.executeList(input, runId);
+      }
+    });
   }
 
   private executeAsk(

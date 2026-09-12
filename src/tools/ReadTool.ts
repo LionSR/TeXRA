@@ -1,20 +1,15 @@
-// Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import {
   resolveAndFormat,
-  currentToolRoot,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
@@ -127,12 +122,13 @@ const ATTACHMENT_COPY: Record<
  * later edits.
  */
 interface ReadPorts {
-  readonly signal: AbortSignal | undefined;
+  readonly signal: AbortSignal;
+  readonly inScope: <A>(operation: () => A) => A;
   readonly resolve: (targetPath: string) => {
     path: WorkspacePathResolution;
     display: string;
   };
-  readonly recordRead: (path: string) => void;
+  readonly recordRead: (path: string) => Effect.Effect<void, never, ToolCall>;
 }
 
 export class ReadFileTool extends defineTool({
@@ -142,32 +138,33 @@ export class ReadFileTool extends defineTool({
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
 }) {
-  protected execute(input: ReadInput): Promise<ToolResult> {
-    // The read tracker and path resolution belong to the calling turn: the
-    // working directory comes from its RunContext and the fallback root from
-    // its workspace, both async-local. Binding the whole resolve step — not
-    // just the working-directory lookup — keeps the workspace fallback on the
-    // caller's context too. They stay thunks so the abort check still comes
-    // first.
-    const context = getCurrentToolCallContext();
-    const ports: ReadPorts = {
-      signal: context?.signal,
-      resolve: AsyncLocalStorage.bind((targetPath: string) =>
-        resolveAndFormat(targetPath, currentToolRoot()),
-      ),
-      recordRead: AsyncLocalStorage.bind(recordToolFileRead),
-    };
-    return effectRuntime().runPromise(this.read(ports, input));
+  protected execute(input: ReadInput) {
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        const call = yield* ToolCall;
+        const signal = yield* Effect.abortSignal;
+        const ports: ReadPorts = {
+          signal,
+          inScope: call.inScope,
+          resolve: (targetPath) =>
+            call.inScope(() =>
+              resolveAndFormat(targetPath, call.workingDirectory),
+            ),
+          recordRead: recordToolFileRead,
+        };
+        return yield* this.read(ports, input);
+      }),
+    );
   }
 
   private readonly read = Effect.fn('ReadFileTool.execute')(function* (
     this: ReadFileTool,
     ports: ReadPorts,
     input: ReadInput,
-  ): Effect.fn.Return<ToolResult, unknown> {
+  ): Effect.fn.Return<ToolResult, unknown, ToolCall | Scope.Scope> {
     // Local reads finish in milliseconds, so no mid-read cancellation is
     // needed — but a queued call must not start after the batch aborted.
-    if (ports.signal?.aborted) {
+    if (ports.signal.aborted) {
       return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
     const { path: resolved, display: displayPath } = ports.resolve(input.path);
@@ -180,7 +177,7 @@ export class ReadFileTool extends defineTool({
         attachmentKind,
         resolved,
       );
-      ports.recordRead(filePath);
+      yield* ports.recordRead(filePath);
       return result;
     }
 
@@ -190,7 +187,9 @@ export class ReadFileTool extends defineTool({
     let lines: string[];
 
     if (hasExtension(input.path, '.eml')) {
-      const stats = yield* hostPort(() => WorkspaceFS.stat(filePath));
+      const stats = yield* hostPort(() =>
+        ports.inScope(() => WorkspaceFS.stat(filePath)),
+      );
       if (stats.size > MAX_EML_BYTES) {
         return yield* Effect.fail(
           new ToolError(
@@ -198,17 +197,19 @@ export class ReadFileTool extends defineTool({
           ),
         );
       }
-      const raw = yield* hostPort(() => WorkspaceFS.read(filePath));
+      const raw = yield* hostPort(() =>
+        ports.inScope(() => WorkspaceFS.read(filePath)),
+      );
       const { text, images } = yield* parseEml(raw);
       lines = splitContentLines(text);
       emlImages = images;
     } else {
       lines = splitContentLines(
-        yield* hostPort(() => WorkspaceFS.read(filePath)),
+        yield* hostPort(() => ports.inScope(() => WorkspaceFS.read(filePath))),
       );
     }
 
-    ports.recordRead(filePath);
+    yield* ports.recordRead(filePath);
 
     const range = input.range;
     const totalLines = lines.length;
@@ -277,7 +278,7 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
     kind: AttachmentKind,
     resolved: WorkspacePathResolution,
-  ): Effect.fn.Return<ToolResult, unknown> {
+  ): Effect.fn.Return<ToolResult, unknown, ToolCall> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,

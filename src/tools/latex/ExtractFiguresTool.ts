@@ -1,11 +1,10 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
@@ -30,7 +29,8 @@ const DEFAULT_MAX_FILES = 20;
 
 const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   texPath,
-}: ExtractFiguresInput): Effect.fn.Return<ToolResult, Error> {
+}: ExtractFiguresInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+  const call = yield* ToolCall;
   const { path, display } = yield* resolveLatexFile(texPath);
 
   const figurePaths = yield* extractFigurePathsFromLatex(
@@ -49,7 +49,8 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
     });
 
   const formattedList = limitedPaths.map(
-    (figurePath) => `- ${resolveAndFormat(figurePath).display}`,
+    (figurePath) =>
+      `- ${call.inScope(() => resolveAndFormat(figurePath, call.workingDirectory)).display}`,
   );
   const header = `Figures referenced in ${display}`;
   const output = formatToolOutput(header, formattedList);
@@ -73,11 +74,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     'Resolve and list figure assets referenced by a LaTeX document, returning attachments when available.',
   schema: ExtractFiguresInputSchema,
 }) {
-  protected execute(input: ExtractFiguresInput): Promise<ToolResult> {
-    // The owning run's cancellation enters the extraction as interruption, so
-    // the bounded probe fan-out is torn down instead of running to completion.
-    return effectRuntime().runPromise(extractFigures(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(input: ExtractFiguresInput) {
+    return extractFigures(input);
   }
 }

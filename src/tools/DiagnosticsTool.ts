@@ -1,19 +1,17 @@
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
-  currentToolRoot,
+  parseWorkingDirectory,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -41,6 +39,7 @@ interface DiagnosticsPorts {
    * its own.
    */
   readonly toolRoot: () => string | undefined;
+  readonly inScope: <A>(operation: () => A) => A;
   readonly readDiagnostics: HostInteractions['readDiagnostics'];
   readonly addCriticism: HostInteractions['addCriticism'];
 }
@@ -120,21 +119,26 @@ export class DiagnosticsTool extends defineTool({
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,
 }) {
-  protected execute(input: DiagnosticsInput): Promise<ToolResult> {
-    // The session and working directory belong to the calling turn, so they
-    // are read here and handed to the program rather than from a fiber.
-    const interactions = currentSession().interactions;
+  protected readonly execute = Effect.fn('DiagnosticsTool.call')(function* (
+    this: DiagnosticsTool,
+    input: DiagnosticsInput,
+  ) {
+    const call = yield* ToolCall;
+    const interactions = call.run?.session.interactions;
+    if (!interactions)
+      return yield* Effect.fail(
+        new ToolError('Diagnostics requires an active session.'),
+      );
     const ports: DiagnosticsPorts = {
-      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
+      inScope: call.inScope,
       readDiagnostics: interactions.readDiagnostics,
       addCriticism: interactions.addCriticism,
     };
-    return effectRuntime().runPromise(
-      input.command === 'add'
-        ? this.addCriticism(ports, input)
-        : this.readDiagnostics(ports, input),
-    );
-  }
+    return yield* input.command === 'add'
+      ? this.addCriticism(ports, input)
+      : this.readDiagnostics(ports, input);
+  });
 
   private readonly readDiagnostics = Effect.fn(
     'DiagnosticsTool.readDiagnostics',
@@ -143,7 +147,9 @@ export class DiagnosticsTool extends defineTool({
     input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
   ): Effect.fn.Return<ToolResult, ToolError> {
     const { command, path } = input;
-    const diagnosticsPath = resolveAbsolutePath(path, ports.toolRoot());
+    const diagnosticsPath = ports.inScope(() =>
+      resolveAbsolutePath(path, ports.toolRoot()),
+    );
     const linter = ports.readDiagnostics;
     if (!linter) {
       return yield* Effect.fail(

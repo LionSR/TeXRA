@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect, Result } from 'effect';
+
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript/checkpoint';
@@ -35,8 +38,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * account of what happened read the canonical run snapshot instead
  * (`onSnapshot` remains open and is composed, not replaced).
  */
-type WorkflowScriptRunWithProgressOptions = Omit<
-  PersistedWorkflowScriptRunOptions,
+type WorkflowScriptRunWithProgressOptions<R> = Omit<
+  PersistedWorkflowScriptRunOptions<R>,
   'onEvent' | 'onTransition'
 > & {
   /**
@@ -138,8 +141,8 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
  * trace: the run options with the engine's event and transition slots bound,
  * and the settle step the caller runs once the run has ended either way.
  */
-export interface WorkflowScriptProgressProjection {
-  readonly options: PersistedWorkflowScriptRunOptions;
+export interface WorkflowScriptProgressProjection<R> {
+  readonly options: PersistedWorkflowScriptRunOptions<R>;
   /** Close every phase the run left open; `completed` names how it ended. */
   readonly settle: (completed: boolean) => void;
 }
@@ -147,14 +150,14 @@ export interface WorkflowScriptProgressProjection {
 /**
  * Project a durable workflow script's progress onto the parent trace. The
  * caller runs `options` through `runPersistedWorkflowScript` and calls
- * `settle` in a finalizer; the projection itself stays Promise- and
- * Effect-free so its per-transition fault policy (warn and continue) needs no
- * runtime of its own.
+ * `settle` in a finalizer. Its synchronous projection state remains local;
+ * snapshot persistence is composed as an Effect so it shares the caller's
+ * runtime and lifecycle.
  */
-export function projectWorkflowScriptProgress(
+export function projectWorkflowScriptProgress<R>(
   trace: AgentTrace,
-  options: WorkflowScriptRunWithProgressOptions,
-): WorkflowScriptProgressProjection {
+  options: WorkflowScriptRunWithProgressOptions<R>,
+): WorkflowScriptProgressProjection<R> {
   const { onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseHandleState>();
@@ -378,7 +381,7 @@ export function projectWorkflowScriptProgress(
         }
       }
     }
-    try {
+    const projected = Result.try(() => {
       declaredStageTotal ??= snapshot.stages.length;
       if (!planEmitted) {
         planEmitted = true;
@@ -533,7 +536,9 @@ export function projectWorkflowScriptProgress(
         }
         phase.handle.end(outcome);
       }
-    } catch (error) {
+    });
+    if (Result.isFailure(projected)) {
+      const error = projected.failure;
       trace.warn(
         `Workflow progress projection failed for one transition: ${toErrorMessage(error)}`,
         { data: error },
@@ -585,10 +590,11 @@ export function projectWorkflowScriptProgress(
       ...runOptions,
       onEvent: projectLog,
       onTransition: fold,
-      onSnapshot: async (snapshot) => {
-        lastSnapshot = snapshot;
-        await runOptions.onSnapshot?.(snapshot);
-      },
+      onSnapshot: (snapshot) =>
+        Effect.gen(function* () {
+          lastSnapshot = snapshot;
+          if (runOptions.onSnapshot) yield* runOptions.onSnapshot(snapshot);
+        }),
     },
     settle,
   };

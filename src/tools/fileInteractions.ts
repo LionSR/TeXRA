@@ -1,21 +1,27 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { type ToolResult } from '@shared/schemas';
 import { errorResult } from '@tools/core/result';
 
-export function recordToolFileRead(path: string): void {
-  const context = getCurrentToolCallContext();
-  if (!context) return;
-  context.tracker.recordRead(path);
-}
+export const recordToolFileRead = Effect.fn('fileInteractions.recordRead')(
+  function* (path: string): Effect.fn.Return<void, never, ToolCall> {
+    const call = yield* ToolCall;
+    call.tracker.recordRead(path);
+  },
+);
 
-export function requireFileReadForEdit(
+export const requireFileReadForEdit = Effect.fn(
+  'fileInteractions.requireReadForEdit',
+)(function* (
   path: string,
   exists: boolean,
   errorMessage?: string,
-): ToolResult | null {
-  const context = getCurrentToolCallContext();
-  if (!context || !exists || context.tracker.hasRead(path)) {
+): Effect.fn.Return<ToolResult | null, never, ToolCall> {
+  const call = yield* ToolCall;
+  if (!exists || call.tracker.hasRead(path)) {
     return null;
   }
   return errorResult(
@@ -26,4 +32,4 @@ export function requireFileReadForEdit(
       diagnostics: { reason: 'unread-file', path },
     },
   );
-}
+});

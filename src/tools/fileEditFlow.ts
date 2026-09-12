@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports - common
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
 
 // Local imports - shared schemas
@@ -9,11 +10,7 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
 import { requireFileReadForEdit } from '@tools/fileInteractions';
-import {
-  assertWritable,
-  currentToolRoot,
-  resolveAndFormat,
-} from '@tools/pathResolution';
+import { assertWritable, resolveAndFormat } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
@@ -116,15 +113,16 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
     options: ResolveWritableTargetOptions = {},
-  ): Effect.fn.Return<WritableTargetPreparation, unknown> {
+  ): Effect.fn.Return<WritableTargetPreparation, unknown, ToolCall> {
     // Resolution, the read-only-root check and the caller's own validation all
     // reject with a ToolError the tool runner reports to the model, so they
     // stay a failure rather than becoming a defect.
+    const call = yield* ToolCall;
     const { path, displayPath } = yield* Effect.try({
       try: () => {
         const { path: resolved, display } = resolveAndFormat(
           inputPath,
-          currentToolRoot(),
+          call.workingDirectory,
         );
         assertWritable(resolved, display);
 
@@ -136,15 +134,17 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     });
 
     // Shared read-before-edit gate, then the current content.
-    const exists = yield* hostPort(() => WorkspaceFS.exists(path));
-    const blocked = requireFileReadForEdit(path, exists);
+    const exists = yield* hostPort(() =>
+      call.inScope(() => WorkspaceFS.exists(path)),
+    );
+    const blocked = yield* requireFileReadForEdit(path, exists);
     if (blocked) {
       return { blocked };
     }
 
     const originalContent =
       exists || (options.missing ?? 'require') === 'require'
-        ? yield* hostPort(() => WorkspaceFS.read(path))
+        ? yield* hostPort(() => call.inScope(() => WorkspaceFS.read(path)))
         : '';
 
     return {
@@ -246,7 +246,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     proposedContent,
     sourceTool,
     present,
-  }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown> {
+  }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown, ToolCall> {
     const approval = yield* requestToolEditApproval({
       path,
       originalContent,
@@ -257,8 +257,10 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       return buildApprovalRejectedResult(displayPath, sourceTool, approval);
     }
 
-    const written = yield* hostPort(() =>
-      writeApprovedContent(path, originalContent, approval.appliedContent),
+    const written = yield* writeApprovedContent(
+      path,
+      originalContent,
+      approval.appliedContent,
     );
     const presentation = present({ approval, ...written });
     const output = appendApprovalDiffNote(

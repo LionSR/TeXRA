@@ -28,8 +28,6 @@ import {
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { appSignals } from '@eventBus/AppSignals';
-import { effectRuntime } from '@platform/processRuntime';
-import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
   AGENT_MODE_PRESETS_BY_ID,
@@ -207,7 +205,7 @@ Teams:
 ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
 }) {
-  protected execute(input: ApplyTeamInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(applyTeam(input));
+  protected execute(input: ApplyTeamInput) {
+    return applyTeam(input);
   }
 }

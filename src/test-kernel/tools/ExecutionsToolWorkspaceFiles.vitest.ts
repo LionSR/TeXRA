@@ -1,17 +1,22 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
+
+// Test composition imports
 
 // Node imports
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { it } from '@effect/vitest';
 
 import { Effect } from 'effect';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
@@ -21,6 +26,7 @@ import {
   type RunPhase,
   type TodoItem,
 } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -32,7 +38,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { withTempDir } from '@test/support/tempDirPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
@@ -148,16 +154,24 @@ const config = {
 } as AgentConfig;
 
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */
-async function withTempStorage(run: () => Promise<void>): Promise<void> {
-  await withTempDir('texra-exec-storage-', async (root) => {
-    await installPlatform(
-      {
-        workspacePath: path.join(root, 'workspace'),
-        storagePath: path.join(root, 'storage'),
-      },
-      { fs: nodeFilesystem },
+function withTempStorage(
+  run: () => Effect.Effect<void, unknown, ToolServices>,
+) {
+  return Effect.gen(function* () {
+    yield* withTempDirEffect('texra-exec-storage-', (root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform(
+            {
+              workspacePath: path.join(root, 'workspace'),
+              storagePath: path.join(root, 'storage'),
+            },
+            { fs: nodeFilesystem },
+          ),
+        );
+        yield* run();
+      }),
     );
-    await run();
   });
 }
 
@@ -174,155 +188,197 @@ describe('ExecutionsTool', () => {
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
-  it("rejects '..' path traversal in /executions/{id}/files/{path}", async () => {
-    const result = await new ExecutionsTool().call({
-      path: '/executions/abc123def456/files/../../../../../../etc/passwd',
-    });
-
-    expect(result.status).toBe('error');
-    expect(result.error).toContain("must not contain '..'");
-  });
-
-  it('does not duplicate auto-delivered live subagent reports for the parent run', async () => {
-    const session = createTestSession();
-    const parentRunId = RunIdSchema.parse('ba5e0000000a');
-    const childRunId = RunIdSchema.parse('c41d0000000a');
-    const otherRunId = RunIdSchema.parse('0f1e0000000a');
-    const handle = testRunHandle({
-      runId: childRunId,
-      parent: parentRunId,
-      agent: 'review',
-    });
-
-    try {
-      publishTestRunStart(session, parentRunId);
-      publishTestRunStart(session, childRunId, { parent: parentRunId });
-      session.runs.track(handle);
-      await foldRunPhase(session, childRunId, 'waiting', RUN_PHASE.WAITING);
-      mocks.readReport.mockResolvedValue(
-        '<subagent-result>full report</subagent-result>',
-      );
-
-      const parentWaitResult = await withRunContext(
-        createRunContext({
-          runId: parentRunId,
-          session,
-        }),
-        () =>
-          new ExecutionsTool().call({
-            path: `/executions/${childRunId}`,
-            action: 'wait',
-          }),
-      );
-      const crossTreeWaitResult = await withRunContext(
-        createRunContext({
-          runId: otherRunId,
-          session,
-        }),
-        () =>
-          new ExecutionsTool().call({
-            path: `/executions/${childRunId}`,
-            action: 'wait',
-          }),
-      );
-
-      expect(parentWaitResult.output).toContain(
-        'Result: delivered automatically to this parent run as a follow-up message.',
-      );
-      expect(parentWaitResult.output).toContain(
-        `/executions/${childRunId}/report`,
-      );
-      expect(parentWaitResult.output).not.toContain(
-        '<subagent-result>full report',
-      );
-      expect(crossTreeWaitResult.output).toContain(
-        '<subagent-result>full report</subagent-result>',
-      );
-      expect(crossTreeWaitResult.output).not.toContain(
-        'delivered automatically',
-      );
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('reads running task lists from session snapshot state', () =>
-    withTempStorage(async () => {
-      const session = createTestSession();
-      const parentRunId = RunIdSchema.parse('ba5e0000000b');
-      const childRunId = RunIdSchema.parse('c41d0000000b');
-      const handle = testRunHandle({
-        runId: childRunId,
-        parent: parentRunId,
-        agent: 'review',
+  it.live("rejects '..' path traversal in /executions/{id}/files/{path}", () =>
+    Effect.gen(function* () {
+      const result = yield* new ExecutionsTool().call({
+        path: '/executions/abc123def456/files/../../../../../../etc/passwd',
       });
 
-      try {
-        publishTestRunStart(session, parentRunId);
-        publishTestRunStart(session, childRunId, { parent: parentRunId });
-        await session.settlePublications();
-        session.runs.track(handle);
-        await foldRunPhase(
-          session,
-          childRunId,
-          'turn.begin',
-          RUN_PHASE.RUNNING,
-        );
-        session.publish([
-          {
-            type: 'updateTodos',
-            aggregateId: aggregateId('run', childRunId),
-            todos: [
-              {
-                content: 'Read live snapshot state',
-                status: 'in_progress',
-                activeForm: 'Reading live snapshot state',
-              },
-            ],
+      expect(result.status).toBe('error');
+      expect(result.error).toContain("must not contain '..'");
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
           },
-        ]);
-        await session.settlePublications();
-        const [summary, todos] = await withRunContext(
-          createRunContext({ runId: parentRunId, session }),
-          () =>
-            Promise.all([
-              new ExecutionsTool().call({
-                path: `/executions/${childRunId}`,
-              }),
-              new ExecutionsTool().call({
-                path: `/executions/${childRunId}/todos`,
-              }),
-            ]),
-        );
+        }),
+      ),
+    ),
+  );
 
-        expect(summary.output).toContain('Read live snapshot state');
-        expect(todos.output).toContain('Read live snapshot state');
-      } finally {
-        session.dispose();
-      }
-    }));
+  it.live(
+    'does not duplicate auto-delivered live subagent reports for the parent run',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        const parentRunId = RunIdSchema.parse('ba5e0000000a');
+        const childRunId = RunIdSchema.parse('c41d0000000a');
+        const otherRunId = RunIdSchema.parse('0f1e0000000a');
+        const handle = testRunHandle({
+          runId: childRunId,
+          parent: parentRunId,
+          agent: 'review',
+        });
+
+        try {
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(handle);
+          yield* Effect.promise(() =>
+            foldRunPhase(session, childRunId, 'waiting', RUN_PHASE.WAITING),
+          );
+          mocks.readReport.mockResolvedValue(
+            '<subagent-result>full report</subagent-result>',
+          );
+
+          const parentWaitResult = yield* new ExecutionsTool()
+            .call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+            })
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session: session, runId: parentRunId, toolPolicy: {} },
+                }),
+              ),
+            );
+          const crossTreeWaitResult = yield* new ExecutionsTool()
+            .call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+            })
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session: session, runId: otherRunId, toolPolicy: {} },
+                }),
+              ),
+            );
+
+          expect(parentWaitResult.output).toContain(
+            'Result: delivered automatically to this parent run as a follow-up message.',
+          );
+          expect(parentWaitResult.output).toContain(
+            `/executions/${childRunId}/report`,
+          );
+          expect(parentWaitResult.output).not.toContain(
+            '<subagent-result>full report',
+          );
+          expect(crossTreeWaitResult.output).toContain(
+            '<subagent-result>full report</subagent-result>',
+          );
+          expect(crossTreeWaitResult.output).not.toContain(
+            'delivered automatically',
+          );
+        } finally {
+          session.dispose();
+        }
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
+
+  it.live('reads running task lists from session snapshot state', () =>
+    withTempStorage(() =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        const parentRunId = RunIdSchema.parse('ba5e0000000b');
+        const childRunId = RunIdSchema.parse('c41d0000000b');
+        const handle = testRunHandle({
+          runId: childRunId,
+          parent: parentRunId,
+          agent: 'review',
+        });
+
+        try {
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          yield* Effect.promise(() => session.settlePublications());
+          session.runs.track(handle);
+          yield* Effect.promise(() =>
+            foldRunPhase(session, childRunId, 'turn.begin', RUN_PHASE.RUNNING),
+          );
+          session.publish([
+            {
+              type: 'updateTodos',
+              aggregateId: aggregateId('run', childRunId),
+              todos: [
+                {
+                  content: 'Read live snapshot state',
+                  status: 'in_progress',
+                  activeForm: 'Reading live snapshot state',
+                },
+              ],
+            },
+          ]);
+          yield* Effect.promise(() => session.settlePublications());
+          const [summary, todos] = yield* Effect.all([
+            new ExecutionsTool().call({
+              path: `/executions/${childRunId}`,
+            }),
+            new ExecutionsTool().call({
+              path: `/executions/${childRunId}/todos`,
+            }),
+          ]).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session: session, runId: parentRunId, toolPolicy: {} },
+              }),
+            ),
+          );
+
+          expect(summary.output).toContain('Read live snapshot state');
+          expect(todos.output).toContain('Read live snapshot state');
+        } finally {
+          session.dispose();
+        }
+      }),
+    ).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
   // A completed run has no live handle, so nothing proves the caller is the
   // parent run that already received the report as a follow-up. The wait
   // summary must therefore keep the report inline rather than eliding it.
-  it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', () =>
-    withTempStorage(async () => {
-      const session = createTestSession();
-      const runId = 'abc123' as RunId;
-      const callerRunId = RunIdSchema.parse('ca11e0000001');
+  it.live(
+    'keeps completed wait summary reports inline when parent delivery cannot be confirmed',
+    () =>
+      withTempStorage(() =>
+        Effect.gen(function* () {
+          const session = createTestSession();
+          const runId = 'abc123' as RunId;
+          const callerRunId = RunIdSchema.parse('ca11e0000001');
 
-      try {
-        publishTestRunStart(session, runId);
-        await session.settlePublications();
-        mocks.readConfig.mockResolvedValue(config);
-        mocks.readReport.mockResolvedValue(
-          '<subagent-result>full report</subagent-result>',
-        );
+          try {
+            publishTestRunStart(session, runId);
+            yield* Effect.promise(() => session.settlePublications());
+            mocks.readConfig.mockResolvedValue(config);
+            mocks.readReport.mockResolvedValue(
+              '<subagent-result>full report</subagent-result>',
+            );
 
-        const [waitResult, reportResult] = await withRunContext(
-          createRunContext({ runId: callerRunId, session }),
-          () =>
-            Promise.all([
+            const [waitResult, reportResult] = yield* Effect.all([
               new ExecutionsTool().call({
                 path: `/executions/${runId}`,
                 action: 'wait',
@@ -330,22 +386,39 @@ describe('ExecutionsTool', () => {
               new ExecutionsTool().call({
                 path: `/executions/${runId}/report`,
               }),
-            ]),
-        );
+            ]).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session: session, runId: callerRunId, toolPolicy: {} },
+                }),
+              ),
+            );
 
-        expect(waitResult.output).toContain(
-          '<subagent-result>full report</subagent-result>',
-        );
-        expect(waitResult.output).not.toContain('delivered automatically');
-        expect(reportResult.output).toBe(
-          '<subagent-result>full report</subagent-result>',
-        );
-      } finally {
-        session.dispose();
-      }
-    }));
+            expect(waitResult.output).toContain(
+              '<subagent-result>full report</subagent-result>',
+            );
+            expect(waitResult.output).not.toContain('delivered automatically');
+            expect(reportResult.output).toBe(
+              '<subagent-result>full report</subagent-result>',
+            );
+          } finally {
+            session.dispose();
+          }
+        }),
+      ).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 
-  it.each([
+  it.live.each([
     {
       label: 'subagent',
       record: {
@@ -372,9 +445,8 @@ describe('ExecutionsTool', () => {
         },
       },
     },
-  ])(
-    'exposes only the final envelope for a $label result',
-    async ({ record }) => {
+  ])('exposes only the final envelope for a $label result', ({ record }) =>
+    Effect.gen(function* () {
       // The terminal fact comes from the `run.end` row; the producer record
       // contributes the delivery-enriched output and nothing else.
       const runEnd = {
@@ -385,7 +457,7 @@ describe('ExecutionsTool', () => {
       mocks.readResultMeta.mockResolvedValue(record);
       mocks.readRunEnd.mockResolvedValue(runEnd);
 
-      const result = await new ExecutionsTool().call({
+      const result = yield* new ExecutionsTool().call({
         path: '/executions/abc123/result',
       });
 
@@ -398,161 +470,270 @@ describe('ExecutionsTool', () => {
       expect(result.output).not.toContain('agentName');
       expect(result.output).not.toContain('wallTimeMs');
       expect(result.output).not.toContain('copiedOutput');
-    },
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
   );
 
-  it('keeps the background process result shape at /result', async () => {
-    const record = {
-      producer: 'backgroundBash' as const,
-      command: 'echo hi',
-      exitCode: 0,
-      wallTimeMs: 10,
-      success: true,
-    };
-    mocks.readResultMeta.mockResolvedValue(record);
+  it.live('keeps the background process result shape at /result', () =>
+    Effect.gen(function* () {
+      const record = {
+        producer: 'backgroundBash' as const,
+        command: 'echo hi',
+        exitCode: 0,
+        wallTimeMs: 10,
+        success: true,
+      };
+      mocks.readResultMeta.mockResolvedValue(record);
 
-    const result = await new ExecutionsTool().call({
-      path: '/executions/abc123/result',
-    });
+      const result = yield* new ExecutionsTool().call({
+        path: '/executions/abc123/result',
+      });
 
-    expect(JSON.parse(result.output ?? '')).toEqual(record);
-  });
+      expect(JSON.parse(result.output ?? '')).toEqual(record);
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
   // The advertised /executions/{id}/todos endpoint must resolve a task list
   // exactly as the completed summary does, from the same committed stream fold.
-  it.each([
+  it.live.each([
     { label: 'completed summary', toolPath: '/executions/abc123' },
     { label: 'todos endpoint', toolPath: '/executions/abc123/todos' },
   ])(
     'reads completed todos from committed stream events via the $label',
-    async ({ toolPath }) => {
-      await withTempStorage(async () => {
-        const runId = 'abc123' as RunId;
-        const session = createTestSession();
-        publishTestRunStart(session, runId);
-        session.publish([
-          {
-            type: 'updateTodos',
-            aggregateId: aggregateId('run', runId),
-            todos: [
+    ({ toolPath }) =>
+      Effect.gen(function* () {
+        yield* withTempStorage(() =>
+          Effect.gen(function* () {
+            const runId = 'abc123' as RunId;
+            const session = createTestSession();
+            publishTestRunStart(session, runId);
+            session.publish([
               {
-                content: 'Read the committed task list',
-                status: 'in_progress',
-                activeForm: 'Reading the committed task list',
+                type: 'updateTodos',
+                aggregateId: aggregateId('run', runId),
+                todos: [
+                  {
+                    content: 'Read the committed task list',
+                    status: 'in_progress',
+                    activeForm: 'Reading the committed task list',
+                  },
+                ],
               },
-            ],
-          },
-        ]);
-        await session.settlePublications();
-        mocks.readConfig.mockResolvedValue(config);
-        const result = await withRunContext(
-          createRunContext({ runId, session }),
-          () => new ExecutionsTool().call({ path: toolPath }),
-        );
+            ]);
+            yield* Effect.promise(() => session.settlePublications());
+            mocks.readConfig.mockResolvedValue(config);
+            const result = yield* new ExecutionsTool()
+              .call({ path: toolPath })
+              .pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { session: session, runId: runId, toolPolicy: {} },
+                  }),
+                ),
+              );
 
-        expect(result.output).toContain('Read the committed task list');
-      });
-    },
+            expect(result.output).toContain('Read the committed task list');
+          }),
+        );
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
   );
 
-  it('lists and reads persisted workspace files for tool-use executions', async () => {
-    await withTempDir('texra-exec-files-', async (workspace) => {
-      await writeFile(path.join(workspace, 'review.md'), '# report\n');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        workingDirectory: workspace,
-      });
-      mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
+  it.live(
+    'lists and reads persisted workspace files for tool-use executions',
+    () =>
+      Effect.gen(function* () {
+        yield* withTempDirEffect('texra-exec-files-', (workspace) =>
+          Effect.gen(function* () {
+            yield* Effect.promise(() =>
+              writeFile(path.join(workspace, 'review.md'), '# report\n'),
+            );
+            mocks.readConfig.mockResolvedValue({
+              ...config,
+              workingDirectory: workspace,
+            });
+            mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
 
-      const tool = new ExecutionsTool();
-      const listResult = await tool.call({
-        path: '/executions/abc123/workspace-files',
-      });
-      const readResult = await tool.call({
-        path: '/executions/abc123/workspace-files/review.md',
-      });
+            const tool = new ExecutionsTool();
+            const listResult = yield* tool.call({
+              path: '/executions/abc123/workspace-files',
+            });
+            const readResult = yield* tool.call({
+              path: '/executions/abc123/workspace-files/review.md',
+            });
 
-      expect(listResult.output).toContain('review.md');
-      expect(readResult.summary).toBe(
-        'Read /executions/abc123/workspace-files/review.md',
+            expect(listResult.output).toContain('review.md');
+            expect(readResult.summary).toBe(
+              'Read /executions/abc123/workspace-files/review.md',
+            );
+            expect(readResult.output).toContain('# report');
+          }),
+        );
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
+
+  it.live('refuses unrecorded workspace file reads', () =>
+    Effect.gen(function* () {
+      yield* withTempDirEffect('texra-exec-files-', (workspace) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            writeFile(path.join(workspace, 'secret.md'), 'secret'),
+          );
+          mocks.readConfig.mockResolvedValue({
+            ...config,
+            workingDirectory: workspace,
+          });
+          mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
+
+          const result = yield* new ExecutionsTool().call({
+            path: '/executions/abc123/workspace-files/secret.md',
+          });
+
+          expect(result.status).toBe('error');
+          expect(result.error).toContain('Workspace file not found');
+        }),
       );
-      expect(readResult.output).toContain('# report');
-    });
-  });
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 
-  it('refuses unrecorded workspace file reads', async () => {
-    await withTempDir('texra-exec-files-', async (workspace) => {
-      await writeFile(path.join(workspace, 'secret.md'), 'secret');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        workingDirectory: workspace,
-      });
-      mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
+  // A run's records are rows; every file in its directory is generated output.
+  it.live('lists every file under /executions/{id}/files', () =>
+    Effect.gen(function* () {
+      yield* withTempStorage(() =>
+        Effect.gen(function* () {
+          const runId = 'abc123' as RunId;
+          const runDir = resolveRunStoragePath(runId);
+          yield* Effect.promise(() => StorageFS.ensureDir(runDir));
+          const listedFiles = [
+            'conversation.json',
+            'todos.json',
+            'meta.json',
+            'config.json',
+            'report.json',
+            'workspace-files.json',
+            'result-meta.json',
+            'child-def456.json',
+            'stable-subagent-attempt.json',
+            'stable-subagent-sequence-abc123.json',
+          ];
+          for (const name of listedFiles) {
+            yield* Effect.promise(() =>
+              StorageFS.write(path.join(runDir, name), '{}'),
+            );
+          }
+          yield* Effect.promise(() =>
+            StorageFS.write(path.join(runDir, 'output.tex'), 'generated'),
+          );
 
-      const result = await new ExecutionsTool().call({
-        path: '/executions/abc123/workspace-files/secret.md',
-      });
+          const result = yield* new ExecutionsTool().call({
+            path: `/executions/${runId}/files`,
+          });
 
-      expect(result.status).toBe('error');
-      expect(result.error).toContain('Workspace file not found');
-    });
-  });
-
-  // Exercises the real listing: a run's records are rows, so nothing left in
-  // its directory is internal and the model-facing view lists all of it.
-  it('lists every file under /executions/{id}/files', async () => {
-    await withTempStorage(async () => {
-      const runId = 'abc123' as RunId;
-      const runDir = resolveRunStoragePath(runId);
-      await StorageFS.ensureDir(runDir);
-      const listedFiles = [
-        'conversation.json',
-        'todos.json',
-        'meta.json',
-        'config.json',
-        'report.json',
-        'workspace-files.json',
-        'result-meta.json',
-        'child-def456.json',
-        'stable-subagent-attempt.json',
-        'stable-subagent-sequence-abc123.json',
-      ];
-      for (const name of listedFiles) {
-        await StorageFS.write(path.join(runDir, name), '{}');
-      }
-      await StorageFS.write(path.join(runDir, 'output.tex'), 'generated');
-
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${runId}/files`,
-      });
-
-      expect(result.output).toContain('output.tex');
-      for (const name of listedFiles) {
-        expect(result.output).toContain(name);
-      }
-    });
-  });
-
-  it('reads recorded files inside a top-level workspace directory', async () => {
-    await withTempDir('texra-exec-files-', async (workspace) => {
-      await mkdir(path.join(workspace, 'workspace'));
-      await writeFile(path.join(workspace, 'review.md'), 'wrong');
-      await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        workingDirectory: workspace,
-      });
-      mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
-
-      const result = await new ExecutionsTool().call({
-        path: '/executions/abc123/workspace-files/workspace/review.md',
-      });
-
-      expect(result.summary).toBe(
-        'Read /executions/abc123/workspace-files/workspace/review.md',
+          expect(result.output).toContain('output.tex');
+          for (const name of listedFiles) {
+            expect(result.output).toContain(name);
+          }
+        }),
       );
-      expect(result.output).toContain('nested');
-      expect(result.output).not.toContain('wrong');
-    });
-  });
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
+
+  it.live('reads recorded files inside a top-level workspace directory', () =>
+    Effect.gen(function* () {
+      yield* withTempDirEffect('texra-exec-files-', (workspace) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => mkdir(path.join(workspace, 'workspace')));
+          yield* Effect.promise(() =>
+            writeFile(path.join(workspace, 'review.md'), 'wrong'),
+          );
+          yield* Effect.promise(() =>
+            writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested'),
+          );
+          mocks.readConfig.mockResolvedValue({
+            ...config,
+            workingDirectory: workspace,
+          });
+          mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
+
+          const result = yield* new ExecutionsTool().call({
+            path: '/executions/abc123/workspace-files/workspace/review.md',
+          });
+
+          expect(result.summary).toBe(
+            'Read /executions/abc123/workspace-files/workspace/review.md',
+          );
+          expect(result.output).toContain('nested');
+          expect(result.output).not.toContain('wrong');
+        }),
+      );
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: defaultSession(),
+            runId: 'tool-test' as RunId,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    ),
+  );
 });

@@ -329,11 +329,13 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
  * agent run (registration, status accounting, error surfacing, cleanup).
  */
 export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
-  function* (
+  function* <R>(
     ctx: AgentLaunchContext,
-    runner: (handle: RunHandle) => Effect.Effect<AgentRuntimeFlowResult, Error>,
+    runner: (
+      handle: RunHandle,
+    ) => Effect.Effect<AgentRuntimeFlowResult, Error, R>,
     options?: RunFlowLifecycleOptions,
-  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
+  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, R | AppState> {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
     const handle = new RunHandle(

@@ -5,9 +5,7 @@ import { z } from 'zod';
 // Local imports
 import { hostPort } from '@common/hostPort';
 import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
-import { type ToolResult } from '@shared/schemas';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -118,7 +116,7 @@ export class ListApiKeysTool extends defineTool({
   description: `Audit only TeXRA's persisted credential store without reading secret values. Environment-backed provider keys are deliberately excluded and are reported by probe_environment instead. Known persisted provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to detect persisted provider keys and stale API-key entries. Recognised providers can be removed with unset_api_key; other entries must be removed through the current host's credential-management surface.`,
   schema: ListApiKeysInputSchema,
 }) {
-  protected execute(_input: ListApiKeysInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(listApiKeys());
+  protected execute(_input: ListApiKeysInput) {
+    return listApiKeys();
   }
 }

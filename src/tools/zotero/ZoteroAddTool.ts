@@ -22,9 +22,7 @@ import { Data, Duration, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
@@ -425,9 +423,7 @@ export class ZoteroAddTool extends defineTool({
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
 }) {
-  protected execute(input: ZoteroAddInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(addItems(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(input: ZoteroAddInput): Effect.Effect<ToolResult, unknown> {
+    return addItems(input);
   }
 }

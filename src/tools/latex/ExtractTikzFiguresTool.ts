@@ -1,11 +1,10 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { effectRuntime } from '@platform/processRuntime';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
@@ -35,12 +34,13 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   function* ({
     texPath,
     compile = true,
-  }: ExtractTikzInput): Effect.fn.Return<ToolResult, Error> {
+  }: ExtractTikzInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+    const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
     const location = pathToLocation(path.absolute);
 
     const tikzFigures = yield* Effect.tryPromise({
-      try: () => TikzPictureManager.extract(location),
+      try: () => call.inScope(() => TikzPictureManager.extract(location)),
       catch: ensureError,
     });
     if (tikzFigures.length === 0) {
@@ -65,7 +65,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
       const compiledPaths = yield* Effect.tryPromise({
-        try: () => TikzPictureManager.compile(location),
+        try: () => call.inScope(() => TikzPictureManager.compile(location)),
         catch: ensureError,
       });
       if (compiledPaths.length > 0) {
@@ -114,11 +114,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
   schema: ExtractTikzInputSchema,
 }) {
-  protected execute(input: ExtractTikzInput): Promise<ToolResult> {
-    // Compiling every picture is slow, so the run's cancellation has to reach
-    // it as interruption rather than waiting the compiles out.
-    return effectRuntime().runPromise(extractTikzFigures(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(input: ExtractTikzInput) {
+    return extractTikzFigures(input);
   }
 }

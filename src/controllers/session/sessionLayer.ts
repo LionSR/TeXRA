@@ -57,6 +57,7 @@ import {
   clearProcessRuntime,
   initProcessRuntime,
   tryProcessRuntime,
+  type ProcessRuntime,
 } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
@@ -787,7 +788,7 @@ export interface ProcessRuntimeOptions {
  * runtime, and what the agent package provides around the launches it runs
  * on an embedder's runtime (its `Sessions` API keeps them off its types).
  */
-export function processServicesLayer({
+function processServicesLayer({
   secrets,
   appState,
   setup,
@@ -810,7 +811,7 @@ export function installProcessRuntime({
   appState,
   setup,
   editorModel,
-}: ProcessRuntimeOptions): void {
+}: ProcessRuntimeOptions): ProcessRuntime {
   const identity =
     processStart instanceof Promise
       ? Layer.effect(
@@ -862,6 +863,7 @@ export function installProcessRuntime({
     list: () => onThisRuntime(listSessions),
     close: (root, signal) => onThisRuntime(closeSession(root, signal)),
   });
+  return runtime;
 }
 
 /**

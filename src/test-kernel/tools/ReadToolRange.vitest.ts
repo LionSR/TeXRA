@@ -2,15 +2,14 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it, beforeEach } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { RunId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { ReadFileTool } from '@tools/ReadTool';
-
-const RUN_ID = 'read-range-exec' as RunId;
 
 /** 10 lines: "line 1" … "line 10". */
 const SMALL = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
@@ -18,15 +17,12 @@ const LARGE = Array.from({ length: 2500 }, (_, i) => `line ${i + 1}`).join(
   '\n',
 );
 
-async function callRead(input: unknown) {
-  const tool = new ReadFileTool();
-  return withRunContext(
-    createRunContext({
-      runId: RUN_ID,
-    }),
-    () => tool.call(input),
-  );
-}
+const callRead = (input: unknown) =>
+  new ReadFileTool()
+    .call(input)
+    .pipe(
+      Effect.provide(nativeToolTestLayer({ workingDirectory: '/workspace' })),
+    );
 
 describe('read_file line ranges', () => {
   beforeEach(async () => {
@@ -39,15 +35,17 @@ describe('read_file line ranges', () => {
     });
   });
 
-  it('reads the whole file when no range is given', async () => {
-    const result = await callRead({ path: 'small.txt' });
+  it.effect('reads the whole file when no range is given', () =>
+    Effect.gen(function* () {
+      const result = yield* callRead({ path: 'small.txt' });
 
-    expect(result.summary).toBe('Read small.txt');
-    expect(result.output).toContain('line 1');
-    expect(result.output).toContain('line 10');
-  });
+      expect(result.summary).toBe('Read small.txt');
+      expect(result.output).toContain('line 1');
+      expect(result.output).toContain('line 10');
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       name: 'an explicit in-bounds range inclusively',
       range: { start: 3, end: 5 },
@@ -93,37 +91,39 @@ describe('read_file line ranges', () => {
       contains: ['line 2', 'line 4'],
       excludes: ['line 5'],
     },
-  ])('reads $name', async ({ range, summary, contains, excludes, empty }) => {
-    const result = await callRead({ path: 'small.txt', range });
+  ])('reads $name', ({ range, summary, contains, excludes, empty }) =>
+    Effect.gen(function* () {
+      const result = yield* callRead({ path: 'small.txt', range });
 
-    expect(result.summary).toBe(summary);
-    if (empty) {
-      expect(result.output).toBe('');
-    }
-    for (const line of contains) {
-      expect(result.output).toContain(line);
-    }
-    for (const line of excludes) {
-      expect(result.output).not.toContain(line);
-    }
-  });
+      expect(result.summary).toBe(summary);
+      if (empty) expect(result.output).toBe('');
+      for (const line of contains) expect(result.output).toContain(line);
+      for (const line of excludes) expect(result.output).not.toContain(line);
+    }),
+  );
 
-  it('reports remaining lines when a start-only range is truncated', async () => {
-    const result = await callRead({
-      path: 'large.txt',
-      range: { start: 2 },
-    });
+  it.effect(
+    'reports remaining lines when a start-only range is truncated',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* callRead({
+          path: 'large.txt',
+          range: { start: 2 },
+        });
 
-    expect(result.summary).toBe('Read lines 2-2001 of large.txt');
-    expect(result.output).toContain('...(truncated, 499 more lines)');
-  });
+        expect(result.summary).toBe('Read lines 2-2001 of large.txt');
+        expect(result.output).toContain('...(truncated, 499 more lines)');
+      }),
+  );
 
-  it('rejects an end below the start', async () => {
-    const result = await callRead({
-      path: 'small.txt',
-      range: { start: 5, end: 2 },
-    });
+  it.effect('rejects an end below the start', () =>
+    Effect.gen(function* () {
+      const result = yield* callRead({
+        path: 'small.txt',
+        range: { start: 5, end: 2 },
+      });
 
-    expect(result.status).toBe('error');
-  });
+      expect(result.status).toBe('error');
+    }),
+  );
 });

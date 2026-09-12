@@ -5,7 +5,6 @@ import { Cause, Effect } from 'effect';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
@@ -26,20 +25,19 @@ import {
   rejectOversizedBibAttachments,
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { requireVisibleAgent } from './proposalFlow';
+import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
 
 const log = createLog('workflowScriptAgentRunner');
 
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
-  parent: LaunchRunContext,
+  parent: DelegationParent,
 ): Effect.Effect<string, Error, Secrets | AppState> {
   const requestedModel = invocation.options.model;
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
     parentModel: parent.model,
-    withScope: <T>(read: () => T) =>
-      runInSession(parent.runScope.session, read),
+    withScope: parent.inScope,
   }).pipe(
     Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
@@ -75,7 +73,7 @@ interface WorkflowRunIdentity {
 const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   function* (
     call: Pick<WorkflowAgentInvocation, 'prompt' | 'options'>,
-    parent: LaunchRunContext,
+    parent: DelegationParent,
     defaultAgent: AgentEntry,
     runId: RunId,
   ): Effect.fn.Return<
@@ -83,24 +81,32 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     Error,
     Secrets | AppState
   > {
-    const { runScope } = parent;
+    const { session } = parent.run;
     const sharedConfigFields = {
       instruction: call.prompt,
-      ...(runScope.workingDirectory !== undefined && {
-        workingDirectory: runScope.workingDirectory,
+      ...(parent.workingDirectory !== undefined && {
+        workingDirectory: parent.workingDirectory,
       }),
-      ...(runScope.delegationAgentScope && {
-        delegationAgentScope: runScope.delegationAgentScope,
+      ...(parent.delegationAgentScope && {
+        delegationAgentScope: parent.delegationAgentScope,
       }),
     };
     let configPayload: AgentConfigPayload;
     let agentName: string;
 
     if (call.options.schema !== undefined) {
-      const agent = requireVisibleAgent(
-        AgentCategory.ToolUse,
-        call.options.agentName,
-        runScope.delegationAgentScope ?? undefined,
+      const requestedAgentName = call.options.agentName;
+      if (requestedAgentName === undefined) {
+        throw new WorkflowRunAbortError(
+          'A structured workflow call must name a tool-use agent.',
+        );
+      }
+      const agent = parent.inScope(() =>
+        requireVisibleAgent(
+          AgentCategory.ToolUse,
+          requestedAgentName,
+          parent.delegationAgentScope ?? undefined,
+        ),
       );
       const model = yield* workflowScriptModelSelection(call, parent);
       agentName = agent.name;
@@ -113,13 +119,16 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         outputSchema: call.options.schema,
       };
     } else {
+      const requestedAgentName = call.options.agentName;
       const agent =
-        call.options.agentName === undefined
+        requestedAgentName === undefined
           ? defaultAgent
-          : requireVisibleAgent(
-              AgentCategory.Workflow,
-              call.options.agentName,
-              runScope.delegationAgentScope ?? undefined,
+          : parent.inScope(() =>
+              requireVisibleAgent(
+                AgentCategory.Workflow,
+                requestedAgentName,
+                parent.delegationAgentScope ?? undefined,
+              ),
             );
       if (agent.category !== AgentCategory.Workflow) {
         throw new WorkflowRunAbortError(
@@ -132,19 +141,19 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const model = yield* workflowScriptModelSelection(call, parent);
       const [inputs, context, media] = yield* Effect.all([
         resolveInvocationFileList(
-          runScope.session,
+          session,
           runId,
           'Input file',
           call.options.inputFiles ?? [],
         ),
         resolveInvocationFileList(
-          runScope.session,
+          session,
           runId,
           'Context file',
           call.options.contextFiles ?? [],
         ),
         resolveInvocationFileList(
-          runScope.session,
+          session,
           runId,
           'Media file',
           call.options.mediaFiles ?? [],
@@ -155,9 +164,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const mediaFiles = media.map(({ file }) => file);
       const oversizedBibRejection = yield* Effect.tryPromise({
         try: () =>
-          runInSession(runScope.session, () =>
-            rejectOversizedBibAttachments(contextFiles),
-          ),
+          parent.inScope(() => rejectOversizedBibAttachments(contextFiles)),
         catch: ensureError,
       });
       if (oversizedBibRejection) {
@@ -181,7 +188,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
 
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
-  parent: LaunchRunContext,
+  parent: DelegationParent,
   defaultAgent: AgentEntry,
   checkpointId: string,
   run: WorkflowRunIdentity,
@@ -195,7 +202,7 @@ export function createWorkflowScriptAgentRunner(
 ): (
   invocation: WorkflowAgentInvocation,
 ) => Effect.Effect<RunEnd, Error, AgentRunServices> {
-  const { runScope } = parent;
+  const { session } = parent.run;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
@@ -213,7 +220,7 @@ export function createWorkflowScriptAgentRunner(
       // durable recovery (which never fires the callback) is distinguished by.
       let activeRunId: RunId | undefined;
       const completed = yield* executeStableSubagentInBand({
-        session: runScope.session,
+        session,
         runId: logicalRunId,
         parentRunId: run.runId,
         signal: invocation.signal,
@@ -240,10 +247,12 @@ export function createWorkflowScriptAgentRunner(
               configPayload,
               agentName,
               parentRunId: run.runId,
-              session: runScope.session,
-              approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
+              session,
+              approvalPromptsUnavailable:
+                parent.run.toolPolicy.approvalPromptsUnavailable,
               onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
-              runtimeUnavailableTools: parent.runtimeUnavailableTools,
+              runtimeUnavailableTools:
+                parent.run.toolPolicy.runtimeUnavailableTools,
               // The engine settles the owning phase onto the call options before
               // handing them here (declared task phase, else the phase active at
               // call time), so this is a single-owner read rather than a
@@ -258,7 +267,7 @@ export function createWorkflowScriptAgentRunner(
                   resolvedRunId,
                   run.runId,
                   'inherit',
-                  runScope.session,
+                  session,
                 );
               },
               onCost: (costUsd) => {

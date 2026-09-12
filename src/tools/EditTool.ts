@@ -1,9 +1,9 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -37,7 +37,7 @@ export type EditInput = z.infer<typeof EditInputSchema>;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,
-): Effect.fn.Return<ToolResult, unknown> {
+): Effect.fn.Return<ToolResult, unknown, ToolCall> {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {
     validate: ({ displayPath }) => {
@@ -98,13 +98,7 @@ export class EditFileTool extends defineTool({
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,
 }) {
-  protected execute(
-    input: EditInput,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
-    // The call's signal is the wait's stop: aborted when this tool call is
-    // interrupted, it interrupts the request fiber so `openRequest` closes a
-    // pending request instead of leaving it approvable after the run stopped.
-    return effectRuntime().runPromise(edit(input), { signal });
+  protected execute(input: EditInput) {
+    return edit(input);
   }
 }

@@ -1,7 +1,6 @@
 import { Context, Layer } from 'effect';
 
-import type { AppState } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
+import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 // Deliberately not the `@tools/goal` barrel: it also loads goalStore, whose
@@ -92,4 +91,4 @@ export class ToolInjections extends Context.Service<
  * Named once here because the launch, resume and delegation signatures all
  * carry exactly these three tags in their `R` channel.
  */
-export type AgentRunServices = ToolInjections | AppState | Secrets;
+export type AgentRunServices = ProcessServices;

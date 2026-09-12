@@ -1,12 +1,15 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { it } from '@effect/vitest';
+// Test composition imports
+
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
@@ -39,20 +42,34 @@ describe('ExecutionsTool resumability fallback', () => {
 
   beforeEach(() => {});
 
-  it('does not label a metadata-free run carrying a snapshot as completed', async () => {
-    const runId = 'abc123abc123' as RunId;
-    const session = defaultSession();
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(
-      session.ledger.appendBatch(runId, null, [openingSnapshot(runId)]),
-    );
+  it.live(
+    'does not label a metadata-free run carrying a snapshot as completed',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'abc123abc123' as RunId;
+        const session = defaultSession();
+        publishTestRunStart(session, runId);
+        yield* session.ledger.appendBatch(runId, null, [
+          openingSnapshot(runId),
+        ]);
 
-    const result = await new ExecutionsTool().call({
-      path: `/executions/${runId}`,
-    });
+        const result = yield* new ExecutionsTool().call({
+          path: `/executions/${runId}`,
+        });
 
-    expect(result.status).toBe('executed');
-    expect(result.output).toContain('Status: resumable');
-    expect(result.output).not.toContain('Status: completed');
-  });
+        expect(result.status).toBe('executed');
+        expect(result.output).toContain('Status: resumable');
+        expect(result.output).not.toContain('Status: completed');
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: defaultSession(),
+              runId: 'tool-test' as RunId,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
 });

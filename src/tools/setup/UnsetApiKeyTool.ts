@@ -12,9 +12,8 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';
@@ -106,7 +105,7 @@ export class UnsetApiKeyTool extends defineTool({
   description: `Remove a provider's API key from TeXRA's persisted credential store. Use when the user wants to rotate or clear credentials. Non-destructive of any other state: just deletes that one secret. If the key is actually coming from a \`<PROVIDER>_API_KEY\` environment variable, this tool will report that: the credential store has nothing to remove, and the env var must be cleared in the user's shell.`,
   schema: UnsetApiKeyInputSchema,
 }) {
-  protected execute(input: UnsetApiKeyInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(unsetApiKey(input));
+  protected execute(input: UnsetApiKeyInput) {
+    return unsetApiKey(input);
   }
 }

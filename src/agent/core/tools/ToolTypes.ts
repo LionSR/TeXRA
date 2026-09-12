@@ -3,6 +3,7 @@
  */
 
 import type { ToolDefinition, ToolResult } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 /** Product hosts that expose the shared agent-tool registry. */
 export type ToolHost = 'cli' | 'desktop' | 'extension';
@@ -14,7 +15,7 @@ export type ToolHost = 'cli' | 'desktop' | 'extension';
  * ToolResult values; unexpected/programmer failures should throw and let
  * BaseTool convert them at the boundary.
  */
-export interface ITool {
+export interface ITool<E = unknown, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly ToolHost[];
@@ -38,30 +39,27 @@ export interface ITool {
   readonly slow?: boolean;
   readonly deferLogUntilApproval?: boolean;
   readonly streamsOutput?: boolean;
-  /**
-   * Run the tool. `signal` is the caller's cancellation, aborted when the
-   * call is interrupted: a tool that waits on a person, or runs its work on
-   * a runtime of its own, hands it to that wait so the caller's stop reaches
-   * it. A caller with no cancellation of its own passes none.
-   */
-  call(rawInput: unknown, signal?: AbortSignal): Promise<ToolResult>;
+  call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 
 /** Tool lookup abstraction — supports dependency injection and mock tools. */
-export interface IToolRegistry {
-  get(name: string): ITool | undefined;
+export interface IToolRegistry<E = unknown, R = never> {
+  get(name: string): ITool<E, R> | undefined;
   has(name: string): boolean;
 }
 
 /** Map- or Record-backed IToolRegistry. */
-export class MapToolRegistry implements IToolRegistry {
-  private readonly tools: Map<string, ITool>;
+export class MapToolRegistry<E = unknown, R = never> implements IToolRegistry<
+  E,
+  R
+> {
+  private readonly tools: Map<string, ITool<E, R>>;
 
-  constructor(tools: Map<string, ITool> | Record<string, ITool>) {
+  constructor(tools: Map<string, ITool<E, R>> | Record<string, ITool<E, R>>) {
     this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
   }
 
-  get(name: string): ITool | undefined {
+  get(name: string): ITool<E, R> | undefined {
     return this.tools.get(name);
   }
 

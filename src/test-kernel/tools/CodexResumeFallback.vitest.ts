@@ -1,4 +1,5 @@
-import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
@@ -6,20 +7,19 @@ import { Effect } from 'effect';
 // also the only place the fresh `startThread` launch branch is exercised.
 
 import pDefer from 'p-defer';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
-  getCurrentToolContexts: vi.fn(),
   registerRun: vi.fn(),
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
-  currentSession: vi.fn(),
   importCodexClass: vi.fn(),
   findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
@@ -31,23 +31,8 @@ vi.mock('@tools/approval/bashApproval', () => ({
   buildBashApprovalRejectedResult: vi.fn(),
 }));
 
-vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
-  getCurrentToolContexts: mocks.getCurrentToolContexts,
-}));
-
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
-}));
-
-vi.mock('@agent/runtime/RunContext', () => ({
-  runInSession: (_session: unknown, run: () => unknown) => run(),
-  getRunContextRunId: (ctx: any) => ctx?.runId,
-  getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
-  getRunContextInteractions: (ctx: any) => ctx?.interactions,
-}));
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
 }));
 
 // Session-keyed registries: the suite pins one fake session and reads the
@@ -113,18 +98,6 @@ function completedChildRunLoop() {
   return Effect.forkDetach(Effect.void);
 }
 
-function toolContext(runContext: Record<string, unknown> = {}): unknown {
-  return {
-    runContext: {
-      runId: parentRunId,
-      workingDirectory: undefined,
-      interactions: { name: 'fake-runtime-host' },
-      ...runContext,
-    },
-    callContext: { tracker: {}, hooks: {} },
-  };
-}
-
 /**
  * Capture the run id and strategy passed to the (single) child run loop
  * launch. The launch mints the run id itself, and that is the run a waiting
@@ -154,13 +127,12 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.requestBashApproval.mockReturnValue(
       Effect.succeed({ action: 'approve' }),
     );
-    mocks.getCurrentToolContexts.mockReturnValue(toolContext());
+
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
-    mocks.currentSession.mockReturnValue(testSession);
   });
 
   afterEach(() => {
@@ -169,117 +141,148 @@ describe('codex tool - atomic resume fallback', () => {
     CodexThreads.release('stale-thread');
   });
 
-  it('logs a detached run-loop rejection from a fresh Codex thread launch', async () => {
-    const childRun = createFakeAgentCliChildRun(childRunId);
-    const error = vi
-      .spyOn(childRun.logger, 'error')
-      .mockImplementation(() => {});
-    const lateFailure = new Error('late Codex finalization failed');
-    mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
-    mocks.startChildRunLoop.mockReturnValue(
-      Effect.forkDetach(Effect.fail(lateFailure)),
-    );
-    mocks.importCodexClass.mockResolvedValue(
-      class MockCodex {
-        startThread(): {
-          id: undefined;
-          runStreamed: ReturnType<typeof vi.fn>;
-        } {
-          return { id: undefined, runStreamed: vi.fn() };
-        }
-      },
-    );
+  it.live(
+    'logs a detached run-loop rejection from a fresh Codex thread launch',
+    () =>
+      Effect.gen(function* () {
+        const childRun = createFakeAgentCliChildRun(childRunId);
+        const error = vi
+          .spyOn(childRun.logger, 'error')
+          .mockImplementation(() => {});
+        const lateFailure = new Error('late Codex finalization failed');
+        mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
+        mocks.startChildRunLoop.mockReturnValue(
+          Effect.forkDetach(Effect.fail(lateFailure)),
+        );
+        mocks.importCodexClass.mockResolvedValue(
+          class MockCodex {
+            startThread(): {
+              id: undefined;
+              runStreamed: ReturnType<typeof vi.fn>;
+            } {
+              return { id: undefined, runStreamed: vi.fn() };
+            }
+          },
+        );
 
-    await expect(
-      new CodexTool().call({
-        prompt: 'launch Codex',
-        sandbox_mode: 'workspace-write',
-      }),
-    ).resolves.toMatchObject({ status: 'executed' });
-    await vi.waitFor(() => {
-      expect(error).toHaveBeenCalledWith('Codex run loop failed after launch', {
-        data: lateFailure,
-      });
-    });
-  });
+        expect(
+          yield* new CodexTool().call({
+            prompt: 'launch Codex',
+            sandbox_mode: 'workspace-write',
+          }),
+        ).toMatchObject({ status: 'executed' });
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(error).toHaveBeenCalledWith(
+              'Codex run loop failed after launch',
+              {
+                data: lateFailure,
+              },
+            );
+          }),
+        );
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+          }),
+        ),
+      ),
+  );
 
-  it('releases a resume reservation when launch rejects a missing run context', async () => {
-    mocks.getCurrentToolContexts.mockReturnValue(undefined);
+  it.live(
+    'releases a resume reservation when launch rejects a missing run context',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* new CodexTool().call({
+            prompt: 'resume Codex',
+            sandbox_mode: 'workspace-write',
+            thread_id: 'stale-thread',
+          }),
+        ).toMatchObject({ status: 'error' });
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-    await expect(
-      new CodexTool().call({
-        prompt: 'resume Codex',
-        sandbox_mode: 'workspace-write',
-        thread_id: 'stale-thread',
-      }),
-    ).resolves.toMatchObject({ status: 'error' });
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+        const release = CodexThreads.claim('stale-thread');
+        expect(release).toBeTypeOf('function');
+        release?.();
+      }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 
-    const release = CodexThreads.claim('stale-thread');
-    expect(release).toBeTypeOf('function');
-    release?.();
-  });
+  it.live(
+    'launches one fallback loop when concurrent calls use the same stale thread_id',
+    () =>
+      Effect.gen(function* () {
+        const sdkImportStarted = pDefer<void>();
+        const sdkReady = pDefer<any>();
+        const thread = {
+          id: 'stale-thread',
+          runStreamed: vi.fn(),
+        };
+        const runs = {
+          getHandle: () => undefined,
+        } as any;
+        const getLaunch = captureRunLoopLaunch();
 
-  it('launches one fallback loop when concurrent calls use the same stale thread_id', async () => {
-    const sdkImportStarted = pDefer<void>();
-    const sdkReady = pDefer<any>();
-    const thread = {
-      id: 'stale-thread',
-      runStreamed: vi.fn(),
-    };
-    const runs = {
-      getHandle: () => undefined,
-    } as any;
-    const getLaunch = captureRunLoopLaunch();
+        mocks.importCodexClass.mockImplementation(() => {
+          sdkImportStarted.resolve(undefined);
+          return sdkReady.promise;
+        });
 
-    mocks.importCodexClass.mockImplementation(() => {
-      sdkImportStarted.resolve(undefined);
-      return sdkReady.promise;
-    });
+        const tool = new CodexTool();
+        const first = yield* Effect.forkChild(
+          tool.call({
+            prompt: 'continue the refactor',
+            sandbox_mode: 'workspace-write',
+            thread_id: 'stale-thread',
+          }),
+        );
+        yield* Effect.promise(() => sdkImportStarted.promise);
 
-    const tool = new CodexTool();
-    const first = tool.call({
-      prompt: 'continue the refactor',
-      sandbox_mode: 'workspace-write',
-      thread_id: 'stale-thread',
-    });
-    await sdkImportStarted.promise;
+        const second = yield* Effect.forkChild(
+          tool.call({
+            prompt: 'also update the tests',
+            sandbox_mode: 'workspace-write',
+            thread_id: 'stale-thread',
+          }),
+        );
+        yield* Effect.promise(() => Promise.resolve());
 
-    const second = tool.call({
-      prompt: 'also update the tests',
-      sandbox_mode: 'workspace-write',
-      thread_id: 'stale-thread',
-    });
-    await Promise.resolve();
+        expect(mocks.importCodexClass).toHaveBeenCalledTimes(1);
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-    expect(mocks.importCodexClass).toHaveBeenCalledTimes(1);
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+        sdkReady.resolve(
+          class MockCodex {
+            resumeThread(threadId: string): typeof thread {
+              mocks.resumeThread(threadId);
+              return thread;
+            }
+          },
+        );
+        const firstResult = yield* Fiber.join(first);
+        getLaunch().strategy?.onTurnSuccess?.({}, { runs } as any);
+        const secondResult = yield* Fiber.join(second);
 
-    sdkReady.resolve(
-      class MockCodex {
-        resumeThread(threadId: string): typeof thread {
-          mocks.resumeThread(threadId);
-          return thread;
-        }
-      },
-    );
-    const firstResult = await first;
-    getLaunch().strategy?.onTurnSuccess?.({}, { runs } as any);
-    const secondResult = await second;
+        expect(firstResult.status).toBe('executed');
+        expect(secondResult.summary).toMatch(/Follow-up queued/);
+        expect(mocks.resumeThread).toHaveBeenCalledOnce();
+        expect(mocks.resumeThread).toHaveBeenCalledWith('stale-thread');
+        expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+        expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+          getLaunch().runId,
+          'also update the tests',
+          expect.objectContaining({ session: expect.anything() }),
+        );
 
-    expect(firstResult.status).toBe('executed');
-    expect(secondResult.summary).toMatch(/Follow-up queued/);
-    expect(mocks.resumeThread).toHaveBeenCalledOnce();
-    expect(mocks.resumeThread).toHaveBeenCalledWith('stale-thread');
-    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-    expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-    expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-      getLaunch().runId,
-      'also update the tests',
-      expect.objectContaining({ session: expect.anything() }),
-    );
-
-    getLaunch().strategy?.releaseSessionOwnership?.();
-    expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
-  });
+        getLaunch().strategy?.releaseSessionOwnership?.();
+        expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+          }),
+        ),
+      ),
+  );
 });

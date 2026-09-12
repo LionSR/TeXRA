@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 /**
  * Claude Code CLI tool — spin off a Claude Code agent via @anthropic-ai/claude-agent-sdk.
  *
@@ -39,13 +38,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { runInSession } from '@agent/runtime/RunContext';
-import {
-  getCurrentToolContexts,
-  type CurrentToolContexts,
-} from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
+import { ToolError } from '@shared/schemas';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -533,37 +529,27 @@ export class ClaudeAgentTool extends defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
 }) {
-  protected execute(
-    input: ClaudeAgentInput,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
-    // The one run edge of this tool (PRD run-edge category b): the dispatch
-    // below is an Effect program, run once here on the process runtime. A
-    // collaborator's rejection is re-raised as its own cause; a `ToolError`
-    // stays a typed failure and `runPromise` rejects with it. The call's
-    // signal is its stop: aborted when this tool call is interrupted, it
-    // interrupts the fiber so a pending bash approval closes as cancelled
-    // instead of staying approvable after the run stopped.
-    return effectRuntime().runPromise(
-      reraiseAgentCliCallFailure(
-        this.run(
-          input,
-          currentSession(),
-          getCurrentToolContexts(),
-          AsyncLocalStorage.bind(requestBashApproval),
-        ),
-      ),
-      { signal },
-    );
+  protected execute(input: ClaudeAgentInput) {
+    return Effect.gen({ self: this }, function* () {
+      const toolCall = yield* ToolCall;
+      if (!toolCall.run)
+        return yield* Effect.fail(
+          new ToolError('This tool requires an active agent session.'),
+        );
+      const session = toolCall.run.session;
+      return yield* reraiseAgentCliCallFailure(
+        this.run(input, session, toolCall, requestBashApproval),
+      );
+    });
   }
 
   private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
     session: SessionHandle,
-    contexts: CurrentToolContexts | undefined,
+    toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets | ToolCall> {
     const config = yield* agentCliCall(() =>
       runInSession(session, getClaudeAgentConfig),
     );
@@ -576,7 +562,7 @@ export class ClaudeAgentTool extends defineTool({
 
     return yield* dispatchAgentCliTool({
       session,
-      contexts,
+      toolCall,
       requestApproval,
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
@@ -618,7 +604,7 @@ const launchClaudeAgentSession = Effect.fn(
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets | ToolCall> {
   const config = yield* agentCliCall(() =>
     runInSession(session, getClaudeAgentConfig),
   );

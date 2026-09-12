@@ -54,6 +54,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -309,7 +310,11 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
     ...(init.attachment ? { attachment: init.attachment } : {}),
   }).pipe(
     Effect.provide(
-      Layer.mergeAll(invokerLayer(init.script, requests), followUpsLayer).pipe(
+      Layer.mergeAll(
+        invokerLayer(init.script, requests),
+        followUpsLayer,
+        nativeToolTestLayer(),
+      ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
       ),

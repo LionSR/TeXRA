@@ -140,10 +140,7 @@ describe('tool-use follow-up progress events', () => {
     const onFollowUp = vi.fn();
     const otherRun = 'fa0003' as RunId;
 
-    let cleanup: () => void = () => {};
-    withRunContext(createRunContext({ session, runId }), () => {
-      cleanup = listenForFollowUp(onFollowUp);
-    });
+    const cleanup = listenForFollowUp(session, runId, onFollowUp);
     unsubscribeFollowUpObservers.push(cleanup);
 
     notifyFollowUpSent(otherRun, session);

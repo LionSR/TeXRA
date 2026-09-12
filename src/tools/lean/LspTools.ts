@@ -1,7 +1,6 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
@@ -131,19 +130,17 @@ If you expected errors:
 2. Make sure the file is saved
 3. Try \`lean_file\` with command "restart" to refresh the Lean server`;
 
-/**
- * The one run of a Lean tool's program settles here (R1: the tool execute()
- * contract is the Promise boundary). A failure — the port's typed failure, a
- * host rejection, or an unwired-services defect — becomes the same `ToolError`
- * the old try/catch produced, with the squashed cause as `cause`.
- */
-function foldToolExit(
-  exit: Exit.Exit<ToolResult, unknown>,
-  onFailure: (cause: unknown) => ToolError,
-): ToolResult {
-  if (Exit.isFailure(exit)) throw onFailure(Cause.squash(exit.cause));
-  return exit.value;
-}
+const catchLeanFailure = (
+  message: (cause: unknown) => string,
+  summary: string,
+) =>
+  Effect.catchCause((cause: Cause.Cause<unknown>) => {
+    if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+    const error = Cause.squash(cause);
+    return Effect.fail(
+      new ToolError(message(error), { cause: error, summary }),
+    );
+  });
 
 export class LeanDiagnosticsTool extends defineTool({
   name: 'lean_diagnostics',
@@ -164,15 +161,15 @@ Tips:
 - Import/dependency errors may not surface as diagnostics: check imports manually`,
   schema: LeanDiagnosticsInputSchema,
 }) {
-  protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
+  protected execute(
+    input: LeanDiagnosticsInput,
+  ): Effect.Effect<ToolResult, unknown> {
     const { command, file } = input;
-    return foldToolExit(
-      await effectRuntime().runPromiseExit(this.diagnose(file, command)),
-      (cause) =>
-        new ToolError(
-          `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
-          { cause, summary: 'Failed to get diagnostics' },
-        ),
+    return this.diagnose(file, command).pipe(
+      catchLeanFailure(
+        (cause) => `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
+        'Failed to get diagnostics',
+      ),
     );
   }
 
@@ -241,30 +238,26 @@ ${FILE_COMMAND_PROSE}
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanFileInputSchema,
 }) {
-  protected async execute(input: LeanFileInput): Promise<ToolResult> {
+  protected execute(input: LeanFileInput): Effect.Effect<ToolResult, unknown> {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
-    return foldToolExit(
-      await effectRuntime().runPromiseExit(
-        Effect.gen(function* () {
-          const success = yield* getLeanLanguageServices().executeFileCommand(
-            command,
-            file,
-          );
-          if (!success) {
-            return errorResult(
-              `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
-              { summary: 'Command failed' },
-            );
-          }
-          return executed(`Executed "${command}" on ${file}`, description);
-        }),
+    return Effect.gen(function* () {
+      const success = yield* getLeanLanguageServices().executeFileCommand(
+        command,
+        file,
+      );
+      if (!success) {
+        return errorResult(
+          `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
+          { summary: 'Command failed' },
+        );
+      }
+      return executed(`Executed "${command}" on ${file}`, description);
+    }).pipe(
+      catchLeanFailure(
+        (cause) => `Error: ${toErrorMessage(cause)}`,
+        'Command failed',
       ),
-      (cause) =>
-        new ToolError(`Error: ${toErrorMessage(cause)}`, {
-          cause,
-          summary: 'Command failed',
-        }),
     );
   }
 }
@@ -278,32 +271,27 @@ ${PROJECT_COMMAND_PROSE}
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanProjectInputSchema,
 }) {
-  protected async execute(input: LeanProjectInput): Promise<ToolResult> {
+  protected execute(
+    input: LeanProjectInput,
+  ): Effect.Effect<ToolResult, unknown> {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
-    return foldToolExit(
-      await effectRuntime().runPromiseExit(
-        Effect.gen(function* () {
-          yield* getLeanLanguageServices().executeProjectCommand(command);
+    return Effect.gen(function* () {
+      yield* getLeanLanguageServices().executeProjectCommand(command);
 
-          if (command === 'build') {
-            return executed(
-              `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
-              description,
-            );
-          }
+      if (command === 'build') {
+        return executed(
+          `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
+          description,
+        );
+      }
 
-          return executed(`Executed "${command}" successfully`, description);
-        }),
+      return executed(`Executed "${command}" successfully`, description);
+    }).pipe(
+      catchLeanFailure(
+        (cause) => `Error executing "${command}": ${toErrorMessage(cause)}`,
+        'Command failed',
       ),
-      (cause) =>
-        new ToolError(
-          `Error executing "${command}": ${toErrorMessage(cause)}`,
-          {
-            cause,
-            summary: 'Command failed',
-          },
-        ),
     );
   }
 }
@@ -326,7 +314,9 @@ Line and column are 1-indexed.
 In VS Code, this uses the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanInspectInputSchema,
 }) {
-  protected async execute(input: LeanInspectInput): Promise<ToolResult> {
+  protected execute(
+    input: LeanInspectInput,
+  ): Effect.Effect<ToolResult, unknown> {
     const { type, file, line, column } = input;
     // Convert to 0-indexed for LSP
     const line0 = line - 1;
@@ -349,13 +339,11 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
         break;
     }
 
-    return foldToolExit(
-      await effectRuntime().runPromiseExit(program),
-      (cause) =>
-        new ToolError(`Error: ${toErrorMessage(cause)}`, {
-          cause,
-          summary: `Failed to get ${type}`,
-        }),
+    return program.pipe(
+      catchLeanFailure(
+        (cause) => `Error: ${toErrorMessage(cause)}`,
+        `Failed to get ${type}`,
+      ),
     );
   }
 

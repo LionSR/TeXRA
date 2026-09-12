@@ -71,6 +71,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
@@ -590,11 +591,17 @@ describe('completedRunArchive facade', () => {
           ],
         });
 
-        const endpoint = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const toolLayer = nativeToolTestLayer({
+          run: { session: taskSession, runId, toolPolicy: {} },
+          inScope: (operation) =>
+            runWithWorkspaceRoots(taskSession.roots, operation),
+        });
+
+        const endpoint = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(endpoint.status).toBe('executed');
         expect(endpoint.output).toContain('Conversation (4 messages)');
         expect(endpoint.output).toContain('Prove the first lemma.');
@@ -602,20 +609,20 @@ describe('completedRunArchive facade', () => {
         expect(endpoint.output).toContain('Now prove the second lemma.');
         expect(endpoint.output).toContain('Second proof.');
 
-        const firstPage = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const firstPage = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             offset: 0,
             limit: 2,
-          }),
-        );
-        const secondPage = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+          })
+          .pipe(Effect.provide(toolLayer));
+        const secondPage = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             offset: 2,
             limit: 2,
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(firstPage.output).toContain('Source: streamLog');
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
@@ -641,12 +648,12 @@ describe('completedRunArchive facade', () => {
           ).toHaveLength(2);
         }
 
-        const lineRange = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
+        const lineRange = yield* new ExecutionsTool()
+          .call({
             path: `/executions/${runId}/conversation`,
             view_range: [1, 10],
-          }),
-        );
+          })
+          .pipe(Effect.provide(toolLayer));
         expect(lineRange.status).toBe('error');
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
@@ -725,26 +732,42 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  it('reports a diagnostic-only transcript as no conversation', async () => {
-    const runId = '0999cb0999cb' as RunId;
+  effectIt.live('reports a diagnostic-only transcript as no conversation', () =>
+    Effect.gen(function* () {
+      const runId = '0999cb0999cb' as RunId;
 
-    await stampRun(runId);
+      yield* Effect.promise(() => stampRun(runId));
 
-    await appendRows(runId, [
-      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-    ]);
+      yield* Effect.promise(() =>
+        appendRows(runId, [
+          logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+        ]),
+      );
 
-    const result = await readCompletedRunConversation(runId);
-    expect(result).toEqual({
-      conversation: null,
-      source: 'none',
-    });
-    expect(hasCompletedRunConversationEvidence(result)).toBe(false);
+      const result = yield* Effect.promise(() =>
+        readCompletedRunConversation(runId),
+      );
+      expect(result).toEqual({
+        conversation: null,
+        source: 'none',
+      });
+      expect(hasCompletedRunConversationEvidence(result)).toBe(false);
 
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${runId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain('Conversation (0 messages)');
-  });
+      const endpoint = yield* new ExecutionsTool()
+        .call({
+          path: `/executions/${runId}/conversation`,
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              run: { session: taskSession, runId, toolPolicy: {} },
+              inScope: (operation) =>
+                runWithWorkspaceRoots(taskSession.roots, operation),
+            }),
+          ),
+        );
+      expect(endpoint.status).toBe('executed');
+      expect(endpoint.output).toContain('Conversation (0 messages)');
+    }),
+  );
 });
