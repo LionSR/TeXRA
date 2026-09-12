@@ -34,7 +34,6 @@ import {
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { prepareMainViewRunLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
@@ -1263,12 +1262,12 @@ function createWindow(options: {
               if (!binding) {
                 throw new Error('Open a folder before running setup.');
               }
-              const { buildDesktopSetupExecuteMessage } =
+              const { buildDesktopSetupRunRequest } =
                 await import('@controllers/onboarding/setupLaunch');
-              const message = await buildDesktopSetupExecuteMessage(
+              const request = await buildDesktopSetupRunRequest(
                 options.secrets,
               );
-              if (!message) {
+              if (!request) {
                 throw new Error(
                   'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
                 );
@@ -1278,11 +1277,7 @@ function createWindow(options: {
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
               await effectRuntime().runPromise(loadAgents());
               await runInSession(binding.project.session, async () =>
-                binding.run.runValidated(
-                  await effectRuntime().runPromise(
-                    prepareMainViewRunLaunch(message, agentRunHost),
-                  ),
-                ),
+                binding.run.runValidated(request),
               );
             },
             catch: (error) => error,

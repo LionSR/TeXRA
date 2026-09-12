@@ -1,6 +1,9 @@
 // Local imports - run requests
 import { Effect } from 'effect';
-import type { ValidatedRunRequest } from '@agent/core/state/runRequests';
+import {
+  validateRunRequest,
+  type ValidatedRunRequest,
+} from '@agent/core/state/runRequests';
 
 // Local imports - team launch
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
@@ -15,18 +18,26 @@ import {
 
 // Local imports - main-view run
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
-import {
-  type MainViewRunPreparationResult,
-  prepareMainViewRunRequest,
-  prepareMainViewTeamRunRequest,
-} from '@controllers/mainView/MainViewRunController';
 
 // Local imports - shared types and errors
-import type { MainViewExecuteMessage } from '@shared/schemas';
+import {
+  AgentCategory,
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigSchema,
+  type AgentDelegationScope,
+} from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isPastedImage } from '@utils/files/pastedImageName';
+import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';
+
+type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
+
+type LaunchPreparation =
+  | { valid: true; request: ValidatedRunRequest }
+  | { valid: false; message: string; docsCommand?: string };
 
 /** Host interactions needed by the shared team-launch decision sequence. */
 export interface MainViewRunLaunchHost {
@@ -37,18 +48,91 @@ export interface MainViewRunLaunchHost {
   showInfoMessage(message: string): Promise<void> | void;
 }
 
-/** Resolve an ordinary or team launch and answer refusals on the request path. */
-export function prepareMainViewRunLaunch(
-  message: MainViewExecuteMessage,
+/** Turn the launcher's selections into a validated run request. */
+function buildLaunchRequest(
+  launch: LaunchRequest['launch'],
+  instruction: string,
+  agent: string,
+  agentCategory: AgentCategory,
+  team?: {
+    readonly delegationAgentScope: AgentDelegationScope;
+    readonly cli: { readonly multiAgentPresetId: string };
+  },
+): LaunchPreparation {
+  const isToolUse = agentCategory === AgentCategory.ToolUse;
+  if (!isToolUse && launch.inputFiles.length === 0) {
+    return {
+      valid: false,
+      message: 'Choose an input file first.',
+      docsCommand: 'file-management',
+    };
+  }
+
+  const toolConfigResult = isToolUse
+    ? { success: true as const, data: DEFAULT_TOOL_CONFIG }
+    : ToolConfigSchema.safeParse(launch);
+  if (!toolConfigResult.success) {
+    const issue = toolConfigResult.error.issues[0];
+    const path = issue?.path.join('.') || 'toolConfig';
+    return {
+      valid: false,
+      message: `Invalid tool configuration (${path}): ${issue?.message ?? 'validation failed'}`,
+    };
+  }
+
+  const validation = validateRunRequest({
+    config: {
+      agent,
+      model: launch.model,
+      instruction,
+      workingDirectory: launch.workingDirectory.trim() || undefined,
+      inputFiles: launch.inputFiles,
+      contextFiles: launch.contextFiles,
+      agentCategory,
+      ...(team
+        ? {
+            delegationAgentScope: team.delegationAgentScope,
+            cli: { multiAgentPresetId: team.cli.multiAgentPresetId },
+          }
+        : {}),
+      // Workflow output paths are implicit in the input list. Agent settings
+      // may still declare generated filenames later during prompt rendering.
+      outputFiles: [],
+      toolConfig: toolConfigResult.data,
+      mediaFiles: launch.mediaFiles.map((file) =>
+        isPastedImage(file) ? getPastedImageFullPath(file) : file,
+      ),
+    },
+  });
+
+  if (!validation.valid) {
+    return { valid: false, message: validation.message };
+  }
+
+  return { valid: true, request: validation.request };
+}
+
+/** Both GUI hosts launch the selections carried by the requesting surface. */
+export function prepareSurfaceLaunch(
+  { launch, instruction }: LaunchRequest,
   host: MainViewRunLaunchHost,
 ): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
   return Effect.gen(function* () {
-    let preparation: MainViewRunPreparationResult;
+    let preparation: LaunchPreparation;
     let infoMessage: string | undefined;
-    if (message.session?.launchTarget !== 'team') {
-      preparation = prepareMainViewRunRequest(message);
+    if (launch.launchTarget !== 'team') {
+      // AgentConfigSchema prefaults agent/model; reject missing UI selections
+      // before schema parsing so the user sees the real form problem.
+      const agent = launch.agent[launch.sessionType];
+      preparation =
+        !agent || !launch.model
+          ? {
+              valid: false,
+              message: 'Choose an agent, a model, and a run type first.',
+            }
+          : buildLaunchRequest(launch, instruction, agent, launch.sessionType);
     } else {
-      const teamId = message.session.teamId;
+      const teamId = launch.selectedTeamId || undefined;
       if (!teamId)
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
       const resolution = yield* resolveTeamLaunch({
@@ -85,10 +169,18 @@ export function prepareMainViewRunLaunch(
             ),
           });
         case 'ready':
-          preparation = prepareMainViewTeamRunRequest(
-            message,
-            resolution.fields,
-          );
+          // The renderer's selected agent is intentionally ignored: the
+          // authoritative team plan resolves both the root and delegation
+          // roster at launch time.
+          preparation = !launch.model
+            ? { valid: false, message: 'Choose a model first.' }
+            : buildLaunchRequest(
+                launch,
+                instruction,
+                resolution.fields.agent,
+                AgentCategory.ToolUse,
+                resolution.fields,
+              );
           if (resolution.partial)
             infoMessage = formatPartialTeamLaunchMessage(
               resolution.missingNames,
@@ -112,31 +204,4 @@ export function prepareMainViewRunLaunch(
     if (infoMessage) void host.showInfoMessage(infoMessage);
     return preparation.request;
   });
-}
-
-/** Both GUI hosts launch the selections carried by the requesting surface. */
-export function prepareSurfaceLaunch(
-  { launch, instruction }: Extract<HostRequest, { kind: 'launch' }>,
-  host: MainViewRunLaunchHost,
-): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
-  return prepareMainViewRunLaunch(
-    {
-      agent: launch.agent[launch.sessionType],
-      model: launch.model,
-      instruction,
-      agentCategory: launch.sessionType,
-      files: {
-        inputFiles: launch.inputFiles,
-        contextFiles: launch.contextFiles,
-        mediaFiles: launch.mediaFiles,
-      },
-      session: {
-        launchTarget: launch.launchTarget,
-        teamId: launch.selectedTeamId || undefined,
-        workingDirectory: launch.workingDirectory.trim() || undefined,
-      },
-      toolConfig: launch,
-    },
-    host,
-  );
 }
