@@ -16,7 +16,6 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
-  WORKFLOW_TASK_STATUS_LABEL,
   type RunId,
   type RunPhase,
 } from '@shared/schemas';
@@ -441,10 +440,10 @@ function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
     isTerminalOutcomePhase(run.status) &&
     run.identity?.kind === 'multiAgentWorkflow'
   ) {
-    lines.set(
-      'outcome',
-      `${WORKFLOW_TASK_STATUS_LABEL[run.status]}: ${run.identity.workflowName}`,
-    );
+    // `run.status` is a run phase, so the word comes from the fold's own
+    // run-status label, never from the workflow-*call* status table the two
+    // vocabularies happen to share four key names with.
+    lines.set('outcome', `${run.statusLabel}: ${run.identity.workflowName}`);
   }
   return lines;
 }

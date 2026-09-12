@@ -609,14 +609,12 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
         );
         yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          lifecycle: 'active',
           currentStageId: longStageId,
           stages: [
             {
               id: longStageId,
               title: longTitle,
               order: 0,
-              lifecycle: 'active',
               startedAt: timestamp,
             },
           ],
@@ -709,7 +707,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         const runId = yield* registerWorkflowRun('cancelled-summary');
         const timestamp = new Date().toISOString();
         yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          lifecycle: 'cancelled',
+          outcome: 'cancelled',
           stages: [],
           calls: [
             {
@@ -781,22 +779,18 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         });
         const failedAt = new Date(base).toISOString();
         yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          lifecycle: 'active',
           currentStageId: 'stage-2',
           stages: [
             {
               id: 'stage-1',
               title: 'Earlier stage',
               order: 0,
-              lifecycle: 'failed',
               startedAt: failedAt,
-              completedAt: failedAt,
             },
             {
               id: 'stage-2',
               title: 'Current stage',
               order: 1,
-              lifecycle: 'active',
               startedAt: failedAt,
             },
           ],
@@ -871,22 +865,18 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           },
         }));
         yield* writeWorkflowRunSnapshot(defaultSession(), runId, {
-          lifecycle: 'active',
           currentStageId: 'stage-2',
           stages: [
             {
               id: 'stage-1',
               title: 'Earlier stage',
               order: 0,
-              lifecycle: 'completed',
               startedAt: timestamp,
-              completedAt: timestamp,
             },
             {
               id: 'stage-2',
               title: 'Current stage',
               order: 1,
-              lifecycle: 'active',
               startedAt: timestamp,
             },
           ],

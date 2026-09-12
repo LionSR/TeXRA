@@ -187,7 +187,7 @@ function markToolUseAgent(...runIds: RunId[]): void {
 /** A workflow-task row as the projector builds one, for the suites that seed
  *  a dashboard directly instead of replaying a stream log. */
 function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
-  const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
+  const statusLabel = call.status === 'running' ? 'Running' : 'Queued';
   return {
     kind: 'workflowTask',
     id,

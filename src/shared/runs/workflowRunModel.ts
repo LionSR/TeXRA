@@ -626,11 +626,6 @@ function isAttentionStatus(
   return status === 'failed' || status === 'running';
 }
 
-const QUEUED_STATUSES: ReadonlySet<WorkflowCallProgress['status']> = new Set([
-  'planned',
-  'queued',
-]);
-
 function taskRowOf(row: WorkflowTaskRow): WorkflowPhaseRow {
   return { kind: 'task', key: `task:${row.id}`, row };
 }
@@ -694,7 +689,7 @@ export function workflowPhaseRows(
   for (const row of phase.tasks) {
     const status = row.call.status;
     if (isAttentionStatus(status)) attention.push(row);
-    else if (QUEUED_STATUSES.has(status)) queued.push(row);
+    else if (status === 'queued') queued.push(row);
     else done.push(row);
   }
   const rank = (row: WorkflowTaskRow): number =>

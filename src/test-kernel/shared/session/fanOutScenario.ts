@@ -186,7 +186,7 @@ export class Log {
 }
 
 function call(
-  status: 'planned' | 'running' | 'completed',
+  status: 'queued' | 'running' | 'completed',
   childRunId?: RunId,
 ): WorkflowCallProgress {
   return {
@@ -293,7 +293,7 @@ export function buildScenario({ proposal = false } = {}) {
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       messageType: MESSAGE_TYPES.WORKFLOW_TASK,
       groupId: 'phase-Map',
-      data: call('planned'),
+      data: call('queued'),
     }),
   );
 
@@ -785,8 +785,8 @@ const BOARD_CALLS: readonly BoardCall[] = [
     costUsd: 0.09,
   },
   { id: 'review:legal', phase: 'Review', status: 'cached' },
-  { id: 'review:relay', phase: 'Review', status: 'planned' },
-  { id: 'review:auth', phase: 'Review', status: 'planned' },
+  { id: 'review:relay', phase: 'Review', status: 'queued' },
+  { id: 'review:auth', phase: 'Review', status: 'queued' },
 ];
 
 function boardProgress(entry: BoardCall): WorkflowCallProgress {
@@ -818,7 +818,6 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
       return { ...base, status: 'skipped', reason: 'user', ...terminal };
     case 'cached':
     case 'declared':
-    case 'planned':
     case 'queued':
     case 'running':
       return { ...base, status: entry.status };
@@ -1091,7 +1090,7 @@ function boardView({
           },
           closedAt,
         );
-      } else if (entry.status === 'planned') {
+      } else if (entry.status === 'queued') {
         card({ ...entry, status: 'cancelled' }, closedAt);
       }
     }

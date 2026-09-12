@@ -101,7 +101,6 @@ function workflowCallStatusIcon(
   switch (status) {
     case 'declared':
       return 'circle';
-    case 'planned':
     case 'queued':
       return 'circle-dot';
     case 'running':

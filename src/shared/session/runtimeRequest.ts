@@ -15,7 +15,11 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
+import {
+  RequestDecisionSchema,
+  RunIdSchema,
+  WorkflowControlActionSchema,
+} from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 
@@ -68,7 +72,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('workflow.control'),
     ...runScoped,
     childRunId: RunIdSchema,
-    action: z.enum(['skip', 'retry']),
+    action: WorkflowControlActionSchema,
   }),
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;

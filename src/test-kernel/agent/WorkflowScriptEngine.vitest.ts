@@ -13,7 +13,11 @@ import type {
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
-import { deriveWorkflowCounts, type RunId } from '@shared/schemas';
+import {
+  deriveWorkflowCounts,
+  deriveWorkflowStageState,
+  type RunId,
+} from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const META = `export const meta = {
@@ -1192,7 +1196,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
         // A cached call that fails validation settles as failed with the real
         // cause; the terminal pass must not reclassify it as never-reached.
         const terminal = snapshots.at(-1);
-        expect(terminal?.lifecycle).toBe('failed');
+        expect(terminal?.outcome).toBe('failed');
         expect(terminal?.calls).toMatchObject([
           {
             id: 'call-0',
@@ -1272,8 +1276,11 @@ return null`,
         });
         expect(invocations[0].options.phase).toBe('Work');
         expect(run.snapshot.stages).toMatchObject([
-          { id: 'stage-1', title: 'Work', order: 0, lifecycle: 'completed' },
+          { id: 'stage-1', title: 'Work', order: 0 },
         ]);
+        expect(
+          deriveWorkflowStageState(run.snapshot, run.snapshot.stages[0]!),
+        ).toMatchObject({ outcome: 'completed' });
         expect(run.snapshot.calls).toMatchObject([
           {
             id: 'call-0',
@@ -1641,18 +1648,19 @@ return 'delivered'`,
   );
 
   it.live(
-    'restamps sweep-settled stages without restamping settled stages',
+    'derives a stage end from its calls, not from the run terminal instant',
     () =>
       Effect.gen(function* () {
         const run = yield* runWorkflowScript({
           script: `export const meta = {
   name: 'sweep-stage',
   description: 'distinguishes settled work from terminal-sweep work',
-  phases: ['Settled', 'A', 'B'],
+  phases: ['Settled', 'A', 'B', 'C'],
   tasks: [
     { id: 'settled', label: 'Settled normally', phase: 'Settled' },
     { id: 'live', label: 'Ignores cancellation', phase: 'A' },
     { id: 'unreached', label: 'Never issued', phase: 'B' },
+    { id: 'bypassed', label: 'Never reached', phase: 'C' },
   ],
 }
 phase('Settled')
@@ -1667,26 +1675,44 @@ return 'done'`,
               : Effect.never,
         });
 
+        expect(run.snapshot.outcome).toBe('completed');
         expect(run.snapshot.calls).toMatchObject([
           { id: 'settled', status: 'completed' },
           { id: 'live', status: 'failed', settledBySweep: true },
           { id: 'unreached', status: 'skipped', settledBySweep: true },
+          { id: 'bypassed', status: 'skipped', settledBySweep: true },
         ]);
         expect(run.snapshot.calls[0]).not.toHaveProperty(
           'settledBySweep',
           true,
         );
-        const [settledStage, sweptStage, plannedStage] = run.snapshot.stages;
+        const [settledStage, sweptStage, enteredStage, bypassedStage] =
+          run.snapshot.stages.map((stage) =>
+            deriveWorkflowStageState(run.snapshot, stage),
+          );
         const terminalAt = run.snapshot.timestamps.completedAt;
-        expect(settledStage).toMatchObject({ lifecycle: 'completed' });
+        expect(settledStage).toMatchObject({ outcome: 'completed' });
         expect(settledStage?.completedAt).toBeDefined();
+        // A stage whose own call the sweep failed reads failed, at the run's
+        // terminal instant rather than an end of its own.
         expect(sweptStage).toMatchObject({
-          lifecycle: 'failed',
+          outcome: 'failed',
           completedAt: terminalAt,
         });
-        expect(plannedStage).toMatchObject({
-          lifecycle: 'skipped',
+        // B was entered and issued nothing before the run ended, so the run's
+        // own outcome is its outcome.
+        expect(enteredStage).toMatchObject({
+          started: true,
+          outcome: 'completed',
           completedAt: terminalAt,
+        });
+        // C was never entered: a swept plan label is not work it did, so it
+        // has no end and no outcome at all rather than reading completed.
+        expect(bypassedStage).toEqual({
+          current: false,
+          started: false,
+          outcome: undefined,
+          completedAt: undefined,
         });
       }),
   );
@@ -2577,7 +2603,7 @@ return 'done'`,
 
       expect(snapshots.length).toBeGreaterThan(0);
       expect(result.snapshot).toMatchObject({
-        lifecycle: 'completed',
+        outcome: 'completed',
         currentStageId: undefined,
         calls: [
           {

@@ -14,7 +14,6 @@ function snapshot(status: 'declared' | 'running') {
   const timestamp = '2026-08-15T20:00:00.000Z';
   const active = status === 'running';
   return WorkflowRunSnapshotSchema.parse({
-    lifecycle: active ? 'active' : 'waiting',
     stages: [],
     calls: [
       {

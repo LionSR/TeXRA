@@ -8,6 +8,7 @@ import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
   WorkflowRunSnapshotSchema,
   deriveWorkflowCounts,
+  deriveWorkflowStageState,
   type RunId,
   type WorkflowRunSnapshot,
 } from '@shared/schemas';
@@ -25,6 +26,11 @@ const META = `export const meta = {
 
 function finalSnapshot(snapshots: readonly WorkflowRunSnapshot[]) {
   return snapshots.at(-1)!;
+}
+
+/** The derived state of one stage by position, for assertions. */
+function stageState(snapshot: WorkflowRunSnapshot, index: number) {
+  return deriveWorkflowStageState(snapshot, snapshot.stages[index]!);
 }
 
 function recordingSnapshots(): {
@@ -56,27 +62,30 @@ return 'done'`,
         });
 
         // Stage gating: the later-phase call is declared in some snapshot, and
-        // wherever it is declared its own stage is still unreached (waiting, or
-        // skipped by the settle sweep), never a stage the run has entered.
+        // wherever it is declared its own stage is still unreached — never a
+        // stage the run has entered, so nothing shows it yet.
         const declaredReviewStages = snapshots.flatMap((snapshot) => {
           const review = snapshot.calls.find((call) => call.id === 'review');
           if (review?.status !== 'declared') return [];
           const stage = snapshot.stages.find(
             (entry) => entry.id === review.stageId,
           );
-          return [stage?.lifecycle ?? 'unstaged'];
+          if (!stage) return [];
+          return [deriveWorkflowStageState(snapshot, stage).started];
         });
         expect(declaredReviewStages.length).toBeGreaterThan(0);
-        expect(
-          declaredReviewStages.filter(
-            (lifecycle) => lifecycle !== 'waiting' && lifecycle !== 'skipped',
-          ),
-        ).toEqual([]);
+        expect(declaredReviewStages.filter(Boolean)).toEqual([]);
         // Drain-time cloning: every delivered snapshot is its own isolated copy.
         expect(new Set(snapshots).size).toBe(snapshots.length);
-        expect(result.snapshot.stages.map((stage) => stage.lifecycle)).toEqual([
-          'completed',
-          'skipped',
+        // Draft ran and completed; Review was never entered, so it stays
+        // unstarted with no outcome — its swept plan label is not work done.
+        expect(
+          result.snapshot.stages.map((stage) =>
+            deriveWorkflowStageState(result.snapshot, stage),
+          ),
+        ).toMatchObject([
+          { started: true, outcome: 'completed' },
+          { started: false, outcome: undefined },
         ]);
         expect(result.snapshot.calls.map((call) => call.status)).toEqual([
           'completed',
@@ -104,7 +113,7 @@ return null`,
           }),
         );
         expect(error.message).toMatch(/monotonically/);
-        expect(finalSnapshot(failedSnapshots).lifecycle).toBe('failed');
+        expect(finalSnapshot(failedSnapshots).outcome).toBe('failed');
       }),
   );
 
@@ -315,7 +324,7 @@ return [failed, passed]`,
               : Effect.succeed('passed'),
         });
         expect(failed.result).toEqual([null, 'passed']);
-        expect(failed.snapshot.lifecycle).toBe('completed');
+        expect(failed.snapshot.outcome).toBe('completed');
         expect(deriveWorkflowCounts(failed.snapshot.calls)).toMatchObject({
           failed: 1,
           completed: 1,
@@ -381,11 +390,14 @@ return [await draft, review]`,
             const review = snapshot.calls.find(
               (call) => call.id === 'review-call',
             );
+            // Draft is behind the run but still draining: derived from its
+            // own calls it stays live, where the stored lifecycle used to
+            // read completed while its call was still running.
             return (
               snapshot.currentStageId === 'stage-2' &&
               draft?.status === 'running' &&
               review?.status === 'running' &&
-              snapshot.stages[0]?.lifecycle === 'completed'
+              stageState(snapshot, 0).outcome === undefined
             );
           }),
         ).toBe(true);
@@ -409,20 +421,22 @@ return [failed, passed]`,
           onSnapshot: failureOnSnapshot,
         });
         expect(continued.result).toEqual([null, 'passed']);
-        expect(continued.snapshot.stages[0]?.lifecycle).toBe('failed');
+        expect(stageState(continued.snapshot, 0).outcome).toBe('failed');
         expect(
-          failureSnapshots.some(
-            (snapshot) =>
+          failureSnapshots.some((snapshot) => {
+            const stage = stageState(snapshot, 0);
+            return (
               snapshot.calls[0]?.status === 'failed' &&
-              snapshot.stages[0]?.lifecycle === 'active' &&
-              snapshot.stages[0]?.completedAt === undefined,
-          ),
+              stage.current &&
+              stage.outcome === undefined
+            );
+          }),
         ).toBe(true);
       }),
   );
 
   it.effect(
-    'marks the active stage failed when orchestration throws with no failed call',
+    'fails the run when orchestration throws after a successful call',
     () =>
       Effect.gen(function* () {
         const { snapshots, onSnapshot } = recordingSnapshots();
@@ -442,40 +456,39 @@ throw new Error('reduce failed after success')`,
         );
         expect(error.message).toMatch(/reduce failed after success/);
 
-        // Script throw after a successful call must not leave Merge as completed
-        // just because call-derived settlement saw only completed work.
+        // The orchestration failure is the run's, not the call's: Merge's own
+        // work completed, and the run's outcome is what records the throw.
         const terminal = finalSnapshot(snapshots);
-        expect(terminal.lifecycle).toBe('failed');
-        expect(terminal.stages[0]?.lifecycle).toBe('failed');
+        expect(terminal.outcome).toBe('failed');
         expect(terminal.calls[0]?.status).toBe('completed');
+        expect(stageState(terminal, 0).outcome).toBe('completed');
       }),
   );
 
-  it.effect(
-    'marks a call-less active stage failed on orchestration throw',
-    () =>
-      Effect.gen(function* () {
-        const { snapshots, onSnapshot } = recordingSnapshots();
-        const error = yield* Effect.flip(
-          runWorkflowScript({
-            script: `export const meta = {
+  it.effect('fails the run when a call-less stage throws', () =>
+    Effect.gen(function* () {
+      const { snapshots, onSnapshot } = recordingSnapshots();
+      const error = yield* Effect.flip(
+        runWorkflowScript({
+          script: `export const meta = {
   name: 'empty-stage-fail',
   description: 'phase with no agent() then throw',
   phases: ['Merge'],
 }
 phase('Merge')
 throw new Error('reduce only')`,
-            runAgent: () => Effect.fail(new Error('must not run')),
-            onSnapshot,
-          }),
-        );
-        expect(error.message).toMatch(/reduce only/);
+          runAgent: () => Effect.fail(new Error('must not run')),
+          onSnapshot,
+        }),
+      );
+      expect(error.message).toMatch(/reduce only/);
 
-        const terminal = finalSnapshot(snapshots);
-        expect(terminal.lifecycle).toBe('failed');
-        // Without the active-stage override, call-less stages settle as skipped.
-        expect(terminal.stages[0]?.lifecycle).toBe('failed');
-      }),
+      const terminal = finalSnapshot(snapshots);
+      expect(terminal.outcome).toBe('failed');
+      // A stage owns no state of its own: with no call to fail, Merge shows
+      // nothing and the run's outcome carries the throw.
+      expect(stageState(terminal, 0).outcome).toBe('completed');
+    }),
   );
 
   it.effect(
@@ -508,7 +521,7 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
         expect(cancellation).toMatchObject({ name: 'AbortError' });
 
         const terminal = finalSnapshot(snapshots);
-        expect(terminal.lifecycle).toBe('cancelled');
+        expect(terminal.outcome).toBe('cancelled');
         expect(terminal.error).toBe('cancelled');
         expect(terminal.calls[0]?.error).toBeUndefined();
         expect(

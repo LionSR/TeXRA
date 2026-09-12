@@ -352,7 +352,7 @@ describe('workflow run model', () => {
         { id: 'ok1', phase: 'Derive', status: 'completed' },
         { id: 'r1', phase: 'Derive', status: 'running' },
         { id: 'bad', phase: 'Derive', status: 'failed' },
-        { id: 'q2', phase: 'Derive', status: 'planned' },
+        { id: 'q2', phase: 'Derive', status: 'queued' },
         { id: 'r2', phase: 'Derive', status: 'running' },
         { id: 'ok2', phase: 'Derive', status: 'cached' },
       ],

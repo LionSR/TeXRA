@@ -10,13 +10,12 @@ import type {
   WorkflowScriptEvent,
 } from '@agent/workflowScript/types';
 import {
+  deriveWorkflowStageState,
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
   RUN_OUTCOME,
   stageTitleFor,
-  TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
-  WORKFLOW_RUN_LIFECYCLE,
   RunEndSchema,
   type RunOutcome,
   type WorkflowCallProgress,
@@ -335,7 +334,6 @@ export function projectWorkflowScriptProgress<R>(
               ...terminalMetadata(call),
             };
       case WORKFLOW_CALL_STATUS.DECLARED:
-      case WORKFLOW_CALL_STATUS.PLANNED:
       case WORKFLOW_CALL_STATUS.QUEUED:
       case WORKFLOW_CALL_STATUS.RUNNING:
       case WORKFLOW_CALL_STATUS.CACHED:
@@ -414,18 +412,12 @@ export function projectWorkflowScriptProgress<R>(
         });
       }
       for (const stage of snapshot.stages) {
-        if (stage.lifecycle === 'waiting') continue;
-        // A declared phase the run bypassed (`phase()` jumped past it, or the
-        // script ended first) and that owns no card is nothing to show: no
-        // header, no `Phase:` line. One that owns declared cards still opens
-        // so their not-reached rows land under it.
-        if (
-          stage.lifecycle === 'skipped' &&
-          stage.startedAt === undefined &&
-          !snapshot.calls.some((call) => call.stageId === stage.id)
-        ) {
-          continue;
-        }
+        // A phase the run never entered is nothing to announce: no header
+        // line, no `Phase:` line. One that owns declared cards still opens
+        // when the sweep terminalizes them — `emitCall` groups a card under
+        // its own phase — so their not-reached rows never land elsewhere.
+        const state = deriveWorkflowStageState(snapshot, stage);
+        if (!state.started) continue;
         const known = phases.has(stage.title);
         const phase = phaseFor(
           stage.title,
@@ -433,8 +425,8 @@ export function projectWorkflowScriptProgress<R>(
           stage.order < declaredStageTotal ? declaredStageTotal : undefined,
         );
         if (!known) onActivity?.(`Phase: ${stage.title}`);
-        if (stage.lifecycle === 'failed') phase.failed = true;
-        if (stage.lifecycle === 'active') currentPhase = stage.title;
+        if (state.outcome === RUN_OUTCOME.FAILED) phase.failed = true;
+        if (state.current) currentPhase = stage.title;
       }
       for (const call of snapshot.calls) {
         const last = projectedCalls.get(call.id);
@@ -504,37 +496,19 @@ export function projectWorkflowScriptProgress<R>(
           recordTerminalActivity(card as WorkflowCallTerminalProgress);
         }
       }
-      // Close a phase's stage when the engine has settled it, so a finished
-      // phase reads finished (icon, duration) while later phases still run,
-      // and a failure in phase 3 cannot retroactively mark phases 1-2. The
-      // schema has no "exited but draining" lifecycle — `#settleStage` stamps
-      // completed from call statuses while calls may still run — so close
-      // only once every call of the stage is terminal; the failed card that
-      // flips a phase is then already emitted above. `end` is idempotent, so
-      // the finally sweep stays the backstop for stages the engine never
-      // settled.
+      // Close a phase's stage once the run has left it and every call it
+      // owns is terminal, so a finished phase reads finished (icon,
+      // duration) while later phases still run, and a failure in phase 3
+      // cannot retroactively mark phases 1-2. The failed card that flips a
+      // phase is already emitted above. Once the run itself has ended,
+      // `settle` closes whatever is still open, reading the same derived
+      // stage state so the trace and `/executions/{id}` never disagree.
+      if (snapshot.outcome !== undefined) return;
       for (const stage of snapshot.stages) {
         const phase = phases.get(stage.title);
-        if (
-          !phase ||
-          stage.lifecycle === 'waiting' ||
-          stage.lifecycle === 'active'
-        ) {
-          continue;
-        }
-        const drained = snapshot.calls.every(
-          (call) =>
-            call.stageId !== stage.id ||
-            TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status),
-        );
-        if (!drained) continue;
-        let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
-        if (phase.failed || stage.lifecycle === 'failed') {
-          outcome = RUN_OUTCOME.FAILED;
-        } else if (stage.lifecycle === 'cancelled') {
-          outcome = RUN_OUTCOME.CANCELLED;
-        }
-        phase.handle.end(outcome);
+        const outcome = deriveWorkflowStageState(snapshot, stage).outcome;
+        if (!phase || outcome === undefined) continue;
+        phase.handle.end(phase.failed ? RUN_OUTCOME.FAILED : outcome);
       }
     });
     if (Result.isFailure(projected)) {
@@ -548,7 +522,7 @@ export function projectWorkflowScriptProgress<R>(
 
   const settle = (completed: boolean): void => {
     if (completed) runOutcome = RUN_OUTCOME.COMPLETED;
-    if (lastSnapshot?.lifecycle === WORKFLOW_RUN_LIFECYCLE.CANCELLED) {
+    if (lastSnapshot?.outcome === RUN_OUTCOME.CANCELLED) {
       runOutcome = RUN_OUTCOME.CANCELLED;
     }
     // The engine's `finish()` publishes its terminal snapshot synchronously
@@ -558,11 +532,7 @@ export function projectWorkflowScriptProgress<R>(
     // live as unfinished. A writer failure leaves `lastSnapshot` stale and
     // non-terminal; re-folding stale state could move a card backwards, so
     // only a terminal snapshot is re-folded.
-    if (
-      lastSnapshot !== undefined &&
-      lastSnapshot.lifecycle !== WORKFLOW_RUN_LIFECYCLE.WAITING &&
-      lastSnapshot.lifecycle !== WORKFLOW_RUN_LIFECYCLE.ACTIVE
-    ) {
+    if (lastSnapshot?.outcome !== undefined) {
       fold(lastSnapshot);
     }
     closed = true;
@@ -581,8 +551,22 @@ export function projectWorkflowScriptProgress<R>(
       emitCall(call);
       recordTerminalActivity(call);
     }
-    for (const phase of phases.values()) {
-      phase.handle.end(phase.failed ? RUN_OUTCOME.FAILED : runOutcome);
+    for (const [title, phase] of phases) {
+      // One authority for how a phase ended: the same derived stage state
+      // `/executions/{id}` reads. A stage the script threw inside owns no
+      // failed call, so it reads as its own calls left it and the throw stays
+      // the run's fact. The run's outcome closes only what the snapshot has
+      // no stage state for: a phase opened for its not-reached rows alone,
+      // and — when a writer failure left the last snapshot stale — a phase
+      // whose calls this projection had to settle as unfinished itself.
+      const stage = lastSnapshot?.stages.find((entry) => entry.title === title);
+      const derived =
+        lastSnapshot && stage
+          ? deriveWorkflowStageState(lastSnapshot, stage).outcome
+          : undefined;
+      phase.handle.end(
+        phase.failed ? RUN_OUTCOME.FAILED : (derived ?? runOutcome),
+      );
     }
   };
   return {
