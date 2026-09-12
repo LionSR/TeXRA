@@ -433,6 +433,13 @@ const sessionHandleLayer = (
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
+      // The registry's phase notification rides the fold-gated tail, not the
+      // raw one above: its waiters and child rosters read `RunView.status`
+      // synchronously, so a row must reach them only once the view holds the
+      // state that row produced.
+      yield* Stream.runForEach(session.folded(anchor), (event) =>
+        Effect.sync(() => session.receiveFoldedEvent(event)),
+      ).pipe(Effect.forkIn(consumerScope));
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
