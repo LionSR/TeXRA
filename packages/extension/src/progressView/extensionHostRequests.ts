@@ -41,7 +41,6 @@ import {
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -233,16 +232,6 @@ export function createExtensionHostRequests(
     },
     sendFollowUp: (runId, text) =>
       runtime.runPromise(runActions.sendFollowUp(runId, text)),
-  });
-
-  const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: runOutputs,
-    runDiff: async (request) => {
-      await runCommand('texra.runLatexdiff', request);
-    },
-    runFileOperation: async (operation, request) => {
-      await runCommand(`texra.${operation}`, request);
-    },
   });
 
   let chatExportController: ChatExportController | undefined;
@@ -660,22 +649,18 @@ export function createExtensionHostRequests(
         await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const diff = await runtime.runPromise(
+          runActions.workflowDiffRequest(request.runId),
         );
-        await workflowRunActions.diffStream(request.runId, config);
+        if (diff) await runCommand('texra.runLatexdiff', diff);
         return done;
       }
       case 'pack':
       case 'clean': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const operation = await runtime.runPromise(
+          runActions.workflowFileOperationRequest(request.runId),
         );
-        await workflowRunActions.runFileOperation(
-          request.runId,
-          request.kind,
-          config,
-        );
+        if (operation) await runCommand(`texra.${request.kind}`, operation);
         return done;
       }
       case 'latexdiffs':

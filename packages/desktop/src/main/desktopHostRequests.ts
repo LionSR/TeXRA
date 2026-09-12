@@ -19,14 +19,10 @@ import type { ChatExportController } from '@controllers/progressView/ChatExportC
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
-  ProgressWorkflowRunActionsController,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperation,
-  type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowRunActionsController';
-import {
   createHostRunActions,
   launchPatchOf,
+  type WorkflowDiffRequest,
+  type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
@@ -120,6 +116,8 @@ export interface DesktopHostRequests {
 }
 
 const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
+
+type WorkflowFileOperation = 'pack' | 'clean';
 
 function operationLabel(operation: WorkflowFileOperation): {
   verb: string;
@@ -375,12 +373,6 @@ export function createDesktopHostRequests(
     await reportFileOperationResult(operation, ran.value, inputFile);
   }
 
-  const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: runOutputs,
-    runDiff: runWorkflowDiff,
-    runFileOperation: runWorkflowFileOperation,
-  });
-
   let chatExportControllerLoad: Promise<ChatExportController> | undefined;
   function getChatExportController(): Promise<ChatExportController> {
     chatExportControllerLoad ??= runtime
@@ -607,22 +599,18 @@ export function createDesktopHostRequests(
         await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const diff = await runtime.runPromise(
+          runActions.workflowDiffRequest(request.runId),
         );
-        await workflowRunActions.diffStream(request.runId, config);
+        if (diff) await runWorkflowDiff(diff);
         return done;
       }
       case 'pack':
       case 'clean': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const operation = await runtime.runPromise(
+          runActions.workflowFileOperationRequest(request.runId),
         );
-        await workflowRunActions.runFileOperation(
-          request.runId,
-          request.kind,
-          config,
-        );
+        if (operation) await runWorkflowFileOperation(request.kind, operation);
         return done;
       }
       case 'latexdiffs':
