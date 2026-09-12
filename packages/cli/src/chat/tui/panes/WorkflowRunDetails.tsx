@@ -24,7 +24,6 @@ import {
 } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
-  WORKFLOW_TASK_STATUS_LABEL,
   fileLocationDisplayPath,
   outputDiffCounts,
   outputDisplayName,
@@ -104,15 +103,16 @@ function taskGroupLine(
   return {
     key: `group:${group.id}`,
     // A task group's status is a RunPhase, so it is worded with the stream
-    // vocabulary — the same one the progress view's group icon announces.
-    // WORKFLOW_TASK_STATUS_LABEL words a workflow *call* ('Finished',
-    // 'Saved result'), which is a different thing that happens to share four
-    // key names with this one.
+    // vocabulary — the same one the progress view's group icon announces,
+    // never the workflow-call vocabulary that happens to share key names.
     text: `${appearance.marker} ${safeTerminalText(label)} ${formatRunStatusLabel(status)}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };
 }
+
+/** A workflow-agent round the run has not reached yet. */
+const ROUND_PLANNED_LABEL = 'Planned';
 
 function lifecyclePriority(
   status: TaskGroupStatus | undefined,
@@ -191,7 +191,7 @@ function workflowRunDetailGroups(
       );
     } else {
       const label = planned
-        ? `${formatRoundStageLabel({ index: round, total: plannedTotal })} ${WORKFLOW_TASK_STATUS_LABEL.planned}`
+        ? `${formatRoundStageLabel({ index: round, total: plannedTotal })} ${ROUND_PLANNED_LABEL}`
         : `${formatRoundStageLabel({ index: round })} results`;
       lines.push({
         key: `round:${round}`,

@@ -11,6 +11,8 @@
 // Local imports
 import {
   deriveWorkflowCounts,
+  deriveWorkflowStageState,
+  RUN_OUTCOME,
   stageTitleFor,
   TERMINAL_WORKFLOW_CALL_STATUSES,
   type WorkflowRunSnapshot,
@@ -27,15 +29,19 @@ function compactWorkflowText(value: string | undefined): string | undefined {
 }
 
 function workflowPhaseView(
+  snapshot: WorkflowRunSnapshot,
   stage: WorkflowRunSnapshot['stages'][number],
 ): unknown {
+  const state = deriveWorkflowStageState(snapshot, stage);
   return {
     id: compactWorkflowText(stage.id),
     title: compactWorkflowText(stage.title),
     order: stage.order,
-    lifecycle: stage.lifecycle,
+    // Live while the run is still inside the phase or its calls are still
+    // running; the triad once every call it owns has settled.
+    outcome: state.outcome,
     startedAt: stage.startedAt,
-    completedAt: stage.completedAt,
+    completedAt: state.completedAt,
   };
 }
 
@@ -93,7 +99,8 @@ export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
     stage: WorkflowRunSnapshot['stages'][number],
   ): number => {
     if (stage.id === snapshot.currentStageId) return 0;
-    if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
+    const { outcome } = deriveWorkflowStageState(snapshot, stage);
+    if (outcome === RUN_OUTCOME.FAILED || outcome === RUN_OUTCOME.CANCELLED) {
       return 1;
     }
     return 2;
@@ -104,7 +111,7 @@ export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
         phasePriority(left) - phasePriority(right) || right.order - left.order,
     )
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map(workflowPhaseView);
+    .map((stage) => workflowPhaseView(snapshot, stage));
   const calls = byPriority
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
     .map((call) => {
@@ -142,7 +149,7 @@ export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
   );
   return {
     aggregate: {
-      lifecycle: snapshot.lifecycle,
+      outcome: snapshot.outcome,
       error: compactWorkflowText(snapshot.error),
       counts: deriveWorkflowCounts(snapshot.calls),
       timestamps: snapshot.timestamps,
@@ -153,7 +160,9 @@ export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
         maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
       },
     },
-    currentPhase: currentPhase ? workflowPhaseView(currentPhase) : null,
+    currentPhase: currentPhase
+      ? workflowPhaseView(snapshot, currentPhase)
+      : null,
     phases,
     calls,
     ...(snapshot.stages.length > phases.length && {

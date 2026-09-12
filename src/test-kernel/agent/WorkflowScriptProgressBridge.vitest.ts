@@ -72,7 +72,7 @@ type ScriptRunOptions = Parameters<
   typeof projectWorkflowScriptProgress<never>
 >[1];
 
-const LIFECYCLE_STATUSES = ['planned', 'running', 'completed'] as const;
+const LIFECYCLE_STATUSES = ['queued', 'running', 'completed'] as const;
 
 /**
  * Project a run onto `trace` and run it against this file's session, the way
@@ -225,7 +225,7 @@ return await agent('Inspect', { id: 'inspect' })`,
             stageId: parent.id,
           }),
         );
-        const planned = workflowCallEvent(events, 'Inspect source', 'planned');
+        const queued = workflowCallEvent(events, 'Inspect source', 'queued');
         const running = workflowCallEvent(events, 'Inspect source', 'running');
         const completed = workflowCallEvent(
           events,
@@ -233,23 +233,23 @@ return await agent('Inspect', { id: 'inspect' })`,
           'completed',
         );
         // One stable, phase-derived stage across the whole lifecycle: the card is
-        // classified into its phase group when it is planned and never moves.
-        expect(planned).toMatchObject({
+        // classified into its phase group when it is queued and never moves.
+        expect(queued).toMatchObject({
           type: 'workflow.call',
           stageId: phaseId,
           call: { attemptId: expect.any(String) },
         });
         expect(running).toMatchObject({
           type: 'workflow.call',
-          logId: planned?.logId,
+          logId: queued?.logId,
           stageId: phaseId,
-          call: { attemptId: planned?.call.attemptId },
+          call: { attemptId: queued?.call.attemptId },
         });
         expect(completed).toMatchObject({
           type: 'workflow.call',
-          logId: planned?.logId,
+          logId: queued?.logId,
           stageId: phaseId,
-          call: { attemptId: planned?.call.attemptId },
+          call: { attemptId: queued?.call.attemptId },
         });
         expect(events).toContainEqual(
           expect.objectContaining({
@@ -693,7 +693,7 @@ return await agent('Retry review', { id: 'retry-review' })`;
 
           const reviewId = stageId(retry.events, 'Review');
           expect(
-            workflowCallEvent(retry.events, 'Retry review', 'planned'),
+            workflowCallEvent(retry.events, 'Retry review', 'queued'),
           ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
           expect(
             workflowCallEvent(retry.events, 'Retry review', 'completed'),
@@ -806,12 +806,12 @@ return await agent('Review the argument', { id: 'review-task' })`;
             total: 1,
           }),
         ]);
-        const planned = workflowCallEvent(events, 'Review argument', 'planned');
+        const queued = workflowCallEvent(events, 'Review argument', 'queued');
         for (const status of LIFECYCLE_STATUSES) {
           expect(
             workflowCallEvent(events, 'Review argument', status),
           ).toMatchObject({
-            logId: planned?.logId,
+            logId: queued?.logId,
             call: {
               id: 'review-task',
               label: 'Review argument',

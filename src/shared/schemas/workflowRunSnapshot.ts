@@ -1,17 +1,7 @@
 import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
-
-export const WORKFLOW_RUN_LIFECYCLE = {
-  WAITING: 'waiting',
-  ACTIVE: 'active',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  SKIPPED: 'skipped',
-  CANCELLED: 'cancelled',
-} as const;
-const WorkflowRunLifecycleSchema = z.enum(WORKFLOW_RUN_LIFECYCLE);
-type WorkflowRunLifecycle = z.infer<typeof WorkflowRunLifecycleSchema>;
+import { RUN_OUTCOME, RunOutcomeSchema, type RunOutcome } from './run';
 
 /**
  * The one status vocabulary of a workflow-script call, shared by the
@@ -21,7 +11,6 @@ type WorkflowRunLifecycle = z.infer<typeof WorkflowRunLifecycleSchema>;
  */
 export const WORKFLOW_CALL_STATUS = {
   DECLARED: 'declared',
-  PLANNED: 'planned',
   QUEUED: 'queued',
   RUNNING: 'running',
   COMPLETED: 'completed',
@@ -43,7 +32,8 @@ export type WorkflowCallStatus = z.infer<typeof WorkflowCallStatusSchema>;
  * host UI that offers it — so a control a host can name is always a control
  * the engine implements.
  */
-export type WorkflowControlAction = 'skip' | 'retry';
+export const WorkflowControlActionSchema = z.enum(['skip', 'retry']);
+export type WorkflowControlAction = z.infer<typeof WorkflowControlActionSchema>;
 
 const WorkflowRunLiveTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
@@ -55,13 +45,17 @@ const WorkflowRunTerminalTimestampsSchema =
   WorkflowRunLiveTimestampsSchema.extend({
     completedAt: z.iso.datetime(),
   });
+/**
+ * A stage is a `phase()` title and the instant the script entered it. It
+ * carries no state of its own: how a stage is doing is derived from its own
+ * calls at read time by `deriveWorkflowStageState`, so a stored stage state
+ * can never disagree with the calls it summarizes.
+ */
 const WorkflowRunStageSchema = z.strictObject({
   id: z.string().min(1),
   title: z.string().min(1),
   order: z.int().nonnegative(),
-  lifecycle: WorkflowRunLifecycleSchema,
   startedAt: z.iso.datetime().optional(),
-  completedAt: z.iso.datetime().optional(),
 });
 const WorkflowRunAttemptSchema = z.strictObject({
   number: z.int().positive(),
@@ -142,10 +136,6 @@ const WorkflowRunCallSchema = z
       timestamps: WorkflowRunLiveTimestampsSchema,
     }),
     WorkflowRunIssuedCallSchema.extend({
-      status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
-      timestamps: WorkflowRunLiveTimestampsSchema,
-    }),
-    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
       timestamps: WorkflowRunLiveTimestampsSchema,
     }),
@@ -203,14 +193,12 @@ export type WorkflowRunCall = z.infer<typeof WorkflowRunCallSchema>;
 
 type WorkflowRunCounts = Record<WorkflowCallStatus, number> & {
   readonly total: number;
-  readonly waiting: number;
 };
 
 /**
  * The one owner of "how many calls are in each state". Derived from the calls
  * themselves at the read boundary rather than stored beside them, so a tally
- * can never disagree with the array it summarizes. `waiting` is the composite
- * every consumer asks for: every call not yet queued, declared plus planned.
+ * can never disagree with the array it summarizes.
  */
 export function deriveWorkflowCounts(
   calls: readonly Pick<WorkflowRunCall, 'status'>[],
@@ -219,11 +207,7 @@ export function deriveWorkflowCounts(
     Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
   ) as Record<WorkflowCallStatus, number>;
   for (const call of calls) byStatus[call.status] += 1;
-  return {
-    total: calls.length,
-    waiting: byStatus.declared + byStatus.planned,
-    ...byStatus,
-  };
+  return { total: calls.length, ...byStatus };
 }
 
 /**
@@ -238,6 +222,63 @@ export function stageTitleFor(
   return snapshot.stages.find((stage) => stage.id === call.stageId)?.title;
 }
 
+/**
+ * How one stage is doing, derived from the calls it owns rather than stored
+ * beside them, so a stage state can never disagree with its calls.
+ *
+ * A stage is `started` once the script has entered it or any of its calls has
+ * been issued — before that there is nothing to show. It settles once it is
+ * no longer current and every call it owns is terminal, and its `outcome` is
+ * then the worst of those calls: failed beats cancelled beats completed.
+ */
+export interface WorkflowStageState {
+  readonly current: boolean;
+  readonly started: boolean;
+  readonly outcome: RunOutcome | undefined;
+  readonly completedAt: string | undefined;
+}
+
+export function deriveWorkflowStageState(
+  snapshot: Pick<WorkflowRunSnapshot, 'calls' | 'currentStageId'>,
+  stage: Pick<WorkflowRunSnapshot['stages'][number], 'id' | 'startedAt'>,
+): WorkflowStageState {
+  const current = stage.id === snapshot.currentStageId;
+  const calls = snapshot.calls.filter((call) => call.stageId === stage.id);
+  const started =
+    current ||
+    stage.startedAt !== undefined ||
+    calls.some((call) => call.status !== WORKFLOW_CALL_STATUS.DECLARED);
+  const settled =
+    !current &&
+    started &&
+    calls.every((call) => TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status));
+  if (!settled) {
+    return { current, started, outcome: undefined, completedAt: undefined };
+  }
+  // Worst wins: one failed call fails the stage, one cancelled call cancels
+  // it, and a stage whose calls all skipped simply completed.
+  let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
+  if (calls.some((call) => call.status === WORKFLOW_CALL_STATUS.CANCELLED)) {
+    outcome = RUN_OUTCOME.CANCELLED;
+  }
+  if (calls.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED)) {
+    outcome = RUN_OUTCOME.FAILED;
+  }
+  return {
+    current,
+    started,
+    outcome,
+    completedAt: calls.reduce<string | undefined>(
+      (latest, call) =>
+        call.timestamps.completedAt !== undefined &&
+        (latest === undefined || call.timestamps.completedAt > latest)
+          ? call.timestamps.completedAt
+          : latest,
+      undefined,
+    ),
+  };
+}
+
 export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowCallStatus> =
   new Set([
     WORKFLOW_CALL_STATUS.COMPLETED,
@@ -246,16 +287,10 @@ export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowCallStatus> =
     WORKFLOW_CALL_STATUS.SKIPPED,
     WORKFLOW_CALL_STATUS.CACHED,
   ]);
-const TERMINAL_LIFECYCLES = new Set<WorkflowRunLifecycle>([
-  WORKFLOW_RUN_LIFECYCLE.COMPLETED,
-  WORKFLOW_RUN_LIFECYCLE.FAILED,
-  WORKFLOW_RUN_LIFECYCLE.SKIPPED,
-  WORKFLOW_RUN_LIFECYCLE.CANCELLED,
-]);
-
 export const WorkflowRunSnapshotSchema = z
   .strictObject({
-    lifecycle: WorkflowRunLifecycleSchema,
+    /** The run's own outcome, present exactly once the run has finished. */
+    outcome: RunOutcomeSchema.optional(),
     currentStageId: z.string().min(1).optional(),
     stages: z.array(WorkflowRunStageSchema),
     calls: z.array(WorkflowRunCallSchema),
@@ -269,16 +304,6 @@ export const WorkflowRunSnapshotSchema = z
   .superRefine((snapshot, context) => {
     const stageIds = new Set<string>();
     const stageOrders = new Set<number>();
-    const activeStages = snapshot.stages.filter(
-      (stage) => stage.lifecycle === WORKFLOW_RUN_LIFECYCLE.ACTIVE,
-    );
-    if (activeStages.length > 1) {
-      context.addIssue({
-        code: 'custom',
-        path: ['stages'],
-        message: 'A workflow snapshot can have at most one active stage.',
-      });
-    }
     for (const [index, stage] of snapshot.stages.entries()) {
       if (stageIds.has(stage.id))
         context.addIssue({
@@ -292,25 +317,17 @@ export const WorkflowRunSnapshotSchema = z
           path: ['stages', index, 'order'],
           message: `Duplicate workflow stage order ${stage.order}.`,
         });
-      if (
-        stage.lifecycle !== WORKFLOW_RUN_LIFECYCLE.WAITING &&
-        stage.lifecycle !== WORKFLOW_RUN_LIFECYCLE.ACTIVE &&
-        stage.completedAt === undefined
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['stages', index, 'completedAt'],
-          message: 'A terminal workflow stage requires completedAt.',
-        });
-      }
       stageIds.add(stage.id);
       stageOrders.add(stage.order);
     }
-    if (snapshot.currentStageId !== activeStages[0]?.id) {
+    if (
+      snapshot.currentStageId !== undefined &&
+      !stageIds.has(snapshot.currentStageId)
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['currentStageId'],
-        message: 'currentStageId must identify the one active workflow stage.',
+        message: 'currentStageId must identify one of the workflow stages.',
       });
     }
 
@@ -331,7 +348,13 @@ export const WorkflowRunSnapshotSchema = z
         });
       }
     }
-    if (TERMINAL_LIFECYCLES.has(snapshot.lifecycle)) {
+    if (snapshot.outcome !== undefined) {
+      if (snapshot.currentStageId !== undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['currentStageId'],
+          message: 'A finished workflow snapshot has no current stage.',
+        });
       if (snapshot.timestamps.completedAt === undefined)
         context.addIssue({
           code: 'custom',

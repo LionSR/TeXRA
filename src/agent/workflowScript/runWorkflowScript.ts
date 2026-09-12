@@ -15,14 +15,15 @@ import {
 } from 'effect';
 import type {
   RunId,
+  RunOutcome,
   WorkflowCallIdentity,
   WorkflowControlAction,
   WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
+  RUN_OUTCOME,
   WORKFLOW_CALL_KIND,
   WORKFLOW_CALL_STATUS,
-  WORKFLOW_RUN_LIFECYCLE,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
 import { isNonEmptyString, onAbort } from '@utils/core';
@@ -424,17 +425,13 @@ export function runWorkflowScript<R = never>(
 
               const interrupted =
                 Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
-              let terminalLifecycle: 'completed' | 'failed' | 'cancelled' =
-                WORKFLOW_RUN_LIFECYCLE.FAILED;
+              let terminalOutcome: RunOutcome = RUN_OUTCOME.FAILED;
               if (firstFatalFault !== undefined) {
-                terminalLifecycle = WORKFLOW_RUN_LIFECYCLE.FAILED;
+                terminalOutcome = RUN_OUTCOME.FAILED;
               } else if (Exit.isSuccess(exit)) {
-                terminalLifecycle = WORKFLOW_RUN_LIFECYCLE.COMPLETED;
-              } else if (
-                firstFatalFault === undefined &&
-                (interrupted || options.signal?.aborted)
-              ) {
-                terminalLifecycle = WORKFLOW_RUN_LIFECYCLE.CANCELLED;
+                terminalOutcome = RUN_OUTCOME.COMPLETED;
+              } else if (interrupted || options.signal?.aborted) {
+                terminalOutcome = RUN_OUTCOME.CANCELLED;
               }
               const terminalError =
                 firstFatalFault ??
@@ -442,7 +439,7 @@ export function runWorkflowScript<R = never>(
                   ? Cause.squash(exit.cause)
                   : scriptFailure);
               workflowRunState.finish(
-                terminalLifecycle,
+                terminalOutcome,
                 terminalError === undefined
                   ? undefined
                   : toErrorMessage(terminalError),

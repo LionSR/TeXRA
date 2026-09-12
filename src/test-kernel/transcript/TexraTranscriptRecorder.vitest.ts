@@ -235,7 +235,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       call: {
         id: 'planned',
         label: 'Audit later',
-        status: 'planned',
+        status: 'queued',
       },
     });
 
@@ -395,7 +395,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
         id: 'audit-core',
         label: 'Audit core',
         phase: 'Audit',
-        status: 'planned',
+        status: 'queued',
       },
     });
     trace.emit({

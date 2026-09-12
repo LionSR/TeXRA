@@ -158,7 +158,6 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
  */
 export const WORKFLOW_CALL_STATUS_GLYPH = {
   declared: '□',
-  planned: '□',
   queued: '□',
   running: '☐',
   completed: '☑',
