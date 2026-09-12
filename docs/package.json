@@ -1,6 +1,6 @@
 {
   "name": "texra-docs",
-  "version": "0.3.0",
+  "version": "0.41.0",
   "scripts": {
     "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
     "sync-changelog": "cp ../CHANGELOG.md changelog.md",

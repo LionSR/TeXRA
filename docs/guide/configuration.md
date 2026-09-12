@@ -48,6 +48,12 @@ override. If a host cannot write the project directory, it uses an internal
 workspace store so that its settings view remains usable; that fallback is not
 shared with the other hosts.
 
+Configuration files are ordinary JSON. Persistent application state—including
+session history, execution records, and run events—is stored separately in an
+authoritative local SQLite database (`texra.db`) in workspace storage.
+TeXRA 1.0 initializes fresh application state and does not import legacy JSON
+session stores or execution checkpoints.
+
 New releases begin with the current defaults. TeXRA does not import old values
 from `.vscode/settings.json`.
 
