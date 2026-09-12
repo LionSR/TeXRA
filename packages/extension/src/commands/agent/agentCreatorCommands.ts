@@ -16,6 +16,7 @@ import { hostPort } from '@common/hostPort';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -181,7 +182,7 @@ export function handleCreateAgentWithAI(
   category: AgentCategory,
   secrets: PlatformSecrets,
 ): Promise<void> {
-  return Effect.runPromise(
+  return effectRuntime().runPromise(
     Effect.gen(function* () {
       const config = yield* hostPort(() => loadCreatorConfig(context));
       yield* runAgentCreator(config, category, buildVSCodeUI(), {
