@@ -16,7 +16,7 @@ The shortest path is: choose a credential, run setup once, then let the orchestr
 
 ## Overview
 
-TeXRA sits inside VS Code and helps you derive and check results, formalize proofs, and, along the way, polish writing, fix errors, and create figures without leaving your editor. The short version:
+TeXRA sits inside your editor and terminal to help you do good work: deriving and checking mathematical results in Wolfram, formalizing proofs in Lean 4, searching grounded literature, and, along the way, polishing writing, fixing errors, and creating figures without leaving your workspace. The short version:
 
 1. Select your file
 2. Pick an agent and model
@@ -316,8 +316,8 @@ folder per round. Each round holds three artifacts, and the document keeps your
 
 <p class="hero-caption">One folder per round under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. Round 1 (and any further reflection rounds) repeat the same trio.</p>
 
-So if your input file is `paper.tex`, the first round's output lands at
-`r0/paper.tex`, the filename you started with, never `output.tex`. The CLI
+So if your input file is `draft.tex`, the first round's output lands at
+`r0/draft.tex`, the filename you started with, never `output.tex`. The CLI
 writes the same per-round tree under `executions/<run-id>/` in the
 workspace store. Read
 [First run](./first-run.md) for the terminal walkthrough.
