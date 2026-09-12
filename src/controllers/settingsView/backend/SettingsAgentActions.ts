@@ -6,7 +6,11 @@ import type { SettingsAgentDirectoryController } from '@controllers/settingsView
 import type { MessageHost } from '@hosts/uiHosts';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentSource, SettingsMessageFor } from '@shared/schemas';
+import {
+  isPackagedAgentSource,
+  type AgentSource,
+  type SettingsMessageFor,
+} from '@shared/schemas';
 // Local imports - utilities
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -46,6 +50,11 @@ interface SettingsAgentActionsOptions {
     source: AgentSource,
   ) => Promise<string | undefined>;
   readonly openDocument: (filePath: string) => Promise<void>;
+  /**
+   * Show a file the user must not edit in place. Hosts present it however
+   * they can without handing back a buffer that saves over the original.
+   */
+  readonly openReadOnlyDocument: (filePath: string) => Promise<void>;
   readonly revealFile: (filePath: string) => Promise<void>;
   readonly confirmAction: (
     message: string,
@@ -101,7 +110,13 @@ export function createSettingsAgentActions(
           );
           return;
         }
-        await options.openDocument(result.path);
+        // A packaged definition lives inside the installed host bundle, so
+        // opening the file itself would let a save mutate the built-in agent
+        // every later scan and launch reads — and silently bypass the
+        // adjacent Customize action that makes the editable copy.
+        await (isPackagedAgentSource(message.agentSource)
+          ? options.openReadOnlyDocument(result.path)
+          : options.openDocument(result.path));
       }),
 
     revealAgentFile: (message) =>

@@ -187,7 +187,11 @@ export function resolveWorkspaceRelativePath(
   }
 
   const relative = resolved.relativePath || '.';
-  return { relative, absolute: resolved.absolutePath, fsPath: relative };
+  return annotateExternalPermission({
+    relative,
+    absolute: resolved.absolutePath,
+    fsPath: relative,
+  });
 }
 
 /** Permission metadata carried for a path inside a registered external root. */
@@ -202,13 +206,18 @@ function externalInfo(
 }
 
 /**
- * Attach external-root permission metadata when a resolution (from the
- * working_directory branch) happens to land inside a registered root.
+ * Attach external-root permission metadata when a resolution that stayed
+ * inside its containing root (the `working_directory` branch or the
+ * workspace branch) happens to land inside a registered root.
  *
- * Without this, a subagent launched with `working_directory` set to a
- * read-only external root (e.g. the built-in agents dir) could bypass
- * `assertWritable` by addressing files with paths relative to `root` —
- * the in-root branches return without touching the allowlist otherwise.
+ * Containment inside a root does not imply writability: a registered
+ * read-only root may itself sit inside the workspace or the working
+ * directory — the packaged agent definitions do exactly that when the
+ * extension is run from its own source checkout, where `resourcesPath`
+ * is `${workspaceFolder}/packages/extension/resources`. Without this the
+ * in-root branches return without touching the allowlist, and
+ * `assertWritable` would let `write_file`/`edit_file` overwrite files the
+ * host registered `writable: false`.
  *
  * Preserves `relative`/`absolute`/`fsPath` as the caller already built
  * them so display and I/O remain unchanged; only `external` is added.

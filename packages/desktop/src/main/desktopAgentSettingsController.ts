@@ -181,6 +181,17 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       getCustomAgentDirectory: directory.getCustomAgentDirectory,
       getSourceDirectory: directory.getSourceDirectory,
       openDocument: directory.openPath,
+      // The desktop has no editor of its own and hands the path to the OS,
+      // so a packaged definition is shown through a temporary copy that the
+      // external editor may save without touching the installed bundle.
+      openReadOnlyDocument: async (filePath) => {
+        const target = path.join(
+          await createTexraTempDir('texra-agent-yaml-'),
+          path.basename(filePath),
+        );
+        await AbsoluteFS.copy(filePath, target, { overwrite: true });
+        await directory.openPath(target);
+      },
       revealFile: directory.revealPath,
       confirmAction: (message, confirmLabel) =>
         prompts.confirm({

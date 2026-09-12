@@ -87,6 +87,15 @@ export class AgentHandlers {
         const doc = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(doc, { preview: false });
       },
+      // An untitled buffer holds the text, so Ctrl+S prompts for a new
+      // location instead of writing back into the packaged resources.
+      openReadOnlyDocument: async (filePath) => {
+        const doc = await vscode.workspace.openTextDocument({
+          content: await AbsoluteFS.read(filePath),
+          language: 'yaml',
+        });
+        await vscode.window.showTextDocument(doc, { preview: false });
+      },
       revealFile: async (filePath) => {
         await vscode.commands.executeCommand(
           'revealFileInOS',
