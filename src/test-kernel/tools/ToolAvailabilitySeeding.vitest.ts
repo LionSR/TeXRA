@@ -10,6 +10,10 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
+const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
+  (def) => def.id,
+);
+
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
 
@@ -20,7 +24,7 @@ describe('seedDisabledToolDefaults', () => {
       yield* seedDisabledToolDefaults(platform().globalState);
 
       expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-        EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map((def) => def.id),
+        EXPECTED_DEFAULTS,
       );
     }),
   );
