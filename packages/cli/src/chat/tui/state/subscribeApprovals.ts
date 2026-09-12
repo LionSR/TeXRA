@@ -62,6 +62,7 @@ import {
   attentionRequests,
   currentApproval,
   decidePendingRequest,
+  forgetSettledRequests,
   landRequestDecision,
   stagePresentation,
   useHostCapability,
@@ -283,6 +284,10 @@ export function createTuiHostInteractions(
   const answerPendingRequests = (): void => {
     const pending = pendingRequests.get();
     const live = new Set(pending.map((request) => request.requestId));
+    // Every level prunes what this host staged for requests that have left
+    // it, however they settled: a decision taken on another surface or a run
+    // interruption drops the fact without passing through this surface.
+    forgetSettledRequests(live);
     for (const id of acted) if (!live.has(id)) acted.delete(id);
     for (const id of automaticSwitches) {
       if (!live.has(id)) automaticSwitches.delete(id);

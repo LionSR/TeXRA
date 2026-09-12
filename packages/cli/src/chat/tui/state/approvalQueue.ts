@@ -285,9 +285,14 @@ export function promoteApprovalsForRun(
  *  "not listed" alone cannot mean "settled". */
 const stagedSeenListed = new Set<string>();
 
-/** Forget what this surface holds for requests the fold no longer lists: a
- *  settled request leaves with its staged presentation. */
-function forgetSettledRequests(live: ReadonlySet<string>): void {
+/**
+ * Forget what this surface holds for requests the fold no longer lists: a
+ * settled request leaves with its staged presentation. Called for every
+ * level of pending requests, not only for the decisions taken here: a
+ * request settled by a run interruption or by another surface takes its
+ * staged edit contents with it too.
+ */
+export function forgetSettledRequests(live: ReadonlySet<string>): void {
   const staged = stagedPresentations.get();
   for (const id of staged.keys()) if (live.has(id)) stagedSeenListed.add(id);
   const remaining = [...staged].filter(
@@ -305,9 +310,8 @@ function forgetSettledRequests(live: ReadonlySet<string>): void {
 }
 
 function markDecided(requestId: string): void {
-  const view = sessionView().get();
   const live = new Set(
-    attentionRequests(view).map((request) => request.requestId),
+    attentionRequests(sessionView().get()).map((request) => request.requestId),
   );
   const next = new Set([...decided.get()].filter((id) => live.has(id)));
   next.add(requestId);

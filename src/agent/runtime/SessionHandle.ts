@@ -590,9 +590,10 @@ export class SessionHandle {
    * one door for a request outside the loop's own batches (a command, an
    * edit, a plan, a delegation, a question); a loop-owned request commits
    * its row with its recovery binding through the ledger and waits with
-   * {@link decisionFor} directly. An interrupted wait (the run stopped, the
-   * session unwound) closes the request as cancelled, so a pending set is
-   * never left behind in the fold.
+   * {@link decisionFor} directly. An interruption anywhere in the call (the
+   * run stopped, the session unwound) closes the request as cancelled, so a
+   * pending set is never left behind in the fold; a cancel for a request
+   * this call never opened writes nothing.
    */
   openRequest(
     runId: RunId,
@@ -612,7 +613,7 @@ export class SessionHandle {
           thread,
         },
       ]);
-      const decided = yield* this.decisionFor(runId, requestId, from).pipe(
+      return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
           Effect.sync((): RequestDecision => {
@@ -622,20 +623,20 @@ export class SessionHandle {
             return { action: 'cancel', cause: cause.message };
           }),
         ),
-        Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            if (this.disposed) return;
-            this.schedulePublication(
-              this.decisionRow(runId, requestId, {
-                action: 'cancel',
-                cause: 'Run interrupted.',
-              }),
-            );
-          }),
-        ),
       );
-      return decided;
-    });
+    }).pipe(
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          if (this.disposed) return;
+          this.schedulePublication(
+            this.decisionRow(runId, requestId, {
+              action: 'cancel',
+              cause: 'Run interrupted.',
+            }),
+          );
+        }),
+      ),
+    );
   }
 
   /**

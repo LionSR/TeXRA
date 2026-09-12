@@ -597,9 +597,20 @@ export function makeSessions(
           },
         });
         if (!hostOpened && !deniers.has(resolved.storage)) {
+          const root = resolved.storage;
+          // The listener ends with the session it answers for: interrupted
+          // by the close below, or finished when that session is invalidated
+          // after its abandoned runs settle. Its key ends with it, so a
+          // later open on this root installs a live listener rather than
+          // trusting a dead entry and leaving its retries unanswered.
           deniers.set(
-            resolved.storage,
-            yield* Effect.forkDetach(denyRetryRequests(handle)),
+            root,
+            yield* Effect.forkDetach(
+              Effect.ensuring(
+                denyRetryRequests(handle),
+                Effect.sync(() => deniers.delete(root)),
+              ),
+            ),
           );
         }
         return sessionOf(handle, services);
@@ -610,10 +621,9 @@ export function makeSessions(
         const report = yield* closeOwnedSession(root, signal);
         // A close that could not settle leaves the session open with its
         // runs live, so the listener stays with them; the close that finally
-        // settles ends it.
+        // settles ends it, and its own finalizer drops the key.
         if (report.settled) {
           const denier = deniers.get(root);
-          deniers.delete(root);
           if (denier) yield* Fiber.interrupt(denier);
         }
         return report;

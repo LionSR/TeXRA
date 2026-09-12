@@ -29,7 +29,10 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
-import { aggregateId as qualifyAggregateId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  requestParksItsCaller,
+} from '@shared/schemas';
 import type { LocalRuntimeState, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
@@ -175,12 +178,33 @@ function decide(
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
+  // A run whose owner is gone (proved dead, or a claim already released)
+  // takes no append until this process holds its claim: the decision
+  // acquires it with the fencing resume uses and gives it back, so a later
+  // resume can still take the run.
+  const heldHere =
+    admitted.ownerId !== null &&
+    SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
   const answer = Effect.gen(function* () {
     const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
       (request) =>
         request.runId === req.runId && request.requestId === req.requestId,
     );
     if (pending === undefined) return yield* Effect.fail(settled(req.runId));
+    // A request that parks its caller is answered by the fiber waiting on
+    // it, and that fiber died with the owner this decision is taking over
+    // from: recording a decision would clear the panel without doing what
+    // it says. Resuming the run retires those requests
+    // (`RunLedger.acquire`) and asks again.
+    if (!heldHere && requestParksItsCaller(pending.payload)) {
+      return yield* Effect.fail(
+        new Unavailable({
+          runId: req.runId,
+          reason:
+            'The run that asked is no longer running: resume it to answer this request.',
+        }),
+      );
+    }
     if (pending.payload.kind === 'externalInquiry') {
       yield* recordInquiryDecision(
         pending.payload.data,
@@ -203,13 +227,6 @@ function decide(
     if (!recorded) return yield* Effect.fail(settled(req.runId));
     return done;
   });
-  // A run whose owner is gone (proved dead, or a claim already released)
-  // takes no append until this process holds its claim: the decision
-  // acquires it with the fencing resume uses and gives it back, so a later
-  // resume can still take the run.
-  const heldHere =
-    admitted.ownerId !== null &&
-    SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
   return withPerKeyLane(
     decisionLanes,
     `${req.runId}/${req.requestId}`,

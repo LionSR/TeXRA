@@ -235,6 +235,11 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     });
     const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
     return yield* session.approvals.toolEdit.enqueue(runId, {
+      // The preview is staged before the request opens, and stays staged
+      // until that request's `request.decided` releases it on every host:
+      // a surface reading the committed row must never find the request
+      // listed with nothing to show for it. An interrupted open closes the
+      // request as cancelled, which is the release.
       prompt: Effect.suspend(() => {
         session.interactions.presentToolEdit(staged);
         return session
