@@ -2,6 +2,13 @@
  * Media input for the run loop: attached files become the package's
  * base64 input parts, gated by what the bound model accepts. The package
  * models media in the request; this is the one place file bytes are read.
+ *
+ * Failure policy: a file the model cannot take is skipped with a transcript
+ * warning; a file that cannot be read or classified fails the read. The
+ * caller decides what a failed read means for its message: the tool-use
+ * loop fails the opening message loudly, the reflection loop warns and
+ * continues, and a follow-up batch is restored to its queue with the failure
+ * reported. Nothing drops an attachment silently.
  */
 import { Effect } from 'effect';
 

@@ -86,7 +86,6 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { sessionWithInteractions } from '../progressTestUtils';
-import { testModelCell } from '../modelCellTestUtils';
 import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
@@ -282,7 +281,6 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
       { logger, runId, runStageId: undefined },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),

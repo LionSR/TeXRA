@@ -8,8 +8,8 @@
 //   - Linux:   wl-paste (Wayland) / xclip (X11) image/png
 //   - Windows: PowerShell Get-Clipboard -Format Image → PNG
 // The saved file flows through the same shared `pasted/` storage dir +
-// MediaAttachmentProcessor path as the extension webview, so no model-layer
-// code is duplicated.
+// `run/mediaInput` path as the extension webview, so no model-layer code is
+// duplicated.
 
 import { execFile } from 'node:child_process';
 import { readFile, rm, stat } from 'node:fs/promises';

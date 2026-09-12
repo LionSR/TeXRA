@@ -780,11 +780,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           if (!suspended) {
             yield* runOnRunEnd;
           }
-          // Release long-lived resources (e.g., WebSocket connections, keepalive
-          // intervals) to prevent leaks when handler instances are discarded after
-          // run. The cell disposed each handler a mid-run switch retired, so
-          // this closes the one still live.
-          ctx.modelCell.dispose();
           // Drop the run-trace subscribers (channel sink + transcript recorder) so
           // they don't pile up across many agent runs.
           ctx.disposeTrace();

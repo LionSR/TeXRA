@@ -3,9 +3,9 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
-  internalValidationModelHandlerEnvName,
-  shouldUseInternalValidationModelHandler,
-} from '@agent/runtime/internalValidationOverride';
+  internalValidationModelEnvName,
+  shouldUseInternalValidationModel,
+} from '@agent/runtime/run/validationModel';
 import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CodexAuthError,
@@ -285,7 +285,7 @@ export function resolveModelHandlerCompatibilityKey(
   useOpenRouter = getUseOpenRouter(),
   copilotRouteOverride?: CopilotRouteOverride,
 ): ModelHandlerCompatibilityKey | undefined {
-  if (shouldUseInternalValidationModelHandler()) {
+  if (shouldUseInternalValidationModel()) {
     return 'ModelHandlerValidation';
   }
 
@@ -626,7 +626,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       // Only the provider boundary is deterministic, so this must not become
       // a user-facing model selector or an injected command-layer substitute.
       log.warn(
-        `${internalValidationModelHandlerEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
+        `${internalValidationModelEnvName()}=1 is replacing provider handlers with the internal validation handler.`,
       );
       const { ModelHandlerValidation } =
         await import('@agent/modelHandlers/modelHandlerValidation');

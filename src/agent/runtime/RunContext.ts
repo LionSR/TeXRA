@@ -4,14 +4,14 @@ import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHostInteractions } from './HostInteractions';
-import type { ModelCell } from './ModelCell';
 import type { SessionHandle } from './SessionHandle';
 
 interface RunContextCommon {
   /**
-   * Current model short name for this run (e.g. "opus46T"), read through the
-   * run's model cell so a mid-run swap is visible to every reader.
+   * Current model short name for this run (e.g. "opus46T"), read off the
+   * run's config at read time so a mid-run switch is visible to every reader.
    */
   readonly model?: string;
   readonly approvalPromptsUnavailable?: boolean;
@@ -50,11 +50,11 @@ export type RunContext = LaunchRunContext | BareRunContext;
 
 interface CreateRunContextCommon {
   /**
-   * The run's model channel, held as a pointer rather than copied: a launch
-   * context passes the run's live {@link ModelCell}, a manually built one
-   * passes a frozen one-shot cell.
+   * The run's config, held as a pointer rather than copied: `model` is read
+   * from it at read time, and the run mirrors a mid-run switch into it
+   * (`onModelChanged`) as soon as the new binding is live.
    */
-  modelCell?: Pick<ModelCell, 'modelId'>;
+  config?: Pick<AgentConfig, 'model'>;
   approvalPromptsUnavailable?: boolean;
   onApprovalPolicyDenial?: () => void;
   runtimeUnavailableTools?: readonly string[];
@@ -105,18 +105,18 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
  *
  * A `runScope` produces a `launch` context with full run identity; without one
  * the result is a `bare` context for tests and one-shot tool environments.
- * Both read `model` off the supplied cell, so the model a reader sees is the
- * one the cell holds at read time.
+ * Both read `model` off the supplied config, so the model a reader sees is
+ * the one the run is on at read time.
  */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
-  const { modelCell } = options;
+  const { config } = options;
   if (options.runScope) {
     return Object.freeze({
       kind: 'launch',
       ...commonRunContextFields(options),
       runScope: options.runScope,
       get model() {
-        return modelCell?.modelId;
+        return config?.model;
       },
     });
   }
@@ -128,7 +128,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     workingDirectory: options.workingDirectory,
     session: options.session,
     get model() {
-      return modelCell?.modelId;
+      return config?.model;
     },
   } satisfies BareRunContext);
 }

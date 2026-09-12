@@ -38,7 +38,6 @@ import {
 } from '@agent/storage/runLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
-import { ModelCell } from '@agent/runtime/ModelCell';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -450,7 +449,7 @@ async function launchWaitingChild(options: {
 
   const parentContext = createRunContext({
     runId: PARENT_RUN_ID,
-    modelCell: new ModelCell({} as never, PARENT_MODEL),
+    config: { model: PARENT_MODEL },
     session,
   });
   const runAsParentOwner: ParentOwnerRunner = (operation) => {

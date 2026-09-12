@@ -19,17 +19,13 @@ import {
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-import { testModelCell } from '../modelCellTestUtils';
-
-/** The zero-priced OpenAI model every runtime fixture bills against. */
+/**
+ * The zero-priced OpenAI model every runtime fixture bills against, shaped
+ * as the binding `UsageMonitor.recordUsage` reads.
+ */
 export const testModelInfo = {
-  capabilities: {
-    supportsPromptCaching: false,
-    supportsAutoPromptCaching: false,
-    supportsReasoning: false,
-    cacheDiscountFactor: 0,
-  },
   config: {
     provider: ModelProvider.OPENAI,
     name: 'test-model',
@@ -37,6 +33,12 @@ export const testModelInfo = {
     inputPrice: 0,
     openRouterOnly: false,
     requiresResponsesAPI: false,
+    capabilities: {
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
+      supportsReasoning: false,
+      cacheDiscountFactor: 0,
+    },
   },
 };
 
@@ -70,10 +72,6 @@ export function createTestLaunchContext({
     agentCategory: category,
   });
   const setting = AgentSettingSchema.parse({ agentCategory: category });
-  const modelCell = testModelCell(
-    { ...testModelInfo, dispose: vi.fn() },
-    config.model,
-  );
 
   return {
     config,
@@ -92,11 +90,11 @@ export function createTestLaunchContext({
     toolPolicy: {},
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
-      modelCell,
       { logger, runId, runStageId: undefined },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
-    modelCell,
+    modelConfig: buildTestModelConfig(),
+    modelHandlerCompatibilityKey: null,
     interrupt: () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     },

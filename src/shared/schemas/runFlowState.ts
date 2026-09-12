@@ -338,8 +338,8 @@ export const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   /**
-   * The model the run is on, mirroring the live `ModelCell`. This is the
-   * resume SSOT for model identity.
+   * The model the run is on, mirroring the run's live model binding. This is
+   * the resume SSOT for model identity.
    */
   modelId: z.string().optional(),
   /** Provider-message format of the persisted messages. Absent for an

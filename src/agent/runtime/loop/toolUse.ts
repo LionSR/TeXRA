@@ -671,10 +671,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
         totalResponseTimeMs += outcome.responseTimeMs;
+        // Priced against the binding that served the round: a manual retry
+        // may have rebound the model inside the invoker.
+        const served = yield* SynchronizedRef.get(run.model);
         yield* Effect.tryPromise({
           try: () =>
             run.inScope(() =>
-              run.usageMonitor.recordUsage(usageSnapshot(state, outcome.usage)),
+              run.usageMonitor.recordUsage(
+                usageSnapshot(state, outcome.usage),
+                served,
+              ),
             ),
           catch: ensureError,
         });

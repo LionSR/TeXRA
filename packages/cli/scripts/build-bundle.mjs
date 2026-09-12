@@ -71,8 +71,7 @@ try {
       'react-devtools-core': reactDevtoolsStub,
       ...(!includeInternalValidationModel
         ? {
-            '@agent/modelHandlers/modelHandlerValidation':
-              internalValidationModelStub,
+            '@agent/runtime/run/validationModel': internalValidationModelStub,
           }
         : {}),
     },

@@ -52,7 +52,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const buildAgentLaunchContext = (
@@ -302,12 +301,10 @@ describe('AgentLaunchContext', () => {
       session,
       signal: new AbortController().signal,
     });
-    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
     const onApprovalPolicyDenial = vi.fn();
     const ctx = {
       runScope,
       logger: noopTrace,
-      modelCell,
       toolPolicy: {
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['inquiry'],
@@ -334,9 +331,9 @@ describe('AgentLaunchContext', () => {
       expect(context.stopAfterCycle).toBe(true);
       expect(context.onApprovalPolicyDenial).toBe(onApprovalPolicyDenial);
 
-      // The cell is the run's live model, so a swap alone moves the run
-      // context; the `AgentConfig.model` mirror does not drive it.
-      modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
+      // The run mirrors a switch into its config once the new binding is
+      // live (`onModelChanged`); the context reads it at read time.
+      ctx.config.model = 'sonnet46T';
 
       expect(tryUseRunContext()?.model).toBe('sonnet46T');
     });
@@ -421,7 +418,7 @@ describe('AgentLaunchContext', () => {
     const responseTextProcessing = {
       normalizeResponseText: (text: string) => text,
       postProcessResponse,
-      connectResponseText: async () => ' ',
+      connectResponseText: () => Effect.succeed(' '),
     };
     const session = createTestSession({
       responseTextProcessing,

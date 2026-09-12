@@ -1,6 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
   AgentRunStateSnapshot,
   RunId,
@@ -43,17 +42,16 @@ interface UsageMonitorMetadata {
 /**
  * Minimal model info needed for usage tracking.
  *
- * This interface names the fields UsageMonitor reads off the run's live model
- * handler, so widening what usage accounting depends on is a visible edit here.
- * Fields are directly from ModelCapabilities and ModelConfig.
+ * This type names the fields UsageMonitor reads off the config of the run's
+ * live model binding, so widening what usage accounting depends on is a
+ * visible edit here.
  */
-interface UsageMonitorModelInfo {
-  capabilities: Pick<
+type UsageMonitorModelInfo = Pick<ModelConfig, 'fullName'> & {
+  readonly capabilities: Pick<
     ModelCapabilities,
     'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
   >;
-  config: Pick<ModelConfig, 'fullName'>;
-}
+};
 
 /**
  * Runtime dependencies for UsageMonitor — the individual run facts it reads,
@@ -93,26 +91,25 @@ export class UsageMonitor {
   private lastSeenTotals: RunUsageTotals | undefined;
 
   constructor(
-    private readonly modelCell: ModelCell,
     private readonly context: UsageMonitorContext,
     private readonly metadata: UsageMonitorMetadata,
   ) {}
-
-  /**
-   * The model this run is live on. Read from the cell on every use, so a
-   * mid-run model switch is priced and reported against the model that
-   * actually served the round without anyone mirroring it back in.
-   */
-  private get modelInfo(): UsageMonitorModelInfo {
-    return this.modelCell.handler;
-  }
 
   /** The last run totals recorded this run, or undefined before any round. */
   lastTotals(): RunUsageTotals | undefined {
     return this.lastSeenTotals;
   }
 
-  async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
+  /**
+   * Record one round's usage against `bound`, the run's binding that served
+   * it. The loop passes the model it actually ran, so a mid-run switch is
+   * priced and reported against it without anyone mirroring it back in.
+   */
+  async recordUsage(
+    stateGlobal: AgentRunStateSnapshot,
+    bound: { readonly config: UsageMonitorModelInfo },
+  ): Promise<void> {
+    const model = bound.config;
     const { logger, runId, runStageId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
@@ -137,7 +134,7 @@ export class UsageMonitor {
         roundCacheReadTokens,
       );
 
-      const { capabilities } = this.modelInfo;
+      const { capabilities } = model;
       const supportsCaching =
         capabilities.supportsPromptCaching ||
         capabilities.supportsAutoPromptCaching;
@@ -146,6 +143,7 @@ export class UsageMonitor {
       const percentageCached = this.calculateCachePercentage(
         supportsCaching,
         totals,
+        model,
       );
 
       // The `usage` row is a snapshot fact, not a delta: `usage` is a
@@ -206,6 +204,7 @@ export class UsageMonitor {
           usageRoute,
         },
         latestUsage.provider,
+        model,
       );
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics`, { data: error });
@@ -218,11 +217,11 @@ export class UsageMonitor {
   private calculateCachePercentage(
     supportsCaching: boolean,
     totals: RunUsageTotals,
+    model: UsageMonitorModelInfo,
   ): number {
     if (!supportsCaching) return 0;
 
-    const totalCacheableTokens = this.modelInfo.capabilities
-      .supportsPromptCaching
+    const totalCacheableTokens = model.capabilities.supportsPromptCaching
       ? totals.totalCacheCreationInputTokens + totals.totalCacheReadInputTokens
       : totals.totalInputTokens;
 
@@ -247,13 +246,13 @@ export class UsageMonitor {
     provider: NonNullable<
       AgentRunStateSnapshot['usageAccumulator']['latestUsage']
     >['provider'],
+    model: UsageMonitorModelInfo,
   ): void {
     try {
-      const { config } = this.modelInfo;
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
 
       UsageLogService.log({
-        model: config.fullName,
+        model: model.fullName,
         provider,
         agentName: this.metadata.agentName,
         agentCategory: this.metadata.agentCategory,

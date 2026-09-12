@@ -61,7 +61,6 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
-import { testModelCell } from './modelCellTestUtils';
 import { testModelInfo } from './runtime/launchContextTestUtils';
 
 setupPlatform({ workspacePath: '/workspace' });
@@ -248,7 +247,6 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
       { logger, runId, runStageId: undefined },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),

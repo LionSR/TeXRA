@@ -41,7 +41,6 @@ import { generateRunId, generateShortId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { sessionWithInteractions } from '../progressTestUtils';
-import { testModelCell } from '../modelCellTestUtils';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with
@@ -246,7 +245,6 @@ function agentRunTestLayer(init: HarnessInit) {
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),
         usageMonitor: new UsageMonitor(
-          testModelCell({ config: buildTestModelConfig() }),
           { logger, runId: init.runId, runStageId: undefined },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
