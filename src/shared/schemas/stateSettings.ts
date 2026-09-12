@@ -424,9 +424,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'openai',
       label: 'GPT-5 reasoning summary',
@@ -444,7 +442,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Use the Responses API',
     description:
       "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'openai',
       label: 'Use the Responses API',
@@ -457,9 +455,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'google',
       label: 'Server-side conversation state',
@@ -498,9 +494,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'openai',
       label: 'Parallel tool calls',
@@ -555,7 +549,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/providerCapabilities.ts',
     }),
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
@@ -841,8 +835,7 @@ const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
 const WORKFLOW_COMPILE_READER =
   'src/agent/implementations/flows/reflection/output/compileCheck.ts';
-const PROXY_CONFIG_READER =
-  'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
+const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 const GIT_AUTHOR_RUNTIME_REACHABILITY = {
@@ -884,32 +877,32 @@ const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --model <openai-model> --input paper.tex --instruction "summarize the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/run/modelBinding.ts',
 } satisfies CliRuntimeReachability;
 const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
 const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
   // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
   command:
     'texra agents run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/model/kimiCodeSubscriptionRouting.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_REGION_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/run/modelBinding.ts -> src/agent/runtime/run/routeEndpoint.ts',
 } satisfies CliRuntimeReachability;
 const CODEX_AGENT_RUNTIME_REACHABILITY = {
   command:
@@ -987,7 +980,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       category: 'model',
       slots: sameSlot('globalState'),
       honoredBy: everyHost(
-        PROXY_CONFIG_READER,
+        ROUTE_ENDPOINT_READER,
         PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
       ),
       surfaces: { settingsView: 'profile', cliConfig: true },
@@ -995,7 +988,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `ProxyConfigResolver`, each also a Models
+ * Region/routing toggles resolved by `run/routeEndpoint`, each also a Models
  * tab control for its provider. The rows differ only in key, default, and
  * copy, so the shared fields are written once.
  */
@@ -1061,7 +1054,7 @@ const PROVIDER_ROUTING_SETTINGS = (
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      PROXY_CONFIG_READER,
+      ROUTE_ENDPOINT_READER,
       PROVIDER_REGION_RUNTIME_REACHABILITY,
     ),
     surfaces: {
@@ -1399,7 +1392,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
+      'src/agent/runtime/run/modelBinding.ts',
       OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
     ),
     surfaces: {
@@ -1448,7 +1441,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Show compact model names in pickers.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
+    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     surfaces: { settingsView: 'models' },
   }),
 
@@ -1490,7 +1483,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      'src/agent/runtime/ModelFactory.ts',
+      'src/agent/runtime/run/modelBinding.ts',
       KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
     ),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
@@ -1522,7 +1515,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
-      PROXY_CONFIG_READER,
+      ROUTE_ENDPOINT_READER,
       PROVIDER_REGION_RUNTIME_REACHABILITY,
     ),
     onWrite: { invalidatesModelOptions: true },

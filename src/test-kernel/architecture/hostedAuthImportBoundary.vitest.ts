@@ -15,7 +15,6 @@ import {
 
 const SCAN_ROOTS = [
   'src/model',
-  'src/agent/modelHandlers',
   'src/agent/core',
   'src/agent/runtime',
 ] as const;

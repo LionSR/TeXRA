@@ -37,7 +37,6 @@ import {
   logProgressStatus,
   type StreamHandle,
 } from '@agent/trace';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -70,6 +69,7 @@ import { generateShortId } from '@utils/core';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import type { ModelCredentialSelection } from './HostInteractions';
 import { AgentRun } from './run/AgentRun';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';

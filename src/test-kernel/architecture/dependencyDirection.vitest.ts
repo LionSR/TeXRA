@@ -1,6 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -165,26 +165,6 @@ function importsHostLayer(file: string): boolean {
   );
 }
 
-function importsAgentModelHandlers(file: string): boolean {
-  return importSpecifiers(file).some((specifier) => {
-    if (
-      specifier === '@agent/modelHandlers' ||
-      specifier.startsWith('@agent/modelHandlers/')
-    ) {
-      return true;
-    }
-    if (!specifier.startsWith('.')) {
-      return false;
-    }
-
-    const repoRelative = toRepoPath(resolve(dirname(file), specifier));
-    return (
-      repoRelative === 'src/agent/modelHandlers' ||
-      repoRelative.startsWith('src/agent/modelHandlers/')
-    );
-  });
-}
-
 describe('VS Code-free zones never import vscode', () => {
   for (const zone of VSCODE_FREE_ZONES) {
     it(`${zone} has no vscode imports`, () => {
@@ -239,17 +219,6 @@ describe('Production core never imports host layers', () => {
 
   it('actually scans production src files', () => {
     expect(productionSrcFiles().length).toBeGreaterThan(500);
-  });
-});
-
-describe('Agent core dependency direction', () => {
-  it('does not import model handler implementations', () => {
-    const offenders = sourceFilesUnder('src/agent/core')
-      .filter(importsAgentModelHandlers)
-      .map(toRepoPath)
-      .toSorted();
-
-    expect(offenders).toEqual([]);
   });
 });
 

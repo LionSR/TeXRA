@@ -33,7 +33,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
@@ -380,7 +379,7 @@ function httpError(
 function statuslessServerError(message: string): OpenAIAPIError {
   const body = { type: 'server_error', code: 'server_error', message };
   const error = new OpenAIAPIError(undefined, body, message, undefined);
-  tagOpenAISdkError(error, 'openai');
+  attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
   return error;
 }
 
@@ -437,7 +436,11 @@ describe('model failure classification', () => {
       'transient provider failure',
       undefined,
     );
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'api_error',
+      statusCode: 503,
+    });
 
     expect(classifyModelFailure(error).formatted).toMatchObject({
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',

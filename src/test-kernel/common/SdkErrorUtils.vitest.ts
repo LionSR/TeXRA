@@ -19,9 +19,6 @@ import {
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { tagAnthropicSdkError } from '@agent/modelHandlers/anthropic/anthropicSdkError';
-import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
-import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   attachContextWindowError,
   attachMissingApiKeyError,
@@ -321,7 +318,10 @@ describe('formatProviderHttpError', () => {
 
   it('formats tagged OpenAI connection errors with existing retry behavior', () => {
     const error = new OpenAIAPIConnectionTimeoutError();
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'connection_timeout',
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -340,7 +340,7 @@ describe('formatProviderHttpError', () => {
       param: null,
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -358,7 +358,7 @@ describe('formatProviderHttpError', () => {
       param: null,
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -378,7 +378,10 @@ describe('formatProviderHttpError', () => {
       codeOnlyBody.message,
       undefined,
     );
-    tagOpenAISdkError(codeOnlyError, 'openai');
+    attachSdkErrorMetadata(codeOnlyError, {
+      provider: 'openai',
+      kind: 'api_error',
+    });
 
     expect(formatProviderHttpError(codeOnlyError).statusCode).toBe(503);
   });
@@ -390,7 +393,7 @@ describe('formatProviderHttpError', () => {
       message: 'Unexpected provider failure.',
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -405,7 +408,11 @@ describe('formatProviderHttpError', () => {
       'bad payload',
       new Headers([['x-request-id', 'req_123']]),
     );
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -430,7 +437,11 @@ describe('formatProviderHttpError', () => {
       `400 ${JSON.stringify(body)}`,
       new Headers(),
     );
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -495,7 +506,11 @@ describe('formatProviderHttpError', () => {
       'ignored by the OpenAI error constructor',
       new Headers(),
     );
-    tagOpenAISdkError(error, 'openai');
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -630,7 +645,10 @@ describe('formatProviderHttpError', () => {
 
   it('formats tagged Anthropic user abort errors', () => {
     const error = new AnthropicAPIUserAbortError();
-    tagAnthropicSdkError(error, 'anthropic');
+    attachSdkErrorMetadata(error, {
+      provider: 'anthropic',
+      kind: 'user_abort',
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -649,7 +667,11 @@ describe('formatProviderHttpError', () => {
       'invalid key',
       new Headers([['request-id', 'req_anthropic']]),
     );
-    tagAnthropicSdkError(error, 'anthropic');
+    attachSdkErrorMetadata(error, {
+      provider: 'anthropic',
+      kind: 'authentication',
+      statusCode: 401,
+    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -667,7 +689,11 @@ describe('formatProviderHttpError', () => {
       message: 'quota exceeded',
       status: 429,
     });
-    tagGoogleSdkError(error, 'google');
+    attachSdkErrorMetadata(error, {
+      provider: 'google',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
 
     const formatted = formatProviderHttpError(error);
 

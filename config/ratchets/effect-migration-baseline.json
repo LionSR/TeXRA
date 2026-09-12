@@ -9,8 +9,6 @@
       "src/agent/implementations/flows/reflection/output/compiledPdfArtifacts.ts": 2,
       "src/agent/index/agentRegistry.ts": 2,
       "src/agent/index/platformAgentDirectories.ts": 2,
-      "src/agent/modelHandlers/ModelHandler.ts": 1,
-      "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
       "src/auth/oauth/sessionAccess.ts": 2,
       "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/workspaceFileOptions.ts": 1,
@@ -260,7 +258,6 @@
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,
       "packages/cli/src/chat/tui/state/approvalQueue.ts": 1,
       "packages/cli/src/runtime/executeCli.ts": 1,
-      "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
       "src/agent/runtime/AgentLaunchContext.ts": 1,
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/runAgent.ts": 1,
@@ -311,8 +308,6 @@
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     },
-    "dep:@agent/modelHandlers": {
-      "src/agent/runtime/ModelFactory.ts": 13
-    }
+    "dep:@agent/modelHandlers": {}
   }
 }

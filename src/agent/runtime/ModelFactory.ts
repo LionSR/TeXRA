@@ -1,12 +1,9 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
-import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
@@ -28,99 +25,28 @@ import { getConfig } from '@utils/config/configUtils';
 
 const log = createLog('ModelFactory');
 
-type ModelHandlerConstructor = new (
-  config: ModelConfig,
-  responseTextProcessing?: ResponseTextProcessing,
-) => ModelHandler<ProviderMessage>;
-
-type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
-
-interface ProviderHandlerRoute {
-  readonly load: ProviderHandlerLoader;
-  readonly compatibilityKey: ModelHandlerCompatibilityKey;
-}
-
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
-const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
-  [ModelProvider.ANTHROPIC]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic'))
-        .ModelHandlerAnthropic,
-    compatibilityKey: 'ModelHandlerAnthropic',
-  },
-  [ModelProvider.OPENAI]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerOpenAI'))
-        .ModelHandlerOpenAI,
-    compatibilityKey: 'ModelHandlerOpenAI',
-  },
-  [ModelProvider.GOOGLE]: {
-    load: async () =>
-      (
-        await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions')
-      ).ModelHandlerGoogleInteractions,
-    compatibilityKey: 'ModelHandlerGoogleInteractions',
-  },
-  [ModelProvider.DEEPSEEK]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerDeepSeek'))
-        .ModelHandlerDeepSeek,
-    compatibilityKey: 'ModelHandlerDeepSeek',
-  },
-  [ModelProvider.XAI]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerXAI'))
-        .ModelHandlerXAI,
-    compatibilityKey: 'ModelHandlerXAI',
-  },
-  [ModelProvider.MOONSHOT]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerKimi'))
-        .ModelHandlerKimi,
-    compatibilityKey: 'ModelHandlerKimi',
-  },
-  [ModelProvider.DASHSCOPE]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerDashScope'))
-        .ModelHandlerDashScope,
-    compatibilityKey: 'ModelHandlerDashScope',
-  },
-  [ModelProvider.MINIMAX]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerMiniMax'))
-        .ModelHandlerMiniMax,
-    compatibilityKey: 'ModelHandlerMiniMax',
-  },
-  [ModelProvider.GLM]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerGLM'))
-        .ModelHandlerGLM,
-    compatibilityKey: 'ModelHandlerGLM',
-  },
-  [ModelProvider.META]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse'))
-        .ModelHandlerOpenAIResponse,
-    compatibilityKey: 'ModelHandlerMeta',
-  },
-  [ModelProvider.OTHERS]: {
-    load: async () =>
-      (
-        await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative')
-      ).ModelHandlerOpenRouterNative,
-    compatibilityKey: 'ModelHandlerOpenRouterNative',
-  },
-  [ModelProvider.COPILOT]: {
-    load: async () =>
-      (await import('@agent/modelHandlers/vscodelm/modelHandlerVscodeLm'))
-        .ModelHandlerVscodeLm,
-    compatibilityKey: 'ModelHandlerVscodeLm',
-  },
+const PROVIDER_COMPATIBILITY_KEYS: Record<
+  ModelProvider,
+  ModelHandlerCompatibilityKey
+> = {
+  [ModelProvider.ANTHROPIC]: 'ModelHandlerAnthropic',
+  [ModelProvider.OPENAI]: 'ModelHandlerOpenAI',
+  [ModelProvider.GOOGLE]: 'ModelHandlerGoogleInteractions',
+  [ModelProvider.DEEPSEEK]: 'ModelHandlerDeepSeek',
+  [ModelProvider.XAI]: 'ModelHandlerXAI',
+  [ModelProvider.MOONSHOT]: 'ModelHandlerKimi',
+  [ModelProvider.DASHSCOPE]: 'ModelHandlerDashScope',
+  [ModelProvider.MINIMAX]: 'ModelHandlerMiniMax',
+  [ModelProvider.GLM]: 'ModelHandlerGLM',
+  [ModelProvider.META]: 'ModelHandlerMeta',
+  [ModelProvider.OTHERS]: 'ModelHandlerOpenRouterNative',
+  [ModelProvider.COPILOT]: 'ModelHandlerVscodeLm',
 };
 
 /** Check if OpenAI Responses API should be used for this config. */
-export function shouldUseResponsesAPI(
+function shouldUseResponsesAPI(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): boolean {
@@ -257,7 +183,7 @@ export function resolveModelHandlerCompatibilityKey(
   }
 
   // Re-application is identity on an already-shortened config, so the live
-  // `createModelHandler` path can hand this its own resolved config.
+  // `bindModel` path can hand this its own resolved config.
   const config = applyShortModelNamePreference(
     originalConfig,
     getPreferShortModelNames(globalState),
@@ -268,23 +194,22 @@ export function resolveModelHandlerCompatibilityKey(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
-  return providerHandlerRoute(config.provider)?.compatibilityKey;
+  return providerCompatibilityKey(config.provider);
 }
 
 /**
  * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a
  * miss means a provider string from outside the enum (stale registry entry or
  * persisted config). Report it here instead of crashing on the property
- * access; both callers turn the missing route into a named failure — the model
- * switch reports it as a reason, handler creation throws it.
+ * access; the caller turns the missing route into a named failure.
  */
-function providerHandlerRoute(
+function providerCompatibilityKey(
   provider: ModelProvider,
-): ProviderHandlerRoute | undefined {
-  const route = PROVIDER_HANDLER_ROUTES[provider];
-  if (!route) {
-    log.warn(`No model handler route is registered for provider ${provider}`);
+): ModelHandlerCompatibilityKey | undefined {
+  const key = PROVIDER_COMPATIBILITY_KEYS[provider];
+  if (!key) {
+    log.warn(`No model route is registered for provider ${provider}`);
     return undefined;
   }
-  return route;
+  return key;
 }

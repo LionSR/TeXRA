@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { Result } from 'effect';
 import type { AgentTrace } from '@agent/trace';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -38,7 +37,7 @@ export type DuplicateCallMap = Map<string, number>;
  * repeat plausibly intentional (e.g. write x; edit x; write x as a restore).
  */
 export function partitionDuplicateCalls<
-  Call extends Pick<SdkToolCall, 'callId' | 'name' | 'input'>,
+  Call extends { callId: string; name: string; input: unknown },
 >(
   toolCalls: readonly Call[],
   isParallelSafe: (call: Call) => boolean,

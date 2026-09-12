@@ -1,5 +1,4 @@
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
@@ -77,6 +76,12 @@ type ReportReviewIssueSink = (report: ReviewIssueReport) => {
   readonly accepted: boolean;
   readonly reason?: string;
 };
+
+/**
+ * Credential source the host picked for the next attempt: the account the
+ * run is already configured with, or the user's personal credential.
+ */
+export type ModelCredentialSelection = 'configured' | 'personal';
 
 export interface HostRetryInteractionOptions extends RequestRowOptions {
   /**

@@ -806,42 +806,6 @@
       "name": "registerInlineAgents"
     },
     {
-      "file": "src/agent/modelHandlers/anthropic/anthropicServerTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "stripOrphanedServerToolUse"
-    },
-    {
-      "file": "src/agent/modelHandlers/anthropic/anthropicThinking.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "normalizeAnthropicEffort"
-    },
-    {
-      "file": "src/agent/modelHandlers/anthropic/anthropicThinking.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "requiresNoTemperatureWithThinking"
-    },
-    {
-      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_DEFAULT_INSTRUCTIONS"
-    },
-    {
-      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isGenerationRequest"
-    },
-    {
-      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "rewriteCodexRequestBody"
-    },
-    {
       "file": "src/agent/prompt/userVars.ts",
       "category": "production-dead",
       "kind": "exports",
