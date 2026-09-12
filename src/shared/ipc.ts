@@ -5,8 +5,10 @@ export const COMMON_COMMANDS = {
 } as const;
 
 /**
- * Inbound settings-view command literals (webview → host); outbound-only
- * commands are added in `SETTINGS_VIEW_COMMANDS`.
+ * Settings-view command literals the schema definitions reference. Mostly
+ * inbound (webview → host), plus a few outbound ones such as `SET_TAB` and the
+ * auth-status updates; `SETTINGS_VIEW_COMMANDS` adds the rest of the outbound
+ * set on top of these.
  */
 export const SETTINGS_VIEW_CMD = {
   // Navigation commands

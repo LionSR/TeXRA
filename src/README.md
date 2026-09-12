@@ -63,7 +63,7 @@ way `tsc` will not catch.
   here. Second, the **shared browser UI kit** — `shared/wa/` (Web Awesome icon
   and component helpers), `shared/styles/`, `shared/litControllers/`,
   `shared/markdown/`. That is runtime UI code, not a
-  contract: 26 modules under `shared/` import `lit`. Reusable webview UI belongs
+  contract: 23 modules under `shared/` import `lit`. Reusable webview UI belongs
   here, not in a host package.
 - **`common/`** — cross-cutting logic with domain meaning that is not a wire
   contract. Error classification is the clearest example.
