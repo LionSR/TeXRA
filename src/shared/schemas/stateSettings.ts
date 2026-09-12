@@ -917,10 +917,14 @@ const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
 } satisfies CliRuntimeReachability;
 
 /**
- * The one documented slot divergence in the catalog, shared by the git
- * identity and skill availability rows: the extension and desktop store them
- * in worktree-shared WorkspaceState while the CLI reads them from
- * `.texra/config.json`, which is where an existing user's values already live.
+ * The one documented slot divergence in the catalog, carried by the git
+ * identity rows: the extension and desktop store them in WorkspaceState —
+ * where `WorktreeStateStore` additionally shares them across every worktree of
+ * a repository, so one clone has one agent commit identity — while the CLI
+ * reads them from `.texra/config.json`, which is where an existing user's
+ * values already live. Do not move these rows to `config`: `.texra/` is
+ * gitignored by default, so the project config file is per-checkout, not
+ * repository-level, and the move would silently drop the worktree sharing.
  */
 const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
   vscode: 'workspaceState',
@@ -1547,7 +1551,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skills',
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: sameSlot('config'),
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,
@@ -1561,7 +1565,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skill sources',
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: sameSlot('config'),
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,
