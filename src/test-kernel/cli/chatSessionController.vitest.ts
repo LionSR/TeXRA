@@ -4,7 +4,7 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -787,6 +787,30 @@ describe('createChatSessionController', () => {
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
       'launch defect',
     );
+    expect(session.runCompleted).toBe(true);
+  });
+
+  it('reports a run failure whose cause also carries an interrupt', async () => {
+    // Fail-fast concurrency and interrupted teardown both fold an Interrupt
+    // into a genuine failure's Cause; recovery must still see the failure.
+    mocks.runAgent.mockReturnValueOnce(
+      Effect.failCause(
+        Cause.fromReasons([
+          Cause.makeFailReason(new Error('run failed mid-teardown')),
+          Cause.makeInterruptReason(),
+        ]),
+      ),
+    );
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun(makeRunRequest('Check racing failure.'));
+
+    await expect(session.runPromise).resolves.toBeUndefined();
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'run failed mid-teardown',
+    );
+    expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
   });
 

@@ -151,7 +151,7 @@ const recoverRun = <A, E, R>(
 ): Effect.Effect<A, E, R> =>
   program.pipe(
     Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause)
+      Cause.hasInterruptsOnly(cause)
         ? Effect.failCause(cause)
         : Effect.sync(() => recover(Cause.squash(cause))),
     ),
