@@ -33,6 +33,7 @@ import {
   selectCliRunModel,
 } from '../runtime/runModel';
 import {
+  resolveCliDefaultOutputFiles,
   resolveCliLaunchAgent,
   WORKFLOW_AGENT_NAME_DESCRIPTION,
 } from '../runtime/agents';
@@ -146,8 +147,17 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
+        // The catalog entry carries declared defaults for local agents only;
+        // remote agents need their definition loaded to resolve them.
         const expectedOutputFiles = init.outputDir
-          ? expectedOutputFilesForOutputDir(agent, inputFiles, stdinInputPath)
+          ? expectedOutputFilesForOutputDir(
+              yield* Effect.tryPromise({
+                try: () => resolveCliDefaultOutputFiles(agent),
+                catch: ensureError,
+              }),
+              inputFiles,
+              stdinInputPath,
+            )
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.

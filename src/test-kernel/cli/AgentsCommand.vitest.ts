@@ -14,11 +14,16 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   resolveCliAgent: vi.fn(),
+  loadRemoteAgent: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
   resolveCliAgent: mocks.resolveCliAgent,
+}));
+
+vi.mock('@agent/remote/RemoteAgentLoader', () => ({
+  loadRemoteAgent: mocks.loadRemoteAgent,
 }));
 
 // Import the modules under test after the mock factories above are registered
@@ -96,6 +101,8 @@ describe('CLI agents command', () => {
     vi.clearAllMocks();
     agentCatalogMock.getAgentsByCategory.mockReturnValue([]);
     agentCatalogMock.getVisibleAgents.mockReturnValue([]);
+    // Show falls back to catalog data when the remote definition cannot load.
+    mocks.loadRemoteAgent.mockRejectedValue(new Error('not signed in'));
   });
 
   it('parses agent category filter spellings', () => {
