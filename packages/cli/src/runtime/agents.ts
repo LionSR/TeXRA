@@ -268,9 +268,20 @@ export function formatCliAgentList(
     return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
   }
 
+  // Shell completion reads the name column straight back into `texra run`,
+  // `texra agents show` and `--agent`, so every row has to print a spelling
+  // that resolves to that row. A bare name shared by two listed agents does
+  // not — `texra run` refuses it as ambiguous — so those rows print the
+  // source-qualified key instead, which hits exactly one registry entry.
+  const collidingNames = new Set(
+    agents
+      .map((agent) => agent.name)
+      .filter((name, index, names) => names.indexOf(name) !== index),
+  );
   return agents
     .map(
-      (agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+      (agent) =>
+        `${agent.category}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
 }

@@ -7,10 +7,12 @@ import { Effect } from 'effect';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
+import { getAgentsByCategory } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import {
   assertCliAgentLaunch,
+  formatCliAgentList,
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
@@ -111,6 +113,24 @@ describe('CLI agent validation with a shadowed name', () => {
     expect(
       (await resolveCliRunAgent('builtInToolUse:assistant')).category,
     ).toBe(AgentCategory.ToolUse);
+  });
+
+  // Shell completion feeds `texra run` from the name column of
+  // `agents list --quiet --all`, so that column has to hold spellings the
+  // command accepts: the qualified keys for the shadowed name, whose bare form
+  // the test above shows is refused, and the plain name for everything else.
+  it('lists a name two agents share as their source-qualified keys', () => {
+    const names = formatCliAgentList([
+      ...getAgentsByCategory(AgentCategory.Workflow),
+      ...getAgentsByCategory(AgentCategory.ToolUse),
+    ])
+      .split('\n')
+      .map((row) => row.split('\t')[1]);
+
+    expect(names).toContain('custom:assistant');
+    expect(names).toContain('builtInToolUse:assistant');
+    expect(names).not.toContain('assistant');
+    expect(names).toContain('polish');
   });
 
   it('resolves a source-qualified identifier to that exact source', () => {

@@ -210,7 +210,12 @@ const COMPLETION_SOURCES = {
     command: 'agents list --quiet',
     column: 2,
   },
-  /** Every launchable agent: `texra run` takes both categories. */
+  /**
+   * Every launchable agent: `texra run` takes both categories. The name column
+   * prints the source-qualified key for a name two listed agents share, so a
+   * cross-category collision completes to the spellings `texra run` accepts
+   * rather than the bare name it refuses.
+   */
   launchableAgents: {
     shellFunction: '_texra_launchable_agents',
     command: 'agents list --quiet --all',
