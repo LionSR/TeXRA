@@ -4,7 +4,7 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, SubscriptionRef } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToRun: vi.fn(),
+  reportRequestDefect: vi.fn(),
   followUpEnqueue: vi.fn(),
   followUpQueueForLease: vi.fn(),
 }));
@@ -105,6 +106,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,
   clearLocalTranscript: mocks.clearLocalTranscript,
   moveLocalTranscriptToRun: mocks.moveLocalTranscriptToRun,
+  reportRequestDefect: mocks.reportRequestDefect,
 }));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
@@ -128,16 +130,19 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
+import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
   patchSessionMeta,
   rootRunPending,
   claimedRunId,
+  draftRestoreRequest,
   rootRunId,
   sessionMeta,
+  transientNotice,
 } from '@cli/chat/tui/state/cliState';
-import { currentView } from '@cli/chat/tui/state/sessionView';
+import { currentView, sessionView } from '@cli/chat/tui/state/sessionView';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
@@ -147,6 +152,7 @@ import {
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -527,6 +533,9 @@ describe('createChatSessionController', () => {
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.request.mockImplementation(() =>
       Effect.succeed<Outcome>({ kind: 'done' }),
+    );
+    mocks.reportRequestDefect.mockReturnValue(
+      'The request failed inside TeXRA; see the log.',
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
@@ -1161,6 +1170,44 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedRunId).toBe('e11111');
     expect(chatTuiCanStartRootRun(session)).toBe(true);
+  });
+
+  it('surfaces a defected follow-up request instead of an unhandled rejection', async () => {
+    // A collaborator rejecting inside `followUp.send` defects the request
+    // Effect, which `Effect.match` does not recover: without the defect arm
+    // the queued task rejects with no surfacing at all.
+    holdRun('a11111' as RunId);
+    installSession({
+      view: await effectRuntime().runPromise(
+        SubscriptionRef.make(currentView()),
+      ),
+    });
+    mocks.request.mockReturnValueOnce(Effect.die(new Error('dispatch broke')));
+    const session = makeSession({
+      runId: 'a11111' as RunId,
+      runPromise: new Promise(() => {}),
+    });
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        // A non-slash line never reads the context.
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
+      }),
+    );
+
+    await ctrl.submit('Deliver this if you can.');
+
+    await vi.waitFor(() =>
+      expect(mocks.reportRequestDefect).toHaveBeenCalledOnce(),
+    );
+    expect(transientNotice.get()?.text).toContain(
+      'The request failed inside TeXRA',
+    );
+    expect(draftRestoreRequest.get().map((request) => request.text)).toContain(
+      'Deliver this if you can.',
+    );
+    // A defect is no refusal: the run is not marked stopped.
+    expect(session.stopRequested).toBe(false);
   });
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {

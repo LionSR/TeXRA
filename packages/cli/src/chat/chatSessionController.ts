@@ -98,6 +98,7 @@ import {
   clearLocalTranscript,
   describeRequestError,
   moveLocalTranscriptToRun,
+  reportRequestDefect,
 } from './tui/state/transcript';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
@@ -1178,12 +1179,20 @@ export function createChatSessionController(
                 }),
                 onSuccess: (value) => ({ refused: undefined, value }),
               }),
+              // `match` recovers only the typed refusal; a collaborator that
+              // rejects defects, and the queued task would swallow it into an
+              // unhandled rejection. Read the defect the way `SessionBridge`
+              // answers `Internal`: logged, worded, the message handed back.
+              Effect.catchCause((cause) =>
+                Effect.sync(() =>
+                  Cause.hasInterruptsOnly(cause)
+                    ? { interrupted: true as const }
+                    : { defect: reportRequestDefect(cause) },
+                ),
+              ),
             ),
         );
-        if (
-          outcome.refused === undefined &&
-          outcome.value.kind === 'followUp'
-        ) {
+        if ('value' in outcome && outcome.value.kind === 'followUp') {
           runtimeSession.followUps.notifySent(followUpTarget);
           delivered = true;
           const presentation = presentFollowUpResult(
@@ -1197,6 +1206,17 @@ export function createChatSessionController(
               followUpTarget,
             );
           }
+        } else if ('interrupted' in outcome) {
+          // Teardown mid-send is not a verdict on the message; hand it back.
+          requestDraftRestore(line, images);
+        } else if ('defect' in outcome) {
+          // The run may be healthy; a defect is no refusal, so it neither
+          // stops the stream nor retargets the conversation.
+          requestDraftRestore(line, images);
+          setTransientNotice(
+            `${outcome.defect} The message has been restored to the input.`,
+            { ttlMs: Infinity },
+          );
         } else {
           requestDraftRestore(line, images);
           setTransientNotice(
