@@ -38,7 +38,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -141,6 +141,9 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  *   afterwards → the infrastructure failed before the child's terminal
  *   persistence, so there is no typed result to return
  *   (SubagentDurabilityError).
+ * - no persisted `run.result` manifest for a required-result caller → the row
+ *   a later attempt would recover from never landed, so the call is refused
+ *   here rather than left unrecoverable (SubagentDurabilityError).
  * - terminal row says failed → the child itself failed; the persisted
  *   terminal error message is the thrown message.
  * - terminal row says completed/cancelled → returned typed.
@@ -248,16 +251,56 @@ const executeInBand = Effect.fn('executeInBand')(
       // the onTurnSettled callback, so a closure cannot keep the narrowing.
       const turnError = settledTurn.error;
       const turnMessage = settledTurn.message;
-
-      if (childFailed) {
-        throw (
-          turnError ??
-          new Error(
-            runEnd?.error?.message ??
-              `Subagent ${runId} ended with failed outcome.`,
-          )
+      const childError = () =>
+        turnError ??
+        new Error(
+          runEnd?.error?.message ??
+            `Subagent ${runId} ended with failed outcome.`,
         );
+
+      // A required-result caller answers a call whose recovery reads the
+      // child's own `run.result` row, so the in-memory manifest is not enough:
+      // a completed run whose manifest never landed is precisely what recovery
+      // refuses to repeat, so the write is verified here, where the failure can
+      // still be named. A read failure stays distinct from an absent row so the
+      // thrown error blames the I/O cause rather than persistence.
+      if (mode === 'required-result') {
+        const persistedExit = yield* Effect.exit(
+          getRunRecords(options.session, runId).readResultMeta(),
+        );
+        const readFailure = Exit.isFailure(persistedExit)
+          ? Cause.squash(persistedExit.cause)
+          : undefined;
+        if (readFailure !== undefined)
+          log.warn('Failed to read the persisted result manifest', {
+            data: { runId, error: readFailure },
+          });
+        const persisted = Exit.isSuccess(persistedExit)
+          ? persistedExit.value
+          : null;
+        if (persisted === null) {
+          if (childFailed) {
+            const error = childError();
+            throw new SubagentDurabilityError(
+              `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+              {
+                cause: new AggregateError(
+                  readFailure === undefined ? [error] : [error, readFailure],
+                  `Subagent ${runId} run and persistence both failed.`,
+                ),
+              },
+            );
+          }
+          throw new SubagentDurabilityError(
+            readFailure === undefined
+              ? `Failed to persist result for subagent ${runId}.`
+              : `Failed to verify the persisted result for subagent ${runId}.`,
+            readFailure !== undefined ? { cause: readFailure } : undefined,
+          );
+        }
       }
+
+      if (childFailed) throw childError();
 
       if (!runEnd) {
         // The child did not fail, so the missing terminal row is an

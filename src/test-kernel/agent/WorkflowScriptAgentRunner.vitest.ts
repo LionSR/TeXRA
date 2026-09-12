@@ -53,6 +53,7 @@ function fingerprintWorkflowAgentDependencies(
 const mocks = vi.hoisted(() => ({
   executeSubagentInBand: vi.fn(),
   getRunRecords: vi.fn(),
+  resolveRunLiveness: vi.fn(),
   probedRunIds: [] as string[],
   preparedOptions: [] as unknown[],
   requireVisibleAgent: vi.fn(),
@@ -88,6 +89,10 @@ vi.mock('@tools/delegation/proposalFlow', () => ({
 
 vi.mock('@tools/delegation/delegationAvailability', () => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
+}));
+
+vi.mock('@tools/executions/runLiveness', () => ({
+  resolveRunLiveness: mocks.resolveRunLiveness,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -291,6 +296,11 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     probeAnswers();
+    // Nothing alive owns a probed run unless a case says so: the claim is the
+    // liveness authority, and a dead owner is what lets the probe advance.
+    mocks.resolveRunLiveness.mockReturnValue(
+      Effect.succeed({ kind: 'interrupted' }),
+    );
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
       source: 'builtInWorkflow',
@@ -912,6 +922,9 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect(
     'recovers a completed child without charging it as a live run',
     () =>
+      // Owner ruling 2026-09-13: a COMPLETED `run.end` with a
+      // `producer: 'subagent'` manifest is durable completion on its own, with
+      // no parent-owned attestation to corroborate it.
       Effect.gen(function* () {
         const onCost = vi.fn();
         const report = reportSpy();
@@ -953,7 +966,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('uses one stable child id per workflow call identity', () =>
+  it.effect('derives one child id per workflow call identity', () =>
     Effect.gen(function* () {
       const runner = defaultRunner();
 
@@ -1073,6 +1086,28 @@ describe('createWorkflowScriptAgentRunner', () => {
           }
         }
       }),
+  );
+
+  it.effect('refuses to repeat a child a live owner still holds', () =>
+    Effect.gen(function* () {
+      probeAnswers({ exists: true });
+      mocks.resolveRunLiveness.mockReturnValueOnce(
+        Effect.succeed({
+          kind: 'unsettled',
+          reason: 'held by another TeXRA process (pid 42 on studio)',
+        }),
+      );
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'held by another TeXRA process (pid 42 on studio); refusing to repeat it',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect('launches the next attempt id after a failed child', () =>

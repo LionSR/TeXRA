@@ -280,15 +280,15 @@ function delegateWithProposalDecision(
   );
 }
 
-const STABLE_PARENT_RUN_ID = 'abcdef123456' as RunId;
-const IN_BAND_LOGICAL_RUN_ID = 'aaaaaa111111' as RunId;
+const IN_BAND_PARENT_RUN_ID = 'abcdef123456' as RunId;
+const IN_BAND_RUN_ID = 'aaaaaa111111' as RunId;
 
 /**
- * The stable-call session, one per case. The attempt markers are rows on the
- * launching run's aggregate now, so a shared database would let one case read
- * the markers and the child runs another case left behind.
+ * The in-band caller's session, one per case: a child's rows live on its own
+ * aggregate, so a shared database would let one case read the runs another
+ * case left behind.
  */
-let stableSession: SessionHandle;
+let inBandSession: SessionHandle;
 
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeSubagentInBand>[0]['prepare']>
@@ -308,8 +308,8 @@ function delegationOptions(
       model: 'deepseekT',
     },
     agentName: 'review',
-    parentRunId: STABLE_PARENT_RUN_ID,
-    session: stableSession,
+    parentRunId: IN_BAND_PARENT_RUN_ID,
+    session: inBandSession,
     ...overrides,
   };
 }
@@ -317,7 +317,7 @@ function delegationOptions(
 /** Run the typed required-result path the way production callers reach it. */
 function runInBand(
   options: InBandSubagentRunOptions,
-  runId: RunId = IN_BAND_LOGICAL_RUN_ID,
+  runId: RunId = IN_BAND_RUN_ID,
 ) {
   const { signal, ...prepared } = options;
   return executeSubagentInBand({
@@ -396,7 +396,7 @@ function mockWaitingChildOnce(
   );
 }
 
-/** In-memory child records: enough surface for the stable attempt path. */
+/** In-memory child records: the surface a required-result caller reads. */
 function memoryChildRecords() {
   // The loop persists the manifest and the awaiting caller verifies it by
   // read-back, so the fixture must retain writes like the real store does.
@@ -460,40 +460,16 @@ function recordTerminalFact(
   });
 }
 
-/** Child records with nothing persisted: what a fresh attempt starts from. */
-function emptyChildRecords() {
-  return memoryChildRecords();
-}
-
-/** Child records for an attempt that ran: its terminal row and manifest. */
-function completedChildRecords(runEnd: { outcome: string; output: unknown }) {
-  return {
-    exists: vi.fn(async () => true),
-    readRunEnd: vi.fn().mockResolvedValue(runEnd),
-    readResultMeta: vi.fn().mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'review',
-      wallTimeMs: 100,
-      output: runEnd.output,
-    }),
-  };
-}
-
-/** Route every child read to one set of records. */
-function useChildRecords(childRecords: unknown): void {
-  mocks.childRecords.mockImplementation(() => childRecords);
-}
-
 describe('headless delegation', () => {
   let restoreAgentEngine = (): void => {};
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    // The stable-attempt markers are rows on the launching run's aggregate,
-    // and a run's aggregate must begin with its `run.start`.
-    stableSession = createTestSession();
-    publishTestRunStart(stableSession, STABLE_PARENT_RUN_ID);
-    await stableSession.settlePublications();
+    // A child registers under its parent, and a run's aggregate must begin
+    // with its own `run.start`.
+    inBandSession = createTestSession();
+    publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
+    await inBandSession.settlePublications();
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, setting: { defaultOutputFiles: [] } }),
@@ -598,7 +574,7 @@ describe('headless delegation', () => {
         const run = () =>
           Effect.provide(
             executeSubagentInBandEffect({
-              runId: IN_BAND_LOGICAL_RUN_ID,
+              runId: IN_BAND_RUN_ID,
               parentRunId: prepared.parentRunId,
               session: prepared.session,
               signal,
@@ -644,7 +620,7 @@ describe('headless delegation', () => {
     session.followUps.terminalize(CHILD_RUN_ID);
     await waitForChildren(session);
     restoreAgentEngine();
-    stableSession.dispose();
+    inBandSession.dispose();
   });
 
   effectIt.effect('awaits child delegation during one-shot tool-use runs', () =>
@@ -705,11 +681,11 @@ describe('headless delegation', () => {
     // as any detached child (this closed item 10's report gap).
     expect(mocks.writeReport).toHaveBeenCalled();
     expect(mocks.registerRun).toHaveBeenCalledWith(
-      stableSession,
+      inBandSession,
       result.runId,
       expect.objectContaining({ agent: 'review' }),
       'review',
-      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
+      expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -724,10 +700,24 @@ describe('headless delegation', () => {
     );
   });
 
+  it('returns the committed result when the final lease release fails', async () => {
+    mocks.releaseOwnedRunLease.mockRejectedValueOnce(
+      new Error('lease deletion failed'),
+    );
+
+    const result = await runInBand(delegationOptions());
+
+    // The child's rows are the fact: they were committed inside its own lease
+    // boundary, so a cleanup failure afterwards cannot rewrite the outcome, and
+    // the manifest this asserts is what a later attempt would recover from.
+    expect(result.result.outcome).toBe('completed');
+    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+  });
+
   it('records a failed child cost once for durable in-band run', async () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {
-      runId: IN_BAND_LOGICAL_RUN_ID,
+      runId: IN_BAND_RUN_ID,
       output: {
         category: 'toolUse',
         response: 'Partial review.',
@@ -753,7 +743,7 @@ describe('headless delegation', () => {
     const onCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce({
       outcome: RUN_PHASE.WAITING,
-      runId: IN_BAND_LOGICAL_RUN_ID,
+      runId: IN_BAND_RUN_ID,
       output: {
         category: 'toolUse',
         response: 'Waiting for clarification.',
@@ -763,14 +753,14 @@ describe('headless delegation', () => {
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      `Single-cycle subagent ${IN_BAND_LOGICAL_RUN_ID} unexpectedly suspended.`,
+      `Single-cycle subagent ${IN_BAND_RUN_ID} unexpectedly suspended.`,
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.any(Object),
-      IN_BAND_LOGICAL_RUN_ID,
+      IN_BAND_RUN_ID,
       expect.objectContaining({
-        parentRunId: STABLE_PARENT_RUN_ID,
+        parentRunId: IN_BAND_PARENT_RUN_ID,
         stopAfterCycle: true,
       }),
     );
