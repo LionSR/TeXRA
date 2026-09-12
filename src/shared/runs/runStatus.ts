@@ -90,9 +90,8 @@ export function isInFlightPhase(
  * reads it off `runPhase`: a known status that is neither running nor
  * waiting. An unknown status is not "ended" — a plan-only phase must not
  * vanish before the stream's first status has arrived. This is the looser of
- * the model's two readings: `unavailable` (a run another process owns) counts
- * as ended here, which is why the model repaints a running card only on the
- * stricter `isTerminalOutcomePhase`.
+ * the model's two readings, which is why the model repaints a running card
+ * only on the stricter `isTerminalOutcomePhase`.
  */
 export function workflowRunSettled(
   phase: RunLifecycleStatus | undefined,
