@@ -175,7 +175,7 @@ export class ChatExportController {
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
-      const { trace } = traceResult;
+      const { trace, record } = traceResult;
 
       if (
         !(yield* Effect.tryPromise({
@@ -198,8 +198,10 @@ export class ChatExportController {
 
       const filename = generateExportFilename(
         {
-          timestamp: new Date(trace.meta.launchedAt).toISOString(),
-          config: trace.config,
+          // The document's first row is the run's creation row, so its
+          // publish clock is the run's launch time.
+          timestamp: new Date(trace.events[0]!.at).toISOString(),
+          config: record,
         },
         'html',
       );

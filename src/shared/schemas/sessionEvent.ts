@@ -535,7 +535,7 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   GlobalInquiryDraftSchema,
   UpdateCheckDraftSchema,
 ]);
-const DisplaySessionEventSchema = z.discriminatedUnion('type', [
+export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
   RunRemovedEventSchema.extend(envelope),
   ...DisplaySessionEventDraftSchema.options
@@ -551,9 +551,6 @@ const DisplaySessionEventSchema = z.discriminatedUnion('type', [
     )
     .map((schema) => schema.extend(envelope)),
 ]);
-export type DisplaySessionEventDraft = z.infer<
-  typeof DisplaySessionEventDraftSchema
->;
 export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

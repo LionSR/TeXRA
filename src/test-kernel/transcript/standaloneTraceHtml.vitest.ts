@@ -1,37 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { emptyUsageStats, type RunId, AgentCategory } from '@shared/schemas';
+import {
+  aggregateId,
+  DisplaySessionEventSchema,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  type RunId,
+} from '@shared/schemas';
 import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 
 const RUN_ID = 'ab0001' as RunId;
 
-function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
+function trace(message = 'hello'): TraceDocument {
   return {
     runId: RUN_ID,
-    config: AgentConfigSchema.parse({
-      agent: 'orchestrator',
-      model: 'deepseekT',
-      instruction: 'Solve the problem.',
-      agentCategory: AgentCategory.ToolUse,
-      workingDirectory: '/workspace',
-    }),
-    meta: {
-      identity: { kind: 'agent', agent: 'assistant' },
-      launchedAt: 1_767_225_600_000,
-      description: null,
-      outcome: null,
-      conversationProgress: { toolCallCount: 0 },
-      usage: emptyUsageStats(),
-      todos: [],
-      plan: null,
-      outputs: {},
-      missingOutputs: {},
-      compileFailures: {},
-    },
-    entries: [],
-    steps: [],
-    ...overrides,
+    events: [
+      DisplaySessionEventSchema.parse({
+        aggregateId: aggregateId('run', RUN_ID),
+        seq: 1,
+        commit: 1,
+        ownerId: null,
+        at: 1_767_225_600_000,
+        type: 'log',
+        level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        message,
+      }),
+    ],
   };
 }
 
@@ -48,13 +43,8 @@ function embeddedTrace(html: string): TraceDocument {
 
 describe('injectStandaloneTrace', () => {
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
-    const t = trace({
-      meta: {
-        ...trace().meta,
-        description: '</script><img src=x onerror=alert(1)>',
-      },
-    });
-    const html = injectStandaloneTrace(TEMPLATE, t);
+    const payload = '</script><img src=x onerror=alert(1)>';
+    const html = injectStandaloneTrace(TEMPLATE, trace(payload));
 
     // The dangerous substring must not appear literally in the output.
     expect(html).not.toContain('</script><img');
@@ -65,9 +55,7 @@ describe('injectStandaloneTrace', () => {
       '<script type="module" crossorigin src="./index.js"></script>',
     );
 
-    expect(embeddedTrace(html).meta?.description).toBe(
-      '</script><img src=x onerror=alert(1)>',
-    );
+    expect(embeddedTrace(html).events[0]).toMatchObject({ message: payload });
   });
 
   it('throws a clear error when the template has no module script tag', () => {
