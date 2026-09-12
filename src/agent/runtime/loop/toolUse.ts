@@ -83,7 +83,6 @@ const NOT_RESUMABLE_MESSAGE =
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
-  readonly modelHandler: { readonly supportsManualCompaction: boolean };
   interrupt(): void;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
@@ -195,9 +194,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
-    // Every bound model can summarize its own history through the run's
-    // compaction step, so the manual command is always available.
-    modelHandler: { supportsManualCompaction: true },
     interrupt(): void {
       run.interrupt();
       session.interactions.cancel({ runId, cause: 'Run interrupted.' });

@@ -70,8 +70,8 @@ export interface QuotaLimitInfo {
 
 /** Match a subscription usage-limit phrase against the error's message — the
  *  body `message` first, then the thrown error's own — returning the reset
- *  hint when the phrase matches. Shared by the endpoint/route-guarded
- *  subscription detectors (Kimi Code, SuperGrok), which differ only in their
+ *  hint when the phrase matches. Shared by the route-guarded subscription
+ *  detectors (Kimi Code, SuperGrok), which differ only in their bound-route
  *  guard and phrase. */
 export function matchUsageLimitMessage(
   err: unknown,

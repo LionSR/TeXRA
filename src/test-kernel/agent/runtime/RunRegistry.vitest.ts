@@ -185,7 +185,6 @@ function createLiveToolUseFlowContext(
 ): LiveToolUseFlowContext {
   return {
     ownerSession: {} as SessionHandle,
-    modelHandler: { supportsManualCompaction: true },
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(),
     switchModel: vi.fn(),
@@ -1306,20 +1305,12 @@ describe('runRegistry', () => {
   it('owns manual compaction admission for active tool-use flows', () => {
     const { registry } = createRegistry();
     const runId = generateRunId();
-    const unsupportedRunId = generateRunId();
     const requestImmediateCompaction = vi.fn();
     const ownerSession = {} as SessionHandle;
     const context = createLiveToolUseFlowContext({
       ownerSession,
       requestImmediateCompaction,
     });
-    const unsupportedContext: LiveToolUseFlowContext = {
-      ...context,
-      modelHandler: {
-        supportsManualCompaction: false,
-      },
-      requestImmediateCompaction: vi.fn(),
-    };
 
     try {
       expect(registry.requestManualCompaction(undefined)).toEqual({
@@ -1335,20 +1326,6 @@ describe('runRegistry', () => {
       });
       handle.attachToolUseFlow(context);
       registry.track(handle);
-
-      const unsupportedHandle = createHandle(unsupportedRunId, null, {
-        agentName: 'test-tool-use',
-      });
-      unsupportedHandle.attachToolUseFlow(unsupportedContext);
-      registry.track(unsupportedHandle);
-
-      expect(registry.requestManualCompaction(unsupportedRunId)).toEqual({
-        kind: 'unsupported',
-        runId: unsupportedRunId,
-      });
-      expect(
-        unsupportedContext.requestImmediateCompaction,
-      ).not.toHaveBeenCalled();
 
       expect(registry.requestManualCompaction(runId)).toEqual({
         kind: 'requested',

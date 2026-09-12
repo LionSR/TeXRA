@@ -254,13 +254,6 @@ function handle(
         switch (result.kind) {
           case 'requested':
             return Effect.succeed(done);
-          case 'unsupported':
-            return Effect.fail(
-              new Rejected({
-                reason:
-                  'Manual context compaction is not available for this model yet.',
-              }),
-            );
           case 'no_active_tool_use':
             return Effect.fail(
               new Unavailable({

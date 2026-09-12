@@ -75,7 +75,6 @@ describe('tool-use follow-up progress events', () => {
     const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
       ownerSession: owner,
-      modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},

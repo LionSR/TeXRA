@@ -27,8 +27,8 @@ const USAGE_LIMIT_PATTERN =
 
 /**
  * Parse a Kimi Code usage-limit error, returning the reset details or `null`
- * when the error is not a Kimi Code subscription usage-limit. Mirrors
- * {@link parseChatGptSubscriptionLimit}: pure body inspection, no clock reads.
+ * when the error is not a Kimi Code subscription usage-limit. Route stamp plus
+ * body inspection, no clock reads.
  */
 export function parseKimiCodeSubscriptionLimit(
   err: unknown,
