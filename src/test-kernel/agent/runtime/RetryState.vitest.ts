@@ -306,7 +306,7 @@ const freshState = (): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: {},
-  approvals: {},
+  requests: {},
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
 });

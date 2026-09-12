@@ -91,7 +91,7 @@ export class RunLedgerInconsistent extends Data.TaggedError(
     | 'stale-snapshot' // a snapshot contradicts rows already folded
     | 'orphan-settlement' // a tool.result under no pending response
     | 'unknown-run-row' // an unrecognized type on the run aggregate
-    | 'dangling-binding' // an approval binding names no row
+    | 'dangling-binding' // a request binding names no row
     | 'mismatched-delivery' // a delivering append does not settle its response
     | 'invalid-mutation'; // a tool.result state operation names no slice or leaves an invalid state
   readonly detail: string;
@@ -146,7 +146,7 @@ type PendingIntent = {
   readonly approvalRequestId: string | null;
 };
 
-type Approval = {
+type RequestState = {
   readonly payload: PermissionPayload;
   readonly resolved: boolean;
   /** The recorded decision (R5): the `request.decided` row's, null while
@@ -191,7 +191,7 @@ export type RunState = {
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
   /** By request id, with its recovery binding resolved at each snapshot. */
-  readonly approvals: Readonly<Record<string, Approval>>;
+  readonly requests: Readonly<Record<string, RequestState>>;
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
@@ -292,7 +292,7 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: byId([]),
-  approvals: byId([]),
+  requests: byId([]),
   usage: RunUsageTotalsSchema.parse({}),
   flow: null,
 });
@@ -580,9 +580,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         pendingResponse,
         flow: flowOf(p),
       };
-      // Every binding names a requested approval, and every unresolved
-      // approval is bound: an approval with nothing to recover it by can only
-      // be retired as interrupted, which is forbidden for these purposes.
+      // Every binding names an opened request, and every undecided request
+      // is bound: a request with nothing to recover it by can only be
+      // retired as interrupted, which is forbidden for these purposes.
       const bindings = new Set<string>();
       if (next.pendingRetry !== null) bindings.add(next.pendingRetry.requestId);
       for (const intent of Object.values(next.pendingIntents)) {
@@ -591,19 +591,19 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         }
       }
       for (const requestId of bindings) {
-        if (!Object.hasOwn(next.approvals, requestId)) {
+        if (!Object.hasOwn(next.requests, requestId)) {
           return refuse(
             'dangling-binding',
-            `binding ${requestId} names no approval`,
+            `binding ${requestId} names no request`,
             commit,
           );
         }
       }
-      for (const [requestId, approval] of Object.entries(next.approvals)) {
-        if (!approval.resolved && !bindings.has(requestId)) {
+      for (const [requestId, request] of Object.entries(next.requests)) {
+        if (!request.resolved && !bindings.has(requestId)) {
           return refuse(
             'dangling-binding',
-            `approval ${requestId} has no recovery binding`,
+            `request ${requestId} has no recovery binding`,
             commit,
           );
         }
@@ -928,7 +928,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return null;
     case 'request.opened': {
       if (current === null) return null;
-      if (Object.hasOwn(current.approvals, row.requestId)) {
+      if (Object.hasOwn(current.requests, row.requestId)) {
         return refuse(
           'out-of-order',
           `request ${row.requestId} opened twice`,
@@ -938,8 +938,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...current,
         commit,
-        approvals: byId([
-          ...Object.entries(current.approvals),
+        requests: byId([
+          ...Object.entries(current.requests),
           [
             row.requestId,
             { payload: row.payload, resolved: false, decision: null },
@@ -949,8 +949,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     }
     case 'request.decided': {
       if (current === null) return null;
-      const approval = current.approvals[row.requestId];
-      if (approval === undefined) {
+      const request = current.requests[row.requestId];
+      if (request === undefined) {
         return refuse(
           'dangling-binding',
           `decision names no request ${row.requestId}`,
@@ -960,11 +960,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...current,
         commit,
-        approvals: byId([
-          ...Object.entries(current.approvals),
+        requests: byId([
+          ...Object.entries(current.requests),
           [
             row.requestId,
-            { ...approval, resolved: true, decision: row.decision },
+            { ...request, resolved: true, decision: row.decision },
           ],
         ]),
       });

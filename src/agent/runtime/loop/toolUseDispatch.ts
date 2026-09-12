@@ -580,7 +580,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       if (decision.action === 'skip') return 'skip';
       return null;
     };
-    const bound = current.approvals[intent.approvalRequestId ?? ''];
+    const bound = current.requests[intent.approvalRequestId ?? ''];
     if (bound !== undefined && bound.resolved && bound.decision !== null) {
       const answer = decided(bound.decision);
       if (answer !== null)

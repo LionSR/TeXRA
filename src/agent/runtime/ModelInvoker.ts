@@ -996,7 +996,7 @@ export const modelInvokerLayer: Layer.Layer<
       // its unused consent), else the one the decide command lands on the
       // tail while this fiber waits. A plane that closes first is a
       // cancellation.
-      let decision = state.approvals[requestId]?.decision ?? null;
+      let decision = state.requests[requestId]?.decision ?? null;
       if (decision === null) {
         const row = yield* session
           .decisionFor(runId, requestId, state.commit)
