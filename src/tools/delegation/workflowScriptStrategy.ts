@@ -117,6 +117,8 @@ export interface WorkflowScriptStrategyParams {
   /** The run's child-stream trace — where phase/log progress projects. */
   readonly logger: AgentTrace;
   readonly checkpointId: string;
+  /** The run that invoked the workflow — the checkpoint aggregate's parent. */
+  readonly parentRunId: RunId;
   readonly script: string;
   /** Canonical editable path to this submitted script in the workspace. */
   readonly scriptPath: string;
@@ -281,6 +283,7 @@ export function createWorkflowScriptStrategy(
         const projection = projectWorkflowScriptProgress(params.logger, {
           session: params.session,
           checkpointId: params.checkpointId,
+          parentRunId: params.parentRunId,
           ...(params.initialSnapshot !== undefined && {
             initialSnapshot: params.initialSnapshot,
           }),

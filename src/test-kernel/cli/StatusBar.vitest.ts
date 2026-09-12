@@ -587,12 +587,13 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: RUN_PHASE.RUNNING,
-        // What the loop writes: the round stays at the zero it opened with.
+        // What the loop writes: the turn is one-based (`state.turn + 1`) and
+        // the round stays at the zero it opened with.
         flow: { family: 'toolUse', step: 'turn.begin', round: 0, turn: 2 },
       }),
     );
 
-    expect(leftTexts(display)).toContain('t3');
+    expect(leftTexts(display)).toContain('t2');
     expect(leftTexts(display)).not.toContain('r1');
   });
 

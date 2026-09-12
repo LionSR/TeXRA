@@ -1,8 +1,9 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
@@ -250,6 +251,13 @@ async function callToolInput(
     ),
   );
 }
+
+// The tool runs under a registered parent run, and a checkpoint aggregate
+// hangs under it, so that run has to exist before a script row names it.
+beforeAll(async () => {
+  publishTestRunStart(currentSession(), parentRunId);
+  await currentSession().settlePublications();
+});
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -862,6 +870,7 @@ return null`;
             'workflow-checkpoint',
             checkpointIdFor('resume'),
           ),
+          parentRunId,
           script: resumeScript,
           args: { kind: 'undefined' },
           files,

@@ -1,6 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 import { Effect, Exit } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
@@ -16,6 +16,7 @@ import {
   type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -25,6 +26,14 @@ const meta = `export const meta = {
 }`;
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
+
+/** The run every checkpoint in this file hangs under; it has to exist before
+ *  a script row can name it as the aggregate's parent. */
+let parentRunId: RunId;
+beforeAll(async () => {
+  parentRunId = publishTestRunStart(currentSession());
+  await currentSession().settlePublications();
+});
 
 function recordingTrace(): {
   readonly trace: TraceEmitter;
@@ -72,7 +81,7 @@ function runScript(
   trace: TraceEmitter,
   checkpointId: string,
   script: string,
-  options: Partial<Omit<ScriptRunOptions, 'session'>> = {},
+  options: Partial<Omit<ScriptRunOptions, 'session' | 'parentRunId'>> = {},
 ): Promise<WorkflowScriptRunResult> {
   return runProjected(trace, {
     checkpointId,
@@ -85,10 +94,11 @@ function runScript(
 /** Run one projection over the file's session; the resume paths' entry. */
 function runProjected(
   trace: TraceEmitter,
-  options: Omit<ScriptRunOptions, 'session'>,
+  options: Omit<ScriptRunOptions, 'session' | 'parentRunId'>,
 ): Promise<WorkflowScriptRunResult> {
   const projection = projectWorkflowScriptProgress(trace, {
     session: currentSession(),
+    parentRunId,
     ...options,
   });
   return Effect.runPromise(
