@@ -48,7 +48,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
-import { getPermissionKey } from '../permissionState';
 
 // Local imports - progress view component types
 import type { ApproveSplitButton } from './ApproveSplitButton';
@@ -130,6 +129,19 @@ const SECTIONS: readonly SectionConfig[] = [
  * second list of element names to keep in sync with `SECTIONS`.
  */
 const PANEL_MARKER_SELECTOR = '[data-request-panel]';
+
+/** Retry is the one kind not keyed by `requestId`: it is keyed by `runId`
+ *  instead (one pending retry per stream, a new request replaces the old). */
+function permissionId(permission: PermissionPayload): string {
+  return permission.kind === 'retry'
+    ? permission.data.runId
+    : permission.data.requestId;
+}
+
+/** Stable identity key for a pending permission, used for selection/dedup. */
+function getPermissionKey(permission: PermissionPayload): string {
+  return `${permission.kind}:${permissionId(permission)}`;
+}
 
 function externalInquiryKeys(
   permissions: readonly PermissionPayload[],

@@ -8,10 +8,8 @@
  * If the external model returns files, the user saves them into the workspace
  * and tells the agent the paths.
  *
- * User input (answer text) is persisted in a module-level cache keyed by
- * requestId so it survives component recreation during webview hide/show
- * cycles — the permission is replayed via ApprovalRequestHandler but the
- * component is re-mounted with fresh @state.
+ * The answer draft lives in the surface's `inquiryDrafts`, keyed by
+ * `draftKey`, so it survives a re-mount.
  */
 
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';

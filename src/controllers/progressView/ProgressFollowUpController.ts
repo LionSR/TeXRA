@@ -48,7 +48,7 @@ interface CompileFixerTarget {
   missingLatexdiffArtifact?: string;
 }
 
-export type ProgressFollowUpPlan =
+type ProgressFollowUpPlan =
   | { kind: 'warning'; message: string }
   | { kind: 'info'; message: string }
   // Produced only by planCompileFixer (latexFixer). The progress view opts every

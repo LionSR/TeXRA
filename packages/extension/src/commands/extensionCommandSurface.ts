@@ -33,10 +33,6 @@ import {
   handleCompileTikzFigures as latexCompileTikzFigures,
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
-import {
-  openProgressViewInTab as progressOpenInTab,
-  showProgressView as progressShowProgressView,
-} from '@commands/progress/progressViewCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
@@ -85,7 +81,7 @@ export function createExtensionCommandActions(
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
     downloadArXivSource: latexDownloadArXivSource,
-    openProgressViewInTab: progressOpenInTab,
+    openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     async openDoc(page) {
       if (!page) return;
       await vscode.env.openExternal(
@@ -101,7 +97,8 @@ export function createExtensionCommandActions(
     removeApiKey: () => apiRemoveApiKey(secrets, refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
-    showProgressView: progressShowProgressView,
+    showProgressView: (inPlace) =>
+      progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>
       apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
     // The wizard is an Effect program; the host entry's runtime, threaded in

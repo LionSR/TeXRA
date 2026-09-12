@@ -142,12 +142,10 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
 
 /**
  * The persisted form: interaction state only, per view and session. A
- * missing field takes its default before validation (`prefault`), because
- * a surface saved by an older build is still a valid surface; a corrupt
- * field fails the parse loudly rather than becoming a silent default. A
- * surface whose `expanded` entries still hold the retired `'expanded'` /
- * `'collapsed'` strings is such a field: `PersistedState` warns with the
- * failing key and resets that session's whole record to these defaults.
+ * missing field takes its default before validation (`prefault`); a corrupt
+ * field fails the parse loudly rather than becoming a silent default —
+ * `PersistedState` warns with the failing key and resets that session's
+ * whole record to these defaults.
  */
 export const PersistedSurfaceSchema = z.object({
   selected: RunIdSchema.nullable().prefault(null),
