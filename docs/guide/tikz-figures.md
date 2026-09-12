@@ -177,7 +177,7 @@ With automatic extraction on, one source file fans out into one standalone docum
   { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />
 
-<p class="hero-caption">The extract, compile, attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterisation to PNG, only for models without native PDF support, needs GraphicsMagick / ImageMagick + Ghostscript.</p>
+<p class="hero-caption">The extract, compile, attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterization to PNG, only for models without native PDF support, needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
 Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
@@ -188,7 +188,7 @@ Missing system dependencies show <wa-icon library="texra" name="warning"></wa-ic
 
 This compiles all extracted figures into standalone PDFs.
 
-## <wa-icon library="texra" name="settings-gear"></wa-icon> Customising TikZ processing
+## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 
 Several settings tune how TeXRA handles TikZ. They have no control on the Dashboard, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
 
@@ -200,7 +200,7 @@ The standalone document structure TeXRA uses for each extracted figure:
 "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
 ```
 
-Customise this template to include additional packages or settings your figures need.
+Customize this template to include additional packages or settings your figures need.
 
 ### TikZ input directory
 
@@ -256,10 +256,10 @@ For best results when asking an agent to draw figures:
 
 1. <wa-icon library="texra" name="target"></wa-icon> **Be specific**: describe all elements and their relationships.
 2. <wa-icon library="texra" name="info"></wa-icon> **Provide context**: include purpose and intended audience.
-3. <wa-icon library="texra" name="symbol-color"></wa-icon> **Specify style**: mention colours, line styles, text formatting.
+3. <wa-icon library="texra" name="symbol-color"></wa-icon> **Specify style**: mention colors, line styles, text formatting.
 4. <wa-icon library="texra" name="link"></wa-icon> **Reference examples**: point to similar figures when possible.
 
-### Figure organisation
+### Figure organization
 
 1. Use consistent naming conventions for figures.
 2. Store extracted figures in a dedicated directory.

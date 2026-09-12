@@ -42,12 +42,14 @@ tooling, and figures come along as supporting capabilities.
 
 ## Why multi-agent
 
-Theory work is long chains of dependent steps. A derivation where one
-sign error in section 3 invalidates appendix C. A Lean formalization
-where the proof state needs careful tactic selection. A numerical
-cross-check that has to agree with the closed form. And then the
-manuscript: notation consistent from Definition 2.1 onward, every
-`\cite` resolving to a real paper, diagrams that compile.
+Theoretical research involves long chains of interdependent steps:
+a derivation where a subtle sign error in Section 3 invalidates
+Appendix C; a Lean formalization demanding precise tactic selection
+to discharge a goal; a numerical simulation that must corroborate an
+analytical closed form. Alongside the mathematics sits the manuscript
+itself: notation that must remain uniform from Definition 2.1 onward,
+every `\cite` resolving to an authentic citation record, and figures
+that compile without warnings.
 
 General-purpose chatbots make this worse, not better:
 
@@ -61,9 +63,9 @@ in real tools, each producing verifiable output.
 
 ## Two surfaces, one system
 
-The VS Code extension and the `texra` CLI share the same agents, the
-same sign-in, and the same run history. A run started in the CLI shows
-up in the extension's ProgressBoard, and vice versa.
+The VS Code extension and the `texra` CLI share the same underlying
+agents, credentials, and execution history. A run launched in the CLI
+surfaces live in the extension's Progress view, and vice versa.
 
 <RunParityHero />
 

@@ -6,8 +6,7 @@ import CliToolsLifecycleHero from '../.vitepress/components/CliToolsLifecycleHer
 
 # Agent integrations
 
-When a theory run needs code, such as a numerical check of a derived bound or a script to reproduce a figure, TeXRA can hand that task off to a second coding agent that runs on your machine
-alongside it. Two are supported today:
+When a theoretical investigation requires external software execution—such as running a numerical verification of a derived bound or generating reproduction scripts for a figure—TeXRA can delegate the programming task to a dedicated coding agent running locally. Two are supported today:
 
 - **OpenAI Codex**: a sandboxed coding agent on your ChatGPT Plus / Pro plan
   (or an OpenAI API key). TeXRA agents reach it through the `codex` tool.

@@ -6,7 +6,7 @@ import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
-You want to verify an integral in your appendix against a computer algebra system. Or you need to cite "that attention paper from 2017" but cannot remember the title. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor, in VS Code or the `texra` CLI.
+Whether checking an intricate integral against a computer algebra system, tracking down a half-remembered reference from 2017, or importing twenty curated BibTeX entries directly from your Zotero collection, TeXRA's research agents conduct grounded verification and literature search without leaving your workspace.
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
@@ -110,6 +110,10 @@ Set a default location for Zotero exports so agents always know where to save bi
 
 The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>).
 
+### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
+
+The `lean` agent formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
+
 ### <wa-icon library="texra" name="comment-discussion"></wa-icon> External inquiry
 
 The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key is required; it uses your existing subscription. The inquiry tool is not available in the CLI; there, agents use `ask_user_question` for synchronous terminal input.
@@ -120,16 +124,17 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which agent to use
 
-Two research agents, each tuned for a different stage of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` is an account-served agent: it appears only after you sign in and apply the Physicist or Computer Scientist team. Without an account, the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero):
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` is an account-served agent: it appears only after you sign in and apply the Physicist or Computer Scientist team. Without an account, the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
   value="search"
   valueIcon="sparkle"
   maxWidth="320px"
-  :groups="[{ label: 'Research', items: [
+  :groups="[{ label: 'Research & Verification', items: [
     { name: 'search', icon: 'mortar-board', badge: 'tool-use', badgeVariant: 'info', active: true },
     { name: 'research', icon: 'symbol-operator', badge: 'tool-use', badgeVariant: 'info' },
+    { name: 'lean', icon: 'beaker', badge: 'tool-use', badgeVariant: 'info' },
   ] }]"
 />
 
@@ -150,6 +155,12 @@ Two research agents, each tuned for a different stage of the work. Pick one from
       { text: 'texcount', variant: 'neutral' },
       { text: 'extract_figures', variant: 'neutral' },
     ] },
+    { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
+      { text: 'lean_diagnostics', variant: 'info' },
+      { text: 'lean_inspect', variant: 'info' },
+      { text: 'lean_loogle', variant: 'neutral' },
+      { text: 'lake build', variant: 'neutral' },
+    ] },
   ]"
 />
 
@@ -157,6 +168,7 @@ Two research agents, each tuned for a different stage of the work. Pick one from
 
 ## Next steps
 
+- [Lean 4 proofs](./lean.md): formalize proofs, inspect goal states, and search Mathlib
 - [LaTeX tools](./latex-tools.md): formatting, diffs, texcount, figures, bibliography
 - [Agent integrations](./agent-integrations.md): delegate long-running code tasks to Codex or Claude Code
 - [Working with figures](./working-with-figures.md): feed figures and PDFs to vision models

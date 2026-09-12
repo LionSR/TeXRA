@@ -5,7 +5,7 @@ import MediaSectionPanel from '../.vitepress/components/MediaSectionPanel.vue';
 import AutoExtractMenu from '../.vitepress/components/AutoExtractMenu.vue';
 </script>
 
-Figures carry a lot of the evidence in theoretical work: a plot that a derivation predicts, a diagram of a construction, a page of a reference PDF. TeXRA lets agents analyse, reference, and generate figures inside your documents, from `.png` screenshots to embedded TikZ diagrams and PDFs.
+Figures carry a lot of the evidence in theoretical work: a plot that a derivation predicts, a diagram of a construction, a page of a reference PDF. TeXRA lets agents analyze, reference, and generate figures inside your documents, from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
 ::: tip CLI
 This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
@@ -61,7 +61,7 @@ TeXRA recognizes these media types by default:
     {
       icon: 'file-pdf',
       title: 'Documents',
-      desc: 'Native PDF input on models that support it (Claude 4.5+, Gemini, GPT-5.x, Muse Spark, GLM-5V-Turbo), otherwise rasterised pages.',
+      desc: 'Native PDF input on models that support it (Claude 4.5+, Gemini, GPT-5.x, Muse Spark, GLM-5V-Turbo), otherwise rasterized pages.',
       chips: [{ text: '.pdf', variant: 'info' }],
     },
     {

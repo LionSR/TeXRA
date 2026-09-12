@@ -5,7 +5,7 @@ import CliStorageHero from '../.vitepress/components/CliStorageHero.vue';
 
 # File management
 
-A research project involves many files: the manuscript, chapters and appendices with derivations, figures, references, notes, auxiliary styles. This guide explains how to organize, select, and manage files when working with TeXRA.
+A scientific research project encompasses diverse assets: manuscripts, derivations, appendices, computational scripts, figures, bibliographies, and auxiliary style files. This guide explains how TeXRA organizes, scopes, and manages these files during agent execution.
 
 ## File categories
 
@@ -284,7 +284,7 @@ If you work on several computers, use a cloud storage service like Dropbox to sy
 To keep your local directory structure while syncing this folder, use symbolic links. Store the actual folder in Dropbox and create a symbolic link in your local project directory. For example:
 
 ```bash
-ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName/History
+ln -s /path/to/Dropbox/texra-projects/ProjectName/History /path/to/local/ProjectName/History
 ```
 
 Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.

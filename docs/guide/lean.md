@@ -7,11 +7,11 @@ import CliLeanHero from '../.vitepress/components/CliLeanHero.vue';
 
 # Lean 4 proofs
 
-You're formalizing a theorem and Lean is fighting you: the proof state isn't what you expected, you can't remember the name of the Mathlib lemma you need, and the build cache is stale. TeXRA drives a real Lean 4 language server so its agents can read compiler diagnostics, inspect the proof state at any point, search Mathlib, and manage your build, all without leaving your editor.
+Formalizing mathematics requires continuous feedback: inspecting proof states, identifying Mathlib lemmas by signature, resolving compiler errors, and managing build caches. TeXRA connects directly to a running Lean 4 language server, allowing agents to read compiler diagnostics, inspect goal states at any position, search Mathlib via Loogle, and trigger project builds from within your workspace.
 
 ## Prerequisites
 
-TeXRA doesn't ship a Lean toolchain; you bring your own. It then drives Lean in one of two ways, depending on how you run TeXRA.
+TeXRA relies on your local Lean toolchain, interfacing with it through one of two mechanisms depending on the host environment:
 
 ::: tip You always need a Lake project
 Lean tools only work on `.lean` files that live inside a **Lake project**: a folder (or ancestor folder) containing a `lakefile.lean` or `lakefile.toml`. If there's no lakefile, the language server has nothing to attach to. Create one with `lake new myproject` or `lake init`.
@@ -29,7 +29,7 @@ TeXRA detects the running Lean 4 extension and routes its tools through it, so y
 
 ### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI
 
-There's no Lean 4 extension to rely on, so TeXRA spawns its own server (`lake env lean --server`). Each Lake project gets its own process; a server stops when the agent run that was using it ends, and an unused one stops after thirty minutes at the latest. A later run that reuses the server takes over that attribution. You need `lake` on your `PATH`:
+Without the VS Code extension host, the CLI spawns and manages its own headless server process (`lake env lean --server`). Each Lake project receives a dedicated process that terminates when its calling run ends (or after an idle timeout of 30 minutes). Ensure `lake` is present on your `PATH`:
 
 1. Install **elan** (the Lean version manager):
    ```bash

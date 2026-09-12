@@ -7,7 +7,7 @@ import CliModelsHero from '../.vitepress/components/CliModelsHero.vue';
 
 # AI models
 
-TeXRA supports models from multiple providers, so you can pick the strongest reasoning model for a derivation and a cheaper one for routine edits. Select a model from the dropdown in the TeXRA UI. Hover over an option to see its context window and cost estimate.
+TeXRA connects directly to frontier reasoning models from leading providers—including Anthropic, OpenAI, Google, DeepSeek, Moonshot, and DashScope. You can assign flagship reasoning models to demanding mathematical proofs and autonomous loops, while reserving faster, cost-efficient variants for routine document polish and formatting. Select a model from the dropdown menu in the TeXRA UI or pass `--model` in the CLI. Hover over any option to inspect its context window and pricing.
 
 <ModelPickerHero />
 
@@ -78,6 +78,8 @@ GPT-5 reasoning summaries require account verification. Enable them with `texra.
 
 | Model ID         | Use Case                           | Cost | Speed  |
 | :--------------- | :--------------------------------- | :--- | :----- |
+| `deepseek41`     | V4.1 Flash chat mode               | $    | Fast   |
+| `deepseek41T`    | V4.1 Flash with reasoning          | $    | Medium |
 | `deepseek`       | V4 Flash chat mode                 | $    | Fast   |
 | `deepseekT`      | V4 Flash with reasoning            | $    | Medium |
 | `deepseekvision` | V4 Flash Vision (Exp), image input | $    | Fast   |
@@ -114,6 +116,7 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 | Model ID     | Use Case                                     | Cost | Speed  |
 | :----------- | :------------------------------------------- | :--- | :----- |
 | `glm53`      | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
+| `glm53flash` | Flagship fast variant, 1M context            | $    | Fast   |
 | `glm52`      | Previous flagship (deprecated)               | $$   | Medium |
 | `glm5turbo`  | Fast inference, agent-optimized              | $$$  | Medium |
 | `glm5vturbo` | Multimodal vision model                      | $$   | Medium |
@@ -126,9 +129,10 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Meta (Muse Spark) models
 
-| Model ID      | Use Case                             | Cost | Speed  |
-| :------------ | :----------------------------------- | :--- | :----- |
-| `musespark11` | Reasoning + vision + PDF, 1M context | $$   | Medium |
+| Model ID      | Use Case                                | Cost | Speed  |
+| :------------ | :-------------------------------------- | :--- | :----- |
+| `musespark13` | Flagship reasoning + vision, 1M context | $$   | Medium |
+| `musespark11` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
 
 Muse Spark always reasons (effort is adjustable but cannot be disabled). TeXRA
 uses the Meta Model API's Responses surface, which carries reasoning across
