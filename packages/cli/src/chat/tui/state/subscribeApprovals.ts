@@ -100,6 +100,14 @@ export function createTuiHostInteractions(
   let disposed = false;
   /** Requests this attachment has already acted on, pruned as they settle. */
   const acted = new Set<string>();
+  /** The undo this guard hands every decision it sends: a refused
+   *  `request.decide` answered nothing, and the queue drops its own decided
+   *  entry, so this entry must go too or no later level acts on the request
+   *  again — and an automatically settled plan, question, or retry has no
+   *  staged modal the user could answer it through. */
+  const actAgainOnRefusal = (requestId: string) => (): void => {
+    acted.delete(requestId);
+  };
   /** Retries this host switched without asking, which get the notification. */
   const automaticSwitches = new Set<string>();
 
@@ -155,19 +163,23 @@ export function createTuiHostInteractions(
         // vocabulary: a personal-credential retry decomposes into this very
         // capability, so re-deciding it here would call back into this
         // function and the request would never be answered.
-        landRequestDecision(permission.runId, requestId, {
-          action: 'retry',
-          credentials: 'personal',
-        });
+        landRequestDecision(
+          permission.runId,
+          requestId,
+          { action: 'retry', credentials: 'personal' },
+          actAgainOnRefusal(requestId),
+        );
       } catch (error) {
         logWarning(
           'cli.tui',
           `The retry could not switch to your own API key: ${toErrorMessage(error)}`,
         );
-        landRequestDecision(permission.runId, requestId, {
-          action: 'deny',
-          reason: toErrorMessage(error),
-        });
+        landRequestDecision(
+          permission.runId,
+          requestId,
+          { action: 'deny', reason: toErrorMessage(error) },
+          actAgainOnRefusal(requestId),
+        );
       }
     })();
   };
@@ -286,23 +298,34 @@ export function createTuiHostInteractions(
         case 'planApproval':
         case 'proposal': {
           const settled = settleExecutable(context, request.runId);
-          if (settled) decidePendingRequest(request.requestId, settled);
+          if (settled) {
+            decidePendingRequest(
+              request.requestId,
+              settled,
+              actAgainOnRefusal(request.requestId),
+            );
+          }
           continue;
         }
         case 'userQuestion': {
           const denial = settleHumanInputDenial(context, request.runId);
           if (denial) {
-            decidePendingRequest(request.requestId, {
-              action: 'deny',
-              reason: denial.reason,
-            });
+            decidePendingRequest(
+              request.requestId,
+              { action: 'deny', reason: denial.reason },
+              actAgainOnRefusal(request.requestId),
+            );
           }
           continue;
         }
         case 'retry': {
           const settled = settleRetry(payload.data, context);
           if (settled) {
-            decidePendingRequest(request.requestId, settled);
+            decidePendingRequest(
+              request.requestId,
+              settled,
+              actAgainOnRefusal(request.requestId),
+            );
             continue;
           }
           prepareRetry(payload.data);

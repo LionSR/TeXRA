@@ -3,8 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
-import { WorkflowRunSnapshotSchema } from '@shared/schemas';
+import { WorkflowRunSnapshotSchema, type RunId } from '@shared/schemas';
 import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
+
+/** Named on the options; these cases drive the projection directly and never
+ *  persist a script row, so the run itself is never read. */
+const parentRunId = '7154decade02' as RunId;
 
 function snapshot(status: 'declared' | 'running') {
   const timestamp = '2026-08-15T20:00:00.000Z';
@@ -45,6 +49,7 @@ describe('workflow-script projection failure recovery', () => {
 
     const projection = projectWorkflowScriptProgress(trace, {
       session: currentSession(),
+      parentRunId,
       checkpointId: 'projection-failure',
       script: 'return await agent("Retry review")',
       runAgent: vi.fn(),
@@ -106,6 +111,7 @@ describe('workflow-script projection failure recovery', () => {
 
     const projection = projectWorkflowScriptProgress(trace, {
       session: currentSession(),
+      parentRunId,
       checkpointId: 'attempt-number-backstop',
       script: 'return await agent("Retry review")',
       runAgent: vi.fn(),

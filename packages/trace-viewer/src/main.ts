@@ -12,6 +12,10 @@ import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import type { TraceDocument } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -36,17 +40,14 @@ function renderLoadError(err: unknown): void {
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
-/** One step's coordinates, as the slider's readout spells them. The
- *  persisted coordinates are zero-based; the run progress formatters print
- *  them one-based (`Round ${round + 1}`), and the scrubber reads the same. */
+/** One step's position, as the slider's readout spells it: the single
+ *  coordinate the step's family counts in, in the wording every run surface
+ *  prints. A row carries all three coordinates, the ones its family never
+ *  advances included, so reading them all would label a tool-use turn with
+ *  the round and cycle it never left. */
 function stepLabel(step: TraceDocument['steps'][number]): string {
-  const { family, step: name, round, turn, continuationIndex } = step.payload;
-  const where = [
-    round == null ? null : `round ${round + 1}`,
-    turn == null ? null : `turn ${turn + 1}`,
-    continuationIndex == null ? null : `cycle ${continuationIndex + 1}`,
-  ].filter((part) => part !== null);
-  return `${family} ${name}${where.length ? ` (${where.join(', ')})` : ''}`;
+  const where = formatFlowPositionLabel(flowPosition(step.payload));
+  return `${step.payload.family} ${step.payload.step}${where ? ` (${where})` : ''}`;
 }
 
 /**

@@ -86,8 +86,9 @@ const SESSION_DATABASE_FILE = 'texra.db';
  * unquoted, and every query below aliases the snake-case columns onto it.
  *
  * `event_sequence` is declared first because `event` references it, and the
- * dependency edge (an inquiry thread under the run that asked it) is
- * self-referential, so both cascades exist the moment the schema does. One
+ * dependency edge (an inquiry thread under the run that asked it, a workflow
+ * checkpoint under the run that invoked it) is self-referential, so both
+ * cascades exist the moment the schema does. One
  * run owns one row here: one sequence counter and one ownership claim (one
  * run model, section 3.1). `STRICT` makes a wrong-typed value an error at
  * insert instead of a surprise at read: on persisted data, a silent coercion
@@ -455,7 +456,7 @@ export const databaseLayer = (
       const latestInquiry = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
         ORDER BY e.seq DESC LIMIT 1`;
-      const reparentInquiry = `UPDATE event_sequence SET parent_id = ?
+      const reparent = `UPDATE event_sequence SET parent_id = ?
         WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`;
       const cleanupLanes = new Map<AggregateId, PerKeyLane>();
       const closedTombstone = `SELECT ${EVENT_COLUMNS},
@@ -718,8 +719,19 @@ export const databaseLayer = (
                 identity.ownerId,
               ]);
             }
+            if (draft.type === 'workflow.script') {
+              // The checkpoint outlives the workflow run's attempts but not
+              // the run that invoked it: hang the aggregate under that run so
+              // its deletion closes and collects the journal with it, instead
+              // of stranding rows no id can reach.
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
+                qualifyAggregateId('run', draft.parentRunId),
+                draft.aggregateId,
+                identity.ownerId,
+              ]);
+            }
             if (draft.type === 'inquiryThreadUpdated') {
-              yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
                 draft.parentRunId === null
                   ? null
                   : qualifyAggregateId('run', draft.parentRunId),

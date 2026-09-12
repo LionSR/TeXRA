@@ -12,7 +12,10 @@ import type {
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { createProcessSession } from '@test/support/sessionTestUtils';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
@@ -194,8 +197,13 @@ return await agent('retry cost')`,
 
 describe('workflow-script completed journal cost', () => {
   let session: SessionHandle;
-  beforeEach(() => {
+  // The checkpoint aggregate hangs under the run that invoked the workflow,
+  // so that run has to exist before a script row can name it.
+  let parentRunId: RunId;
+  beforeEach(async () => {
     session = createProcessSession();
+    parentRunId = publishTestRunStart(session);
+    await session.settlePublications();
   });
 
   it('sums canonical workflow and tool-use results independent of entry order', () => {
@@ -235,6 +243,7 @@ return await agent('second')`;
     const first = await Effect.runPromise(
       runPersistedWorkflowScript({
         session,
+        parentRunId,
         checkpointId: 'replay',
         script,
         runAgent: async ({ index }) => results[index],
@@ -245,6 +254,7 @@ return await agent('second')`;
     const replayed = await Effect.runPromise(
       runPersistedWorkflowScript({
         session,
+        parentRunId,
         checkpointId: 'replay',
         runAgent: runner,
       }),
@@ -264,6 +274,7 @@ throw new Error('later failure')`;
       Effect.runPromise(
         runPersistedWorkflowScript({
           session,
+          parentRunId,
           checkpointId: 'failure',
           script,
           runAgent: async () => workflowResult(0.75),

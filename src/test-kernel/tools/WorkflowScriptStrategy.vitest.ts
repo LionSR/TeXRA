@@ -1,6 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
@@ -19,6 +19,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
 import {
@@ -93,6 +94,7 @@ function strategyParams(
 ): WorkflowScriptStrategyParams {
   return {
     runId,
+    parentRunId: runId,
     session: currentSession(),
     fingerprintAgentDependencies: (options) =>
       Effect.runPromise(
@@ -107,6 +109,13 @@ function strategyParams(
     ...overrides,
   };
 }
+
+// The checkpoint aggregate hangs under the run that invoked the workflow, so
+// that run has to exist before a script row can name it.
+beforeAll(async () => {
+  publishTestRunStart(currentSession(), runId);
+  await currentSession().settlePublications();
+});
 
 beforeEach(() => {
   workflowControls = new WorkflowControlRegistry();
@@ -199,6 +208,7 @@ return await agent('Solve.', {
     await Effect.runPromise(
       runPersistedWorkflowScript({
         session: currentSession(),
+        parentRunId: runId,
         checkpointId: checkpointIdFor('strategy-test'),
         script,
         runAgent: async () => finalResult,
@@ -261,6 +271,7 @@ return args`;
     await Effect.runPromise(
       runPersistedWorkflowScript({
         session: currentSession(),
+        parentRunId: runId,
         checkpointId: checkpointIdFor('retained-arguments'),
         script: argsScript,
         args: { topic: 'geometry' },
@@ -322,6 +333,7 @@ throw new Error('script failed after replay')`;
       Effect.runPromise(
         runPersistedWorkflowScript({
           session: currentSession(),
+          parentRunId: runId,
           checkpointId: checkpointIdFor('retained-settlement'),
           script: failingScript,
           runAgent: async () => finalResult,
@@ -383,6 +395,7 @@ return await agent('malformed stale')`;
     await Effect.runPromise(
       runPersistedWorkflowScript({
         session: currentSession(),
+        parentRunId: runId,
         checkpointId: checkpointIdFor(name),
         script: baselineScript,
         runAgent: async ({ prompt }) =>

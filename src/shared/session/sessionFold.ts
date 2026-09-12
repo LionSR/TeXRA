@@ -73,6 +73,7 @@ import {
   listingTypeOf,
   isTranscriptEvent,
   ownerPid,
+  requestParksItsCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -701,10 +702,10 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
  * local snapshot, and its children (5.2). Interrupted is owner loss: a
  * non-terminal run nobody holds, whether or not an approval is pending.
  * Somebody holds it when its owner is this process or a process whose lease
- * this one may not touch. Waiting needs a held owner: without one the same
- * pending request reads as interrupted, never waiting, because nothing is
- * listening for the answer; the durable phase and the listed request stay,
- * so a resume can re-ask.
+ * this one may not touch. Waiting needs a held owner and a request that parks
+ * its tool: without an owner the same pending request reads as interrupted,
+ * never waiting, because nothing is listening for the answer; the durable
+ * phase and the listed request stay, so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -714,7 +715,12 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
-  const pendingOwn = view.requests.some((r) => r.runId === run.id);
+  // Only a request that parks its tool is a wait: a dispatched inquiry left
+  // its run working, so it stays listed for the panel without moving the run
+  // out of Running.
+  const pendingOwn = view.requests.some(
+    (r) => r.runId === run.id && requestParksItsCaller(r.payload),
+  );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held;
   const waiting = pendingOwn && held;
   const durableOutcome =

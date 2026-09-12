@@ -16,6 +16,7 @@ import {
   JsonValueSchema,
   WorkflowScriptFilesSchema,
   type PersistedJsonValue,
+  type RunId,
   type SessionEvent,
   type WorkflowScriptFiles,
 } from '@shared/schemas';
@@ -88,6 +89,10 @@ export interface PersistedWorkflowScriptRunOptions extends Omit<
   session: SessionHandle;
   /** Stable identity, normally derived from `meta.name` under the parent. */
   checkpointId: string;
+  /** The run that invoked this workflow — the same id `checkpointId` is
+   *  derived from. The checkpoint aggregate hangs under it, so removing that
+   *  run collects the journal instead of leaving it unreachable. */
+  parentRunId: RunId;
   /** Omit only when resuming the script already stored at checkpointId. */
   script?: string;
 }
@@ -172,6 +177,7 @@ export const runPersistedWorkflowScript = Effect.fn(
     const {
       session,
       checkpointId,
+      parentRunId,
       script: requestedScript,
       args: requestedArgs,
       files: requestedFiles,
@@ -247,12 +253,14 @@ export const runPersistedWorkflowScript = Effect.fn(
                 })
               : prior.files;
           // The script row lands before the run, so the journal always has the
-          // source it replays against.
+          // source it replays against, and it is the row that hangs the
+          // aggregate under the invoking run (deletion cascades from there).
           yield* session
             .commit([
               {
                 type: 'workflow.script',
                 aggregateId: target,
+                parentRunId,
                 script,
                 args: encodeJsonValue(args),
                 files,

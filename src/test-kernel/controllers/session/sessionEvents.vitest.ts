@@ -313,6 +313,37 @@ describe('session events and view', () => {
     }).pipe(Effect.provide(graph([]))),
   );
 
+  it.effect('hangs a workflow checkpoint under the run that invoked it', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const log = yield* Database;
+      const checkpoint = qualifyAggregateId(
+        'workflow-checkpoint',
+        'cp-000000000000',
+      );
+      yield* events.publish([
+        runStart,
+        {
+          type: 'workflow.script',
+          aggregateId: checkpoint,
+          parentRunId: RUN,
+          script: 'return 1',
+          args: { kind: 'undefined' },
+          files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+        },
+      ]);
+      // Without the edge the journal is unreachable once the run is gone:
+      // deletion follows `parent_id`, and nothing else names this id.
+      expect((yield* log.aggregateState([checkpoint]))[0]?.parentId).toBe(
+        qualifyAggregateId('run', RUN),
+      );
+      yield* events.publish([
+        { type: 'run.removed', aggregateId: qualifyAggregateId('run', RUN) },
+      ]);
+      expect((yield* log.aggregateState([checkpoint]))[0]?.closed).toBe(true);
+    }).pipe(Effect.provide(graph([]))),
+  );
+
   it.effect(
     'reparents an answered inquiry atomically before old-parent deletion',
     () =>

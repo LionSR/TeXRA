@@ -256,6 +256,11 @@ function denyRetryRequests(handle: RuntimeSessionHandle): Effect.Effect<void> {
           .pipe(
             Effect.catch((error) =>
               Effect.sync(() => {
+                // A refused write answered nothing: the request stays
+                // pending, so this listener must forget it or no later
+                // level would ever deny it again and the run would wait
+                // for a surface that never comes.
+                answered.delete(pending.requestId);
                 log.warn(
                   `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
                 );

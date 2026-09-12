@@ -28,6 +28,7 @@ import {
 import {
   FlowSnapshotPayloadSchema,
   RunUsageTotalsSchema,
+  requestParksItsCaller,
   type CommitOrdinal,
   type FlowSnapshotPayload,
   type DispatchFacts,
@@ -327,7 +328,7 @@ export function unboundRequests(state: RunState): readonly string[] {
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
     request.resolved ||
     bindings.has(requestId) ||
-    request.payload.kind === 'externalInquiry'
+    !requestParksItsCaller(request.payload)
       ? []
       : [requestId],
   );

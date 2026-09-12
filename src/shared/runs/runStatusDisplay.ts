@@ -207,8 +207,11 @@ export interface FlowPosition {
  * advances `round`, a tool-use run advances `turn` and leaves `round` at the
  * zero it opened with. A renderer that reads `round` first therefore paints
  * `r1` over every tool-use run for its whole life, which is why this rule has
- * one home rather than one copy per surface. Both coordinates are zero-based
- * on the row and render one-based.
+ * one home rather than one copy per surface. The two coordinates are not
+ * counted alike on the row: `round` is zero-based (a reflection flow opens at
+ * round 0), while `turn` is already one-based — the tool-use loop commits
+ * `state.turn + 1` from a zero start and the child loop counts its first turn
+ * as 1 — so only `round` gains one when it renders.
  */
 export function flowPosition(
   flow: RunFlow | null | undefined,
@@ -223,8 +226,8 @@ export function flowPosition(
 }
 
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for
- *  a round, `t3` for a turn. A total counts planned rounds, so a turn ignores
- *  it. */
+ *  a round, `t2` for the row's second turn. A total counts planned rounds, so
+ *  a turn ignores it. */
 export function formatFlowPositionLabel(
   position: Readonly<FlowPosition>,
   total?: number,
@@ -240,7 +243,7 @@ export function formatFlowPositionLabel(
   total?: number,
 ): string | undefined {
   if (position === undefined) return undefined;
-  if (position.kind === 'turn') return `t${position.index + 1}`;
+  if (position.kind === 'turn') return `t${position.index}`;
   return formatRoundStageLabel({
     index: position.index,
     ...(total !== undefined ? { total } : {}),

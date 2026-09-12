@@ -331,10 +331,14 @@ export function stagePresentation(payload: ApprovalPayload): void {
  * Issue the runtime requests one decision names, in order; a refusal reads
  * in the conversation and puts `requestId` back on this surface, since the
  * durable request it answered is still pending and nobody else will re-ask.
+ * `onRefused` is the same undo for a caller keeping its own "already acted"
+ * guard beside this one (the TUI host's automatic answers): a guard left set
+ * over a refused decision parks the run on a request nobody answers again.
  */
 function issue(
   runId: RunId,
   requestId: string,
+  onRefused: (() => void) | undefined,
   ...requests: RuntimeRequest[]
 ): void {
   const session = currentSession();
@@ -347,6 +351,7 @@ function issue(
           const next = new Set(decided.get());
           next.delete(requestId);
           decided.set(next);
+          onRefused?.();
           appendLocalRequestRefusal(error, runId);
         },
         onSuccess: () => undefined,
@@ -366,6 +371,7 @@ function decideRequest(
   request: AttentionRequest,
   payload: PermissionPayload,
   decision: SurfaceDecision,
+  onRefused?: () => void,
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
@@ -373,7 +379,9 @@ function decideRequest(
   const runtimeArms = arms.flatMap((arm) =>
     'runtime' in arm ? [arm.runtime] : [],
   );
-  if (runtimeArms.length > 0) issue(runId, request.requestId, ...runtimeArms);
+  if (runtimeArms.length > 0) {
+    issue(runId, request.requestId, onRefused, ...runtimeArms);
+  }
   for (const arm of arms) {
     if (!('host' in arm)) continue;
     if (!hostCapability) {
@@ -424,6 +432,7 @@ function approveQueuedDelegatedWorkForRun(runId: RunId): void {
 export function decidePendingRequest(
   requestId: string,
   decision: SurfaceDecision,
+  onRefused?: () => void,
 ): void {
   const request = attentionRequests(sessionView().get()).find(
     (pending) => pending.requestId === requestId,
@@ -435,7 +444,7 @@ export function decidePendingRequest(
     );
     return;
   }
-  decideRequest(request, request.payload, decision);
+  decideRequest(request, request.payload, decision, onRefused);
 }
 
 /**
@@ -449,9 +458,10 @@ export function landRequestDecision(
   runId: RunId,
   requestId: string,
   decision: RequestDecision,
+  onRefused?: () => void,
 ): void {
   markDecided(requestId);
-  issue(runId, requestId, {
+  issue(runId, requestId, onRefused, {
     kind: 'request.decide',
     runId,
     requestId,

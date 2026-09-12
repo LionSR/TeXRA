@@ -490,6 +490,11 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
   durable(
     'workflow.script',
     {
+      /** The run the checkpoint hangs under: the run that invoked the
+       *  workflow, whose id its checkpoint id is derived from. The database
+       *  makes it the aggregate's parent, so removing that run collects the
+       *  journal with it instead of stranding these rows. */
+      parentRunId: RunIdSchema,
       script: z.string().min(1),
       args: PersistedJsonValueSchema,
       files: WorkflowScriptFilesSchema,
