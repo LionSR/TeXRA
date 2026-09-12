@@ -472,9 +472,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Google background responses',
     description:
       'Run Google workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     model: {
       provider: 'google',
       label: 'Background responses',
@@ -487,9 +485,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     model: {
       provider: 'openai',
       label: 'Background responses',
@@ -521,11 +517,11 @@ const CORE_SETTING_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts', {
+    honoredBy: everyHost('src/agent/runtime/run/compaction.ts', {
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/loop/toolUse.ts -> src/agent/runtime/run/compaction.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },

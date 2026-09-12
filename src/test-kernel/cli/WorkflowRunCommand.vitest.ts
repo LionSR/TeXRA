@@ -339,6 +339,7 @@ type ReflectionState = Extract<
 /** The reflection snapshot a round writes, minus the fields a case sets. */
 function reflectionSnapshot(
   state: Partial<ReflectionState> = {},
+  runtime: Partial<FlowSnapshotPayload['runtime']> = {},
 ): FlowSnapshotPayload {
   return {
     family: 'reflection',
@@ -351,6 +352,7 @@ function reflectionSnapshot(
       modelHandlerCompatibilityKey: null,
       lastError: null,
       pendingRetry: null,
+      ...runtime,
     },
     references: { pendingIntents: [], pendingResponse: null },
     state: {
@@ -1083,9 +1085,10 @@ describe('CLI workflow run command', () => {
     expect(
       canAdvertise?.({
         kind: 'checkpoint',
-        snapshot: reflectionSnapshot({
-          lastError: { message: 'provider failed', userRetryable: true },
-        }),
+        snapshot: reflectionSnapshot(
+          {},
+          { lastError: { message: 'provider failed', userRetryable: true } },
+        ),
       }),
     ).toBe(false);
   });

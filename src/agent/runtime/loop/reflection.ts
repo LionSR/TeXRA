@@ -105,6 +105,7 @@ import {
   haltedStepRow,
   reflectionFlowState,
   reflectionSnapshotRow,
+  runtimeSnapshotRow,
   stepRow,
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
@@ -231,6 +232,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const commit = (state: RunState) =>
     Ref.set(latest, state).pipe(Effect.as(state));
   let workspace = AgentWorkspaceState.create();
+  // The run's error fact, runtime-owned: every snapshot names it, so the
+  // value a listing or a resume reads (`runtime.lastError`) is the value the
+  // live loop holds, and a resumed run that retries clears it for good.
+  let lastError: RetryErrorInfo | undefined;
   // The scalar family state; the snapshot re-derives the collections below.
   let flow: ReflectionFlowState = {
     currentRound: 0,
@@ -250,7 +255,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const snapshot = (
     state: RunState,
     patch: Omit<ReflectionSnapshotPatch, 'state'>,
-  ) => reflectionSnapshotRow(runId, state, { ...patch, state: flowState() });
+  ) =>
+    reflectionSnapshotRow(runId, state, {
+      ...patch,
+      runtime: { lastError: lastError ?? null, ...patch.runtime },
+      state: flowState(),
+    });
   const coordinates = (state: RunState, continuationIndex?: number) => ({
     family: state.family,
     round: flow.currentRound,
@@ -283,12 +293,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     flow.currentRound + 1 >= flow.totalRounds;
   const resolveOutcome = (): RunOutcome =>
     deriveRunOutcome({
-      failed: flow.lastError !== undefined || terminalCompileRejection(),
+      failed: lastError !== undefined || terminalCompileRejection(),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */
   const shouldContinueNextRound = (): boolean =>
-    flow.lastError === undefined &&
+    lastError === undefined &&
     flow.continueRounds &&
     flow.currentRound + 1 < flow.totalRounds;
 
@@ -365,7 +375,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // The configured total wins over the persisted one, so a YAML change
     // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
     // invocation its failure interrupted rather than failing again at once.
-    flow = { ...persisted, totalRounds, lastError: undefined };
+    flow = { ...persisted, totalRounds };
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
     outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
     // Mid-round, the raw output file holds the text every earlier response
@@ -992,7 +1002,21 @@ export const runReflection = Effect.fn('reflection.run')(function* (
               return { state, kind: 'cancelled' } as const;
             }
             if (outcome.kind === 'failed') {
-              flow = { ...flow, lastError: outcome.error };
+              lastError = outcome.error;
+              // A failure the invoker's gate did not already commit (no
+              // retry was available) is committed here, so a listing and a
+              // resume read the run's error where the gate writes it.
+              if (state.lastError === null) {
+                state = yield* commit(
+                  yield* Effect.uninterruptible(
+                    ledger.appendBatch(runId, state, [
+                      runtimeSnapshotRow(runId, state, {
+                        lastError: outcome.error,
+                      }),
+                    ]),
+                  ),
+                );
+              }
               roundOutcome = RUN_OUTCOME.FAILED;
               return { state, kind: 'failed' } as const;
             }
@@ -1165,8 +1189,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     usage:
       at?.usage ??
       AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    ...(flow.lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: flow.lastError }
+    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
+      ? { error: lastError }
       : {}),
   });
 
