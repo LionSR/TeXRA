@@ -30,9 +30,8 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  attachedDroppedPaths,
+  attachDroppedPaths,
   normalizeMainViewFileExtension,
-  planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -457,22 +456,16 @@ export function createExtensionHostRequests(
     const paths = await Promise.all(
       request.paths.map((rawPath) => resolveWorkspaceDropFile(rawPath)),
     );
-    const plan = planMainViewDroppedFileAttachments({
+    const attached = attachDroppedPaths(
       paths,
-      allowedExtensions: {
-        input: getIncludedExtensions('input'),
-        context: getIncludedExtensions('context'),
-        media: getIncludedExtensions('media'),
-      },
-      target: request.category,
-    });
-    const attached = attachedDroppedPaths(plan);
-    if (plan.attachedCount > 0 && plan.rejectedCount > 0) {
+      getIncludedExtensions(request.category),
+    );
+    if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
       void showInfo(
-        `Attached ${formatResultCount(plan.attachedCount, 'dropped file')}; skipped ${formatResultCount(plan.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+        `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
       );
     }
-    return { kind: 'files', paths: attached };
+    return { kind: 'files', paths: attached.paths };
   }
 
   /** The editor's current file into a launcher field. */
@@ -749,10 +742,6 @@ export function createExtensionHostRequests(
       case 'launch':
         await launch(request);
         return done;
-      case 'compileInputPdf':
-        throw new Rejected({
-          reason: 'Compiling the input PDF is not available in VS Code yet.',
-        });
       case 'extractFigures':
         await runCommand('texra.extractTikzFigures');
         return done;

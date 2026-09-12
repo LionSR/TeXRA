@@ -1,8 +1,8 @@
 /**
  * The launcher's multi-file groups: the three the New-task state renders,
- * and the `Surface.launch` list each group's `type` selects from. The host
- * publishes `FILE_SELECT_CONFIGS` as `HostSnapshot.fileConfigs` and the
- * components read the list through `LAUNCH_FILE_LISTS`.
+ * and the `Surface.launch` list each group's `type` selects from. The groups
+ * are a compile-time constant the renderer reads directly; the list each one
+ * selects from comes from `LAUNCH_FILE_LISTS`.
  */
 import type {
   FileSelectConfig,

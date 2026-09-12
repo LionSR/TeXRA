@@ -97,7 +97,7 @@ describe('desktop preview host', () => {
   it.each([
     { kind: 'openFile', path: '/missing/output.pdf' },
     { kind: 'apiKeyBanner', action: 'guide' },
-    { kind: 'compileInputPdf' },
+    { kind: 'extractFigures' },
     { kind: 'latexdiffs', action: 'compare' },
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },

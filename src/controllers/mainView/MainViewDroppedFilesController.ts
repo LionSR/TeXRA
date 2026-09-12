@@ -2,146 +2,53 @@
 import * as path from 'node:path';
 
 // Local imports - shared schemas
-import type { MultipleDocumentFileType } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
-const MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES = [
-  'input',
-  'context',
-  'media',
-] as const satisfies readonly MultipleDocumentFileType[];
-
-type MainViewAttachableDropCategory =
-  (typeof MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES)[number];
-
-export type MainViewAllowedDropExtensions = Readonly<
-  Record<MainViewAttachableDropCategory, readonly string[]>
->;
-
-interface MainViewDroppedFileAttachmentPlan {
-  readonly filesByCategory: Readonly<
-    Record<MainViewAttachableDropCategory, readonly string[]>
-  >;
-  readonly attachedCount: number;
-  readonly rejectedCount: number;
-}
-
-interface MainViewDroppedFileAttachmentInput {
-  readonly paths: readonly (string | null)[];
-  readonly allowedExtensions: MainViewAllowedDropExtensions;
-  readonly target?: MultipleDocumentFileType;
-}
-
-export function planMainViewDroppedFileAttachments(
-  input: MainViewDroppedFileAttachmentInput,
-): MainViewDroppedFileAttachmentPlan {
-  const grouped = {
-    input: new Set<string>(),
-    context: new Set<string>(),
-    media: new Set<string>(),
-  } satisfies Record<MainViewAttachableDropCategory, Set<string>>;
+/**
+ * The dropped paths one launcher field takes: every non-null path whose
+ * extension that field accepts, deduplicated and in drop order. A drop that
+ * attached nothing but rejected something is the user's to hear about, so it
+ * is a rejection rather than an empty result.
+ */
+export function attachDroppedPaths(
+  paths: readonly (string | null)[],
+  allowedExtensions: readonly string[],
+): { paths: string[]; attachedCount: number; rejectedCount: number } {
+  const allowed = new Set(
+    allowedExtensions.map(normalizeMainViewFileExtension),
+  );
+  const attached = new Set<string>();
   let rejectedCount = 0;
 
-  for (const filePath of input.paths) {
+  for (const filePath of paths) {
     if (!filePath) {
       rejectedCount += 1;
       continue;
     }
-    const category = resolveDroppedFileCategory(
-      filePath,
-      input.allowedExtensions,
-      input.target,
-    );
-    if (!category) {
+    const extension = normalizeMainViewFileExtension(filePath);
+    if (!extension || !allowed.has(extension)) {
       rejectedCount += 1;
       continue;
     }
-    grouped[category].add(filePath);
+    attached.add(filePath);
   }
 
-  const filesByCategory = {
-    input: [...grouped.input],
-    context: [...grouped.context],
-    media: [...grouped.media],
-  } satisfies Record<MainViewAttachableDropCategory, string[]>;
-
-  return {
-    filesByCategory,
-    attachedCount: MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.reduce(
-      (count, category) => count + filesByCategory[category].length,
-      0,
-    ),
-    rejectedCount,
-  };
-}
-
-/** The paths a plan attaches, in category order. A drop that attached
- *  nothing but rejected something is the user's to hear about. */
-export function attachedDroppedPaths(
-  plan: MainViewDroppedFileAttachmentPlan,
-): string[] {
-  if (plan.attachedCount === 0 && plan.rejectedCount > 0) {
+  if (attached.size === 0 && rejectedCount > 0) {
     throw new Rejected({
       reason:
         'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
     });
   }
-  return MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.flatMap(
-    (category) => plan.filesByCategory[category],
-  );
+
+  return {
+    paths: [...attached],
+    attachedCount: attached.size,
+    rejectedCount,
+  };
 }
 
 export function normalizeMainViewFileExtension(filePath: string): string {
   const trimmed = filePath.trim();
   const extension = path.extname(trimmed) || trimmed;
   return extension.toLowerCase().replace(/^\./, '');
-}
-
-function resolveDroppedFileCategory(
-  filePath: string,
-  allowedExtensions: MainViewAllowedDropExtensions,
-  target?: MultipleDocumentFileType,
-): MainViewAttachableDropCategory | null {
-  const extension = normalizeMainViewFileExtension(filePath);
-  if (!extension) return null;
-
-  if (target) {
-    return isAttachableDropCategory(target) &&
-      isExtensionAllowed(target, extension, allowedExtensions)
-      ? target
-      : null;
-  }
-
-  if (isExtensionAllowed('media', extension, allowedExtensions)) {
-    return 'media';
-  }
-  if (
-    ['bib', 'bbl', 'cls', 'sty'].includes(extension) &&
-    isExtensionAllowed('context', extension, allowedExtensions)
-  ) {
-    return 'context';
-  }
-  if (isExtensionAllowed('input', extension, allowedExtensions)) {
-    return 'input';
-  }
-  if (isExtensionAllowed('context', extension, allowedExtensions)) {
-    return 'context';
-  }
-  return null;
-}
-
-function isAttachableDropCategory(
-  category: MultipleDocumentFileType,
-): category is MainViewAttachableDropCategory {
-  return category === 'input' || category === 'context' || category === 'media';
-}
-
-function isExtensionAllowed(
-  category: MainViewAttachableDropCategory,
-  extension: string,
-  allowedExtensions: MainViewAllowedDropExtensions,
-): boolean {
-  return allowedExtensions[category].some(
-    (candidate) => normalizeMainViewFileExtension(candidate) === extension,
-  );
 }

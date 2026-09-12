@@ -127,7 +127,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     base64: z.string().min(1),
     mediaType: z.string().min(1),
   }),
-  z.object({ kind: z.literal('compileInputPdf') }),
   z.object({ kind: z.literal('extractFigures') }),
   /** A tool-edit prompt's verbs over the preview the host staged: the
    *  approval applies the proposed file as the user left it, so the host

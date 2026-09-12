@@ -675,8 +675,6 @@ export function createDesktopHostRequests(
           await runtime.runPromise(prepareSurfaceLaunch(request, host)),
         );
         return done;
-      case 'compileInputPdf':
-        throw notOnDesktop('Compiling the input PDF');
       case 'extractFigures':
         throw notOnDesktop('Figure extraction');
       case 'toolEdit':

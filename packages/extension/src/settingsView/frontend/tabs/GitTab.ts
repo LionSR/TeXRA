@@ -13,7 +13,6 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
 } from '@shared/schemas';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -26,9 +25,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
-// Local imports - shared utils
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
-
 // Local imports - shared constants
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -40,7 +36,7 @@ import {
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 @customElement('git-tab')
-export class GitTab extends UnsupportedCommandsMixin(LitElement) {
+export class GitTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -221,90 +217,77 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
     const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container tab-content-container">
+        <div class="settings-section">
+          ${renderSettingsSectionHeading({
+            title: 'GitHub personal access token',
+            description:
+              'Used to poll GitHub for pull request events, reviews, comments, and failed checks.',
+            icon: 'key',
+          })}
+          <div class="token-row">
+            <span class="token-row-label">Status:</span>
+            ${this.renderTokenStatusBadge()}
+            <span class="token-actions">
+              ${renderLabeledActionButton({
+                icon: 'key',
+                text: tokenIsSet ? 'Replace token' : 'Set token',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: this.handleSetGitHubToken,
+              })}
+              ${
+                this.githubTokenStatus === 'secret'
+                  ? renderLabeledActionButton({
+                      icon: 'trash',
+                      text: 'Remove token',
+                      kind: 'danger',
+                      onClick: this.handleRemoveGitHubToken,
+                    })
+                  : nothing
+              }
+              ${renderLabeledActionButton({
+                icon: 'arrow-up-right-from-square',
+                text: 'Create on GitHub…',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: this.handleOpenGitHubTokenUrl,
+              })}
+            </span>
+          </div>
+          <div class="instructions">
+            <strong>How to get a token:</strong>
+            <ol>
+              <li>
+                Select <em>Create on GitHub…</em> to open the token-creation
+                page in your browser.
+              </li>
+              <li>
+                Choose scopes: <code>repo</code> for private repos or
+                <code>public_repo</code> for public only. Read-only usage; no
+                write scopes needed.
+              </li>
+              <li>
+                Pick an expiration (90 days is common) and select
+                <em>Generate token</em>.
+              </li>
+              <li>
+                Copy the token (shown only once) and paste it here via
+                <em>Set token</em>.
+              </li>
+            </ol>
+            ${
+              this.githubTokenStatus === 'env'
+                ? html`<p>
+                    A token is currently being read from the
+                    <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
+                    environment variable. Setting one above will override it.
+                  </p>`
+                : nothing
+            }
+          </div>
+        </div>
         ${
-          isKnownUnsupported(
-            this.unsupportedCommands,
-            SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
-          )
-            ? nothing
-            : html`
-                <div class="settings-section">
-                  ${renderSettingsSectionHeading({
-                    title: 'GitHub personal access token',
-                    description:
-                      'Used to poll GitHub for pull request events, reviews, comments, and failed checks.',
-                    icon: 'key',
-                  })}
-                  <div class="token-row">
-                    <span class="token-row-label">Status:</span>
-                    ${this.renderTokenStatusBadge()}
-                    <span class="token-actions">
-                      ${renderLabeledActionButton({
-                        icon: 'key',
-                        text: tokenIsSet ? 'Replace token' : 'Set token',
-                        kind: 'secondary',
-                        appearance: 'outlined',
-                        onClick: this.handleSetGitHubToken,
-                      })}
-                      ${
-                        this.githubTokenStatus === 'secret'
-                          ? renderLabeledActionButton({
-                              icon: 'trash',
-                              text: 'Remove token',
-                              kind: 'danger',
-                              onClick: this.handleRemoveGitHubToken,
-                            })
-                          : nothing
-                      }
-                      ${renderLabeledActionButton({
-                        icon: 'arrow-up-right-from-square',
-                        text: 'Create on GitHub…',
-                        kind: 'secondary',
-                        appearance: 'outlined',
-                        onClick: this.handleOpenGitHubTokenUrl,
-                      })}
-                    </span>
-                  </div>
-                  <div class="instructions">
-                    <strong>How to get a token:</strong>
-                    <ol>
-                      <li>
-                        Select <em>Create on GitHub…</em> to open the
-                        token-creation page in your browser.
-                      </li>
-                      <li>
-                        Choose scopes: <code>repo</code> for private repos or
-                        <code>public_repo</code> for public only. Read-only
-                        usage; no write scopes needed.
-                      </li>
-                      <li>
-                        Pick an expiration (90 days is common) and select
-                        <em>Generate token</em>.
-                      </li>
-                      <li>
-                        Copy the token (shown only once) and paste it here via
-                        <em>Set token</em>.
-                      </li>
-                    </ol>
-                    ${
-                      this.githubTokenStatus === 'env'
-                        ? html`<p>
-                            A token is currently being read from the
-                            <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
-                            environment variable. Setting one above will
-                            override it.
-                          </p>`
-                        : nothing
-                    }
-                  </div>
-                </div>
-              `
-        }
-        ${
-          !isKnownUnsupported(
-            this.unsupportedCommands,
-            SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
-          ) && this.prSubscriptions.length > 0
+          this.prSubscriptions.length > 0
             ? html`
                 <div class="settings-section">
                   ${renderSettingsSectionHeading({

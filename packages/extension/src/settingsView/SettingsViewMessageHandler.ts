@@ -16,7 +16,8 @@ import { ModelError } from '@texra-ai/llm/turn';
 import { defaultSession } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { BaseViewMessageHandler } from '@common/webview';
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -54,7 +55,6 @@ import {
 import { setCopilotRoutePreference } from '@model/copilotRouting';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -115,7 +115,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: SubscriptionHandlers;
   private readonly grokHandlers: SubscriptionHandlers;
-  private readonly settingsHost: SettingsViewHost;
+  private readonly memoryController: SettingsMemoryController;
+  private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: SubscriptionUsageReader;
@@ -129,13 +130,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
 
     const globalState = context.globalState;
-    this.settingsHost = new SettingsViewHost({
-      state: {
-        workspaceState: workspaceRoots().workspaceState,
-        globalState,
-      },
+    this.memoryController = new SettingsMemoryController({
+      prompt: new VscodePromptHost(),
+    });
+    this.modelSelectionController = new SettingsModelSelectionController({
+      globalState,
       secrets,
-      memoryPrompt: new VscodePromptHost(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -174,7 +174,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
-      this.settingsHost,
+      this.memoryController,
       this.viewName,
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx, secrets);
@@ -280,13 +280,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
-      setModelReasoningLevel: (message) =>
-        this.settingsHost.setReasoningLevel(
-          { modelName: message.modelName, level: message.level },
-          {
-            respond: (response) => this.postMessageToActiveWebview(response),
-          },
-        ),
+      setModelReasoningLevel: async (message) => {
+        await this.modelSelectionController.setReasoningLevel({
+          modelName: message.modelName,
+          level: message.level,
+        });
+        await this.postModelSelectionData();
+      },
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
@@ -506,8 +506,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendModelSelectionData((message) =>
-      webview.postMessage(message),
+    await webview.postMessage(
+      await this.modelSelectionController.buildModelSelectionMessage(),
+    );
+  }
+
+  /** Post the model-selection payload to whichever webview is active. */
+  private async postModelSelectionData(): Promise<void> {
+    await this.postMessageToActiveWebview(
+      await this.modelSelectionController.buildModelSelectionMessage(),
     );
   }
 
@@ -870,14 +877,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     modelName: string,
     enabled: boolean,
   ): Promise<void> {
-    await this.settingsHost.setModelEnabled(
-      { modelName, enabled },
-      {
-        // The options cache is invalidated by the writer itself.
-        respond: (message) => this.postMessageToActiveWebview(message),
-        afterPost: () =>
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-      },
-    );
+    await this.modelSelectionController.setModelEnabled({ modelName, enabled });
+    await this.postModelSelectionData();
+    // The options cache is invalidated by the writer itself.
+    await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
   }
 }

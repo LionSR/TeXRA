@@ -974,12 +974,6 @@
       "name": "buildTeamOptions"
     },
     {
-      "file": "src/controllers/mainView/MainViewDroppedFilesController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "MainViewAllowedDropExtensions"
-    },
-    {
       "file": "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",
       "category": "production-dead",
       "kind": "exports",
