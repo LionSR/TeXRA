@@ -158,7 +158,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
     { icon: 'beaker', title: 'lean', desc: 'Formal proof engineering in Lean 4 and Mathlib with live diagnostic verification.', chips: [
       { text: 'lean_diagnostics', variant: 'info' },
       { text: 'lean_inspect', variant: 'info' },
-      { text: 'lean_search', variant: 'neutral' },
+      { text: 'lean_loogle', variant: 'neutral' },
       { text: 'lake build', variant: 'neutral' },
     ] },
   ]"

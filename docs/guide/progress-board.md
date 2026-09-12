@@ -42,7 +42,7 @@ The ProgressBoard is split into two main sections (usually side by side, but con
 
 ## Stream tabs section
 
-This section lists the stored runs for the workspace, including runs from earlier sessions and from other TeXRA hosts; transcripts are loaded from storage when you open them.
+This section lists the stored runs for the workspace, including runs from earlier sessions and from other TeXRA hosts; transcripts and run facts load from the workspace SQLite run database.
 
 - **Switching streams**: Select a stream name (e.g., `polish: paper.tex`) to view its logs and status in the Content Area.
 - **Removing a stream**: Each tab has an <wa-icon library="texra" name="xmark"></wa-icon> button that removes that stream and its logs from the ProgressBoard view.
