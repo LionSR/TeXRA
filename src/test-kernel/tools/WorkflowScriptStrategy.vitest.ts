@@ -99,7 +99,6 @@ function strategyParams(
         fingerprintWorkflowAgentDependencies(currentSession(), runId, options),
       ),
     logger: new TraceEmitter(),
-    parentRunId: runId,
     checkpointId: checkpointIdFor(overrides.name),
     script,
     scriptPath: '.texra/workflow-scripts/draft-strategy.mjs',

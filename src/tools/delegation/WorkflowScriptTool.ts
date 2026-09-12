@@ -568,7 +568,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         session: runScope.session,
                         runId,
                         logger: childRun.logger,
-                        parentRunId: runScope.runId,
                         checkpointId,
                         script,
                         scriptPath,

@@ -68,7 +68,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     }
     if (resumability.kind === 'none') {
       logger.warn('Run is not resumable', {
-        data: { agentType: type, runId, notice: resumability.notice },
+        data: { agentType: type, runId },
       });
       return null;
     }

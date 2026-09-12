@@ -105,12 +105,7 @@ export async function runResumeCommand(
           );
           return CliExitCode.AgentError;
         case 'finished':
-          // A run whose only durable state is a retired `flow_<id>.json` says
-          // so in its own words (R10) rather than being reported as an
-          // ordinary finished run.
-          writeTextStderr(
-            classification.notice ?? describeFollowUpFailure('finished'),
-          );
+          writeTextStderr(describeFollowUpFailure('finished'));
           return CliExitCode.Usage;
         case 'resumable':
           break;

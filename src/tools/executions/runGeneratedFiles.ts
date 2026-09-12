@@ -4,13 +4,12 @@
  * One walk, two renderings: the agent-facing `/executions/{id}/files` listing
  * in `ExecutionsTool` and the CLI's history detail view both need "what did
  * this run produce", and previously each walked the directory itself. The two
- * walks agreed on depth and on the internal-file predicate but disagreed on
- * order, on stat/readDir failure policy, and on whether an internally named
- * *directory* was descended into — so the same run listed differently
- * depending on who asked.
+ * walks agreed on depth but disagreed on order, on stat/readDir failure
+ * policy, and on how deep they descended — so the same run listed
+ * differently depending on who asked.
  *
- * A run's records live in the event table, so the only internal files left
- * beside its output are the retired checkpoints `resumability` owns.
+ * A run's records live in the event table, so everything left in the
+ * directory is the run's own output.
  */
 
 import * as path from 'node:path';
@@ -18,7 +17,6 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { runInSession } from '@agent/runtime/RunContext';
-import { isRetiredRunFile } from '@agent/storage/resumability';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { hostPort } from '@common/hostPort';
@@ -108,11 +106,6 @@ function walkRunStorage(
 
     const files: RunGeneratedFile[] = [];
     for (const [name, type] of entries) {
-      // Skip before stat and before recursion: an internally named
-      // *directory* is internal all the way down, so its children are not
-      // generated output either.
-      if (isRetiredRunFile(name)) continue;
-
       const rawRelative = relativePath ? path.join(relativePath, name) : name;
       const childPath = path.join(basePath, rawRelative);
       const entryIsDirectory = isDirectory(type);

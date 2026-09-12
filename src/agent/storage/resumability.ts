@@ -1,127 +1,18 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentTrace } from '@agent/trace';
 import { createLog } from '@logger/logUtils';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   type FlowSnapshotPayload,
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import { truncatedHexId } from '@utils/core/idHash';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getRunRecords } from './runRecords';
 
 const log = createLog('Resumability');
-
-/**
- * The retired engine's checkpoint, `flow_<id>.json` beside the run's other
- * files. It is never read: it is statted so a run whose only durable state
- * is that file can say so (R10), and renamed `.superseded` before the run's
- * first ledger row so a reverted release cannot resume from a cursor the
- * ledger has moved past. The `.superseded` file stays on disk for the D8
- * sweep.
- */
-const RETIRED_CHECKPOINT_PREFIX = 'flow_';
-const SUPERSEDED_SUFFIX = '.superseded';
-
-const retiredCheckpointPath = (runId: RunId): string =>
-  resolveRunStoragePath(runId, `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`);
-
-/**
- * The retired workflow-script checkpoint, `workflow-script-<digest>.json` in
- * the orchestrating run's directory, where the journal lived before it
- * became rows on the checkpoint aggregate. Never read: statted and renamed
- * like the flow checkpoint, because its entries are completed `agent()`
- * calls and re-executing them silently would spend money without a word.
- */
-const RETIRED_WORKFLOW_CHECKPOINT_PREFIX = 'workflow-script-';
-
-const retiredWorkflowCheckpointFile = (checkpointId: string): string =>
-  // JSON.stringify preserves lone UTF-16 surrogates as escapes, the spelling
-  // the retired key derivation used.
-  `${RETIRED_WORKFLOW_CHECKPOINT_PREFIX}${truncatedHexId(JSON.stringify(checkpointId), 64)}.json`;
-
-/** A retired checkpoint of either kind, renamed or not, is internal and never a run output. */
-export function isRetiredRunFile(name: string): boolean {
-  return (
-    (name.startsWith(RETIRED_CHECKPOINT_PREFIX) ||
-      name.startsWith(RETIRED_WORKFLOW_CHECKPOINT_PREFIX)) &&
-    (name.endsWith('.json') || name.endsWith(`.json${SUPERSEDED_SUFFIX}`))
-  );
-}
-
-/**
- * The user-visible fact a listing states for a run whose only durable state
- * is a retired checkpoint (R10).
- */
-const RETIRED_CHECKPOINT_NOTICE =
-  'This run was recorded before the run ledger and is not resumable under this release; a request it left pending (an approval, a retry, a question) is not resumable either.';
-
-/** Rename one retired file `.superseded`; false when there was none. */
-const supersedeRetiredFile = (
-  path: string,
-  session: SessionHandle,
-): Effect.Effect<boolean, Error> =>
-  // One session frame for the stat and the rename: the second read would
-  // resolve the same workspace roots the first already entered.
-  Effect.tryPromise({
-    try: () =>
-      runInSession(session, async () => {
-        if (!(await StorageFS.exists(path))) return false;
-        await StorageFS.rename(path, `${path}${SUPERSEDED_SUFFIX}`);
-        return true;
-      }),
-    catch: ensureError,
-  });
-
-/**
- * The rename, never silent: the transcript names the file, its new name, and
- * the fact that this release cannot resume it. Both loops call it before the
- * first ledger append of a fresh run.
- */
-export const supersedeLegacyFlowRecord = Effect.fn('supersedeLegacyFlowRecord')(
-  function* (
-    runId: RunId,
-    session: SessionHandle,
-    logger: AgentTrace,
-  ): Effect.fn.Return<void, Error> {
-    if (!(yield* supersedeRetiredFile(retiredCheckpointPath(runId), session)))
-      return;
-    const fileName = `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`;
-    logger.warn(
-      `A checkpoint from an earlier release (${fileName}) was found for this run. ${RETIRED_CHECKPOINT_NOTICE} It was renamed ${fileName}${SUPERSEDED_SUFFIX}.`,
-    );
-  },
-);
-
-/**
- * The same announcement for a workflow script's retired journal (R10 for
- * PR 4): the workflow run's transcript says which file, that its completed
- * `agent()` calls are not replayable under this release and will run
- * again, and what it was renamed. Called once per invocation, before the
- * journal rows are read.
- */
-export const supersedeLegacyWorkflowCheckpoint = Effect.fn(
-  'supersedeLegacyWorkflowCheckpoint',
-)(function* (
-  parentRunId: RunId,
-  checkpointId: string,
-  session: SessionHandle,
-  logger: AgentTrace,
-): Effect.fn.Return<void, Error> {
-  const fileName = retiredWorkflowCheckpointFile(checkpointId);
-  const path = resolveRunStoragePath(parentRunId, fileName);
-  if (!(yield* supersedeRetiredFile(path, session))) return;
-  logger.warn(
-    `A workflow checkpoint from an earlier release (${fileName}) was found for this workflow. It was recorded before the run ledger and is not resumable under this release: the agent() calls it had completed will run again. It was renamed ${fileName}${SUPERSEDED_SUFFIX}.`,
-  );
-});
 
 /**
  * Which durable fact was unreadable. The checkpoint's own content is never
@@ -136,8 +27,7 @@ export type ResumabilityFault =
  * What the durable run facts alone say about continuing a run: a
  * `flow.snapshot` exists on the run aggregate, nothing is left to resume, or
  * the storage itself could not be read (reported with its cause, never
- * guessed). A `none` decision carries the R10 notice when the run's only
- * durable state is a retired checkpoint.
+ * guessed).
  */
 export type ResumabilityDecision =
   | {
@@ -148,7 +38,6 @@ export type ResumabilityDecision =
   | {
       readonly kind: 'none';
       readonly outcome?: RunOutcome;
-      readonly notice?: string;
     }
   | {
       readonly kind: 'unreadable';
@@ -211,29 +100,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
       ...metaFields,
     };
   }
-  const retired = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () =>
-        StorageFS.exists(retiredCheckpointPath(runId)),
-      ),
-    catch: ensureError,
-  }).pipe(Effect.result);
-  if (retired._tag === 'Failure') {
-    const error = retired.failure;
-    log.debug(
-      `Failed to stat the retired checkpoint of ${runId}: ${toErrorMessage(error)}`,
-    );
-    return {
-      kind: 'unreadable',
-      fault: 'checkpoint-unreadable',
-      cause: `checkpoint could not be read (${toErrorMessage(error)})`,
-    };
-  }
-  return {
-    kind: 'none',
-    ...metaFields,
-    ...(retired.success ? { notice: RETIRED_CHECKPOINT_NOTICE } : {}),
-  };
+  return { kind: 'none', ...metaFields };
 });
 
 /**
