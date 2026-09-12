@@ -46,7 +46,7 @@ export abstract class BaseTool<T> implements ITool {
    * - ToolError or other Error: Returns error result with error name (stack traces excluded to save tokens)
    * - Other thrown values: Returns error result with string representation
    */
-  async call(rawInput: unknown): Promise<ToolResult> {
+  async call(rawInput: unknown, signal?: AbortSignal): Promise<ToolResult> {
     try {
       // Synchronous validation must stay synchronous: awaiting unconditionally
       // would defer execute() by a microtask, so a tool that dispatches a host
@@ -61,7 +61,7 @@ export abstract class BaseTool<T> implements ITool {
         input = await this.schema.parseAsync(rawInput);
       }
       // await is required here - without it, rejections bypass the catch block
-      return await this.execute(input);
+      return await this.execute(input, signal);
     } catch (err) {
       if (err instanceof ZodError) {
         return {
@@ -86,5 +86,11 @@ export abstract class BaseTool<T> implements ITool {
     }
   }
 
-  protected abstract execute(input: T): Promise<ToolResult>;
+  /** `signal` is the call's cancellation, forwarded from {@link call}: a
+   *  tool that waits on a person or runs an Effect program of its own passes
+   *  it to that wait; one that cannot be cancelled mid-call ignores it. */
+  protected abstract execute(
+    input: T,
+    signal?: AbortSignal,
+  ): Promise<ToolResult>;
 }

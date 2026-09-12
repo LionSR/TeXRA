@@ -364,7 +364,10 @@ export class BashTool extends defineTool({
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
 }) {
-  protected async execute(input: BashInput): Promise<ToolResult> {
+  protected async execute(
+    input: BashInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     if (
       !input.run_in_background &&
       SHELL_BACKGROUNDING_PATTERN.test(input.command)
@@ -396,9 +399,14 @@ export class BashTool extends defineTool({
       parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
       workspaceRoots().workspace;
 
-    // Request approval before executing the command.
+    // Request approval before executing the command. The call's signal is the
+    // wait's stop: aborted when this tool call is interrupted, it interrupts
+    // the request fiber so `openRequest` closes the request as cancelled,
+    // instead of leaving it approvable and launching the command after the run
+    // stopped.
     const approval = await runtime.runPromise(
       requestBashApproval({ command: input.command, cwd }),
+      { signal },
     );
 
     if (approval.action !== 'approve') {

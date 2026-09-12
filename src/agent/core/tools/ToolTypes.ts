@@ -38,7 +38,13 @@ export interface ITool {
   readonly slow?: boolean;
   readonly deferLogUntilApproval?: boolean;
   readonly streamsOutput?: boolean;
-  call(rawInput: unknown): Promise<ToolResult>;
+  /**
+   * Run the tool. `signal` is the caller's cancellation, aborted when the
+   * call is interrupted: a tool that waits on a person, or runs its work on
+   * a runtime of its own, hands it to that wait so the caller's stop reaches
+   * it. A caller with no cancellation of its own passes none.
+   */
+  call(rawInput: unknown, signal?: AbortSignal): Promise<ToolResult>;
 }
 
 /** Tool lookup abstraction — supports dependency injection and mock tools. */

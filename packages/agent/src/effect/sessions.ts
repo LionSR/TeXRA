@@ -216,6 +216,58 @@ const log = createLog('agentPackage');
  */
 const TRACE_HANDOVER_EVENTS = 512;
 
+/** What a run on a package session hears instead of a retry prompt. */
+const RETRY_DENIAL =
+  'Interactive retries are unavailable in the agent package.';
+
+/**
+ * The package's standing answer to a retry request, for the life of a
+ * session it opened: there is nobody here to ask, so a run parked on a
+ * user-retryable provider failure is denied rather than left waiting for a
+ * surface that never comes. It answers through `request.decide`, the one
+ * door every host answers through, and reads the same pending list a host
+ * renders, so the denial lands as the run's `request.decided` row and
+ * nothing else in the protocol is special-cased for this package.
+ */
+function denyRetryRequests(handle: RuntimeSessionHandle): Effect.Effect<void> {
+  /** The requests this listener has answered, dropped as the fold drops
+   *  them: a level published before the decision lands lists the request
+   *  again, and answering twice is refused as already settled. */
+  const answered = new Set<string>();
+  return Stream.runForEach(handle.viewChanges, (level) => {
+    const live = new Set(level.requests.map((pending) => pending.requestId));
+    for (const requestId of answered) {
+      if (!live.has(requestId)) answered.delete(requestId);
+    }
+    return Effect.forEach(
+      level.requests.filter(
+        (pending) =>
+          pending.payload.kind === 'retry' && !answered.has(pending.requestId),
+      ),
+      (pending) => {
+        answered.add(pending.requestId);
+        return handle.requests
+          .request({
+            kind: 'request.decide',
+            runId: pending.runId,
+            requestId: pending.requestId,
+            decision: { action: 'deny', reason: RETRY_DENIAL },
+          })
+          .pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                log.warn(
+                  `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
+                );
+              }),
+            ),
+          );
+      },
+      { discard: true },
+    );
+  });
+}
+
 /**
  * The refusal the package states from the caller's own input, before
  * anything of the process is touched: it has no approval channel, so a tool
@@ -513,25 +565,54 @@ function sessionOf(
 }
 
 /** The package's session policy over the process's owner: an ephemeral
- *  transcript store and one headless host for the session's life. */
+ *  transcript store and, on the sessions it opens, the retry denial that
+ *  stands in for the person a package session has no way to ask. */
 export function makeSessions(
   runtime: AgentRuntime,
 ): Context.Service.Shape<typeof Sessions> {
   const services = processServicesLayer(runtime.services);
+  /** The retry listener of each session this package opened, by storage
+   *  root, ended with the session it answers for. */
+  const deniers = new Map<string, Fiber.Fiber<void>>();
   return {
     open: (roots?: WorkspaceRoots) =>
-      Effect.map(
-        openSessionEffect({
-          roots: roots ?? runtime.roots,
+      Effect.gen(function* () {
+        const resolved = roots ?? runtime.roots;
+        // A root a host already opened keeps that host's decision delivery:
+        // its UI prompts for the retries of every run on the session, this
+        // package's included. Only a session opened here gets the denial.
+        const hostOpened = (yield* listOwnedSessions()).some(
+          (other) => other.roots.storage === resolved.storage,
+        );
+        const handle = yield* openSessionEffect({
+          roots: resolved,
           transcriptMode: {
             kind: 'ephemeral',
             reason: 'npm package consumer',
           },
-        }),
-        (handle) => sessionOf(handle, services),
-      ),
+        });
+        if (!hostOpened && !deniers.has(resolved.storage)) {
+          deniers.set(
+            resolved.storage,
+            yield* Effect.forkDetach(denyRetryRequests(handle)),
+          );
+        }
+        return sessionOf(handle, services);
+      }),
     close: (roots?: WorkspaceRoots, signal?: AbortSignal) =>
-      closeOwnedSession((roots ?? runtime.roots).storage, signal),
+      Effect.gen(function* () {
+        const root = (roots ?? runtime.roots).storage;
+        const report = yield* closeOwnedSession(root, signal);
+        // A close that could not settle leaves the session open with its
+        // runs live, so the listener stays with them; the close that finally
+        // settles ends it.
+        if (report.settled) {
+          const denier = deniers.get(root);
+          deniers.delete(root);
+          if (denier) yield* Fiber.interrupt(denier);
+        }
+        return report;
+      }),
     list: Effect.map(listOwnedSessions(), (handles) =>
       handles.map((handle) => sessionOf(handle, services)),
     ),

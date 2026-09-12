@@ -8,7 +8,10 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
@@ -104,10 +107,7 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const flowLabel =
-    run.flow?.round == null
-      ? undefined
-      : formatRoundStageLabel({ index: run.flow.round });
+  const flowLabel = formatFlowPositionLabel(flowPosition(run.flow));
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({

@@ -478,7 +478,10 @@ Commands:
 pause/complete only affect autonomous goals; with no goal running they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
 }) {
-  protected execute(input: PlanToolInput): Promise<ToolResult> {
+  protected execute(
+    input: PlanToolInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     const ports: PlanPorts = {
       contexts: getCurrentToolContexts(),
       session: currentSession(),
@@ -486,6 +489,9 @@ pause/complete only affect autonomous goals; with no goal running they return gu
         operation(),
       ),
     };
-    return effectRuntime().runPromise(planCommand(ports, input));
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
+    return effectRuntime().runPromise(planCommand(ports, input), { signal });
   }
 }

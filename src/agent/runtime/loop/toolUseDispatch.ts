@@ -382,6 +382,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const invoked = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
+            // This call's stop, bridged from the fiber: the scope aborts it
+            // when the call is interrupted. It reaches the tool as an
+            // argument as well as through the call context, because a tool
+            // that runs an Effect program of its own starts a root fiber
+            // this one does not own, and the signal is what reaches that
+            // root's waits.
             const signal = yield* Effect.abortSignal;
             return yield* Effect.tryPromise({
               try: () =>
@@ -405,7 +411,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                         },
                       },
                     },
-                    () => tool.call(parsedInput),
+                    () => tool.call(parsedInput, signal),
                   ),
                 ),
               catch: (cause) => cause,

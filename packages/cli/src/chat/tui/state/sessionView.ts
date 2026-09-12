@@ -26,8 +26,12 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { isInFlightPhase } from '@shared/runs/runStatus';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -135,17 +139,35 @@ export function anyRunRunning(
   );
 }
 
-/** The nearest ancestor's round, for a child's location: the loop's own
- *  coordinate off `RunView.flow`, which is what the fold now carries. */
-export function ancestorRoundLabel(
+/**
+ * The nearest ancestor's position, for a child's location: the loop's own
+ * coordinate off `RunView.flow`, and the open phase for a workflow-script
+ * ancestor, which drives no loop of its own — its child loop is terminal on
+ * the first turn, so it never writes a `flow.step` and its `flow` stays null.
+ */
+export function ancestorPositionLabel(
   view: SessionView,
   runId: RunId,
 ): string | undefined {
   const ancestors = runViewOf(view, runId)?.ancestors ?? [];
-  // Root first in the view; the nearest ancestor's round wins.
+  // Root first in the view; the nearest ancestor that has a position wins.
   for (const ancestor of ancestors.toReversed()) {
-    const round = runViewOf(view, ancestor.id)?.flow?.round;
-    if (round != null) return formatRoundStageLabel({ index: round });
+    const run = runViewOf(view, ancestor.id);
+    if (run === undefined) continue;
+    const label =
+      formatFlowPositionLabel(flowPosition(run.flow)) ??
+      openWorkflowPhaseLabel(run);
+    if (label !== undefined) return label;
   }
   return undefined;
+}
+
+/** The phase a workflow-script run has opened most recently, spelled by the
+ *  one owner of phase-heading copy. Only a workflow-script run carries a run
+ *  model, so every other run has no phase to name. */
+function openWorkflowPhaseLabel(run: RunView): string | undefined {
+  const opened = run.transcript.run?.phases.findLast((phase) => phase.opened);
+  return opened === undefined
+    ? undefined
+    : formatWorkflowPhaseHeading(opened.heading);
 }

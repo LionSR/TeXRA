@@ -95,7 +95,13 @@ export class SendToTerminalTool extends defineTool({
   description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
 }) {
-  protected execute(input: SendToTerminalInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(sendToTerminal(input));
+  protected execute(
+    input: SendToTerminalInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
+    return effectRuntime().runPromise(sendToTerminal(input), { signal });
   }
 }

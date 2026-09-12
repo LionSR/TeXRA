@@ -583,15 +583,28 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
-  it('leaves the flow slot empty until the loop reaches a round', () => {
+  it('shows a tool-use run its turn, not the round it never advances', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: RUN_PHASE.RUNNING,
-        flow: { family: 'toolUse', step: 'turn.begin', turn: 2 },
+        // What the loop writes: the round stays at the zero it opened with.
+        flow: { family: 'toolUse', step: 'turn.begin', round: 0, turn: 2 },
       }),
     );
 
+    expect(leftTexts(display)).toContain('t3');
     expect(leftTexts(display)).not.toContain('r1');
+  });
+
+  it('leaves the flow slot empty until the loop reaches a coordinate', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: RUN_PHASE.RUNNING,
+        flow: { family: 'toolUse', step: 'waiting' },
+      }),
+    );
+
+    expect(leftTexts(display).join(' ')).not.toMatch(/\b[rt]\d/);
   });
 
   it('reports the window the model handler served, not a registry lookup', () => {

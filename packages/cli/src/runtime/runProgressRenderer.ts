@@ -27,7 +27,10 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -272,9 +275,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private formatLine(now: number): string {
     const root = this.root();
     if (!root) return '';
-    // The loop's own coordinate off the fold's `flow`; a run that has not
-    // stepped yet carries none.
-    const round = root.flow?.round ?? undefined;
+    // The loop's own coordinate off the fold's `flow`, in the one its family
+    // counts; a run that has not stepped yet carries none.
+    const position = flowPosition(root.flow);
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const plannedRounds =
@@ -282,12 +285,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         ? getAgent(agentName, AgentCategory.Workflow)?.rounds
         : undefined;
     const parts: string[] = [];
-    if (round !== undefined) {
+    if (position !== undefined) {
       parts.push(
-        `[${formatRoundStageLabel({
-          index: round,
-          ...(isMultiRound(plannedRounds) ? { total: plannedRounds } : {}),
-        })}]`,
+        `[${formatFlowPositionLabel(
+          position,
+          isMultiRound(plannedRounds) ? plannedRounds : undefined,
+        )}]`,
       );
     }
     const subject = [agentName, formatInputLabel(root.inputFiles)]
@@ -296,7 +299,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const phase = livePhaseText(root);
     parts.push(subject || phase || 'Running');
     if (subject && phase && phase !== 'Running') parts.push(phase);
-    if (round === undefined && isMultiRound(plannedRounds)) {
+    if (position === undefined && isMultiRound(plannedRounds)) {
       parts.push(`${plannedRounds} rounds`);
     }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;

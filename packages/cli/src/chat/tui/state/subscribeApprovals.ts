@@ -95,6 +95,9 @@ export function createTuiHostInteractions(
   // lifetime. Keeping the queue session-owned prevents stale work leaking
   // across disposed hosts or tests.
   const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
+  /** Set by `dispose`: an attachment that is gone answers for nobody, so its
+   *  queued credential work must not reach the user's settings. */
+  let disposed = false;
   /** Requests this attachment has already acted on, pruned as they settle. */
   const acted = new Set<string>();
   /** Retries this host switched without asking, which get the notification. */
@@ -124,11 +127,25 @@ export function createTuiHostInteractions(
     }
     void (async () => {
       try {
-        await switchRetryToPersonalCredentials(
+        const switched = await switchRetryToPersonalCredentials(
           permission,
           cliRetryQuotaRoute(permission),
-          { commitQueue: retryCredentialCommitQueue, stores },
+          {
+            commitQueue: retryCredentialCommitQueue,
+            stores,
+            // Re-read at the commit itself: the key lookup and the queue slot
+            // ahead of this one both take time, and a retry another surface
+            // settled meanwhile must not change the user's access settings.
+            isPending: () => !disposed && pendingRetry(requestId) !== undefined,
+          },
         );
+        if (!switched) {
+          logWarning(
+            'cli.tui',
+            `Request ${requestId} was settled elsewhere before its credential switch committed: no access setting was changed.`,
+          );
+          return;
+        }
         // Switching without asking also skips the modal's quota warning, and
         // the switch persists the plan preference as disabled. Announce it
         // only after the switch commits: a failure rolls the preference back,
@@ -321,6 +338,7 @@ export function createTuiHostInteractions(
       host.emitApprovalBypassState(update);
     },
     dispose() {
+      disposed = true;
       unsubscribe();
       releaseCapability();
     },
@@ -529,7 +547,9 @@ async function applyRetryCredentialCommit(
  * key, then turn off the preference that routed onto the exhausted one.
  * Throws when the switch cannot be made, with every setting it touched put
  * back, so the caller can say so instead of retrying on a route that has not
- * changed.
+ * changed. Returns false, having written nothing, when `isPending` says the
+ * request is gone by the time the commit slot is this switch's: access
+ * settings are the user's, not one dead request's.
  */
 async function switchRetryToPersonalCredentials(
   permission: RetryPermission,
@@ -537,8 +557,12 @@ async function switchRetryToPersonalCredentials(
   options: {
     readonly commitQueue: PQueue;
     readonly stores: TuiApprovalStores;
+    /** Whether the request this switch serves is still pending on a live
+     *  attachment. Read inside the commit slot, immediately before the first
+     *  persistent write. */
+    readonly isPending: () => boolean;
   },
-): Promise<void> {
+): Promise<boolean> {
   const requestedProvider = permission.errorDetails?.provider;
   if (!requestedProvider || !isApiProvider(requestedProvider)) {
     throw new Error(
@@ -573,32 +597,41 @@ async function switchRetryToPersonalCredentials(
     : undefined;
   if (codingPlanId && codingPlanRuntime) {
     const runtime = codingPlanRuntime;
-    await options.commitQueue.add(async () => {
-      const previousCodingPlanEnabled = runtime.getEnabled();
-      try {
-        await setCliCodingPlanSubscription(codingPlanId, false);
-      } catch (error) {
-        throwWithRollbackFailures(
-          error,
-          await rollbackChangedSettings([
-            codingPlanRollbackConfig(
-              runtime,
-              previousCodingPlanEnabled,
-              options.stores.state,
-            ),
-          ]),
+    return (
+      (await options.commitQueue.add(async () => {
+        if (!options.isPending()) return false;
+        const previousCodingPlanEnabled = runtime.getEnabled();
+        try {
+          await setCliCodingPlanSubscription(codingPlanId, false);
+        } catch (error) {
+          throwWithRollbackFailures(
+            error,
+            await rollbackChangedSettings([
+              codingPlanRollbackConfig(
+                runtime,
+                previousCodingPlanEnabled,
+                options.stores.state,
+              ),
+            ]),
+          );
+        }
+        await applyRetryCredentialCommit(
+          route?.id,
+          codingPlanRollbackConfig(
+            runtime,
+            previousCodingPlanEnabled,
+            options.stores.state,
+          ),
         );
-      }
-      await applyRetryCredentialCommit(
-        route?.id,
-        codingPlanRollbackConfig(
-          runtime,
-          previousCodingPlanEnabled,
-          options.stores.state,
-        ),
-      );
-    });
-    return;
+        return true;
+      })) === true
+    );
   }
-  await options.commitQueue.add(() => applyRetryCredentialCommit(route?.id));
+  return (
+    (await options.commitQueue.add(async () => {
+      if (!options.isPending()) return false;
+      await applyRetryCredentialCommit(route?.id);
+      return true;
+    })) === true
+  );
 }

@@ -31,7 +31,10 @@ import {
   SUBAGENT,
 } from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/runs/runStatus';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   assertNever,
@@ -324,14 +327,15 @@ function locationSegment(
   };
 }
 
-// One status-bar slot carries the loop position this run is at (mirrors
-// the SubagentList row's `flowLabel`).
+// One status-bar slot carries the loop position this run is at, in the
+// coordinate its family counts (mirrors the SubagentList row's `flowLabel`).
 function flowSegment(
   flow: RunView['flow'] | undefined,
 ): StatusBarSegment | undefined {
-  if (flow?.round == null) return undefined;
+  const text = formatFlowPositionLabel(flowPosition(flow));
+  if (text === undefined) return undefined;
   return {
-    text: formatRoundStageLabel({ index: flow.round }),
+    text,
     color: 'dim',
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
   };

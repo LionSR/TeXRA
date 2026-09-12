@@ -124,7 +124,13 @@ Use this when the task has several reasonable paths and continuing without the u
 The tool returns a JSON object whose keys are the original question texts and whose values are the selected option labels, arrays of labels for multi-select questions, or free-text answers.`,
   schema: AskUserQuestionInputSchema,
 }) {
-  protected execute(input: AskUserQuestionInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(askUserQuestion(input));
+  protected execute(
+    input: AskUserQuestionInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
+    return effectRuntime().runPromise(askUserQuestion(input), { signal });
   }
 }

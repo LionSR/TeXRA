@@ -533,11 +533,17 @@ export class ClaudeAgentTool extends defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
 }) {
-  protected execute(input: ClaudeAgentInput): Promise<ToolResult> {
+  protected execute(
+    input: ClaudeAgentInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     // The one run edge of this tool (PRD run-edge category b): the dispatch
     // below is an Effect program, run once here on the process runtime. A
     // collaborator's rejection is re-raised as its own cause; a `ToolError`
-    // stays a typed failure and `runPromise` rejects with it.
+    // stays a typed failure and `runPromise` rejects with it. The call's
+    // signal is its stop: aborted when this tool call is interrupted, it
+    // interrupts the fiber so a pending bash approval closes as cancelled
+    // instead of staying approvable after the run stopped.
     return effectRuntime().runPromise(
       reraiseAgentCliCallFailure(
         this.run(
@@ -547,6 +553,7 @@ export class ClaudeAgentTool extends defineTool({
           AsyncLocalStorage.bind(requestBashApproval),
         ),
       ),
+      { signal },
     );
   }
 

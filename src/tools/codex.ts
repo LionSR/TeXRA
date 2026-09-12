@@ -479,11 +479,17 @@ export class CodexTool extends defineTool({
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
-  protected execute(input: CodexInput): Promise<ToolResult> {
+  protected execute(
+    input: CodexInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     // The one run edge of this tool (PRD run-edge category b): the dispatch
     // below is an Effect program, run once here on the process runtime. A
     // collaborator's rejection is re-raised as its own cause; a `ToolError`
-    // stays a typed failure and `runPromise` rejects with it.
+    // stays a typed failure and `runPromise` rejects with it. The call's
+    // signal is its stop: aborted when this tool call is interrupted, it
+    // interrupts the fiber so a pending bash approval closes as cancelled
+    // instead of staying approvable after the run stopped.
     return effectRuntime().runPromise(
       reraiseAgentCliCallFailure(
         this.run(
@@ -493,6 +499,7 @@ export class CodexTool extends defineTool({
           AsyncLocalStorage.bind(requestBashApproval),
         ),
       ),
+      { signal },
     );
   }
 
