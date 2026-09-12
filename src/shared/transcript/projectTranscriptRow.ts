@@ -118,9 +118,9 @@ const STREAMING_TEXT_ROW_KIND = {
  * `ErrorLogData` so a schema rename is a compile error here rather than a
  * field that quietly stops rendering.
  *
- * `streamDiagnostics` and `partialText` are deliberately absent: they are a
- * retry surface's material, not a transcript row's. `RetryRequestPanel` reads
- * them from the approval request's own payload, never from a projected row.
+ * `partialText` is deliberately absent: it is a retry surface's material,
+ * not a transcript row's. `RetryRequestPanel` reads it from the approval
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',

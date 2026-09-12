@@ -26,7 +26,10 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
-import { createTestLaunchContext } from './launchContextTestUtils';
+import {
+  createTestLaunchContext,
+  testModelInfo,
+} from './launchContextTestUtils';
 
 let counter = 0;
 
@@ -110,9 +113,6 @@ describe('terminal result event', () => {
         output: { category: 'toolUse' },
       });
       expect(results[0].error).toBeUndefined();
-      // One disposal owner for the run's model handler: the cell closes
-      // whichever handler is live when the run ends.
-      expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
     } finally {
       clearRunStatusForTest(runStatus, ctx.runScope.runId);
     }
@@ -222,7 +222,10 @@ describe('terminal result event', () => {
   it('emits a failed result with usage on an unexpected throw after a round', async () => {
     const { ctx, runStatus, results } = setupResultCase();
     // Record one round of usage so the failed result still carries totals.
-    await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
+    await ctx.usageMonitor.recordUsage(
+      AgentRunStateSnapshotSchema.parse({}),
+      testModelInfo,
+    );
     try {
       await expect(
         Effect.runPromise(runFlow(ctx, explodedRun)),

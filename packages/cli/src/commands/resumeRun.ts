@@ -173,7 +173,7 @@ export async function runResumeCommand(
           executeWorkflow: async (
             workflowConfig,
             runId,
-            modelHandlerCompatibilityKey,
+            modelCompatibilityKey,
           ) => {
             // Fast-fail on an unusable destination before the run restarts;
             // `executeCliWorkflowConfig` reads the same persisted `cli` block.
@@ -191,7 +191,7 @@ export async function runResumeCommand(
                 buildHeadlessRunContext(context),
                 {
                   runId,
-                  modelHandlerCompatibilityKey,
+                  modelCompatibilityKey,
                   recoveryInputIsDurable:
                     await workflowRecoveryInputsAreDurable(
                       workflowConfig,

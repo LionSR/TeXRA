@@ -30,9 +30,10 @@ const binaryPath = process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY?.trim()
   : defaultValidationBinaryPath;
 const validationRoot = path.dirname(path.dirname(binaryPath));
 const validationResourcesPath = path.join(validationRoot, 'resources');
-const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
-const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
+const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
+const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = validationFlagContent.trim();
 const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
@@ -738,10 +739,7 @@ function validateRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-run-'));
   try {
     const inputPath = path.join(cwd, 'paper.tex');
-    const validationFlagPath = path.join(
-      cwd,
-      '.texra-internal-validation-model-handler',
-    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
     writeFileSync(inputPath, '\\section{Input}\nOriginal text.\n');
     writeFileSync(validationFlagPath, validationFlagContent);
 
@@ -841,10 +839,7 @@ function validateToolUseAgentRunCommand() {
   try {
     const promptPath = path.join(cwd, 'review-prompt.md');
     const contextPath = path.join(cwd, 'pr.diff');
-    const validationFlagPath = path.join(
-      cwd,
-      '.texra-internal-validation-model-handler',
-    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
     writeFileSync(
       promptPath,
       'Review this change for mathematical and physical correctness.\n',
@@ -904,10 +899,7 @@ function validateWorkflowScriptAgentRunCommand() {
     const home = path.join(cwd, 'home');
     const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
     const customAgents = path.join(globalStorage, 'custom_agents');
-    const validationFlagPath = path.join(
-      cwd,
-      '.texra-internal-validation-model-handler',
-    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
     mkdirSync(customAgents, { recursive: true });
     writeFileSync(
       path.join(globalStorage, 'state.json'),
@@ -1046,10 +1038,7 @@ function validateMultiAgentRunCommand() {
   const validationPreset = 'software-engineer';
   try {
     const inputPath = path.join(cwd, 'math-problem.md');
-    const validationFlagPath = path.join(
-      cwd,
-      '.texra-internal-validation-model-handler',
-    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
     writeFileSync(
       inputPath,
       'Problem: Prove that if n is odd, then n^2 is congruent to 1 modulo 8.\n',

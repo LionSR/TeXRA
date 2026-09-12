@@ -71,7 +71,6 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-import { testModelCell } from './modelCellTestUtils';
 import {
   createRecordingHost,
   recordTraceEvents,
@@ -253,7 +252,7 @@ function testBoundModel(): BoundModel {
   return {
     modelId: 'test-model',
     config: buildTestModelConfig(),
-    compatibilityKey: 'ModelHandlerDeepSeek',
+    compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
     usageProvider: 'openai',
@@ -444,7 +443,6 @@ function agentRunTestLayer(init: LoopInit) {
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),
         usageMonitor: new UsageMonitor(
-          testModelCell({ config: buildTestModelConfig() }),
           { logger, runId: init.runId, runStageId: undefined },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),
@@ -1032,7 +1030,7 @@ describe('a token-limited reflection response', () => {
 
   it.effect('joins a continued response through the session text policy', () =>
     Effect.gen(function* () {
-      const connectResponseText = vi.fn(async () => '\n');
+      const connectResponseText = vi.fn(() => Effect.succeed('\n'));
       const session = createProcessSession({
         responseTextProcessing: {
           normalizeResponseText: (text: string) => text,

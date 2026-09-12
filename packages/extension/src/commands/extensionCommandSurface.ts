@@ -40,6 +40,7 @@ import {
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -56,6 +57,7 @@ export function createExtensionCommandActions(
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -102,8 +104,12 @@ export function createExtensionCommandActions(
     showProgressView: progressShowProgressView,
     setApiKey: (provider) =>
       apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
+    // The wizard is an Effect program; the host entry's runtime, threaded in
+    // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
-      agentHandleCreateAgentWithAI(context, category, secrets),
+      runtime.runPromise(
+        agentHandleCreateAgentWithAI(context, category, secrets),
+      ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>

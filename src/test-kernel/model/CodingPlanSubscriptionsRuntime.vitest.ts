@@ -3,7 +3,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { resolveProxyEndpoint } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { resolveGlmRoute } from '@model/glmRouting';
 import {
@@ -131,7 +131,7 @@ describe('coding-plan subscription runtime', () => {
       usageRoute: undefined,
     },
   ])(
-    'keeps the canonical route, proxy endpoint, and subscription usage aligned for $name',
+    'keeps the canonical route, bound endpoint, and subscription usage aligned for $name',
     async ({
       useOpenRouter,
       providerEndpoint,
@@ -154,18 +154,9 @@ describe('coding-plan subscription runtime', () => {
         baseUrl: modelBaseUrl,
         useOpenRouter,
       });
-      const proxy = resolveProxyEndpoint(
-        modelBaseUrl
-          ? {
-              route: 'custom',
-              provider: ModelProvider.GLM,
-              url: modelBaseUrl,
-            }
-          : {
-              route: 'direct',
-              provider: ModelProvider.GLM,
-              useOpenRouter,
-            },
+      const endpoint = resolveRouteEndpoint(
+        { name: 'glm52', provider: ModelProvider.GLM, baseUrl: modelBaseUrl },
+        useOpenRouter,
       );
 
       expect(canonical).toEqual({
@@ -173,10 +164,8 @@ describe('coding-plan subscription runtime', () => {
         baseUrl,
         ...(usageRoute && { usageRoute }),
       });
-      expect(proxy).toMatchObject({ baseUrl });
-      expect('usageRoute' in proxy ? proxy.usageRoute : undefined).toBe(
-        usageRoute,
-      );
+      expect(endpoint).toMatchObject({ baseUrl });
+      expect(endpoint.usageRoute).toBe(usageRoute);
       await expect(
         activeSubscriptionUsageRoute('glm52', platform().secrets),
       ).resolves.toBe(usageRoute);

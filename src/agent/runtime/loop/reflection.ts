@@ -339,7 +339,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     turn: 0,
     continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
+    modelCompatibilityKey: bound.compatibilityKey,
     lastError: null,
     pendingRetry: null,
     messages: [],
@@ -375,7 +375,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         round: 0,
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(),
       }),
@@ -699,14 +699,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       },
     );
     if (text) {
-      const connector = yield* Effect.tryPromise({
-        try: () =>
-          session.responseTextProcessing.connectResponseText(
-            workspace.assembly.lastResponse.slice(-K_SLICE),
-            text.slice(0, K_SLICE),
-          ),
-        catch: ensureError,
-      });
+      const connector =
+        yield* session.responseTextProcessing.connectResponseText(
+          workspace.assembly.lastResponse.slice(-K_SLICE),
+          text.slice(0, K_SLICE),
+        );
       yield* writeOutputFragment(
         location,
         workspace.assembly.accumulatedOutput ? connector + text : text,
@@ -1105,11 +1102,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   outcome.responseTimeMs,
               },
             };
+            // Priced against the binding that served the round: a manual
+            // retry may have rebound the model inside the invoker.
+            const served = yield* SynchronizedRef.get(run.model);
             yield* Effect.tryPromise({
               try: () =>
                 run.inScope(() =>
                   run.usageMonitor.recordUsage(
                     usageSnapshot(state, outcome.usage),
+                    served,
                   ),
                 ),
               catch: ensureError,

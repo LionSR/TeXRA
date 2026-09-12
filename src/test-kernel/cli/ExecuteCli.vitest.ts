@@ -264,7 +264,7 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       turn: 0,
       continuationIndex: 0,
       modelId: 'deepseekT',
-      modelHandlerCompatibilityKey: null,
+      modelCompatibilityKey: null,
       lastError: null,
       pendingRetry: null,
     },

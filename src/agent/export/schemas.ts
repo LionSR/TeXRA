@@ -6,8 +6,7 @@
  * format spec (markdown, LaTeX) and text view consumes. The HTML export path uses
  * `assembleTrace` instead. They are host-neutral and carry no
  * provider-specific types — the command-layer export package imports these
- * without pulling in `openai/*`, `@agent/modelHandlers/openai/*`, or
- * `@google/genai`.
+ * without pulling in `openai/*` or `@google/genai`.
  *
  * These types describe an in-process representation rather than a validation
  * boundary. The one cross-module dependency is the canonical web-search

@@ -22,6 +22,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   nodeProcesses,
@@ -116,6 +117,7 @@ export async function initializeElectronPlatform(
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
+  installLongRunningModelDispatcher();
   // The secrets and global state stores below open on this runtime, so the
   // process services bind them through thunks over this root's own locals,
   // resolved at first use — after this function has assigned them.

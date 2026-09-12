@@ -175,14 +175,6 @@ export function logWebSearch(
   trace.domain({ key: 'webSearch', data, stageId });
 }
 
-export function logWebFetch(
-  trace: AgentTrace,
-  data: unknown,
-  stageId?: string,
-): void {
-  trace.domain({ key: 'webFetch', data, stageId });
-}
-
 /** Files-loaded card with full {@link FileListEntry} entries. */
 export function logFilesLoaded(
   trace: AgentTrace,

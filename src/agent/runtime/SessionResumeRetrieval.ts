@@ -12,7 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { ModelHandlerCompatibilityKey, RunId } from '@shared/schemas';
+import type { ModelCompatibilityKey, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
 const logger = createLog('SessionResumeRetrieval');
@@ -22,7 +22,7 @@ interface ResumeIdentity {
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
   /** The conversation format the run's rows are in. */
-  readonly modelHandlerCompatibilityKey: ModelHandlerCompatibilityKey | null;
+  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
 }
 
 export type ToolUseResumeData = ResumeIdentity & { readonly type: 'toolUse' };
@@ -88,8 +88,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
       type,
       runId,
       agentConfig: { ...agentConfig, model: snapshot.runtime.modelId },
-      modelHandlerCompatibilityKey:
-        snapshot.runtime.modelHandlerCompatibilityKey,
+      modelCompatibilityKey: snapshot.runtime.modelCompatibilityKey,
     };
   },
 );

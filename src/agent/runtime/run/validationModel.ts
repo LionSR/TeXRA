@@ -1,10 +1,26 @@
 /**
- * The deterministic model the package-validation gate runs against
- * (`TEXRA_INTERNAL_VALIDATION_MODEL_HANDLER=1`): the same canned turns the
- * validation handler serves the reflection family, as an llm `Model` for the
- * run loop. The provider boundary is the only deterministic piece; the CLI
- * and `executeAgent` path stays real.
+ * The deterministic model the package-validation gate runs against, and the
+ * CI-only gate that selects it.
+ *
+ * Package validation (`pnpm --filter @texra-ai/cli run build` with
+ * `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`) swaps the real provider
+ * models for this canned llm `Model` at the provider boundary, so a
+ * `texra run` smoke test exercises the full CLI + executeAgent path without
+ * reaching a live model API. The provider boundary is the only deterministic
+ * piece; the CLI and `executeAgent` path stays real.
+ *
+ * All env reads use direct `process.env.<NAME>` property access (never
+ * computed keys) so esbuild's `define` (`packages/cli/scripts/build-bundle.mjs`)
+ * inlines them at bundle time. In the default CLI build the include flag is
+ * defined to `''`, so {@link shouldUseInternalValidationModel} constant-folds
+ * to `return false`, and the build aliases this whole module to a stub so no
+ * canned output ships. The reads stay lazy (evaluated at call time, not module
+ * load) so they happen after `initPlatform()` and can be overridden between
+ * test cases.
  */
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+
 import { Effect, Stream } from 'effect';
 import type {
   Model,
@@ -15,12 +31,12 @@ import type {
 } from '@llm/turn';
 import type { ModelConfig } from 'llm-zoo';
 
-export const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
+const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 
-This document was produced by the internal TeXRA CLI validation model handler.
+This document was produced by the internal TeXRA CLI validation model.
 `;
 
-export const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
+const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
   name: 'cli-workflow-script-validation-v2',
   description: 'Solve three mathematical problems through the CLI',
   phases: [{ title: 'Solve' }],
@@ -48,7 +64,7 @@ const results = await parallel([
 ])
 return { solutions: results.map((result) => result?.structured ?? null) }`;
 
-export function mathematicalValidationOutput(prompt: string): {
+function mathematicalValidationOutput(prompt: string): {
   answer: string;
   derivation: string;
   check: string;
@@ -78,6 +94,39 @@ export function mathematicalValidationOutput(prompt: string): {
     check:
       'Substitution satisfies every state equation and uses absorbing values 1 after HHT and 0 after THH.',
   };
+}
+
+/**
+ * True only inside a guarded package-validation run: the include flag is set,
+ * the per-run env var is `1`, `CI=1`, and an absolute flag file holds the
+ * expected sentinel. Any partial/forged activation throws rather than
+ * silently falling through to real models.
+ */
+export function shouldUseInternalValidationModel(): boolean {
+  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
+    return false;
+
+  const envKey = process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV ?? '';
+  const flagEnvKey =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '';
+  const expectedFlagContent =
+    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT ?? '';
+
+  if (process.env[envKey] !== '1') return false;
+
+  const flagPath = process.env[flagEnvKey];
+  if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
+    throw new Error(
+      `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
+    );
+  }
+
+  // An unreadable flag file fails with the filesystem error, which names it.
+  if (readFileSync(flagPath, 'utf8').trim() !== expectedFlagContent) {
+    throw new Error(`${envKey}=1 received an invalid validation flag file.`);
+  }
+
+  return true;
 }
 
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';

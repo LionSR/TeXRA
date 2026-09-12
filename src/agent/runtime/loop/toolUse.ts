@@ -26,10 +26,7 @@ import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuati
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import {
-  activeModelHandlerCompatibilityKey,
-  resolveModelHandlerCompatibilityKey,
-} from '@agent/runtime/ModelFactory';
+import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage } from '@agent/trace';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
@@ -86,7 +83,6 @@ const NOT_RESUMABLE_MESSAGE =
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
-  readonly modelHandler: { readonly supportsManualCompaction: boolean };
   interrupt(): void;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
@@ -150,9 +146,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const previous = toolUseFlowState(state);
     return {
       modelId: state.modelId ?? previous?.modelId,
-      ...(state.modelHandlerCompatibilityKey === null
+      ...(state.modelCompatibilityKey === null
         ? {}
-        : { modelHandlerCompatibilityKey: state.modelHandlerCompatibilityKey }),
+        : { modelCompatibilityKey: state.modelCompatibilityKey }),
       shouldSkipCycle: false,
       stateSlices: {
         runStateSnapshot: {
@@ -198,9 +194,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
-    // Every bound model can summarize its own history through the run's
-    // compaction step, so the manual command is always available.
-    modelHandler: { supportsManualCompaction: true },
     interrupt(): void {
       run.interrupt();
       session.interactions.cancel({ runId, cause: 'Run interrupted.' });
@@ -219,7 +212,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (current.modelId === model) return undefined;
       const nextConfig = getRuntimeModelConfig(model);
       if (!nextConfig) return `Model ${model} is not registered`;
-      const nextKey = resolveModelHandlerCompatibilityKey(
+      const nextKey = resolveModelCompatibilityKey(
         nextConfig,
         run.stores.globalState,
       );
@@ -300,7 +293,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           phase: state.phase ?? 'model.ready',
           runtime: {
             modelId: next.modelId,
-            modelHandlerCompatibilityKey: next.compatibilityKey,
+            modelCompatibilityKey: next.compatibilityKey,
           },
         }),
       ]);
@@ -391,7 +384,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(fresh(bound)),
       }),
@@ -413,7 +406,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     turn: 0,
     continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
+    modelCompatibilityKey: bound.compatibilityKey,
     lastError: null,
     pendingRetry: null,
     messages: [],
@@ -671,10 +664,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
         totalResponseTimeMs += outcome.responseTimeMs;
+        // Priced against the binding that served the round: a manual retry
+        // may have rebound the model inside the invoker.
+        const served = yield* SynchronizedRef.get(run.model);
         yield* Effect.tryPromise({
           try: () =>
             run.inScope(() =>
-              run.usageMonitor.recordUsage(usageSnapshot(state, outcome.usage)),
+              run.usageMonitor.recordUsage(
+                usageSnapshot(state, outcome.usage),
+                served,
+              ),
             ),
           catch: ensureError,
         });

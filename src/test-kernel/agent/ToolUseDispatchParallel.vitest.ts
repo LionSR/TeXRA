@@ -61,7 +61,6 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
-import { testModelCell } from './modelCellTestUtils';
 import { testModelInfo } from './runtime/launchContextTestUtils';
 
 setupPlatform({ workspacePath: '/workspace' });
@@ -153,7 +152,7 @@ function boundModel(): BoundModel {
   return {
     modelId: 'gpt54',
     config: MODEL_CONFIGS.gpt54,
-    compatibilityKey: 'ModelHandlerOpenAI',
+    compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
     usageProvider: 'openai',
@@ -188,7 +187,7 @@ const freshState = (): RunState => ({
   turn: 0,
   continuationIndex: 0,
   modelId: 'gpt54',
-  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
   messages: [],
@@ -248,7 +247,6 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
       { logger, runId, runStageId: undefined },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),

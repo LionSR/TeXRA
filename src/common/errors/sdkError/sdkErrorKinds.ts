@@ -1,8 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
-import { ExhaustionReasonSchema, type ExhaustionReason } from '@shared/schemas';
-import { isFiniteNumber, isObject, isString } from '@utils/core';
+import { isFiniteNumber } from '@utils/core';
 
-export type SdkErrorKind =
+type SdkErrorKind =
   | 'connection_timeout'
   | 'connection'
   | 'user_abort'
@@ -15,31 +14,6 @@ export type SdkErrorKind =
   | 'rate_limit'
   | 'internal_server'
   | 'api_error';
-
-export interface SdkErrorMetadata {
-  provider: string;
-  kind: SdkErrorKind;
-  statusCode?: number;
-  exhaustionReason?: ExhaustionReason;
-}
-
-export function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
-  if (!isObject(value)) return false;
-  const candidate = value as {
-    provider?: unknown;
-    kind?: unknown;
-    statusCode?: unknown;
-    exhaustionReason?: unknown;
-  };
-  return (
-    isString(candidate.provider) &&
-    SDK_ERRORS_BY_KIND.has(candidate.kind as SdkErrorKind) &&
-    (candidate.statusCode === undefined ||
-      isFiniteNumber(candidate.statusCode)) &&
-    (candidate.exhaustionReason === undefined ||
-      ExhaustionReasonSchema.safeParse(candidate.exhaustionReason).success)
-  );
-}
 
 /** SDK error mapping entry. */
 export interface SdkErrorEntry {
@@ -115,26 +89,6 @@ export const SDK_ERRORS: readonly SdkErrorEntry[] = [
   // Generic API errors (no fallback)
   { kind: 'api_error', classNames: ['APIError', 'ApiError'] },
 ];
-
-export const SDK_ERRORS_BY_KIND = new Map(
-  SDK_ERRORS.map((entry) => [entry.kind, entry] as const),
-);
-
-const SDK_ERROR_KIND_BY_FALLBACK_STATUS = new Map(
-  SDK_ERRORS.flatMap((entry) =>
-    entry.fallbackStatusCode === undefined
-      ? []
-      : [[entry.fallbackStatusCode, entry.kind] as const],
-  ),
-);
-
-/** Maps known provider HTTP status codes to the shared SDK error kind table. */
-export function sdkErrorKindFromStatusCode(
-  statusCode: number | undefined,
-): SdkErrorKind {
-  if (statusCode === undefined) return 'api_error';
-  return SDK_ERROR_KIND_BY_FALLBACK_STATUS.get(statusCode) ?? 'api_error';
-}
 
 /** Server errors (5xx), conflicts (409), rate limits (429), and request timeouts
  *  (408) are retryable — these are transient. Other client errors (4xx) are

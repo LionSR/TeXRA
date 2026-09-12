@@ -1,28 +1,5 @@
 import { z } from 'zod';
 
-/** Stream diagnostics for debugging Anthropic streaming failures */
-const StreamDiagnosticsSchema = z.object({
-  thinkingChars: z.number().prefault(0),
-  textChars: z.number().prefault(0),
-  toolInputChars: z.number().prefault(0),
-  blockTypesSeen: z.array(z.string()).prefault([]),
-  eventsProcessed: z.number().prefault(0),
-  lastEventType: z.string().nullable().prefault(null),
-  elapsedSecs: z.number().prefault(0),
-  secsSinceLastEvent: z.number().prefault(0),
-  finalized: z.boolean().prefault(false),
-  /** Whether a message_start event was received from the API */
-  messageStartReceived: z.boolean().prefault(false),
-  /** Whether a message_stop event was received from the API */
-  messageStopReceived: z.boolean().prefault(false),
-  /** Stop reason from message_delta (e.g. 'end_turn', 'tool_use', 'max_tokens') */
-  stopReason: z.string().nullable().prefault(null),
-  /** Anthropic message ID from message_start (e.g. 'msg_01XFD...') */
-  anthropicMessageId: z.string().nullable().prefault(null),
-});
-
-export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
-
 /** Reason a credential/quota is exhausted, requiring user action before an
  *  identical retry can succeed. The reasons are mutually exclusive — a single
  *  error is classified as exactly one — which is why this is a discriminant
@@ -90,12 +67,11 @@ const ProviderErrorObjectSchema = z.object({
   classification: ProviderErrorClassificationSchema.optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
-  streamDiagnostics: StreamDiagnosticsSchema.optional(),
-  /** Tail of text generated before a streaming failure. Present when the
-   *  stream produced any text before dying — lets the caller show it to the
-   *  user or construct a continuation prompt on retry. Producers truncate
-   *  to a few KB before attaching; this schema is inferred only, not parsed
-   *  at runtime, so size enforcement is the producer's responsibility. */
+  /** Tail of the text the model streamed before the attempt failed, written
+   *  by `classifyModelFailure` from what the run loop had already received.
+   *  Lets the retry surface show the user that the work so far is not lost.
+   *  The producer truncates to a few KB; this schema is inferred only, not
+   *  parsed at runtime, so size enforcement stays the producer's. */
   partialText: z.string().optional(),
 });
 /** Canonical current ProviderError metadata. Unknown fields are rejected so

@@ -168,7 +168,7 @@ async function mockWorkflowResume(): Promise<void> {
       type: 'workflow',
       agentConfig: workflowConfig,
       runId,
-      modelHandlerCompatibilityKey: null,
+      modelCompatibilityKey: null,
     }),
   );
 }
@@ -190,7 +190,7 @@ async function gateWorkflowResume(): Promise<{
           type: 'workflow' as const,
           agentConfig: workflowConfig,
           runId,
-          modelHandlerCompatibilityKey: null,
+          modelCompatibilityKey: null,
         };
       },
       catch: ensureError,

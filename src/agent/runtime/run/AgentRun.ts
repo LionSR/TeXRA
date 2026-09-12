@@ -23,7 +23,6 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
@@ -236,18 +235,15 @@ export const agentRunLayer = (
       // fresh run binds the launch model under the route the launch context
       // resolved for it (including a persisted compatibility key).
       const snapshot = yield* ledger.latestSnapshot(runId);
-      const launchKey = activeModelHandlerCompatibilityKey(
-        ctx.modelCell.handler,
-      );
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey =
         persisted !== null
-          ? persisted.modelHandlerCompatibilityKey
-          : (launchKey ?? null);
+          ? persisted.modelCompatibilityKey
+          : ctx.modelCompatibilityKey;
       const modelConfig =
         modelId === config.model
-          ? ctx.modelCell.handler.config
+          ? ctx.modelConfig
           : yield* Effect.tryPromise({
               try: () => resolveRuntimeModelConfig(modelId),
               catch: ensureError,

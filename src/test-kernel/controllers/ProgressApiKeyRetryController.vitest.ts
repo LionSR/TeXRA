@@ -677,7 +677,7 @@ describe('ProgressApiKeyRetryController', () => {
         // panel asks to replace; the routing step then turns off "Prefer Kimi
         // Code" so the rebuilt handler actually uses the new Moonshot key. The
         // controller does not consult the live route resolver here: the failed
-        // handler was dispatched under `ModelHandlerKimi`, and the rebuild pins
+        // handler was dispatched under `Kimi`, and the rebuild pins
         // that key, so a later OpenRouter preference change must not keep the
         // exhausted coding route selected.
         expect(harness.prompts).toStrictEqual(['moonshot']);

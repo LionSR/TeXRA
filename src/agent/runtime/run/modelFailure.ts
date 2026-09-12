@@ -8,6 +8,7 @@ import { isContextWindowError } from '@common/errors/sdkError/errorPatterns';
 import {
   attachContextWindowError,
   attachProviderError,
+  attachSdkUsageRoute,
 } from '@common/errors/sdkError/errorMetadata';
 import {
   classifyModelRouteFailure,
@@ -20,6 +21,7 @@ import {
   toRetryErrorInfo,
   type ProviderError,
   type RetryErrorInfo,
+  type UsageRoute,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -43,7 +45,20 @@ function isPackageContextOverflow(error: ModelError): boolean {
   );
 }
 
-export function classifyModelFailure(cause: unknown): ModelFailure {
+/**
+ * Reads a failed attempt. `usageRoute` is the credential route the attempt was
+ * bound to: SuperGrok and Kimi Code share their API-key host, so the bound
+ * route is the only signal that separates a subscription quota failure from a
+ * key rate limit, and the subscription detectors read it back off the error.
+ * `partialText` is the tail of the text the attempt had already streamed: the
+ * one producer of the field the retry surface shows, now that the loop rather
+ * than a provider handler is what watches the stream.
+ */
+export function classifyModelFailure(
+  cause: unknown,
+  usageRoute?: UsageRoute,
+  partialText?: string,
+): ModelFailure {
   const packageError = cause instanceof ModelError ? cause : null;
   const error =
     packageError !== null && packageError.cause instanceof Error
@@ -52,6 +67,7 @@ export function classifyModelFailure(cause: unknown): ModelFailure {
   if (packageError !== null && isPackageContextOverflow(packageError)) {
     attachContextWindowError(error);
   }
+  if (usageRoute !== undefined) attachSdkUsageRoute(error, usageRoute);
   const formatted = normalizeProviderError(error);
   const withPackageFacts: ProviderError = {
     ...formatted,
@@ -66,6 +82,7 @@ export function classifyModelFailure(cause: unknown): ModelFailure {
     formatted.requestId === undefined
       ? { requestId: packageError.requestId }
       : {}),
+    ...(partialText !== undefined && partialText !== '' ? { partialText } : {}),
   };
   // Seed the runtime's error cache so every later reader (the run lifecycle's
   // terminal classification included) recovers this same shape.

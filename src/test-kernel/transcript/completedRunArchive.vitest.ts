@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const launchMocks = vi.hoisted(() => ({
   acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
-  createHandler: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
 }));
@@ -19,11 +18,6 @@ vi.mock('@agent/index', async (importActual) => ({
 vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
   loadAgentSettingAndPrompts: launchMocks.loadAgent,
-}));
-vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/ModelFactory')>()),
-  createModelHandler: launchMocks.createHandler,
-  createModelHandlerForCompatibilityKey: launchMocks.createHandler,
 }));
 vi.mock('@agent/prompt/userVars', async (importActual) => ({
   ...(await importActual<typeof import('@agent/prompt/userVars')>()),
@@ -493,13 +487,6 @@ describe('completedRunArchive facade', () => {
           { agentCategory: AgentCategory.ToolUse },
           {},
         ]);
-        launchMocks.createHandler.mockResolvedValue({
-          capabilities: { supportsVision: false, supportsNativeAudio: false },
-          config: { provider: 'openai' },
-          setAgentCategory: vi.fn(),
-          setLogger: vi.fn(),
-          dispose: vi.fn(),
-        });
         launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
         // The one fact a resume reads: the run aggregate's latest
@@ -516,7 +503,7 @@ describe('completedRunArchive facade', () => {
                 turn: 0,
                 continuationIndex: 0,
                 modelId: config.model,
-                modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+                modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,
                 pendingRetry: null,
               },

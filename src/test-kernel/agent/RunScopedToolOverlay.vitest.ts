@@ -26,7 +26,6 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
-import { testModelCell } from './modelCellTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
 
 function tool(name: string): ITool {
@@ -42,24 +41,21 @@ function approvalGatedTool(name: string): ITool {
 
 /**
  * A launch whose model binds without a credential: the run layer reads the
- * compatibility key off the launch handler, and the validation key binds the
+ * compatibility key off the launch context, and the validation key binds the
  * deterministic in-process model.
  */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
   config: AgentLaunchContext['config'],
 ): AgentLaunchContext {
-  const handler = {
-    config: buildTestModelConfig(),
-    __texraModelHandlerCompatibilityKey: 'ModelHandlerValidation',
-  };
   return {
     ...createTestLaunchContext(init),
     config,
     prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-    modelCell: testModelCell(handler, config.model),
+    modelConfig: buildTestModelConfig(),
+    modelCompatibilityKey: 'Validation',
   };
 }
 

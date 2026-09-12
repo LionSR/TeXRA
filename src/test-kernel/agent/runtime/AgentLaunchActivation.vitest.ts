@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
-  createHandler: vi.fn(),
   createTrace: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
@@ -17,10 +16,6 @@ vi.mock('@agent/index', () => ({
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
-}));
-vi.mock('@agent/runtime/ModelFactory', () => ({
-  createModelHandler: mocks.createHandler,
-  createModelHandlerForCompatibilityKey: mocks.createHandler,
 }));
 vi.mock('@transcript', async (importActual) => ({
   ...(await importActual<typeof import('@transcript')>()),
@@ -75,7 +70,7 @@ function runOf(key: AggregateId): RunId {
 }
 
 const FRESH_RUN_ID = 'f1e501' as RunId;
-const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;
+const MODEL_COMPATIBILITY_KEY = 'OpenAIResponse' as const;
 
 const config = AgentConfigSchema.parse({
   agent: 'chat',
@@ -121,13 +116,6 @@ async function captureStartedLaunch(
   }
   const recordedSession = recordSessionEvents(session);
   const trace = new TraceEmitter();
-  const handler = {
-    capabilities: { supportsVision: false, supportsNativeAudio: false },
-    config: { provider: 'openai' },
-    setAgentCategory: vi.fn(),
-    setLogger: vi.fn(),
-    dispose: vi.fn(),
-  };
 
   mocks.resolve.mockReturnValueOnce({
     entry: { path: '/agents/chat.yaml' },
@@ -136,7 +124,6 @@ async function captureStartedLaunch(
     { agentCategory: AgentCategory.ToolUse },
     {},
   ]);
-  mocks.createHandler.mockResolvedValueOnce(handler);
   mocks.createTrace.mockReturnValueOnce({
     trace,
     dispose: vi.fn(),
@@ -242,11 +229,11 @@ describe('native agent launch activation', () => {
                 ? executeAgent(definition, FRESH_RUN_ID, {
                     session,
                     parentRunId,
-                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                    modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
                   })
                 : executeAgent(definition, FRESH_RUN_ID, {
                     session,
-                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                    modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
                   }),
             ),
           ),
@@ -268,7 +255,7 @@ describe('native agent launch activation', () => {
       const resume = createToolUseResumeData({
         runId,
         agentConfig: config,
-        modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+        modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
       });
       mocks.retrieveSessionResumeData.mockReturnValueOnce(
         Effect.succeed(resume),

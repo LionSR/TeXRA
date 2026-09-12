@@ -67,12 +67,6 @@ export const CODEX_ORIGINATOR = 'texra';
  */
 export const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
-/** Non-auth request headers for the Codex backend. */
-export const CODEX_ACCOUNT_ID_HEADER = 'chatgpt-account-id';
-export const CODEX_ORIGINATOR_HEADER = 'originator';
-export const CODEX_BETA_HEADER = 'openai-beta';
-export const CODEX_BETA_VALUE = 'responses=experimental';
-
 /** JWT claim namespace holding the ChatGPT account id. */
 export const CODEX_JWT_AUTH_CLAIM = 'https://api.openai.com/auth';
 

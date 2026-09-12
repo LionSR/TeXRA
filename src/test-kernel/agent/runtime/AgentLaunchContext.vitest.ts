@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   load: vi.fn(),
-  createHandler: vi.fn(),
   createTrace: vi.fn(),
   buildVars: vi.fn(),
 }));
@@ -15,10 +14,6 @@ vi.mock('@agent/index', () => ({
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
-}));
-vi.mock('@agent/runtime/ModelFactory', () => ({
-  createModelHandler: mocks.createHandler,
-  createModelHandlerForCompatibilityKey: mocks.createHandler,
 }));
 vi.mock('@transcript', async (importActual) => ({
   ...(await importActual<typeof import('@transcript')>()),
@@ -52,7 +47,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const buildAgentLaunchContext = (
@@ -269,7 +263,9 @@ describe('AgentLaunchContext', () => {
       { agentCategory: AgentCategory.ToolUse },
       {},
     ]);
-    mocks.createHandler.mockRejectedValueOnce(new Error('handler failed'));
+    mocks.createTrace.mockImplementationOnce(() => {
+      throw new Error('trace failed');
+    });
 
     try {
       await expect(
@@ -282,9 +278,9 @@ describe('AgentLaunchContext', () => {
           runId: EXECUTION_ID,
           session,
           resumed: true,
-          modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+          modelCompatibilityKey: 'OpenAIResponse',
         }),
-      ).rejects.toThrow('handler failed');
+      ).rejects.toThrow('trace failed');
       expect(
         recording.events.filter((event) => event.event === 'requestShowError'),
       ).toHaveLength(1);
@@ -302,12 +298,10 @@ describe('AgentLaunchContext', () => {
       session,
       signal: new AbortController().signal,
     });
-    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
     const onApprovalPolicyDenial = vi.fn();
     const ctx = {
       runScope,
       logger: noopTrace,
-      modelCell,
       toolPolicy: {
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['inquiry'],
@@ -334,9 +328,9 @@ describe('AgentLaunchContext', () => {
       expect(context.stopAfterCycle).toBe(true);
       expect(context.onApprovalPolicyDenial).toBe(onApprovalPolicyDenial);
 
-      // The cell is the run's live model, so a swap alone moves the run
-      // context; the `AgentConfig.model` mirror does not drive it.
-      modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
+      // The run mirrors a switch into its config once the new binding is
+      // live (`onModelChanged`); the context reads it at read time.
+      ctx.config.model = 'sonnet46T';
 
       expect(tryUseRunContext()?.model).toBe('sonnet46T');
     });
@@ -346,19 +340,11 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession();
     const batches = vi.spyOn(session, 'commitRegistration');
     const recording = recordSessionEvents(session);
-    const handler = {
-      capabilities: { supportsVision: false, supportsNativeAudio: false },
-      config: { provider: 'openai' },
-      setAgentCategory: vi.fn(),
-      setLogger: vi.fn(),
-      dispose: vi.fn(),
-    };
     mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
     ]);
-    mocks.createHandler.mockResolvedValueOnce(handler);
     mocks.createTrace.mockReturnValueOnce({
       trace: noopTrace,
       handleStatus: () => {},
@@ -380,7 +366,7 @@ describe('AgentLaunchContext', () => {
         config,
         runId: EXECUTION_ID,
         session,
-        modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+        modelCompatibilityKey: 'OpenAIResponse',
       });
       try {
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
@@ -403,7 +389,6 @@ describe('AgentLaunchContext', () => {
         });
       } finally {
         context.disposeTrace();
-        handler.dispose();
       }
     } finally {
       session.dispose();
@@ -421,7 +406,7 @@ describe('AgentLaunchContext', () => {
     const responseTextProcessing = {
       normalizeResponseText: (text: string) => text,
       postProcessResponse,
-      connectResponseText: async () => ' ',
+      connectResponseText: () => Effect.succeed(' '),
     };
     const session = createTestSession({
       responseTextProcessing,
@@ -439,14 +424,6 @@ describe('AgentLaunchContext', () => {
     const rawDispose = vi.fn(() => order.push('raw-trace'));
     const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
     trace.openStage = vi.fn(() => stage);
-    const handler = {
-      capabilities: { supportsVision: false, supportsNativeAudio: false },
-      config: { provider: 'openai' },
-      setAgentCategory: vi.fn(),
-      setLogger: vi.fn(),
-      dispose: vi.fn(() => order.push('handler')),
-    };
-
     mocks.resolve.mockReturnValueOnce({
       entry: { path: '/agents/chat.yaml' },
     });
@@ -454,7 +431,6 @@ describe('AgentLaunchContext', () => {
       { agentCategory: AgentCategory.ToolUse },
       {},
     ]);
-    mocks.createHandler.mockResolvedValueOnce(handler);
     mocks.createTrace.mockReturnValueOnce({ trace, dispose: rawDispose });
     mocks.buildVars.mockRejectedValueOnce(failure);
 
@@ -471,20 +447,14 @@ describe('AgentLaunchContext', () => {
           session,
           resumed: true,
           suppressErrorNotification: true,
-          modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+          modelCompatibilityKey: 'OpenAIResponse',
         }),
       ).rejects.toBe(failure);
 
       expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
         delegationAgentScope,
       });
-      // `createModelHandlerForCompatibilityKey(config, key, stores, …)`:
-      // the session's response-text processing follows the process stores.
-      expect(mocks.createHandler.mock.calls.at(-1)?.at(3)).toBe(
-        responseTextProcessing,
-      );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-      expect(handler.dispose).toHaveBeenCalledOnce();
       expect(session.status.get(EXECUTION_ID)).toBe(RUN_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
@@ -495,7 +465,7 @@ describe('AgentLaunchContext', () => {
       );
       expect(rawDispose).toHaveBeenCalledOnce();
       // Terminal compensation is committed before the trace is detached.
-      expect(order).toEqual(['stage', 'detach', 'raw-trace', 'handler']);
+      expect(order).toEqual(['stage', 'detach', 'raw-trace']);
     } finally {
       session.dispose();
     }

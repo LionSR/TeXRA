@@ -33,7 +33,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
@@ -46,11 +45,7 @@ import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
-import {
-  attachContextWindowError,
-  attachManualRetryOnlyError,
-  attachSdkErrorMetadata,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
   ModelError,
   ResolvedTurnSchema,
@@ -86,7 +81,6 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { sessionWithInteractions } from '../progressTestUtils';
-import { testModelCell } from '../modelCellTestUtils';
 import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
@@ -204,7 +198,7 @@ function boundModel(
   return {
     modelId: 'gpt54',
     config: MODEL_CONFIGS.gpt54,
-    compatibilityKey: 'ModelHandlerOpenAI',
+    compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
     usageProvider: 'openai',
@@ -282,7 +276,6 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      testModelCell(testModelInfo, 'gpt54'),
       { logger, runId, runStageId: undefined },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
@@ -304,7 +297,7 @@ const freshState = (): RunState => ({
   turn: 0,
   continuationIndex: 0,
   modelId: 'gpt54',
-  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
   messages: [],
@@ -378,12 +371,10 @@ function httpError(
   return Object.assign(new Error(message), { status, ...extra });
 }
 
-/** A status-less OpenAI server_error response, tagged as the SDK would. */
+/** A status-less OpenAI server_error response, as the SDK raises it. */
 function statuslessServerError(message: string): OpenAIAPIError {
   const body = { type: 'server_error', code: 'server_error', message };
-  const error = new OpenAIAPIError(undefined, body, message, undefined);
-  tagOpenAISdkError(error, 'openai');
-  return error;
+  return new OpenAIAPIError(undefined, body, message, undefined);
 }
 
 /**
@@ -432,6 +423,28 @@ describe('model failure classification', () => {
     expect(classifyModelFailure(abort).autoRetryable).toBe(false);
   });
 
+  it('carries the text streamed before the failure onto the retry surface', () => {
+    // The one producer of `partialText`: the loop hands `classifyModelFailure`
+    // the tail it had already received, and the retry panel reads it back off
+    // the classified error rather than from a provider handler.
+    const error = new OpenAIAPIError(
+      500,
+      { message: 'stream dropped' },
+      'stream dropped',
+      undefined,
+    );
+
+    const failure = classifyModelFailure(error, 'api-key', 'partial answer');
+
+    expect(failure.formatted.partialText).toBe('partial answer');
+    expect(failure.info.partialText).toBe('partial answer');
+    // A failure with nothing streamed carries no tail at all.
+    expect(
+      classifyModelFailure(statuslessServerError('nothing streamed')).formatted
+        .partialText,
+    ).toBeUndefined();
+  });
+
   it('reports a retryable provider failure with its formatted message', () => {
     const error = new OpenAIAPIError(
       503,
@@ -439,7 +452,6 @@ describe('model failure classification', () => {
       'transient provider failure',
       undefined,
     );
-    tagOpenAISdkError(error, 'openai');
 
     expect(classifyModelFailure(error).formatted).toMatchObject({
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
@@ -452,17 +464,6 @@ describe('model failure classification', () => {
       name: 'a status-less OpenAI server_error response',
       error: statuslessServerError('temporary provider failure'),
       autoRetryable: true,
-    },
-    {
-      name: 'a manual-retry-only failure',
-      error: (() => {
-        const error = Object.assign(new Error('retry explicitly'), {
-          provider: 'openai',
-        });
-        attachManualRetryOnlyError(error);
-        return error;
-      })(),
-      autoRetryable: false,
     },
     {
       name: 'an HTTP conflict after provider SDK retries are disabled',
@@ -568,20 +569,6 @@ describe('recovery-route verdicts', () => {
           ),
         }),
       }),
-      expected: { retryAfterMs: undefined },
-    },
-    {
-      name: 'recognizes tagged connection closures as route failures',
-      error: (() => {
-        const closure = new Error(
-          'WebSocket closed unexpectedly (code: 1006, reason: idle timeout)',
-        );
-        attachSdkErrorMetadata(closure, {
-          provider: 'openai',
-          kind: 'connection',
-        });
-        return closure;
-      })(),
       expected: { retryAfterMs: undefined },
     },
     {

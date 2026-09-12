@@ -291,7 +291,7 @@ export class ProgressApiKeyRetryController {
     //
     // Deliberately conservative: do not consult the live route resolver
     // here. The failed handler was dispatched under the persisted
-    // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
+    // `Kimi` compatibility key, and the retry rebuild pins that
     // same key, so a later OpenRouter preference change cannot make the
     // rebuild take a non-coding route. The request's
     // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,

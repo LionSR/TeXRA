@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Cause, Deferred, Effect, Exit, Layer } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -16,7 +16,7 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
@@ -453,7 +453,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
 }
@@ -513,7 +513,7 @@ export function executeAgent(
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
       session: options.session,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      modelCompatibilityKey: options.modelCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       signal: options.launchSignal,
       toolPolicy: {
@@ -537,14 +537,17 @@ export function executeAgent(
             // Start description generation concurrently with the run, but join it
             // before the owner can release its run lease. This prevents the
             // metadata write from recreating a run deleted by another host.
-            const sessionDescription = runInScope(() =>
-              generateSessionDescription(
-                runId,
-                config,
-                ctx.resolvedAgentDescription,
-                runSession,
-                ctx.stores,
-                ctx.runScope.signal,
+            // The run's stop interrupts it, as it interrupts the run.
+            const sessionDescription = yield* Effect.forkChild(
+              Effect.raceFirst(
+                generateSessionDescription(
+                  runId,
+                  config,
+                  ctx.resolvedAgentDescription,
+                  runSession,
+                  ctx.stores,
+                ),
+                Deferred.await(ctx.stopped),
               ),
             );
             try {
@@ -611,10 +614,7 @@ export function executeAgent(
               }
               return result;
             } finally {
-              yield* Effect.tryPromise({
-                try: () => sessionDescription,
-                catch: ensureError,
-              });
+              yield* Fiber.join(sessionDescription);
             }
           });
         },
@@ -674,7 +674,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
           definition,
           runId: resume.runId,
           resumed: true,
-          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
+          modelCompatibilityKey: resume.modelCompatibilityKey,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,

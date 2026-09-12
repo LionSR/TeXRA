@@ -1,6 +1,6 @@
 /**
- * The run's model binding: one runtime `ModelConfig` plus the route the
- * factory already decides, resolved to the llm package `Model` the loop
+ * The run's model binding: one runtime `ModelConfig` plus the route
+ * `modelRoutes` resolves, bound to the llm package `Model` the loop
  * calls, the durable `ModelOrigin` every ledger row names, and the runtime
  * facts the package deliberately does not own (price, context window, the
  * credential route keys the retry gate coordinates on).
@@ -12,17 +12,24 @@
 import { createHash } from 'node:crypto';
 
 import { Context, Effect, Option, type Scope } from 'effect';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
-  resolveModelHandlerCompatibilityKey,
+  resolveModelCompatibilityKey,
   resolveRouteCredential,
+  resolveSubscriptionCredential,
+  routeBearer,
+  withShortModelName,
   type RouteCredential,
-} from '@agent/runtime/ModelFactory';
+} from '@agent/runtime/modelRoutes';
+import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
 import { googleInteractionsModel } from '@llm/googleInteractions';
 import { openaiChatModel } from '@llm/openaiChat';
-import { openaiResponsesModel } from '@llm/openaiResponses';
+import {
+  openaiResponsesModel,
+  openaiResponsesWebSocketModel,
+} from '@llm/openaiResponses';
 import { openrouterChatModel } from '@llm/openrouterChat';
 import {
   type Model,
@@ -33,14 +40,20 @@ import {
 } from '@llm/turn';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import {
+  reasoningEffortOverrides,
+  supportsReasoningLevel,
+} from '@model/reasoningLevel';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import {
   kimiCodeEffectiveConfig,
   resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
+import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
+import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type UsageProviderSchema,
   type UsageRoute,
 } from '@shared/schemas';
@@ -48,6 +61,8 @@ import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
@@ -55,7 +70,7 @@ import type { z } from 'zod';
 
 type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
-/** Tool-use runs keep output headroom for context growth, as the handler did. */
+/** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
 
 /**
@@ -117,7 +132,7 @@ export interface BoundModel {
   /** Registry short name; the run's `modelId` on every snapshot. */
   readonly modelId: string;
   readonly config: ModelConfig;
-  readonly compatibilityKey: ModelHandlerCompatibilityKey;
+  readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
   readonly usageProvider: UsageProvider;
@@ -143,7 +158,7 @@ export interface BindModelInput {
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
-  readonly compatibilityKey?: ModelHandlerCompatibilityKey | null;
+  readonly compatibilityKey?: ModelCompatibilityKey | null;
   readonly copilotRouteOverride?: CopilotRouteOverride;
   readonly agentCategory: AgentCategory;
   /** The route default's temperature; the request may override per turn. */
@@ -157,25 +172,23 @@ type Protocol = ModelConfiguration['protocol'];
 type HttpProtocol = Exclude<Protocol, 'vscode-lm'>;
 type HttpConfiguration = Exclude<ModelConfiguration, { protocol: 'vscode-lm' }>;
 
-const PROTOCOL_BY_KEY: Record<
-  ModelHandlerCompatibilityKey,
-  Protocol | 'validation'
-> = {
-  ModelHandlerValidation: 'validation',
-  ModelHandlerOpenAIResponse: 'openai-responses',
-  ModelHandlerOpenRouterNative: 'openrouter-chat',
-  ModelHandlerVscodeLm: 'vscode-lm',
-  ModelHandlerAnthropic: 'anthropic-messages',
-  ModelHandlerOpenAI: 'openai-chat',
-  ModelHandlerGoogleInteractions: 'google-interactions',
-  ModelHandlerDeepSeek: 'deepseek-chat',
-  ModelHandlerXAI: 'xai-chat',
-  ModelHandlerKimi: 'kimi-chat',
-  ModelHandlerDashScope: 'dashscope-chat',
-  ModelHandlerMiniMax: 'minimax-chat',
-  ModelHandlerGLM: 'glm-chat',
-  ModelHandlerMeta: 'openai-responses',
-};
+const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
+  {
+    Validation: 'validation',
+    OpenAIResponse: 'openai-responses',
+    OpenRouterNative: 'openrouter-chat',
+    VscodeLm: 'vscode-lm',
+    Anthropic: 'anthropic-messages',
+    OpenAI: 'openai-chat',
+    GoogleInteractions: 'google-interactions',
+    DeepSeek: 'deepseek-chat',
+    XAI: 'xai-chat',
+    Kimi: 'kimi-chat',
+    DashScope: 'dashscope-chat',
+    MiniMax: 'minimax-chat',
+    GLM: 'glm-chat',
+    Meta: 'openai-responses',
+  };
 
 const USAGE_PROVIDER_BY_MODEL_PROVIDER: Record<ModelProvider, UsageProvider> = {
   [ModelProvider.ANTHROPIC]: 'anthropic',
@@ -240,6 +253,79 @@ function anthropicThinking(
   };
 }
 
+/**
+ * Moonshot API `fullName`s shared by a reasoning and a non-reasoning registry
+ * entry (`kimi26`/`kimi26T` both wire to `kimi-k2.6`), distinguished only by
+ * TeXRA's `supportsReasoning`. Moonshot defaults these wire names to thinking
+ * on, so both entries send the toggle explicitly; every other Kimi model
+ * leaves thinking to the wire default. Computed from the live catalog so a
+ * later shared-name family needs no new literal.
+ */
+const AMBIGUOUS_MOONSHOT_FULL_NAMES: ReadonlySet<string> = (() => {
+  const supportsReasoningByFullName = new Map<string, boolean>();
+  const ambiguous = new Set<string>();
+  for (const config of Object.values(MODEL_CONFIGS)) {
+    if (config.provider !== ModelProvider.MOONSHOT) continue;
+    const seen = supportsReasoningByFullName.get(config.fullName);
+    if (seen !== undefined && seen !== config.capabilities.supportsReasoning) {
+      ambiguous.add(config.fullName);
+    }
+    supportsReasoningByFullName.set(
+      config.fullName,
+      config.capabilities.supportsReasoning,
+    );
+  }
+  return ambiguous;
+})();
+
+type KimiThinkingControl = Extract<
+  ModelConfiguration,
+  { protocol: 'kimi-chat' }
+>['thinkingControl'];
+
+function kimiThinkingControl(config: ModelConfig): KimiThinkingControl {
+  if (AMBIGUOUS_MOONSHOT_FULL_NAMES.has(config.fullName)) return 'toggle';
+  return config.capabilities.supportsReasoning ? 'always' : 'toggle';
+}
+
+/**
+ * Sampling Moonshot fixes per wire name, thinking on and off: `null` is a
+ * temperature the API requires omitted. Applies to direct requests and to
+ * requests forwarded through OpenRouter alike.
+ */
+const KIMI_FIXED_TEMPERATURES: ReadonlyMap<
+  string,
+  { readonly enabled: number | null; readonly disabled: number | null }
+> = new Map([
+  ['kimi-k2.5', { enabled: 1, disabled: 0.6 }],
+  ['kimi-k2.7-code', { enabled: 1, disabled: 1 }],
+  ['kimi-for-coding', { enabled: 1, disabled: 1 }],
+  ['kimi-for-coding-highspeed', { enabled: 1, disabled: 1 }],
+  ['kimi-k3', { enabled: null, disabled: null }],
+  ['k3', { enabled: null, disabled: null }],
+]);
+
+function kimiTemperatureByThinking(
+  config: ModelConfig,
+  temperature: number,
+): { readonly enabled: number | null; readonly disabled: number | null } {
+  return (
+    KIMI_FIXED_TEMPERATURES.get(config.fullName) ?? {
+      enabled: 1,
+      disabled: temperature,
+    }
+  );
+}
+
+/** Instructions the Codex backend requires when the request carries none. */
+const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
+
+/**
+ * The Codex backend runs every turn synchronously on one connection, so an
+ * effort above medium risks the client timing out before it answers.
+ */
+const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = ['low', 'medium'];
+
 function configurationFor(
   protocol: HttpProtocol,
   config: ModelConfig,
@@ -293,6 +379,45 @@ function configurationFor(
         },
       };
     case 'openai-responses':
+      if (credential.route === 'chatgpt-subscription') {
+        let codexEffort: RouteEffort | null = effort;
+        if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
+          codexEffort = 'medium';
+        }
+        return {
+          ...base,
+          requestedModel: credential.requestedModel,
+          protocol,
+          background: 'unsupported',
+          supportsInputTokenEstimation: false,
+          supportsTemperature,
+          supportsMaxOutputTokens: false,
+          supportsStorage: false,
+          supportsResponseChaining: false,
+          webSocketStreamParameter: 'required',
+          allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
+          instructions: {
+            kind: 'required',
+            fallback: CODEX_DEFAULT_INSTRUCTIONS,
+          },
+          defaults: {
+            maxOutputTokens: null,
+            temperature: supportsTemperature ? input.temperature : null,
+            store: false,
+            parallelToolCalls: true,
+            reasoning: capabilities.supportsReasoning
+              ? {
+                  effort: capabilities.supportsReasoningEffort
+                    ? codexEffort
+                    : null,
+                  mode: capabilities.reasoningMode ?? null,
+                  summary: 'auto',
+                }
+              : null,
+            serviceTier: null,
+          },
+        };
+      }
       return {
         ...base,
         protocol,
@@ -355,11 +480,18 @@ function configurationFor(
         ...base,
         protocol,
         supportsImageInput: capabilities.supportsVision,
-        supportsInputTokenEstimation: capabilities.supportsTokenCounting,
-        thinkingControl: 'toggle',
+        // Moonshot's own endpoint counts tokens; a managed coding endpoint
+        // opts in through the catalog.
+        supportsInputTokenEstimation:
+          !isKimiCodeExclusiveModel(config) ||
+          capabilities.supportsTokenCounting,
+        thinkingControl: kimiThinkingControl(config),
         supportedEfforts: [...supportedEfforts],
         supportsForcedToolChoice: true,
-        temperatureByThinking: { enabled: 1, disabled: input.temperature },
+        temperatureByThinking: kimiTemperatureByThinking(
+          config,
+          input.temperature,
+        ),
         defaults: {
           maxOutputTokens,
           thinking: { mode: thinkingMode },
@@ -448,27 +580,64 @@ function configurationFor(
   }
 }
 
+type ResponsesAuthentication = Parameters<
+  typeof openaiResponsesWebSocketModel
+>[1];
+
+/** The Responses bearer: a subscription token names its account, a key does not. */
+function responsesAuthentication(
+  credential: RouteCredential,
+): ResponsesAuthentication {
+  return credential.route === 'chatgpt-subscription'
+    ? {
+        kind: 'codex',
+        accessToken: credential.accessToken,
+        accountId: credential.accountId,
+      }
+    : { kind: 'api-key', apiKey: routeBearer(credential) };
+}
+
+/**
+ * Whether this binding runs the Responses protocol over the persistent
+ * WebSocket instead of HTTP. The user's opt-in, honored on the routes the
+ * socket is served on: the ChatGPT-subscription backend, or OpenAI's own
+ * endpoint (a per-model or dashboard endpoint may not speak it). Background
+ * delivery still wins where both are selected, as it did before the binding
+ * owned the choice.
+ */
+function responsesWebSocketSelected(
+  credential: RouteCredential,
+  globalState: StateStore,
+): boolean {
+  if (!globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false)) {
+    return false;
+  }
+  return (
+    credential.route === 'chatgpt-subscription' ||
+    credential.endpoint === OPENAI_DEFAULT_ENDPOINT
+  );
+}
+
+/**
+ * One constructor per protocol; a subscription token is the bearer where an
+ * API key would be, and the Codex session additionally names its account.
+ */
 function constructModel(
   configuration: HttpConfiguration,
   credential: RouteCredential,
 ): Model {
+  const apiKey = routeBearer(credential);
   switch (configuration.protocol) {
     case 'anthropic-messages':
-      return anthropicMessagesModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return anthropicMessagesModel(configuration, { apiKey });
     case 'openai-responses':
       return openaiResponsesModel(configuration, {
-        authentication: { kind: 'api-key', apiKey: credential.apiKey },
+        authentication: responsesAuthentication(credential),
       });
     case 'google-interactions':
-      return googleInteractionsModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return googleInteractionsModel(configuration, { apiKey });
     case 'openrouter-chat':
-      return openrouterChatModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return openrouterChatModel(configuration, { apiKey });
     case 'openai-chat':
     case 'deepseek-chat':
     case 'kimi-chat':
@@ -476,8 +645,31 @@ function constructModel(
     case 'xai-chat':
     case 'dashscope-chat':
     case 'minimax-chat':
-      return openaiChatModel(configuration, { apiKey: credential.apiKey });
+      return openaiChatModel(configuration, { apiKey });
   }
+}
+
+/**
+ * Whether a binding delivers its turns as background work: the run's
+ * category and the provider's own toggle over a configuration that supports
+ * it. One owner for the choice — the loop asks it per turn, and the binding
+ * asks it to decide whether the Responses WebSocket applies.
+ */
+export function backgroundDelivery(bound: {
+  readonly backgroundCapable: boolean;
+  readonly protocol: ModelOrigin['protocol'];
+  readonly modelName: string;
+  readonly agentCategory: AgentCategory;
+}): boolean {
+  if (!bound.backgroundCapable) return false;
+  if (bound.agentCategory !== AgentCategory.Workflow) return false;
+  if (bound.protocol === 'google-interactions') {
+    return getConfig<boolean>('texra.model.useGoogleBackgroundResponses');
+  }
+  return (
+    bound.modelName.toLowerCase().startsWith('gpt') &&
+    getConfig<boolean>('texra.model.useBackgroundResponses')
+  );
 }
 
 /** Whether a binding's configuration admits background work. */
@@ -502,7 +694,7 @@ function backgroundCapable(configuration: HttpConfiguration): boolean {
  */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
-  compatibilityKey: ModelHandlerCompatibilityKey,
+  compatibilityKey: ModelCompatibilityKey,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const editor = yield* Effect.serviceOption(EditorModel);
   if (Option.isNone(editor)) {
@@ -574,20 +766,44 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
 });
 
 /**
- * Bind one model for a run. The route is the factory's decision, read
- * through the same resolver every other route reader uses; the persisted
- * compatibility key of a resumed conversation wins over today's default.
+ * The user's per-model reasoning level, applied to the config the run binds
+ * so the request default, the reported range and the accounting all read one
+ * effort. Only models whose level is user-selectable honor it; every other
+ * model keeps the catalog's effort.
+ */
+function withReasoningLevelOverride(
+  config: ModelConfig,
+  globalState: StateStore,
+): ModelConfig {
+  if (!supportsReasoningLevel(config)) return config;
+  const effort = reasoningEffortOverrides(globalState)[config.name];
+  if (effort === undefined) return config;
+  return {
+    ...config,
+    capabilities: { ...config.capabilities, reasoningEffort: effort },
+  };
+}
+
+/**
+ * Bind one model for a run. The route is `resolveRouteCredential`'s
+ * decision, read through the same resolver every other route reader uses;
+ * the persisted compatibility key of a resumed conversation wins over
+ * today's default.
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const useOpenRouter = getUseOpenRouter();
+  // The wire identity the preference promises, applied to the bound config
+  // and not only to the route decision below (which re-applies it as
+  // identity), so the request carries the unpinned identifier.
+  const requested = withShortModelName(input.config, input.stores.globalState);
   const compatibilityKey =
     input.compatibilityKey ??
     (yield* Effect.try({
       try: () =>
-        resolveModelHandlerCompatibilityKey(
-          input.config,
+        resolveModelCompatibilityKey(
+          requested,
           input.stores.globalState,
           useOpenRouter,
           input.copilotRouteOverride,
@@ -599,16 +815,31 @@ export const bindModel = Effect.fn('bindModel')(function* (
       new Error(`Unsupported model provider: ${input.config.provider}`),
     );
   }
+  // The OpenRouter choice this binding answers to: a resumed conversation
+  // keeps the route its persisted format names, a fresh one follows the live
+  // preference. Read before the editor branch so a mode-selected model is
+  // rejected on the route the picker already reports as unavailable.
+  const selectedOpenRouter =
+    input.compatibilityKey == null
+      ? useOpenRouter
+      : compatibilityKey === 'OpenRouterNative';
+  if (
+    compatibilityKey !== 'Validation' &&
+    isOpenRouterRoutingUnsupported(requested, selectedOpenRouter)
+  ) {
+    return yield* Effect.fail(
+      new Error(
+        `Model ${requested.name} requires reasoning mode ${requested.capabilities.reasoningMode}, which OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
+      ),
+    );
+  }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
   if (protocol === 'vscode-lm') {
-    return yield* bindEditorModel(input.config, compatibilityKey);
+    return yield* bindEditorModel(requested, compatibilityKey);
   }
-  const onOpenRouter = compatibilityKey === 'ModelHandlerOpenRouterNative';
-  let config = input.config;
-  if (
-    compatibilityKey === 'ModelHandlerKimi' &&
-    isKimiSubscriptionEligible(config)
-  ) {
+  const onOpenRouter = compatibilityKey === 'OpenRouterNative';
+  let config = requested;
+  if (compatibilityKey === 'Kimi' && isKimiSubscriptionEligible(config)) {
     config = yield* Effect.tryPromise({
       try: () =>
         input.inScope(async () =>
@@ -649,45 +880,81 @@ export const bindModel = Effect.fn('bindModel')(function* (
       backgroundCapable: false,
     };
   }
-  const credential = yield* Effect.tryPromise({
-    try: () =>
-      input.inScope(() =>
-        resolveRouteCredential(config, onOpenRouter, input.stores.secrets),
-      ),
+  // The ChatGPT session serves the Responses protocol and the Grok session
+  // the xAI Chat protocol, so the subscription route is asked only there;
+  // `constructModel` can then hand a subscription token to no other
+  // protocol's constructor. Eligibility follows `selectedOpenRouter`: a fresh
+  // binding honors the live preference (a Responses model whose route stays
+  // direct must still not consume the subscription the picker reports as
+  // disabled), while a resumed conversation keeps the route its persisted
+  // format names instead of silently billing the provider key because the
+  // preference was turned on since.
+  const subscription =
+    protocol === 'openai-responses' || protocol === 'xai-chat'
+      ? yield* Effect.tryPromise({
+          try: () =>
+            input.inScope(() =>
+              resolveSubscriptionCredential(config, selectedOpenRouter),
+            ),
+          catch: ensureError,
+        })
+      : null;
+  let credential: RouteCredential;
+  if (subscription !== null) {
+    config = subscription.config;
+    credential = subscription.credential;
+  } else {
+    credential = yield* Effect.tryPromise({
+      try: () =>
+        input.inScope(() =>
+          resolveRouteCredential(config, onOpenRouter, input.stores.secrets),
+        ),
+      catch: ensureError,
+    });
+  }
+  config = withReasoningLevelOverride(config, input.stores.globalState);
+  const configuration = yield* Effect.try({
+    try: () => configurationFor(protocol, config, credential, input),
     catch: ensureError,
   });
-  const built = yield* Effect.try({
-    try: () => {
-      const configuration = configurationFor(
-        protocol,
-        config,
-        credential,
-        input,
-      );
-      return {
-        configuration,
-        model: constructModel(configuration, credential),
-      };
-    },
-    catch: ensureError,
-  });
+  // Background delivery and the persistent WebSocket are alternatives on the
+  // Responses protocol, and background wins where the user selected both.
+  const onWebSocket =
+    configuration.protocol === 'openai-responses' &&
+    !backgroundDelivery({
+      backgroundCapable: backgroundCapable(configuration),
+      protocol: configuration.protocol,
+      modelName: config.name,
+      agentCategory: input.agentCategory,
+    }) &&
+    responsesWebSocketSelected(credential, input.stores.globalState);
+  const model =
+    configuration.protocol === 'openai-responses' && onWebSocket
+      ? yield* openaiResponsesWebSocketModel(
+          configuration,
+          responsesAuthentication(credential),
+        ).pipe(Effect.mapError(ensureError))
+      : yield* Effect.try({
+          try: () => constructModel(configuration, credential),
+          catch: ensureError,
+        });
   const origin: ModelOrigin = {
-    protocol: built.configuration.protocol,
+    protocol: configuration.protocol,
     codecVersion: 1,
-    requestedModel: built.configuration.requestedModel,
-    deployment: built.configuration.deployment,
+    requestedModel: configuration.requestedModel,
+    deployment: configuration.deployment,
   } as ModelOrigin;
   const wireRouteKey = JSON.stringify([
     config.provider,
     credential.route,
     credential.endpoint,
-    credentialFingerprint(credential.route, credential.apiKey),
+    credentialFingerprint(credential.route, routeBearer(credential)),
   ]);
   return {
     modelId: config.name,
     config,
     compatibilityKey,
-    model: built.model,
+    model,
     origin,
     usageProvider: usageProviderFor(protocol, config),
     usageRoute: credential.usageRoute,
@@ -702,6 +969,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     wireRouteKey,
     modelRetryRouteKey: JSON.stringify([wireRouteKey, config.fullName]),
     routedOnKimiCode: isKimiCodeExclusiveModel(config),
-    backgroundCapable: backgroundCapable(built.configuration),
+    // The socket carries one turn at a time and submits no background work.
+    backgroundCapable: !onWebSocket && backgroundCapable(configuration),
   };
 });

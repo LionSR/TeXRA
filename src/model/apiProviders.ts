@@ -1,7 +1,7 @@
 /**
  * API provider constants and key resolution utilities.
  *
- * Shared between SecretManager (VS Code), ModelHandler (agent core),
+ * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
 import { Redacted } from 'effect';

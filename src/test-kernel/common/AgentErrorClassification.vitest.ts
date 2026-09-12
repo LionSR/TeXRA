@@ -32,7 +32,7 @@ describe('classifyAgentError', () => {
   });
 
   it('finds the missing-api-key marker through a rewrapping cause chain', () => {
-    // The marker is attached at ModelHandler.fetchApiKeyOrThrow; anything that
+    // The marker is attached at resolveRouteCredential; anything that
     // rethrows on top of it must stay classifiable.
     const inner = new Error('Missing API key for openai.');
     attachMissingApiKeyError(inner);

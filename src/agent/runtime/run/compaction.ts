@@ -37,14 +37,14 @@ import { rowAggregate, type Message } from '../loop/rows';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
-export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
+const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
 
 /**
  * Prefix prepended to a compaction summary when it is folded back into the
  * conversation as a synthetic user message, so the resumed-conversation
  * marker stays identical across providers.
  */
-export const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
+const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 
 /**
  * Rough chars-per-token ratio for estimating token counts without a
@@ -57,12 +57,12 @@ const ESTIMATED_CHARS_PER_TOKEN = 4;
  * Heuristic token estimate for `text` when no tokenizer or counting API is
  * available. Deliberately coarse; callers pair it with a safety buffer.
  */
-export function estimateTokensFromText(text: string): number {
+function estimateTokensFromText(text: string): number {
   return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
 }
 
 /** System prompt used for conversation compaction. */
-export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
+const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 - The original user request and goals
 - All key decisions made
 - File paths and code changes discussed or made
@@ -73,7 +73,7 @@ export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Prese
 Write a structured summary with enough context to continue the task. Output only the summary.`;
 
 /** Final user instruction that makes the compaction task explicit after history. */
-export const COMPACTION_USER_PROMPT =
+const COMPACTION_USER_PROMPT =
   'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.';
 
 interface LogCompactionEventOptions {
@@ -85,7 +85,7 @@ interface LogCompactionEventOptions {
   readonly tokensAfterIsEstimate?: boolean;
 }
 
-export function logCompactionEvent({
+function logCompactionEvent({
   logger,
   tokensBefore,
   tokensAfter,

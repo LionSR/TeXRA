@@ -86,7 +86,7 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => text,
-    connectResponseText: async () => ' ',
+    connectResponseText: () => Effect.succeed(' '),
   }),
 }));
 

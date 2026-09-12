@@ -166,7 +166,7 @@ function parentRunContext(
 ): RunContext {
   return createRunContext({
     runId: PARENT_RUN_ID,
-    modelCell: { modelId: 'deepseekT' },
+    config: { model: 'deepseekT' },
     session: defaultSession(),
     ...overrides,
   });

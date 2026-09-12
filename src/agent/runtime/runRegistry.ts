@@ -96,10 +96,6 @@ type ManualCompactionRequestResult =
       readonly session: SessionHandle;
     }
   | {
-      readonly kind: 'unsupported';
-      readonly runId: RunId;
-    }
-  | {
       readonly kind: 'no_active_tool_use';
       readonly runId?: RunId;
     };
@@ -386,8 +382,7 @@ export class RunRegistry {
    * Request manual compaction from the active tool-use flow, if one exists.
    *
    * Hosts own the user-facing message, but the registry owns the live-flow
-   * lookup and model capability test so CLI and extension do not rederive the
-   * same runtime facts.
+   * lookup so CLI and extension do not rederive the same runtime facts.
    */
   requestManualCompaction(
     runId: RunId | undefined,
@@ -395,10 +390,6 @@ export class RunRegistry {
     if (!runId) return { kind: 'no_active_tool_use' };
     const context = this.getToolUseFlowContext(runId);
     if (!context) return { kind: 'no_active_tool_use', runId };
-
-    if (!context.modelHandler.supportsManualCompaction) {
-      return { kind: 'unsupported', runId };
-    }
 
     context.requestImmediateCompaction();
     return {

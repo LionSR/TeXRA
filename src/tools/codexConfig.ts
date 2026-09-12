@@ -92,8 +92,8 @@ export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
 /**
  * Build synthetic run metadata for Codex child runs.
  *
- * Codex runs outside the normal model-handler pipeline, so we provide an
- * explicit tool-use category and a stable Codex model label for the UI
+ * Codex runs outside the normal run loop, so we provide an explicit
+ * tool-use category and a stable Codex model label for the UI
  * instead of inheriting the generic AgentConfig defaults.
  */
 export function buildCodexConfig(prompt: string): AgentConfig {

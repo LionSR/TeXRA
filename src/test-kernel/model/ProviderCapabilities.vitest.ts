@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
@@ -14,7 +14,6 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import {
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
-  resolveCodexSubscriptionProfile,
 } from '@model/providerCapabilities';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -67,11 +66,17 @@ async function installSubscriptionPlatform(options?: {
 }
 
 describe('provider capabilities', () => {
+  beforeEach(() =>
+    installPlatform({
+      config: { 'texra.chatgptCodex.preferSubscription': true },
+    }),
+  );
+
   it('resolves ChatGPT subscription profile from model routing context', () => {
-    const capabilities = resolveCodexSubscriptionProfile({
-      model: gpt55Config,
-      useOpenRouter: false,
-    });
+    const capabilities = resolveCodexSubscriptionCapabilities(
+      gpt55Config,
+      false,
+    );
 
     expect(capabilities).toMatchObject({
       contextWindow:
@@ -87,7 +92,7 @@ describe('provider capabilities', () => {
         webSocket: 'global-toggle',
         supportsTokenCounting: false,
         // Manual compaction is supported end-to-end via
-        // `ModelHandlerOpenAIResponse`'s client-side summarize-and-resend
+        // the Responses model's client-side summarize-and-resend
         // fallback (#7213) even though the stateful `/responses/compact`
         // endpoint is unusable on this `store: false` backend.
         supportsManualCompaction: true,
@@ -103,10 +108,7 @@ describe('provider capabilities', () => {
     'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
     (id) => {
       const model = MODEL_CONFIGS[id];
-      const capabilities = resolveCodexSubscriptionProfile({
-        model,
-        useOpenRouter: false,
-      });
+      const capabilities = resolveCodexSubscriptionCapabilities(model, false);
 
       expect(model.codexSubscription).toBe(true);
       expect(capabilities).toMatchObject({
@@ -123,14 +125,14 @@ describe('provider capabilities', () => {
 
     it('raises the subscription input and displayed context windows', async () => {
       await installPlatform({
-        config: { 'texra.chatgptCodex.contextWindow': 872_000 },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.contextWindow': 872_000,
+        },
       });
 
       expect(
-        resolveCodexSubscriptionProfile({
-          model: gpt55Config,
-          useOpenRouter: false,
-        }),
+        resolveCodexSubscriptionCapabilities(gpt55Config, false),
       ).toMatchObject({
         inputTokenLimit: 872_000,
         contextWindow: 1_000_000,
@@ -139,14 +141,14 @@ describe('provider capabilities', () => {
 
     it('falls back when the configured context window is out of range', async () => {
       await installPlatform({
-        config: { 'texra.chatgptCodex.contextWindow': 900_000 },
+        config: {
+          'texra.chatgptCodex.preferSubscription': true,
+          'texra.chatgptCodex.contextWindow': 900_000,
+        },
       });
 
       expect(
-        resolveCodexSubscriptionProfile({
-          model: gpt55Config,
-          useOpenRouter: false,
-        }),
+        resolveCodexSubscriptionCapabilities(gpt55Config, false),
       ).toMatchObject({
         inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
       });

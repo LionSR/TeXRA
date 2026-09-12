@@ -9,8 +9,8 @@
  * `subscription_usage_logs.cost` answers "what would this usage have cost at
  * list price" for every client version, old or new.
  *
- * Formula parity: mirrors the client's `computeStandardPrice`
- * (`src/agent/modelHandlers/support/priceUtils.ts`) on the wire fields. The client reports
+ * Formula parity: mirrors the client's `standardCost`
+ * (`src/agent/runtime/run/pricing.ts`) on the wire fields. The client reports
  * `inputTokens` as cache-MISS tokens (`UsageMonitor.logToBackend` sends
  * `usage.cacheMissInputTokens`) with cached tokens separate, so
  *   miss·in + cached·in·discount + (output + reasoning)·out

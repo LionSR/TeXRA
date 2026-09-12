@@ -31,7 +31,7 @@ export interface JSONSchemaObject {
   [key: string]: unknown;
 }
 
-export function isSchemaObject(value: unknown): value is JSONSchemaObject {
+function isSchemaObject(value: unknown): value is JSONSchemaObject {
   return isObject(value);
 }
 
@@ -55,9 +55,7 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
  * non-literal shapes fall back to the first branch's shape; the discriminator
  * enum is what the model actually selects between.
  */
-export function flattenTopLevelUnion(
-  schema: JSONSchemaObject,
-): JSONSchemaObject {
+function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
     (k) => Array.isArray(schema[k]) && schema.type !== 'object',
   );
@@ -137,7 +135,7 @@ export function flattenTopLevelUnion(
  * parameter schemas. Zod v4's `toJSONSchema` includes this dialect URI by
  * default. Strip it for any provider.
  */
-export function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
+function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
   if (!('$schema' in schema)) return schema;
   const { $schema: _unused, ...rest } = schema;
   return rest;

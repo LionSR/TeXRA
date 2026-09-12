@@ -70,6 +70,7 @@ import { setLogSink } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -187,6 +188,7 @@ async function initVscodePlatform(
   // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  installLongRunningModelDispatcher();
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);
@@ -597,9 +599,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
 
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  const runtime = effectRuntime();
+
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await effectRuntime().runPromise(
+  await runtime.runPromise(
     seedDisabledToolDefaults(
       context.globalState,
       GlobalStateKey.LAST_KNOWN_VERSION,
@@ -668,7 +675,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(context.globalState), 0);
-  registerCommands(context, progressViewProvider, secrets);
+  registerCommands(context, progressViewProvider, secrets, runtime);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 

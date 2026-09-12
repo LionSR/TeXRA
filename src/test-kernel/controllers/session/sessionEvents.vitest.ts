@@ -1962,7 +1962,7 @@ describe('RunLedger', () => {
         turn: 0,
         continuationIndex: 0,
         modelId: 'gpt-test',
-        modelHandlerCompatibilityKey: null,
+        modelCompatibilityKey: null,
         lastError: null,
         pendingRetry: null,
       },

@@ -19,11 +19,6 @@ import type {
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import {
-  createModelHandler,
-  createModelHandlerForCompatibilityKey,
-} from '@agent/runtime/ModelFactory';
-import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
@@ -43,14 +38,14 @@ import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
   type AttachedMemoryMiss,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
   type UserVariableChannels,
 } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
-  ModelHandlerCompatibilityKeySchema,
+  ModelCompatibilityKeySchema,
   RUN_OUTCOME,
   RUN_PHASE,
 } from '@shared/schemas';
@@ -92,11 +87,16 @@ export interface AgentLaunchContext {
   /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
   readonly runScope: RunScope;
   /**
-   * The run's live model handler and model id. Shared by reference with the
-   * run's `AgentRun` service, so a mid-run switch is visible here without a
-   * mirror.
+   * The registry config of the launch model. The run's `AgentRun` service
+   * binds it (or the model a resumed run's snapshot names) under the route
+   * `modelCompatibilityKey` records; a mid-run switch rebinds there.
    */
-  readonly modelCell: ModelCell;
+  readonly modelConfig: ModelConfig;
+  /**
+   * The conversation format a resumed run persisted, or null for a fresh run
+   * whose route the binding resolves from today's settings.
+   */
+  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   /** Immutable per-run tool policy; the loop reads it instead of the ambient RunContext. */
   readonly toolPolicy: ToolPolicy;
   /**
@@ -169,7 +169,7 @@ interface AgentLaunchInput {
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
   /** Cancel launch preparation and the resulting live run. */
@@ -196,13 +196,13 @@ export function withLaunchRunContext<T>(
   // can't drift a hand-maintained copy of the same values; only
   // `onApprovalPolicyDenial` (a callback that is not part of ToolPolicy) is
   // still supplied explicitly. Run identity (`runId`/`workingDirectory`)
-  // travels via `ctx.runScope` unchanged, and
-  // the model via the run's `ModelCell`, so tools observe a mid-session model
-  // switch without depending on the `AgentConfig.model` mirror.
+  // travels via `ctx.runScope` unchanged, and the model via `ctx.config`,
+  // which the run mirrors a mid-session switch into as soon as the new
+  // binding is live.
   return withRunContext(
     createRunContext({
       runScope: ctx.runScope,
-      modelCell: ctx.modelCell,
+      config: ctx.config,
       approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
       runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
       stopAfterCycle: ctx.toolPolicy.stopAfterCycle,
@@ -280,12 +280,12 @@ async function validateModelExists(
  * `flow.snapshot` (the one indexed read); a run with no snapshot has no
  * persisted format and binds today's default route.
  */
-const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
-  'inferLaunchModelHandlerCompatibilityKey',
+const inferLaunchModelCompatibilityKey = Effect.fn(
+  'inferLaunchModelCompatibilityKey',
 )(function* (runId: RunId, session: SessionHandle) {
   const snapshot = yield* session.ledger.latestSnapshot(runId);
   if (snapshot === null) return undefined;
-  return snapshot.payload.runtime.modelHandlerCompatibilityKey ?? undefined;
+  return snapshot.payload.runtime.modelCompatibilityKey ?? undefined;
 });
 
 /**
@@ -438,39 +438,18 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const session = input.session;
-    const modelHandlerCompatibilityKey =
-      input.modelHandlerCompatibilityKey ??
-      (yield* inferLaunchModelHandlerCompatibilityKey(runId, session));
+    const modelCompatibilityKey =
+      input.modelCompatibilityKey ??
+      (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
+      null;
     yield* failIfAborted(input.signal);
-    // The run's model handler is built from the process stores the launch
-    // already has in scope, so routing and key availability read the same
-    // secret store and global state the rest of the run does.
+    // The run's model is bound from the process stores the launch already
+    // has in scope, so routing and key availability read the same secret
+    // store and global state the rest of the run does.
     const stores: ModelOptionStores = {
       secrets: yield* Secrets,
       globalState: yield* AppState,
     };
-    const modelHandler = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(session, () =>
-          modelHandlerCompatibilityKey
-            ? createModelHandlerForCompatibilityKey(
-                modelConfig,
-                modelHandlerCompatibilityKey,
-                stores,
-                session.responseTextProcessing,
-              )
-            : createModelHandler(
-                modelConfig,
-                stores,
-                session.responseTextProcessing,
-                input.copilotRouteOverride,
-              ),
-        ),
-      catch: ensureError,
-    });
-    resources.push(() => modelHandler.dispose());
-    yield* failIfAborted(input.signal);
-    const modelCell = new ModelCell(modelHandler, config.model);
 
     const residency = yield* session.transcripts.acquireRunResidency(runId);
     const rawRunTrace = createRunTrace(residency);
@@ -492,8 +471,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
     const agentLogger = runTrace.trace;
-    modelHandler.setAgentCategory(setting.agentCategory);
-    modelHandler.setLogger(agentLogger);
 
     yield* failIfAborted(input.signal);
     const isRemote = isRemoteAgent(config.agent);
@@ -523,9 +500,9 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       displayInstruction && !input.resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
       setting.agentCategory === AgentCategory.ToolUse
-        ? modelHandler.capabilities.supportsVision ||
-          modelHandler.capabilities.supportsNativeAudio
-        : modelHandler.capabilities.supportsVision;
+        ? modelConfig.capabilities.supportsVision ||
+          modelConfig.capabilities.supportsNativeAudio
+        : modelConfig.capabilities.supportsVision;
     const initialMediaMayBeInserted =
       config.mediaFiles.length > 0 && supportsMediaInMessage;
 
@@ -537,11 +514,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources.push(() => parentStage.end(RUN_OUTCOME.FAILED));
 
     // Tell the user when attached images will be dropped because the chosen model
-    // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
-    // drop them silently otherwise.
+    // lacks vision. The loop's media input skips them with a per-file warning
+    // otherwise.
     const visionWarning = mediaNeedsVisionWarning(
       config.mediaFiles,
-      modelHandler.capabilities,
+      modelConfig.capabilities,
       'attached',
       config.model,
     );
@@ -587,9 +564,9 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         prompt,
         agentPath,
         {
-          isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
-          isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
-          isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
+          isOpenai: modelConfig.provider === ModelProvider.OPENAI,
+          isAnthropic: modelConfig.provider === ModelProvider.ANTHROPIC,
+          isGoogle: modelConfig.provider === ModelProvider.GOOGLE,
         },
         agentLogger,
         { delegationAgentScope: runScope.delegationAgentScope },
@@ -610,7 +587,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
 
     const usageMonitor = new UsageMonitor(
-      modelCell,
       {
         logger: agentLogger,
         runId,
@@ -626,7 +602,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       resolvedAgentDescription: resolution.entry.description,
       setting,
       prompt,
-      modelCell,
+      modelConfig,
+      modelCompatibilityKey,
       // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
       // the nested tool-name array gets its own frozen copy rather than
       // aliasing the caller's (still mutable) array.

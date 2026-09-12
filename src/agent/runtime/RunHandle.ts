@@ -71,10 +71,9 @@ type RunSuspension =
  *
  * This is derived from — not a parallel re-declaration of — {@link
  * ToolUseFlowContext}, so a shape change to either surface fails type-checking
- * instead of silently diverging: the nested `modelHandler` view is a `Pick` of
- * the flow context's own type, and the method members are picked through
- * directly. The loop's context is deliberately richer (it owns the run's
- * `FollowUps` lease and the bound model); the handle keeps only what a
+ * instead of silently diverging: every member is picked through from the flow
+ * context's own type. The loop's context is deliberately richer (it owns the
+ * run's `FollowUps` lease and the bound model); the handle keeps only what a
  * consumer of an attached run needs.
  *
  * {@link RunHandle.interrupt} falls back to this context's
@@ -84,12 +83,7 @@ type RunSuspension =
  * `flowContext` is attached via `attachToolUseFlow` for the duration of one
  * turn and knows how to cancel the in-progress model/tool round.
  */
-export type LiveToolUseFlowContext = {
-  readonly modelHandler: Pick<
-    ToolUseFlowContext['modelHandler'],
-    'supportsManualCompaction'
-  >;
-} & Pick<
+export type LiveToolUseFlowContext = Pick<
   ToolUseFlowContext,
   | 'ownerSession'
   | 'requestImmediateCompaction'

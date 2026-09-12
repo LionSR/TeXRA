@@ -1,6 +1,6 @@
 /**
  * The agent flow state a `flow.snapshot` row restores: the run-state and
- * workspace snapshots, the user-variable channels, the handler compatibility
+ * workspace snapshots, the user-variable channels, the model compatibility
  * key, and the message-free core of each flow family. Host-neutral so the run
  * ledger (`runLedgerEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back, and the two family modules
@@ -29,8 +29,8 @@ import { WorkPlanSnapshotSchema } from './workPlan';
 
 /**
  * Normalized usage statistics from any model provider: the ONLY usage type
- * after API response extraction. Every model handler normalizes its
- * provider-specific usage to this shape.
+ * after API response extraction. The package's `TurnResult.usage` is priced
+ * into this shape by `run/pricing.ts`.
  *
  * Reuses only the required base fields via `.pick()` — the optional cache
  * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
@@ -89,14 +89,13 @@ export type AgentRunStateSnapshot = z.output<
 
 // ------------------------------------------------------------ workspace
 
-/** Schema for thinking blocks (used by model handlers). */
+/** Schema for thinking blocks (carried in persisted messages). */
 const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
   signature: z.string().optional(),
   data: z.string().optional(),
 });
-export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
 /** Response assembly state. */
 const ResponseAssemblyStateSchema = z.object({
@@ -292,29 +291,26 @@ export const UserVariableChannelsSchema = UserVariableChannelRecordSchema;
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 
-// ------------------------------------------------- handler compatibility
+// --------------------------------------------------- model compatibility
 
-const MODEL_HANDLER_COMPATIBILITY_KEYS = [
-  'ModelHandlerValidation',
-  'ModelHandlerOpenAIResponse',
-  'ModelHandlerOpenRouterNative',
-  'ModelHandlerVscodeLm',
-  'ModelHandlerAnthropic',
-  'ModelHandlerOpenAI',
-  'ModelHandlerGoogleInteractions',
-  'ModelHandlerDeepSeek',
-  'ModelHandlerXAI',
-  'ModelHandlerKimi',
-  'ModelHandlerDashScope',
-  'ModelHandlerMiniMax',
-  'ModelHandlerGLM',
-  'ModelHandlerMeta',
+const MODEL_COMPATIBILITY_KEYS = [
+  'Validation',
+  'OpenAIResponse',
+  'OpenRouterNative',
+  'VscodeLm',
+  'Anthropic',
+  'OpenAI',
+  'GoogleInteractions',
+  'DeepSeek',
+  'XAI',
+  'Kimi',
+  'DashScope',
+  'MiniMax',
+  'GLM',
+  'Meta',
 ] as const;
-export type ModelHandlerCompatibilityKey =
-  (typeof MODEL_HANDLER_COMPATIBILITY_KEYS)[number];
-export const ModelHandlerCompatibilityKeySchema = z.enum(
-  MODEL_HANDLER_COMPATIBILITY_KEYS,
-);
+export type ModelCompatibilityKey = (typeof MODEL_COMPATIBILITY_KEYS)[number];
+export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
 
 // -------------------------------------------------------- family cores
 
@@ -338,13 +334,13 @@ export const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   /**
-   * The model the run is on, mirroring the live `ModelCell`. This is the
-   * resume SSOT for model identity.
+   * The model the run is on, mirroring the run's live model binding. This is
+   * the resume SSOT for model identity.
    */
   modelId: z.string().optional(),
   /** Provider-message format of the persisted messages. Absent for an
-   *  untagged handler (see `modelHandlersShareConversationFormat`). */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
+   *  untagged run. */
+  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
   shouldSkipCycle: z.boolean(),
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
@@ -374,8 +370,8 @@ export const ReflectionSnapshotStateSchema = z.object({
   endTurn: z.boolean(),
 
   /** Provider-message format used by the persisted `context` messages.
-   *  Absent for an untagged handler. */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
+   *  Absent for an untagged run. */
+  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
 
   /** One-shot compile-failure feedback injected into the next round prompt. */
   compileFailureContext: z.string().optional(),

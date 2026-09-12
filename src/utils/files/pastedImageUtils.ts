@@ -41,7 +41,7 @@ export function pastedImageFileName(fileName: string): string {
  * Persist pasted image bytes into the shared `pasted/` storage dir and return
  * the absolute path. Shared by the extension webview host and the CLI so both
  * produce identical on-disk media files that flow through the same
- * MediaAttachmentProcessor path — no duplicated encoding.
+ * `run/mediaInput` path — no duplicated encoding.
  */
 export async function savePastedImageBuffer(
   data: Buffer,

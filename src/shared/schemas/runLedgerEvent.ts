@@ -30,7 +30,7 @@ import { JsonValueSchema } from './jsonValue';
 import { RunOutcomeSchema } from './run';
 import {
   AgentRunStateSnapshotSchema,
-  ModelHandlerCompatibilityKeySchema,
+  ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
   ReflectionSnapshotStateSchema,
   StateSlicesSchema,
@@ -481,7 +481,7 @@ const PendingRetrySchema = z.strictObject({
   requestId: z.string().min(1),
   invocation: InvocationRefSchema,
   failedModelId: z.string().min(1),
-  failedCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable(),
+  failedCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /** Route requirements without secrets: a credential scope, never a
    *  credential. */
   credentialScope: z.string().min(1),
@@ -521,7 +521,7 @@ const SnapshotRuntimeSchema = z.strictObject({
   turn: z.int().nonnegative(),
   continuationIndex: z.int().nonnegative(),
   modelId: z.string().min(1),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable(),
+  modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /**
    * Runtime-owned failure vocabulary, already persisted today and already
    * carrying the exhaustion classification that drives retry and route-switch

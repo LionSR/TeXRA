@@ -5,13 +5,13 @@
 ubiquitous language is visible in the directory layout rather than buried in a
 flat folder.
 
-| Module        | Concern                          | Contents                                                                                                                                                                                                                                                                                          |
-| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable tokens; the user-variable record now lives in `@shared/schemas` `runFlowState.ts`)                                     |
-| `state/`      | Run-state snapshots              | `AgentWorkspaceState`, `AgentState` (round snapshot + metrics; the run snapshot moved to `@shared/schemas` `runFlowState.ts`), and `runRequests` (request validation) — **not** a live state model: `AgentConfig` is the one run-config vocabulary, and no boundary projects a second shape of it |
-| `usage/`      | Usage value objects              | `RunUsageAccumulator` — accumulates already-normalized `NormalizedUsage` (`@shared/schemas`). Raw per-provider usage payloads (`ProviderUsage`) no longer cross into core flows and live in `@agent/types/ProviderUsage`; core never imports them.                                                |
-| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                                                                                                                                         |
-| `flows/`      | Shared loop helpers              | Only what both run programs use: `toolCallParsing`. The programs themselves live in `@agent/runtime/loop/` (`toolUse.ts`, `reflection.ts`), their per-run services in `@agent/runtime/run/`, and the model call in `@agent/runtime/ModelInvoker.ts`                                               |
+| Module        | Concern                          | Contents                                                                                                                                                                                                                                                                              |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable tokens; the user-variable record now lives in `@shared/schemas` `runFlowState.ts`)                         |
+| `state/`      | Run-state snapshots              | `AgentWorkspaceState` and `runRequests` (request validation); the run snapshot lives in `@shared/schemas` `runFlowState.ts` — **not** a live state model: `AgentConfig` is the one run-config vocabulary, and no boundary projects a second shape of it                               |
+| `usage/`      | Usage value objects              | `RunUsageAccumulator` — accumulates already-normalized `NormalizedUsage` (`@shared/schemas`). There is no raw per-provider usage shape any more: `TurnResult.usage` from `packages/llm` and `priceTurnUsage` (`src/agent/runtime/run/pricing.ts`) produce `NormalizedUsage` directly. |
+| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                                                                                                                             |
+| `flows/`      | Shared loop helpers              | Only what both run programs use: `toolCallParsing`. The programs themselves live in `@agent/runtime/loop/` (`toolUse.ts`, `reflection.ts`), their per-run services in `@agent/runtime/run/`, and the model call in `@agent/runtime/ModelInvoker.ts`                                   |
 
 ## Dependency direction
 
@@ -28,8 +28,8 @@ depend on neither. Don't introduce imports that point back outward (e.g.
 
 This diagram covers dependencies _within_ `core`. A `flows/` helper may still
 call a canonical host-agnostic collaborator outside `core` directly instead of
-taking a second reference to the same run-owned service; this is the same
-pattern `@agent/modelHandlers` already uses, not a `core`-specific exception.
+taking a second reference to the same run-owned service; this is not a
+`core`-specific exception.
 None of this pulls in `vscode` or `packages/*`; it's still host-agnostic, just
 not self-contained within `core`'s own module boundaries. Don't read the
 diagram above as "`flows/` files never import outside `core`."

@@ -37,7 +37,6 @@ const RunEndErrorSchema = z
     RetryErrorInfoSchema.pick({
       message: true,
       userRetryable: true,
-      streamDiagnostics: true,
       partialText: true,
     })
       .partial()

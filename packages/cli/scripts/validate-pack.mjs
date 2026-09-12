@@ -96,9 +96,9 @@ function assertBundleHardened(bundlePath) {
   const forbiddenFragments = [
     'sourceMappingURL',
     'sourcesContent',
-    'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER',
+    'TEXRA_INTERNAL_VALIDATE_MODEL',
     'Validated CLI Runtime',
-    'modelHandlerValidation',
+    'validation.invalid',
     '/Users/',
   ];
   const present = forbiddenFragments.filter((fragment) =>

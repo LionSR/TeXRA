@@ -52,10 +52,11 @@ engine or execution persistence.
   graph cursor through `ExecutionKVStore`. Reimplementing that KV interface
   with SQLite would retain the old engine and checkpoint representation.
 - [`AgentLaunchContext.ts`](../../../../src/agent/runtime/AgentLaunchContext.ts)
-  still constructs models through the old `ModelFactory` and handler classes.
-  [`packages/llm/src/turn.ts`](../../../../packages/llm/src/turn.ts) defines the
-  new Effect/Stream model contract, but the provider package is not yet used
-  by the production agent execution path at this revision.
+  resolves the route and compatibility key through
+  [`modelRoutes.ts`](../../../../src/agent/runtime/modelRoutes.ts), and
+  [`run/modelBinding.ts`](../../../../src/agent/runtime/run/modelBinding.ts)
+  binds the [`packages/llm`](../../../../packages/llm/src/turn.ts)
+  Effect/Stream model the production execution path calls.
 - [`sessionLayer.ts`](../../../../src/controllers/session/sessionLayer.ts),
   [`SessionView.ts`](../../../../src/controllers/session/SessionView.ts), and
   the shared session fold already provide useful scoped services and a common

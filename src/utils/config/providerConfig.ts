@@ -107,12 +107,6 @@ export function getPreferKimiCode(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
 }
 
-export function getWebSocketEnabled(): boolean {
-  // WEBSOCKET_OPENAI is catalog-modeled, so its default comes from the schema
-  // via the shared accessor.
-  return readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI);
-}
-
 /**
  * Whether to route all API calls through OpenRouter. Catalog-modeled (see
  * `stateSettings.ts`), so the default comes from the schema via the shared

@@ -2,21 +2,14 @@
  * Experimental "Sign in with ChatGPT" (Codex subscription) OAuth session.
  *
  * Public surface for hosts (CLI/extension/desktop login commands) and the Codex
- * model handler. Rides an UNOFFICIAL OpenAI endpoint + borrowed client id —
+ * route binding. Rides an UNOFFICIAL OpenAI endpoint + borrowed client id —
  * opt-in, off by default, personal use only.
  *
  * The "prefer my subscription" switches are NOT here: they are model-selection
  * preferences, owned by `@model/codex/codexPreference` so the model layer can
  * read them without depending on this OAuth machinery.
  */
-export {
-  CODEX_ACCOUNT_ID_HEADER,
-  CODEX_BACKEND_BASE_URL,
-  CODEX_BETA_HEADER,
-  CODEX_BETA_VALUE,
-  CODEX_ORIGINATOR,
-  CODEX_ORIGINATOR_HEADER,
-} from './codexConstants';
+export { CODEX_BACKEND_BASE_URL } from './codexConstants';
 export {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,

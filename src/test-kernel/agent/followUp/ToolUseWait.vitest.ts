@@ -74,7 +74,6 @@ import {
   recordSessionEvents,
   sessionWithInteractions,
 } from '../progressTestUtils';
-import { testModelCell } from '../modelCellTestUtils';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger and the
@@ -109,7 +108,7 @@ function testBoundModel(supportsVision: boolean): BoundModel {
   return {
     modelId: 'test-model',
     config: buildTestModelConfig({ capabilities: { supportsVision } }),
-    compatibilityKey: 'ModelHandlerDeepSeek',
+    compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
     usageProvider: 'openai',
@@ -289,7 +288,6 @@ function agentRunTestLayer(init: LoopInit) {
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),
         usageMonitor: new UsageMonitor(
-          testModelCell({ config: buildTestModelConfig() }),
           { logger, runId: init.runId, runStageId: undefined },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
@@ -407,7 +405,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       turn: 0,
       continuationIndex: 0,
       modelId: 'test-model',
-      modelHandlerCompatibilityKey: 'ModelHandlerDeepSeek',
+      modelCompatibilityKey: 'DeepSeek',
       lastError: null,
       pendingRetry: null,
       messages: [],

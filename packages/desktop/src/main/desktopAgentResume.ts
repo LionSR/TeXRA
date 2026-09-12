@@ -96,11 +96,11 @@ export class DesktopProcessResumeOwner {
             recovery,
             runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
             isCancellationRequested,
-            executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+            executeWorkflow: (config, id, modelCompatibilityKey) =>
               launchDesktopAgent(
                 { kind: 'resume', config, runId: id },
                 { session },
-                { modelHandlerCompatibilityKey },
+                { modelCompatibilityKey },
               ),
           });
         }),

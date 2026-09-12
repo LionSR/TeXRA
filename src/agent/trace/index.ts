@@ -16,7 +16,7 @@ export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';
 export { noopTrace } from './noopTrace';
-export { attachChannelSubscriber, createChannelTrace } from './channelTrace';
+export { createChannelTrace } from './channelTrace';
 export {
   startToolUseCard,
   endToolUseCard,
@@ -27,7 +27,6 @@ export {
   logSdkError,
   logErrorData,
   startCompactionActivity,
-  type CompactionActivityOperation,
   logProgressStatus,
   logUserMessage,
   logInternal,
@@ -35,7 +34,6 @@ export {
   logContextManagementEvent,
   logConversationProgress,
   logWebSearch,
-  logWebFetch,
   logFilesLoaded,
   logFileCategory,
 } from './helpers';
