@@ -31,6 +31,7 @@ import type {
   RequestOpenFilePayload,
   RunId,
 } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
 import {
@@ -60,6 +61,11 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
+  /** A run on this session committed a completed terminal result. The run
+   *  lifecycle has already persisted `firstRunDone`; the host recomputes
+   *  state derived from it (the onboarding funnel) so a first successful run
+   *  clears the setup card without waiting for a restart. */
+  onRunCompleted?: () => void;
   logger?: AgentTrace;
 }
 
@@ -193,6 +199,9 @@ export function createDesktopAgentRun(
     // behind it to go.
     releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
+  const detachRunCompleted = session.onResult((event) => {
+    if (event.outcome === RUN_OUTCOME.COMPLETED) options.onRunCompleted?.();
+  });
 
   function runValidated(
     request: ValidatedRunRequest,
@@ -225,6 +234,7 @@ export function createDesktopAgentRun(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
+      detachRunCompleted();
       runtime.runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },
