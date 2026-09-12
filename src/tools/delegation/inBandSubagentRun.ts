@@ -1,19 +1,19 @@
 /**
- * In-band native subagent run for callers that consume a typed result.
+ * Await one native subagent child in band, for callers that consume a typed
+ * result.
  *
- * This is the durable synchronous composition of the same native strategy
- * `childRunLoop` drives for detached delegation. It adds stable physical-attempt
- * reservation/recovery and required result persistence around that standard
- * launch primitive; XML presentation remains a delivery adapter.
- *
- * The attempt ledger here is physical: it records reservation and launch edges
- * for one model run. The workflow journal is logical: it records an `agent()`
- * call's replayable value. Journal replay is checked first by the workflow
- * engine; only a journal miss enters this physical attempt layer.
+ * The child runs under the same `childRunLoop` every detached delegation
+ * drives, with the same single-cycle native strategy and persist-only
+ * delivery; "in-band" is only this caller blocking on the loop's completion,
+ * and XML presentation remains a delivery adapter. The child's own run
+ * aggregate is the durable record of what happened, so whether an earlier
+ * child already answered a logical call belongs to whoever owns that call
+ * identity (the workflow-script runner derives the attempt's run id and probes
+ * it); this module only ever starts the run it is handed.
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -33,13 +33,12 @@ import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
-  type ResultMeta,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -48,20 +47,25 @@ import {
   type DetachedChildRunInput,
 } from './detachedChildRun';
 import {
-  commitStableSubagentAttempt,
-  reserveStableAttempt,
-  throwRetryableDurabilityError,
-  SubagentCommitError,
-  SubagentDurabilityError,
-  writeStableSubagentAttempt,
-  type StableSubagentAttempt,
-} from './stableSubagentAttempt';
-import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
 } from './nativeSubagentStrategy';
 
 const log = createLog('inBandSubagentRun');
+
+/**
+ * A required-result child left no typed result to read back: the
+ * infrastructure failed before or around the child's terminal persistence.
+ * Kept distinct from the child's own failure, which is an ordinary failed
+ * call, because a durability fault must abort the caller's run instead of
+ * returning a null value to it.
+ */
+export class SubagentDurabilityError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'SubagentDurabilityError';
+  }
+}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
@@ -92,18 +96,6 @@ export interface InBandSubagentLaunchOptions {
   >;
 }
 
-interface StableInBandSubagentRunOptions extends InBandSubagentLaunchOptions {
-  /**
-   * Fires once, just before a live attempt runs, with the run id that
-   * attempt actually uses; the logical id on attempt 0, an attempt-specific
-   * id after a durable retry advanced the sequence. This is the id the child
-   * stream registers under and the roster exposes, so a host targeting the
-   * in-flight child (skip/retry) must key on it, not the pre-derived logical
-   * id. Recovered attempts never run live, so this does not fire for them.
-   */
-  readonly onActiveRunId?: (runId: RunId) => void;
-}
-
 /** Options for the XML-delivery API. */
 type InBandSubagentDeliveryOptions = InBandSubagentRunBaseOptions;
 
@@ -121,16 +113,6 @@ type PersistenceMode = 'required-result' | 'best-effort-delivery';
 type SettledInBandTurn = Parameters<
   NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
 >[0];
-
-// Parent run ownership is process-local. Serialize duplicate dispatches
-// within that owner while durable manifests handle later restart recovery.
-const stableRuns = new Map<
-  RunId,
-  {
-    readonly semaphore: Semaphore.Semaphore;
-    users: number;
-  }
->();
 
 /** Resolve the definition once before either in-band launch path registers it. */
 const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
@@ -155,13 +137,17 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
  * Failure taxonomy at the read-back boundary:
- * - completion rejected, or no `run.end` row / result manifest exists
+ * - completion rejected, or no settled typed result / no `run.end` row
  *   afterwards → the infrastructure failed before the child's terminal
- *   persistence; durable callers mark the stable attempt retryable
+ *   persistence, so there is no typed result to return
  *   (SubagentDurabilityError).
  * - terminal row says failed → the child itself failed; the persisted
  *   terminal error message is the thrown message.
  * - terminal row says completed/cancelled → returned typed.
+ *
+ * A loop failure after the turn settled (a lease release or artifact cleanup
+ * that threw once the child's rows were already committed) does not rewrite
+ * the outcome: the committed rows are the fact.
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
@@ -169,7 +155,6 @@ const executeInBand = Effect.fn('executeInBand')(
     definition: PreparedAgentDefinition,
     mode: PersistenceMode,
     runId: RunId,
-    stableAttempt?: StableSubagentAttempt,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
     const { config } = definition;
     const startedAt = Date.now();
@@ -191,7 +176,6 @@ const executeInBand = Effect.fn('executeInBand')(
           : ensureError(cause),
       ),
     );
-    let stableCompletionCommitted = false;
     const completed = yield* Effect.gen(function* () {
       let settledTurn: SettledInBandTurn | undefined;
       const { completion } = yield* startDetachedChildRunLoop({
@@ -207,58 +191,20 @@ const executeInBand = Effect.fn('executeInBand')(
         onTurnSettled: (settled) => {
           settledTurn = settled;
         },
-        afterArtifactsDrained: Effect.gen(function* () {
-          if (
-            !stableAttempt ||
-            settledTurn?.isError === true ||
-            settledTurn?.resultMeta?.producer !== 'subagent'
-          ) {
-            return;
-          }
-          // How the child ended is the `run.end` row's fact, already written
-          // by the run's own lifecycle before this drain hook runs.
-          const runEnd = yield* getRunRecords(
-            options.session,
-            runId,
-          ).readRunEnd();
-          if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) return;
-          yield* commitStableSubagentAttempt(
-            runId,
-            stableAttempt,
-            options.session,
-          );
-          stableCompletionCommitted = true;
-        }),
+        // Built inside the loop's lease launch guard, like every
+        // attempt-scoped setup: a throw here releases the owned-run lease.
         buildLaunch: () =>
-          Effect.gen(function* () {
-            // Inside the loop's lease launch guard, like every attempt-scoped
-            // setup: a throw here releases the owned-run lease.
-            if (stableAttempt) {
-              yield* writeStableSubagentAttempt(options.session, {
-                ...stableAttempt,
-                phase: 'launched',
-              }).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new SubagentDurabilityError(
-                      `Failed to mark subagent ${runId} as launched.`,
-                      { cause },
-                    ),
-                ),
-              );
-            }
-            return {
-              strategy: createNativeSubagentStrategy({
-                ...options,
-                definition,
-                runId,
-                startedAt,
-                workingDirectory,
-                runMode: 'single-cycle',
-                resultOnly: mode === 'required-result',
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              }),
-            };
+          Effect.succeed({
+            strategy: createNativeSubagentStrategy({
+              ...options,
+              definition,
+              runId,
+              startedAt,
+              workingDirectory,
+              runMode: 'single-cycle',
+              resultOnly: mode === 'required-result',
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            }),
           }),
       });
 
@@ -270,23 +216,13 @@ const executeInBand = Effect.fn('executeInBand')(
       // The loop hands this caller the settled turn's facts only once its
       // report and result manifest are on disk; no turn settling means the run
       // was interrupted, or a delivery write or the infrastructure failed
-      // before terminal persistence; durable callers mark the attempt
-      // retryable.
+      // before terminal persistence.
       const resultMeta = settledTurn?.resultMeta;
       if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
-        const failure = new SubagentDurabilityError(
+        throw new SubagentDurabilityError(
           `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
           loopFailure !== undefined ? { cause: loopFailure } : undefined,
         );
-        if (mode === 'required-result') {
-          return yield* throwRetryableDurabilityError(
-            runId,
-            stableAttempt,
-            failure,
-            options.session,
-          );
-        }
-        throw failure;
       }
 
       // How the child ended is the `run.end` row's fact, written by the run's
@@ -312,111 +248,25 @@ const executeInBand = Effect.fn('executeInBand')(
       // the onTurnSettled callback, so a closure cannot keep the narrowing.
       const turnError = settledTurn.error;
       const turnMessage = settledTurn.message;
-      const childError = () =>
-        turnError ??
-        new Error(
-          runEnd?.error?.message ??
-            `Subagent ${runId} ended with failed outcome.`,
-        );
-
-      if (loopFailure instanceof SubagentCommitError) throw loopFailure;
-      if (loopFailure !== undefined && stableCompletionCommitted) {
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} committed durable completion but failed to release its run lease.`,
-          { cause: loopFailure },
-        );
-      }
-
-      if (mode === 'required-result') {
-        // The ledger recovers restarts by inspecting the persisted manifest, so
-        // the in-memory copy is not enough here: verify the write landed. A
-        // FAILED child's attempt is marked retryable (re-running a failed child
-        // is safe); a COMPLETED child whose manifest did not persist keeps its
-        // 'launched' marker, so a later run refuses to repeat side-effectful
-        // work rather than executing it twice.
-        let persisted: ResultMeta | null;
-        // A read failure is NOT the same fact as a missing manifest: keep it so
-        // the thrown error names the I/O cause instead of blaming persistence.
-        let readFailure: unknown;
-        const persistedExit = yield* Effect.exit(
-          getRunRecords(options.session, runId).readResultMeta(),
-        );
-        if (Exit.isSuccess(persistedExit)) {
-          persisted = persistedExit.value;
-        } else {
-          readFailure = Cause.squash(persistedExit.cause);
-          log.warn('Failed to read the persisted result manifest', {
-            data: { runId, error: readFailure },
-          });
-          persisted = null;
-        }
-        if (!persisted) {
-          if (childFailed) {
-            const error = childError();
-            return yield* throwRetryableDurabilityError(
-              runId,
-              stableAttempt,
-              new SubagentDurabilityError(
-                `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-                {
-                  cause: new AggregateError(
-                    readFailure === undefined ? [error] : [error, readFailure],
-                    `Subagent ${runId} run and persistence both failed.`,
-                  ),
-                },
-              ),
-              options.session,
-            );
-          }
-          if (readFailure !== undefined) {
-            throw new SubagentDurabilityError(
-              `Failed to verify the persisted result for subagent ${runId}.`,
-              { cause: readFailure },
-            );
-          }
-          throw new SubagentDurabilityError(
-            `Failed to persist result for subagent ${runId}.`,
-          );
-        }
-      }
-
-      if (
-        mode === 'required-result' &&
-        loopFailure !== undefined &&
-        !childFailed
-      ) {
-        return yield* throwRetryableDurabilityError(
-          runId,
-          stableAttempt,
-          new SubagentDurabilityError(
-            `Subagent ${runId} failed to persist its final artifacts.`,
-            { cause: loopFailure },
-          ),
-          options.session,
-        );
-      }
 
       if (childFailed) {
-        throw childError();
+        throw (
+          turnError ??
+          new Error(
+            runEnd?.error?.message ??
+              `Subagent ${runId} ended with failed outcome.`,
+          )
+        );
       }
 
       if (!runEnd) {
         // The child did not fail, so the missing terminal row is an
         // infrastructure gap: the run's lifecycle never committed it, or the
         // read of it failed.
-        const failure = new SubagentDurabilityError(
+        throw new SubagentDurabilityError(
           `Subagent ${runId} ended without a terminal record.`,
           endFailure !== undefined ? { cause: endFailure } : undefined,
         );
-        if (mode === 'required-result') {
-          return yield* throwRetryableDurabilityError(
-            runId,
-            stableAttempt,
-            failure,
-            options.session,
-          );
-        }
-        throw failure;
       }
 
       return {
@@ -426,84 +276,11 @@ const executeInBand = Effect.fn('executeInBand')(
       };
     });
 
-    // Post-run cancellation deliberately observes a terminal record: stable
-    // success was committed inside the post-drain/pre-release lease boundary,
-    // then the awaiting caller rejects without rewriting the child.
+    // Post-run cancellation deliberately observes a terminal record: the
+    // child's rows were committed inside its own lease boundary, then the
+    // awaiting caller rejects without rewriting them.
     options.signal?.throwIfAborted();
     return completed;
-  },
-  Effect.uninterruptible,
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-);
-
-/** Recover a logical child first; resolve launch-only state only when needed. */
-export const executeStableSubagentInBand = Effect.fn(
-  'executeStableSubagentInBand',
-)(
-  function* (
-    options: StableInBandSubagentRunOptions,
-  ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const reservation = yield* Effect.acquireRelease(
-          Effect.sync(() => {
-            let reservation = stableRuns.get(options.runId);
-            if (!reservation) {
-              reservation = { semaphore: Semaphore.makeUnsafe(1), users: 0 };
-              stableRuns.set(options.runId, reservation);
-            }
-            reservation.users += 1;
-            return reservation;
-          }),
-          (reservation) =>
-            Effect.sync(() => {
-              reservation.users -= 1;
-              if (reservation.users === 0) stableRuns.delete(options.runId);
-            }),
-        );
-        return yield* reservation.semaphore.withPermit(
-          Effect.gen(function* () {
-            const reserved = yield* reserveStableAttempt(
-              options,
-              options.session,
-            );
-            if (reserved.kind === 'recovered') return reserved.result;
-            const { runId, attempt } = reserved;
-            // Publish the physical attempt id before resolving mutable launch state.
-            options.onActiveRunId?.(runId);
-            const prepared = yield* options.prepare();
-            const launch = { ...prepared, signal: options.signal };
-            const definition = yield* prepareInBandDefinition(launch);
-            // Validate the current definition, not metadata left by an earlier
-            // catalog load. Recovery returned above without loading it again.
-            if (
-              definition.config.agentCategory === AgentCategory.Workflow &&
-              definition.config.inputFiles.length === 0 &&
-              definition.setting.defaultOutputFiles.length === 0
-            ) {
-              return yield* Effect.fail(
-                new WorkflowRunAbortError(
-                  `Workflow agent '${launch.agentName}' edits files: pass options.inputFiles ` +
-                    `with files that still exist (its result carries output files and ` +
-                    `diffs, not response text).`,
-                ),
-              );
-            }
-            const completed = yield* executeInBand(
-              launch,
-              definition,
-              'required-result',
-              runId,
-              attempt,
-            );
-            return {
-              runId: completed.runId,
-              result: completed.result,
-            };
-          }),
-        );
-      }),
-    );
   },
   Effect.uninterruptible,
   Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),

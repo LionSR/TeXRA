@@ -16,7 +16,7 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
-import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
+import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentRun';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -71,8 +71,13 @@ vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
 }));
 
-vi.mock('@tools/delegation/inBandSubagentRun', async () => {
+vi.mock('@tools/delegation/inBandSubagentRun', async (importOriginal) => {
+  // Only the launch entry point is faked; the durability error the runner
+  // classifies is the real class.
   return {
+    ...(await importOriginal<
+      typeof import('@tools/delegation/inBandSubagentRun')
+    >()),
     executeSubagentInBand: mocks.executeSubagentInBand,
   };
 });

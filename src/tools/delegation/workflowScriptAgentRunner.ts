@@ -26,9 +26,9 @@ import { deriveRunId } from '@utils/core/idHash';
 // Local file imports
 import {
   executeSubagentInBand,
+  SubagentDurabilityError,
   type InBandSubagentLaunchOptions,
 } from './inBandSubagentRun';
-import { SubagentDurabilityError } from './stableSubagentAttempt';
 import {
   resolveInvocationFileList,
   rejectOversizedBibAttachments,

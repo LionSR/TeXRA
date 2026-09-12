@@ -29,21 +29,20 @@ import {
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
-import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
+import {
+  executeSubagentInBand as executeSubagentInBandEffect,
+  SubagentDurabilityError,
+} from '@tools/delegation/inBandSubagentRun';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { deriveRunId } from '@utils/core/idHash';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Drive the native operation at the test entry point. */
-function executeStableSubagentInBand(
-  options: Parameters<typeof executeStableSubagentInBandEffect>[0],
+function executeSubagentInBand(
+  options: Parameters<typeof executeSubagentInBandEffect>[0],
 ) {
   return Effect.runPromise(
-    Effect.provide(
-      executeStableSubagentInBandEffect(options),
-      fakeProcessServices(),
-    ),
+    Effect.provide(executeSubagentInBandEffect(options), fakeProcessServices()),
   );
 }
 
@@ -299,7 +298,7 @@ const IN_BAND_LOGICAL_RUN_ID = 'aaaaaa111111' as RunId;
 let stableSession: SessionHandle;
 
 type PreparedInBandSubagentOptions = Effect.Success<
-  ReturnType<Parameters<typeof executeStableSubagentInBand>[0]['prepare']>
+  ReturnType<Parameters<typeof executeSubagentInBand>[0]['prepare']>
 >;
 type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
   signal?: AbortSignal;
@@ -328,7 +327,7 @@ function runInBand(
   runId: RunId = IN_BAND_LOGICAL_RUN_ID,
 ) {
   const { signal, ...prepared } = options;
-  return executeStableSubagentInBand({
+  return executeSubagentInBand({
     runId,
     parentRunId: prepared.parentRunId,
     session: prepared.session,
@@ -669,7 +668,7 @@ describe('headless delegation', () => {
         const { signal, ...prepared } = options;
         const run = () =>
           Effect.provide(
-            executeStableSubagentInBandEffect({
+            executeSubagentInBandEffect({
               runId: IN_BAND_LOGICAL_RUN_ID,
               parentRunId: prepared.parentRunId,
               session: prepared.session,
@@ -959,7 +958,7 @@ describe('headless delegation', () => {
     );
 
     await expect(
-      executeStableSubagentInBand({
+      executeSubagentInBand({
         runId: stableRunId,
         parentRunId: STABLE_PARENT_RUN_ID,
         session: stableSession,
@@ -995,7 +994,7 @@ describe('headless delegation', () => {
     );
     const prepare = vi.fn();
 
-    const recovered = await executeStableSubagentInBand({
+    const recovered = await executeSubagentInBand({
       runId: logicalRunId,
       parentRunId: STABLE_PARENT_RUN_ID,
       session: stableSession,
