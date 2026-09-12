@@ -562,7 +562,7 @@ describe('the tool-use turn', () => {
         expect(result.response).toBe('B');
         // The replacement is the history now: the paid response lands on it,
         // not on the conversation it discarded.
-        expect(state.messages).toMatchObject([
+        expect(state?.messages).toMatchObject([
           {
             role: 'user',
             content: [{ kind: 'text', text: 'Compacted context.' }],

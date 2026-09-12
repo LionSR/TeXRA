@@ -8,6 +8,7 @@ import { priceTurnUsage } from '@agent/runtime/run/pricing';
 import { noopTrace } from '@agent/trace';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
+import type { Model, TurnResult } from '@llm/turn';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   setPreferCodexSubscription,
@@ -21,7 +22,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type OpenAI from 'openai';
-import type { Model, TurnResult } from '@llm/turn';
 
 function initFakePlatformWithSubscription(): Promise<void> {
   return installPlatform({
