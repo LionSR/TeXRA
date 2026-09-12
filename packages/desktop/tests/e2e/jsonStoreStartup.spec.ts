@@ -26,7 +26,9 @@ test('desktop main bundle completes its locked startup write', async () => {
       readFileSync(globalStatePath, 'utf8'),
     ) as Record<string, unknown>;
 
-    expect(globalState.lastKnownVersion).toEqual(expect.any(String));
+    // The startup write on a fresh profile is the first-install tool seed
+    // (`seedDisabledToolDefaults`, GlobalStateKey.DISABLED_TOOLS).
+    expect(globalState['texra.tools.disabled']).toEqual(expect.any(Array));
   } finally {
     if (launched) await closeTexraApp(launched);
     cleanupDirectory(workspacePath);

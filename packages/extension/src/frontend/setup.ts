@@ -25,7 +25,8 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  * allowlist so the creator tool-use agent can read/write them through the
  * standard file tools (read_file, write_file, grep, glob, edit_file).
  *
- * Call this after copyDefaultAgents(), which populates the built-in dirs.
+ * The built-in directories are the packaged ones, so this only needs the
+ * extension's resources path to be resolvable.
  */
 export async function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
