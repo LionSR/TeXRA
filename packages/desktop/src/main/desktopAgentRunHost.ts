@@ -17,6 +17,12 @@ export interface DesktopAgentRunHost
     message: string,
     actions: readonly InstructionAction[] | undefined,
   ): Promise<void>;
+  /**
+   * Presents a failure dialog. A `docsCommand` (from a refusing request's
+   * `Rejected`) adds a guide button opening the matching docs page — the
+   * native form of the link the extension's request-error callout renders.
+   */
+  showErrorDialog(message: string, docsCommand?: string): Promise<void>;
   pickTranscriptExportFormat(): Promise<TranscriptExportFormat | undefined>;
   openPath(filePath: string, line?: number): Promise<void>;
   openBuildDisplay: BuildDisplayFn;

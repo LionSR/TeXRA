@@ -108,9 +108,9 @@ export function createDesktopAgentRun(
       // The desktop task shell keeps the conversation canvas permanently on
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message }) =>
+      requestShowError: ({ message, docsCommand }) =>
         settleHostDialog(
-          host.showErrorMessage(message),
+          host.showErrorDialog(message, docsCommand),
           'Failed to present the error dialog',
         ),
       requestShowInstruction: (instruction) =>

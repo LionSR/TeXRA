@@ -71,7 +71,11 @@ const MISSING_API_KEY_MESSAGE =
 export function agentErrorPresentation(error: {
   kind: AgentErrorKind;
   message?: string;
+  /** Docs page of a refusing request (`Rejected.docsCommand`), surfaced
+   *  beside the error so the host's dialog keeps the guide affordance. */
+  docsCommand?: string;
 }): AgentErrorPresentation | null {
+  const docs = error.docsCommand ? { docsCommand: error.docsCommand } : {};
   switch (error.kind) {
     case 'missing-api-key':
       return {
@@ -95,18 +99,20 @@ export function agentErrorPresentation(error: {
             error.message ??
             'Conversation exceeds the model context window. Start a new ' +
               'session, or reduce attached files and tool output.',
+          ...docs,
         },
       };
     case 'disk-full':
       return {
         type: 'error',
-        payload: { message: error.message ?? 'Disk full.' },
+        payload: { message: error.message ?? 'Disk full.', ...docs },
       };
     case 'unexpected':
       return {
         type: 'error',
         payload: {
           message: error.message ?? 'Unexpected error executing agent.',
+          ...docs,
         },
       };
     case 'abort':
