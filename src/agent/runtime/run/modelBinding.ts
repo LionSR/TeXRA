@@ -488,8 +488,7 @@ function backgroundCapable(configuration: HttpConfiguration): boolean {
     case 'google-interactions':
       // Google retrieves a background result through server-side state.
       return (
-        configuration.background === 'supported' &&
-        configuration.defaults.store
+        configuration.background === 'supported' && configuration.defaults.store
       );
     default:
       return false;
@@ -558,7 +557,11 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     supportsNativeAudio: false,
     supportsReasoning: routed.capabilities.supportsReasoning,
     supportsForcedToolChoice: false,
-    wireRouteKey: JSON.stringify(['vscode-lm', deployment.vendor, deployment.version]),
+    wireRouteKey: JSON.stringify([
+      'vscode-lm',
+      deployment.vendor,
+      deployment.version,
+    ]),
     modelRetryRouteKey: JSON.stringify([
       'vscode-lm',
       deployment.vendor,

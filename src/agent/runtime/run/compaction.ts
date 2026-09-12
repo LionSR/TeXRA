@@ -33,8 +33,8 @@ import type { RunState } from '@shared/session/runStateFold';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { BoundModel } from './modelBinding';
 import { rowAggregate, type Message } from '../loop/rows';
+import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
 export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
@@ -303,9 +303,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   }
   const replacement: Message = {
     role: 'user',
-    content: [
-      { kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` },
-    ],
+    content: [{ kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` }],
   };
   const tokensAfter = Math.max(
     1,

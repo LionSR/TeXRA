@@ -78,14 +78,6 @@ const RunUsageAccumulatorJSONSchema = z.strictObject({
   totals: RunUsageTotalsSchema.prefault({}),
   latestUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
-/**
- * Output type for RunUsageAccumulator serialization.
- * Uses z.output<> to get the type after parsing (totals fully resolved).
- */
-export type RunUsageAccumulatorJSON = z.output<
-  typeof RunUsageAccumulatorJSONSchema
->;
-
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),

@@ -455,7 +455,8 @@ export const modelInvokerLayer: Layer.Layer<
       if (background === undefined) {
         return yield* new ModelError({
           kind: 'unsupported',
-          message: 'The bound model resolved a background turn it cannot submit.',
+          message:
+            'The bound model resolved a background turn it cannot submit.',
         });
       }
       const submission = yield* background.submit(resolved);
@@ -582,7 +583,8 @@ export const modelInvokerLayer: Layer.Layer<
               kind: 'attempt',
               invocation,
               origin: bound.origin,
-              delivery: resolved.mode === 'background' ? 'background' : 'stream',
+              delivery:
+                resolved.mode === 'background' ? 'background' : 'stream',
             },
           },
         ]),

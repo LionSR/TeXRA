@@ -1,5 +1,5 @@
 {
-  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
+  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip\u2019s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
       "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
@@ -776,18 +776,6 @@
       "name": "TraceDataSchema"
     },
     {
-      "file": "src/agent/core/state/AgentState.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/state/AgentState.ts"
-    },
-    {
-      "file": "src/agent/core/usage/RunUsageAccumulator.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "recordNormalizedUsage"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -869,25 +857,7 @@
       "file": "src/agent/runtime/ModelFactory.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "createKimiCodeFallbackHandler"
-    },
-    {
-      "file": "src/agent/runtime/ModelFactory.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modelHandlersShareConversationFormat"
-    },
-    {
-      "file": "src/agent/runtime/ModelFactory.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "shouldUseResponsesAPI"
-    },
-    {
-      "file": "src/agent/runtime/run/toolResultText.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "MAX_TOOL_RESULT_TEXT_LENGTH"
     },
     {
       "file": "src/agent/storage/runLease.ts",
@@ -1206,12 +1176,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "ActiveSkillSummarySchema"
-    },
-    {
-      "file": "src/shared/schemas/runFlowState.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StateSlicesSnapshot"
     },
     {
       "file": "src/shared/schemas/settingsViewMessages.ts",

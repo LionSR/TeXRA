@@ -4,6 +4,12 @@ import type {
   TokenCountOptions,
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_USER_PROMPT,
+  estimateTokensFromText,
+  logCompactionEvent,
+} from '@agent/runtime/run/compaction';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -15,12 +21,6 @@ import { clamp } from '@utils/core';
 
 // Local file imports
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
-import {
-  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_USER_PROMPT,
-  estimateTokensFromText,
-  logCompactionEvent,
-} from '@agent/runtime/run/compaction';
 import {
   contentToText,
   createInputText,

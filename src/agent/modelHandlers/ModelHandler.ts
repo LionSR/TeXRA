@@ -37,6 +37,11 @@ import type {
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
+  COMPACTION_SUMMARY_PREFIX,
+  COMPACTION_SYSTEM_PROMPT,
+  logCompactionEvent,
+} from '@agent/runtime/run/compaction';
+import {
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkError/errorMetadata';
@@ -87,11 +92,6 @@ import {
   TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
 } from './contextManagementConstants';
-import {
-  COMPACTION_SUMMARY_PREFIX,
-  COMPACTION_SYSTEM_PROMPT,
-  logCompactionEvent,
-} from '@agent/runtime/run/compaction';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   reportMediaAttachmentFailure,
