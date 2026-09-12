@@ -121,3 +121,8 @@ export const RunUsageTotalsSchema = z.object({
 });
 
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
+
+/** A run's usage before its first turn: every counter at its zero. */
+export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
+  RunUsageTotalsSchema.parse({}),
+);

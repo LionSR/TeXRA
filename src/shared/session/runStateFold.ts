@@ -26,6 +26,7 @@ import {
   type TurnResult,
 } from '@llm/turn';
 import {
+  EMPTY_RUN_USAGE_TOTALS,
   FlowSnapshotPayloadSchema,
   RunUsageTotalsSchema,
   requestParksItsCaller,
@@ -272,7 +273,9 @@ function byId<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
   return record;
 }
 
-const fresh = (commit: CommitOrdinal): RunState => ({
+/** The state a run starts from: every field at its zero, no family bound
+ *  yet. Both run programs open from this and stamp their own family. */
+export const freshRunState = (commit: CommitOrdinal): RunState => ({
   commit,
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
@@ -294,7 +297,7 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   pendingIntents: byId([]),
   requests: byId([]),
-  usage: RunUsageTotalsSchema.parse({}),
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
 });
 
@@ -497,7 +500,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
   switch (row.type) {
     case 'flow.step': {
       const p = row.payload;
-      const state = current ?? fresh(commit);
+      const state = current ?? freshRunState(commit);
       if (state.family !== null && state.family !== p.family) {
         return refuse('out-of-order', 'a step of another family', commit);
       }
@@ -529,7 +532,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     }
     case 'flow.snapshot': {
       const p = row.payload;
-      const state = current ?? fresh(commit);
+      const state = current ?? freshRunState(commit);
       if (state.family !== null && state.family !== p.family) {
         return refuse('stale-snapshot', 'a snapshot of another family', commit);
       }
@@ -644,7 +647,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     case 'model.message': {
       const p = row.payload;
       if (p.kind === 'append' && p.sourceResponse === null) {
-        const state = current ?? fresh(commit);
+        const state = current ?? freshRunState(commit);
         return Result.succeed({
           ...state,
           commit,
