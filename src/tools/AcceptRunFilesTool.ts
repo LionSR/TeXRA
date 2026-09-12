@@ -221,7 +221,7 @@ Parameters map directly to subagent-result delivery attributes:
             );
 
             const destPath = mapping.original ?? mapping.path;
-            const dest = WorkspaceFS.locatePath(destPath);
+            const dest = call.inScope(() => WorkspaceFS.locatePath(destPath));
             if (dest.kind === 'external') {
               throw new ToolError(
                 `original must be inside the workspace: ${destPath}`,
@@ -248,9 +248,8 @@ Parameters map directly to subagent-result delivery attributes:
             // Determine original content for diff display. In-place workflow
             // outputs can make source and destination the same workspace file, so
             // the pre-run snapshot is the only reliable "before" image.
-            const snapshotPath = getOriginalSnapshotPath(
-              runId,
-              dest.relativePath,
+            const snapshotPath = call.inScope(() =>
+              getOriginalSnapshotPath(runId, dest.relativePath),
             );
             const snapshotExists = yield* Effect.tryPromise({
               try: () => call.inScope(() => AbsoluteFS.isFile(snapshotPath)),
@@ -453,7 +452,7 @@ Parameters map directly to subagent-result delivery attributes:
     }
 
     // Fall back to workspace
-    const wsLoc = WorkspaceFS.locatePath(runPath);
+    const wsLoc = call.inScope(() => WorkspaceFS.locatePath(runPath));
     if (
       wsLoc.kind !== 'external' &&
       (yield* Effect.tryPromise({

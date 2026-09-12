@@ -14,6 +14,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import {
   Cause,
+  Deferred,
   Exit,
   Effect,
   Fiber,
@@ -103,7 +104,7 @@ function newProbe(): DispatchProbe {
 function probeTool(
   probe: DispatchProbe,
   name: string,
-  delayMs: number,
+  wait: number | Effect.Effect<void>,
   options: { endTurn?: boolean; parallelSafe?: boolean } = {},
 ): ITool {
   return {
@@ -116,7 +117,7 @@ function probeTool(
       probe.events.push(`start ${tag}`);
       probe.inFlight += 1;
       probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
-      yield* Effect.sleep(delayMs);
+      yield* typeof wait === 'number' ? Effect.sleep(wait) : wait;
       probe.inFlight -= 1;
       probe.events.push(`end ${tag}`);
       return {
@@ -714,10 +715,20 @@ describe('tool-use dispatch', () => {
   it.live('commits no settlement for a call interrupted in flight', () =>
     Effect.gen(function* () {
       const probe = newProbe();
+      const bothStarted = yield* Deferred.make<void>();
+      const awaitInterruption = Effect.gen(function* () {
+        if (probe.inFlight === 2)
+          yield* Deferred.succeed(bothStarted, undefined);
+        yield* Effect.never;
+      });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitInterruption, {
+            parallelSafe: true,
+          }),
+          read_file: probeTool(probe, 'read_file', awaitInterruption, {
+            parallelSafe: true,
+          }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
@@ -729,9 +740,8 @@ describe('tool-use dispatch', () => {
       });
 
       const fiber = yield* Effect.forkChild(dispatch(kit));
-      // A real wait, matching the probe tools' own real timers: the point is
-      // that both calls are genuinely in flight when the interrupt lands.
-      yield* Effect.sleep(15);
+      // Interrupt only after both calls have entered and are held in flight.
+      yield* Deferred.await(bothStarted);
       expect(probe.maxInFlight).toBe(2);
       yield* Fiber.interrupt(fiber);
 

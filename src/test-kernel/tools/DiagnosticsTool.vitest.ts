@@ -4,10 +4,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { createFakeHost } from '@test/support/setupPlatform';
 import { DiagnosticsTool, type DiagnosticsInput } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
@@ -178,6 +180,48 @@ describe('DiagnosticsTool', () => {
           ]);
           expect(result.summary).toBe(
             `Added criticism for ${PAPER_PATH}:3 (S4/C5)`,
+          );
+        }),
+      );
+    }),
+  );
+
+  it.effect('resolves an added criticism in the invoking project scope', () =>
+    Effect.gen(function* () {
+      const project = createFakeHost({
+        workspacePath: path.join(path.sep, 'project', 'diagnostics'),
+      });
+      const projectPath = path.join(project.roots.workspace!, 'paper.tex');
+
+      yield* withSession((session) =>
+        Effect.gen(function* () {
+          const addCriticism = vi.fn((entry) => ({
+            accepted: true,
+            resolvedPath: entry.absolutePath,
+          }));
+          session.interactions.use({ addCriticism });
+
+          const result = yield* new DiagnosticsTool()
+            .call(addCriticismCall())
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: {
+                    session,
+                    runId: 'diagnostics-project-scope' as RunId,
+                    toolPolicy: {},
+                  },
+                  inScope: (operation) =>
+                    runWithWorkspaceRoots(project.roots, operation),
+                }),
+              ),
+            );
+
+          expect(addCriticism).toHaveBeenCalledWith(
+            expect.objectContaining({ absolutePath: projectPath }),
+          );
+          expect(result.summary).toBe(
+            `Added criticism for ${projectPath}:3 (S4/C5)`,
           );
         }),
       );

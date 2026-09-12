@@ -17,6 +17,10 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
+import {
+  runWithWorkspaceRoots,
+  workspaceRoots,
+} from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -314,6 +318,75 @@ describe('accept_run_files progress events', () => {
       });
       expect(write).not.toHaveBeenCalled();
     }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
+
+  it.live(
+    'uses the invoking project roots for workspace fallbacks and snapshots',
+    () =>
+      Effect.gen(function* () {
+        const projectRoots = {
+          ...workspaceRoots(),
+          workspace: '/project',
+          storage: '/project-storage',
+        };
+        const tool = new AcceptRunFilesTool();
+        const tracker = new FileInteractionState();
+        const snapshotPath = `${projectRoots.storage}/executions/${runId}/original/paper.tex`;
+        let approvalOriginal = '';
+        let approvalProposed = '';
+        const { written, dispose } = recordWrittenFiles();
+
+        setRunStorageEntries();
+        vi.spyOn(StorageFS, 'fullPath').mockImplementation(
+          (target) => `${workspaceRoots().storage}/${target}`,
+        );
+        vi.spyOn(WorkspaceFS, 'locatePath').mockImplementation((target) => ({
+          kind: 'workspace',
+          absolutePath: `${workspaceRoots().workspace}/${target}`,
+          relativePath: target,
+        }));
+        vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
+        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue('current project');
+        vi.spyOn(WorkspaceFS, 'delete').mockResolvedValue(undefined);
+        vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+        vi.spyOn(AbsoluteFS, 'isFile').mockImplementation(
+          async (target) => target === snapshotPath,
+        );
+        vi.spyOn(AbsoluteFS, 'read').mockImplementation(async (target) => {
+          if (target === snapshotPath) return 'original project';
+          if (target === '/project/draft.tex') return 'proposed project';
+          return 'wrong project';
+        });
+        decideToolEdits((request) => {
+          approvalOriginal = request.originalContent;
+          approvalProposed = request.proposedContent;
+          return { action: 'approve' };
+        });
+
+        const result = yield* tool
+          .call({
+            execution_id: runId,
+            files: [{ path: 'draft.tex', original: 'paper.tex' }],
+          })
+          .pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                tracker,
+                run: { runId, session: defaultSession(), toolPolicy: {} },
+                inScope: (operation) =>
+                  runWithWorkspaceRoots(projectRoots, operation),
+              }),
+            ),
+          );
+
+        expect(result.status).toBe('executed');
+        expect({ approvalOriginal, approvalProposed, written }).toEqual({
+          approvalOriginal: 'original project',
+          approvalProposed: 'proposed project',
+          written: [['/project/paper.tex']],
+        });
+        dispose();
+      }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 
   it.live('reports unchanged same-path fallbacks without approval', () =>

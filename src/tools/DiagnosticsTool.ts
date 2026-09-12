@@ -217,19 +217,20 @@ export class DiagnosticsTool extends defineTool({
       // Path resolution shares the sink's failure report: both are the "add"
       // command failing before it could annotate anything.
       const added = yield* Effect.try({
-        try: () => {
-          const absolutePath = resolveAbsolutePath(path, ports.toolRoot());
-          return {
-            absolutePath,
-            result: addCriticismSink({
+        try: () =>
+          ports.inScope(() => {
+            const absolutePath = resolveAbsolutePath(path, ports.toolRoot());
+            return {
               absolutePath,
-              line,
-              message,
-              severity,
-              confidence,
-            }),
-          };
-        },
+              result: addCriticismSink({
+                absolutePath,
+                line,
+                message,
+                severity,
+                confidence,
+              }),
+            };
+          }),
         catch: (error) => {
           const detail = toErrorMessage(error);
           log.error(`Failed to add criticism: ${detail}`);
