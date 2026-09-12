@@ -52,7 +52,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/storage', async (importOriginal) => {
-  const { createFakeRunRecords } = await import('@test/support/FakeRunKVStore');
+  const { createFakeRunRecords } = await import('@test/support/FakeRunRecords');
   return {
     ...(await importOriginal<typeof import('@agent/storage')>()),
     getRunRecords: vi.fn(() =>

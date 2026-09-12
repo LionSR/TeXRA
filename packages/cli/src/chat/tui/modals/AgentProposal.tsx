@@ -21,12 +21,12 @@ import {
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface AgentProposalProps {
   readonly availableRows?: number;

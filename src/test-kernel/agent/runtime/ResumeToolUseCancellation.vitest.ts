@@ -146,7 +146,7 @@ const LANE_SESSION = {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
   },
-  acquireRunClaims: () => Effect.succeed(Effect.void),
+  acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseRunClaims: mocks.releaseRunClaims },
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   // The resumed run reads its parent edge off the session's cold fold, so the
@@ -235,7 +235,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
   it('resolves run lineage before activating the resume stream', async () => {
     const storageError = new Error('run lineage unavailable');
-    const snapshot = createToolUseResumeData({ runId: 'e8048' as RunId });
+    const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
     mocks.readView.mockRejectedValueOnce(storageError);
 
     await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
@@ -249,7 +249,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('reports a reloaded session that is no longer resumable distinctly', async () => {
-    const snapshot = createToolUseResumeData();
+    const snapshot = createToolUseResumeData({ runId: 'e80482' as RunId });
     mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
 
     await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBeInstanceOf(
@@ -259,7 +259,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('rejects a resumed launch that is not a tool-use agent', async () => {
-    const resume = createToolUseResumeData();
+    const resume = createToolUseResumeData({ runId: 'e80483' as RunId });
     // The guard runs inside the lifecycle so its failure ends the started
     // stream; the mocked lifecycle only has to run the body.
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -283,7 +283,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('interrupts at flow attachment before substantive work starts', async () => {
-    const runId = 'e8049' as RunId;
+    const runId = 'e80491' as RunId;
     const context = buildResumeContext(runId);
     const order: string[] = [];
     const tools = [
@@ -369,7 +369,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('surfaces a teardown failure after an otherwise successful turn', async () => {
-    const runId = 'e8050' as RunId;
+    const runId = 'e80501' as RunId;
     const teardownFailure = new Error('final artifacts could not be flushed');
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(
       buildResumeContext(runId),
@@ -387,7 +387,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('reports the turn failure and the teardown failure together', async () => {
     // The run's own failure is not replaced by the teardown's: both reach
     // the caller, the run's first.
-    const runId = 'e8051' as RunId;
+    const runId = 'e80511' as RunId;
     const turnFailure = new Error('turn failed');
     const teardownFailure = new Error('final artifacts could not be flushed');
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(
@@ -408,7 +408,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('mirrors a mid-run model switch onto the persisted config only', async () => {
-    const runId = 'e9421-model' as RunId;
+    const runId = 'e9421d0de1' as RunId;
     const ctx = buildResumeContext(runId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
     mocks.runToolUse.mockImplementationOnce(() =>

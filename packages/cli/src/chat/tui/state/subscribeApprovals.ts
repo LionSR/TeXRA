@@ -62,6 +62,7 @@ import {
   attentionRequests,
   currentApproval,
   decidePendingRequest,
+  landRequestDecision,
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
@@ -133,7 +134,11 @@ export function createTuiHostInteractions(
         // only after the switch commits: a failure rolls the preference back,
         // and the user must not be told a switch happened that did not.
         if (automaticSwitches.has(requestId)) notify('credentialSwitched');
-        decidePendingRequest(requestId, {
+        // The decision lands as itself, not through the surface decision
+        // vocabulary: a personal-credential retry decomposes into this very
+        // capability, so re-deciding it here would call back into this
+        // function and the request would never be answered.
+        landRequestDecision(permission.runId, requestId, {
           action: 'retry',
           credentials: 'personal',
         });
@@ -142,7 +147,7 @@ export function createTuiHostInteractions(
           'cli.tui',
           `The retry could not switch to your own API key: ${toErrorMessage(error)}`,
         );
-        decidePendingRequest(requestId, {
+        landRequestDecision(permission.runId, requestId, {
           action: 'deny',
           reason: toErrorMessage(error),
         });

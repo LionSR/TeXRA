@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   assertOwnedRunLease: vi.fn((_runId: RunId) => undefined),
 }));
 
-// Turn-state persistence runs against the real (memfs-backed) run store:
-// the loop writes it best-effort and no assertion here depends on it.
+// Turn attribution is committed as `child.turn` rows on the run aggregate,
+// so the fixtures read it back through the fold rather than a store mock.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeRun: mocks.finalizeRun,
@@ -46,7 +46,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-import { getRunRecords, getRunStore } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
@@ -454,47 +455,45 @@ describe('childRunLoop E2E fixtures', () => {
     },
   );
 
-  it('drains accepted-turn attribution before releasing the run lease', async () => {
+  it('commits accepted-turn attribution before releasing the run lease', async () => {
     const runId = loopRunId();
     const { strategy, rejectTurn } = createFakeStrategy();
-    const writeBarrier = pDefer<void>();
-    const writeStarted = pDefer<void>();
-    const store = getRunStore(runId);
-    const writeTurnState = vi
-      .spyOn(store, 'writeTurnState')
-      .mockImplementationOnce(async () => {
-        writeStarted.resolve();
-        await writeBarrier.promise;
-      });
 
-    try {
-      const completion = startLoop(runId, strategy);
-      await writeStarted.promise;
-      // Interrupt the loop through its parent lineage: no turn handle is
-      // tracked in this fixture, so the stop reaches the loop via its
-      // child activation.
-      const stopSettlement = Effect.runPromise(
-        session.runs.stopAgentRun(PARENT_RUN_ID),
-      );
-      await rejectTurn(1, createAbortError());
-      await stopSettlement;
+    const completion = startLoop(runId, strategy);
+    // Acceptance is committed before the turn is dispatched, so the run's
+    // report/result slots are attributable while the turn is still running.
+    await vi.waitFor(async () =>
+      expect(
+        await Effect.runPromise(readChildTurnState(session, runId)),
+      ).toEqual({
+        active: { attemptId: expect.any(String), turnIndex: 1 },
+        lastCompleted: null,
+      }),
+    );
+    expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      await vi.waitFor(() =>
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true),
-      );
-      expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+    // Interrupt the loop through its parent lineage: no turn handle is
+    // tracked in this fixture, so the stop reaches the loop via its
+    // child activation.
+    const stopSettlement = Effect.runPromise(
+      session.runs.stopAgentRun(PARENT_RUN_ID),
+    );
+    await rejectTurn(1, createAbortError());
+    await stopSettlement;
+    await completion;
 
-      writeBarrier.resolve();
-      await completion;
-      expect(writeTurnState).toHaveBeenCalledOnce();
-      expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
-        session,
-        runId,
-      );
-    } finally {
-      writeBarrier.resolve();
-      writeTurnState.mockRestore();
-    }
+    // An interrupted turn never settles, so the acceptance row stands and
+    // the lease is released only once the loop is done with it.
+    expect(await Effect.runPromise(readChildTurnState(session, runId))).toEqual(
+      {
+        active: { attemptId: expect.any(String), turnIndex: 1 },
+        lastCompleted: null,
+      },
+    );
+    expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+      session,
+      runId,
+    );
   });
 
   it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {

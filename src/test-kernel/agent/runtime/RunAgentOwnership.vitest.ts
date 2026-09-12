@@ -80,7 +80,7 @@ import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-const EXECUTION_ID = 'run-agent-owner' as RunId;
+const RUN_ID = 'a9e70a9e7001' as RunId;
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   agentCategory: 'toolUse',
@@ -110,7 +110,7 @@ const SESSION = {
     ),
   },
   flushArtifacts,
-  acquireRunClaims: () => Effect.succeed(Effect.void),
+  acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseRunClaims: () => Effect.void },
   settlePublications: vi.fn(async () => {}),
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
@@ -118,7 +118,7 @@ const SESSION = {
 
 const EXECUTE_RESULT = {
   category: 'toolUse',
-  runId: EXECUTION_ID,
+  runId: RUN_ID,
   outcome: 'COMPLETED',
 };
 const FINALIZE_RESULT = { ok: true };
@@ -139,7 +139,7 @@ function launchRun(...args: Parameters<typeof runAgent>) {
 function launch({ kind = 'resume', ...options }: RunOptions = {}) {
   return Effect.runPromise(
     launchRun(
-      { kind, config: CONFIG, runId: EXECUTION_ID },
+      { kind, config: CONFIG, runId: RUN_ID },
       { session: SESSION, ...options },
     ),
   );
@@ -183,7 +183,7 @@ describe('runAgent run ownership', () => {
       expect.any(Function),
     );
     expect(untrackRun).toHaveBeenCalledOnce();
-    expect(untrackRun).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(untrackRun).toHaveBeenCalledWith(RUN_ID);
     expect(trackedHandle).toBeUndefined();
     expect(partiallyTrackedHandle).toBeDefined();
     expect(partiallyTrackedHandle?.interrupt()).toBe(false);
@@ -198,12 +198,12 @@ describe('runAgent run ownership', () => {
         expect(
           yield* Effect.flip(
             launchRun(
-              { kind: 'resume', config: CONFIG, runId: EXECUTION_ID },
+              { kind: 'resume', config: CONFIG, runId: RUN_ID },
               { session: SESSION, launchSignal: signal },
             ),
           ),
         ).toMatchObject({
-          message: `Run not found: ${EXECUTION_ID}`,
+          message: `Run not found: ${RUN_ID}`,
         });
         expect(getEventListeners(signal, 'abort')).toEqual([]);
       }),
@@ -235,7 +235,7 @@ describe('runAgent run ownership', () => {
     // completes before the run — so before any transcript/snapshot fact.
     expect(mocks.registerRun).toHaveBeenCalledWith(
       SESSION,
-      EXECUTION_ID,
+      RUN_ID,
       CONFIG,
       CONFIG.agent,
       expect.objectContaining({
@@ -246,15 +246,15 @@ describe('runAgent run ownership', () => {
     expect(
       mocks.registerRun.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     ).toBeLessThan(mocks.executeAgent.mock.invocationCallOrder[0] ?? 0);
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
   });
 
   it('acquires and releases ownership for an existing run', async () => {
     await launch();
 
     expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(RUN_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
   });
   it.effect(
     'registers the resolved category and passes the same definition to run',
@@ -264,20 +264,20 @@ describe('runAgent run ownership', () => {
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
         yield* launchRun(
-          { kind: 'fresh', config: CONFIG, runId: EXECUTION_ID },
+          { kind: 'fresh', config: CONFIG, runId: RUN_ID },
           { session: SESSION },
         );
 
         expect(mocks.registerRun).toHaveBeenCalledWith(
           SESSION,
-          EXECUTION_ID,
+          RUN_ID,
           definition.config,
           CONFIG.agent,
           expect.objectContaining({ userFollowUpSupport: 'unsupported' }),
         );
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           definition,
-          EXECUTION_ID,
+          RUN_ID,
           expect.any(Object),
         );
       }),
@@ -298,7 +298,7 @@ describe('runAgent run ownership', () => {
 
     expect(order).toEqual(['finalize', 'release']);
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
-      runId: EXECUTION_ID,
+      runId: RUN_ID,
       outcome: RUN_OUTCOME.FAILED,
     });
   });
@@ -313,7 +313,7 @@ describe('runAgent run ownership', () => {
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(mocks.finalizeRun).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
   });
 
   it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
@@ -324,10 +324,10 @@ describe('runAgent run ownership', () => {
     await expect(launch()).rejects.toBe(launchError);
 
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
-      runId: EXECUTION_ID,
+      runId: RUN_ID,
       outcome: RUN_OUTCOME.CANCELLED,
     });
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
   });
 
   it('persists final host artifacts before releasing ownership', async () => {
@@ -365,7 +365,7 @@ describe('runAgent run ownership', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       { config: CONFIG },
-      EXECUTION_ID,
+      RUN_ID,
       expect.objectContaining({ openWorkflowOutput }),
     );
     expect(openWorkflowOutput).not.toHaveBeenCalled();
@@ -448,7 +448,7 @@ describe('runAgent run ownership', () => {
       );
       // A failed host hook never changes ownership: the one drain still runs
       // and releases the lease.
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
+      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(RUN_ID);
       expect(flushArtifacts).toHaveBeenCalledOnce();
     },
   );

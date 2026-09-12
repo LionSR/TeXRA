@@ -1,14 +1,13 @@
 /**
- * Run-scoped key-value store infrastructure.
- *
- * The child protocol's turn state retains file-backed key-value access
- * until PR 4 moves it into the event table. Canonical run metadata is read
- * and written through private events; the run loop writes the run ledger.
+ * Native access to a run's named records: the run-record tier of its
+ * aggregate (`run.record`, `run.report`, `run.result`, ...), the terminal
+ * fact, and the child loop's turn bookkeeping. Every read is a database read
+ * of committed rows; nothing here reads a file, and the run loop itself
+ * writes the run ledger.
  */
 
 import { Cause, Effect } from 'effect';
 
-import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -18,9 +17,6 @@ import {
   RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import { KVStore } from '@common/storage/KVStore';
-import { createLog } from '@logger/logUtils';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ResultMetaSchema,
   aggregateId,
@@ -31,26 +27,7 @@ import {
   type RunId,
   type WorkflowRunSnapshot,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-import { runWithRunLeaseWriteFence } from './runLease';
-
-// ============================================================================
-// Key constants (implementation detail — not exported)
-// ============================================================================
-
-const KEYS = { TURN_STATE: 'turn-state' } as const;
-
-/** Generic persistence remains scoped to the child protocol's turn state. */
-export function isReservedKvKeyName(key: string): boolean {
-  return key === KEYS.TURN_STATE;
-}
-
-const log = createLog('RunKVStore');
-
-// ============================================================================
-// Domain types — Zod schemas as source of truth
-// ============================================================================
+import { ensureError } from '@utils/errors/errorMessage';
 
 /** A child launch projected from its canonical creation fact. */
 export interface ChildRecord {
@@ -60,111 +37,60 @@ export interface ChildRecord {
 }
 
 /**
- * Logical identity of one child run turn (#9531, introduced 2026-08-03): a
- * stable turn token. Minted by the child-run loop per accepted turn — not by a
- * global registry — so the same logical delivery always carries the same id
- * and distinct turns never share one. The delivery id its single parent
- * delivery is admitted under is derived from this token at the enqueue site.
+ * The structural identity of one child turn (#9531): the run is the
+ * aggregate, `attemptId` the child-run attempt that accepted it, `turnIndex`
+ * its position in that attempt. Minted by the child-run loop per accepted
+ * turn, so the same logical delivery always carries the same identity and
+ * distinct turns never share one.
  */
-const TurnRefSchema = z.object({
-  token: z.string(),
-});
-export type ChildTurnRef = z.infer<typeof TurnRefSchema>;
+export interface ChildTurnKey {
+  readonly attemptId: string;
+  readonly turnIndex: number;
+}
 
 /**
  * Turn attribution for a child run's single latest-value report/result
  * slots: the turn currently running (or interrupted mid-flight before its
- * result was persisted) versus the latest turn whose result WAS persisted.
- * Absent entirely on executions that predate turn identity or never had
- * turns (e.g. background commands).
+ * delivery ran) versus the latest turn whose delivery ran. Both null on a
+ * run that never had turns (a run recorded before the run ledger, or one
+ * whose loop never accepted a turn).
  */
-const ChildTurnStateSchema = z.object({
-  activeTurn: TurnRefSchema.optional(),
-  lastCompletedTurn: TurnRefSchema.optional(),
-});
-export type ChildTurnState = z.infer<typeof ChildTurnStateSchema>;
-
-// ============================================================================
-// Interface
-// ============================================================================
-
-/**
- * Run-scoped key-value store.
- *
- * All keys are automatically namespaced to the run context.
- * Values are JSON-serialized transparently.
- *
- * Typed accessors provide domain-specific reads with schema validation;
- * malformed or missing entries resolve to null.
- */
-export interface RunKVStore {
-  // -- Generic KV -----------------------------------------------------------
-  read<T = unknown>(key: string): Promise<T | undefined>;
-  write<T = unknown>(key: string, value: T): Promise<void>;
-  delete(key: string): Promise<void>;
-  exists(key: string): Promise<boolean>;
-  listKeys(prefix?: string): Promise<string[]>;
-  clear(): Promise<void>;
-  getRunId(): RunId;
-
-  readTurnState(): Promise<ChildTurnState | null>;
-  writeTurnState(state: ChildTurnState): Promise<void>;
+export interface ChildTurnState {
+  readonly active: ChildTurnKey | null;
+  readonly lastCompleted: ChildTurnKey | null;
 }
 
-// ============================================================================
-// Implementation
-// ============================================================================
+const sameTurn = (a: ChildTurnKey, b: ChildTurnKey): boolean =>
+  a.attemptId === b.attemptId && a.turnIndex === b.turnIndex;
 
 /**
- * StorageFS-backed implementation of RunKVStore.
- * Extends KVStore for generic file operations and adds typed accessors.
- * Stores data in executions/{runId}/{key}.json
+ * Fold the run's `child.turn` rows: `accepted` opens the active turn,
+ * `settled` closes it and becomes the last completed one. Reads the whole
+ * aggregate, because the last completed turn can belong to an earlier
+ * attempt than the active one.
  */
-class StorageFSKVStore extends KVStore implements RunKVStore {
-  constructor(private readonly runId: RunId) {
-    super(resolveRunStoragePath(runId));
-  }
-
-  override async write<T = unknown>(key: string, value: T): Promise<void> {
-    await runWithRunLeaseWriteFence(this.runId, () => super.write(key, value));
-  }
-
-  override async delete(key: string): Promise<void> {
-    await runWithRunLeaseWriteFence(this.runId, () => super.delete(key));
-  }
-
-  async clear(): Promise<void> {
-    return runWithRunLeaseWriteFence(this.runId, () => this.deleteDir());
-  }
-
-  getRunId(): RunId {
-    return this.runId;
-  }
-
-  // -- Typed readers --------------------------------------------------------
-
-  /**
-   * Permissive read: a missing or malformed turn-state entry resolves to
-   * `null`, with malformed data leaving a warn trace. Canonical run
-   * metadata uses the strict event accessor.
-   */
-  async readTurnState(): Promise<ChildTurnState | null> {
-    const raw = await this.read(KEYS.TURN_STATE);
-    if (raw === undefined) return null;
-    const result = ChildTurnStateSchema.safeParse(raw);
-    if (result.success) return result.data;
-    log.warn(
-      `Failed to parse run ${this.runId} ${KEYS.TURN_STATE}.json: ${toErrorMessage(
-        result.error,
-      )}`,
-      { data: result.error },
-    );
-    return null;
-  }
-
-  async writeTurnState(state: ChildTurnState): Promise<void> {
-    await this.write(KEYS.TURN_STATE, ChildTurnStateSchema.parse(state));
-  }
+export function readChildTurnState(
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<ChildTurnState, Error> {
+  return session.readAggregate(aggregateId('run', runId)).pipe(
+    Effect.map((rows) => {
+      let active: ChildTurnKey | null = null;
+      let lastCompleted: ChildTurnKey | null = null;
+      for (const row of rows) {
+        if (row.type !== 'child.turn') continue;
+        const key = { attemptId: row.attemptId, turnIndex: row.turnIndex };
+        if (row.phase === 'accepted') {
+          active = key;
+        } else {
+          lastCompleted = key;
+          if (active !== null && sameTurn(active, key)) active = null;
+        }
+      }
+      return { active, lastCompleted };
+    }),
+    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  );
 }
 
 /**
@@ -307,27 +233,4 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         }),
       ),
   };
-}
-
-// ============================================================================
-// Factory
-// ============================================================================
-
-// LRU-capped store cache. StorageFSKVStore is stateless (file-backed),
-// so eviction is lossless — re-creation just makes a new thin wrapper. The
-// cache exists for instance identity (callers spy on the returned store),
-// not to avoid work.
-const storeCache = new LRUCache<RunId, StorageFSKVStore>({ max: 50 });
-
-export function getRunStore(runId: RunId): RunKVStore {
-  const cached = storeCache.get(runId);
-  if (cached) return cached;
-  const created = new StorageFSKVStore(runId);
-  storeCache.set(runId, created);
-  return created;
-}
-
-/** Clear the in-memory store cache. Called during extension deactivation. */
-export function clearStoreCache(): void {
-  storeCache.clear();
 }

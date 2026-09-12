@@ -18,12 +18,12 @@ describe('CLI user-question modal state', () => {
       'Which path should the agent take?': ['Short proof', 'Detailed proof'],
     };
     expect(userQuestionDecision(answers)).toEqual({
-      accepted: true,
-      userQuestionAnswers: answers,
+      action: 'submit',
+      answers,
     });
     expect(userQuestionDecision({})).toEqual({
-      accepted: false,
-      userMessage: USER_QUESTION_SKIPPED_FEEDBACK,
+      action: 'skip',
+      feedback: USER_QUESTION_SKIPPED_FEEDBACK,
     });
   });
 });

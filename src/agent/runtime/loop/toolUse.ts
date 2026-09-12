@@ -817,6 +817,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
+      // The turn's trace rows publish fire-and-forget while the ledger
+      // appends on this fiber, so the parking row would commit ahead of
+      // them: the transcript boundary closes on `waiting`, and this turn's
+      // `stream.start`/`stream.end`/`response.finalized` are then dropped by
+      // the fold, leaving a parked run whose transcript holds no assistant
+      // answer. Settling the session's publications here is the order
+      // between the two paths.
+      yield* Effect.tryPromise({
+        try: () => session.flushArtifacts(),
+        catch: ensureError,
+      });
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
       // turn and its wait cannot leave the turn unended. The `waiting` step

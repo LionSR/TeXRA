@@ -9,12 +9,12 @@ import {
 import { truncateToWidth } from '@cli/runtime/terminalText';
 import type { BashPermission } from '@shared/schemas';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface BashApprovalProps {
   readonly availableRows?: number;

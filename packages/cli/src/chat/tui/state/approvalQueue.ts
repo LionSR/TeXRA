@@ -18,6 +18,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type {
   PermissionPayload,
   ProgressPermissionKind,
+  RequestDecision,
   RunId,
 } from '@shared/schemas';
 import {
@@ -418,6 +419,22 @@ export function decidePendingRequest(
     return;
   }
   decideRequest(request, request.payload, decision);
+}
+
+/**
+ * Land one durable decision a host capability took itself — the retry a
+ * stored credential let this host switch onto the user's own key. The
+ * `request.decide` alone, with no arm decomposition: the decomposition is
+ * what named the capability, so re-entering it here would hand the
+ * capability back to itself and the request would never be answered.
+ */
+export function landRequestDecision(
+  runId: RunId,
+  requestId: string,
+  decision: RequestDecision,
+): void {
+  markDecided(requestId);
+  issue(runId, { kind: 'request.decide', runId, requestId, decision });
 }
 
 /** Forget every staged presentation and local decision: the Surface reset

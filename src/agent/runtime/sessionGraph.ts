@@ -24,6 +24,7 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import type {
+  AggregateId,
   CommitOrdinal,
   RunId,
   LocalRuntimeState,
@@ -50,13 +51,20 @@ export interface SessionGraph {
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
-  /** The run's one claim, acquired before a resume reads or mutates. Private
-   *  record reads never enter display transport. */
-  readonly acquireRunClaims: (
-    runId: RunId,
+  /** One aggregate's claim, acquired before a resume reads or mutates a run
+   *  and before a relaunch appends to a workflow checkpoint. Private record
+   *  reads never enter display transport. */
+  readonly acquireClaims: (
+    id: AggregateId,
   ) => Effect.Effect<Effect.Effect<void>>;
   readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
   readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  /** Every committed row of one aggregate, ledger-private rows included:
+   *  the read behind the keyed private records and the checkpoint journal,
+   *  which fold over the whole aggregate rather than the latest of a type. */
+  readonly aggregateRows: (
+    id: AggregateId,
+  ) => Effect.Effect<readonly SessionEvent[]>;
   readonly runChildren: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */

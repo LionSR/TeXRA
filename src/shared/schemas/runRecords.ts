@@ -120,7 +120,6 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
     agentName: z.string(),
     wallTimeMs: z.number().nonnegative(),
     output: RunEndOutputSchema,
-    turnToken: z.string().optional(),
   }),
 ]);
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;

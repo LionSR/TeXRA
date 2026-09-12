@@ -7,7 +7,6 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache } from '@agent/storage';
 import {
   createAgentResponseTextConnector,
   defaultSession,
@@ -582,7 +581,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => effectRuntime().runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    afterRunSettlement: [() => clearStoreCache(), () => disposeDiffRefresh()],
+    afterRunSettlement: [() => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),

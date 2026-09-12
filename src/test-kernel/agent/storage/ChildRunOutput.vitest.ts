@@ -1,11 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 
-import {
-  clearStoreCache,
-  getRunRecords,
-  resolveChildRunOutput,
-} from '@agent/storage';
+import { getRunRecords, resolveChildRunOutput } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -102,8 +98,6 @@ async function persistCompletedChild(
 }
 
 describe('resolveChildRunOutput', () => {
-  afterEach(() => clearStoreCache());
-
   it('resolves a declared regular output of a completed direct child', async () => {
     const absolutePath = await persistCompletedChild();
 

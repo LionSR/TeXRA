@@ -9,7 +9,7 @@
  * Two owners of retry, as before. Owner A is automatic and route-scoped: a
  * bounded batch of attempts under the session's `ModelRetryGate`, so sibling
  * runs on one credential share cooling. Owner B is a human and indefinite,
- * and it is durable here: the prompt is admitted by an `approval.requested`
+ * and it is durable here: the prompt is admitted by a `request.opened`
  * row bound through a `flow.snapshot` whose `pendingRetry` walks
  * `waiting` -> `authorized` -> `started`. A decision survives a restart, an
  * unused permit survives one, and a consumed permit never buys a second

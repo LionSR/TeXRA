@@ -1,14 +1,10 @@
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import {
-  runPersistedWorkflowScript,
-  type PersistedWorkflowScriptRunOptions,
-} from '@agent/workflowScript/persistence';
+import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,
   WorkflowJournalEntry,
   WorkflowScriptEvent,
-  WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
 import {
   isTerminalWorkflowCallProgress,
@@ -138,12 +134,27 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
 }
 
 /**
- * Run a durable workflow script and project its progress onto the parent trace.
+ * The progress projection of one durable workflow-script run onto the parent
+ * trace: the run options with the engine's event and transition slots bound,
+ * and the settle step the caller runs once the run has ended either way.
  */
-export async function runPersistedWorkflowScriptWithProgress(
+export interface WorkflowScriptProgressProjection {
+  readonly options: PersistedWorkflowScriptRunOptions;
+  /** Close every phase the run left open; `completed` names how it ended. */
+  readonly settle: (completed: boolean) => void;
+}
+
+/**
+ * Project a durable workflow script's progress onto the parent trace. The
+ * caller runs `options` through `runPersistedWorkflowScript` and calls
+ * `settle` in a finalizer; the projection itself stays Promise- and
+ * Effect-free so its per-transition fault policy (warn and continue) needs no
+ * runtime of its own.
+ */
+export function projectWorkflowScriptProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
-): Promise<WorkflowScriptRunResult> {
+): WorkflowScriptProgressProjection {
   const { onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseHandleState>();
@@ -530,19 +541,8 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
   };
 
-  try {
-    const result = await runPersistedWorkflowScript({
-      ...runOptions,
-      onEvent: projectLog,
-      onTransition: fold,
-      onSnapshot: async (snapshot) => {
-        lastSnapshot = snapshot;
-        await runOptions.onSnapshot?.(snapshot);
-      },
-    });
-    runOutcome = RUN_OUTCOME.COMPLETED;
-    return result;
-  } finally {
+  const settle = (completed: boolean): void => {
+    if (completed) runOutcome = RUN_OUTCOME.COMPLETED;
     if (lastSnapshot?.lifecycle === WORKFLOW_RUN_LIFECYCLE.CANCELLED) {
       runOutcome = RUN_OUTCOME.CANCELLED;
     }
@@ -579,5 +579,17 @@ export async function runPersistedWorkflowScriptWithProgress(
     for (const phase of phases.values()) {
       phase.handle.end(phase.failed ? RUN_OUTCOME.FAILED : runOutcome);
     }
-  }
+  };
+  return {
+    options: {
+      ...runOptions,
+      onEvent: projectLog,
+      onTransition: fold,
+      onSnapshot: async (snapshot) => {
+        lastSnapshot = snapshot;
+        await runOptions.onSnapshot?.(snapshot);
+      },
+    },
+    settle,
+  };
 }

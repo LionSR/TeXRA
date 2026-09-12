@@ -66,6 +66,7 @@ import {
   interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
+  type AggregateId,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
   type PermissionPayload,
@@ -415,11 +416,13 @@ export class SessionHandle {
     });
   }
 
-  /** Admit the run's existing claim before resume reads or mutations. */
-  acquireRunClaims(
-    runId: RunId,
+  /** Admit an aggregate's existing claim before this process appends to it:
+   *  a run's before resume reads or mutations, a workflow checkpoint's
+   *  before a relaunch journals into it. */
+  acquireClaims(
+    id: AggregateId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireRunClaims(runId).pipe(
+    return this.graph.acquireClaims(id).pipe(
       Effect.map((release) =>
         release.pipe(
           Effect.catchCause((cause) =>
@@ -727,6 +730,12 @@ export class SessionHandle {
 
   readRunChildren(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.runChildren(runId);
+  }
+
+  /** Every committed row of one aggregate, private rows included, for the
+   *  readers that fold a keyed record or a journal over the whole aggregate. */
+  readAggregate(id: AggregateId): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.aggregateRows(id);
   }
 
   readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
