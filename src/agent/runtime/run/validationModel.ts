@@ -31,12 +31,12 @@ import type {
 } from '@llm/turn';
 import type { ModelConfig } from 'llm-zoo';
 
-export const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
+const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 
 This document was produced by the internal TeXRA CLI validation model handler.
 `;
 
-export const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
+const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
   name: 'cli-workflow-script-validation-v2',
   description: 'Solve three mathematical problems through the CLI',
   phases: [{ title: 'Solve' }],
@@ -64,7 +64,7 @@ const results = await parallel([
 ])
 return { solutions: results.map((result) => result?.structured ?? null) }`;
 
-export function mathematicalValidationOutput(prompt: string): {
+function mathematicalValidationOutput(prompt: string): {
   answer: string;
   derivation: string;
   check: string;
@@ -122,26 +122,12 @@ export function shouldUseInternalValidationModel(): boolean {
     );
   }
 
-  let flagContent: string;
-  try {
-    flagContent = readFileSync(flagPath, 'utf8').trim();
-  } catch (error) {
-    throw new Error(
-      `${envKey}=1 requires a readable validation flag file at ${flagPath}.`,
-      { cause: error },
-    );
-  }
-
-  if (flagContent !== expectedFlagContent) {
+  // An unreadable flag file fails with the filesystem error, which names it.
+  if (readFileSync(flagPath, 'utf8').trim() !== expectedFlagContent) {
     throw new Error(`${envKey}=1 received an invalid validation flag file.`);
   }
 
   return true;
-}
-
-/** Env-var name that activates the override, for diagnostic log messages. */
-export function internalValidationModelEnvName(): string {
-  return process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
 }
 
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';

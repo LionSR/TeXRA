@@ -6,7 +6,7 @@
  * history view, and future agents can quickly understand each session.
  */
 
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -16,6 +16,7 @@ import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const log = createLog('SessionDescription');
@@ -121,21 +122,22 @@ export const generateSessionDescription = Effect.fn(
         description,
       },
     ]);
-    yield* Effect.promise(() => session.settlePublications());
+    yield* Effect.tryPromise({
+      try: () => session.settlePublications(),
+      catch: ensureError,
+    });
     log.info(`Generated session description for ${runId}`);
   }).pipe(
     Effect.scoped,
-    Effect.catchTag('HelperModelUnavailable', ({ reason }) =>
-      Effect.sync(() => log.warn(reason)),
-    ),
-    Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause)
-        ? Effect.failCause(cause)
-        : Effect.sync(() =>
-            log.warn(
-              `Failed to generate session description: ${getSdkErrorMessage(Cause.squash(cause))}`,
-            ),
-          ),
-    ),
+    Effect.catch((error) => warnFailure(error)),
+    Effect.catchDefect((defect) => warnFailure(defect)),
   );
 });
+
+function warnFailure(cause: unknown): Effect.Effect<void> {
+  return Effect.sync(() =>
+    log.warn(
+      `Failed to generate session description: ${getSdkErrorMessage(cause)}`,
+    ),
+  );
+}

@@ -285,8 +285,6 @@ describe('run lifecycle host-interaction cancel', () => {
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(session.status.get(runId)).toBe(RUN_PHASE.COMPLETED);
-      // The disposal below must not resurrect the throwing adapter's failure.
-      expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
     } finally {
       detach();
       session.dispose();

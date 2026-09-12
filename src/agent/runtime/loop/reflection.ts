@@ -699,10 +699,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       },
     );
     if (text) {
-      const connector = yield* session.responseTextProcessing.connectResponseText(
-        workspace.assembly.lastResponse.slice(-K_SLICE),
-        text.slice(0, K_SLICE),
-      );
+      const connector =
+        yield* session.responseTextProcessing.connectResponseText(
+          workspace.assembly.lastResponse.slice(-K_SLICE),
+          text.slice(0, K_SLICE),
+        );
       yield* writeOutputFragment(
         location,
         workspace.assembly.accumulatedOutput ? connector + text : text,

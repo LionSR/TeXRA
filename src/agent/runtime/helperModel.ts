@@ -21,10 +21,13 @@ import { turnText } from './ModelInvoker';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure } from './run/modelFailure';
 
-/** The configured helper model cannot serve right now (no key, disabled). */
+/**
+ * The configured helper model cannot serve right now (no key, disabled,
+ * unknown name). An expected state, not a defect: callers degrade quietly.
+ */
 export class HelperModelUnavailable extends Data.TaggedError(
   'HelperModelUnavailable',
-)<{ readonly reason: string }> {}
+)<{ readonly message: string }> {}
 
 /**
  * Bind the configured helper model into the caller's scope.
@@ -37,24 +40,20 @@ export class HelperModelUnavailable extends Data.TaggedError(
  */
 export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
-): Effect.fn.Return<
-  BoundModel,
-  HelperModelUnavailable | Error,
-  Scope.Scope
-> {
+): Effect.fn.Return<BoundModel, HelperModelUnavailable | Error, Scope.Scope> {
   const modelName = getHelperModelName(stores.globalState);
   const reason = yield* Effect.tryPromise({
     try: () => getModelUnavailableReason(modelName, stores),
     catch: ensureError,
   });
-  if (reason) return yield* new HelperModelUnavailable({ reason });
+  if (reason) return yield* new HelperModelUnavailable({ message: reason });
   const config = yield* Effect.tryPromise({
     try: () => resolveRuntimeModelConfig(modelName),
     catch: ensureError,
   });
   if (!config) {
     return yield* new HelperModelUnavailable({
-      reason: `Model "${modelName}" is not recognized.`,
+      message: `Model "${modelName}" is not recognized.`,
     });
   }
   return yield* bindModel({

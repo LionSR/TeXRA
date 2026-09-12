@@ -4,10 +4,6 @@ export function shouldUseInternalValidationModel() {
   return false;
 }
 
-export function internalValidationModelEnvName() {
-  return '';
-}
-
 export function validationModel() {
   throw new Error('The validation model is not available in this build.');
 }

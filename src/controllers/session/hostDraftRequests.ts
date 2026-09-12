@@ -154,8 +154,8 @@ export class HostDraftRequests {
     this: HostDraftRequests,
     take: Take,
   ) {
-    const takeProgram: Effect.Effect<HostOutcome, unknown, Secrets> = Effect.gen(
-      function* () {
+    const takeProgram: Effect.Effect<HostOutcome, unknown, Secrets> =
+      Effect.gen(function* () {
         // Transcription binds its OpenAI credential against the process
         // secret store the host root provides.
         const secrets = yield* Secrets;
@@ -175,9 +175,7 @@ export class HostDraftRequests {
           });
         }
         const result = yield* hostPort(async () =>
-          runInSession(take.session, () =>
-            stopRecordingAndTranscribe(secrets),
-          ),
+          runInSession(take.session, () => stopRecordingAndTranscribe(secrets)),
         );
         if (!result.success) {
           return yield* new Rejected({
@@ -185,8 +183,7 @@ export class HostDraftRequests {
           });
         }
         return { kind: 'text', text: result.text };
-      },
-    );
+      });
     // A cancelled take already has its answer; `into` leaves it in place.
     yield* takeProgram.pipe(
       Deferred.into(take.result),

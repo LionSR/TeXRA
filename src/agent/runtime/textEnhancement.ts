@@ -40,9 +40,6 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
     return (corrected ?? responseText).trim();
   }).pipe(
     Effect.scoped,
-    Effect.catchTag('HelperModelUnavailable', ({ reason }) =>
-      Effect.fail(new Error(reason)),
-    ),
     Effect.mapError((error) => {
       const message = getSdkErrorMessage(error);
       log.error(`Error polishing text: ${message}`);

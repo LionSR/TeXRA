@@ -378,10 +378,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
       '\n' +
       schemaRef;
 
-    let userMessage = nunjucksEnv.renderString(
-      prompts.userRequest,
-      renderVars,
-    );
+    let userMessage = nunjucksEnv.renderString(prompts.userRequest, renderVars);
     if (lastValidationError) {
       userMessage +=
         '\n' +
@@ -410,12 +407,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
 
     log.info(`AI generation succeeded for ${blueprint.category} agent`);
     return candidate;
-  }).pipe(
-    Effect.scoped,
-    Effect.catchTag('HelperModelUnavailable', ({ reason }) =>
-      Effect.fail(new Error(reason)),
-    ),
-  );
+  }).pipe(Effect.scoped);
 
   return yield* attempt.pipe(
     Effect.retry({ times: AI_GENERATION_ATTEMPTS - 1 }),
