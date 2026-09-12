@@ -20,7 +20,7 @@ import {
   turnText,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
-import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
+import { rowAggregate, stepRow, type Message } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -35,6 +35,7 @@ import {
   AgentCategory,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  type JsonValue,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -107,8 +108,10 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
   };
 }
 
+/** A turn that calls tools, after the text the model wrote alongside them. */
 function toolCallTurn(
   calls: readonly { readonly id: string; readonly name: string }[],
+  text = '',
 ): TurnResult {
   return {
     kind: 'http',
@@ -116,12 +119,22 @@ function toolCallTurn(
     requestedOrigin: ORIGIN,
     returnedModel: null,
     modelFingerprint: null,
-    content: calls.map((call) => ({
-      kind: 'local-call' as const,
-      providerCallId: call.id,
-      name: call.name,
-      argumentsText: '{}',
-    })),
+    content: [
+      ...(text === ''
+        ? []
+        : [
+            {
+              kind: 'message' as const,
+              content: [{ kind: 'text' as const, text }],
+            },
+          ]),
+      ...calls.map((call) => ({
+        kind: 'local-call' as const,
+        providerCallId: call.id,
+        name: call.name,
+        argumentsText: '{}',
+      })),
+    ],
     finishReason: 'tool-calls',
     usage: null,
   };
@@ -143,9 +156,14 @@ function textTurn(text: string): TurnResult {
   };
 }
 
-/** What the faked invoker reports for one turn, in script order. */
+/**
+ * What the faked invoker reports for one turn, in script order. A turn may
+ * first replace the whole conversation, the way a context-limit compaction
+ * does, before its response is committed.
+ */
 type ScriptedTurn =
   | TurnResult
+  | { readonly compactTo: readonly Message[]; readonly turn: TurnResult }
   | { readonly failWith: RetryErrorInfo }
   | { readonly cancelled: true };
 
@@ -181,6 +199,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
+            const turn = 'compactTo' in scripted ? scripted.turn : scripted;
             const next = yield* ledger.appendBatch(run.runId, state, [
               {
                 type: 'model.message',
@@ -192,6 +211,21 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   delivery: 'stream',
                 },
               },
+              ...('compactTo' in scripted
+                ? [
+                    {
+                      type: 'model.compaction' as const,
+                      aggregateId,
+                      payload: {
+                        keepPrefix: 0,
+                        messages: scripted.compactTo,
+                        cause: 'context-limit' as const,
+                        continuation: null,
+                        continuationDropped: null,
+                      },
+                    },
+                  ]
+                : []),
               {
                 type: 'model.message',
                 aggregateId,
@@ -199,9 +233,9 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   kind: 'response',
                   responseId,
                   invocation,
-                  turn: scripted,
+                  turn,
                   calls: dispatchFactsFor(
-                    scripted,
+                    turn,
                     run.tools,
                     run.logger,
                     generateShortId,
@@ -215,8 +249,8 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               kind: 'response' as const,
               state: next,
               responseId,
-              turn: scripted,
-              text: turnText(scripted),
+              turn,
+              text: turnText(turn),
               usage: null,
               responseTimeMs: 1,
             };
@@ -234,6 +268,8 @@ interface LoopInit {
   readonly logger?: TraceEmitter;
   readonly bound?: Partial<BoundModel>;
   readonly finalToolName?: string | null;
+  /** The slot the terminal tool captures into, shared with the scenario. */
+  readonly structured?: { value: JsonValue | undefined };
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessageForTranscript?: string | undefined;
@@ -281,7 +317,7 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new TaskRunFileService(init.runId),
         tools: new MapToolRegistry(tools),
         finalToolName: init.finalToolName ?? null,
-        structured: { value: undefined },
+        structured: init.structured ?? { value: undefined },
         model,
         scope,
         pendingModelSwitch: { value: null },
@@ -426,6 +462,118 @@ describe('the tool-use turn', () => {
             text.includes('Submit the final structured output now.'),
           ),
         ).toHaveLength(1);
+      }),
+  );
+
+  it.effect('returns the text that accompanied the terminal tool', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const structured: { value: JsonValue | undefined } = { value: undefined };
+      const submitOutput: ITool = {
+        definition: { name: 'submit_output' },
+        call: vi.fn(async () => {
+          structured.value = { answer: 'done' };
+          return {
+            status: 'executed' as const,
+            output: 'recorded',
+            endTurn: true,
+          };
+        }),
+      } as ITool;
+
+      const { result } = yield* runScript({
+        runId: startedRun(session),
+        session,
+        finalToolName: 'submit_output',
+        structured,
+        tools: { submit_output: submitOutput },
+        script: [
+          toolCallTurn(
+            [{ id: 'call-1', name: 'submit_output' }],
+            'Here is the structured result.',
+          ),
+        ],
+      });
+
+      expect(result).toMatchObject({
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'Here is the structured result.',
+        structured: { answer: 'done' },
+      });
+    }),
+  );
+
+  it.effect(
+    'keeps the text of an earlier turn when a later model turn fails',
+    () =>
+      Effect.gen(function* () {
+        // A failed run still reports what the model had said: the text that
+        // accompanied the tool calls is the run's response, beside the error.
+        const session = quietSession();
+
+        const { result } = yield* runScript({
+          runId: startedRun(session),
+          session,
+          tools: { probe: echoTool('probe') },
+          script: [
+            toolCallTurn(
+              [{ id: 'call-1', name: 'probe' }],
+              'I checked the tool.',
+            ),
+            {
+              failWith: {
+                message: 'Later provider failure',
+                userRetryable: false,
+              },
+            },
+          ],
+        });
+
+        expect(result).toMatchObject({
+          outcome: RUN_OUTCOME.FAILED,
+          response: 'I checked the tool.',
+          error: { message: 'Later provider failure' },
+        });
+      }),
+  );
+
+  it.effect(
+    'keeps the fresh response when a compaction replaces the whole conversation',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+
+        const { result, state } = yield* runScript({
+          runId: startedRun(session),
+          session,
+          script: [
+            {
+              compactTo: [
+                {
+                  role: 'user',
+                  content: [{ kind: 'text', text: 'Compacted context.' }],
+                },
+              ],
+              turn: textTurn('B'),
+            },
+          ],
+        });
+
+        expect(result.response).toBe('B');
+        // The replacement is the history now: the paid response lands on it,
+        // not on the conversation it discarded.
+        expect(state.messages).toMatchObject([
+          {
+            role: 'user',
+            content: [{ kind: 'text', text: 'Compacted context.' }],
+          },
+          {
+            role: 'assistant',
+            content: [
+              { kind: 'message', content: [{ kind: 'text', text: 'B' }] },
+            ],
+          },
+        ]);
       }),
   );
 });
