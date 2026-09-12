@@ -42,5 +42,6 @@ export function testRunRegistry(): RunRegistry {
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
+    acquireRunClaim: () => Effect.succeed(Effect.void),
   });
 }

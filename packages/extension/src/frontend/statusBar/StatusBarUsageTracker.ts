@@ -4,16 +4,26 @@ import { SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
+
+/** A run whose durable phase says in flight but whose owner is gone: the
+ *  fold's interrupted reading (5.2), which no durable row records — a crash
+ *  leaves RUNNING or WAITING behind. Nothing is spending on it, so it counts
+ *  towards neither the spinner nor the in-flight total. */
+function ownerLost(run: RunView): boolean {
+  return run.group === 'interrupted';
+}
 
 /**
  * Projects the accumulated spend of the runs currently in flight for the
  * extension status bar.
  *
  * Holds no state of its own: the session's fold is the one reader of which
- * runs are in flight (`RunView.status`) and carries each run's metered
- * total (`RunView.usage`). Both getters read that view live, so a run
- * leaving flight drops out of the total without any bookkeeping here, and
- * the summing rule has a single home (`sumUsageStats`).
+ * runs are in flight (`RunView.status` beside the interrupted reading of
+ * `RunView.group`) and carries each run's metered total (`RunView.usage`).
+ * Both getters read that view live, so a run leaving flight drops out of the
+ * total without any bookkeeping here, and the summing rule has a single home
+ * (`sumUsageStats`).
  */
 export class StatusBarUsageTracker {
   constructor(private readonly session: Pick<SessionHandle, 'view'>) {}
@@ -23,7 +33,7 @@ export class StatusBarUsageTracker {
     for (const run of SubscriptionRef.getUnsafe(
       this.session.view,
     ).runs.values()) {
-      if (isActivePhase(run.status)) count += 1;
+      if (isActivePhase(run.status) && !ownerLost(run)) count += 1;
     }
     return count;
   }
@@ -33,7 +43,8 @@ export class StatusBarUsageTracker {
     for (const run of SubscriptionRef.getUnsafe(
       this.session.view,
     ).runs.values()) {
-      if (isInFlightPhase(run.status)) usages.push(run.usage);
+      if (isInFlightPhase(run.status) && !ownerLost(run))
+        usages.push(run.usage);
     }
     return sumUsageStats(usages);
   }

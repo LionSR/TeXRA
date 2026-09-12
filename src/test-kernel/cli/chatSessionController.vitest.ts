@@ -342,9 +342,13 @@ function installOwnerSession(): {
       request: (req: RuntimeRequest) =>
         Effect.gen(function* (): Effect.fn.Return<Outcome> {
           if (req.kind === 'run.stop') {
-            yield* session.runs.stopAgentRun(req.runId, {
-              detachActiveChildren: req.detachActiveChildren ?? undefined,
-            });
+            yield* session.runs
+              .stopAgentRun(req.runId, {
+                detachActiveChildren: req.detachActiveChildren ?? undefined,
+              })
+              // The handler words a refused stop as a request error; this
+              // stub has no such vocabulary, so a refusal is a defect here.
+              .pipe(Effect.orDie);
           }
           return { kind: 'done' };
         }),

@@ -167,6 +167,7 @@ function createRegistry(
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(defaultSession(), input),
+    acquireRunClaim: () => Effect.succeed(Effect.void),
     ...options,
   });
   return { events, phases, registry };

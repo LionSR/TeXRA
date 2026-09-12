@@ -86,7 +86,10 @@ export class AgentReviewRunController {
   }
 
   /** Attach the exact run handle and replay any earlier stop. */
-  bind(run: AgentReviewRunToken, handle: AgentRunHandle): Effect.Effect<void> {
+  bind(
+    run: AgentReviewRunToken,
+    handle: AgentRunHandle,
+  ): Effect.Effect<void, Error> {
     if (this.activeRun !== run) return Effect.void;
     run.handle = handle;
     return run.stopRequested ? this.stop(run) : Effect.void;
@@ -95,7 +98,7 @@ export class AgentReviewRunController {
   /** Request one idempotent stop of the active run. */
   requestStop(): {
     readonly accepted: boolean;
-    readonly settlement: Effect.Effect<void>;
+    readonly settlement: Effect.Effect<void, Error>;
   } {
     const run = this.activeRun;
     if (!run || run.stopRequested)
@@ -105,7 +108,7 @@ export class AgentReviewRunController {
   }
 
   /** Stop the active run and drop whatever it still produces. */
-  discard(): Effect.Effect<void> {
+  discard(): Effect.Effect<void, Error> {
     const run = this.activeRun;
     if (!run) return Effect.void;
     const stop = this.requestStop();
@@ -121,7 +124,9 @@ export class AgentReviewRunController {
     return true;
   }
 
-  private stop(run: AgentReviewRunToken): Effect.Effect<void> {
+  /** Fails when the run's stop could not be written: the run is still in
+   *  flight, and the caller that asked for it hears so. */
+  private stop(run: AgentReviewRunToken): Effect.Effect<void, Error> {
     const handle = run.handle;
     if (!handle) return Effect.void;
     if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;

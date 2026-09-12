@@ -827,6 +827,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
     session: statusBarSession,
+    tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
       updateStatusBarText();

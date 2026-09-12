@@ -279,6 +279,8 @@ export class SessionHandle {
       publish: (events) => this.publish(events),
       approvals,
       finalizeRun: (input) => finalizeRun(this, input),
+      acquireRunClaim: (runId) =>
+        this.acquireClaims(qualifyAggregateId('run', runId)),
       releaseRootRunLease: (runId) => this.releaseRunLease(runId),
     });
 
