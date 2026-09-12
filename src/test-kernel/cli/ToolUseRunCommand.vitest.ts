@@ -75,6 +75,8 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
       catch: ensureError,
     }),
   hasMixedStdinWorkflowInputSpecs: vi.fn(() => false),
+  WORKFLOW_INPUT_REQUIRED_MESSAGE:
+    'At least one workflow input file is required.',
 }));
 
 // Hoisted out of each test body — a dynamic import()'s result is cached, so

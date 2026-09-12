@@ -62,6 +62,7 @@ import {
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
+  WORKFLOW_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/workflowInputs';
 import {
   assertOutputDirAvailable,
@@ -139,6 +140,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     return yield* runToolUseAgent(context, init, instruction, services);
   }
 
+  // A workflow agent with no `--input` cannot run, and the output probes below
+  // `mkdir -p` their destination before `withExpandedRunInputs` would report
+  // it. Refuse first so an invalid command leaves nothing on disk.
+  if (init.inputFiles.length === 0) {
+    throw new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE);
+  }
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
   yield* Effect.tryPromise({

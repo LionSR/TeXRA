@@ -135,6 +135,8 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     return specs.has('-') && specs.size > 1;
   }),
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
+  WORKFLOW_INPUT_REQUIRED_MESSAGE:
+    'At least one workflow input file is required.',
 }));
 
 // Hoisted out of each test body — a dynamic import()'s result is cached, so
@@ -439,6 +441,27 @@ describe('CLI run command, workflow agents', () => {
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
     expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
     expectNoModelOrInputWork();
+  });
+
+  // The output probes `mkdir -p` their destination, so a run that can never
+  // start has to be refused before them — otherwise an invalid command leaves
+  // directories behind.
+  it('refuses a workflow run with no input before creating the output directory', async () => {
+    await withTempDir('texra-workflow-', async (root) => {
+      await expect(
+        runWorkflow(
+          {
+            inputFiles: [],
+            instruction: 'Polish it.',
+            outputDir: path.join(root, 'missing', 'out'),
+          },
+          createRunCommandCliContext({ cwd: root }),
+        ),
+      ).rejects.toThrow('At least one workflow input file is required.');
+
+      await expect(fs.stat(path.join(root, 'missing'))).rejects.toThrow();
+      expectNoModelOrInputWork();
+    });
   });
 
   it('passes instruction file contents before inline workflow instructions', async () => {
