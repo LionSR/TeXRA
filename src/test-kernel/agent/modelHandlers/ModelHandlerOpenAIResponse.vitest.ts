@@ -1483,6 +1483,40 @@ describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
 
     assert.equal(normalized.cacheCreationTokens, undefined);
   });
+
+  it('bills gpt-6-astra at the long-context tier past 272K prompt tokens', () => {
+    const handler = createHandler({ ...MODEL_CONFIGS.gpt6 });
+    const usage: ResponseUsage = {
+      input_tokens: 300_000,
+      output_tokens: 10_000,
+      total_tokens: 310_000,
+      input_tokens_details: { cached_tokens: 100_000 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    } as ResponseUsage;
+
+    const normalized = handler.normalizeUsage(usage, 0);
+
+    // Tier rates: 2x input/cache and 1.5x output on the catalog's $10/$50
+    // with the 0.1 cache factor — 300K*20 + 10K*75 − 100K*20*0.9, per 1M.
+    assert.ok(normalized.cost != null);
+    assert.ok(
+      Math.abs(normalized.cost - 4.95) < 1e-9,
+      `cost=${normalized.cost}`,
+    );
+
+    const shortContext = handler.normalizeUsage(
+      { ...usage, input_tokens: 271_999, total_tokens: 281_999 },
+      0,
+    );
+    // Flat catalog rates below the threshold.
+    assert.ok(
+      Math.abs(
+        (shortContext.cost ?? NaN) -
+          (271_999 * 10 + 10_000 * 50 - 100_000 * 10 * 0.9) / 1e6,
+      ) < 1e-9,
+      `cost=${shortContext.cost}`,
+    );
+  });
 });
 
 describe('ModelHandlerOpenAIResponse background abort handling', () => {

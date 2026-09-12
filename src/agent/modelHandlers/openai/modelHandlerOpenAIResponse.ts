@@ -105,6 +105,7 @@ import {
   uploadToolAttachments,
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
+import type { StandardPricingConfig } from '../support/priceUtils';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
 
@@ -1950,6 +1951,25 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return this.config.provider === ModelProvider.OPENAI
       ? 'openai-response'
       : (this.config.provider as NormalizedUsage['provider']);
+  }
+
+  /**
+   * Astra's documented long-context tier: once a request's prompt reaches
+   * 272K input tokens, the whole request bills at 2x input/cache and 1.5x
+   * output (docs/guide/models.md). The registry catalogs only the standard
+   * rates, so the tier derives from them.
+   */
+  protected override standardPricingConfig(): StandardPricingConfig {
+    const base = super.standardPricingConfig();
+    if (this.config.fullName !== 'gpt-6-astra') return base;
+    return {
+      ...base,
+      longContextTier: {
+        thresholdTokens: 272_000,
+        inputPrice: base.inputPrice * 2,
+        outputPrice: base.outputPrice * 1.5,
+      },
+    };
   }
 
   /** Normalizes OpenAI Responses API usage data into a unified format. */
