@@ -135,6 +135,37 @@ describe('CLI tool display lines', () => {
     `);
   });
 
+  it('full transcript prints the output only when the card withholds it', () => {
+    // `rendered-by-sections`: the diff already carries the output, so a
+    // "Full output:" block would print the same text a second time.
+    const edit = toolUse(
+      'Edit',
+      {
+        path: 'paper.tex',
+        old_string: 'We use a CNN.\n',
+        new_string: 'We use a transformer.\n',
+      },
+      { outputText: 'The diff applied cleanly.' },
+    );
+    const editLines = toolUseDisplayLines(edit, { showFullOutput: true });
+    expect(editLines).not.toContain('Full output:');
+    expect(editLines).not.toContain('The diff applied cleanly.');
+
+    // `file-link`: the card shows only a link, so the full transcript is
+    // where the content appears.
+    const read = toolUse(
+      'read_file',
+      { path: 'paper.tex' },
+      { outputText: 'Large file contents\nwith many lines' },
+    );
+    expect(toolUseDisplayLines(read, { showFullOutput: true })).toEqual([
+      '● read_file (paper.tex)',
+      'Full output:',
+      'Large file contents',
+      'with many lines',
+    ]);
+  });
+
   it('sizes live header previews to the terminal width', () => {
     const command = 'x'.repeat(300);
     const header = (width: number | undefined, toolName = 'bash'): string =>
