@@ -372,7 +372,7 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
         with:
-          node-version: '22.16.0'
+          node-version: '22.19.0'
 
       - name: Validate CLI real-runtime run path
         run: |

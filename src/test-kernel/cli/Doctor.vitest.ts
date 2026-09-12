@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
+import { subset } from 'semver';
 import stripAnsi from 'strip-ansi';
 
 import {
@@ -13,6 +16,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',
@@ -193,8 +197,10 @@ describe('CLI doctor', () => {
       ['21.9.9', 'fail'],
       ['22.9.0', 'fail'],
       ['22.15.0', 'fail'],
-      ['22.16.0', 'pass'],
-      ['v22.16.0', 'pass'],
+      ['22.16.0', 'fail'],
+      ['22.18.0', 'fail'],
+      ['22.19.0', 'pass'],
+      ['v22.19.0', 'pass'],
       ['23.0.0', 'fail'],
       ['23.11.0', 'fail'],
       ['24.0.0', 'pass'],
@@ -210,8 +216,22 @@ describe('CLI doctor', () => {
     const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
     expect(checkById(unsupportedRelease, 'node')).toMatchObject({
       message: 'Node 21.0.0 is outside the supported range.',
-      hint: 'Install Node ^22.16.0 || >=24.0.0 before running TeXRA CLI.',
+      hint: 'Install Node ^22.19.0 || >=24.0.0 before running TeXRA CLI.',
     });
+  });
+
+  // #11952: undici 8.x declares engines.node >=22.19.0; a published floor
+  // below that handed Node 22.16-22.18 users an engine mismatch on install.
+  it('keeps the published engine ranges inside the bundled undici requirement', () => {
+    const readJson = (path: string) =>
+      JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+    const undiciEngines = readJson('../../../node_modules/undici/package.json')
+      .engines.node;
+    for (const pkg of ['packages/cli', 'packages/agent']) {
+      const engines = readJson(`../../../${pkg}/package.json`).engines.node;
+      expect(engines).toBe(TEXRA_CLI_SUPPORTED_NODE_RANGE);
+      expect(subset(engines, undiciEngines, { loose: true })).toBe(true);
+    }
   });
 
   it('reports loaded workspace config warnings', async () => {
