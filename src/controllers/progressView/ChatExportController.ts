@@ -198,9 +198,16 @@ export class ChatExportController {
 
       const filename = generateExportFilename(
         {
-          // The document's first row is the run's creation row, so its
-          // publish clock is the run's launch time.
-          timestamp: new Date(trace.events[0]!.at).toISOString(),
+          // The creation row's publish clock is the run's launch time. Found
+          // by type rather than by position: an aggregate always opens with
+          // `run.start`, but that ordering is another file's invariant, and
+          // the assembler only guarantees the document is non-empty.
+          timestamp: new Date(
+            (
+              trace.events.find((event) => event.type === 'run.start') ??
+              trace.events[0]!
+            ).at,
+          ).toISOString(),
           config: record,
         },
         'html',
