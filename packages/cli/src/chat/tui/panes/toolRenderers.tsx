@@ -356,7 +356,16 @@ function buildStyledLines(
     (isBashKind || isMcpToolName(toolUse.toolName));
 
   const compactOutput: ToolDisplayLine[] = [];
-  if (options.showFullOutput && !model.showOutput && toolUse.outputText) {
+  // The full-transcript fallback exists for suppression modes whose sections
+  // genuinely omit the output: `file-link` renders a link, not the content.
+  // Every other mode already shows the output elsewhere on the card (header,
+  // error, or the sections themselves), so repeating it under "Full output:"
+  // would print it twice.
+  if (
+    options.showFullOutput &&
+    model.outputSuppression === 'file-link' &&
+    toolUse.outputText
+  ) {
     compactOutput.push(row([{ text: 'Full output:' }]));
     for (const line of toolUse.outputText.split('\n')) {
       compactOutput.push(row([{ text: line }]));
