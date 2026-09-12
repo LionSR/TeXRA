@@ -101,7 +101,9 @@ this one function.
   resolves instead of being rejected.
 - `supabase/functions/github-app-token-exchange/index.ts`: the local
   `bearerToken` function is deleted; the file imports `bearerToken` from
-  `./auth.ts` alongside its existing imports from that module.
+  `../_shared/auth.ts` (the module that actually exports it — see
+  "Correction" below) alongside its existing imports from the local
+  `./auth.ts`.
 
 Verified: `npm run typecheck` (all seven workspace/package checks) passes
 clean; `npx eslint` on both touched files reports zero errors (the Supabase
@@ -111,6 +113,25 @@ change); `npx prettier --check` passes on both files; `npx vitest run
 memory` (26 tests, 6 files) passes; `npm run test:pure` (2335 tests) passes;
 `npm run check:dead-code-ratchet` reports no new findings; the full `npm
 test` (6295 tests, 591 files) passes.
+
+**Correction (PR #12319 review):** the first pushed commit (`c356c80`)
+imported `bearerToken` from `./auth.ts` — the wrong module. This
+`github-app-token-exchange/` directory has its own local `auth.ts` (GitHub
+OIDC-claim helpers only: `verifyGitHubActionsToken`, `parseRepositoryClaim`,
+`validateWorkflowIdentity`), separate from the shared
+`supabase/functions/_shared/auth.ts` that actually exports `bearerToken`.
+None of the checks listed above catch this: Supabase edge functions are
+Deno projects outside the pnpm workspace's `tsc`/ESLint scope, validated
+instead by CI's dedicated `deno check` step, which this session could not
+run locally (no `deno` binary available, and the sandboxed network policy
+blocked fetching one). Both Codex and the repo's own `texra-ai` PR review
+caught the dangling import independently; fixed in commit `df663c1` by
+importing `bearerToken` from `../_shared/auth.ts` instead, matching the
+three other edge functions (`auth-device`, `get-agent-config`,
+`log-usage`) that already import it that way. Lesson for this series: a
+proposed consolidation in a directory with a same-named local module
+(`auth.ts` here) needs the import path double-checked against a same-stack
+type checker, not just visual similarity to the target export.
 
 ## 4. What was checked and ruled out
 
