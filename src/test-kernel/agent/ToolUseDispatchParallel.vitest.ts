@@ -28,7 +28,13 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
+import {
+  appendRow,
+  rowAggregate,
+  snapshotRow,
+  toolUseFlowState,
+  type ToolUseFlowState,
+} from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
@@ -54,6 +60,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
+import { recordSessionEvents } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 import { testModelInfo } from './runtime/launchContextTestUtils';
 
@@ -264,7 +271,19 @@ interface HarnessOptions {
   readonly calls: readonly Call[];
   readonly rootUserInstruction?: string;
   readonly logger?: AgentTrace;
+  /** Opened with the slices a real run carries, for the cases that read the
+   *  workspace a settlement persisted. */
+  readonly stateSlices?: ToolUseFlowState['stateSlices'];
 }
+
+/** The slices of a run that has yet to touch a file. */
+const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
+  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
+  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
+    excludeAssemblyStrings: true,
+  }),
+  userChannels: {},
+});
 
 /**
  * Open a run aggregate and commit the completed turn the dispatch continues
@@ -286,7 +305,10 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     ]),
     snapshotRow(runId, freshState(), {
       phase: 'initial',
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        shouldSkipCycle: false,
+        stateSlices: options.stateSlices ?? null,
+      },
     }),
   ]);
   const turn = turnWithCalls(options.calls);
@@ -547,6 +569,81 @@ describe('tool-use dispatch', () => {
         expect(delivered[1]?.text).toBe(delivered[0]?.text);
         kit.session.dispose();
       }),
+  );
+
+  // The settlement is the whole transactional boundary: the result, the card
+  // that reports it, and the workspace the call mutated commit together, so a
+  // stop before the delivering snapshot cannot leave a settled call whose
+  // edits, media and tool-call count existed only in memory.
+  it.effect('commits the card and the workspace with the tool result', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const editingTool: ITool = {
+        definition: { name: 'edit_file', description: 'edit_file' },
+        async call(): Promise<ToolResult> {
+          probe.events.push('end edit_file');
+          return {
+            status: 'executed',
+            output: 'edited',
+            edits: [
+              { path: 'notes.tex', lineChanges: { added: 3, removed: 1 } },
+            ],
+          };
+        },
+      } as ITool;
+      const kit = yield* openDispatch({
+        tools: {
+          edit_file: editingTool,
+          slow_barrier: probeTool(probe, 'slow_barrier', 5_000),
+        },
+        calls: [
+          makeCall('c1', 'edit_file', { path: 'notes.tex' }),
+          makeCall('c2', 'slow_barrier', {}),
+        ],
+        stateSlices: emptySlices(),
+      });
+      const recorded = recordSessionEvents(kit.session, {
+        aggregateId: rowAggregate(kit.runId),
+      });
+
+      const fiber = yield* Effect.forkChild(dispatch(kit));
+      // The barriers are ordered, so the second call starting is proof the
+      // first has settled; the dispatch is then stopped before delivery.
+      while (!probe.events.some((event) => event.startsWith('start slow'))) {
+        yield* Effect.promise(() => delay(5));
+      }
+      yield* Fiber.interrupt(fiber);
+
+      const folded = yield* Effect.provide(
+        Effect.gen(function* () {
+          const ledger = yield* RunLedger;
+          return yield* ledger.load(kit.runId);
+        }),
+        kit.layer,
+      );
+      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([
+        'c1',
+      ]);
+      // No delivery ran, so this workspace can only have come from the
+      // settlement's own state operation.
+      const slices = toolUseFlowState(folded!)?.stateSlices;
+      expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
+        { path: 'notes.tex', added: 3, removed: 1 },
+      ]);
+      // The count the settling call had made: the interrupted barrier's own
+      // call is not in it, because it never settled.
+      expect(slices?.workspaceSnapshot.interactions.toolCallCount).toBe(1);
+
+      // The fast tool's card is now two rows of that same batch rather than a
+      // pair of trace publications: exactly one open and one close reach the
+      // display plane, and the interrupted second call opens none.
+      const types = (yield* Effect.promise(() => recorded.read())).map(
+        (event) => event.type,
+      );
+      expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
+      expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
+      kit.session.dispose();
+    }),
   );
 
   // No fail-fast sibling interruption and no fabricated settlement: an

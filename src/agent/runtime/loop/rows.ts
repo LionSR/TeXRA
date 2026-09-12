@@ -258,10 +258,16 @@ export function runtimeSnapshotRow(
   );
 }
 
-/** A display row the loop commits atomically with a ledger row. */
+/** Each arm of a draft union keeps its own required fields. */
+type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
+
+/** A display row the loop commits atomically with a ledger row: the card a
+ *  tool call opens, closes, or both, in the batch that settles it. */
 export function displayRow(
   runId: RunId,
-  draft: Omit<Extract<SessionEventDraft, { type: 'tool.end' }>, 'aggregateId'>,
+  draft: Unqualified<
+    Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
+  >,
 ): RunLedgerDraft {
   return { ...draft, aggregateId: rowAggregate(runId) };
 }

@@ -51,13 +51,16 @@ import type { z } from 'zod';
 
 /**
  * The rows `RunLedger.appendBatch` commits: the six ledger arms plus the
- * display arms a batch has to commit atomically with them. `tool.end` settles
- * with its `tool.result`; an approval's recovery binding is the
- * `flow.snapshot` committed in the same batch. Publishing those companions
- * separately is the crash window where a settled tool keeps an active card,
- * or an approval survives with nothing to recover it by. An explicit list
- * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself, or
- * `appendBatch` would accept a `tool.start`.
+ * display arms a batch has to commit atomically with them. A tool call's card
+ * settles with its `tool.result` — `tool.end` for a card the dispatcher
+ * already opened, both card rows for a fast tool whose card opens and closes
+ * in that one batch; an approval's recovery binding is the `flow.snapshot`
+ * committed in the same batch. Publishing those companions separately is the
+ * crash window where a settled tool keeps an active card, or a terminal card
+ * claims a result no row holds, or an approval survives with nothing to
+ * recover it by. An explicit list narrowed from `SessionEventDraft`, never
+ * `SessionEventDraft` itself: a card the ledger opens is one a settlement in
+ * the same batch closes, and no other row type reaches `appendBatch`.
  */
 export type RunLedgerDraft = Extract<
   SessionEventDraft,
@@ -69,6 +72,7 @@ export type RunLedgerDraft = Extract<
       | 'tool.intent'
       | 'tool.result'
       | 'flow.snapshot'
+      | 'tool.start'
       | 'tool.end'
       | 'approval.requested'
       | 'approval.resolved';
@@ -223,7 +227,6 @@ const IGNORED_ROW_TYPES: Readonly<
   log: true,
   'stage.start': true,
   'stage.end': true,
-  'tool.start': true,
   'workflow.plan': true,
   'workflow.call': true,
   'skills.snapshot': true,
@@ -908,6 +911,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
       );
     }
+    case 'tool.start':
     case 'tool.end':
       // Committed with its `tool.result`; the settlement is the ledger fact.
       return null;

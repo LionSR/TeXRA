@@ -27,10 +27,11 @@ import { normalizeToolCallError } from '@agent/core/flows/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import { emitToolUseCard, endToolUseCard, type AgentTrace } from '@agent/trace';
+import { endToolUseCard, type AgentTrace } from '@agent/trace';
 import {
   type DispatchFacts,
   type FileLocation,
+  type StateOperation,
   type ToolCallStatus,
   type ToolFileAttachment,
   type ToolResult,
@@ -239,23 +240,59 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const stateRef = yield* SynchronizedRef.make(initial);
 
   /** Append rows under the state's semaphore: concurrent settlements of one
-   *  parallel partition serialize here and each folds onto the latest. */
-  const append = (rows: readonly RunLedgerDraft[]) =>
+   *  parallel partition serialize here and each folds onto the latest. Rows
+   *  may be built from that latest state, so a settlement that carries the
+   *  workspace it mutated records it in the order the batches commit. */
+  const append = (
+    rows:
+      | readonly RunLedgerDraft[]
+      | ((state: RunState) => readonly RunLedgerDraft[]),
+  ) =>
     SynchronizedRef.updateEffect(stateRef, (state) =>
-      Effect.uninterruptible(ledger.appendBatch(runId, state, rows)),
+      Effect.uninterruptible(
+        ledger.appendBatch(
+          runId,
+          state,
+          typeof rows === 'function' ? rows(state) : rows,
+        ),
+      ),
     );
   const settledOf = (state: RunState, callId: string) =>
     state.pendingResponse?.responseId === responseId
       ? (state.pendingResponse.settled[callId] ?? null)
       : null;
 
+  /**
+   * The workspace the call mutated, as the settlement's own operation. The
+   * recorded edits, the media it added, the tool-call count and the work plan
+   * are in-memory state until a snapshot carries them, and the delivering
+   * snapshot lands only after every call of the response has settled: without
+   * this a process exit between a `tool.result` and that delivery leaves a
+   * call the resume will not run again whose effects on the run are gone.
+   */
+  const workspaceMutation = (state: RunState): readonly StateOperation[] => {
+    const flow = toolUseFlowState(state);
+    if (flow === null || flow.stateSlices === null) return [];
+    return [
+      {
+        op: 'set',
+        path: ['state', 'stateSlices', 'workspaceSnapshot'],
+        value: turn.workspace.toSnapshot({ excludeAssemblyStrings: true }),
+      },
+    ];
+  };
+
   const settle = (
     fact: DispatchFacts,
     attempt: number,
     settlement: Settlement,
-    card: RunLedgerDraft | null,
+    cards: readonly RunLedgerDraft[],
+    /** An executed call carries the workspace with its result. A synthetic
+     *  settlement ran no tool, and a duplicate reapplies no effect — the
+     *  payload schema refuses one that claims otherwise. */
+    ranTool = false,
   ) =>
-    append([
+    append((state) => [
       {
         type: 'tool.result',
         aggregateId,
@@ -264,9 +301,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           callId: fact.callId,
           attempt,
           ...settlement,
+          ...(ranTool
+            ? {
+                stateMutation: [
+                  ...settlement.stateMutation,
+                  ...workspaceMutation(state),
+                ],
+              }
+            : {}),
         },
       },
-      ...(card === null ? [] : [card]),
+      ...cards,
     ]);
 
   const syntheticSettlement = (error: string): Settlement => ({
@@ -447,21 +492,33 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     };
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
-    // A card already open closes in the settlement's batch; a fast tool's
-    // card opens and closes through the trace, its start never having been
-    // a row the batch could order after.
-    let card: RunLedgerDraft | null = null;
-    if (logId !== null) {
-      card = displayRow(runId, {
+    // The whole card commits with the settlement: a slow tool's card is
+    // already open and only closes here, and a fast tool's opens and closes
+    // in this same batch under a log id minted for it. Publishing a terminal
+    // card outside the batch would tell the transcript the call completed
+    // while recovery still sees an unsettled call.
+    const cardId = logId ?? generateShortId();
+    const stage = stageId !== undefined ? { stageId } : {};
+    const cards: RunLedgerDraft[] = [
+      ...(logId === null
+        ? [
+            displayRow(runId, {
+              type: 'tool.start',
+              logId: cardId,
+              toolName: fact.toolName,
+              input: parsedInput,
+              ...stage,
+            }),
+          ]
+        : []),
+      displayRow(runId, {
         type: 'tool.end',
-        logId,
+        logId: cardId,
         status,
         result: toolUseLog,
-        ...(stageId !== undefined ? { stageId } : {}),
-      });
-    } else {
-      emitToolUseCard(logger, { ...toolUseLog, status }, stageId);
-    }
+        ...stage,
+      }),
+    ];
     yield* settle(
       fact,
       attempt,
@@ -484,7 +541,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               ]
             : [],
       },
-      card,
+      cards,
+      true,
     ).pipe(
       // A ledger refusal mid-dispatch is the loop's to stop on; it surfaces
       // as a defect of this call's fiber so the partition unwinds with it.
@@ -640,7 +698,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         fact,
         1,
         syntheticSettlement(SKIPPED_AFTER_END_TURN),
-        null,
+        [],
       ).pipe(Effect.orDie);
       return;
     }
@@ -656,7 +714,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           fact,
           intent.attempt,
           syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-          null,
+          [],
         ).pipe(Effect.orDie);
         return;
       }
@@ -703,7 +761,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         attachments: [],
         stateMutation: [],
       },
-      null,
+      [],
     ).pipe(Effect.orDie);
   });
 

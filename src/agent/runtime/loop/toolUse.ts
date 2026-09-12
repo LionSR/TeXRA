@@ -509,6 +509,85 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         );
       }
       let forcedTool: string | null = null;
+      /**
+       * The policy a text-only response runs once it is committed: a blank
+       * turn after a tool result asks once more, the terminal tool gets one
+       * forced turn, and otherwise the turn ends with this text. `done` is
+       * the end of the turn; anything else continues the loop.
+       */
+      const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(
+        function* (
+          at: RunState,
+          text: string,
+          /** A response this turn just received. A recovered one is already
+           *  in the transcript its rows were folded from, so replaying it
+           *  must not finalize it a second time. */
+          live: boolean,
+        ): Effect.fn.Return<
+          { readonly state: RunState; readonly done: boolean },
+          Error,
+          AgentRun | RunLedger
+        > {
+          let next = at;
+          const previous = next.messages.at(-2);
+          if (
+            !text.trim() &&
+            previous?.role === 'tool' &&
+            continuedAt !== next.messages.length
+          ) {
+            continuedAt = next.messages.length;
+            next = yield* commit(
+              yield* ledger.appendBatch(runId, next, [
+                appendRow(runId, [
+                  {
+                    role: 'user',
+                    content: [
+                      { kind: 'text', text: BLANK_TOOL_RESULT_CONTINUATION },
+                    ],
+                  },
+                ]),
+              ]),
+            );
+            workspace.resetServerToolContent();
+            workspace.resetReasoning();
+            return { state: next, done: false };
+          }
+          if (text) {
+            workspace.assembly.lastResponse = text;
+            if (live) logger.responseFinalized(text);
+          }
+          workspace.resetServerToolContent();
+          workspace.resetReasoning();
+          if (
+            run.finalToolName !== null &&
+            !finalToolAttempted &&
+            run.structured.value === undefined
+          ) {
+            finalToolAttempted = true;
+            forcedTool = run.finalToolName;
+            next = yield* commit(
+              yield* ledger.appendBatch(runId, next, [
+                appendRow(runId, [
+                  {
+                    role: 'user',
+                    content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
+                  },
+                ]),
+              ]),
+            );
+            return { state: next, done: false };
+          }
+          return { state: next, done: true };
+        },
+      );
+      // A committed response whose live post-processing never ran is replayed
+      // through the same policy, once, when this turn is entered. The rows
+      // say so: the response row moved the step and cleared the attempt, and
+      // nothing since has delivered tools or begun another round. Treating it
+      // as a finished turn instead would skip the blank-turn continuation and
+      // the one forced structured-output attempt, so a crash at that commit
+      // boundary could finalize a run with no structured output at all.
+      let replayCommitted = true;
       for (;;) {
         state = yield* applyPendingModelSwitch(state);
         if (state.pendingResponse !== null) {
@@ -520,21 +599,29 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           continue;
         }
-        if (state.phase === 'response.ready' && state.openAttempt === null) {
-          // A completed text response that was never processed: the turn it
-          // ended is over. The assistant message is already in history.
-          const last = state.messages.at(-1);
+        if (replayCommitted) {
+          replayCommitted = false;
+          const last =
+            state.step === 'response.ready' && state.openAttempt === null
+              ? state.messages.at(-1)
+              : undefined;
           if (last?.role === 'assistant') {
-            response = last.content
+            const text = last.content
               .flatMap((part) =>
                 part.kind === 'message'
                   ? part.content.map((piece) => piece.text)
                   : [],
               )
               .join('');
+            if (text) response = text;
+            const replayed = yield* afterTextResponse(state, text, false);
+            state = replayed.state;
+            if (replayed.done) {
+              stageOutcome = RUN_OUTCOME.COMPLETED;
+              return { state, outcome: 'completed' };
+            }
+            continue;
           }
-          stageOutcome = RUN_OUTCOME.COMPLETED;
-          return { state, outcome: 'completed' };
         }
         const bound = yield* SynchronizedRef.get(run.model);
         const tools = toolDefinitionsFor(run.setting.tools);
@@ -593,55 +680,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         });
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
-        // A text-only response. A blank turn after a tool result asks once
-        // more; the terminal tool gets one forced turn; otherwise the turn
-        // ends with this text.
-        const previous = state.messages.at(-2);
-        const blankAfterToolResult =
-          !outcome.text.trim() && previous?.role === 'tool';
-        if (blankAfterToolResult && continuedAt !== state.messages.length) {
-          continuedAt = state.messages.length;
-          state = yield* commit(
-            yield* ledger.appendBatch(runId, state, [
-              appendRow(runId, [
-                {
-                  role: 'user',
-                  content: [
-                    { kind: 'text', text: BLANK_TOOL_RESULT_CONTINUATION },
-                  ],
-                },
-              ]),
-            ]),
-          );
-          workspace.resetServerToolContent();
-          workspace.resetReasoning();
-          continue;
-        }
-        if (outcome.text) {
-          workspace.assembly.lastResponse = outcome.text;
-          logger.responseFinalized(outcome.text);
-        }
-        workspace.resetServerToolContent();
-        workspace.resetReasoning();
-        if (
-          run.finalToolName !== null &&
-          !finalToolAttempted &&
-          run.structured.value === undefined
-        ) {
-          finalToolAttempted = true;
-          forcedTool = run.finalToolName;
-          state = yield* commit(
-            yield* ledger.appendBatch(runId, state, [
-              appendRow(runId, [
-                {
-                  role: 'user',
-                  content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
-                },
-              ]),
-            ]),
-          );
-          continue;
-        }
+        // A text-only response: the same policy the resume path replays.
+        const processed = yield* afterTextResponse(state, outcome.text, true);
+        state = processed.state;
+        if (!processed.done) continue;
         stageOutcome = RUN_OUTCOME.COMPLETED;
         return { state, outcome: 'completed' };
       }
@@ -808,6 +850,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         turn.outcome === 'completed' &&
         pendingBatches.length === 0
       ) {
+        // A one-cycle launch ends here rather than parking: its caller
+        // treats a WAITING result as an invariant failure, because the
+        // headless in-band child has no orchestrator to resume it. Checked
+        // before the park, not at the top of the next iteration, which a
+        // child never reaches.
+        if (run.toolPolicy.stopAfterCycle) {
+          return finish(state, RUN_OUTCOME.COMPLETED);
+        }
         // One child cycle per invocation: the child loop delivers this
         // turn's facts and owns the next wait.
         session.status.transitionToWaiting(runId, 'wait');

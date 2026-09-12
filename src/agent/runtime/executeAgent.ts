@@ -105,7 +105,11 @@ type ToolUseLaunchVariant =
 
 /**
  * The per-run layer both families run under: the run's `AgentRun`, the
- * invoker, the follow-up lease, and the session's ledger.
+ * invoker, and the session's ledger. The follow-up lease is not here: only
+ * the tool-use loop consumes a queue and only its finalizer releases the
+ * lease, so building `followUpsLayer` for a workflow run would claim a live
+ * consumer nothing ever releases — later submissions would report as
+ * delivered live to a run that has ended.
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
@@ -118,7 +122,7 @@ function runLayerFor(
   inScope: <A>(operation: () => A) => A,
 ) {
   const { runId, session: runSession } = ctx.runScope;
-  return Layer.mergeAll(modelInvokerLayer, followUpsLayer).pipe(
+  return modelInvokerLayer.pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         setting: shared.setting,
@@ -239,12 +243,18 @@ function launchToolUseRun(
     },
   }).pipe(
     Effect.provide(
-      runLayerFor(
-        ctx,
-        shared,
-        shared.toolInjections,
-        variant.kind === 'fresh' ? variant.onIdle : undefined,
-        inScope,
+      // The follow-up lease is the tool-use loop's alone; its finalizer is
+      // what releases it.
+      followUpsLayer.pipe(
+        Layer.provideMerge(
+          runLayerFor(
+            ctx,
+            shared,
+            shared.toolInjections,
+            variant.kind === 'fresh' ? variant.onIdle : undefined,
+            inScope,
+          ),
+        ),
       ),
     ),
     Effect.map((result): AgentRuntimeFlowResult => ({

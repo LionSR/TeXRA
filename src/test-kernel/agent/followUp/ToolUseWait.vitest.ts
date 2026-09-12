@@ -24,8 +24,10 @@ import {
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
 import {
+  appendRow,
   rowAggregate,
   runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
 import {
@@ -43,6 +45,7 @@ import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
 import {
   AgentCategory,
+  AgentRunStateSnapshotSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -231,6 +234,8 @@ interface LoopInit {
   readonly logger?: TraceEmitter;
   readonly supportsVision?: boolean;
   readonly stopAfterCycle?: boolean;
+  /** The terminal structured-output tool, when the run has one. */
+  readonly finalToolName?: string;
   readonly onIdle?: () => void;
   readonly onFollowUpConsumed?: () => void;
   /** Host wiring that is live while the loop can accept an interrupt. */
@@ -276,7 +281,7 @@ function agentRunTestLayer(init: LoopInit) {
         initialUserMessageForTranscript: 'Do the thing.',
         fileService: new TaskRunFileService(init.runId),
         tools: new MapToolRegistry({}),
-        finalToolName: null,
+        finalToolName: init.finalToolName ?? null,
         structured: { value: undefined },
         model,
         scope,
@@ -380,6 +385,79 @@ function startedRun(session: SessionHandle): RunId {
   publishTestRunStart(session, runId);
   return runId;
 }
+
+/**
+ * A run whose rows stop where a crash between a committed text response and
+ * its post-response policy would leave them: the response and its step are
+ * in the ledger, nothing after them is.
+ */
+const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
+  function* (session: SessionHandle, runId: RunId, text: string) {
+    const ledger = session.ledger;
+    const aggregate = rowAggregate(runId);
+    const fresh: RunState = {
+      commit: 0,
+      snapshotCommit: null,
+      rowsBeforeSnapshot: 0,
+      family: 'toolUse',
+      step: null,
+      outcome: null,
+      phase: null,
+      round: 0,
+      turn: 0,
+      continuationIndex: 0,
+      modelId: 'test-model',
+      modelHandlerCompatibilityKey: 'ModelHandlerDeepSeek',
+      lastError: null,
+      pendingRetry: null,
+      messages: [],
+      continuation: null,
+      openAttempt: null,
+      lastTurn: null,
+      pendingResponse: null,
+      pendingIntents: {},
+      approvals: {},
+      usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+      flow: null,
+    };
+    const opened = yield* ledger.appendBatch(runId, null, [
+      appendRow(runId, [
+        { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
+      ]),
+      snapshotRow(runId, fresh, {
+        phase: 'model.ready',
+        turn: 1,
+        state: { shouldSkipCycle: false, stateSlices: null },
+      }),
+    ]);
+    const invocation = { invocationId: randomUUID(), attempt: 1 };
+    return yield* ledger.appendBatch(runId, opened, [
+      {
+        type: 'model.message',
+        aggregateId: aggregate,
+        payload: {
+          kind: 'attempt',
+          invocation,
+          origin: ORIGIN,
+          delivery: 'stream',
+        },
+      },
+      {
+        type: 'model.message',
+        aggregateId: aggregate,
+        payload: {
+          kind: 'response',
+          responseId: randomUUID(),
+          invocation,
+          turn: textTurn(text),
+          calls: [],
+          usage: null,
+        },
+      },
+      stepRow(runId, opened, 'response.ready'),
+    ]);
+  },
+);
 
 /** Put input on the run's queue before the loop claims it. */
 function enqueue(
@@ -525,6 +603,54 @@ describe('a parked root run', () => {
 
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
         expect(requests).toHaveLength(1);
+      }),
+  );
+
+  it.effect('stops a one-cycle child instead of parking it as waiting', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const { result, requests } = yield* runLoop({
+        runId: startedRun(session),
+        session,
+        parentRunId: generateRunId(),
+        stopAfterCycle: true,
+        script: [textTurn('done')],
+      });
+
+      // A single-cycle native subagent's caller reads a WAITING result as
+      // an invariant failure, so the cycle that finished must say so.
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(requests).toHaveLength(1);
+    }),
+  );
+
+  it.effect(
+    'replays a recovered text response through the final-turn policy',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        yield* seedCommittedResponse(session, runId, 'the prose answer');
+
+        const { result, requests, state } = yield* runLoop({
+          runId,
+          session,
+          resume: true,
+          // One cycle, so the scenario ends at the turn it is about.
+          stopAfterCycle: true,
+          finalToolName: 'submit_output',
+          script: [textTurn('and the structured one')],
+        });
+
+        // The crash landed between the response row and the live policy that
+        // reads it. Treating the row as an already-finished turn would end
+        // the run with no structured output attempted at all.
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.toolChoice).toEqual({ name: 'submit_output' });
+        expect(userTexts(state)).toContain(
+          'Submit the final structured output now.',
+        );
+        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
 
