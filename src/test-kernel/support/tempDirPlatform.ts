@@ -9,6 +9,7 @@ import { afterEach } from 'vitest';
 // Platform defaults
 
 // Local imports
+import { closeSession, listSessions } from '@agent/runtime/sessionGraph';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -95,6 +96,32 @@ export function useTempDirs(): string[] {
 /** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */
 export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   const uniqueDirs = [...new Set(tempDirs.splice(0))];
+  const sessionRoots = new Set(
+    (await Effect.runPromise(listSessions()))
+      .filter((session) =>
+        uniqueDirs.some((directory) => {
+          const relative = path.relative(directory, session.roots.storage);
+          return (
+            relative === '' ||
+            (relative !== '..' &&
+              !relative.startsWith(`..${path.sep}`) &&
+              !path.isAbsolute(relative))
+          );
+        }),
+      )
+      .map((session) => session.roots.storage),
+  );
+  const reports = await Effect.runPromise(
+    Effect.forEach(sessionRoots, (root) => closeSession(root), {
+      concurrency: 'unbounded',
+    }),
+  );
+  const abandoned = reports.flatMap((report) => report.abandoned);
+  if (reports.some((report) => !report.settled) || abandoned.length > 0) {
+    throw new Error(
+      `Cannot remove temporary directories while sessions still own runs: ${abandoned.join(', ')}`,
+    );
+  }
   await Promise.all(
     uniqueDirs.map((dir) => rm(dir, { recursive: true, force: true })),
   );

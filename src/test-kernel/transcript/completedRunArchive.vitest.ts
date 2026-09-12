@@ -35,9 +35,13 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
-import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import {
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import {
   readCliHistoryDetails,
   formatCliHistoryDetailsText,
@@ -106,6 +110,20 @@ const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
 const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
+
+function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
+  return closeSession(session.roots.storage).pipe(
+    Effect.flatMap((report) =>
+      report.settled && report.abandoned.length === 0
+        ? Effect.void
+        : Effect.fail(
+            new Error(
+              `Test session did not close: ${report.abandoned.join(', ')}`,
+            ),
+          ),
+    ),
+  );
+}
 
 /** Persist completed tasks as committed run events. */
 async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
@@ -223,7 +241,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('keeps private metadata exact while public events and exports redact its secrets', async () => {
-    taskSession.dispose();
+    await Effect.runPromise(closeTestSession(taskSession));
     taskSession = createProcessSession({
       transcriptMode: { kind: 'persistent' },
     });
@@ -374,7 +392,12 @@ describe('completedRunArchive facade', () => {
         })),
       );
     } finally {
-      for (const { session } of papers) session.dispose();
+      await Effect.runPromise(
+        Effect.forEach(papers, ({ session }) => closeTestSession(session), {
+          concurrency: 'unbounded',
+          discard: true,
+        }),
+      );
     }
   });
 
@@ -444,7 +467,7 @@ describe('completedRunArchive facade', () => {
         const config = runConfig('orchestrator');
 
         yield* Effect.promise(() => stampRun(runId));
-        taskSession.dispose();
+        yield* closeTestSession(taskSession);
         const session = initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, runId);

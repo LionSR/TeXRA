@@ -20,6 +20,17 @@ import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 
+const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+const STORAGE_PATH = path.resolve(path.sep, 'storage');
+const CANONICAL_PATH = path.resolve(path.sep, 'canonical');
+
+const workspacePath = (...segments: string[]) =>
+  path.join(WORKSPACE_PATH, ...segments);
+const storagePath = (...segments: string[]) =>
+  path.join(STORAGE_PATH, ...segments);
+const canonicalPath = (...segments: string[]) =>
+  path.join(CANONICAL_PATH, ...segments);
+
 function createWorkflowScriptAgentRunner(
   ...args: Parameters<typeof createNativeWorkflowScriptAgentRunner>
 ) {
@@ -120,9 +131,14 @@ const result: RunEnd = {
       {
         round: 0,
         relativePath: 'r0/draft.tex',
-        absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
+        absolutePath: storagePath(
+          'executions',
+          'bbbbbb222222',
+          'r0',
+          'draft.tex',
+        ),
         location: 'runStorage',
-        originalPath: '/workspace/draft.tex',
+        originalPath: workspacePath('draft.tex'),
         added: 1,
         removed: 0,
       },
@@ -154,7 +170,7 @@ function parentContext(): DelegationParent {
     config: new FakeConfigProvider(),
     model: 'parent-model',
     tracker: new FileInteractionState(),
-    workingDirectory: '/workspace',
+    workingDirectory: WORKSPACE_PATH,
     delegationAgentScope: {
       workflow: ['builtInWorkflow:correct'],
       toolUse: ['builtInToolUse:assistant'],
@@ -260,7 +276,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-      path.resolve('/workspace', file),
+      path.resolve(WORKSPACE_PATH, file),
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
@@ -285,7 +301,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
       expect(oldFingerprint).not.toBe(newFingerprint);
       expect(mocks.absoluteReadBytes).toHaveBeenCalledWith(
-        '/workspace/proof.tex',
+        workspacePath('proof.tex'),
       );
     }),
   );
@@ -450,16 +466,16 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(yield* runner(call)).toBe(result);
       expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
       expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        '/workspace/paper.tex',
+        workspacePath('paper.tex'),
       );
       expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        '/workspace/notes.tex',
+        workspacePath('notes.tex'),
       );
       expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
         'notes.tex',
       ]);
       expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        '/workspace/figure.pdf',
+        workspacePath('figure.pdf'),
       );
       expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
         parentModel: 'parent-model',
@@ -488,7 +504,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             inputFiles: ['paper.tex'],
             contextFiles: ['notes.tex'],
             mediaFiles: ['figure.pdf'],
-            workingDirectory: '/workspace',
+            workingDirectory: WORKSPACE_PATH,
             delegationAgentScope: {
               workflow: ['builtInWorkflow:correct'],
               toolUse: ['builtInToolUse:assistant'],
@@ -567,14 +583,30 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('honors an explicit agent and binds verified run outputs', () =>
     Effect.gen(function* () {
-      const firstRequested =
-        '/storage/executions/bbbbbb222222/r1/introduction.tex';
-      const firstCanonical =
-        '/canonical/executions/bbbbbb222222/r1/introduction.tex';
-      const secondRequested =
-        '/storage/executions/cccccc333333/r1/conclusion.tex';
-      const secondCanonical =
-        '/canonical/executions/cccccc333333/r1/conclusion.tex';
+      const firstRequested = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'introduction.tex',
+      );
+      const firstCanonical = canonicalPath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'introduction.tex',
+      );
+      const secondRequested = storagePath(
+        'executions',
+        'cccccc333333',
+        'r1',
+        'conclusion.tex',
+      );
+      const secondCanonical = canonicalPath(
+        'executions',
+        'cccccc333333',
+        'r1',
+        'conclusion.tex',
+      );
       mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
         file === firstRequested || file === secondRequested
           ? { kind: 'runStorage' }
@@ -627,7 +659,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         parentContext().run.session,
       );
       expect(mocks.workspaceExists).toHaveBeenCalledWith(
-        '/workspace/notes.tex',
+        workspacePath('notes.tex'),
       );
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
@@ -642,7 +674,12 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('rejects a run-storage input that no longer resolves', () =>
     Effect.gen(function* () {
-      const placeholder = '/storage/executions/bbbbbb222222/r1/unchanged.tex';
+      const placeholder = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'unchanged.tex',
+      );
       mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
         kind: 'runStorage',
       });
@@ -697,7 +734,12 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('makes storage resolver failures run-fatal', () =>
     Effect.gen(function* () {
-      const placeholder = '/storage/executions/bbbbbb222222/r1/deleted.tex';
+      const placeholder = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'deleted.tex',
+      );
       const storageError = new Error(
         'Declared output r1/deleted.tex is missing from run bbbbbb222222.',
       );
@@ -723,8 +765,18 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects mixed inputs when any run-storage input no longer resolves',
     () =>
       Effect.gen(function* () {
-        const resolved = '/storage/executions/bbbbbb222222/r1/draft.tex';
-        const stale = '/storage/executions/cccccc333333/r1/review.tex';
+        const resolved = storagePath(
+          'executions',
+          'bbbbbb222222',
+          'r1',
+          'draft.tex',
+        );
+        const stale = storagePath(
+          'executions',
+          'cccccc333333',
+          'r1',
+          'review.tex',
+        );
         mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation(
           (file) =>
             file === resolved || file === stale
@@ -736,8 +788,12 @@ describe('createWorkflowScriptAgentRunner', () => {
             file === resolved
               ? {
                   kind: 'runStorage',
-                  absolutePath:
-                    '/canonical/executions/bbbbbb222222/r1/draft.tex',
+                  absolutePath: canonicalPath(
+                    'executions',
+                    'bbbbbb222222',
+                    'r1',
+                    'draft.tex',
+                  ),
                   relativePath: 'r1/draft.tex',
                   runId: 'bbbbbb222222',
                 }

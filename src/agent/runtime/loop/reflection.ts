@@ -27,6 +27,7 @@
  * nothing can settle. A workflow that needs tools runs in the tool-use
  * family, and the reflection run's tool registry is empty by construction.
  */
+import { dirname } from 'node:path';
 import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -575,9 +576,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           const path = location.absolutePath;
           const expected = flow.rawOutputBytes ?? 0;
           const fragmentBytes = Buffer.byteLength(fragment);
-          await AbsoluteFS.ensureDir(
-            path.slice(0, Math.max(0, path.lastIndexOf('/'))),
-          );
+          await AbsoluteFS.ensureDir(dirname(path));
           const exists = await AbsoluteFS.exists(path);
           const actual = exists ? (await AbsoluteFS.stat(path)).size : 0;
           if (

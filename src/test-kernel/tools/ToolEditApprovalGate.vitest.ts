@@ -34,6 +34,8 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 
+const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+
 // A tool edit opens its request on a run, so every case owns a freshly
 // started one; the file's default session outlives the individual tests.
 let runId: RunId;
@@ -55,7 +57,11 @@ async function installPlatform(
 ) {
   approvalRequests = [];
   nextDecision = () => ({ action: 'approve' });
-  await installFakePlatform({ workspacePath: '/workspace', config, files });
+  await installFakePlatform({
+    workspacePath: WORKSPACE_PATH,
+    config,
+    files,
+  });
   detachHostInteractions();
   detachHostInteractions = defaultSession().interactions.use({
     presentToolEdit: (request) => {
@@ -67,10 +73,10 @@ async function installPlatform(
 // Spies the workspace reads a tool performs before proposing an edit and
 // returns the write spy so a test can inspect what was applied.
 function stubWorkspaceFile(
-  path: string,
+  filePath: string,
   options: { exists: boolean; content: string },
 ) {
-  if (options.exists) tracker.recordRead(`/workspace/${path}`);
+  if (options.exists) tracker.recordRead(path.join(WORKSPACE_PATH, filePath));
   vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(options.exists);
   vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(options.content);
   return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
@@ -81,7 +87,7 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
   return effect.pipe(
     Effect.provide(
       nativeToolTestLayer({
-        workingDirectory: '/workspace',
+        workingDirectory: WORKSPACE_PATH,
         tracker,
         run: { runId, session: defaultSession(), toolPolicy: {} },
         onApprovalPolicyDenial: () => {
@@ -126,7 +132,7 @@ describe('Tool edit approval gating', () => {
       );
 
       const [request] = approvalRequests;
-      assert.strictEqual(request?.path, '/workspace/doc.txt');
+      assert.strictEqual(request?.path, path.join(WORKSPACE_PATH, 'doc.txt'));
       assert.strictEqual(request?.permission.relativePath, 'doc.txt');
       assert.strictEqual(request?.originalContent, 'old content');
       assert.strictEqual(request?.proposedContent, 'new content');
