@@ -22,7 +22,11 @@ import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import {
+  createNodeStorageProvider,
+  DEFAULT_NODE_STORAGE_ROOT,
+} from '@platform/defaults/nodeStorage';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -411,12 +415,12 @@ export async function initCliPlatform(
   });
 
   return {
-    // The same pure path calculator the state stores and the process runtime
-    // use over this process's storage root, so every CLI entry — including
-    // the ones that find the platform already installed — names one root.
-    globalStorage: createNodeStorageProvider({
-      storageRoot: context.storageRoot,
-    }).getGlobalStoragePath(),
+    // The pure path calculator over this process's storage root (no mkdir),
+    // so every CLI entry, including the ones that find the platform already
+    // installed, names one root without touching the filesystem again.
+    globalStorage: resolveGlobalStoragePath(
+      context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+    ),
     globalState: services.globalState,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
