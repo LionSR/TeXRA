@@ -86,7 +86,7 @@ import {
 } from '../support/BackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
 import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
 import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
 import type { BackgroundPollStats } from '../support/BackgroundPoller';

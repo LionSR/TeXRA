@@ -54,10 +54,8 @@ import { OUTPUT_END_TAG } from '@shared/schemas';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
-import {
-  getAnthropicMaxPdfPages,
-  estimateTokensFromText,
-} from '../contextManagementConstants';
+import { getAnthropicMaxPdfPages } from '../contextManagementConstants';
+import { estimateTokensFromText } from '@agent/runtime/run/compaction';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import {
   AUXILIARY_MAX_RETRIES,

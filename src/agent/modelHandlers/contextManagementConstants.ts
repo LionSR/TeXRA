@@ -27,49 +27,6 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
     : ANTHROPIC_MAX_PDF_PAGES_200K;
 }
 
-/** Max tokens for the compaction summary response (client-side compaction for OpenAI-compatible models). */
-export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
-
-/**
- * Prefix prepended to a client-side compaction summary when it is folded back
- * into the conversation as a synthetic user message. Read once in the base
- * compaction method every provider handler inherits, so the resumed-conversation
- * marker stays identical across providers.
- */
-export const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
-
-/**
- * Rough chars-per-token ratio for estimating token counts without a tokenizer.
- * ~4 chars/token is the standard approximation for GPT-family models on English
- * and code. Used only where exact counting is unavailable — e.g. the
- * ChatGPT-subscription (Codex) profile, whose backend exposes no token-counting
- * endpoint (`supportsTokenCounting: false`).
- */
-const ESTIMATED_CHARS_PER_TOKEN = 4;
-
-/**
- * Heuristic token estimate for `text` when no tokenizer or counting API is
- * available. Deliberately coarse — callers pair it with a safety buffer.
- */
-export function estimateTokensFromText(text: string): number {
-  return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
-}
-
-/** System prompt used for client-side conversation compaction. */
-export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
-- The original user request and goals
-- All key decisions made
-- File paths and code changes discussed or made
-- Tool call results and their outcomes
-- Current state of the task (what is done, what is pending)
-- Any errors encountered and how they were resolved
-
-Write a structured summary with enough context to continue the task. Output only the summary.`;
-
-/** Final user instruction that makes the compaction task explicit after history. */
-export const COMPACTION_USER_PROMPT =
-  'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.';
-
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,

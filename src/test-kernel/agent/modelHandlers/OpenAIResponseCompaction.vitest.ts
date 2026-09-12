@@ -10,7 +10,7 @@ import {
   COMPACTION_SYSTEM_PROMPT,
   COMPACTION_USER_PROMPT,
   estimateTokensFromText,
-} from '@agent/modelHandlers/contextManagementConstants';
+} from '@agent/runtime/run/compaction';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';

@@ -86,10 +86,12 @@ import {
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
+} from './contextManagementConstants';
+import {
   COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
-} from './contextManagementConstants';
-import { logCompactionEvent } from './support/compactionLogging';
+  logCompactionEvent,
+} from '@agent/runtime/run/compaction';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   reportMediaAttachmentFailure,

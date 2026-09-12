@@ -64,7 +64,7 @@ import {
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
 import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 
 // Third-party type imports
 import type {

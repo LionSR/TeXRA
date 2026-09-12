@@ -53,6 +53,7 @@ import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, RunHalted } from '../run/AgentRun';
+import { compactIfNeeded } from '../run/compaction';
 import { bindModel, type BoundModel } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
@@ -141,6 +142,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let totalResponseTimeMs = 0;
   let response = '';
   let lastError: RetryErrorInfo | undefined;
+  // A `/compact` the host admitted: honoured at the next model boundary,
+  // regardless of the threshold.
+  let compactionRequested = false;
 
   const flowState = (state: RunState): ToolUseFlowState => {
     const previous = toolUseFlowState(state);
@@ -194,13 +198,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
-    modelHandler: { supportsManualCompaction: false },
+    // Every bound model can summarize its own history through the run's
+    // compaction step, so the manual command is always available.
+    modelHandler: { supportsManualCompaction: true },
     interrupt(): void {
       run.interrupt();
       session.interactions.cancel({ runId, cause: 'Run interrupted.' });
       followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
+      compactionRequested = true;
+      // A parked loop wakes on a synthetic turn; the compaction runs before
+      // that turn's request, and the message tells the model to do nothing.
       if (!followUps.hasQueued()) {
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
@@ -527,15 +536,31 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           stageOutcome = RUN_OUTCOME.COMPLETED;
           return { state, outcome: 'completed' };
         }
-        // One round: the snapshot that admits it, then the invocation.
+        const bound = yield* SynchronizedRef.get(run.model);
+        const tools = toolDefinitionsFor(run.setting.tools);
+        // One round: the compaction the history may need, the snapshot that
+        // admits the round, then the invocation. An open attempt's history
+        // is fixed; it is neither compacted nor re-admitted.
         if (state.openAttempt === null) {
+          const force = compactionRequested;
+          compactionRequested = false;
+          state = yield* commit(
+            yield* compactIfNeeded(state, {
+              runId,
+              ledger,
+              logger,
+              bound,
+              system: systemPrompt,
+              tools,
+              force,
+            }),
+          );
           state = yield* commit(
             yield* ledger.appendBatch(runId, state, [
               snapshot(state, { phase: 'model.ready', round: state.round + 1 }),
             ]),
           );
         }
-        const bound = yield* SynchronizedRef.get(run.model);
         const toolChoice =
           forcedTool !== null && bound.supportsForcedToolChoice
             ? { name: forcedTool }
@@ -543,7 +568,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         forcedTool = null;
         const outcome = yield* invoker.invoke(state, {
           system: systemPrompt,
-          tools: toolDefinitionsFor(run.setting.tools),
+          tools,
           toolChoice,
           round: state.round,
           debugName: 'tooluse',

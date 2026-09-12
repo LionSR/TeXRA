@@ -14,13 +14,13 @@ import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { clamp } from '@utils/core';
 
 // Local file imports
-import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_USER_PROMPT,
   estimateTokensFromText,
-} from '../contextManagementConstants';
+  logCompactionEvent,
+} from '@agent/runtime/run/compaction';
 import {
   contentToText,
   createInputText,

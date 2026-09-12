@@ -70,7 +70,7 @@ import {
 import { toOpenAITools } from '../toolConversion';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
