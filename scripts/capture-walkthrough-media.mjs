@@ -68,7 +68,6 @@ const modelOptions = [
     context: '1M',
     cost: '$$',
     availability: 'provider-key',
-    availabilityLabel: 'API key',
   },
   {
     label: 'GPT-5.5',
@@ -77,7 +76,6 @@ const modelOptions = [
     context: '400k',
     cost: '$$$',
     availability: 'missing-key',
-    availabilityLabel: 'Needs key',
   },
   {
     label: 'DeepSeek V4 Flash',
@@ -86,7 +84,6 @@ const modelOptions = [
     context: '128k',
     cost: '$',
     availability: 'provider-key',
-    availabilityLabel: 'Env key',
   },
 ];
 

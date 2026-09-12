@@ -8,6 +8,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  MODEL_AVAILABILITY_STATUS,
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
   type ModelSelectionItem,
@@ -56,6 +57,20 @@ function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
   return items.toSorted(
     (a, b) => Number(Boolean(b.isFast)) - Number(Boolean(a.isFast)),
   );
+}
+
+/**
+ * What the row's availability kind means. `undefined` is a row the backend
+ * left unresolved (the secret-free basic list), which blocks nothing.
+ */
+function availabilityOf(
+  model: ModelSelectionItem,
+):
+  | (typeof MODEL_AVAILABILITY_STATUS)[keyof typeof MODEL_AVAILABILITY_STATUS]
+  | undefined {
+  return model.availability === undefined
+    ? undefined
+    : MODEL_AVAILABILITY_STATUS[model.availability];
 }
 
 @customElement('model-selection-list')
@@ -134,7 +149,7 @@ export class ModelSelectionList extends LitElement {
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
-        ?disabled=${model.disabled}
+        ?disabled=${availabilityOf(model)?.available === false}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <span slot="label" class="visually-hidden"
@@ -166,17 +181,16 @@ export class ModelSelectionList extends LitElement {
         title,
       });
     }
-    if (!model.disabled) return nothing;
+    // The backend resolves the availability kind; the Models tab words that
+    // verdict from the shared table rather than inventing a reason.
+    const status = availabilityOf(model);
+    if (status === undefined || status.available) return nothing;
 
-    // The backend resolves the label alongside `disabled`; the Models tab
-    // shows that verdict verbatim rather than inventing a reason.
-    const { availabilityLabel } = model;
-    const title =
-      model.requiresKey && availabilityLabel
-        ? `${availabilityLabel} — add a key in API configuration`
-        : availabilityLabel;
-    const iconName = model.requiresKey ? 'key' : 'triangle-exclamation';
-    const className = model.requiresKey
+    const title = status.requiresKey
+      ? `${status.label} — add a key in API configuration`
+      : status.label;
+    const iconName = status.requiresKey ? 'key' : 'triangle-exclamation';
+    const className = status.requiresKey
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
 
@@ -193,7 +207,10 @@ export class ModelSelectionList extends LitElement {
       <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
-          ?disabled=${(model.disabled && !model.enabled) || isLastEnabledModel}
+          ?disabled=${
+            (availabilityOf(model)?.available === false && !model.enabled) ||
+            isLastEnabledModel
+          }
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {

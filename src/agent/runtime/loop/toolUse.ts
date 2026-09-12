@@ -28,7 +28,6 @@ import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
@@ -42,6 +41,7 @@ import {
   type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';

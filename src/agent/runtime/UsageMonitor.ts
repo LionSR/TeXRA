@@ -1,9 +1,9 @@
 import type { AgentTrace } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type {
   AgentRunStateSnapshot,
   RunId,
   ExtendedTokenUsageStats,
+  RunUsageTotals,
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';

@@ -1077,7 +1077,7 @@ const TURN_USAGE = {
   outputTokens: 5,
   cost: 0.25,
   responseTimeMs: 1200,
-  provider: 'openai',
+  provider: 'openai-chat',
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
   serverToolRequests: 1,

@@ -20,6 +20,7 @@ import {
   ToolConfigFieldsSchema,
   UIFileFieldsSchema,
   RunIdSchema,
+  isModelOptionAvailable,
   type InquiryDraft,
   type RunId,
 } from '@shared/schemas';
@@ -290,9 +291,12 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   const current = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
-  if (host.modelOptions.length > 0 && !(current && !current.disabled)) {
+  if (
+    host.modelOptions.length > 0 &&
+    !(current && isModelOptionAvailable(current))
+  ) {
     const next =
-      host.modelOptions.find((option) => !option.disabled) ??
+      host.modelOptions.find((option) => isModelOptionAvailable(option)) ??
       current ??
       host.modelOptions[0];
     if (next.value !== launch.model) patch.model = next.value;

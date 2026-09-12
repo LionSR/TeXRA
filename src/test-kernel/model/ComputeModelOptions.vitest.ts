@@ -18,6 +18,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  isModelOptionAvailable,
   type ModelOptionData,
 } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
@@ -142,7 +143,6 @@ describe('computeModelOptionsData availability', () => {
     expect(model).toMatchObject({
       provider: 'kimiCode',
       availability: 'provider-key',
-      disabled: false,
     });
   });
 
@@ -157,7 +157,6 @@ describe('computeModelOptionsData availability', () => {
     expect(model).toMatchObject({
       provider: 'kimiCode',
       availability: 'missing-key',
-      disabled: true,
     });
     expect(reason).toBe(
       'Model "kimiCoding" requires your Kimi Code API key. Provide it to continue.',
@@ -224,9 +223,6 @@ describe('computeModelOptionsData availability', () => {
       value: 'no-such-model',
       label: 'no-such-model',
       availability: 'unknown-model',
-      availabilityLabel: 'Unknown model',
-      requiresKey: false,
-      disabled: true,
     });
   });
 
@@ -236,7 +232,7 @@ describe('computeModelOptionsData availability', () => {
     const [model] = await computeModelOptionsData(hostStores());
 
     expect(model.availability).toBe('provider-key');
-    expect(model.disabled).toBe(false);
+    expect(isModelOptionAvailable(model)).toBe(true);
   });
 
   it('marks retired models unavailable', async () => {
@@ -245,12 +241,8 @@ describe('computeModelOptionsData availability', () => {
     const [model] = await computeModelOptionsData(hostStores(), ['haiku3']);
     const reason = await getModelUnavailableReason('haiku3', hostStores());
 
-    expect(model).toMatchObject({
-      availability: 'retired',
-      availabilityLabel: 'Retired',
-      disabled: true,
-      requiresKey: false,
-    });
+    expect(model.availability).toBe('retired');
+    expect(isModelOptionAvailable(model)).toBe(false);
     expect(reason).toBe(
       'Model "haiku3" is retired and no longer available from its provider. Choose an active model.',
     );
@@ -262,7 +254,7 @@ describe('computeModelOptionsData availability', () => {
     const [model] = await computeModelOptionsData(hostStores(), ['gpt55']);
 
     expect(model.availability).toBe('provider-key');
-    expect(model.disabled).toBe(false);
+    expect(isModelOptionAvailable(model)).toBe(true);
   });
 
   it('does not advertise GPT-5.6 Pro through ChatGPT subscription', async () => {
@@ -276,8 +268,6 @@ describe('computeModelOptionsData availability', () => {
     expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
     expect(model).toMatchObject({
       availability: 'missing-key',
-      disabled: true,
-      requiresKey: true,
     });
   });
 
@@ -289,9 +279,6 @@ describe('computeModelOptionsData availability', () => {
 
     expect(model).toMatchObject({
       availability: 'provider-unavailable',
-      availabilityLabel: 'Unavailable through OpenRouter',
-      disabled: true,
-      requiresKey: false,
     });
     expect(reason).toBe(
       'Model "gpt56pro" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.',
@@ -306,8 +293,6 @@ describe('computeModelOptionsData availability', () => {
 
     expect(model).toMatchObject({
       availability: 'missing-key',
-      disabled: true,
-      requiresKey: true,
     });
     expect(reason).toBe('Model "gpt55" requires an OpenRouter API key.');
   });
@@ -343,7 +328,7 @@ describe('computeModelOptionsData availability', () => {
     );
     expect(model.cost).toBe('$0.000/$0.000');
     expect(model.hint).not.toContain(FAST_FIRST_RESPONSE_HINT);
-    expect(model.disabled).toBe(false);
+    expect(isModelOptionAvailable(model)).toBe(true);
   });
 
   it('automatically lists every active model served by ChatGPT', async () => {
@@ -371,8 +356,6 @@ describe('computeModelOptionsData availability', () => {
     )) {
       expect(model).toMatchObject({
         availability: 'subscription-access',
-        disabled: false,
-        requiresKey: false,
       });
     }
   });
@@ -431,7 +414,6 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       provider: 'moonshot',
       routeLabel: 'Via Moonshot',
       availability: 'provider-key',
-      disabled: false,
     });
   });
 
@@ -447,7 +429,6 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       provider: 'kimiCode',
       routeLabel: 'Via Kimi Code',
       availability: 'provider-key',
-      disabled: false,
       cost: '$0.000/$0.000',
       context: '262K',
     });
@@ -463,7 +444,6 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       provider: 'moonshot',
       routeLabel: 'Via OpenRouter',
       availability: 'openrouter-key',
-      disabled: false,
     });
   });
 });

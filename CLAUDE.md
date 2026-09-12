@@ -178,8 +178,8 @@ Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
 (`toolUse.ts`, `reflection.ts`), plain Effect loops over the run ledger, with
 `runtime/run/` the per-run services they take from context (`AgentRun`, model
 binding, pricing, media, tools) and `runtime/ModelInvoker.ts` the one service
-that calls the `packages/llm` `Model`. `core/flows/` keeps only the one helper
-both families use (`toolCallParsing`). `implementations/flows/reflection/output/` is the reflection
+that calls the `packages/llm` `Model`. `core/tools/` holds `toolCallParsing`,
+the one helper both run programs use. `implementations/flows/reflection/output/` is the reflection
 output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
 filename: it is one linear async function (`runAgentCreator`) with a single
 production caller. Provider APIs are reached only through the `packages/llm`
