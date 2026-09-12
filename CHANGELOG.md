@@ -45,8 +45,9 @@ All notable changes to this project will be documented in this file.
 - **`texra agents run` is gone — use `texra run`.** One headless run command now
   serves both agent categories: `texra run <agent>` runs a workflow agent or a
   tool-use agent, picking the run shape from the agent itself. There is no alias
-  or deprecation shim. `--output`/`--output-dir` stay workflow-only and
-  `--instruction` is still required for a tool-use agent; using one on the wrong
+  or deprecation shim. `--output`/`--output-dir` stay workflow-only and a
+  tool-use agent still needs an instruction — `--instruction`,
+  `--instruction-file`, or both; using one on the wrong
   category is a usage error that names the flag and the agent's category.
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of

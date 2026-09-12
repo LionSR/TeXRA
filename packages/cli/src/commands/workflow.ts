@@ -100,8 +100,9 @@ interface HeadlessRunInit {
  * `texra run <agent>`: the one headless run command, for both agent
  * categories. The agent is resolved once and its category picks the run shape —
  * a workflow agent takes `--output`/`--output-dir` and produces document
- * artifacts, a tool-use agent takes a required `--instruction` and runs one
- * model/tool cycle. Flags that belong to the other category are usage errors.
+ * artifacts, a tool-use agent takes a required instruction (`--instruction`,
+ * `--instruction-file`, or both) and runs one model/tool cycle. Flags that
+ * belong to the other category are usage errors.
  */
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
@@ -475,7 +476,7 @@ export const headlessRunCommand = defineCliCommand({
     instruction: {
       type: 'string',
       description:
-        'Instruction passed to the agent (required for tool-use agents)',
+        'Instruction passed to the agent (tool-use agents need this or --instruction-file)',
     },
     'instruction-file': {
       type: 'string',

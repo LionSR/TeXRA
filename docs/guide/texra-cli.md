@@ -234,8 +234,9 @@ applies one to your next request, and `/resume` restores a stored execution.
 Chat requires an interactive terminal. For scripted, non-TTY runs use
 `texra run <agent>` with `--print` or `--output-format json|ndjson`. One
 command serves both agent categories: with a tool-use agent it accepts
-workspace `--input` and `--context` files plus a required `--instruction`
-prompt; with a workflow agent it takes input files and `--output`/`--output-dir`
+workspace `--input` and `--context` files plus a required instruction
+(`--instruction`, `--instruction-file`, or both); with a workflow agent it takes
+input files and `--output`/`--output-dir`
 and produces document-oriented outputs. If one name exists in both categories,
 `texra run` refuses it and names both candidates — pass the source-qualified
 form it prints (for example `texra run custom:assistant`) to pick one.
