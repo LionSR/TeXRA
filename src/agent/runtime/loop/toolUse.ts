@@ -414,7 +414,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     lastTurn: null,
     pendingResponse: null,
     pendingIntents: {},
-    approvals: {},
+    requests: {},
     usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
     flow: null,
   });

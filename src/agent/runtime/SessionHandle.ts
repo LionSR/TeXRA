@@ -523,7 +523,7 @@ export class SessionHandle {
     runId: RunId,
   ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
     const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
-    for (const entry of this.transcripts.get(runId)?.getRange(0) ?? []) {
+    for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
       if (!isRunningStreamingTextEntry(entry)) continue;
       closure.push({
         type: 'stream.end',

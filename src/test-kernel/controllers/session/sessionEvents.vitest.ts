@@ -2269,7 +2269,7 @@ describe('RunLedger', () => {
           approvalRequested,
           bindingSnapshot,
         ]);
-        expect(state.approvals['req-1']?.resolved).toBe(false);
+        expect(state.requests['req-1']?.resolved).toBe(false);
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [

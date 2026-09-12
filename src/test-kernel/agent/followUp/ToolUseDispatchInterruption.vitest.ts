@@ -487,7 +487,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(asked.questions).toHaveLength(1);
 
         const open = yield* session.ledger.load(runId).pipe(Effect.orDie);
-        const request = open?.approvals[asked.questions[0].requestId];
+        const request = open?.requests[asked.questions[0].requestId];
         // The close is on the request, and it decides nothing about the call:
         // no rerun was admitted and no skip was reported.
         expect(request?.decision).toMatchObject({ action: 'cancel' });
@@ -523,7 +523,7 @@ describe('tool dispatch interrupted mid-turn', () => {
 
         const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
         expect(
-          delivered?.approvals[asked.questions[1].requestId]?.decision,
+          delivered?.requests[asked.questions[1].requestId]?.decision,
         ).toMatchObject({ action: 'submit' });
         const group = delivered?.messages.find(
           (message) => message.role === 'tool',

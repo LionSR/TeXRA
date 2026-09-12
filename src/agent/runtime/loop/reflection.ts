@@ -348,7 +348,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     lastTurn: null,
     pendingResponse: null,
     pendingIntents: {},
-    approvals: {},
+    requests: {},
     usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
     flow: null,
   });

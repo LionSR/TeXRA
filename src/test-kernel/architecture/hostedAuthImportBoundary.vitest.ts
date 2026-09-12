@@ -87,11 +87,9 @@ describe('hosted auth import boundary', () => {
   });
 
   it('scans non-empty production zones', () => {
-    const scannedFiles = SCAN_ROOTS.flatMap((root) =>
-      sourceFilesUnder(resolve(REPO_ROOT, root)),
-    );
-
-    expect(scannedFiles.length).toBeGreaterThan(100);
+    for (const root of SCAN_ROOTS) {
+      expect(sourceFilesUnder(resolve(REPO_ROOT, root))).not.toHaveLength(0);
+    }
   });
 
   it('rejects TeXRA-hosted and unapproved auth roots while permitting documented subpaths', () => {

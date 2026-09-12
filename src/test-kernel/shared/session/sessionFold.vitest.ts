@@ -1321,7 +1321,7 @@ describe('foldRunState', () => {
             }),
           ),
         );
-        expect(state?.approvals['req-1']?.resolved).toBe(false);
+        expect(state?.requests['req-1']?.resolved).toBe(false);
         expect(state?.pendingIntents['call-a']?.approvalRequestId).toBe(
           'req-1',
         );

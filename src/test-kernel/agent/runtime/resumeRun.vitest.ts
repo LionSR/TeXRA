@@ -11,6 +11,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -37,16 +38,17 @@ const readConfigMock = vi.hoisted(() => vi.fn());
 const runExistsMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/runRecords', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/runRecords')>()),
-  getRunRecords: () => ({
-    readConfig: () =>
-      Effect.tryPromise({ try: () => readConfigMock(), catch: ensureError }),
-    exists: () =>
-      Effect.tryPromise({ try: () => runExistsMock(), catch: ensureError }),
-  }),
+  getRunRecords: () =>
+    createFakeRunRecords({
+      readConfig: () =>
+        Effect.tryPromise({ try: () => readConfigMock(), catch: ensureError }),
+      exists: () =>
+        Effect.tryPromise({ try: () => runExistsMock(), catch: ensureError }),
+    }),
 }));
 
 // The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: the records double answers only `readConfig` and `exists`.
+// not seed: every other reader on the records double answers empty.
 const classifyRunMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/runClassification', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/runClassification')>()),

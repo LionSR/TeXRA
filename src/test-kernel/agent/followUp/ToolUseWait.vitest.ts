@@ -407,7 +407,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       lastTurn: null,
       pendingResponse: null,
       pendingIntents: {},
-      approvals: {},
+      requests: {},
       usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
       flow: null,
     };
