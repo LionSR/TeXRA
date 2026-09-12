@@ -575,4 +575,22 @@ describe('settingsAccess', () => {
       warn.mockRestore();
     }
   });
+
+  // #11797: the kill gate's permissive default is the absent value's; a
+  // present-but-corrupt one fails closed.
+  it('denies orchestrator kills on a corrupt ALLOW_ORCHESTRATOR_KILL value', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const entry = entryByKey(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL);
+    try {
+      const absent = makeFakeSettingsStores();
+      assert.equal(readSetting(entry, absent.stores, 'vscode'), true);
+
+      const { stores, globalState } = makeFakeSettingsStores();
+      void globalState.update(entry.key, 'false');
+      assert.equal(readSetting(entry, stores, 'vscode'), false);
+      assert.equal(warn.mock.calls.length, 1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });

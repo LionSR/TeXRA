@@ -229,6 +229,13 @@ export interface StateSettingEntry {
    * Keep migration mappings in the domain parser referenced here, not the row.
    */
   readonly normalizePersisted?: (raw: unknown) => unknown;
+  /**
+   * What a present-but-invalid persisted value resolves to instead of the
+   * absent default. Only a permission gate whose default is permissive
+   * declares one: corruption of a deliberate denial must fail closed, not
+   * silently re-permit (#11797).
+   */
+  readonly invalidPersistedFallback?: unknown;
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
@@ -1139,6 +1146,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
     schema: z.boolean().prefault(true),
+    // The permissive default applies only when the key is absent: a stored
+    // value that no longer parses resolves to denied (#11797).
+    invalidPersistedFallback: false,
     title: 'Allow orchestrator cancellation',
     description:
       'Allow the orchestrator to stop subagents that are no longer needed.',

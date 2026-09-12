@@ -90,7 +90,11 @@ export function readSetting(
   log.warn(
     `Ignoring invalid persisted value for setting "${entry.key}": ${toErrorMessage(result.error)}`,
   );
-  return settingDefault(entry);
+  // A row can fail closed on a present-but-invalid value when its absent
+  // default is permissive; everything else snaps to that default.
+  return entry.invalidPersistedFallback !== undefined
+    ? entry.invalidPersistedFallback
+    : settingDefault(entry);
 }
 
 /**
