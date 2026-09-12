@@ -79,7 +79,6 @@ import {
   type FoldInput,
   type ExistenceReconciliation,
   type LocalRuntimeState,
-  type RoundIndexed,
   type DisplaySessionEvent,
   type StreamLogEntry,
   type RunId,

@@ -28,7 +28,6 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
-import { isObject } from '@utils/core';
 import { redactLogData } from './traceRedaction';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
