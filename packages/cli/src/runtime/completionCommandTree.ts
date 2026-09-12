@@ -1,5 +1,5 @@
 // Local imports - shared schemas
-import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 
 // Third-party type imports
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
@@ -210,26 +210,23 @@ const COMPLETION_SOURCES = {
     command: 'agents list --quiet',
     column: 2,
   },
+  /** Every launchable agent: `texra run` takes both categories. */
+  launchableAgents: {
+    shellFunction: '_texra_launchable_agents',
+    command: 'agents list --quiet --all',
+    column: 2,
+  },
+  toolUseAgents: {
+    shellFunction: '_texra_tool_use_agents',
+    command: `agents list --quiet --all --category ${AgentCategory.ToolUse}`,
+    column: 2,
+  },
   models: {
     shellFunction: '_texra_models',
     command: 'models list --quiet',
     column: 1,
   },
 } as const satisfies Record<string, CompletionSource>;
-
-const AGENT_COMPLETION_SHELL_FUNCTIONS: ByCategory<string> = {
-  workflow: '_texra_workflow_agents',
-  toolUse: '_texra_tool_use_agents',
-};
-
-/** Per-category agent listing sources (roster-filtered `agents list`). */
-const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> = byCategory(
-  (category) => ({
-    shellFunction: AGENT_COMPLETION_SHELL_FUNCTIONS[category],
-    command: `agents list --quiet --all --category ${category}`,
-    column: 2,
-  }),
-);
 
 /**
  * Positional completions backed by a dynamic listing source, keyed by the
@@ -240,8 +237,7 @@ const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> = byCategory(
 export const POSITIONAL_COMPLETION_SOURCES: Readonly<
   Record<string, CompletionSource>
 > = {
-  run: AGENT_COMPLETION_SOURCES.workflow,
-  'agents run': AGENT_COMPLETION_SOURCES.toolUse,
+  run: COMPLETION_SOURCES.launchableAgents,
   'agents show': COMPLETION_SOURCES.agents,
   'models show': COMPLETION_SOURCES.models,
 };
@@ -256,15 +252,12 @@ export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
   Record<string, CompletionSource>
 > = {
   model: COMPLETION_SOURCES.models,
-  agent: AGENT_COMPLETION_SOURCES.toolUse,
+  agent: COMPLETION_SOURCES.toolUseAgents,
 };
 
 /** Every dynamic listing source, for the generators that emit each function. */
 export function allCompletionSources(): CompletionSource[] {
-  return [
-    ...Object.values(COMPLETION_SOURCES),
-    ...AGENT_CATEGORIES.map((category) => AGENT_COMPLETION_SOURCES[category]),
-  ];
+  return Object.values(COMPLETION_SOURCES);
 }
 
 /** The listing pipeline a shell function body runs, shared by bash and zsh. */

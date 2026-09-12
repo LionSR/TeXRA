@@ -28,7 +28,7 @@ interface CliAgentListResult {
   readonly hiddenCount: number;
 }
 
-type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
+type CliAgentLaunchMode = 'chat' | 'workflowResume';
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';
@@ -42,28 +42,19 @@ const CLI_AGENT_LAUNCH_TARGETS = {
     mismatch: (name: string, actual: AgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
   },
-  run: {
+  workflowResume: {
     requiredCategory: AgentCategory.Workflow,
     missing: missingAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${name}\`, or run a headless team with \`texra multi-agent run\`.`,
-  },
-  agentsRun: {
-    requiredCategory: AgentCategory.ToolUse,
-    missing: missingToolUseAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra agents run\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents.`,
+      `Agent "${name}" is a ${actual} agent; this run was recorded as a workflow run and cannot resume against it.`,
   },
 } as const;
 
 export const AGENT_NAME_DESCRIPTION =
   'Agent name from `texra agents list` or `texra agents list --all`';
 
-export const WORKFLOW_AGENT_NAME_DESCRIPTION =
-  'Workflow agent name from `texra agents list --category workflow --all`';
-
-export const TOOL_USE_AGENT_NAME_DESCRIPTION =
-  'Tool-use agent name from `texra agents list --category toolUse --all`';
+export const LAUNCHABLE_AGENT_NAME_DESCRIPTION =
+  'Workflow or tool-use agent name from `texra agents list --all`';
 
 const AGENT_CATEGORY_FILTER_ALIASES = [
   [AgentCategory.Workflow, AgentCategory.Workflow],
@@ -191,7 +182,23 @@ function lookupCliAgent(
 }
 
 /**
- * Resolve and validate an agent for a CLI launch command.
+ * Resolve the agent `texra run <agent>` launches. One headless command serves
+ * both categories, so resolution tries workflow first and falls back to
+ * tool-use: a name carried by both keeps resolving to its workflow entry, which
+ * is what `texra run` already meant.
+ */
+export async function resolveCliRunAgent(name: string): Promise<AgentEntry> {
+  const agent =
+    (await resolveCliAgent(name, AgentCategory.Workflow)) ??
+    // A workflow miss above already forced the remote-inclusive reload, so this
+    // second pass reads the full catalog.
+    resolveCliAgentInCategory(name, AgentCategory.ToolUse);
+  if (!agent) throw new CliUsageError(missingAgentMessage(name));
+  return agent;
+}
+
+/**
+ * Resolve and validate an agent for a category-pinned CLI launch.
  */
 export async function resolveCliLaunchAgent(
   name: string,

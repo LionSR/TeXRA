@@ -230,10 +230,10 @@ export function executeCliToolUseConfig(
 }
 
 /**
- * Shared headless-run skeleton for `run`, `agents run`, and
- * `multi-agent run`: stand up a runtime host, run the request, always close
- * the host, and resolve the terminal outcome.
- * Centralizing this stops the three runners from drifting apart on host
+ * Shared headless-run skeleton for `run` and `multi-agent run`: stand up a
+ * runtime host, run the request, always close the host, and resolve the
+ * terminal outcome.
+ * Centralizing this stops the runners from drifting apart on host
  * lifecycle and outcome handling, which is how their behavior diverged before.
  *
  * A classified run failure (AgentRunLifecycle already ran it through

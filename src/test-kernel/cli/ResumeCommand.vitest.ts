@@ -235,7 +235,10 @@ describe('runResumeCommand', () => {
         modelCompatibilityKey: 'anthropic',
       }),
     );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+      'correct',
+      'workflowResume',
+    );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 

@@ -380,12 +380,6 @@
       "name": "showAgent"
     },
     {
-      "file": "packages/cli/src/commands/agentsRun.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runToolUseAgent"
-    },
-    {
       "file": "packages/cli/src/commands/auth.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -431,7 +425,7 @@
       "file": "packages/cli/src/commands/workflow.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "runWorkflowAgent"
+      "name": "runHeadlessAgent"
     },
     {
       "file": "packages/cli/src/config/runConfigTui.tsx",

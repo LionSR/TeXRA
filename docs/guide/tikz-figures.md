@@ -71,11 +71,11 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 From the CLI, the same draw, compile, and inspect loop shown below runs
-headlessly (`texra run` is for workflow agents only; tool-use agents like
-`research` use `texra agents run`):
+headlessly (`texra run` takes workflow and tool-use agents alike, so a tool-use
+agent like `research` runs through it too):
 
 ```bash
-texra agents run research --input figures.tex \
+texra run research --input figures.tex \
   --instruction "Create a TikZ flowchart of the ML pipeline in Section 2."
 ```
 

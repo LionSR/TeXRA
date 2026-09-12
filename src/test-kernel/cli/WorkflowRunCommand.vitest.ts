@@ -14,7 +14,7 @@ import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { it as effectIt } from '@effect/vitest';
 import { Effect, Result } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { runWorkflowAgent } from '@cli/commands/workflow';
+import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
     emitCliResult: vi.fn(),
     finalizeRun: vi.fn(),
     withExpandedRunInputs: vi.fn(),
-    resolveCliLaunchAgent: vi.fn(),
+    resolveCliRunAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
     deriveResumability: vi.fn(),
     writeResultMeta: vi.fn(),
@@ -92,7 +92,7 @@ vi.mock('@cli/commands/_helpers/output', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
-  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+  resolveCliRunAgent: mocks.resolveCliRunAgent,
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({
@@ -137,7 +137,12 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
-type WorkflowRunInit = Parameters<typeof runWorkflowAgent>[1];
+// Hoisted out of each test body — a dynamic import()'s result is cached, so
+// one call here serves every test below, and the first test is not charged the
+// module graph's transform time.
+const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
+
+type WorkflowRunInit = Parameters<typeof runHeadlessAgent>[1];
 type WorkflowExecuteResult = CliConfigExecuteResult<
   typeof AgentCategory.Workflow
 >;
@@ -171,10 +176,9 @@ async function runWorkflow(
   init: Partial<WorkflowRunInit> = {},
   context: CliContext = createRunCommandCliContext(),
 ): Promise<number> {
-  const { runWorkflowAgent: run } = await import('@cli/commands/workflow');
   return Effect.runPromise(
     Effect.provide(
-      run(context, {
+      nativeRun(context, {
         agent: 'polish',
         inputFiles: ['paper.tex'],
         contextFiles: [],
@@ -374,7 +378,7 @@ function expectNoModelOrInputWork(): void {
   expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
 }
 
-describe('CLI workflow run command', () => {
+describe('CLI run command, workflow agents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
@@ -384,7 +388,7 @@ describe('CLI workflow run command', () => {
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
-    mocks.resolveCliLaunchAgent.mockResolvedValue({
+    mocks.resolveCliRunAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
       source: 'builtInWorkflow',
@@ -421,7 +425,7 @@ describe('CLI workflow run command', () => {
     ).rejects.toThrow('Use either --output or --output-dir, not both.');
 
     expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
     expectNoModelOrInputWork();
   });
 
@@ -433,7 +437,7 @@ describe('CLI workflow run command', () => {
     );
 
     expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('polish', 'run');
+    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
     expectNoModelOrInputWork();
   });
 
@@ -1271,7 +1275,7 @@ describe('CLI workflow run command', () => {
     ).rejects.toThrow(/--instruction-file: file not found: missing-prompt\.md/);
 
     expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
     expectNoModelOrInputWork();
   });
 });

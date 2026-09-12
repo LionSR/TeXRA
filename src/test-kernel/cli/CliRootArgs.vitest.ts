@@ -1147,8 +1147,8 @@ describe('runCli usage output stream routing', () => {
     // of an ERROR must not land on STDOUT, or it pollutes
     // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
     // Mirrors the documented repro: a usage error under --output-format json.
-    const result = await runCli(['run', 'badagent', '--output-format', 'json']);
-    expectUsageError(result, 'Missing required argument: --input');
+    const result = await runCli(['run', '--output-format', 'json']);
+    expectUsageError(result, 'Missing required positional argument: AGENT');
     // Usage banner goes to the diagnostic stream alongside the error line.
     expect(stderr).toContain('USAGE');
   });
