@@ -301,6 +301,9 @@ function createWindow(options: {
   resourcesPath: string;
 }): void {
   const activeProject = () => options.projects.active();
+  // This window's handle on the process runtime, taken once for the project
+  // bindings below.
+  const runtime = effectRuntime();
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
@@ -794,12 +797,15 @@ function createWindow(options: {
       showOpenFileDialog: openFileDialog,
     });
     // Install the recipient before host requests publish the recorder's state.
-    const bridge = new SessionBridge({
-      session: project.session,
-      handleHostRequest: (request, portId) =>
-        hostRequests.handle(request, portId),
-      onPortClosed: (portId) => hostRequests.closePort(portId),
-    });
+    const bridgeScope = Scope.makeUnsafe();
+    const bridge = runtime.runSync(
+      SessionBridge.make({
+        session: project.session,
+        handleHostRequest: (request, portId) =>
+          hostRequests.handle(request, portId),
+        onPortClosed: (portId) => hostRequests.closePort(portId),
+      }).pipe(Scope.provide(bridgeScope)),
+    );
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
       globalState: options.globalState,
@@ -808,7 +814,9 @@ function createWindow(options: {
       readRecentCommits: () => recentCommitsOf(project.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       onError: reportBackgroundError,
-      publish: (next) => bridge.setHost(next),
+      publish: (next) => {
+        runtime.runFork(bridge.setHost(next));
+      },
     });
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
@@ -848,17 +856,19 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
-        await effectRuntime().runPromise(refreshToolAvailability());
+        await runtime.runPromise(refreshToolAvailability());
       },
       logger: console,
     });
-    const port = bridge.attach({
-      id: `window:${window.id}`,
-      send: (message) => {
-        postToRendererIfAlive(message);
-      },
-    });
-    void effectRuntime().runPromise(snapshot.refresh);
+    const port = runtime.runSync(
+      bridge.attach({
+        id: `window:${window.id}`,
+        send: (message) => {
+          postToRendererIfAlive(message);
+        },
+      }),
+    );
+    void runtime.runPromise(snapshot.refresh);
     return {
       project,
       bridge,
@@ -870,7 +880,7 @@ function createWindow(options: {
       dispose() {
         workspace.disposeRendererResources();
         workspace.dispose();
-        bridge.dispose();
+        runtime.runFork(Scope.close(bridgeScope, Exit.void));
         hostRequests.dispose();
         run.dispose();
       },
@@ -1531,9 +1541,9 @@ function createWindow(options: {
         );
         return;
       }
-      runInSession(binding.project.session, () =>
-        binding.port.receive(message),
-      );
+      runInSession(binding.project.session, () => {
+        runtime.runFork(binding.port.receive(message));
+      });
     },
   });
   windowResources.add(() => {
