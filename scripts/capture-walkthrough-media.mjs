@@ -29,8 +29,7 @@ const fixturePath = join(outputDir, 'session-fixture.cjs');
 await build({
   stdin: {
     contents: `export { buildScenario, ROOT, OWNER, BOARD_NOW } from './src/test-kernel/shared/session/fanOutScenario';
-      export { emptyHostSnapshot } from './src/shared/session/hostSnapshot';
-      export { FILE_SELECT_CONFIGS } from './src/shared/launcher/fileSelectConfigs';`,
+      export { emptyHostSnapshot } from './src/shared/session/hostSnapshot';`,
     resolveDir: repoRoot,
     loader: 'ts',
   },
@@ -40,14 +39,8 @@ await build({
   outfile: fixturePath,
   tsconfig: join(repoRoot, 'tsconfig.json'),
 });
-const {
-  buildScenario,
-  ROOT,
-  OWNER,
-  BOARD_NOW,
-  emptyHostSnapshot,
-  FILE_SELECT_CONFIGS,
-} = desktopRequire(fixturePath);
+const { buildScenario, ROOT, OWNER, BOARD_NOW, emptyHostSnapshot } =
+  desktopRequire(fixturePath);
 const SESSION_KEY = '/workspace/spectral-gap';
 
 const commonReplacements = {
@@ -136,7 +129,6 @@ const host = {
   }),
   agentOptions,
   modelOptions,
-  fileConfigs: FILE_SELECT_CONFIGS,
   workspaceRoots: [{ value: SESSION_KEY, label: 'Spectral gap' }],
   fileOptions: {
     baseFile: ['main.tex'],

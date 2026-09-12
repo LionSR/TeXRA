@@ -193,41 +193,21 @@ export class SettingsApp extends SettingsAppBase {
     selectedPanel.set(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
   }
 
-  private renderDesktopUnavailablePanel(
-    title: string,
-    description: string,
-  ): TemplateResult {
-    return html`
-      <div class="tab-content-container">
-        <div class="settings-unavailable">
-          <div class="settings-unavailable-title">
-            ${waIcon('ban', { className: 'settings-unavailable-icon' })}
-            ${title}
-          </div>
-          <div>${description}</div>
-        </div>
-      </div>
-    `;
-  }
-
   private entriesForGroup(
     group: SettingsNavGroup,
-    goalSupported: boolean,
   ): readonly SettingsNavEntry[] {
     return group.entries.filter(
       (entry) =>
-        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported) &&
-        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
-          this.isDesktopHost),
+        entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
+        this.isDesktopHost,
     );
   }
 
   private renderSettingsNavigation(
     activeGroup: SettingsNavGroup,
     activePanel: SettingsTabPanelName,
-    goalSupported: boolean,
   ): TemplateResult {
-    const activeEntries = this.entriesForGroup(activeGroup, goalSupported);
+    const activeEntries = this.entriesForGroup(activeGroup);
 
     return html`
       <nav class="settings-navigation" aria-label="Settings">
@@ -237,7 +217,7 @@ export class SettingsApp extends SettingsAppBase {
           aria-label="Settings categories"
         >
           ${SETTINGS_NAV_GROUPS.map((group) => {
-            const entries = this.entriesForGroup(group, goalSupported);
+            const entries = this.entriesForGroup(group);
             if (entries.length === 0) return nothing;
             const active = group === activeGroup;
             return html`
@@ -296,7 +276,6 @@ export class SettingsApp extends SettingsAppBase {
   private renderActivePanel(
     activePanel: SettingsTabPanelName,
     desktopHost: boolean,
-    goalSupported: boolean,
   ): TemplateResult {
     switch (activePanel) {
       case 'account':
@@ -346,7 +325,6 @@ export class SettingsApp extends SettingsAppBase {
             .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
-            .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>
         `;
       case 'multi-agent': {
@@ -422,7 +400,6 @@ export class SettingsApp extends SettingsAppBase {
             .authorName=${gitAuthorName.get()}
             .authorEmail=${gitAuthorEmail.get()}
             .toggleDisabled=${!gitSettingsLoaded.get()}
-            .unsupportedCommands=${unsupportedCommands.get()}
             .githubTokenStatus=${githubTokenStatus.get()}
             .prSubscriptions=${prSubscriptions.get()}
           ></git-tab>
@@ -430,12 +407,7 @@ export class SettingsApp extends SettingsAppBase {
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;
       case 'goal':
-        return goalSupported
-          ? html`<goal-tab .items=${goalItems.get()}></goal-tab>`
-          : this.renderDesktopUnavailablePanel(
-              'Goals unavailable',
-              'This host does not support autonomous goals.',
-            );
+        return html`<goal-tab .items=${goalItems.get()}></goal-tab>`;
       case 'memory':
         return html`
           <memory-tab
@@ -457,10 +429,6 @@ export class SettingsApp extends SettingsAppBase {
 
   override render(): TemplateResult {
     const desktopHost = this.isDesktopHost;
-    const goalSupported = !isKnownUnsupported(
-      unsupportedCommands.get(),
-      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-    );
     const requestedPanel = selectedPanel.get();
     const activePanel =
       !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
@@ -476,11 +444,7 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(
-          activeGroup,
-          activePanel,
-          goalSupported,
-        )}
+        ${this.renderSettingsNavigation(activeGroup, activePanel)}
         <section
           class="settings-panel"
           aria-label=${activeEntry?.label ?? 'Settings'}
@@ -497,7 +461,7 @@ export class SettingsApp extends SettingsAppBase {
                 `
               : nothing
           }
-          ${this.renderActivePanel(activePanel, desktopHost, goalSupported)}
+          ${this.renderActivePanel(activePanel, desktopHost)}
         </section>
       </div>
     `;

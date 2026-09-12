@@ -41,7 +41,10 @@ import type {
   ReorderFilesDetail,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
+import {
+  FILE_SELECT_CONFIGS,
+  LAUNCH_FILE_LISTS,
+} from '@shared/launcher/fileSelectConfigs';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -80,7 +83,6 @@ type OverflowItem =
   | 'openDashboard'
   | 'latexdiffs'
   | 'figures'
-  | 'compileInputPdf'
   | 'attachTexCount'
   | 'pack'
   | 'clean';
@@ -122,7 +124,6 @@ export class ProgressApp extends LitElement {
       case 'popOut':
       case 'popBack':
       case 'openDashboard':
-      case 'compileInputPdf':
         this.dispatchEvent(SessionUiEvents.host({ kind: item }));
         return;
       case 'figures':
@@ -330,6 +331,10 @@ export class ProgressApp extends LitElement {
     host: HostSnapshot,
   ): TemplateResult {
     const inEditor = this.placement === 'editor';
+    // The desktop app has neither an editor to pop out into nor a figure
+    // extractor, and its host refuses both requests, so it is not offered
+    // them.
+    const onDesktop = this.placement === 'desktop';
     const attachTexCount = this.surface?.launch.attachTeXCount === true;
     return html`
       <wa-dropdown
@@ -352,11 +357,17 @@ export class ProgressApp extends LitElement {
           aria-label="More"
           >${waIcon('ellipsis')}</wa-button
         >
-        <wa-dropdown-item value=${inEditor ? 'popBack' : 'popOut'}
-          >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
-            slot: 'icon',
-          })}${inEditor ? 'Back to sidebar' : 'Open sessions in editor'}</wa-dropdown-item
-        >
+        ${
+          onDesktop
+            ? nothing
+            : html`<wa-dropdown-item value=${inEditor ? 'popBack' : 'popOut'}
+                >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
+                  slot: 'icon',
+                })}${
+                  inEditor ? 'Back to sidebar' : 'Open sessions in editor'
+                }</wa-dropdown-item
+              >`
+        }
         <wa-dropdown-item value="openDashboard"
           >${waIcon('gear', { slot: 'icon' })}Open dashboard</wa-dropdown-item
         >
@@ -364,13 +375,13 @@ export class ProgressApp extends LitElement {
         <wa-dropdown-item value="latexdiffs"
           >${waIcon('code-compare', { slot: 'icon' })}LaTeXDiffs…</wa-dropdown-item
         >
-        <wa-dropdown-item value="figures"
-          >${waIcon('image', { slot: 'icon' })}Figures…</wa-dropdown-item
-        >
-        <wa-dropdown-item value="compileInputPdf"
-          >${waIcon('file-pdf', { slot: 'icon' })}Compile input
-          PDF</wa-dropdown-item
-        >
+        ${
+          onDesktop
+            ? nothing
+            : html`<wa-dropdown-item value="figures"
+                >${waIcon('image', { slot: 'icon' })}Figures…</wa-dropdown-item
+              >`
+        }
         <wa-dropdown-item
           value="attachTexCount"
           type="checkbox"
@@ -488,7 +499,7 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    const selectedFiles = host.fileConfigs.flatMap(
+    const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
     const { rollup } = view;
@@ -550,7 +561,7 @@ export class ProgressApp extends LitElement {
                 this.patchLaunch({ [detail.id]: detail.checked })}
             >
               ${repeat(
-                host.fileConfigs,
+                FILE_SELECT_CONFIGS,
                 (config) => config.type,
                 (config) => html`
                   <file-select-group

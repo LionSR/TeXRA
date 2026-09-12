@@ -7,7 +7,7 @@
  */
 import * as vscode from 'vscode';
 
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { effectRuntime } from '@platform/processRuntime';
@@ -26,33 +26,42 @@ import {
 export class MemoryHandlers {
   constructor(
     private readonly ctx: SettingsHandlerContext,
-    private readonly settingsHost: SettingsViewHost,
+    private readonly memory: SettingsMemoryController,
     private readonly viewName: string,
   ) {}
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    await effectRuntime().runPromise(
-      this.settingsHost.sendMemoryData((message) =>
-        webview.postMessage(message),
-      ),
+    await webview.postMessage(
+      await effectRuntime().runPromise(this.memory.getMemoryDataMessage()),
     );
   }
 
+  /**
+   * Post one memory preview, or the preview's error placeholder when it
+   * cannot be produced. Every outcome of the read-and-post — an unreadable
+   * file, a rejected post — is reported and then answered with the
+   * placeholder, so the view never waits on a preview that will not arrive.
+   */
   async handleGetMemoryPreview(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.ctx.withActiveWebview(async (webview) => {
-      await effectRuntime().runPromise(
-        this.settingsHost.sendMemoryPreview(data, {
-          respond: (message) => webview.postMessage(message),
-          onError: async (error) => {
-            await showLoggedErrorMessage(
-              this.ctx.channel,
-              'Failed to load memory preview',
-              error,
-            );
-          },
-        }),
+      try {
+        await webview.postMessage(
+          await effectRuntime().runPromise(
+            this.memory.getMemoryPreviewMessage(data.storagePath),
+          ),
+        );
+        return;
+      } catch (error) {
+        await showLoggedErrorMessage(
+          this.ctx.channel,
+          'Failed to load memory preview',
+          error,
+        );
+      }
+      await webview.postMessage(
+        this.memory.getMemoryPreviewErrorMessage(data.storagePath),
       );
     });
   }
@@ -104,12 +113,12 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await effectRuntime().runPromise(
-        this.settingsHost.deleteMemory(
-          data,
-          this.ctx.postMessageToActiveWebview,
-        ),
+      const message = await effectRuntime().runPromise(
+        this.memory.deleteMemory(data),
       );
+      if (message != null) {
+        await this.ctx.postMessageToActiveWebview(message);
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
@@ -124,14 +133,14 @@ export class MemoryHandlers {
     await withHandlerErrorHandling(
       this.ctx,
       `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
-      () =>
-        effectRuntime().runPromise(
-          this.settingsHost.setMemoryPinned(
-            storagePath,
-            pinned,
-            this.ctx.postMessageToActiveWebview,
-          ),
-        ),
+      async () => {
+        const message = await effectRuntime().runPromise(
+          this.memory.setMemoryPinned(storagePath, pinned),
+        );
+        if (message != null) {
+          await this.ctx.postMessageToActiveWebview(message);
+        }
+      },
     );
   }
 }
