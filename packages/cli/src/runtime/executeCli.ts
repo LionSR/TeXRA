@@ -100,7 +100,6 @@ export interface CliConfigExecuteOptions<
   /** Pins the category this command path must stay in: enforced before the
    *  run by `runAgent`, and the narrowing key for the returned result. */
   readonly expectedCategory?: C;
-  readonly categoryMismatchMessage?: string;
   /**
    * Resume an existing run under its persisted id instead of minting a
    * fresh one. The CLI turns this into explicit resume intent for `runAgent`.
@@ -136,7 +135,6 @@ export function executeCliConfig<
   return Effect.gen(function* () {
     const {
       expectedCategory,
-      categoryMismatchMessage,
       runId: resumedRunId,
       ...executeOptions
     } = options;
@@ -167,10 +165,7 @@ export function executeCliConfig<
       // run whenever the resolved agent setting disagrees, and the output's
       // category is stamped from that same resolved setting. Kept as an invariant so the
       // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
-      throw new Error(
-        categoryMismatchMessage ??
-          `Agent resolved to a non ${expectedCategory} run.`,
-      );
+      throw new Error(`Agent resolved to a non ${expectedCategory} run.`);
     }
 
     return {
@@ -230,10 +225,10 @@ export function executeCliToolUseConfig(
 }
 
 /**
- * Shared headless-run skeleton for `run`, `agents run`, and
- * `multi-agent run`: stand up a runtime host, run the request, always close
- * the host, and resolve the terminal outcome.
- * Centralizing this stops the three runners from drifting apart on host
+ * Shared headless-run skeleton for `run` and `multi-agent run`: stand up a
+ * runtime host, run the request, always close the host, and resolve the
+ * terminal outcome.
+ * Centralizing this stops the runners from drifting apart on host
  * lifecycle and outcome handling, which is how their behavior diverged before.
  *
  * A classified run failure (AgentRunLifecycle already ran it through

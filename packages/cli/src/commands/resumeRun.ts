@@ -147,7 +147,7 @@ export async function runResumeCommand(
 
       const agent = yield* Effect.result(
         Effect.tryPromise({
-          try: () => resolveCliLaunchAgent(config.agent, 'run'),
+          try: () => resolveCliLaunchAgent(config.agent, 'workflowResume'),
           catch: ensureError,
         }),
       );
@@ -192,7 +192,6 @@ export async function runResumeCommand(
                       workflowConfig,
                       context.cwd,
                     ),
-                  categoryMismatchMessage: `Run ${id} resolved to a non workflow run.`,
                 },
               ),
             );

@@ -241,7 +241,6 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
-          categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use run.`,
         });
         if (!run.ok) return run.exitCode;
 

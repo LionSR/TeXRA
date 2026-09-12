@@ -64,9 +64,7 @@ describe('CLI shell completion', () => {
   it('keeps dynamic completion gated by TEXRA_COMPLETION_DYNAMIC', () => {
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
-    expect(bash).toContain(
-      'texra agents list --quiet --all --category workflow',
-    );
+    expect(bash).toContain('texra agents list --quiet --all');
     expect(bash).toContain(
       'texra agents list --quiet --all --category toolUse',
     );
@@ -132,7 +130,7 @@ describe('CLI shell completion', () => {
     );
   });
 
-  it('uses category-specific bash agent completions at launch boundaries', () => {
+  it('uses the right bash agent listing at each launch boundary', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-bin-'));
     const bin = path.join(root, 'bin');
 
@@ -141,8 +139,8 @@ describe('CLI shell completion', () => {
       writeFileSync(
         path.join(bin, 'texra'),
         `#!/usr/bin/env bash
-if [[ "$*" == "agents list --quiet --all --category workflow" ]]; then
-  printf 'workflow\\tpolish\\nworkflow\\tcorrect\\n'
+if [[ "$*" == "agents list --quiet --all" ]]; then
+  printf 'workflow\\tpolish\\ntoolUse\\treview\\n'
 elif [[ "$*" == "agents list --quiet --all --category toolUse" ]]; then
   printf 'toolUse\\treview\\ntoolUse\\tlean\\n'
 elif [[ "$*" == "agents list --quiet" ]]; then
@@ -165,10 +163,10 @@ COMP_WORDS=(texra run p)
 COMP_CWORD=2
 _texra
 printf 'run:%s\\n' "\${COMPREPLY[@]}"
-COMP_WORDS=(texra agents run r)
-COMP_CWORD=3
+COMP_WORDS=(texra run r)
+COMP_CWORD=2
 _texra
-printf 'agents-run:%s\\n' "\${COMPREPLY[@]}"
+printf 'run-tool-use:%s\\n' "\${COMPREPLY[@]}"
 COMP_WORDS=(texra chat --agent l)
 COMP_CWORD=3
 _texra
@@ -182,7 +180,7 @@ printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
 
       expect(completions).toEqual([
         'run:polish',
-        'agents-run:review',
+        'run-tool-use:review',
         'agent-flag:lean',
         'agents-show:polish',
       ]);

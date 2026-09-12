@@ -33,8 +33,8 @@ import {
   selectCliRunModel,
 } from '../runtime/runModel';
 import {
-  resolveCliLaunchAgent,
-  WORKFLOW_AGENT_NAME_DESCRIPTION,
+  LAUNCHABLE_AGENT_NAME_DESCRIPTION,
+  resolveCliRunAgent,
 } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
@@ -50,13 +50,19 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
+  executeCliToolUseConfig,
   type CliConfigExecuteOptions,
   type CliRunServices,
 } from '../runtime/executeCli';
-import { runOutcomeExitCode } from '../runtime/terminalStatus';
+import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
+import {
+  runOutcomeExitCode,
+  toolUseResultText,
+} from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
+  WORKFLOW_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/workflowInputs';
 import {
   assertOutputDirAvailable,
@@ -80,7 +86,7 @@ function absoluteOutputDestination(
   return path.resolve(cwd, destination);
 }
 
-interface WorkflowRunInit {
+interface HeadlessRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
   readonly contextFiles: string[];
@@ -91,12 +97,54 @@ interface WorkflowRunInit {
   readonly instructionFile?: string;
 }
 
-export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
+/**
+ * `texra run <agent>`: the one headless run command, for both agent
+ * categories. The agent is resolved once and its category picks the run shape —
+ * a workflow agent takes `--output`/`--output-dir` and produces document
+ * artifacts, a tool-use agent takes a required instruction (`--instruction`,
+ * `--instruction-file`, or both) and runs one model/tool cycle. Flags that
+ * belong to the other category are usage errors.
+ */
+export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
-  init: WorkflowRunInit,
+  init: HeadlessRunInit,
 ): Effect.fn.Return<number, Error, CliRunServices> {
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
+  }
+  const instruction = yield* Effect.tryPromise({
+    try: () => resolveFileBackedInstruction(init, context.cwd),
+    catch: ensureError,
+  });
+  // Neither category can run this: a workflow agent needs at least one input
+  // file, a tool-use agent needs an instruction. Rejecting it before the
+  // platform init keeps a plain usage error off the agent-catalog fetch a
+  // signed-in session would otherwise pay for.
+  if (!instruction && init.inputFiles.length === 0) {
+    throw new CliUsageError(
+      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+    );
+  }
+
+  const services = yield* Effect.tryPromise({
+    try: () => initLocalCliPlatform(context),
+    catch: ensureError,
+  });
+  // Pre-validate the resolved agent so usage errors land before stdin is read
+  // or the runtime host starts.
+  const agent = yield* Effect.tryPromise({
+    try: () => resolveCliRunAgent(init.agent),
+    catch: ensureError,
+  });
+  if (agent.category === AgentCategory.ToolUse) {
+    return yield* runToolUseAgent(context, init, instruction, services);
+  }
+
+  // A workflow agent with no `--input` cannot run, and the output probes below
+  // `mkdir -p` their destination before `withExpandedRunInputs` would report
+  // it. Refuse first so an invalid command leaves nothing on disk.
+  if (init.inputFiles.length === 0) {
+    throw new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
@@ -109,21 +157,6 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
   // full agent run otherwise.
   yield* Effect.tryPromise({
     try: () => assertOutputFileAvailable(init.output, context.cwd),
-    catch: ensureError,
-  });
-  const instruction = yield* Effect.tryPromise({
-    try: () => resolveFileBackedInstruction(init, context.cwd),
-    catch: ensureError,
-  });
-
-  const services = yield* Effect.tryPromise({
-    try: () => initLocalCliPlatform(context),
-    catch: ensureError,
-  });
-  // Pre-validate the resolved agent so usage errors land before stdin is read
-  // or the runtime host starts.
-  const agent = yield* Effect.tryPromise({
-    try: () => resolveCliLaunchAgent(init.agent, 'run'),
     catch: ensureError,
   });
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
@@ -182,9 +215,81 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
         };
 
         return yield* executeCliWorkflowConfig(config, runContext, {
-          categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
+      }),
+  );
+});
+
+/**
+ * The tool-use half of `texra run`: one model/tool cycle over the named
+ * workspace files, reported as the agent's final response.
+ */
+const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
+  context: CliContext,
+  init: HeadlessRunInit,
+  instruction: string,
+  services: Parameters<typeof selectCliRunModel>[3],
+): Effect.fn.Return<number, Error, CliRunServices> {
+  // `--output` and `--output-dir` are rejected as a pair before this point, so
+  // at most one of them is set here.
+  const workflowOnlyFlag = init.output
+    ? '--output'
+    : init.outputDir && '--output-dir';
+  if (workflowOnlyFlag) {
+    throw new CliUsageError(
+      `${workflowOnlyFlag} is only available for workflow agents; "${init.agent}" is a ${AgentCategory.ToolUse} agent.`,
+    );
+  }
+  if (!instruction) {
+    throw new CliUsageError('Provide --instruction or --instruction-file.');
+  }
+
+  const model = yield* Effect.tryPromise({
+    try: () => selectCliRunModel(context, init.model, 'chat', services),
+    catch: ensureError,
+  });
+  const runContext = buildHeadlessRunContext(context);
+
+  return yield* withExpandedRunInputs(
+    init.inputFiles,
+    init.contextFiles,
+    runContext.cwd,
+    {
+      allowEmptyInput: true,
+      requireWorkspaceFiles: true,
+      readStdinText: readCliStdinText,
+    },
+    ({ inputFiles, contextFiles, stdinInputPath }) =>
+      Effect.gen(function* () {
+        const config: AgentConfigPayload = {
+          agent: init.agent,
+          model,
+          inputFiles,
+          contextFiles,
+          instruction: formatToolUseAgentRunInstruction({
+            inputFiles,
+            contextFiles,
+            instruction,
+          }),
+          displayInstruction: instruction,
+          workingDirectory: runContext.cwd,
+          agentCategory: AgentCategory.ToolUse,
+        };
+
+        const run = yield* executeCliToolUseConfig(config, runContext, {
+          stopAfterCycle: true,
+          recoveryInputIsDurable: stdinInputPath === undefined,
+        });
+        if (!run.ok) return run.exitCode;
+
+        emitCliResult(runContext, {
+          json: run.result,
+          ndjson: { kind: 'agent-result', result: run.result },
+          text: toolUseResultText(run.result),
+        });
+
+        return run.exitCode;
       }),
   );
 });
@@ -202,7 +307,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      readonly categoryMismatchMessage: string;
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
@@ -272,7 +376,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      categoryMismatchMessage: options.categoryMismatchMessage,
       openWorkflowOutput: (result, tryCommitPublication) =>
         Effect.gen(function* () {
           const outputResult = yield* Effect.result(
@@ -337,40 +440,40 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
   },
 );
 
-export const runWorkflowCommand = defineCliCommand({
-  meta: { name: 'run', description: 'Run a workflow agent' },
+export const headlessRunCommand = defineCliCommand({
+  meta: { name: 'run', description: 'Run an agent headlessly' },
   args: {
     ...AGENT_RUN_GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
-      description: WORKFLOW_AGENT_NAME_DESCRIPTION,
+      description: LAUNCHABLE_AGENT_NAME_DESCRIPTION,
     },
     input: {
       type: 'string',
       alias: 'i',
-      required: true,
       valueHint: 'file',
       description:
-        'Input file passed to the workflow agent (repeatable; use `-` to read stdin)',
+        'Workspace file passed to the agent (repeatable; use `-` to read stdin; required for workflow agents)',
     },
     context: {
       type: 'string',
       alias: 'c',
       valueHint: 'file',
       description:
-        'Read-only context file passed to the workflow agent (repeatable; use `-` to read stdin)',
+        'Read-only context file passed to the agent (repeatable; use `-` to read stdin)',
     },
     output: {
       type: 'string',
       valueHint: 'file',
       description:
-        'Output file for a single-input run (use --output-dir for multi-input)',
+        'Workflow agents only: output file for a single-input run (use --output-dir for multi-input)',
     },
     'output-dir': {
       type: 'string',
       valueHint: 'directory',
-      description: 'Directory to copy outputs into for multi-input runs',
+      description:
+        'Workflow agents only: directory to copy outputs into for multi-input runs',
     },
     model: {
       type: 'string',
@@ -379,7 +482,8 @@ export const runWorkflowCommand = defineCliCommand({
     },
     instruction: {
       type: 'string',
-      description: 'Instruction passed to the workflow agent',
+      description:
+        'Instruction passed to the agent (tool-use agents need this or --instruction-file)',
     },
     'instruction-file': {
       type: 'string',
@@ -397,6 +501,6 @@ export const runWorkflowCommand = defineCliCommand({
       model: optString(ctx.args.model),
     };
     await installCliProcessRuntime(context.storageRoot);
-    return effectRuntime().runPromise(runWorkflowAgent(context, init));
+    return effectRuntime().runPromise(runHeadlessAgent(context, init));
   },
 });

@@ -222,7 +222,7 @@ texra chat                          # default chat agent and model
 texra chat --agent research         # pick a tool-use agent for the session
 texra chat --model deepseekT        # override the session model
 # headless tool-use run for scripts and CI
-texra agents run review --input main.tex --instruction "Check the proof." --print
+texra run review --input main.tex --instruction "Check the proof." --print
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
@@ -232,11 +232,14 @@ another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
 Chat requires an interactive terminal. For scripted, non-TTY runs use
-`texra agents run <agent>` with `--print` or
-`--output-format json|ndjson`. It accepts workspace `--input` and `--context`
-files plus an `--instruction` prompt for the tool-use agent. Use `texra run`
-for workflow agents that take input files and produce document-oriented
-outputs.
+`texra run <agent>` with `--print` or `--output-format json|ndjson`. One
+command serves both agent categories: with a tool-use agent it accepts
+workspace `--input` and `--context` files plus a required instruction
+(`--instruction`, `--instruction-file`, or both); with a workflow agent it takes
+input files and `--output`/`--output-dir`
+and produces document-oriented outputs. If one name exists in both categories,
+`texra run` refuses it and names both candidates — pass the source-qualified
+form it prints (for example `texra run custom:assistant`) to pick one.
 
 ## Multi-agent teams
 

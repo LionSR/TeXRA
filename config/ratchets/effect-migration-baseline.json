@@ -36,7 +36,6 @@
       "packages/cli/src/chat/tui/state/approvalQueue.ts": 1,
       "packages/cli/src/chat/tui/state/sessionView.ts": 1,
       "packages/cli/src/commands/_helpers/subscriptionAuthCommand.ts": 2,
-      "packages/cli/src/commands/agentsRun.ts": 1,
       "packages/cli/src/commands/auth.ts": 1,
       "packages/cli/src/commands/clone.ts": 1,
       "packages/cli/src/commands/config.ts": 3,
