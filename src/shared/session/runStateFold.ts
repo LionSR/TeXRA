@@ -28,6 +28,7 @@ import {
 import {
   FlowSnapshotPayloadSchema,
   RunUsageTotalsSchema,
+  requestParksItsCaller,
   type CommitOrdinal,
   type FlowSnapshotPayload,
   type DispatchFacts,
@@ -36,6 +37,7 @@ import {
   type ModelCompatibilityKey,
   type NormalizedUsage,
   type PermissionPayload,
+  type RequestDecision,
   type RetryErrorInfo,
   type RunFamily,
   type RunLoopPhase,
@@ -55,7 +57,9 @@ import type { z } from 'zod';
  * settles with its `tool.result` — `tool.end` for a card the dispatcher
  * already opened, both card rows for a fast tool whose card opens and closes
  * in that one batch; an approval's recovery binding is the `flow.snapshot`
- * committed in the same batch. Publishing those companions separately is the
+ * committed in the same batch; a streaming row still open when the loop
+ * parks closes with the `waiting` step, in that step's batch. Publishing
+ * those companions separately is the
  * crash window where a settled tool keeps an active card, or a terminal card
  * claims a result no row holds, or an approval survives with nothing to
  * recover it by. An explicit list narrowed from `SessionEventDraft`, never
@@ -74,8 +78,9 @@ export type RunLedgerDraft = Extract<
       | 'flow.snapshot'
       | 'tool.start'
       | 'tool.end'
-      | 'approval.requested'
-      | 'approval.resolved';
+      | 'stream.end'
+      | 'request.opened'
+      | 'request.decided';
   }
 >;
 
@@ -87,7 +92,7 @@ export class RunLedgerInconsistent extends Data.TaggedError(
     | 'stale-snapshot' // a snapshot contradicts rows already folded
     | 'orphan-settlement' // a tool.result under no pending response
     | 'unknown-run-row' // an unrecognized type on the run aggregate
-    | 'dangling-binding' // an approval binding names no row
+    | 'dangling-binding' // a request binding names no row
     | 'mismatched-delivery' // a delivering append does not settle its response
     | 'invalid-mutation'; // a tool.result state operation names no slice or leaves an invalid state
   readonly detail: string;
@@ -142,12 +147,12 @@ type PendingIntent = {
   readonly approvalRequestId: string | null;
 };
 
-type Approval = {
+type RequestState = {
   readonly payload: PermissionPayload;
   readonly resolved: boolean;
-  /** The recorded decision, when the resolving row carried one (R5). */
-  readonly decision:
-    'approved' | 'denied' | 'skipped' | 'cancelled' | 'interrupted' | null;
+  /** The recorded decision (R5): the `request.decided` row's, null while
+   *  the request is open. */
+  readonly decision: RequestDecision | null;
 };
 
 /**
@@ -187,7 +192,7 @@ export type RunState = {
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
   /** By request id, with its recovery binding resolved at each snapshot. */
-  readonly approvals: Readonly<Record<string, Approval>>;
+  readonly requests: Readonly<Record<string, RequestState>>;
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
@@ -212,7 +217,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.end': true,
   'run.removed': true,
   'run.description': true,
-  status: true,
   'conversation.progress': true,
   updateTodos: true,
   updatePlan: true,
@@ -233,7 +237,6 @@ const IGNORED_ROW_TYPES: Readonly<
   usage: true,
   'context.state': true,
   'stream.start': true,
-  'stream.end': true,
   'response.finalized': true,
   domain: true,
   'run.record': true,
@@ -242,6 +245,13 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.result': true,
   'run.workspaceFiles': true,
   'run.workflow': true,
+  'run.subagentSequence': true,
+  'run.subagentAttempt': true,
+  // The child loop's own bookkeeping: folded by its readers, not the loop.
+  'child.turn': true,
+  // Checkpoint-aggregate rows never reach a run fold; total-record members.
+  'workflow.script': true,
+  'workflow.journal': true,
   'desktop.projects.changed': true,
   'inquiry.recorded': true,
   'update.check.recorded': true,
@@ -283,10 +293,46 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: byId([]),
-  approvals: byId([]),
+  requests: byId([]),
   usage: RunUsageTotalsSchema.parse({}),
   flow: null,
 });
+
+/** The recovery bindings a snapshot carries (R5): the retry permit's request
+ *  and the approval request of every pending intent. */
+function requestBindings(state: RunState): ReadonlySet<string> {
+  const bindings = new Set<string>();
+  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
+  for (const intent of Object.values(state.pendingIntents)) {
+    if (intent.approvalRequestId !== null) {
+      bindings.add(intent.approvalRequestId);
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The undecided requests nothing can recover: no binding names them, and
+ * they are not the one kind that outlives the process that asked. A request
+ * the session opened for a tool (a command, an edit, a plan, a delegation,
+ * a question) parks that tool, so a new owner can neither answer it nor
+ * re-ask it — the snapshot arm below refuses to be authored over one, and a
+ * resume retires them as cancelled before it authors a snapshot
+ * (`RunLedger.acquire`). An `externalInquiry` is the exception by contract:
+ * its tool returns at once and its answer arrives as a follow-up, whichever
+ * process is running the run by then, so it stands unbound across every
+ * snapshot its run writes.
+ */
+export function unboundRequests(state: RunState): readonly string[] {
+  const bindings = requestBindings(state);
+  return Object.entries(state.requests).flatMap(([requestId, request]) =>
+    request.resolved ||
+    bindings.has(requestId) ||
+    !requestParksItsCaller(request.payload)
+      ? []
+      : [requestId],
+  );
+}
 
 type Fold = Result.Result<RunState, RunLedgerInconsistent>;
 
@@ -571,33 +617,27 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         pendingResponse,
         flow: flowOf(p),
       };
-      // Every binding names a requested approval, and every unresolved
-      // approval is bound: an approval with nothing to recover it by can only
-      // be retired as interrupted, which is forbidden for these purposes.
-      const bindings = new Set<string>();
-      if (next.pendingRetry !== null) bindings.add(next.pendingRetry.requestId);
-      for (const intent of Object.values(next.pendingIntents)) {
-        if (intent.approvalRequestId !== null) {
-          bindings.add(intent.approvalRequestId);
-        }
-      }
-      for (const requestId of bindings) {
-        if (!Object.hasOwn(next.approvals, requestId)) {
+      // Every binding names an opened request, and every undecided request
+      // a new owner would have to recover is bound: one with nothing to
+      // recover it by can only be retired as interrupted, which is forbidden
+      // for these purposes. The inquiry {@link unboundRequests} exempts is
+      // not that case: it is answered from the thread, not from the run.
+      for (const requestId of requestBindings(next)) {
+        if (!Object.hasOwn(next.requests, requestId)) {
           return refuse(
             'dangling-binding',
-            `binding ${requestId} names no approval`,
+            `binding ${requestId} names no request`,
             commit,
           );
         }
       }
-      for (const [requestId, approval] of Object.entries(next.approvals)) {
-        if (!approval.resolved && !bindings.has(requestId)) {
-          return refuse(
-            'dangling-binding',
-            `approval ${requestId} has no recovery binding`,
-            commit,
-          );
-        }
+      const [unbound] = unboundRequests(next);
+      if (unbound !== undefined) {
+        return refuse(
+          'dangling-binding',
+          `request ${unbound} has no recovery binding`,
+          commit,
+        );
       }
       return Result.succeed(next);
     }
@@ -913,22 +953,24 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     }
     case 'tool.start':
     case 'tool.end':
-      // Committed with its `tool.result`; the settlement is the ledger fact.
+    case 'stream.end':
+      // Committed with its `tool.result` or its `waiting` step; the ledger
+      // row beside it is the fact.
       return null;
-    case 'approval.requested': {
+    case 'request.opened': {
       if (current === null) return null;
-      if (Object.hasOwn(current.approvals, row.requestId)) {
+      if (Object.hasOwn(current.requests, row.requestId)) {
         return refuse(
           'out-of-order',
-          `approval ${row.requestId} requested twice`,
+          `request ${row.requestId} opened twice`,
           commit,
         );
       }
       return Result.succeed({
         ...current,
         commit,
-        approvals: byId([
-          ...Object.entries(current.approvals),
+        requests: byId([
+          ...Object.entries(current.requests),
           [
             row.requestId,
             { payload: row.payload, resolved: false, decision: null },
@@ -936,28 +978,24 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ]),
       });
     }
-    case 'approval.resolved': {
+    case 'request.decided': {
       if (current === null) return null;
-      const approval = current.approvals[row.requestId];
-      if (approval === undefined) {
+      const request = current.requests[row.requestId];
+      if (request === undefined) {
         return refuse(
           'dangling-binding',
-          `resolution names no approval ${row.requestId}`,
+          `decision names no request ${row.requestId}`,
           commit,
         );
       }
       return Result.succeed({
         ...current,
         commit,
-        approvals: byId([
-          ...Object.entries(current.approvals),
+        requests: byId([
+          ...Object.entries(current.requests),
           [
             row.requestId,
-            {
-              ...approval,
-              resolved: true,
-              decision: row.decision ?? approval.decision,
-            },
+            { ...request, resolved: true, decision: row.decision },
           ],
         ]),
       });

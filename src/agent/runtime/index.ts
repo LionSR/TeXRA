@@ -41,25 +41,11 @@ export {
 export { runInSession } from './RunContext';
 
 // HostInteractions
-export {
-  SessionHostInteractions,
-  matchesCancelSelector,
-} from './HostInteractions';
+export { SessionHostInteractions } from './HostInteractions';
 export type {
-  BashSettlement,
-  HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
-  HostBashApprovalRequest,
-  HostInteractionCancelSelector,
   HostInteractions,
-  HostRetryInteractionOptions,
-  HostRetryRequest,
-  HostUserQuestionRequest,
   ManualCriticismEntry,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
-  UserQuestionSettlement,
 } from './HostInteractions';
 
 // runAgent

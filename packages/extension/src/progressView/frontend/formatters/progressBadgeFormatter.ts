@@ -1,24 +1,28 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress, RunStage } from '@shared/schemas';
-import { formatStageLabel } from '@shared/runs/runStatusDisplay';
+import type { ConversationProgress, RunFlow } from '@shared/schemas';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+  formatFlowPositionTitle,
+} from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
- * Render progress badge with the stage slot and tool call count.
+ * Render progress badge with the loop position and tool call count.
  * Used by RunHeader.
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
-  stage: RunStage | undefined,
+  flow: RunFlow | null,
 ): TemplateResult | typeof nothing {
-  const stageLabel = formatStageLabel(stage);
+  const flowLabel = formatFlowPositionLabel(flowPosition(flow));
   const tools = progress?.toolCallCount ?? 0;
-  if (!stageLabel && tools <= 0) return nothing;
+  if (!flowLabel && tools <= 0) return nothing;
 
-  const accessibleLabel = getProgressBadgeTitle(progress, stage);
+  const accessibleLabel = getProgressBadgeTitle(progress, flow);
   return html`<span aria-hidden="true"
-      >${stageLabel ? html`<bdi dir="auto">${stageLabel}</bdi>` : nothing}${
-        stageLabel && tools > 0 ? ', ' : nothing
+      >${flowLabel ? html`<bdi dir="auto">${flowLabel}</bdi>` : nothing}${
+        flowLabel && tools > 0 ? ', ' : nothing
       }${tools > 0 ? formatResultCount(tools, 'tool call') : nothing}</span
     >${
       accessibleLabel
@@ -31,30 +35,15 @@ export function renderProgressBadgeContent(
 
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
-  stage: RunStage | undefined,
+  flow: RunFlow | null,
 ): string | undefined {
   const parts: string[] = [];
-  const stageTitle = stageBadgeTitle(stage);
-  if (stageTitle) {
-    parts.push(stageTitle);
+  const flowTitle = formatFlowPositionTitle(flowPosition(flow));
+  if (flowTitle) {
+    parts.push(flowTitle);
   }
   if (progress?.toolCallCount) {
     parts.push(`Tool calls: ${progress.toolCallCount}`);
   }
   return parts.length > 0 ? parts.join(', ') : undefined;
-}
-
-/** Spelled-out counterpart of the compact stage label. */
-function stageBadgeTitle(stage: RunStage | undefined): string | undefined {
-  if (stage === undefined) return undefined;
-  if (stage.kind === 'phase') {
-    if (stage.index === undefined) return `Phase: ${stage.label}`;
-    const position =
-      stage.total === undefined
-        ? `Phase ${stage.index + 1}`
-        : `Phase ${stage.index + 1} of ${stage.total}`;
-    return `${position}: ${stage.label}`;
-  }
-  const round = `Round ${stage.index + 1}`;
-  return stage.total !== undefined ? `${round} of ${stage.total}` : round;
 }

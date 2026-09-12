@@ -285,13 +285,10 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-access',
-        availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
         reasoning: 'Default (provider managed)',
         context: '160K',
         cost: '$0.000/$0.000',
-        disabled: false,
-        requiresKey: false,
       }),
     );
   });
@@ -341,8 +338,6 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-consent-required',
-        availabilityLabel: 'Copilot approval required',
-        disabled: true,
       }),
     );
   });
@@ -366,8 +361,6 @@ describe('Copilot route in model pickers', () => {
       expect.objectContaining({
         value: 'gemini31p',
         availability: 'copilot-unavailable',
-        availabilityLabel: 'Copilot unavailable',
-        disabled: true,
       }),
     );
   });

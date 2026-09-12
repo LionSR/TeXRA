@@ -3,7 +3,14 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Option, Stream } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  Option,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -57,18 +64,37 @@ describe('committed run removal', () => {
               GoalStore.start(parent, 'Determine the boundary conditions.'),
             ),
           );
-          const question = session.interactions.askUserQuestion({
-            requestId: 'question:removed-parent',
-            runId: parent,
-            questions: [
-              {
-                question: 'Which normalization should be used?',
-                options: [{ label: 'Unit volume' }, { label: 'Unit mass' }],
+          session.publish([
+            {
+              type: 'request.opened',
+              aggregateId: aggregateId('run', parent),
+              requestId: 'question:removed-parent',
+              payload: {
+                kind: 'userQuestion',
+                data: {
+                  requestId: 'question:removed-parent',
+                  runId: parent,
+                  questions: [
+                    {
+                      question: 'Which normalization should be used?',
+                      options: [
+                        { label: 'Unit volume' },
+                        { label: 'Unit mass' },
+                      ],
+                    },
+                  ],
+                  allowBypass: false,
+                },
               },
-            ],
-            allowBypass: false,
-          });
+              thread: null,
+            },
+          ]);
           yield* Effect.promise(() => session.settlePublications());
+          expect(
+            SubscriptionRef.getUnsafe(session.view).requests.map(
+              (request) => request.requestId,
+            ),
+          ).toEqual(['question:removed-parent']);
           const before = session.now();
           session.publish([
             {
@@ -77,10 +103,7 @@ describe('committed run removal', () => {
             },
           ]);
           yield* Effect.promise(() => session.settlePublications());
-          expect(yield* Effect.promise(() => question)).toEqual({
-            action: 'reject',
-            cause: 'Run removed.',
-          });
+          expect(SubscriptionRef.getUnsafe(session.view).requests).toEqual([]);
           expect(handle.isOwnedBy(parent)).toBe(false);
           expect(session.now()).toBe(before + 1);
           expect(

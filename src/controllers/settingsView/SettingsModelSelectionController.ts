@@ -208,9 +208,6 @@ export class SettingsModelSelectionController {
         cost: option.cost,
         isFast: isFastFirstResponseModel(config.inputPrice),
         availability: option.availability,
-        availabilityLabel: option.availabilityLabel,
-        requiresKey: option.requiresKey,
-        disabled: option.disabled,
       };
 
       const copilotRoute = copilotRoutes.get(name);

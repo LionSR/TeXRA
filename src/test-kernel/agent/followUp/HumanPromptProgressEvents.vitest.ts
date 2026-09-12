@@ -10,44 +10,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { proposalApprovals } from '@tools/approval';
 import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import {
-  requestToolEditApproval,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
-import { createRecordingHost } from '../progressTestUtils';
-
-let testApprovalHandler:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
-let detachHostInteractions = (): void => {};
-
-function installTestPlatform(): Promise<void> {
-  return installPlatform({}).then(() => {
-    detachHostInteractions();
-    detachHostInteractions = defaultSession().interactions.use({
-      requestToolEditApproval: (request) => {
-        const handler = testApprovalHandler;
-        if (!handler) {
-          throw new Error(
-            'No test approval handler. Set `testApprovalHandler` first.',
-          );
-        }
-        return handler(request);
-      },
-      cancel: () => undefined,
-    });
-  });
-}
+import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
 
 async function inToolContext<T>(
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
@@ -68,120 +42,108 @@ async function inToolContext<T>(
   }
 }
 
+/** A run whose existence fact the request rows below hang off. */
+function startedRun(): RunId {
+  const runId = generateRunId();
+  publishTestRunStart(defaultSession(), runId);
+  return runId;
+}
+
 describe('human prompt progress events', () => {
   beforeEach(async () => {
-    testApprovalHandler = undefined;
-    await installTestPlatform();
+    await installPlatform({});
   });
 
   afterEach(() => {
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
-    detachHostInteractions();
-    detachHostInteractions = () => {};
-    testApprovalHandler = undefined;
   });
 
-  it('publishes bash approval events through the tool runtime host', async () => {
+  it('opens a bash request on the run and settles on its decision', async () => {
     const explicit = createRecordingHost();
-    const runId = generateRunId();
+    const runId = startedRun();
+    const decided = autoDecideRequests(defaultSession(), () => ({
+      action: 'approve',
+    }));
 
-    const approval = inToolContext(explicit.interactions, runId, () =>
-      requestBashApproval({
-        command: 'echo hello',
-        cwd: '/tmp/texra-project',
-      }),
-    );
+    try {
+      const approval = await inToolContext(explicit.interactions, runId, () =>
+        effectRuntime().runPromise(
+          requestBashApproval({
+            command: 'echo hello',
+            cwd: '/tmp/texra-project',
+          }),
+        ),
+      );
 
-    const show = await waitForRecordedEvent(
-      explicit.events,
-      'showBashPermission',
-    );
-    expect(
-      explicit.decisions.submitBash(show.payload.requestId, {
-        action: 'approve',
-      }),
-    ).toBe(true);
-
-    await expect(approval).resolves.toMatchObject({ action: 'approve' });
-
-    expect(explicit.events).toEqual([
-      { event: 'requestEnsureProgressView', payload: {} },
-      {
-        event: 'showBashPermission',
-        payload: {
-          requestId: show.payload.requestId,
-          command: 'echo hello',
-          cwd: '/tmp/texra-project',
-          allowBypass: true,
-          runId,
-        },
-      },
-      {
-        event: 'resolveBashPermission',
-        payload: { requestId: show.payload.requestId },
-      },
-    ]);
-  });
-
-  it('publishes user question events through the tool runtime host', async () => {
-    const explicit = createRecordingHost();
-    const runId = generateRunId();
-    const tool = new AskUserQuestionTool();
-
-    const result = inToolContext(explicit.interactions, runId, () =>
-      tool.call({
-        context: 'Choose the next step.',
-        questions: [
-          {
-            question: 'Which path should the agent take?',
-            header: 'Path',
-            options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
+      expect(approval).toMatchObject({ action: 'approve' });
+      expect(decided.opened.map((request) => request.payload)).toEqual([
+        {
+          kind: 'bash',
+          data: {
+            requestId: expect.stringContaining('bash-'),
+            command: 'echo hello',
+            cwd: '/tmp/texra-project',
+            allowBypass: true,
+            runId,
           },
-        ],
-      }),
-    );
-
-    const show = await waitForRecordedEvent(
-      explicit.events,
-      'showUserQuestion',
-    );
-    expect(
-      explicit.decisions.submitUserQuestion(show.payload.requestId, {
-        action: 'submit',
-        answers: {
-          'Which path should the agent take?': 'Run the build',
         },
-      }),
-    ).toBe(true);
+      ]);
+    } finally {
+      decided.detach();
+    }
+  });
 
-    await expect(result).resolves.toMatchObject({
-      summary: 'Answered 1 user question(s).',
-    });
+  it('opens a user-question request and reports the submitted answers', async () => {
+    const explicit = createRecordingHost();
+    const runId = startedRun();
+    const tool = new AskUserQuestionTool();
+    const question = 'Which path should the agent take?';
+    const decided = autoDecideRequests(defaultSession(), () => ({
+      action: 'submit',
+      answers: { [question]: 'Run the build' },
+    }));
 
-    expect(explicit.events).toEqual([
-      { event: 'requestEnsureProgressView', payload: {} },
-      {
-        event: 'showUserQuestion',
-        payload: {
-          requestId: show.payload.requestId,
+    try {
+      const result = await inToolContext(explicit.interactions, runId, () =>
+        tool.call({
+          context: 'Choose the next step.',
           questions: [
             {
-              question: 'Which path should the agent take?',
+              question,
               header: 'Path',
               options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
             },
           ],
-          context: 'Choose the next step.',
-          allowBypass: false,
-          runId,
+        }),
+      );
+
+      expect(result).toMatchObject({
+        summary: 'Answered 1 user question(s).',
+      });
+      expect(decided.opened.map((request) => request.payload)).toEqual([
+        {
+          kind: 'userQuestion',
+          data: {
+            requestId: expect.stringContaining('user-question-'),
+            questions: [
+              {
+                question,
+                header: 'Path',
+                options: [
+                  { label: 'Inspect logs' },
+                  { label: 'Run the build' },
+                ],
+              },
+            ],
+            context: 'Choose the next step.',
+            allowBypass: false,
+            runId,
+          },
         },
-      },
-      {
-        event: 'resolveUserQuestion',
-        payload: { requestId: show.payload.requestId },
-      },
-    ]);
+      ]);
+    } finally {
+      decided.detach();
+    }
   });
 
   it.each([
@@ -227,73 +189,70 @@ describe('human prompt progress events', () => {
 
   it('keeps bash and edit session bypasses independent', async () => {
     const explicit = createRecordingHost();
-    const runId = generateRunId();
+    const runId = startedRun();
+    const decided = autoDecideRequests(defaultSession(), () => ({
+      action: 'approve',
+    }));
 
     try {
       currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
         silent: true,
       });
 
-      const approval = inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo still asks' }),
+      const approval = await inToolContext(explicit.interactions, runId, () =>
+        effectRuntime().runPromise(
+          requestBashApproval({ command: 'echo still asks' }),
+        ),
       );
 
-      const show = await waitForRecordedEvent(
-        explicit.events,
-        'showBashPermission',
-      );
-      expect(
-        explicit.decisions.submitBash(show.payload.requestId, {
-          action: 'approve',
-        }),
-      ).toBe(true);
-      await expect(approval).resolves.toMatchObject({ action: 'approve' });
+      expect(approval).toMatchObject({ action: 'approve' });
+      expect(decided.opened.at(-1)?.payload).toMatchObject({
+        kind: 'bash',
+        data: { command: 'echo still asks' },
+      });
 
-      expect(show.payload.command).toBe('echo still asks');
-
-      explicit.events.length = 0;
+      // A bash bypass answers without asking; the edit bypass above is not
+      // what silenced it.
       currentSession().approvals.bash.bypass.setBypass(runId, true, {
         silent: true,
       });
 
       const bypassed = await inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo bypassed' }),
+        effectRuntime().runPromise(
+          requestBashApproval({ command: 'echo bypassed' }),
+        ),
       );
 
       expect(bypassed).toEqual({ action: 'approve' });
-      expect(explicit.events).toEqual([]);
+      expect(decided.opened).toHaveLength(1);
 
       currentSession().approvals.toolEdit.bypass.setBypass(runId, false, {
         silent: true,
       });
 
-      let editApprovalRequests = 0;
-      testApprovalHandler = async (request) => {
-        editApprovalRequests += 1;
-        return {
-          action: 'apply',
-          appliedContent: request.proposedContent,
-        };
-      };
-
-      const editApproval = await withRunContext(
-        createRunContext({ runId }),
+      const editApproval = await inToolContext(
+        explicit.interactions,
+        runId,
         () =>
-          requestToolEditApproval({
-            path: 'draft.tex',
-            originalContent: 'old',
-            proposedContent: 'new',
-            sourceTool: 'test',
-          }),
+          effectRuntime().runPromise(
+            requestToolEditApproval({
+              path: 'draft.tex',
+              originalContent: 'old',
+              proposedContent: 'new',
+              sourceTool: 'test',
+            }),
+          ),
       );
 
-      expect(editApprovalRequests).toBe(1);
+      expect(
+        decided.opened.filter((request) => request.payload.kind === 'toolEdit'),
+      ).toHaveLength(1);
       expect(editApproval).toMatchObject({
         action: 'apply',
         appliedContent: 'new',
       });
     } finally {
-      testApprovalHandler = undefined;
+      decided.detach();
     }
   });
 });

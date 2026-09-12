@@ -8,6 +8,11 @@
  * answer also selects the run so the shell opens on its conversation rather
  * than the New-task state.
  *
+ * The scrubber's cut is page state the bridge holds: every `Subscribe` is
+ * answered at the current cut, and moving it remounts the shell (`main.ts`),
+ * whose fresh generation is answered at the new one. The document itself
+ * never changes.
+ *
  * The document loads two ways: inline (`window.__TEXRA_TRACE__`, set by the
  * CLI export so the page is one self-contained file: `fetch()` of a local
  * file fails under `file://`), or a fetched `trace.json` beside the page
@@ -49,9 +54,22 @@ function deliver(message: DownMessage): void {
   window.dispatchEvent(new MessageEvent('message', { data: message }));
 }
 
+/** The `flow.step` index the view is read at; null is the whole document. */
+let cut: number | null = null;
+/** Whether the current mount has been told to open the run. */
+let selected = false;
+
+/**
+ * Move the scrubber: subscribes from here on are answered at `index`, and
+ * the next mount opens the run again.
+ */
+export function setTraceCut(index: number | null): void {
+  cut = index;
+  selected = false;
+}
+
 function installTraceHostBridge(document: Promise<TraceDocument>): void {
   let state: unknown;
-  let selected = false;
   const bridge: HostBridgeApi = {
     postMessage(message) {
       const parsed = UpMessageSchema.safeParse(message);
@@ -64,7 +82,7 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
         case 'subscribe':
           document.then(
             (loaded) => {
-              deliver(traceFrame(loaded, TRACE_SESSION, up));
+              deliver(traceFrame(loaded, TRACE_SESSION, up, cut));
               if (selected) return;
               selected = true;
               deliver({

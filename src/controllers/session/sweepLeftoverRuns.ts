@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -16,8 +16,8 @@ function runningRuns(session: SessionHandle): Set<RunId> {
   for (const handle of session.runs.getAgentHandles()) {
     running.add(handle.runId);
   }
-  for (const [runId, state] of session.status.getAllRunStates()) {
-    if (isInFlightPhase(state.phase)) running.add(runId);
+  for (const run of SubscriptionRef.getUnsafe(session.view).runs.values()) {
+    if (isInFlightPhase(run.status)) running.add(run.id);
   }
   return running;
 }

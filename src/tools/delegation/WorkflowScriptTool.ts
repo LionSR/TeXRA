@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import { getRunStore, getRunRecords } from '@agent/storage';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
+import { getRunRecords } from '@agent/storage';
+import {
+  deriveWorkflowScriptCheckpointId,
+  readWorkflowScriptCheckpoint,
+} from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
-import { readWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { runInSession, withRunContext } from '@agent/runtime/RunContext';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
@@ -237,7 +239,10 @@ return await agent('Merge the corrected drafts.', {
 Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
-  protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {
+  protected async execute(
+    input: WorkflowScriptToolInput,
+    signal?: AbortSignal,
+  ): Promise<ToolResult> {
     const contexts = getCurrentToolContexts();
     if (contexts?.runContext?.kind !== 'launch') {
       throw new Error(
@@ -246,6 +251,9 @@ Durability: the journal is keyed by meta.name and the agent field within this se
     }
     const { runContext: parent, callContext } = contexts;
     const { runScope } = parent;
+    // The call's signal is the wait's stop: aborted when this tool call is
+    // interrupted, it interrupts the request fiber so `openRequest` closes a
+    // pending request instead of leaving it approvable after the run stopped.
     return effectRuntime().runPromise(
       Effect.gen(function* () {
         let scriptPath: string;
@@ -322,14 +330,18 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           defaultAgent: defaultAgent.name,
           parentRunId: runScope.runId,
         });
-        const store = runInSession(runScope.session, () =>
-          getRunStore(runScope.runId),
-        );
+        const priorCheckpoint =
+          input.files == null
+            ? yield* readWorkflowScriptCheckpoint(
+                runScope.session,
+                checkpointId,
+              ).pipe(
+                Effect.mapError((error) =>
+                  workflowScriptToolError(error, scriptPath),
+                ),
+              )
+            : null;
         const files = yield* runPhase(async () => {
-          const priorCheckpoint =
-            input.files == null
-              ? await readWorkflowScriptCheckpoint(store, checkpointId)
-              : null;
           const parsedFiles = WorkflowScriptFilesSchema.parse(
             input.files ?? priorCheckpoint?.files ?? {},
           );
@@ -351,7 +363,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // fresh random id: a relaunch with the same meta.name regenerates the same
         // run id, so registration, stream, and grandchildren re-root at one stable
         // anchor and resume still replays completed calls (#8712). The journal
-        // itself stays on the orchestrator store, where the checkpoint lives.
+        // itself lives on the checkpoint aggregate, which outlives the run.
         const runId = deriveRunId({ checkpointId });
 
         // Captured now, while the launching tool call's ALS frame is live, so the
@@ -416,16 +428,12 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             tasks: [...(meta.tasks ?? [])],
           },
         };
-        const proposalDecision = yield* Effect.tryPromise({
-          try: () =>
-            requestDelegationProposal(
-              proposal,
-              runScope.runId,
-              runScope.session,
-              parent,
-            ),
-          catch: ensureError,
-        });
+        const proposalDecision = yield* requestDelegationProposal(
+          proposal,
+          runScope.runId,
+          runScope.session,
+          parent,
+        );
         const declined = proposalResultToToolResult(
           proposalDecision.result,
           defaultAgent.name,
@@ -565,8 +573,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                           ),
                         session: runScope.session,
                         runId,
+                        parentRunId: runScope.runId,
                         logger: childRun.logger,
-                        store,
                         checkpointId,
                         script,
                         scriptPath,
@@ -662,6 +670,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           ),
         );
       }),
+      { signal },
     );
   }
 }

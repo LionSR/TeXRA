@@ -8,7 +8,7 @@
 // Third-party imports
 import { Effect, Layer, Ref, Stream, SubscriptionRef } from 'effect';
 
-import type { AgentEvent, StatusEvent } from '@agent/trace';
+import type { AgentEvent } from '@agent/trace';
 import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
@@ -137,12 +137,4 @@ export function runEventDraft(
     return { ...body, aggregateId };
   }
   return { ...event, aggregateId };
-}
-
-/** The `status` arm of one canonical status fact, on the run it names. */
-export function statusDraft(event: StatusEvent): SessionEventDraft {
-  return {
-    ...event,
-    aggregateId: qualifyAggregateId('run', event.runId),
-  };
 }

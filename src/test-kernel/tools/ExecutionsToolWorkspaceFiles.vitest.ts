@@ -11,21 +11,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
-import { RunIdSchema, type RunId, type TodoItem } from '@shared/schemas';
 import {
-  createFakeKv,
-  createFakeRunRecords,
-} from '@test/support/FakeRunKVStore';
+  RunIdSchema,
+  type RunId,
+  type RunPhase,
+  type TodoItem,
+} from '@shared/schemas';
+import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -35,6 +37,28 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 
+/**
+ * Move a run's phase the way its loop does: a `flow.step` row, which is the
+ * one fact the fold derives a live phase from (one run model, 3.3).
+ */
+async function foldRunPhase(
+  session: SessionHandle,
+  runId: RunId,
+  step: 'waiting' | 'turn.begin',
+  expected: RunPhase,
+): Promise<void> {
+  session.publish([
+    {
+      type: 'flow.step',
+      aggregateId: aggregateId('run', runId),
+      payload: { family: 'toolUse', step },
+    },
+  ]);
+  await vi.waitFor(() => {
+    expect(session.runView(runId)?.status).toBe(expected);
+  });
+}
+
 const tempDirs = useTempDirs();
 
 const mocks = vi.hoisted(() => ({
@@ -43,20 +67,16 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
-  readTurnState: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listRuns: vi.fn(),
 }));
 
-vi.mock('@agent/storage/RunKVStore', async () => {
+vi.mock('@agent/storage/runRecords', async () => {
   const actual = await vi.importActual<
-    typeof import('@agent/storage/RunKVStore')
-  >('@agent/storage/RunKVStore');
+    typeof import('@agent/storage/runRecords')
+  >('@agent/storage/runRecords');
   return {
     ...actual,
-    getRunStore: vi.fn((id: RunId) =>
-      createFakeKv(id, { readTurnState: mocks.readTurnState }),
-    ),
     getRunRecords: vi.fn(() =>
       createFakeRunRecords({
         readConfig: () =>
@@ -147,7 +167,6 @@ describe('ExecutionsTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listRuns.mockResolvedValue([]);
-    mocks.readTurnState.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
@@ -176,10 +195,10 @@ describe('ExecutionsTool', () => {
     });
 
     try {
+      publishTestRunStart(session, parentRunId);
+      publishTestRunStart(session, childRunId, { parent: parentRunId });
       session.runs.track(handle);
-      seedRunStatusForTest(session.status, childRunId, {
-        phase: RUN_PHASE.WAITING,
-      });
+      await foldRunPhase(session, childRunId, 'waiting', RUN_PHASE.WAITING);
       mocks.readReport.mockResolvedValue(
         '<subagent-result>full report</subagent-result>',
       );
@@ -243,9 +262,12 @@ describe('ExecutionsTool', () => {
         publishTestRunStart(session, childRunId, { parent: parentRunId });
         await session.settlePublications();
         session.runs.track(handle);
-        seedRunStatusForTest(session.status, childRunId, {
-          phase: RUN_PHASE.RUNNING,
-        });
+        await foldRunPhase(
+          session,
+          childRunId,
+          'turn.begin',
+          RUN_PHASE.RUNNING,
+        );
         session.publish([
           {
             type: 'updateTodos',
@@ -476,26 +498,14 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Exercises the real listing so every reserved KV filename — including the
-  // child- and flow_ prefixed ones — stays out of the model-facing view.
-  it('filters internal KV metadata files out of /executions/{id}/files', async () => {
+  // Exercises the real listing: a run's records are rows, so nothing left in
+  // its directory is internal and the model-facing view lists all of it.
+  it('lists every file under /executions/{id}/files', async () => {
     await withTempStorage(async () => {
       const runId = 'abc123' as RunId;
       const runDir = resolveRunStoragePath(runId);
       await StorageFS.ensureDir(runDir);
-      const kvFiles = [
-        'stable-subagent-attempt.json',
-        'stable-subagent-sequence-abc123.json',
-        'workflow-script-call-1.json',
-        // The retired engine's checkpoint, before and after the rename the
-        // first ledger append gives it.
-        `flow_${runId}.json`,
-        `flow_${runId}.json.superseded`,
-      ];
-      for (const name of kvFiles) {
-        await StorageFS.write(path.join(runDir, name), '{}');
-      }
-      const retiredKvFiles = [
+      const listedFiles = [
         'conversation.json',
         'todos.json',
         'meta.json',
@@ -504,8 +514,10 @@ describe('ExecutionsTool', () => {
         'workspace-files.json',
         'result-meta.json',
         'child-def456.json',
+        'stable-subagent-attempt.json',
+        'stable-subagent-sequence-abc123.json',
       ];
-      for (const name of retiredKvFiles) {
+      for (const name of listedFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }
       await StorageFS.write(path.join(runDir, 'output.tex'), 'generated');
@@ -515,18 +527,11 @@ describe('ExecutionsTool', () => {
       });
 
       expect(result.output).toContain('output.tex');
-      for (const name of retiredKvFiles) {
+      for (const name of listedFiles) {
         expect(result.output).toContain(name);
-      }
-      for (const name of kvFiles) {
-        expect(result.output).not.toContain(name);
       }
     });
   });
-
-  // Every real KV entry is written as `{key}.json` (KVStore.keyToPath always
-  // appends the suffix), so a generated file whose basename collides with a
-  // reserved key name but carries no `.json` extension stays visible.
 
   it('reads recorded files inside a top-level workspace directory', async () => {
     await withTempDir('texra-exec-files-', async (workspace) => {

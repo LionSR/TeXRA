@@ -123,12 +123,14 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
 
     expect(actions).toEqual([
       {
-        kind: 'externalInquiry.submit',
+        kind: 'request.decide',
         runId: 'run-1',
-        threadId: 'ei_000000000000',
-        turnIndex: 1,
-        answer: 'the answer',
-        sessionLinks: ['https://chatgpt.com/c/abc'],
+        requestId: 'inquiry-1',
+        decision: {
+          action: 'answer',
+          answer: 'the answer',
+          sessionLinks: ['https://chatgpt.com/c/abc'],
+        },
       },
     ]);
   });

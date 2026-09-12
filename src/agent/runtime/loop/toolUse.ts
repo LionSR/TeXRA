@@ -27,9 +27,7 @@ import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
@@ -43,6 +41,7 @@ import {
   type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
@@ -78,7 +77,7 @@ const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
@@ -196,7 +195,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ownerSession: session,
     interrupt(): void {
       run.interrupt();
-      session.interactions.cancel({ runId, cause: 'Run interrupted.' });
       followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
@@ -317,7 +315,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     RunState,
     Error
   > {
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
     const promptVars = {
@@ -415,7 +412,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     lastTurn: null,
     pendingResponse: null,
     pendingIntents: {},
-    approvals: {},
+    requests: {},
     usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
     flow: null,
   });
@@ -761,7 +758,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             batch = yield* followUps.drain;
             if (batch === null) {
-              session.status.transitionToWaiting(runId, 'wait');
               return { state, waiting: true } as const satisfies LoopExit;
             }
           }
@@ -791,9 +787,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            if (!followUps.hasQueued()) {
-              session.status.transitionToWaiting(runId, 'wait');
-            }
             detach();
             batch = yield* followUps.wait;
             if (batch === null) {
@@ -806,7 +799,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             attach();
           }
-          session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
@@ -823,13 +815,27 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
+      // The turn's trace rows publish fire-and-forget while the ledger
+      // appends on this fiber, so the parking row would commit ahead of
+      // them: the transcript boundary closes on `waiting`, and this turn's
+      // `stream.start`/`stream.end`/`response.finalized` are then dropped by
+      // the fold, leaving a parked run whose transcript holds no assistant
+      // answer. Settling the session's publications here is the order
+      // between the two paths.
+      yield* Effect.tryPromise({
+        try: () => session.flushArtifacts(),
+        catch: ensureError,
+      });
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
-      // turn and its wait cannot leave the turn unended.
+      // turn and its wait cannot leave the turn unended. The `waiting` step
+      // parks the run (one run model, 3.3), so the streaming rows still open
+      // close in its batch: a parked transcript never streams.
       state = yield* commit(
         yield* ledger.appendBatch(runId, state, [
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]),
       );
@@ -859,7 +865,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // One child cycle per invocation: the child loop delivers this
         // turn's facts and owns the next wait.
-        session.status.transitionToWaiting(runId, 'wait');
         return { state, waiting: true } as const satisfies LoopExit;
       }
     }

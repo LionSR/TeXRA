@@ -1,18 +1,14 @@
+// The TUI host's side of the request protocol (one run model, 3.7): what it
+// answers from `view.requests` with nobody to ask, the bypass a decision turns
+// on, and the credential work behind a retry on the user's own key. A run asks
+// with `session.openRequest`; the surface answers with `request.decide`.
+
 import '@test/support/defaultSessionTestSetup';
 
 import pDefer from 'p-defer';
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  onTestFinished,
-  vi,
-} from 'vitest';
-import { SubscriptionRef } from 'effect';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, SubscriptionRef } from 'effect';
+import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
@@ -23,28 +19,12 @@ const mocks = vi.hoisted(() => ({
   glmCodingPlan: false,
   notify: vi.fn(),
   openRouter: false,
-  retryCopyFailure: undefined as Error | undefined,
   secrets: {},
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
-
-// Injection point for a pre-modal preparation failure: the retry copy is read
-// while the request is still being assembled, before the modal can be shown.
-vi.mock('@cli/tui/ui/retryCopy', async (importActual) => {
-  const actual = await importActual<typeof import('@cli/tui/ui/retryCopy')>();
-  return {
-    ...actual,
-    missingApiKeyRetryMessage: (
-      ...args: Parameters<typeof actual.missingApiKeyRetryMessage>
-    ): string => {
-      if (mocks.retryCopyFailure) throw mocks.retryCopyFailure;
-      return actual.missingApiKeyRetryMessage(...args);
-    },
-  };
-});
 
 vi.mock('@model/codex/codexPreference', () => ({
   isPreferCodexSubscription: () => mocks.preferSubscription,
@@ -95,16 +75,8 @@ vi.mock('@platform/platform', async () => {
   };
 });
 
-import type {
-  HostInteractions,
-  HostRetryInteractionOptions,
-} from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import {
-  currentApproval,
-  type ApprovalDecision,
-} from '@cli/chat/tui/state/approvalQueue';
+import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import {
   codexPreferenceVersion,
@@ -117,65 +89,30 @@ import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
-  aggregateId as qualifyAggregateId,
   AgentCategory,
   RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
+  type AgentProposalPermission,
+  type PermissionPayload,
+  type RequestDecision,
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
+import {
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
+  APPROVE_SESSION_ACTION,
+  type SurfaceDecision,
+} from '@shared/session/approvalDecision';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
-import {
-  bashApprovalRequest,
-  toolEditApprovalRequest,
-} from '../agent/progressTestUtils';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import { bashApprovalRequest } from '../agent/progressTestUtils';
 
-/**
- * The session's port for a test: a request names a run the fold must
- * already hold (only `run.start` mints one), so each hook first publishes
- * the run's existence fact when the view lacks it, then goes through the
- * session, which publishes `approval.requested` and settles the answer.
- */
-function port(): SessionHostInteractions {
-  const session = defaultSession();
-  const ensureRun = (runId: string | null | undefined): void => {
-    if (!runId) return;
-    if (SubscriptionRef.getUnsafe(session.view).runs.has(runId as RunId))
-      return;
-    session.publish([
-      {
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('run', runId as RunId),
-        identity: { kind: 'agent', agent: 'agent' },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        parent: null,
-      },
-    ]);
-  };
-  const port = session.interactions;
-  return new Proxy(port, {
-    get(target, key) {
-      const value = Reflect.get(target, key) as unknown;
-      if (typeof value !== 'function') return value;
-      return (...args: unknown[]) => {
-        const first = args[0] as { runId?: string | null } | undefined;
-        if (
-          (typeof key === 'string' && key.startsWith('request')) ||
-          key === 'askUserQuestion'
-        ) {
-          ensureRun(first?.runId);
-        }
-        return (value as (...a: unknown[]) => unknown).apply(target, args);
-      };
-    },
-  }) as SessionHostInteractions;
-}
+let detachHost = (): void => {};
 
 function host(): CliRuntimeHost {
   return {
@@ -185,42 +122,33 @@ function host(): CliRuntimeHost {
   } as unknown as CliRuntimeHost;
 }
 
+/**
+ * Attach the TUI presentation host for one test. It answers nothing on its
+ * own: it stages what a request needs before it can be shown, and performs
+ * the `useOwnApiKey` capability a retry decision names.
+ */
 function tui(
   presentationHost = host(),
   contextOverrides: Partial<CliContext> = {},
-): {
-  readonly presentationHost: CliRuntimeHost;
-  readonly interactions: HostInteractions;
-  readonly prepareRetry: ReturnType<typeof vi.fn>;
-  readonly dispose: () => void;
-} {
+): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  // The suite's own fake host, mocked above: the pipeline now takes the two
-  // stores directly, and the key-check expectations are written against
-  // exactly these objects.
+  // The suite's own fake stores, mocked above: the credential work takes them
+  // directly, and the key-check expectations name exactly these objects.
   const { secrets, globalState } = platform();
-  const hostInteractions = createTuiHostInteractions(
-    presentationHost,
-    cliContext,
-    { secrets, state: globalState },
+  detachHost();
+  detachHost = defaultSession().interactions.use(
+    createTuiHostInteractions(presentationHost, cliContext, {
+      secrets,
+      state: globalState,
+    }),
   );
-  const prepareRetry = vi.fn(async () => undefined);
-  const interactions: HostInteractions = {
-    ...hostInteractions,
-    requestRetry: (request, options) =>
-      hostInteractions.requestRetry?.(request, {
-        prepareRetry,
-        ...options,
-      }),
-  };
-  const detachInteractions = defaultSession().interactions.use(interactions);
-  onTestFinished(detachInteractions);
   return {
     presentationHost,
-    interactions,
-    prepareRetry,
-    dispose: detachInteractions,
+    dispose: () => {
+      detachHost();
+      detachHost = () => {};
+    },
   };
 }
 
@@ -233,16 +161,57 @@ function runIdFor(label: string): RunId {
   return hash.toString(16).padStart(8, '0') as RunId;
 }
 
-/** Coding-plan retry on the shared `same-run` run the replacement cases
- *  below queue two requests against. */
-function requestSameRunRetry(
-  interactions: HostInteractions,
-  message: string,
-): ReturnType<NonNullable<HostInteractions['requestRetry']>> {
-  return port().requestRetry({
-    ...kimiCodeSubscriptionRetry('same-run'),
-    errorMessage: message,
-  } as RetryPermission);
+/** The runs this file opens requests on; a request is a row on its run, so
+ *  the run exists before the first one opens. */
+const started = new Set<RunId>();
+
+function ensureRun(runId: RunId): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    if (started.has(runId)) return;
+    started.add(runId);
+    const session = defaultSession();
+    publishTestRunStart(session, runId);
+    yield* Effect.promise(() => session.settlePublications());
+  });
+}
+
+/** Ask through the protocol the TUI host answers: `request.opened` on the
+ *  run, settled by the `request.decided` a surface commits. */
+function openRequest(
+  runId: RunId,
+  payload: PermissionPayload,
+): Effect.Effect<RequestDecision, Error> {
+  return Effect.gen(function* () {
+    yield* ensureRun(runId);
+    return yield* defaultSession().openRequest(runId, payload);
+  }).pipe(Effect.mapError((cause) => new Error(String(cause))));
+}
+
+function openRetry(
+  permission: RetryPermission,
+): Effect.Effect<RequestDecision, Error> {
+  return openRequest(permission.runId as RunId, {
+    kind: 'retry',
+    data: permission,
+  });
+}
+
+function proposalPayload(
+  requestId: string,
+  runId: RunId,
+  instruction = 'Check the local compactness claim.',
+): AgentProposalPermission {
+  return {
+    requestId,
+    runId,
+    agent: 'critic',
+    agentSource: null,
+    model: 'kimi26T',
+    instruction,
+    memories: [],
+    workingDirectory: null,
+    agentCategory: AgentCategory.ToolUse,
+  };
 }
 
 /** Transient retry with no subscription exhaustion behind it. */
@@ -264,6 +233,7 @@ function retryRequestId(label: string): string {
   retrySeq += 1;
   return `retry-${label}-${retrySeq}`;
 }
+
 function chatGptSubscriptionRetry(label: string): RetryPermission {
   const message = 'ChatGPT subscription usage limit reached.';
   return {
@@ -314,11 +284,23 @@ function glmCodingPlanRetry(label: string): RetryPermission {
   } as RetryPermission;
 }
 
-function decideRetry(decision: ApprovalDecision): void {
+/** Answer the request the modal is showing. */
+function decideCurrent(decision: SurfaceDecision): void {
   const pending = currentApproval.get();
-  expect(pending?.payload.kind).toBe('retry');
+  expect(pending).toBeDefined();
   pending?.decide(decision);
 }
+
+function decideRetry(decision: SurfaceDecision): void {
+  expect(currentApproval.get()?.payload.kind).toBe('retry');
+  decideCurrent(decision);
+}
+
+/** The decision a retry on the user's own key lands. */
+const PERSONAL_KEY_RETRY = {
+  action: 'retry',
+  credentials: 'personal',
+} as const;
 
 /** The pre-switch route: the ChatGPT subscription is still preferred. */
 function expectChatGptSubscriptionRoute(): void {
@@ -329,79 +311,47 @@ function expectNoPreferenceWrites(): void {
   expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
 }
 
-function expectNoCredentialChange(
-  prepareRetry: ReturnType<typeof vi.fn>,
-): void {
+function expectNoCredentialChange(): void {
   expect(mocks.invalidateApiKeyCache).not.toHaveBeenCalled();
   expectNoPreferenceWrites();
-  expect(prepareRetry).not.toHaveBeenCalled();
 }
 
-/** A promise that never settles; call sites document why that is safe. */
-function neverSettles(): Promise<void> {
-  return new Promise<void>(() => {});
+function waitFor(assertion: () => void): Effect.Effect<void> {
+  return Effect.promise(async () => {
+    await vi.waitFor(assertion);
+  });
 }
 
-/** Two microtask ticks: one for the abort-aware wrapper around an in-flight
- *  lookup or preparation, one for the retry continuation behind it. */
-async function settleRetryContinuation(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+/** Two macrotasks: enough for the host's own async work to reach its next
+ *  await, used where the assertion is that nothing further happened. */
+function settle(): Effect.Effect<void> {
+  return Effect.promise(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
-const PERSONAL_KEY_RETRY: ApprovalDecision = {
-  accepted: true,
-  disableQuotaRoute: 'chatgpt',
-};
-
-async function waitForApproval(
+function waitForApproval(
   kind: string,
   data: Record<string, unknown>,
-  tui?: Record<string, unknown>,
-): Promise<void> {
-  await vi.waitFor(() => {
+  tuiAdornments?: Record<string, unknown>,
+): Effect.Effect<void> {
+  return waitFor(() => {
     expect(currentApproval.get()?.payload).toMatchObject({
       kind,
       data,
-      ...(tui ? { tui } : {}),
+      ...(tuiAdornments ? { tui: tuiAdornments } : {}),
     });
   });
 }
 
-async function beginSubscriptionSwitch(
-  interactions: HostInteractions,
-  label: string,
-  options?: HostRetryInteractionOptions,
-): Promise<{
-  readonly result: ReturnType<NonNullable<HostInteractions['requestRetry']>>;
-}> {
-  const result = port().requestRetry(chatGptSubscriptionRetry(label), options);
-  await waitForApproval('retry', { runId: runIdFor(label) });
-  decideRetry(PERSONAL_KEY_RETRY);
-  return { result };
+function waitForNoApproval(): Effect.Effect<void> {
+  return waitFor(() => expect(currentApproval.get()).toBeUndefined());
 }
 
-/** Approves an ordinary retry while a credential switch is pending, asserting
- *  its client is still prepared on the old route. */
-async function approveOrdinaryRetryOnOldRoute(
-  interactions: HostInteractions,
-  label: string,
-): Promise<void> {
-  const ordinaryPrepare = vi.fn(async () => {
-    expectChatGptSubscriptionRoute();
-  });
-  const ordinary = port().requestRetry(ordinaryRetry(label), {
-    prepareRetry: ordinaryPrepare,
-  });
-  await waitForApproval('retry', { runId: runIdFor(label) });
-  decideRetry({ accepted: true });
-
-  await expect(ordinary).resolves.toEqual({
-    action: 'retry',
-    feedback: undefined,
-  });
-  expect(ordinaryPrepare).toHaveBeenCalledOnce();
-}
+beforeAll(() => {
+  bindSessionView(defaultSession().view);
+});
 
 beforeEach(() => {
   mocks.preferSubscription = true;
@@ -435,14 +385,27 @@ beforeEach(() => {
   });
 });
 
-beforeAll(() => {
-  bindSessionView(defaultSession().view);
-});
-afterEach(() => {
-  defaultSession().approvals.clearAll();
-  defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
+afterEach(async () => {
+  detachHost();
+  detachHost = () => {};
+  // A request left open outlives its test on the file's session, so close
+  // whatever this test did not answer before the next one reads the head.
+  const session = defaultSession();
+  for (const request of SubscriptionRef.getUnsafe(session.view).requests) {
+    await effectRuntime().runPromise(
+      session.requests
+        .request({
+          kind: 'request.decide',
+          runId: request.runId,
+          requestId: request.requestId,
+          decision: { action: 'cancel', cause: 'Test finished.' },
+        })
+        .pipe(Effect.ignore),
+    );
+  }
+  await session.settlePublications();
+  session.approvals.clearAll();
   resetCliState();
-  mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
   mocks.invalidateApiKeyCache.mockReset();
@@ -453,437 +416,425 @@ afterEach(() => {
   mocks.updateGlobalState.mockReset();
 });
 
-describe('TUI retry approvals', () => {
-  it('reports an automatic yolo retry rejection as a policy denial', async () => {
-    const { interactions } = tui(host(), {
-      approvalPolicy: 'yolo',
-    });
+describe('TUI request decisions', () => {
+  it.effect(
+    'reports an automatic yolo retry rejection as a policy denial',
+    () =>
+      Effect.gen(function* () {
+        tui(host(), { approvalPolicy: 'yolo' });
 
-    const result = port().requestRetry(
-      ordinaryRetry('yolo-transient', 'yolo-transient-retry'),
-    );
+        const decision = yield* openRetry(
+          ordinaryRetry('yolo-transient', 'yolo-transient-retry'),
+        );
 
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason:
-        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-    });
-    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(CliExitCode.AgentError);
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-  });
-
-  it('updates TUI bash bypass state at the approval decision site', async () => {
-    const { presentationHost, interactions } = tui();
-    const result = port().requestBashApproval(
-      bashApprovalRequest({
-        command: 'echo ok',
-        runId: runIdFor('bash-bypass'),
+        expect(decision).toEqual({
+          action: 'deny',
+          reason:
+            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+        });
+        expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(
+          CliExitCode.AgentError,
+        );
+        yield* waitForNoApproval();
       }),
-    );
+  );
 
-    await waitForApproval('bash', { runId: runIdFor('bash-bypass') });
-    currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
+  it.effect('updates TUI bash bypass state at the approval decision site', () =>
+    Effect.gen(function* () {
+      const { presentationHost } = tui();
+      const runId = runIdFor('bash-bypass');
+      const pending = yield* Effect.forkChild(
+        openRequest(runId, {
+          kind: 'bash',
+          data: bashApprovalRequest({ command: 'echo ok', runId }),
+        }),
+      );
 
-    await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('bash-bypass'),
-      kind: 'bash',
-      bypassActive: true,
-    });
-  });
+      yield* waitForApproval('bash', { runId });
+      decideCurrent({ action: APPROVE_SESSION_ACTION });
 
-  it('updates TUI command bypass state when goal auto-approval is enabled and cleared', async () => {
-    const { presentationHost } = tui();
-    await setGoalSessionAutoApproval(runIdFor('goal-bypass'), 'commands');
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('goal-bypass'),
-      kind: 'bash',
-      bypassActive: true,
-    });
+      expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
+      yield* waitFor(() =>
+        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
+          runId,
+          kind: 'bash',
+          bypassActive: true,
+        }),
+      );
+    }),
+  );
 
-    await setGoalSessionAutoApproval(runIdFor('goal-bypass'), false);
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('goal-bypass'),
-      kind: 'bash',
-      bypassActive: false,
-    });
-  });
+  it.effect(
+    'updates TUI command bypass state when goal auto-approval is enabled and cleared',
+    () =>
+      Effect.gen(function* () {
+        const { presentationHost } = tui();
+        const runId = runIdFor('goal-bypass');
+        yield* ensureRun(runId);
 
-  it('updates TUI edit bypass state at the approval decision site', async () => {
-    const { presentationHost, interactions } = tui();
-    const result = port().requestToolEditApproval(
-      toolEditApprovalRequest({
-        path: '/work/main.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit',
-        runId: runIdFor('edit-bypass'),
+        yield* Effect.promise(() =>
+          setGoalSessionAutoApproval(runId, 'commands'),
+        );
+        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
+          runId,
+          kind: 'bash',
+          bypassActive: true,
+        });
+
+        yield* Effect.promise(() => setGoalSessionAutoApproval(runId, false));
+        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
+          runId,
+          kind: 'bash',
+          bypassActive: false,
+        });
       }),
-    );
+  );
 
-    await waitForApproval('toolEdit', { runId: runIdFor('edit-bypass') });
-    currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
+  it.effect('updates TUI edit bypass state at the approval decision site', () =>
+    Effect.gen(function* () {
+      const { presentationHost } = tui();
+      const runId = runIdFor('edit-bypass');
+      yield* ensureRun(runId);
+      const applied = yield* Effect.forkChild(
+        requestToolEditApproval({
+          path: '/work/main.tex',
+          originalContent: 'old',
+          proposedContent: 'new',
+          sourceTool: 'edit',
+          runId,
+        }),
+      );
 
-    await expect(result).resolves.toEqual({
-      action: 'apply',
-      appliedContent: 'new',
-    });
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('edit-bypass'),
-      kind: 'toolEdit',
-      bypassActive: true,
-    });
-  });
+      yield* waitForApproval('toolEdit', { runId });
+      decideCurrent({ action: APPROVE_SESSION_ACTION });
 
-  it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
-    const { presentationHost, interactions } = tui();
-    const result = port().requestAgentProposal({
-      requestId: 'proposal-bypass',
-      runId: runIdFor('proposal-bypass'),
-      agent: 'critic',
-      agentSource: null,
-      model: 'kimi26T',
-      instruction: 'Check the local compactness claim.',
-      memories: [],
-      workingDirectory: null,
-      agentCategory: AgentCategory.ToolUse,
-    });
+      expect(yield* Fiber.join(applied)).toMatchObject({
+        action: 'apply',
+        appliedContent: 'new',
+      });
+      yield* waitFor(() =>
+        expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
+          runId,
+          kind: 'toolEdit',
+          bypassActive: true,
+        }),
+      );
+    }),
+  );
 
-    await waitForApproval('proposal', { runId: runIdFor('proposal-bypass') });
-    currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+  it.effect(
+    'enables the complete delegated-task approval mode at the proposal decision site',
+    () =>
+      Effect.gen(function* () {
+        const { presentationHost } = tui();
+        const runId = runIdFor('proposal-bypass');
+        const pending = yield* Effect.forkChild(
+          openRequest(runId, {
+            kind: 'proposal',
+            data: proposalPayload('proposal-bypass', runId),
+          }),
+        );
 
-    await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(proposalApprovals().isBypassed(runIdFor('proposal-bypass'))).toBe(
-      true,
-    );
-    expect(
-      currentSession().approvals.toolEdit.bypass.isBypassed(
-        runIdFor('proposal-bypass'),
-      ),
-    ).toBe(true);
-    expect(
-      currentSession().approvals.bash.bypass.isBypassed(
-        runIdFor('proposal-bypass'),
-      ),
-    ).toBe(true);
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('proposal-bypass'),
-      kind: 'superYolo',
-      bypassActive: true,
-    });
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('proposal-bypass'),
-      kind: 'toolEdit',
-      bypassActive: true,
-    });
-    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
-      runId: runIdFor('proposal-bypass'),
-      kind: 'bash',
-      bypassActive: true,
-    });
-  });
+        yield* waitForApproval('proposal', { runId });
+        decideCurrent({ action: APPROVE_ALL_DELEGATED_WORK_ACTION });
 
-  it('approves delegated work already queued in the same run', async () => {
-    const { interactions } = tui();
-    const runId = runIdFor('parallel-approval');
-    const proposal = port().requestAgentProposal({
-      requestId: 'proposal-current',
-      runId,
-      agent: 'critic',
-      agentSource: null,
-      model: 'kimi26T',
-      instruction: 'Check the local compactness claim.',
-      memories: [],
-      workingDirectory: null,
-      agentCategory: AgentCategory.ToolUse,
-    });
-    const edit = port().requestToolEditApproval(
-      toolEditApprovalRequest({
-        path: '/work/main.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit',
-        runId,
+        expect(yield* Fiber.join(pending)).toMatchObject({
+          action: 'approve',
+        });
+        yield* waitFor(() => {
+          expect(proposalApprovals().isBypassed(runId)).toBe(true);
+          expect(
+            defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+          ).toBe(true);
+          expect(defaultSession().approvals.bash.bypass.isBypassed(runId)).toBe(
+            true,
+          );
+        });
+        for (const kind of ['superYolo', 'toolEdit', 'bash'] as const) {
+          expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith(
+            { runId, kind, bypassActive: true },
+          );
+        }
       }),
-    );
-    const bash = port().requestBashApproval(
-      bashApprovalRequest({
-        command: 'lake build',
-        runId,
+  );
+
+  it.effect('approves delegated work already queued in the same run', () =>
+    Effect.gen(function* () {
+      tui();
+      const runId = runIdFor('parallel-approval');
+      yield* ensureRun(runId);
+      const proposal = yield* Effect.forkChild(
+        openRequest(runId, {
+          kind: 'proposal',
+          data: proposalPayload('proposal-current', runId),
+        }),
+      );
+      const edit = yield* Effect.forkChild(
+        requestToolEditApproval({
+          path: '/work/main.tex',
+          originalContent: 'old',
+          proposedContent: 'new',
+          sourceTool: 'edit',
+          runId,
+        }),
+      );
+      const bash = yield* Effect.forkChild(
+        openRequest(runId, {
+          kind: 'bash',
+          data: bashApprovalRequest({ command: 'lake build', runId }),
+        }),
+      );
+      yield* Effect.forkChild(
+        openRequest(runId, {
+          kind: 'planApproval',
+          data: {
+            requestId: 'plan-excluded',
+            runId,
+            goalEnabled: false,
+            plan: { objective: 'Keep the approval categories distinct.' },
+          },
+        }),
+      );
+
+      yield* waitForApproval('proposal', { requestId: 'proposal-current' });
+      decideCurrent({ action: APPROVE_ALL_DELEGATED_WORK_ACTION });
+
+      expect(yield* Fiber.join(proposal)).toMatchObject({ action: 'approve' });
+      expect(yield* Fiber.join(edit)).toMatchObject({
+        action: 'apply',
+        appliedContent: 'new',
+      });
+      expect(yield* Fiber.join(bash)).toEqual({ action: 'approve' });
+      // A plan approval is not delegated work: it still waits for the user.
+      yield* waitFor(() =>
+        expect(currentApproval.get()?.payload.kind).toBe('planApproval'),
+      );
+    }),
+  );
+
+  it.effect(
+    'keeps an ordinary proposal approval limited to the current request',
+    () =>
+      Effect.gen(function* () {
+        tui();
+        const runId = runIdFor('proposal-one-off');
+        const pending = yield* Effect.forkChild(
+          openRequest(runId, {
+            kind: 'proposal',
+            data: proposalPayload(
+              'proposal-one-off',
+              runId,
+              'Check one calculation.',
+            ),
+          }),
+        );
+
+        yield* waitForApproval('proposal', { requestId: 'proposal-one-off' });
+        decideCurrent({ action: 'approve' });
+
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
+        expect(proposalApprovals().isBypassed(runId)).toBe(false);
+        expect(
+          defaultSession().approvals.toolEdit.bypass.isBypassed(runId),
+        ).toBe(false);
+        expect(defaultSession().approvals.bash.bypass.isBypassed(runId)).toBe(
+          false,
+        );
       }),
-    );
-    void port().requestPlanApproval({
-      requestId: 'plan-excluded',
-      runId,
-      goalEnabled: false,
-      plan: { objective: 'Keep the approval categories distinct.' },
-    });
-    void port().requestRetry({
-      requestId: 'retry-excluded',
-      runId,
-      operation: 'model request',
-    });
-    void port().askUserQuestion({
-      requestId: 'question-excluded',
-      allowBypass: false,
-      runId,
-      questions: [
+  );
+
+  it.effect(
+    'fails closed when a switchable retry does not identify its provider',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(true);
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry({
+            requestId: 'retry-unknown-provider',
+            runId: runIdFor('s1'),
+            operation: 'model request',
+            errorMessage: 'ChatGPT subscription usage limit reached.',
+            errorDetails: {
+              message: 'ChatGPT subscription usage limit reached.',
+              classification: { kind: 'chatgpt-subscription' },
+            },
+          } as RetryPermission),
+        );
+
+        yield* waitForApproval(
+          'retry',
+          {},
+          {
+            personalApiKeyAvailable: false,
+            missingPersonalApiKeyMessage: expect.stringContaining(
+              'provider could not be identified',
+            ),
+          },
+        );
+        decideRetry({ action: 'reject' });
+
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
+        expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+        expectNoCredentialChange();
+      }),
+  );
+
+  it.effect('falls back to the retry modal when API key lookup fails', () =>
+    Effect.gen(function* () {
+      mocks.hasUsableApiKey.mockRejectedValue(
+        new Error('keychain unavailable'),
+      );
+      tui();
+      yield* Effect.forkChild(openRetry(chatGptSubscriptionRetry('s2')));
+
+      yield* waitForApproval(
+        'retry',
+        { runId: runIdFor('s2') },
         {
-          question: 'Continue?',
-          options: [{ label: 'Yes' }, { label: 'No' }],
+          personalApiKeyAvailable: false,
+          missingPersonalApiKeyMessage:
+            'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
         },
-      ],
-    });
-    void port().requestBashApproval(
-      bashApprovalRequest({
-        command: 'lake test',
-        runId: runIdFor('other-approval'),
+      );
+    }),
+  );
+
+  it.effect(
+    'does not auto-switch when a retry provider is not an API provider',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(true);
+        tui();
+        yield* Effect.forkChild(
+          openRetry({
+            requestId: retryRequestId('unknown-provider'),
+            runId: runIdFor('unknown-provider'),
+            operation: 'model request',
+            errorMessage: 'ChatGPT subscription usage limit reached.',
+            errorDetails: {
+              message: 'ChatGPT subscription usage limit reached.',
+              classification: { kind: 'chatgpt-subscription' },
+              provider: 'custom-provider',
+            },
+          } as RetryPermission),
+        );
+
+        yield* waitForApproval('retry', {
+          runId: runIdFor('unknown-provider'),
+        });
+        expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
       }),
-    );
+  );
 
-    await waitForApproval('proposal', { requestId: 'proposal-current' });
-    currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
+  it.effect(
+    'requires an explicit decision before switching a ChatGPT subscription retry to an API key',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockImplementation(
+          async (_secrets, provider: ApiProvider) => provider === 'openai',
+        );
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry(chatGptSubscriptionRetry('s3')),
+        );
 
-    await expect(proposal).resolves.toEqual({ action: 'approve' });
-    await expect(edit).resolves.toEqual({
-      action: 'apply',
-      appliedContent: 'new',
-    });
-    await expect(bash).resolves.toEqual({ action: 'approve' });
-    await vi.waitFor(() =>
-      expect(currentApproval.get()?.payload.kind).toBe('planApproval'),
-    );
-  });
+        yield* waitForApproval(
+          'retry',
+          {
+            runId: runIdFor('s3'),
+            errorMessage: 'ChatGPT subscription usage limit reached.',
+          },
+          { personalApiKeyAvailable: true },
+        );
+        expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
+        expectNoPreferenceWrites();
 
-  it('keeps an ordinary proposal approval limited to the current request', async () => {
-    const { interactions } = tui();
-    const runId = runIdFor('proposal-one-off');
-    const result = port().requestAgentProposal({
-      requestId: 'proposal-one-off',
-      runId,
-      agent: 'critic',
-      agentSource: null,
-      model: 'kimi26T',
-      instruction: 'Check one calculation.',
-      memories: [],
-      workingDirectory: null,
-      agentCategory: AgentCategory.ToolUse,
-    });
+        decideRetry(PERSONAL_KEY_RETRY);
 
-    await waitForApproval('proposal', { requestId: 'proposal-one-off' });
-    currentApproval.get()?.decide({ accepted: true });
+        expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
+        expect(mocks.setCliSubscriptionPreference).toHaveBeenCalledWith(
+          'chatgpt',
+          false,
+        );
+        expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
+        expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
+          mocks.secrets,
+          'openai',
+        );
+        expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();
+        expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
+        yield* waitForNoApproval();
+      }),
+  );
 
-    await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(proposalApprovals().isBypassed(runId)).toBe(false);
-    expect(currentSession().approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-      false,
-    );
-    expect(currentSession().approvals.bash.bypass.isBypassed(runId)).toBe(
-      false,
-    );
-  });
+  it.effect(
+    'auto-switches a Kimi Code subscription limit to the stored Moonshot key',
+    () =>
+      Effect.gen(function* () {
+        mocks.preferKimiCode = true;
+        mocks.hasUsableApiKey.mockImplementation(
+          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+        );
+        tui();
 
-  it('fails closed when a switchable retry does not identify its provider', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry({
-      requestId: 'retry-unknown-provider',
-      runId: runIdFor('s1'),
-      operation: 'model request',
-      errorMessage: 'ChatGPT subscription usage limit reached.',
-      errorDetails: {
-        message: 'ChatGPT subscription usage limit reached.',
-        classification: { kind: 'chatgpt-subscription' },
-      },
-    } as RetryPermission);
+        const decision = yield* openRetry(
+          kimiCodeSubscriptionRetry('kimi-limit'),
+        );
 
-    await waitForApproval(
-      'retry',
-      {},
-      {
-        personalApiKeyAvailable: false,
-        missingPersonalApiKeyMessage: expect.stringContaining(
-          'provider could not be identified',
-        ),
-      },
-    );
-    decideRetry({ accepted: false });
+        expect(decision).toEqual(PERSONAL_KEY_RETRY);
+        expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
+          'kimiCode',
+          false,
+        );
+        // The plan is off before the run reads the decision: endpoint and
+        // credential resolution read the live preference, so deciding first
+        // would rebind onto the exhausted coding route again.
+        expect(
+          mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
+        ).toBeLessThan(mocks.notify.mock.invocationCallOrder[0] ?? 0);
+        // The modal's quota warning was skipped, so the terminal notification
+        // is the only signal that a persisted preference was flipped.
+        expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
+        yield* waitForNoApproval();
+      }),
+  );
 
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-    expectNoCredentialChange(prepareRetry);
-  });
+  it.effect(
+    'keeps the modal for a Kimi Code-exclusive model with no Moonshot fallback',
+    () =>
+      Effect.gen(function* () {
+        mocks.preferKimiCode = true;
+        mocks.hasUsableApiKey.mockImplementation(
+          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+        );
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry(kimiCodeSubscriptionRetry('kimi-exclusive', 'kimiCoding')),
+        );
 
-  it('falls back to the retry modal when API key lookup fails', async () => {
-    mocks.hasUsableApiKey.mockRejectedValue(new Error('keychain unavailable'));
+        // A stored Moonshot key must not auto-switch a kimi-for-coding model:
+        // the coding endpoint is its only route, so the switch would retry the
+        // same exhausted credential without a human decision. The modal is
+        // shown without the API-key switch affordance, so the key availability
+        // lookup is skipped as well.
+        yield* waitForApproval('retry', { runId: runIdFor('kimi-exclusive') });
+        expect(
+          (
+            currentApproval.get()?.payload as
+              { tui?: { personalApiKeyAvailable?: boolean } } | undefined
+          )?.tui?.personalApiKeyAvailable,
+        ).toBeUndefined();
+        expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+        decideRetry({ action: 'reject' });
 
-    const { interactions } = tui();
-    const retry = chatGptSubscriptionRetry('s2');
-    void port().requestRetry(retry);
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
+        expectNoCredentialChange();
+        expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
+      }),
+  );
 
-    await waitForApproval(
-      'retry',
-      { runId: runIdFor('s2') },
-      {
-        personalApiKeyAvailable: false,
-        missingPersonalApiKeyMessage:
-          'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
-      },
-    );
-  });
-
-  it('does not auto-switch when a retry provider is not an API provider', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-
-    const { interactions } = tui();
-    const retry = {
-      requestId: retryRequestId('unknown-provider'),
-      runId: runIdFor('unknown-provider'),
-      operation: 'model request',
-      errorMessage: 'ChatGPT subscription usage limit reached.',
-      errorDetails: {
-        message: 'ChatGPT subscription usage limit reached.',
-        classification: { kind: 'chatgpt-subscription' },
-        provider: 'custom-provider',
-      },
-    } as RetryPermission;
-    void port().requestRetry(retry);
-
-    await waitForApproval('retry', { runId: runIdFor('unknown-provider') });
-    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-  });
-
-  it('requires an explicit decision before switching a ChatGPT subscription retry to an API key', async () => {
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'openai',
-    );
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(chatGptSubscriptionRetry('s3'));
-
-    await waitForApproval(
-      'retry',
-      {
-        runId: runIdFor('s3'),
-        errorMessage: 'ChatGPT subscription usage limit reached.',
-      },
-      { personalApiKeyAvailable: true },
-    );
-    expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
-    expectNoPreferenceWrites();
-
-    decideRetry(PERSONAL_KEY_RETRY);
-
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(mocks.setCliSubscriptionPreference).toHaveBeenCalledWith(
-      'chatgpt',
-      false,
-    );
-    expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
-    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
-      mocks.secrets,
-      'openai',
-    );
-    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();
-    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
-    expect(prepareRetry).toHaveBeenCalledOnce();
-    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-  });
-
-  it('auto-switches a Kimi Code subscription limit to the stored Moonshot key', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(kimiCodeSubscriptionRetry('kimi-limit'));
-
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
-      'kimiCode',
-      false,
-    );
-    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
-    // The plan must be off before the client rebuild: endpoint and credential
-    // resolution read the live preference, so rebuilding first would prepare
-    // the retry against the exhausted coding route again.
-    expect(
-      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
-    ).toBeLessThan(prepareRetry.mock.invocationCallOrder[0] ?? 0);
-    // The modal's quota warning was skipped, so the terminal notification is
-    // the only signal that a persisted preference was flipped.
-    expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
-    expect(prepareRetry.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
-      mocks.notify.mock.invocationCallOrder[0] ?? 0,
-    );
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-  });
-
-  it('announces the credential switch only after the personal client is prepared', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('Moonshot client construction failed');
-    });
-
-    const { interactions } = tui();
-    const result = port().requestRetry(
-      kimiCodeSubscriptionRetry('kimi-notify-failure'),
-      { prepareRetry },
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: 'Moonshot client construction failed',
-    });
-    // The automatic decision must not announce a switch that then rolled back.
-    expect(mocks.notify).not.toHaveBeenCalled();
-    expect(mocks.preferKimiCode).toBe(true);
-  });
-
-  it('keeps the modal for a Kimi Code-exclusive model with no Moonshot fallback', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(
-      kimiCodeSubscriptionRetry('kimi-exclusive', 'kimiCoding'),
-    );
-
-    // A stored Moonshot key must not auto-switch a kimi-for-coding model:
-    // the coding endpoint is its only route, so the switch would retry the
-    // same exhausted credential without a human decision. The modal is shown
-    // without the API-key switch affordance, so the key availability lookup is
-    // skipped as well.
-    await waitForApproval('retry', { runId: runIdFor('kimi-exclusive') });
-    expect(
-      (
-        currentApproval.get()?.payload as
-          { tui?: { personalApiKeyAvailable?: boolean } } | undefined
-      )?.tui?.personalApiKeyAvailable,
-    ).toBeUndefined();
-    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-    decideRetry({ accepted: false });
-
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    expectNoCredentialChange(prepareRetry);
-    expect(mocks.notify).not.toHaveBeenCalledWith('credentialSwitched');
-  });
-
-  it.each([
+  it.effect.each([
     {
       name: 'Kimi Code',
       retry: () => kimiCodeSubscriptionRetry('plan-no-key'),
@@ -891,697 +842,254 @@ describe('TUI retry approvals', () => {
     { name: 'GLM Coding Plan', retry: () => glmCodingPlanRetry('plan-no-key') },
   ])(
     'falls back to the modal for a $name retry without a usable fallback key',
-    async ({ retry }) => {
-      mocks.preferKimiCode = true;
-      mocks.glmCodingPlan = true;
-      mocks.hasUsableApiKey.mockResolvedValue(false);
+    ({ retry }) =>
+      Effect.gen(function* () {
+        mocks.preferKimiCode = true;
+        mocks.glmCodingPlan = true;
+        mocks.hasUsableApiKey.mockResolvedValue(false);
+        tui();
+        const pending = yield* Effect.forkChild(openRetry(retry()));
 
-      const { interactions, prepareRetry } = tui();
-      const result = port().requestRetry(retry());
+        yield* waitForApproval(
+          'retry',
+          { runId: runIdFor('plan-no-key') },
+          { personalApiKeyAvailable: false },
+        );
+        decideRetry({ action: 'reject' });
 
-      await waitForApproval(
-        'retry',
-        { runId: runIdFor('plan-no-key') },
-        { personalApiKeyAvailable: false },
-      );
-      decideRetry({ accepted: false });
-
-      await expect(result).resolves.toEqual({ action: 'cancel' });
-      expectNoCredentialChange(prepareRetry);
-    },
-  );
-
-  it('auto-switches a GLM Coding Plan limit to the stored GLM key', async () => {
-    mocks.glmCodingPlan = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'glm',
-    );
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(glmCodingPlanRetry('glm-limit'));
-
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
-      'glmCodingPlan',
-      false,
-    );
-    expect(
-      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
-    ).toBeLessThan(prepareRetry.mock.invocationCallOrder[0] ?? 0);
-    expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-  });
-
-  it('restores the coding-plan preference when the fallback client cannot be prepared', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('Moonshot client construction failed');
-    });
-
-    const { interactions } = tui();
-    const previousPreferenceVersion = codexPreferenceVersion.get();
-    const result = port().requestRetry(
-      kimiCodeSubscriptionRetry('kimi-prepare-fails'),
-      { prepareRetry },
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: 'Moonshot client construction failed',
-    });
-    // The plan was disabled before the failed preparation, so it must be put
-    // back: a retry that never ran leaves no settings behind.
-    expect(mocks.preferKimiCode).toBe(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      true,
-    );
-    expect(codexPreferenceVersion.get()).toBeGreaterThan(
-      previousPreferenceVersion,
-    );
-    expectNoPreferenceWrites();
-  });
-
-  it('restores the coding-plan preference when cancellation interrupts client preparation', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-    const preparation = pDefer<void>();
-    const prepareRetry = vi.fn(async () => preparation.promise);
-
-    const { interactions } = tui();
-    const result = port().requestRetry(
-      kimiCodeSubscriptionRetry('kimi-cancel-prepare'),
-      { prepareRetry },
-    );
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expect(mocks.preferKimiCode).toBe(false);
-
-    port().cancel({ runId: runIdFor('kimi-cancel-prepare'), kind: 'retry' });
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    preparation.resolve();
-    await settleRetryContinuation();
-
-    expect(mocks.preferKimiCode).toBe(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      true,
-    );
-  });
-
-  it('serializes coding-plan rollback ahead of a newer coding-plan switch', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-    const firstPreparation = pDefer<void>();
-    const firstPrepare = vi.fn(async () => firstPreparation.promise);
-    const secondPrepare = vi.fn(async () => undefined);
-
-    const { interactions } = tui();
-    const first = port().requestRetry(
-      kimiCodeSubscriptionRetry('plan-race-first'),
-      { prepareRetry: firstPrepare },
-    );
-    await vi.waitFor(() => expect(firstPrepare).toHaveBeenCalledOnce());
-    expect(mocks.preferKimiCode).toBe(false);
-
-    const second = port().requestRetry(
-      kimiCodeSubscriptionRetry('plan-race-second'),
-      { prepareRetry: secondPrepare },
-    );
-    await settleRetryContinuation();
-    // The second switch must wait behind the first switch's rollback: only
-    // the first disable has committed so far.
-    expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1);
-
-    firstPreparation.reject(new Error('first fallback failed'));
-    await expect(first).resolves.toEqual({
-      action: 'deny',
-      reason: 'first fallback failed',
-    });
-    await expect(second).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      true,
-    );
-    // The stale rollback restores the plan before the newer switch disables it
-    // again, so the second retry still runs on the personal route.
-    expect(
-      mocks.updateGlobalState.mock.invocationCallOrder[0] ?? 0,
-    ).toBeLessThan(
-      mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[1] ?? 0,
-    );
-    expect(mocks.preferKimiCode).toBe(false);
-  });
-
-  it('restores Kimi without overwriting a newer OpenRouter choice', async () => {
-    mocks.preferKimiCode = true;
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-    );
-    mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
-      mocks.preferKimiCode = false;
-      mocks.openRouter = true;
-      throw new Error('Kimi preference write failed');
-    });
-
-    const { interactions } = tui();
-    const previousPreferenceVersion = codexPreferenceVersion.get();
-    const result = port().requestRetry(
-      kimiCodeSubscriptionRetry('kimi-rollback'),
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: expect.stringContaining('Kimi preference write failed'),
-    });
-    expect(mocks.preferKimiCode).toBe(true);
-    expect(mocks.openRouter).toBe(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      true,
-    );
-    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
-  });
-
-  it('does not offer or apply the subscription switch without an OpenAI API key', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(
-      chatGptSubscriptionRetry('missing-openai-key'),
-    );
-
-    await waitForApproval(
-      'retry',
-      { runId: runIdFor('missing-openai-key') },
-      { personalApiKeyAvailable: false },
-    );
-    decideRetry({ accepted: false });
-
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    expectNoCredentialChange(prepareRetry);
-  });
-
-  it('does not mutate state when cancellation arrives during uncached validation', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const validation = pDefer<boolean>();
-    mocks.apiKeyExistsUncached.mockReturnValueOnce(validation.promise);
-
-    const { interactions, prepareRetry } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'cancel-during-validation',
-    );
-    await vi.waitFor(() =>
-      expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce(),
-    );
-
-    port().cancel({
-      runId: runIdFor('cancel-during-validation'),
-      kind: 'retry',
-    });
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    validation.resolve(true);
-    await settleRetryContinuation();
-
-    expectNoCredentialChange(prepareRetry);
-  });
-
-  it('does not publish preferences when the personal-key client cannot be prepared', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('OpenAI client construction failed');
-    });
-
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'client-refresh-failure',
-      { prepareRetry },
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: 'OpenAI client construction failed',
-    });
-    expectNoPreferenceWrites();
-    expectChatGptSubscriptionRoute();
-    expect(prepareRetry).toHaveBeenCalledOnce();
-  });
-
-  it('leaves a newer access selection untouched when candidate construction fails', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const preparation = pDefer<void>();
-    const prepareRetry = vi.fn(async () => {
-      await preparation.promise;
-      throw new Error('OpenAI client construction failed');
-    });
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'newer-access-selection',
-      { prepareRetry },
-    );
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expectChatGptSubscriptionRoute();
-
-    // A later /api, /key, login, or logout selection owns this value now.
-    mocks.preferSubscription = true;
-    preparation.resolve();
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: 'OpenAI client construction failed',
-    });
-    expectNoPreferenceWrites();
-    expectChatGptSubscriptionRoute();
-  });
-
-  it('cancels stalled candidate construction without publishing settings', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const prepareRetry = vi.fn(
-      // Deliberately never settles: cancellation must reject the wrapper.
-      async (_selection, _signal?: AbortSignal) => await neverSettles(),
-    );
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'stalled-preparation',
-      { prepareRetry },
-    );
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-
-    port().cancel({
-      runId: runIdFor('stalled-preparation'),
-      kind: 'retry',
-      cause: 'Cancelled in test.',
-    });
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    expect(prepareRetry.mock.calls[0]?.[1]?.aborted).toBe(true);
-    await vi.waitFor(() => {
-      expectChatGptSubscriptionRoute();
-    });
-
-    const laterPrepare = vi.fn(async (selection) => {
-      expect(selection).toBe('configured');
-    });
-    const later = port().requestRetry(ordinaryRetry('retry-after-stall'), {
-      prepareRetry: laterPrepare,
-    });
-    await waitForApproval('retry', { runId: runIdFor('retry-after-stall') });
-    decideRetry({ accepted: true });
-
-    await expect(later).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(laterPrepare).toHaveBeenCalledOnce();
-  });
-
-  it('reports any preference that cannot be restored after commit fails', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.setCliSubscriptionPreference
-      .mockImplementationOnce(async (_id: string, enabled: boolean) => {
-        mocks.preferSubscription = enabled;
-        throw new Error('subscription write failed');
-      })
-      .mockRejectedValueOnce(new Error('settings storage unavailable'));
-    const prepareRetry = vi.fn(async () => undefined);
-
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'rollback-failure',
-      { prepareRetry },
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: expect.stringContaining(
-        'Previous access settings could not be fully restored: Could not restore the ChatGPT subscription preference: settings storage unavailable',
-      ),
-    });
-    expect(mocks.preferSubscription).toBe(false);
-  });
-
-  it('cancels a credential switch during candidate construction without settings writes', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const preparation = pDefer<void>();
-    const prepareRetry = vi.fn(() => preparation.promise);
-
-    const { interactions } = tui();
-    const { result: first } = await beginSubscriptionSwitch(
-      interactions,
-      'commit-race',
-      { prepareRetry },
-    );
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-
-    void port().requestRetry(chatGptSubscriptionRetry('commit-race'));
-    await expect(first).resolves.toEqual({ action: 'cancel' });
-    preparation.resolve();
-    await preparation.promise;
-    await vi.waitFor(() => {
-      expectChatGptSubscriptionRoute();
-    });
-
-    expectNoPreferenceWrites();
-  });
-
-  it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
-    const { interactions } = tui();
-    const result = port().requestRetry(
-      chatGptSubscriptionRetry('subscription-retry'),
-    );
-
-    await waitForApproval('retry', { runId: runIdFor('subscription-retry') });
-    decideRetry({ accepted: true });
-
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(mocks.hasUsableApiKey).toHaveBeenCalledOnce();
-    expectNoPreferenceWrites();
-  });
-
-  it('keeps new ordinary retry preparation on the old route while a candidate is building', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const preparation = pDefer<void>();
-    const prepareRetry = vi.fn(() => preparation.promise);
-    const { interactions } = tui();
-    const { result: switching } = await beginSubscriptionSwitch(
-      interactions,
-      'slow-switch',
-      { prepareRetry },
-    );
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-
-    await approveOrdinaryRetryOnOldRoute(interactions, 'ordinary-run');
-
-    preparation.resolve();
-    await expect(switching).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(mocks.preferSubscription).toBe(false);
-  });
-
-  it('lets an ordinary retry keep the old route while another candidate fails', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const preparation = pDefer<void>();
-    const switchPrepare = vi.fn(async () => {
-      await preparation.promise;
-      throw new Error('replacement client failed');
-    });
-    const { interactions } = tui();
-    const { result: switching } = await beginSubscriptionSwitch(
-      interactions,
-      'failing-switch',
-      { prepareRetry: switchPrepare },
-    );
-    await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
-
-    await approveOrdinaryRetryOnOldRoute(
-      interactions,
-      'ordinary-after-rollback',
-    );
-
-    preparation.resolve();
-    await expect(switching).resolves.toEqual({
-      action: 'deny',
-      reason: 'replacement client failed',
-    });
-  });
-
-  it('denies an ordinary retry when its replacement client cannot be prepared', async () => {
-    const { interactions } = tui();
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('ordinary client refresh failed');
-    });
-    const ordinary = port().requestRetry(
-      ordinaryRetry('ordinary-refresh-failure'),
-      { prepareRetry },
-    );
-    await waitForApproval('retry', {
-      runId: runIdFor('ordinary-refresh-failure'),
-    });
-    decideRetry({ accepted: true });
-
-    await expect(ordinary).resolves.toEqual({
-      action: 'deny',
-      reason: 'ordinary client refresh failed',
-    });
-    expect(prepareRetry).toHaveBeenCalledOnce();
-    expectNoPreferenceWrites();
-  });
-
-  it('holds a preparing retry out of the queue, then joins behind the open modal', async () => {
-    let resolveLookup: ((value: boolean) => void) | undefined;
-    mocks.hasUsableApiKey.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveLookup = resolve;
-        }),
-    );
-
-    const { interactions } = tui();
-    const retry = port().requestRetry(
-      chatGptSubscriptionRetry('preparing-run'),
-    );
-    const bash = port().requestBashApproval(
-      bashApprovalRequest({
-        command: 'echo ok',
-        runId: runIdFor('bash-run'),
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
+        expectNoCredentialChange();
       }),
-    );
-
-    await waitForApproval('bash', { runId: runIdFor('bash-run') });
-    // The retry owns a queue slot from the moment it is requested, but it is
-    // not a request the user can act on until its key lookup finishes.
-
-    resolveLookup?.(false);
-    await vi.waitFor(() => {});
-    // It joined behind the modal the user is already answering.
-    expect(currentApproval.get()?.payload).toMatchObject({ kind: 'bash' });
-
-    currentApproval.get()?.decide({ accepted: true });
-    await expect(bash).resolves.toEqual({ action: 'approve' });
-    await waitForApproval('retry', { runId: runIdFor('preparing-run') });
-    decideRetry({ accepted: false });
-    await expect(retry).resolves.toEqual({ action: 'cancel' });
-  });
-
-  it('cancels both a cleared retry and one the user refuses', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const { interactions } = tui();
-    const cleared = port().requestRetry(
-      chatGptSubscriptionRetry('cleared-retry'),
-    );
-    await waitForApproval('retry', { runId: runIdFor('cleared-retry') });
-    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
-
-    await expect(cleared).resolves.toEqual({ action: 'cancel' });
-
-    const refused = port().requestRetry(
-      chatGptSubscriptionRetry('refused-retry'),
-    );
-    await waitForApproval('retry', { runId: runIdFor('refused-retry') });
-    decideRetry({ accepted: false });
-
-    await expect(refused).resolves.toEqual({ action: 'cancel' });
-  });
-
-  it('cancels ordinary retry preparation after approval', async () => {
-    const ordinaryPrepare = vi.fn(
-      // Cancellation settles the abort-aware wrapper around this task.
-      async (_selection, _signal?: AbortSignal) => await neverSettles(),
-    );
-    const { interactions } = tui();
-    const ordinary = port().requestRetry(ordinaryRetry('cancelled-ordinary'), {
-      prepareRetry: ordinaryPrepare,
-    });
-    await waitForApproval('retry', { runId: runIdFor('cancelled-ordinary') });
-    decideRetry({ accepted: true });
-    await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
-    // The decided retry no longer reads as a request waiting on the user,
-    // but the queue still owns it, so the cancel below reaches its
-    // preparation.
-    port().cancel({
-      runId: runIdFor('cancelled-ordinary'),
-      kind: 'retry',
-      cause: 'Cancelled in test.',
-    });
-    await expect(ordinary).resolves.toEqual({ action: 'cancel' });
-    expect(ordinaryPrepare.mock.calls[0]?.[1]?.aborted).toBe(true);
-  });
-
-  // Both invalidation triggers must reject a retry whose API-key lookup is
-  // still in flight, and must stay rejected once that lookup finally resolves.
-  it.each([
-    [
-      'cleared',
-      'interrupted',
-      () =>
-        defaultSession().interactions.cancel({ cause: 'Session interrupted.' }),
-    ],
-    [
-      'unbound',
-      'unbound',
-      (handle: ReturnType<typeof tui>) => handle.dispose(),
-    ],
-  ] as const)(
-    'invalidates pre-queue retry lookups when approvals are %s',
-    async (_trigger, runId, invalidate) => {
-      let resolveLookup: ((value: boolean) => void) | undefined;
-      mocks.hasUsableApiKey.mockImplementation(
-        () =>
-          new Promise<boolean>((resolve) => {
-            resolveLookup = resolve;
-          }),
-      );
-
-      const handle = tui();
-      // Detaching a host settles that host's own hook promise; the runtime's
-      // request stays parked for the next host, so the unbound case asks the
-      // host directly.
-      const result =
-        _trigger === 'unbound'
-          ? handle.interactions.requestRetry?.(chatGptSubscriptionRetry(runId))
-          : port().requestRetry(chatGptSubscriptionRetry(runId));
-      invalidate(handle);
-      await expect(result).resolves.toEqual({ action: 'cancel' });
-
-      resolveLookup?.(true);
-      await settleRetryContinuation();
-
-      expectNoPreferenceWrites();
-      await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-    },
   );
 
-  it('cancels an active retry modal when approvals are cleared', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
+  it.effect('auto-switches a GLM Coding Plan limit to the stored GLM key', () =>
+    Effect.gen(function* () {
+      mocks.glmCodingPlan = true;
+      mocks.hasUsableApiKey.mockImplementation(
+        async (_secrets, provider: ApiProvider) => provider === 'glm',
+      );
+      tui();
 
-    const { interactions } = tui();
-    const result = port().requestRetry(
-      chatGptSubscriptionRetry('modal-interrupt'),
-    );
+      const decision = yield* openRetry(glmCodingPlanRetry('glm-limit'));
 
-    await waitForApproval('retry', { runId: runIdFor('modal-interrupt') });
+      expect(decision).toEqual(PERSONAL_KEY_RETRY);
+      expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
+        'glmCodingPlan',
+        false,
+      );
+      expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
+      yield* waitForNoApproval();
+    }),
+  );
 
-    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-  });
+  it.effect('restores Kimi without overwriting a newer OpenRouter choice', () =>
+    Effect.gen(function* () {
+      mocks.preferKimiCode = true;
+      mocks.hasUsableApiKey.mockImplementation(
+        async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+      );
+      mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
+        mocks.preferKimiCode = false;
+        mocks.openRouter = true;
+        throw new Error('Kimi preference write failed');
+      });
+      tui();
+      const previousPreferenceVersion = codexPreferenceVersion.get();
 
-  it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {
-    let resolveFirstLookup: ((value: boolean) => void) | undefined;
-    mocks.hasUsableApiKey
-      .mockImplementationOnce(
-        () =>
-          new Promise<boolean>((resolve) => {
-            resolveFirstLookup = resolve;
+      const decision = yield* openRetry(
+        kimiCodeSubscriptionRetry('kimi-rollback'),
+      );
+
+      expect(decision).toEqual({
+        action: 'deny',
+        reason: expect.stringContaining('Kimi preference write failed'),
+      });
+      // A switch that rolled back is never announced.
+      expect(mocks.notify).not.toHaveBeenCalled();
+      expect(mocks.preferKimiCode).toBe(true);
+      expect(mocks.openRouter).toBe(true);
+      expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+        GlobalStateKey.KIMI_CODE_PREFER,
+        true,
+      );
+      expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
+    }),
+  );
+
+  it.effect(
+    'serializes coding-plan rollback ahead of a newer coding-plan switch',
+    () =>
+      Effect.gen(function* () {
+        mocks.preferKimiCode = true;
+        mocks.hasUsableApiKey.mockImplementation(
+          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
+        );
+        const firstDisable = pDefer<void>();
+        mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
+          mocks.preferKimiCode = false;
+          await firstDisable.promise;
+        });
+        tui();
+
+        const first = yield* Effect.forkChild(
+          openRetry(kimiCodeSubscriptionRetry('plan-race-first')),
+        );
+        yield* waitFor(() =>
+          expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1),
+        );
+        const second = yield* Effect.forkChild(
+          openRetry(kimiCodeSubscriptionRetry('plan-race-second')),
+        );
+        yield* settle();
+        // The second switch waits behind the first switch's commit slot: only
+        // the first disable has run so far.
+        expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1);
+
+        firstDisable.reject(new Error('first coding-plan write failed'));
+        expect(yield* Fiber.join(first)).toEqual({
+          action: 'deny',
+          reason: expect.stringContaining('first coding-plan write failed'),
+        });
+        expect(yield* Fiber.join(second)).toEqual(PERSONAL_KEY_RETRY);
+        // The stale rollback restores the plan before the newer switch
+        // disables it again, so the second retry still runs on the personal
+        // route.
+        expect(
+          mocks.updateGlobalState.mock.invocationCallOrder[0] ?? 0,
+        ).toBeLessThan(
+          mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[1] ?? 0,
+        );
+        expect(mocks.preferKimiCode).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'does not offer or apply the subscription switch without an OpenAI API key',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(false);
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry(chatGptSubscriptionRetry('missing-openai-key')),
+        );
+
+        yield* waitForApproval(
+          'retry',
+          { runId: runIdFor('missing-openai-key') },
+          { personalApiKeyAvailable: false },
+        );
+        decideRetry({ action: 'reject' });
+
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
+        expectNoCredentialChange();
+      }),
+  );
+
+  it.effect(
+    'reports any preference that cannot be restored after commit fails',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(true);
+        mocks.setCliSubscriptionPreference
+          .mockImplementationOnce(async (_id: string, enabled: boolean) => {
+            mocks.preferSubscription = enabled;
+            throw new Error('subscription write failed');
+          })
+          .mockRejectedValueOnce(new Error('settings storage unavailable'));
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry(chatGptSubscriptionRetry('rollback-failure')),
+        );
+
+        yield* waitForApproval('retry', {
+          runId: runIdFor('rollback-failure'),
+        });
+        decideRetry(PERSONAL_KEY_RETRY);
+
+        expect(yield* Fiber.join(pending)).toEqual({
+          action: 'deny',
+          reason: expect.stringContaining(
+            'Previous access settings could not be fully restored: Could not restore the ChatGPT subscription preference: settings storage unavailable',
+          ),
+        });
+        expect(mocks.preferSubscription).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen',
+    () =>
+      Effect.gen(function* () {
+        tui();
+        const pending = yield* Effect.forkChild(
+          openRetry(chatGptSubscriptionRetry('subscription-retry')),
+        );
+
+        yield* waitForApproval('retry', {
+          runId: runIdFor('subscription-retry'),
+        });
+        decideRetry({ action: 'retry' });
+
+        expect(yield* Fiber.join(pending)).toEqual({ action: 'retry' });
+        expect(mocks.hasUsableApiKey).toHaveBeenCalledOnce();
+        expectNoPreferenceWrites();
+        expectChatGptSubscriptionRoute();
+      }),
+  );
+
+  it.effect(
+    'holds a preparing retry out of the queue, then joins behind the open modal',
+    () =>
+      Effect.gen(function* () {
+        let resolveLookup: ((value: boolean) => void) | undefined;
+        mocks.hasUsableApiKey.mockImplementation(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveLookup = resolve;
+            }),
+        );
+        tui();
+        const retry = yield* Effect.forkChild(
+          openRetry(chatGptSubscriptionRetry('preparing-run')),
+        );
+        const bashRunId = runIdFor('bash-run');
+        const bash = yield* Effect.forkChild(
+          openRequest(bashRunId, {
+            kind: 'bash',
+            data: bashApprovalRequest({ command: 'echo ok', runId: bashRunId }),
           }),
-      )
-      .mockResolvedValueOnce(false);
+        );
 
-    const { interactions } = tui();
-    void requestSameRunRetry(interactions, 'first retry');
-    void requestSameRunRetry(interactions, 'second retry');
+        yield* waitForApproval('bash', { runId: bashRunId });
+        // The retry is listed from the moment it opens, but it is not a
+        // request the user can act on until its key lookup finishes.
+        yield* waitFor(() => expect(resolveLookup).toBeDefined());
+        resolveLookup?.(false);
+        yield* settle();
+        // It joined behind the modal the user is already answering.
+        expect(currentApproval.get()?.payload).toMatchObject({ kind: 'bash' });
 
-    await waitForApproval('retry', { errorMessage: 'second retry' });
+        decideCurrent({ action: 'approve' });
+        expect(yield* Fiber.join(bash)).toEqual({ action: 'approve' });
 
-    resolveFirstLookup?.(true);
-    await settleRetryContinuation();
+        yield* waitForApproval('retry', { runId: runIdFor('preparing-run') });
+        decideRetry({ action: 'reject' });
+        expect(yield* Fiber.join(retry)).toEqual({ action: 'reject' });
+      }),
+  );
 
-    expect(mocks.setCliCodingPlanSubscription).not.toHaveBeenCalled();
-  });
+  it.effect('cancels the retry modal when the run interrupts its request', () =>
+    Effect.gen(function* () {
+      mocks.hasUsableApiKey.mockResolvedValue(false);
+      tui();
+      const pending = yield* Effect.forkChild(
+        openRetry(chatGptSubscriptionRetry('modal-interrupt')),
+      );
 
-  it('clears an older retry modal when a newer retry auto-switches', async () => {
-    mocks.hasUsableApiKey
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+      yield* waitForApproval('retry', { runId: runIdFor('modal-interrupt') });
+      yield* Fiber.interrupt(pending);
 
-    const { interactions } = tui();
-    void requestSameRunRetry(interactions, 'first retry');
-    await waitForApproval('retry', { errorMessage: 'first retry' });
-
-    const second = requestSameRunRetry(interactions, 'second retry');
-
-    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
-    await expect(second).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-  });
-
-  it('replaces an older retry modal when a newer retry also needs input', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const { interactions } = tui();
-    void requestSameRunRetry(interactions, 'first retry');
-    await waitForApproval('retry', { errorMessage: 'first retry' });
-
-    void requestSameRunRetry(interactions, 'second retry');
-
-    await waitForApproval('retry', { errorMessage: 'second retry' });
-  });
-
-  it('cancels a retry aborted while its preparation was resolving', async () => {
-    const preparation = pDefer<void>();
-    const prepareRetry = vi.fn(() => preparation.promise);
-
-    const { interactions } = tui();
-    const result = port().requestRetry(ordinaryRetry('abort-at-resolution'), {
-      prepareRetry,
-    });
-    await waitForApproval('retry', { runId: runIdFor('abort-at-resolution') });
-    decideRetry({ accepted: true });
-    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-
-    // Registered after the abort-aware wrapper, so the interrupt lands once
-    // that wrapper has resolved and dropped its abort listener, and before the
-    // retry's own continuation runs: no await is left to observe the abort.
-    void preparation.promise.then(() => {
-      defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
-    });
-    preparation.resolve();
-
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-  });
-
-  it('shows the retry modal when pre-modal preparation fails', async () => {
-    mocks.retryCopyFailure = new Error('retry copy unavailable');
-
-    const { interactions, prepareRetry } = tui();
-    const result = port().requestRetry(
-      chatGptSubscriptionRetry('preparation-failure'),
-    );
-
-    await waitForApproval('retry', { runId: runIdFor('preparation-failure') });
-    decideRetry({ accepted: true });
-
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(prepareRetry).toHaveBeenCalledWith('configured', expect.anything());
-  });
+      yield* waitForNoApproval();
+    }),
+  );
 });

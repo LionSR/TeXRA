@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, finalizeRun, getRunStore } from '@agent/storage';
+import { finalizeRun } from '@agent/storage';
 import {
   RunLeaseActiveError,
   RunLeaseLostError,
@@ -20,9 +20,9 @@ import {
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
@@ -222,10 +222,13 @@ async function writeOrphanedLease(
 
 const ownedRunIds = new Set<RunId>();
 
+/** Give the run a directory of its own on disk, the way its artifacts do. */
 async function writeRun(runId: RunId): Promise<void> {
-  await getRunStore(runId).write('lease-probe', {
-    timestamp: '2026-07-16T12:00:00.000Z',
-  });
+  await StorageFS.ensureDir(resolveRunStoragePath(runId));
+  await StorageFS.write(
+    resolveRunStoragePath(runId, 'lease-probe.json'),
+    JSON.stringify({ timestamp: '2026-07-16T12:00:00.000Z' }),
+  );
 }
 
 async function acquire(runId: RunId): Promise<void> {
@@ -272,12 +275,9 @@ afterEach(async () => {
     recursive: true,
   }).catch(() => {});
   await StorageFS.delete('executions', { recursive: true }).catch(() => {});
-  clearStoreCache();
 });
 
-beforeEach(() => {
-  clearStoreCache();
-});
+beforeEach(() => {});
 
 describe('cross-process run leases', () => {
   it('takes over an orphaned lease whose owner is provably dead', async () => {
@@ -511,10 +511,7 @@ describe('cross-process run leases', () => {
   it('starts a resume only after the previous generation has released its lease', async () => {
     const runId = 'd8645a' as RunId;
     const registry = new RunRegistry({
-      runStatus: new RunStatusMachine(
-        () => {},
-        () => {},
-      ),
+      runView: () => undefined,
       publish: () => {},
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       releaseRootRunLease: () => Effect.void,
@@ -637,27 +634,31 @@ describe('cross-process run leases', () => {
     });
   });
 
-  it('fences a run-store write immediately after takeover', async () => {
+  it('fences the durability boundary immediately after takeover', async () => {
     const runId = 'e86440' as RunId;
     await acquire(runId);
     await displaceLease(runId, '00000000-0000-4000-8000-000000000004');
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
 
+    // The first refusal also forgets the lost claim, so every later
+    // boundary refuses without touching the disk again.
     expect(ownsRunLease(runId)).toBe(false);
-    await expect(
-      getRunStore(runId).write('lease-probe', {
-        timestamp: '2026-07-16T12:01:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
     ownedRunIds.delete(runId);
   });
 
-  it('rejects unscoped writes while another owner has a lease', async () => {
+  it('refuses the durability boundary while another owner has a lease', async () => {
     const runId = 'e86446' as RunId;
     await writeForeignLease(runId);
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
+    await expect(validateOwnedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseLostError,
+    );
   });
 
   it('rejects validation when release starts during its record read', async () => {

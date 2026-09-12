@@ -91,7 +91,6 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,
@@ -349,7 +348,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 });
 
 function quietSession(): SessionHandle {
-  return sessionWithInteractions({ emit: () => {}, cancel: () => {} });
+  return sessionWithInteractions({ emit: () => {} });
 }
 
 function startedRun(session: SessionHandle): RunId {

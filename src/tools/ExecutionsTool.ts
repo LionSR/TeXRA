@@ -14,7 +14,6 @@ import { Data, Deferred, Duration, Effect } from 'effect';
 // Local imports
 import {
   deriveResumability,
-  getRunStore,
   getRunRecords,
   readRunChildren,
   listRunWorkspaceFiles,
@@ -714,10 +713,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (context: RunToolContext, runId: RunId) {
       const records = getRunRecords(context.session, runId);
       const [report, note] = yield* Effect.all(
-        [
-          records.readReport(),
-          turnAttributionNote(getRunStore(runId), context.session),
-        ],
+        [records.readReport(), turnAttributionNote(runId, context.session)],
         { concurrency: 2 },
       );
       if (!report) {
@@ -740,7 +736,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         [
           records.readResultMeta(),
           records.readRunEnd(),
-          turnAttributionNote(getRunStore(runId), context.session),
+          turnAttributionNote(runId, context.session),
         ],
         { concurrency: 3 },
       );

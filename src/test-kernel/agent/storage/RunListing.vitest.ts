@@ -2,9 +2,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  clearStoreCache,
   createLatexRunDiscovery,
-  getRunStore,
   getRunRecords,
   isUserVisibleRun,
   listRuns,
@@ -15,6 +13,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import * as logger from '@logger/logUtils';
+import { DatabaseReadFailed } from '@shared/session/database';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -117,7 +116,6 @@ describe('run listing normalization', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
   beforeEach(() => {
-    clearStoreCache();
     session = createProcessSession();
   });
 
@@ -137,14 +135,19 @@ describe('run listing normalization', () => {
   });
 
   // A row is dropped only when the facts it is built from are unreadable. The
-  // checkpoint probe is not one of them: it decides an advertisement, so a
-  // failing `stat` costs the row its Resume affordance, never its place in
-  // history.
+  // checkpoint probe is not one of them: it decides an advertisement, so an
+  // unreadable snapshot costs the row its Resume affordance, never its place
+  // in history.
   it('keeps a row whose checkpoint probe fails, without a checkpoint', async () => {
     const id = 'eee556' as RunId;
     await writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant'));
-    vi.spyOn(getRunStore(id), 'exists').mockRejectedValue(
-      new Error('stat failed'),
+    vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('snapshot read failed'),
+        }),
+      ),
     );
 
     expect(await Effect.runPromise(listRuns(session))).toEqual([

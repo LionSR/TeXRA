@@ -38,12 +38,15 @@ import {
 } from './runRecords';
 import { WorkflowRunSnapshotSchema } from './workflowRunSnapshot';
 import { RunIdSchema, type RunId } from './identifiers';
+import { JsonValueSchema } from './jsonValue';
+import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
 import {
   InquiryThreadRecordSchema,
   InquiryThreadUpdatedEventSchema,
 } from './inquiry';
 import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
+import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
   FlowSnapshotPayloadSchema,
@@ -53,12 +56,7 @@ import {
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
-import {
-  RunPhaseSchema,
-  RunSubstateSchema,
-  UserFollowUpSupportSchema,
-  WorktreeInfoSchema,
-} from './run';
+import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { StreamLogEntrySchema } from './streamLogEntry';
 import {
   ApprovalBypassesSchema,
@@ -329,16 +327,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * row; the fold derives the terminal phase from it and from nothing else.
    */
   durable('run.end', RunEndSchema.shape),
-  /** A non-terminal phase transition; the terminal phase is `run.end`'s. */
-  durable('status', {
-    phase: RunPhaseSchema,
-    previousPhase: RunPhaseSchema.nullish(),
-    /** `RUN_TRANSITION_CAUSE` (`@shared/runs/runStatus`); diagnostic,
-     *  not a fold input. */
-    cause: z.string(),
-    substate: RunSubstateSchema.nullish(),
-    runStartedAt: z.int().positive().nullish(),
-  }),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('updateTodos', { todos: z.array(TodoItemSchema) }),
   durable('updatePlan', { plan: PlanSchema.nullable() }),
@@ -364,30 +352,34 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     'inquiry',
   ),
   durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
-  durable('approval.requested', {
-    requestId: z.string(),
-    /** What the UI shows (diff, command, question), never host handles. */
+  /**
+   * A run asking a person (one run model, section 3.7): what the UI shows
+   * (diff, command, question), never host handles. `thread` names an earlier
+   * request this one continues, which is the whole of the inquiry's
+   * multi-turn: an inquiry is a request whose thread names its predecessor.
+   * Pending is the fold, opened without decided.
+   */
+  durable('request.opened', {
+    requestId: z.string().min(1),
     payload: PermissionPayloadSchema,
+    thread: z.string().min(1).nullish(),
   }),
   /**
-   * `decision` and `cause` are the durable recovery facts (R5): a
-   * `model-retry` or `tool-outcome` resolution names what was decided so a
-   * resumed run never reads consent off a snapshot alone. The interaction
-   * plane's own settlement rows carry neither: they close a request, the
-   * loop's row carries its meaning.
+   * The answer, whatever surface gave it and whatever its provenance. The
+   * decision is the durable recovery fact (R5): a `model-retry` or
+   * `tool-outcome` binding reads its consent off this row, never off a
+   * snapshot alone, and an automatic close names its cause here.
    */
-  durable('approval.resolved', {
-    requestId: z.string(),
-    decision: z
-      .enum(['approved', 'denied', 'skipped', 'cancelled', 'interrupted'])
-      .optional(),
-    cause: z.string().optional(),
+  durable('request.decided', {
+    requestId: z.string().min(1),
+    decision: RequestDecisionSchema,
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
    * The loop's position: family, step, and the coordinates it carries. The
-   * one run-ledger row renderers read (the CLI's waiting-on row and the
-   * progress board fold it); its five siblings below are ledger-private.
+   * one run-ledger row renderers read: the fold derives the live phase from
+   * it (`waiting` parks the run, any other step is running) and `RunView.flow`
+   * carries its coordinates; its five siblings below are ledger-private.
    */
   durable('flow.step', { payload: FlowStepPayloadSchema }),
   /**
@@ -411,6 +403,18 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   ),
 ]);
 /**
+ * A stable subagent attempt's lifecycle phase (#10663): reserved before its
+ * run exists, launched once its loop owns it, committed after its result
+ * manifest drained, retryable when repeating it is known to be safe.
+ */
+const StableSubagentPhaseSchema = z.enum([
+  'reserved',
+  'launched',
+  'committed',
+  'retryable',
+]);
+export type StableSubagentPhase = z.infer<typeof StableSubagentPhaseSchema>;
+/**
  * The run's private records: on the same aggregate as its display rows, read
  * by the runtime's typed accessors and never by a renderer
  * (`isDisplaySessionEvent` keeps them out of the transport by type).
@@ -422,6 +426,23 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
   durable('run.workflow', { workflow: WorkflowRunSnapshotSchema }),
+  /**
+   * The stable-subagent protocol's parent-owned facts, on the launching
+   * run's aggregate and keyed inside the payload (one run model, section
+   * 3.6): the number of physical attempts reserved for one logical call,
+   * and each attempt's lifecycle phase. Latest per key is the fold; neither
+   * is a listing type because one parent carries many keys.
+   */
+  durable('run.subagentSequence', {
+    logicalRunId: RunIdSchema,
+    nextAttempt: z.int().nonnegative(),
+  }),
+  durable('run.subagentAttempt', {
+    /** The physical attempt's run. */
+    runId: RunIdSchema,
+    logicalRunId: RunIdSchema,
+    phase: StableSubagentPhaseSchema,
+  }),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
@@ -436,6 +457,59 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
   durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
+  /**
+   * One child turn's identity and fate: the child loop's own bookkeeping,
+   * never a renderer's. The key is structural, (run, attempt, turn index),
+   * so the same accepted turn always folds to the same identity and a
+   * later attempt that reuses the run id never collides with it. Pending
+   * is the fold: `accepted` without `settled` is the active turn; the
+   * latest `settled` is the last turn whose delivery ran.
+   */
+  durable('child.turn', {
+    attemptId: z.string().min(1),
+    turnIndex: z.int().positive(),
+    phase: z.enum(['accepted', 'settled']),
+  }),
+]);
+/** A script value as the journal keeps it: `undefined` is not JSON. */
+const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('undefined') }),
+  z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
+]);
+export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
+/**
+ * A workflow script's durable journal (runtime on Effect, section 5, PR 4):
+ * one row per completed `agent()` call on the checkpoint aggregate a
+ * `run.start.checkpointId` names. The journal folds latest per `key`, so a
+ * repeated key replaces its entry and the aggregate only ever appends; the
+ * script row is the source the journal replays against, adopted anew on
+ * every invocation because a retrying model rarely reproduces it byte for
+ * byte.
+ */
+const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
+  durable(
+    'workflow.script',
+    {
+      /** The run the checkpoint hangs under: the run that invoked the
+       *  workflow, whose id its checkpoint id is derived from. The database
+       *  makes it the aggregate's parent, so removing that run collects the
+       *  journal with it instead of stranding these rows. */
+      parentRunId: RunIdSchema,
+      script: z.string().min(1),
+      args: PersistedJsonValueSchema,
+      files: WorkflowScriptFilesSchema,
+    },
+    'workflow-checkpoint',
+  ),
+  durable(
+    'workflow.journal',
+    {
+      key: z.string().regex(/^[a-f0-9]{16}$/),
+      index: z.int().nonnegative(),
+      result: PersistedJsonValueSchema,
+    },
+    'workflow-checkpoint',
+  ),
 ]);
 const DesktopProjectsDraftSchema = durable(
   'desktop.projects.changed',
@@ -456,6 +530,7 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
+  ...WorkflowCheckpointDraftSchema.options,
   DesktopProjectsDraftSchema,
   GlobalInquiryDraftSchema,
   UpdateCheckDraftSchema,
@@ -484,6 +559,9 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   ...RunLedgerEventDraftSchema.options.map((schema) => schema.extend(envelope)),
+  ...WorkflowCheckpointDraftSchema.options.map((schema) =>
+    schema.extend(envelope),
+  ),
   DesktopProjectsDraftSchema.extend(envelope),
   GlobalInquiryDraftSchema.extend(envelope),
   UpdateCheckDraftSchema.extend(envelope),
@@ -514,11 +592,16 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
 
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
- * but the transcript tier. The approval pair shares one entry because it
+ * but the transcript tier. The request pair shares one entry because it
  * folds to one set, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read (5.2, "Existence").
+ * tombstone final under every read (5.2, "Existence"). `flow.step` is a
+ * listing key of its own: the phase is folded from it, so a cold listing
+ * that dropped it would paint every parked run as ready. `stage.start` is
+ * transcript tier alone: its display arm is a no-op and only the transcript
+ * fold reads it over the whole aggregate, so listing it would pull the latest
+ * one of every run into every renderer for no reader.
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -526,6 +609,7 @@ export function listingTypeOf(
   switch (event.type) {
     case 'transcript.entry':
     case 'log':
+    case 'stage.start':
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
@@ -536,20 +620,27 @@ export function listingTypeOf(
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
-    case 'flow.step':
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
     case 'tool.result':
     case 'flow.snapshot':
-      // The run ledger's rows stay out of the listing: a cold hydrate must
-      // never pull a run's latest `flow.snapshot` into every renderer. Not
-      // compiler-enforced (the switch ends in `default`); the fold suite pins
-      // it.
+    case 'child.turn':
+    case 'run.subagentSequence':
+    case 'run.subagentAttempt':
+    case 'workflow.script':
+    case 'workflow.journal':
+      // The run ledger's private rows stay out of the listing: a cold hydrate
+      // must never pull a run's latest `flow.snapshot` into every renderer.
+      // `flow.step` is the one ledger row that is listed (its own key, the
+      // `default` below). The keyed private records and the checkpoint
+      // journal are folded by their readers over the whole aggregate, so
+      // "latest of type" is not a fact about them. Not compiler-enforced
+      // (the switch ends in `default`); the fold suite pins it.
       return null;
-    case 'approval.requested':
-    case 'approval.resolved':
-      return 'approval';
+    case 'request.opened':
+    case 'request.decided':
+      return 'request';
     case 'run.start':
     case 'run.removed':
       return 'lifecycle';

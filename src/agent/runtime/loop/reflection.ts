@@ -30,8 +30,6 @@
 import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { K_SLICE } from '@agent/core/constants';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import {
   compileFailuresOf,
@@ -68,7 +66,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -93,6 +90,7 @@ import {
   type RoundOutput,
   type RunOutcome,
   type RunStorageFileLocation,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
@@ -120,11 +118,13 @@ import {
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
+/** Length for preview slices of tool output and responses. */
+const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -348,7 +348,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     lastTurn: null,
     pendingResponse: null,
     pendingIntents: {},
-    approvals: {},
+    requests: {},
     usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
     flow: null,
   });
@@ -367,7 +367,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       reflectionSnapshotRow(runId, fresh(bound), {

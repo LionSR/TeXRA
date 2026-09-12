@@ -276,9 +276,9 @@ export function displayRow(
  * provider error, whose body can echo the request URL or an `Authorization`
  * header, so the raw body is dropped and the text fields are scrubbed before
  * the row is written. Bash commands and question text are what the user
- * typed and stay as they are. Every writer of an `approval.requested` row
- * passes its payload through here, whether the row is published by the
- * interaction owner or appended by a loop that already committed it.
+ * typed and stay as they are. Every writer of a `request.opened` row passes
+ * its payload through here, whether the session opens the request or a loop
+ * commits it with its recovery binding.
  */
 export function redactedForFact(payload: PermissionPayload): PermissionPayload {
   if (payload.kind !== 'retry') return payload;

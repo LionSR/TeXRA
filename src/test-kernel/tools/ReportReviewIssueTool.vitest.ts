@@ -27,7 +27,6 @@ function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
   detachHostInteractions = defaultSession().interactions.use({
     reportReviewIssue: sink,
-    cancel: () => undefined,
   });
 }
 

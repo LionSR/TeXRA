@@ -29,7 +29,7 @@ vi.mock('@agent/storage/runLease', async (importActual) => ({
   assertOwnedRunLease: vi.fn(),
 }));
 
-import { clearStoreCache, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -213,7 +213,6 @@ describe('completedRunArchive facade', () => {
   setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
 
   beforeEach(() => {
-    clearStoreCache();
     vi.resetAllMocks();
     taskSession = createProcessSession();
   });

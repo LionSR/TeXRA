@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  emptyUsageStats,
-  sumUsageStats,
-  UsageProviderSchema,
-} from '@shared/schemas';
+import { emptyUsageStats, sumUsageStats } from '@shared/schemas';
 
 describe('usage wire vocabulary and aggregation', () => {
   it.each<{

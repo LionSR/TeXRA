@@ -14,8 +14,6 @@ const log = createLog('RunRemoval');
 export const applyCommittedRunRemoval = Effect.fn('applyCommittedRunRemoval')(
   function* (session: SessionHandle, stream: RunId) {
     session.runs.detachChildren(stream);
-    session.status.clearRun(stream);
-    session.interactions.discardRun(stream);
     releaseRunResources(stream, session);
     yield* Effect.tryPromise({
       try: async () =>

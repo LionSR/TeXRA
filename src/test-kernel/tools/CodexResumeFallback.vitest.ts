@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
   getCurrentToolContexts: vi.fn(),
   registerRun: vi.fn(),
-  getRunStore: vi.fn(),
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
@@ -65,7 +64,6 @@ const CodexThreads = codexThreadsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
-  getRunStore: mocks.getRunStore,
 }));
 
 vi.mock('@agent/storage/runLease', () => ({
@@ -153,10 +151,11 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
     mocks.findCodexBinaryPath.mockReset();
-    mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
+    mocks.requestBashApproval.mockReturnValue(
+      Effect.succeed({ action: 'approve' }),
+    );
     mocks.getCurrentToolContexts.mockReturnValue(toolContext());
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.getRunStore.mockReturnValue({ write: async () => {} });
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),

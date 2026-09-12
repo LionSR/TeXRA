@@ -37,9 +37,6 @@ describe('listRunGeneratedFiles', () => {
       [path.join(RUN_PATH, 'vanished.tex')]: 'gone',
       [path.join(RUN_PATH, 'blocked.tex')]: 'blocked',
       [path.join(RUN_PATH, 'unreadable.tex')]: 'unreadable',
-      // A KV-*named* directory is internal metadata all the way down: the walk
-      // must skip it before recursing, or its children leak into the listing.
-      [path.join(RUN_PATH, 'turn-state.json', 'buried.tex')]: 'buried',
     },
   });
   let session: SessionHandle;
@@ -49,7 +46,7 @@ describe('listRunGeneratedFiles', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.effect(
-    'lists in path order, skipping KV-named subtrees and concurrent disappearance',
+    'lists in path order, skipping entries that disappear concurrently',
     () =>
       Effect.gen(function* () {
         failStatFor(

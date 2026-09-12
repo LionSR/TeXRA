@@ -9,13 +9,13 @@ import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
-import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { platform, type Platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import type { Plan, RunId } from '@shared/schemas';
+import type { Plan, RequestDecision, RunId } from '@shared/schemas';
 import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
 import { proposalApprovals, releaseRunResources } from '@tools/approval';
@@ -24,11 +24,12 @@ import { generateRunId } from '@utils/core';
 
 // Local file imports
 import {
+  autoDecideRequests,
   createRecordingHost,
+  decideRequest,
   sessionWithInteractions,
-  type RecordedProgressEvent,
-  type RecordingHostDecisions,
 } from '../agent/progressTestUtils';
+import { waitForCondition } from '../support/asyncTestUtils';
 
 const plan: Plan = {
   objective: [
@@ -52,9 +53,47 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
   return platform();
 }
 
-function startPlanUpdate(runId: RunId, objective: string) {
-  const { decisions, events, interactions } = createRecordingHost();
+/** Request watchers the cases opened, released after each. */
+const cleanups: Array<() => void> = [];
+
+/**
+ * A session whose plan requests park until the case answers them: the request
+ * a run opens is a `request.opened` row, and a surface's `request.decide`
+ * answers it (one run model, 3.7).
+ */
+function planSession(runId: RunId) {
+  const { events, interactions } = createRecordingHost();
   const session = sessionWithInteractions(interactions);
+  publishTestRunStart(session, runId);
+  const requests = autoDecideRequests(session, () => null);
+  cleanups.push(() => requests.detach());
+
+  /** The plan request the tool opened, and the way to answer it. */
+  const awaitPlanRequest = async () => {
+    await waitForCondition(() => requests.opened.length > 0, {
+      timeoutMessage: 'Timed out waiting for the plan request to open',
+    });
+    const opened = requests.opened[0]!;
+    if (opened.payload.kind !== 'planApproval') {
+      throw new Error(`Expected a plan request, not ${opened.payload.kind}.`);
+    }
+    const permission = opened.payload.data;
+    return {
+      permission,
+      decide: (decision: RequestDecision) =>
+        decideRequest(
+          session,
+          { runId, requestId: permission.requestId },
+          decision,
+        ),
+    };
+  };
+
+  return { events, session, awaitPlanRequest };
+}
+
+async function startPlanUpdate(runId: RunId, objective: string) {
+  const { events, session, awaitPlanRequest } = planSession(runId);
   const workPlanState = new WorkPlanState();
   const tool = new PlanTool();
 
@@ -72,42 +111,22 @@ function startPlanUpdate(runId: RunId, objective: string) {
     () => tool.call({ command: 'update', objective }),
   );
 
-  return { decisions, resultPromise, events, session, workPlanState };
-}
-
-function findPlanApproval(
-  events: RecordedProgressEvent[],
-): RecordedProgressEvent {
-  const approval = events.find((entry) => entry.event === 'showPlanApproval');
-  expect(approval).toBeDefined();
-  return approval!;
-}
-
-/** Submits a plan-approval decision for the request the tool showed. */
-function submitPlanDecision(
-  decisions: RecordingHostDecisions,
-  approval: RecordedProgressEvent,
-  decision: PlanApprovalResult,
-): boolean {
-  return decisions.submitPlan(
-    (approval.payload as { requestId: string }).requestId,
-    decision,
-  );
+  const { permission, decide } = await awaitPlanRequest();
+  return { resultPromise, events, session, workPlanState, permission, decide };
 }
 
 describe('PlanTool — update (plan approval)', () => {
+  afterEach(() => {
+    for (const release of cleanups.splice(0)) release();
+  });
+
   it('keeps an approved plan in displayed work-plan state and defers steps to the todo tool', async () => {
     await installPlatform(false);
-    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
-      generateRunId(),
-      plan.objective,
-    );
+    const { resultPromise, workPlanState, permission, decide } =
+      await startPlanUpdate(generateRunId(), plan.objective);
 
-    const approval = findPlanApproval(events);
-    expect((approval.payload as { plan: Plan }).plan).toEqual(plan);
-    expect(submitPlanDecision(decisions, approval, { action: 'approve' })).toBe(
-      true,
-    );
+    expect(permission.plan).toEqual(plan);
+    decide({ action: 'approve' });
 
     const result = await resultPromise;
     expect(result.status).toBe('executed');
@@ -119,8 +138,7 @@ describe('PlanTool — update (plan approval)', () => {
   it('keeps a later plan gated after delegated work approval is granted', async () => {
     await installPlatform(false);
     const runId = generateRunId();
-    const { decisions, events, interactions } = createRecordingHost();
-    const session = sessionWithInteractions(interactions);
+    const { session, awaitPlanRequest } = planSession(runId);
     const workPlanState = new WorkPlanState();
 
     try {
@@ -138,11 +156,9 @@ describe('PlanTool — update (plan approval)', () => {
         () => new PlanTool().call({ command: 'update', ...followUpPlan }),
       );
 
-      const approval = findPlanApproval(events);
-      expect((approval.payload as { plan: Plan }).plan).toEqual(followUpPlan);
-      expect(
-        submitPlanDecision(decisions, approval, { action: 'approve' }),
-      ).toBe(true);
+      const { permission, decide } = await awaitPlanRequest();
+      expect(permission.plan).toEqual(followUpPlan);
+      decide({ action: 'approve' });
       await expect(resultPromise).resolves.toMatchObject({
         status: 'executed',
         summary: 'Plan approved: proceed with implementation',
@@ -154,18 +170,12 @@ describe('PlanTool — update (plan approval)', () => {
 
   it('clears a rejected plan from displayed work-plan state', async () => {
     await installPlatform(false);
-    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
+    const { resultPromise, workPlanState, decide } = await startPlanUpdate(
       generateRunId(),
       plan.objective,
     );
 
-    const approval = findPlanApproval(events);
-    expect(
-      submitPlanDecision(decisions, approval, {
-        action: 'reject',
-        feedback: 'Too broad.',
-      }),
-    ).toBe(true);
+    decide({ action: 'reject', feedback: 'Too broad.' });
 
     const result = await resultPromise;
     expect(result.status).toBe('error');
@@ -175,18 +185,12 @@ describe('PlanTool — update (plan approval)', () => {
 
   it('does not attribute a lifecycle cancellation to the user', async () => {
     await installPlatform(false);
-    const { decisions, resultPromise, events } = startPlanUpdate(
+    const { resultPromise, decide } = await startPlanUpdate(
       generateRunId(),
       plan.objective,
     );
 
-    const approval = findPlanApproval(events);
-    expect(
-      submitPlanDecision(decisions, approval, {
-        action: 'reject',
-        cause: 'CLI approval prompt failed.',
-      }),
-    ).toBe(true);
+    decide({ action: 'cancel', cause: 'CLI approval prompt failed.' });
 
     const result = await resultPromise;
     expect(result.status).toBe('error');
@@ -200,20 +204,11 @@ describe('PlanTool — update (plan approval)', () => {
     const runId = generateRunId();
     await installPlatform(true);
 
-    const { decisions, resultPromise, events, session } = startPlanUpdate(
-      runId,
-      plan.objective,
-    );
+    const { resultPromise, events, session, permission, decide } =
+      await startPlanUpdate(runId, plan.objective);
     try {
-      const approval = findPlanApproval(events);
-      expect((approval.payload as { goalEnabled: boolean }).goalEnabled).toBe(
-        true,
-      );
-      expect(
-        submitPlanDecision(decisions, approval, {
-          action: 'approve_and_goal',
-        }),
-      ).toBe(true);
+      expect(permission.goalEnabled).toBe(true);
+      decide({ action: 'approve_and_goal' });
 
       const result = await resultPromise;
       expect(result.status).toBe('executed');
@@ -251,18 +246,12 @@ describe('PlanTool — update (plan approval)', () => {
     const runId = generateRunId();
     await installPlatform(true);
 
-    const { decisions, resultPromise, events, session } = startPlanUpdate(
+    const { resultPromise, events, session, decide } = await startPlanUpdate(
       runId,
       plan.objective,
     );
     try {
-      const approval = findPlanApproval(events);
-      expect(
-        submitPlanDecision(decisions, approval, {
-          action: 'approve_and_goal',
-          autoApproveAll: true,
-        }),
-      ).toBe(true);
+      decide({ action: 'approve_and_goal', autoApproveAll: true });
 
       await expect(resultPromise).resolves.toMatchObject({
         status: 'executed',
@@ -297,17 +286,12 @@ describe('PlanTool — update (plan approval)', () => {
     await installPlatform(true);
 
     const existing = await GoalStore.start(runId, 'Old objective');
-    const { decisions, resultPromise, events, session } = startPlanUpdate(
+    const { resultPromise, session, decide } = await startPlanUpdate(
       runId,
       followUpPlan.objective,
     );
     try {
-      const approval = findPlanApproval(events);
-      expect(
-        submitPlanDecision(decisions, approval, {
-          action: 'approve_and_goal',
-        }),
-      ).toBe(true);
+      decide({ action: 'approve_and_goal' });
 
       const result = await resultPromise;
       expect(result.status).toBe('executed');
@@ -332,25 +316,18 @@ describe('PlanTool — update (plan approval)', () => {
     const platform = await installPlatform(true);
 
     try {
-      const { decisions, resultPromise, events } = startPlanUpdate(
+      const { resultPromise, permission, decide } = await startPlanUpdate(
         runId,
         plan.objective,
       );
 
-      const approval = findPlanApproval(events);
-      expect((approval.payload as { goalEnabled: boolean }).goalEnabled).toBe(
-        true,
-      );
+      expect(permission.goalEnabled).toBe(true);
 
       (workspaceRoots().config as FakeConfigProvider).set(
         GOAL_FEATURE_FLAG_KEY,
         false,
       );
-      expect(
-        submitPlanDecision(decisions, approval, {
-          action: 'approve_and_goal',
-        }),
-      ).toBe(true);
+      decide({ action: 'approve_and_goal' });
 
       const result = await resultPromise;
       expect(result.status).toBe('executed');

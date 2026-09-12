@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getRunRecords, getRunStore } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@agent/storage/runLifecycle';
 import { inspectRunLease } from '@agent/storage/runLease';
 import { effectRuntime } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -65,7 +65,6 @@ describe('run registration and finalization', () => {
         identity: options.identity,
         followUpSupport: 'nativeInteractive',
       });
-      expect(await getRunStore(runId).listKeys()).toEqual([]);
     },
   );
 
@@ -87,7 +86,7 @@ describe('run registration and finalization', () => {
       await register();
       if (!alreadyOwned) await run(session.releaseRunLease(runId));
       const failure = new Error('database admission rejected');
-      vi.spyOn(session, 'acquireRunClaims').mockReturnValueOnce(
+      vi.spyOn(session, 'acquireClaims').mockReturnValueOnce(
         Effect.fail(failure),
       );
       await expect(
@@ -109,7 +108,7 @@ describe('run registration and finalization', () => {
     await expect(
       run(getRunRecords(session, runId).writeReport('unowned')),
     ).rejects.toThrow();
-    await run(session.acquireRunClaims(runId));
+    await run(session.acquireClaims(aggregateId('run', runId)));
     await run(getRunRecords(session, runId).writeReport('owned'));
     expect(await run(getRunRecords(session, runId).readReport())).toBe('owned');
   });

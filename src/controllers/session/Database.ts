@@ -86,8 +86,9 @@ const SESSION_DATABASE_FILE = 'texra.db';
  * unquoted, and every query below aliases the snake-case columns onto it.
  *
  * `event_sequence` is declared first because `event` references it, and the
- * dependency edge (an inquiry thread under the run that asked it) is
- * self-referential, so both cascades exist the moment the schema does. One
+ * dependency edge (an inquiry thread under the run that asked it, a workflow
+ * checkpoint under the run that invoked it) is self-referential, so both
+ * cascades exist the moment the schema does. One
  * run owns one row here: one sequence counter and one ownership claim (one
  * run model, section 3.1). `STRICT` makes a wrong-typed value an error at
  * insert instead of a surprise at read: on persisted data, a silent coercion
@@ -138,14 +139,14 @@ CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.par
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-/** Listing arms of the present vocabulary; approval requests are a set. */
+/** Listing arms of the present vocabulary; pending requests are a set. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
   .filter(
     (type) =>
       listingTypeOf({ type }) !== null &&
-      type !== 'approval.requested' &&
-      type !== 'approval.resolved',
+      type !== 'request.opened' &&
+      type !== 'request.decided',
   )
   .map((type) => `${type}.1`);
 const READ_LISTING = `
@@ -159,11 +160,11 @@ WITH latest AS (
     AND e.type = latest.type AND e.seq = latest.seq
   UNION ALL
   SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'approval.requested.1' AND NOT EXISTS (
-    SELECT 1 FROM event resolved
-    WHERE resolved.aggregate_id = e.aggregate_id
-      AND resolved.type = 'approval.resolved.1'
-      AND json_extract(resolved.data, '$.requestId') = json_extract(e.data, '$.requestId')
+  WHERE e.type = 'request.opened.1' AND NOT EXISTS (
+    SELECT 1 FROM event decided
+    WHERE decided.aggregate_id = e.aggregate_id
+      AND decided.type = 'request.decided.1'
+      AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
   )
 )
 SELECT * FROM selected
@@ -334,8 +335,8 @@ export const databaseLayer = (
         ORDER BY e.seq DESC LIMIT 1`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
-        'approval.requested.1',
-        'approval.resolved.1',
+        'request.opened.1',
+        'request.decided.1',
       ]);
       const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e
@@ -455,7 +456,7 @@ export const databaseLayer = (
       const latestInquiry = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
         ORDER BY e.seq DESC LIMIT 1`;
-      const reparentInquiry = `UPDATE event_sequence SET parent_id = ?
+      const reparent = `UPDATE event_sequence SET parent_id = ?
         WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`;
       const cleanupLanes = new Map<AggregateId, PerKeyLane>();
       const closedTombstone = `SELECT ${EVENT_COLUMNS},
@@ -718,8 +719,19 @@ export const databaseLayer = (
                 identity.ownerId,
               ]);
             }
+            if (draft.type === 'workflow.script') {
+              // The checkpoint outlives the workflow run's attempts but not
+              // the run that invoked it: hang the aggregate under that run so
+              // its deletion closes and collects the journal with it, instead
+              // of stranding rows no id can reach.
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
+                qualifyAggregateId('run', draft.parentRunId),
+                draft.aggregateId,
+                identity.ownerId,
+              ]);
+            }
             if (draft.type === 'inquiryThreadUpdated') {
-              yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
+              yield* sql.unsafe<Record<string, unknown>>(reparent, [
                 draft.parentRunId === null
                   ? null
                   : qualifyAggregateId('run', draft.parentRunId),

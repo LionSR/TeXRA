@@ -830,12 +830,6 @@
       "name": "noopTrace"
     },
     {
-      "file": "src/agent/workflowScript/persistence.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "writeWorkflowScriptCheckpoint"
-    },
-    {
       "file": "src/auth/SupabaseSession.ts",
       "category": "production-dead",
       "kind": "exports",

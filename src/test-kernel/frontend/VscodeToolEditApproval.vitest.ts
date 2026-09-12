@@ -5,9 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import type { RunId } from '@shared/schemas';
+import type { RequestDecision, RunId } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 interface TestUri {
@@ -95,26 +94,42 @@ vi.mock('vscode', () => {
   };
 });
 
+/** The window's `request.decide`, recorded instead of sent. */
+type DecideSpy = ReturnType<typeof createDecideSpy>;
+
+function createDecideSpy() {
+  return vi.fn(
+    async (
+      _runId: RunId,
+      _requestId: string,
+      _decision: RequestDecision,
+    ): Promise<void> => undefined,
+  );
+}
+
 interface ApprovalHarness {
   readonly controller: ToolEditApprovalController;
+  readonly decide: DecideSpy;
 }
 
 interface StartedApproval extends ApprovalHarness {
-  readonly approval: Promise<ToolEditApprovalResult>;
+  /** The staging this request's presentation runs, so a test can await it. */
+  readonly presented: Promise<void>;
   readonly requestId: string;
 }
 
 const harnesses: ApprovalHarness[] = [];
 const tempDirs = useTempDirs();
-const activeApprovals: Promise<ToolEditApprovalResult>[] = [];
+const presentations: Promise<void>[] = [];
 let storageRoot: string;
 
 /** One controller per session, exactly as `ProgressViewProvider` wires it. */
 function createApprovalHarness(): ApprovalHarness {
+  const decide = createDecideSpy();
   const controller = new ToolEditApprovalController({
-    host: new VscodeToolEditApprovalHost(storageRoot),
+    host: new VscodeToolEditApprovalHost(storageRoot, decide),
   });
-  const harness = { controller };
+  const harness = { controller, decide };
   harnesses.push(harness);
   return harness;
 }
@@ -123,7 +138,7 @@ function requestApproval(
   controller: ToolEditApprovalController,
   filePath: string,
   runId: RunId,
-): Pick<StartedApproval, 'approval' | 'requestId'> {
+): Pick<StartedApproval, 'presented' | 'requestId'> {
   const request = toolEditApprovalRequest({
     path: filePath,
     originalContent: 'old\n',
@@ -131,9 +146,9 @@ function requestApproval(
     sourceTool: 'write_file',
     runId,
   });
-  const approval = controller.requestApproval(request);
-  activeApprovals.push(approval);
-  return { approval, requestId: request.permission.requestId };
+  const presented = controller.present(request);
+  presentations.push(presented);
+  return { presented, requestId: request.permission.requestId };
 }
 
 function recordDiffEditor(command: unknown, args: unknown[]): void {
@@ -184,13 +199,13 @@ afterEach(async () => {
   for (const { controller } of harnesses.splice(0)) {
     controller.dispose();
   }
-  await Promise.allSettled(activeApprovals.splice(0));
+  await Promise.allSettled(presentations.splice(0));
 });
 
 describe('VS Code tool edit approval', () => {
   it('approves a matching edit while its preview is still initializing', async () => {
-    const { controller } = createApprovalHarness();
-    const { approval } = requestApproval(
+    const { controller, decide } = createApprovalHarness();
+    const { presented, requestId } = requestApproval(
       controller,
       '/workspace/approve-initializing.txt',
       'run-initializing' as RunId,
@@ -199,39 +214,44 @@ describe('VS Code tool edit approval', () => {
     await expect(
       controller.approvePendingForRun('run-initializing' as RunId),
     ).resolves.toBeUndefined();
-    await expect(approval).resolves.toMatchObject({
-      action: 'apply',
-      appliedContent: 'new\n',
+    await presented;
+
+    // Nothing was staged for the user to edit, so the proposal itself is
+    // the approved content.
+    expect(decide).toHaveBeenCalledWith('run-initializing', requestId, {
+      action: 'approve',
+      content: 'new\n',
     });
     expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
   });
 
   it('approves a matching edit whose preview is already pending', async () => {
-    const { approval, controller } = await startApproval();
+    const { controller, decide, requestId } = await startApproval();
 
     await expect(
       controller.approvePendingForRun('run-approval' as RunId),
     ).resolves.toBeUndefined();
-    await expect(approval).resolves.toMatchObject({
-      action: 'apply',
-      appliedContent: 'new\n',
+
+    expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
+      action: 'approve',
+      content: 'new\n',
     });
   });
 
   it('keeps each session controller scoped to its own requests', async () => {
     const target = createApprovalHarness();
     const other = createApprovalHarness();
-    const { approval: targetRun } = requestApproval(
+    const { requestId: targetRequestId } = requestApproval(
       target.controller,
       '/workspace/target.txt',
       'run-target' as RunId,
     );
-    const { approval: otherRun } = requestApproval(
+    requestApproval(
       target.controller,
       '/workspace/other-stream.txt',
       'run-other' as RunId,
     );
-    const { approval: otherSessionRequest } = requestApproval(
+    requestApproval(
       other.controller,
       '/workspace/other-session.txt',
       'run-target' as RunId,
@@ -245,54 +265,20 @@ describe('VS Code tool edit approval', () => {
     );
 
     await target.controller.approvePendingForRun('run-target' as RunId);
-    await expect(targetRun).resolves.toMatchObject({ action: 'apply' });
 
-    target.controller.cancel({ runId: 'run-other' as RunId });
-    other.controller.cancel({ runId: 'run-target' as RunId });
-    await expect(otherRun).resolves.toMatchObject({ action: 'reject' });
-    await expect(otherSessionRequest).resolves.toMatchObject({
-      action: 'reject',
+    // One request decided: this controller's own, on that run. The other
+    // run's request and the other session's request for the same run are
+    // untouched.
+    expect(target.decide).toHaveBeenCalledOnce();
+    expect(target.decide).toHaveBeenCalledWith('run-target', targetRequestId, {
+      action: 'approve',
+      content: 'new\n',
     });
-  });
-
-  it('does not present an approval cancelled during initialization', async () => {
-    const { controller } = createApprovalHarness();
-    const { approval } = requestApproval(
-      controller,
-      '/workspace/cancel-initializing.txt',
-      'run-initializing' as RunId,
-    );
-
-    controller.cancel({
-      kind: 'toolEdit',
-      runId: 'run-initializing' as RunId,
-      cause: 'Run ended.',
-    });
-
-    await expect(approval).resolves.toMatchObject({
-      action: 'reject',
-      cause: 'Run ended.',
-    });
-    expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
-  });
-
-  it('cancels and cleans a selected session approval', async () => {
-    const { approval, controller } = await startApproval();
-
-    controller.cancel({
-      kind: 'toolEdit',
-      runId: 'run-approval' as RunId,
-      cause: 'Stream resources released.',
-    });
-
-    await expect(approval).resolves.toMatchObject({
-      action: 'reject',
-      cause: 'Stream resources released.',
-    });
+    expect(other.decide).not.toHaveBeenCalled();
   });
 
   it('reports a failed preview read and accepts a later approval', async () => {
-    const { approval, controller, requestId } = await startApproval();
+    const { controller, decide, requestId } = await startApproval();
     const proposedUri = currentProposedUri();
     await rm(proposedUri.fsPath);
 
@@ -304,20 +290,23 @@ describe('VS Code tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('edited document could not be read'),
     );
+    expect(decide).not.toHaveBeenCalled();
 
     const getText = vi.fn(() => 'beta after retry\r\n');
     vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
     controller.handleAction({ requestId, action: 'approve' });
 
-    await expect(approval).resolves.toMatchObject({
-      action: 'apply',
-      appliedContent: 'beta after retry\n',
-    });
+    await vi.waitFor(() =>
+      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
+        action: 'approve',
+        content: 'beta after retry\n',
+      }),
+    );
     expect(getText).toHaveBeenCalledOnce();
   });
 
   it('accepts the current edited document content', async () => {
-    const { approval, controller, requestId } = await startApproval();
+    const { controller, decide, requestId } = await startApproval();
     const getText = vi.fn(() => 'beta edited\r\n');
     vscodeMocks.textDocuments.push({
       uri: currentProposedUri(),
@@ -326,16 +315,18 @@ describe('VS Code tool edit approval', () => {
 
     controller.handleAction({ requestId, action: 'approve' });
 
-    await expect(approval).resolves.toMatchObject({
-      action: 'apply',
-      appliedContent: 'beta edited\n',
-    });
+    await vi.waitFor(() =>
+      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
+        action: 'approve',
+        content: 'beta edited\n',
+      }),
+    );
     expect(getText).toHaveBeenCalledOnce();
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
   });
 
   it('previews a non-LaTeX proposal by opening the proposed file', async () => {
-    const { approval, controller, requestId } = await startApproval();
+    const { controller, decide, requestId } = await startApproval();
     const proposedUri = currentProposedUri();
 
     controller.handleAction({ requestId, action: 'previewProposed' });
@@ -347,8 +338,14 @@ describe('VS Code tool edit approval', () => {
       ),
     );
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
+    expect(decide).not.toHaveBeenCalled();
 
     controller.handleAction({ requestId, action: 'reject' });
-    await expect(approval).resolves.toMatchObject({ action: 'reject' });
+    await vi.waitFor(() =>
+      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
+        action: 'reject',
+        feedback: null,
+      }),
+    );
   });
 });

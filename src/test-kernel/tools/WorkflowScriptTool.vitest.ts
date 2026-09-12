@@ -1,19 +1,20 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
-import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
-import { getRunStore, getRunRecords } from '@agent/storage';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
+import { getRunRecords } from '@agent/storage';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -43,13 +44,13 @@ const mocks = vi.hoisted(() => ({
   lastStrategyParams: undefined as { initialSnapshot?: unknown } | undefined,
 }));
 
-// Spread the real storage module so `getRunStore` stays authentic;
-// only registration is spied so the launch can be observed without touching
-// the async run loop. The runLease mock below spreads the real
+// Spread the real storage module so every reader stays authentic; only
+// registration is spied so the launch can be observed without touching the
+// async run loop. The runLease mock below spreads the real
 // `RunLeaseActiveError` and lease helpers the same way.
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
-  const { createFakeRunRecords } = await import('@test/support/FakeRunKVStore');
+  const { createFakeRunRecords } = await import('@test/support/FakeRunRecords');
   return {
     ...actual,
     registerRun: mocks.registerRun,
@@ -251,6 +252,13 @@ async function callToolInput(
   );
 }
 
+// The tool runs under a registered parent run, and a checkpoint aggregate
+// hangs under it, so that run has to exist before a script row names it.
+beforeAll(async () => {
+  publishTestRunStart(currentSession(), parentRunId);
+  await currentSession().settlePublications();
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   mocks.recordStores.clear();
@@ -263,10 +271,9 @@ beforeEach(async () => {
   mocks.selectAvailableDelegationModel.mockReturnValue(
     Effect.succeed('parent-model'),
   );
-  mocks.requestDelegationProposal.mockResolvedValue({
-    result: { action: 'approve' },
-    autoApproved: false,
-  });
+  mocks.requestDelegationProposal.mockReturnValue(
+    Effect.succeed({ result: { action: 'approve' }, autoApproved: false }),
+  );
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((name) => {
     if (name === 'missing-agent') {
@@ -300,11 +307,15 @@ beforeEach(async () => {
 describe('WorkflowScriptTool', () => {
   it('does not register or execute the workflow before approval', async () => {
     let approve!: () => void;
+    const decided = new Promise<{
+      result: { action: 'approve' };
+      autoApproved: boolean;
+    }>((resolve) => {
+      approve = () =>
+        resolve({ result: { action: 'approve' }, autoApproved: false });
+    });
     mocks.requestDelegationProposal.mockReturnValueOnce(
-      new Promise((resolve) => {
-        approve = () =>
-          resolve({ result: { action: 'approve' }, autoApproved: false });
-      }),
+      Effect.promise(() => decided),
     );
 
     const pending = callTool();
@@ -321,10 +332,9 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('pins the workflow child edit grant when proposal bypass approved it', async () => {
-    mocks.requestDelegationProposal.mockResolvedValueOnce({
-      result: { action: 'approve' },
-      autoApproved: true,
-    });
+    mocks.requestDelegationProposal.mockReturnValueOnce(
+      Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
+    );
 
     await callTool();
 
@@ -345,10 +355,9 @@ describe('WorkflowScriptTool', () => {
   ])(
     'does not execute after $decision.action',
     async ({ decision, status }) => {
-      mocks.requestDelegationProposal.mockResolvedValueOnce({
-        result: decision,
-        autoApproved: false,
-      });
+      mocks.requestDelegationProposal.mockReturnValueOnce(
+        Effect.succeed({ result: decision, autoApproved: false }),
+      );
 
       const result = await callTool();
 
@@ -851,15 +860,22 @@ return null`;
       contextFiles: ['references.bib'],
       mediaFiles: ['figure.pdf'],
     } as const satisfies WorkflowScriptFiles;
-    await writeWorkflowScriptCheckpoint(
-      getRunStore(parentRunId),
-      checkpointIdFor('resume'),
-      {
-        script: resumeScript,
-        args: undefined,
-        files,
-        journal: [],
-      },
+    // The checkpoint's source of record: one `workflow.script` row on the
+    // aggregate the run's `checkpointId` names, with no journal behind it.
+    await Effect.runPromise(
+      currentSession().commit([
+        {
+          type: 'workflow.script',
+          aggregateId: aggregateId(
+            'workflow-checkpoint',
+            checkpointIdFor('resume'),
+          ),
+          parentRunId,
+          script: resumeScript,
+          args: { kind: 'undefined' },
+          files,
+        },
+      ]),
     );
 
     const result = await callTool({ script: resumeScript });

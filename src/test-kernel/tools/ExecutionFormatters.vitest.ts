@@ -4,14 +4,18 @@ import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   emptyRunEndOutput,
   RunIdSchema,
   type RunEnd,
   type RunOutcome,
+  type SessionEventDraft,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 
 const RUN_ID = RunIdSchema.parse('ec1000000001');
 
@@ -24,8 +28,8 @@ vi.mock('@agent/storage/runLease', () => ({
   inspectRunLease: mocks.inspectRunLease,
 }));
 
-vi.mock('@agent/storage/RunKVStore', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/RunKVStore')>()),
+vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runRecords')>()),
   getRunRecords: () => ({ readRunEnd: mocks.readRunEnd }),
 }));
 
@@ -40,6 +44,26 @@ beforeEach(() => {
 afterEach(() => {
   session.dispose();
 });
+
+/**
+ * End the run for real: `run.end` is the terminal fact the fold reads a
+ * terminal phase from, so a tracked handle reports it the way the registry
+ * does in production.
+ */
+async function endRun(outcome: RunOutcome): Promise<void> {
+  publishTestRunStart(session, RUN_ID);
+  session.publish([
+    {
+      type: 'run.end',
+      aggregateId: aggregateId('run', RUN_ID),
+      outcome,
+      output: emptyRunEndOutput('toolUse'),
+    },
+  ]);
+  await vi.waitFor(() => {
+    assert.strictEqual(session.runView(RUN_ID)?.status, outcome);
+  });
+}
 
 /** The one persisted fact the ladder reads: the run's terminal row. */
 function persisted(outcome: RunOutcome | null): void {
@@ -167,18 +191,34 @@ describe('turnAttributionNote', () => {
     // alone must not word the note as "still running".
     const handle = testRunHandle({ runId: RUN_ID, agent: 'test' });
     session.runs.track(handle);
-    seedRunStatusForTest(session.status, RUN_ID, { phase: 'completed' });
-    const store = {
-      getRunId: () => RUN_ID,
-      readTurnState: async () => ({
-        activeTurn: { token: 'turn-2' },
-        lastCompletedTurn: { token: 'turn-1' },
-      }),
-    } as unknown as Parameters<typeof turnAttributionNote>[0];
+    await endRun('completed');
+    // The turn identity is structural now: one settled turn behind the
+    // accepted one the note has to word.
+    const turnRow = (
+      turnIndex: number,
+      phase: 'accepted' | 'settled',
+    ): SessionEventDraft => ({
+      type: 'child.turn',
+      aggregateId: aggregateId('run', RUN_ID),
+      attemptId: 'attempt-1',
+      turnIndex,
+      phase,
+    });
+    await Effect.runPromise(
+      session.commit([
+        turnRow(1, 'accepted'),
+        turnRow(1, 'settled'),
+        turnRow(2, 'accepted'),
+      ]),
+    );
 
-    const note = await Effect.runPromise(turnAttributionNote(store, session));
+    const note = await Effect.runPromise(turnAttributionNote(RUN_ID, session));
 
-    assert.match(note ?? '', /turn turn-2 ended with its run \(completed\)/);
+    assert.match(
+      note ?? '',
+      /turn 2 of attempt attempt-1 ended with its run \(completed\)/,
+    );
+    assert.match(note ?? '', /turn 1 of attempt attempt-1/);
     assert.doesNotMatch(note ?? '', /still running/);
   });
 });

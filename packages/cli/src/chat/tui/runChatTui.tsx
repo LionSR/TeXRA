@@ -51,7 +51,7 @@ import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { isActivePhase } from '@shared/runs/runStatus';
+import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -420,7 +420,6 @@ export async function runChat(
 
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop();
-    runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     followUpQueue.clear();
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
@@ -488,7 +487,7 @@ export async function runChat(
       }
       canInterruptRun={(runId) =>
         (runId === session.runId && canInterruptActiveRun()) ||
-        runtimeSession.status.isInFlight(runId)
+        isInFlightPhase(runtimeSession.runView(runId)?.status)
       }
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
@@ -497,7 +496,6 @@ export async function runChat(
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
-        runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
         const stop = runtimeSession.runs.kill(runId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });

@@ -34,7 +34,10 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import {
+  ToolEditApprovalController,
+  type ToolEditApprovalHost,
+} from '@controllers/approval/ToolEditApprovalController';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
@@ -196,20 +199,34 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       publish: (snapshot) => this.bridge.setHost(snapshot),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
+    // This view's handle on the process runtime, taken once here rather than
+    // re-fetched at each of the session edges below.
+    const runtime = effectRuntime();
     // The tool-edit preview: staged copies of the original and proposed
     // content the diff editor shows. The request itself is the session's
-    // (`approval.requested` folds into the view) and a surface's decision
-    // settles it through the `toolEdit` host arm; the staged preview is
-    // discarded when the request resolves, whichever way.
+    // (`request.opened` folds into the view) and this host's decision goes
+    // back as that request's `request.decide`; the staged preview is
+    // discarded when `request.decided` folds, whichever way it went.
+    const decideRequest: ToolEditApprovalHost['decide'] = (
+      runId,
+      requestId,
+      decision,
+    ) =>
+      runtime.runPromise(
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
+      );
     this.toolEditApprovals = new ToolEditApprovalController({
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
+        decideRequest,
       ),
     });
     // A workflow run's `run.end` is the completion chime, one per process
     // (PRD 12.4), never a renderer transition hook that every subscriber
     // would replay. A failed run does not chime.
-    const sessionEvents = effectRuntime().runFork(
+    const sessionEvents = runtime.runFork(
       Stream.runForEach(session.events.all(session.now()), (event) =>
         Effect.sync(() => {
           this.toolEditApprovals.handleSessionEvent(event);
@@ -225,7 +242,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     this.disposables.push({
       dispose: () => {
-        effectRuntime().runFork(Fiber.interrupt(sessionEvents));
+        runtime.runFork(Fiber.interrupt(sessionEvents));
       },
     });
 
@@ -246,8 +263,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
-    // proposal, retry, question) stay parked in the runtime until the
-    // view's approval row decides them.
+    // proposal, retry, question) stay pending in the fold until the view's
+    // request row decides them.
     const detachHostInteractions = session.interactions.use({
       ...createAgentPresentationHost(this, context.globalState),
       readDiagnostics: getLinterMessages,
@@ -268,9 +285,24 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Findings from the changeReviewer tool-use session flow in through
       // the report_review_issue tool and land in the panel + diagnostics.
       reportReviewIssue: (report) => AgentReviewService.addIssueReport(report),
-      requestToolEditApproval: (request) =>
-        this.toolEditApprovals.requestApproval(request),
-      cancel: (selector) => this.toolEditApprovals.cancel(selector),
+      // Staging is the host's half of a `request.opened`; the fold lists the
+      // request either way, so a staging failure is reported, never swallowed.
+      presentToolEdit: (request) => {
+        const staged = Effect.tryPromise(() =>
+          this.toolEditApprovals.present(request),
+        );
+        runtime.runFork(
+          staged.pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                this.logger.error('Tool edit preview staging failed', {
+                  data: error.cause,
+                });
+              }),
+            ),
+          ),
+        );
+      },
     });
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching

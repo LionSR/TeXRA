@@ -22,10 +22,6 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
-import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
@@ -165,15 +161,7 @@ describe('child run progress events', () => {
         description: 'Run a background bash command',
       }),
     );
-    // `status` carries the non-terminal phases only; the terminal one is
-    // `run.end`'s.
-    expect(eventsOfType(await recorded.read(), 'status')).toEqual([
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('run', runId),
-        phase: RUN_PHASE.RUNNING,
-        cause: 'lifecycle',
-      }),
-    ]);
+    // The terminal phase is `run.end`'s alone.
     expect(eventsOfType(await recorded.read(), 'run.end')).toEqual([
       expect.objectContaining({
         aggregateId: qualifyAggregateId('run', runId),
@@ -219,7 +207,7 @@ describe('child run progress events', () => {
     await Effect.runPromise(
       firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
     );
-    expect(defaultSession().status.get(workflowRelaunchRunId)).toBe(
+    expect(defaultSession().runView(workflowRelaunchRunId)?.status).toBe(
       RUN_PHASE.COMPLETED,
     );
 
@@ -239,7 +227,7 @@ describe('child run progress events', () => {
     );
 
     try {
-      expect(defaultSession().status.get(workflowRelaunchRunId)).toBe(
+      expect(defaultSession().runView(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
       expect(
@@ -250,14 +238,13 @@ describe('child run progress events', () => {
           status: RUN_PHASE.RUNNING,
         }),
       );
-      expect(eventsOfType(await recorded.read(), 'status')).toContainEqual(
+      // The relaunch is a second activation on the same run: that row is
+      // what carries the run out of its terminal phase.
+      expect(eventsOfType(await recorded.read(), 'run.activate')).toEqual([
         expect.objectContaining({
-          cause: 'resume',
-          phase: RUN_PHASE.RUNNING,
-          previousPhase: RUN_PHASE.COMPLETED,
           aggregateId: qualifyAggregateId('run', workflowRelaunchRunId),
         }),
-      );
+      ]);
     } finally {
       await Effect.runPromise(
         relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
@@ -268,7 +255,7 @@ describe('child run progress events', () => {
   it('rolls back a failed rehydrated setup so the same run can retry', async () => {
     const recorded = recordSessionEvents(defaultSession());
     const trackRun = vi
-      .spyOn(defaultSession().runs, 'trackAgentRun')
+      .spyOn(defaultSession().runs, 'track')
       .mockImplementationOnce(() => {
         throw new Error('run setup failed');
       });
@@ -509,119 +496,63 @@ describe('child run progress events', () => {
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
 
-        try {
-          // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
-          // defect, so flip the defect back into the error channel.
-          const defect = yield* Effect.flip(
-            reraiseAgentCliCallFailure(
-              launchAgentCliSession({
-                session: defaultSession(),
-                parentRunId,
-                agentName: 'codex',
-                description: 'Fail during synchronous loop setup',
-                config,
-                registerFailedMessage: 'registration failed',
-                startLoop: (context) => {
-                  childRun = context.childRun;
-                  childRunId = context.runId;
-                  throw setupError;
-                },
-                summary: 'unreachable',
-                launchedLine: 'unreachable',
-                followUpLine: 'unreachable',
-              }),
-            ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
-          );
-          expect(defect).toBe(setupError);
+        // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
+        // defect, so flip the defect back into the error channel.
+        const defect = yield* Effect.flip(
+          reraiseAgentCliCallFailure(
+            launchAgentCliSession({
+              session: defaultSession(),
+              parentRunId,
+              agentName: 'codex',
+              description: 'Fail during synchronous loop setup',
+              config,
+              registerFailedMessage: 'registration failed',
+              startLoop: (context) => {
+                childRun = context.childRun;
+                childRunId = context.runId;
+                throw setupError;
+              },
+              summary: 'unreachable',
+              launchedLine: 'unreachable',
+              followUpLine: 'unreachable',
+            }),
+          ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
+        );
+        expect(defect).toBe(setupError);
 
-          expect(childRun).toBeDefined();
-          expect(childRunId).toBeDefined();
-          if (!childRun || !childRunId) {
-            throw new Error('expected the failed child launch to be captured');
-          }
-          expect(session.runs.getHandle(childRunId)).toBeUndefined();
-          expect(session.status.get(childRun.childRunId)).toBe(
-            RUN_PHASE.FAILED,
-          );
-          expect(
-            yield* getRunRecords(session, childRunId).readRunEnd(),
-          ).toMatchObject({ outcome: 'failed' });
-        } finally {
-          if (childRun) {
-            clearRunStatusForTest(session.status, childRun.childRunId);
-          }
+        expect(childRun).toBeDefined();
+        expect(childRunId).toBeDefined();
+        if (!childRun || !childRunId) {
+          throw new Error('expected the failed child launch to be captured');
         }
+        expect(session.runs.getHandle(childRunId)).toBeUndefined();
+        expect(session.runView(childRun.childRunId)?.status).toBe(
+          RUN_PHASE.FAILED,
+        );
+        expect(
+          yield* getRunRecords(session, childRunId).readRunEnd(),
+        ).toMatchObject({ outcome: 'failed' });
       }),
   );
 
-  it('publishes child loop status changes through the child run owner', async () => {
-    const childRun = await startCodexChild(
-      loopRunId,
-      'Run a long-lived Codex child loop',
-    );
-    expect(defaultSession().runs.getHandle(loopRunId)).toBeDefined();
-    // From here on: the launch's own facts are not the loop's.
-    const recorded = recordSessionEvents(defaultSession());
-    const rosters = recordChildRosters(defaultSession().runs);
-
-    childRun.waitForInput();
-    childRun.beginTurn();
-    childRun.failTurn();
-    await Effect.runPromise(childRun.finalize({ outcome: RUN_OUTCOME.FAILED }));
-
-    expect(
-      eventsOfType(await recorded.read(), 'status')
-        .filter(
-          (event) => event.aggregateId === qualifyAggregateId('run', loopRunId),
-        )
-        .map((event) => event.phase),
-    ).toEqual([RUN_PHASE.WAITING, RUN_PHASE.RUNNING]);
-    expect(defaultSession().status.get(loopRunId)).toBe(RUN_PHASE.FAILED);
-    expect(rosters.rosters.at(-1)).toMatchObject({
-      parentRunId,
-      items: [],
-    });
-    await expect(
-      Effect.runPromise(
-        getRunRecords(defaultSession(), loopRunId).readRunEnd(),
-      ),
-    ).resolves.toMatchObject({
-      outcome: 'failed',
-      error: {
-        kind: 'unexpected',
-        message: 'Child run failed',
-      },
-    });
-  });
-
-  // The child reports its own exit and nothing else: every mid-loop report
-  // below is refused by the status machine because a stop already cancelled
-  // the run, and `finalizeRunTerminal` resolves the run's terminal outcome
-  // from that phase rather than from the failure the child reports.
-  it('settles a stopped child loop as cancelled from the run phase', async () => {
+  // The child reports its own exit and nothing else: a stop that already
+  // reached the handle outranks it, and `finalizeRunTerminal` resolves the
+  // run's terminal outcome from that stop rather than from the failure the
+  // child reports.
+  it('settles a stopped child loop as cancelled from the stop that landed', async () => {
     const childRun = await startCodexChild(
       stoppedRunId,
       'Run a stopped Codex child loop',
     );
-    expect(defaultSession().runs.getHandle(stoppedRunId)).toBeDefined();
-    seedRunStatusForTest(defaultSession().status, stoppedRunId, {
-      phase: RUN_PHASE.CANCELLED,
-    });
-    // From here on: the launch's own facts are not the loop's.
-    const recorded = recordSessionEvents(defaultSession());
+    const handle = defaultSession().runs.getHandle(stoppedRunId);
+    expect(handle).toBeDefined();
+    handle?.interrupt();
 
-    childRun.waitForInput();
-    childRun.beginTurn();
-    childRun.failTurn();
     await Effect.runPromise(childRun.finalize({ outcome: RUN_OUTCOME.FAILED }));
 
-    expect(defaultSession().status.get(stoppedRunId)).toBe(RUN_PHASE.CANCELLED);
-    expect(
-      eventsOfType(await recorded.read(), 'status').filter(
-        (event) =>
-          event.aggregateId === qualifyAggregateId('run', stoppedRunId),
-      ),
-    ).toHaveLength(0);
+    expect(defaultSession().runView(stoppedRunId)?.status).toBe(
+      RUN_PHASE.CANCELLED,
+    );
     await expect(
       Effect.runPromise(
         getRunRecords(defaultSession(), stoppedRunId).readRunEnd(),
@@ -643,7 +574,9 @@ describe('child run progress events', () => {
       }),
     );
 
-    expect(defaultSession().status.get(failedRunId)).toBe(RUN_PHASE.FAILED);
+    expect(defaultSession().runView(failedRunId)?.status).toBe(
+      RUN_PHASE.FAILED,
+    );
     await expect(
       Effect.runPromise(
         getRunRecords(defaultSession(), failedRunId).readRunEnd(),

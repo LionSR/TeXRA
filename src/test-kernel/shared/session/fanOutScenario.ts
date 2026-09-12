@@ -11,8 +11,8 @@ import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
+  STREAM_LOG_ENTRY_TYPES,
   RunIdSchema,
   ToolConfigSchema,
   type ApprovalPolicySnapshot,
@@ -258,12 +258,6 @@ export function buildScenario({ proposal = false } = {}) {
       inputFiles: ['draft.tex'],
     }),
   });
-  log.emit(ROOT, T.root, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.root,
-  });
   log.emit(ROOT, T.root + 1, {
     type: 'workflow.plan',
     attemptId: 'attempt-1',
@@ -321,10 +315,9 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   });
   log.emit(CHILD, T.child, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.child,
+    type: 'run.activate',
+    category: AgentCategory.ToolUse,
+    isRemote: false,
   });
   rootEntries.push(
     log.entry(ROOT, T.child + 1, {
@@ -335,12 +328,18 @@ export function buildScenario({ proposal = false } = {}) {
       data: call('running', CHILD),
     }),
   );
+  // The loop's position: an agent run reads as initializing until its first
+  // step, so a mid-flight fixture carries one (one run model, 3.3).
+  log.emit(CHILD, T.childProgress, {
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+  });
   log.emit(CHILD, T.childProgress, {
     type: 'conversation.progress',
     progress: { toolCallCount: 3 },
   });
   log.emit(CHILD, T.childApproval, {
-    type: 'approval.requested',
+    type: 'request.opened',
     requestId: 'req-1',
     payload: {
       kind: 'bash',
@@ -376,10 +375,13 @@ export function buildScenario({ proposal = false } = {}) {
     parent: log.parent(CHILD),
   });
   log.emit(GRANDCHILD, T.grandchild, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: T.grandchild,
+    type: 'run.activate',
+    category: AgentCategory.ToolUse,
+    isRemote: false,
+  });
+  log.emit(GRANDCHILD, T.grandchild, {
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'addOutputFiles',
@@ -446,7 +448,7 @@ export function buildScenario({ proposal = false } = {}) {
 
   if (proposal) {
     log.emit(ROOT, T.proposal, {
-      type: 'approval.requested',
+      type: 'request.opened',
       requestId: 'req-plan',
       payload: {
         kind: 'proposal',
@@ -490,8 +492,9 @@ export function buildScenario({ proposal = false } = {}) {
   const pending = log.events.length;
 
   log.emit(CHILD, T.approvalResolved, {
-    type: 'approval.resolved',
+    type: 'request.decided',
     requestId: 'req-1',
+    decision: { action: 'approve' },
   });
   log.emit(CHILD, T.childDone, {
     type: 'run.end',
@@ -584,7 +587,7 @@ export function withoutApproval(): SessionView {
   return foldAll([
     ...buildScenario().pending.filter(
       (input) =>
-        !(input._tag === 'event' && input.event.type === 'approval.requested'),
+        !(input._tag === 'event' && input.event.type === 'request.opened'),
     ),
     local({ self: [OWNER] }),
   ]);
@@ -603,20 +606,19 @@ export function withInterruptedChild(): SessionView {
  *  the waiting row is a grandchild of the root. */
 export function withWaitingGrandchild(): SessionView {
   const { pending } = buildScenario();
-  const settled = new Set(['result', 'status']);
   const inputs = pending.filter(
     (input) =>
       !(
         input._tag === 'event' &&
         ((input.event.aggregateId === qualifyAggregateId('run', GRANDCHILD) &&
-          settled.has(input.event.type) &&
+          input.event.type === 'run.end' &&
           input.event.at === T.grandchildDone) ||
-          input.event.type === 'approval.requested')
+          input.event.type === 'request.opened')
       ),
   );
   const log = new Log();
   log.emit(GRANDCHILD, T.grandchildDone, {
-    type: 'approval.requested',
+    type: 'request.opened',
     requestId: 'req-lint',
     payload: {
       kind: 'bash',
@@ -901,12 +903,6 @@ function boardView({
     }),
   });
   log.emit(ROOT, startedAt, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: startedAt,
-  });
-  log.emit(ROOT, startedAt, {
     type: 'usage',
     runId: ROOT,
     usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
@@ -1005,10 +1001,13 @@ function boardView({
         }),
       });
       log.emit(kid.id, kid.startedAt, {
-        type: 'status',
-        phase: RUN_PHASE.RUNNING,
-        cause: 'lifecycle',
-        runStartedAt: kid.startedAt,
+        type: 'run.activate',
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+      });
+      log.emit(kid.id, kid.startedAt, {
+        type: 'flow.step',
+        payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
       });
       if (kid.latest) {
         log.entry(kid.id, kid.startedAt + 1, {
@@ -1037,7 +1036,7 @@ function boardView({
       }
       if (kid.wantsBash) {
         log.emit(kid.id, kid.startedAt + 4, {
-          type: 'approval.requested',
+          type: 'request.opened',
           requestId: `req-${entry.id}`,
           payload: {
             kind: 'bash',
@@ -1073,8 +1072,9 @@ function boardView({
         const { child: kid } = entry;
         if (kid.wantsBash) {
           log.emit(kid.id, closedAt - 2, {
-            type: 'approval.resolved',
+            type: 'request.decided',
             requestId: `req-${entry.id}`,
+            decision: { action: 'approve' },
           });
         }
         log.emit(kid.id, closedAt - 1, {

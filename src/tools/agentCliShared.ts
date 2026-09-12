@@ -386,8 +386,8 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
       );
     }
 
-    const approval = yield* agentCliCall(() =>
-      requestApproval({ command: approvalLabel }),
+    const approval = yield* requestApproval({ command: approvalLabel }).pipe(
+      Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
     );
     if (approval.action !== 'approve') {
       return buildBashApprovalRejectedResult(approvalLabel, approval);

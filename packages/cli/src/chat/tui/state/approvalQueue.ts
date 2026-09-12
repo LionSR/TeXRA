@@ -1,37 +1,33 @@
-// The TUI's approval Surface (PRD one-fold-three-renderers, 9 and 10.1).
+// The TUI's request Surface (PRD one-fold-three-renderers, 9 and 10.1).
 //
-// Which requests are pending is a fold fact: `view.approvals` holds every
-// `approval.requested` the runtime has not resolved. This module owns only
-// what the fold cannot: the presentation payload a host hook hands over
-// beside the fact (a tool edit's before and after text, a retry's
-// personal-key lookup), the settle latch of the two kinds the host still
-// answers through its hook (tool edit, retry), the "decided here, not yet
-// resolved there" gap, and the jump-to-waiting order.
-// Every other decision is a `decision.*` runtime request; the runtime settles
-// its pending set and publishes `approval.resolved`, which the fold drops.
+// Which requests are pending is a fold fact: `view.requests` holds every
+// `request.opened` no `request.decided` has answered. This module owns only
+// what the fold cannot: the presentation a host stages beside the fact (a
+// tool edit's before and after text, a retry's personal-key lookup), the
+// "decided here, not yet folded there" gap, and the jump-to-waiting order.
+// A decision leaves as the arms `approvalDecisionArms` names: the run's
+// `request.decide`, the `policy.set` a session bypass names, and the host
+// capability a retry on the user's own key needs.
 
 import { computed, signal } from '@lit-labs/signals';
 import { Effect } from 'effect';
 
 import { currentSession } from '@agent/runtime';
-import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
+import { warn as logWarning } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
-  ApprovalDecision as SharedApprovalDecision,
   PermissionPayload,
-  PlanApprovalAction,
   ProgressPermissionKind,
+  RequestDecision,
   RunId,
 } from '@shared/schemas';
 import {
   APPROVE_ALL_DELEGATED_WORK_ACTION,
   APPROVE_SESSION_ACTION,
   approvalDecisionArms,
-  type PermissionDecision,
-  sessionBypassRequest,
+  type SurfaceDecision,
 } from '@shared/session/approvalDecision';
+import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
@@ -54,9 +50,9 @@ interface TuiApprovalAdornments {
 /**
  * The kinds this surface presents: the wire vocabulary without the external
  * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
- * declares `unavailableHosts: ['cli']`), and an inquiry is a durable thread,
- * never an `approval.requested` fact: only a `SettledInteractionKind` request
- * publishes one, and that union has no `externalInquiry`.
+ * declares `unavailableHosts: ['cli']`), and an inquiry another host opened
+ * in a shared session is answered from its thread rather than from a modal
+ * here, so {@link pendingApprovalFacts} leaves that kind out of this queue.
  */
 export type PendingApprovalKind = Exclude<
   ProgressPermissionKind,
@@ -84,55 +80,38 @@ export type ToolEditApprovalPayload = Extract<
 >;
 export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 
-/**
- * The TUI decision = the host-neutral {@link SharedApprovalDecision}
- * (accepted / userMessage / userQuestionAnswers) plus the CLI-only session
- * bypass + credential mode applied before accepting.
- */
-export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
-  /** Queue or prompt lifecycle failure, never text entered by the user. */
-  readonly rejectionCause?: string;
-  /** Automatic policy denial, never text entered by the user. */
-  readonly rejectionReason?: string;
-  /** Session bypass to activate before accepting this approval. */
-  readonly bypass?: ApprovalBypassKind;
-  /** Turn off the matching quota-fallback preference before accepting. */
-  readonly disableQuotaRoute?: QuotaFallbackRouteId;
-  /** Plan-only approval action when plain approve/reject is not specific enough. */
-  readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
-  /** Run-as-goal only: extend automatic commands to edits and delegated work. */
-  readonly goalAutoApproveAll?: true;
-}
-
 export interface PendingApproval {
   readonly payload: ApprovalPayload;
-  readonly decide: (decision: ApprovalDecision) => void;
+  readonly decide: (decision: SurfaceDecision) => void;
 }
 
-/** A pending `approval.requested` fact, typed to {@link PendingApprovalKind}. */
-type PendingApprovalFact = SessionView['approvals'][number] & {
+/** A pending `request.opened` fact, typed to {@link PendingApprovalKind}. */
+type PendingApprovalFact = SessionView['requests'][number] & {
   readonly payload: Extract<PermissionPayload, { kind: PendingApprovalKind }>;
 };
 
 /**
- * The fold's pending approvals under {@link PendingApprovalKind}. The
- * narrowing holds by the construction that type names; a fact outside it
- * reaches the `assertNever` payload switches, but not every reader (the row
- * label lookup would render an undefined label).
+ * The fold's pending requests under {@link PendingApprovalKind}: the fold
+ * lists every kind, including an `externalInquiry` a persisted session
+ * carries from another host, and this surface renders none of those, so the
+ * narrowing is a filter rather than an assertion.
  */
 function pendingApprovalFacts(
   view: SessionView,
 ): readonly PendingApprovalFact[] {
-  return view.approvals as readonly PendingApprovalFact[];
+  return view.requests.filter(
+    (request): request is PendingApprovalFact =>
+      request.payload.kind !== 'externalInquiry',
+  );
 }
 
-/** Each run's pending approval kinds in commit order: the badge the session
+/** Each run's pending request kinds in commit order: the badge the session
  *  list and the workflow popup paint on its row. */
 export const pendingApprovalKindsByRun = computed(() =>
   groupBy(
     pendingApprovalFacts(sessionView().get()),
-    (approval) => approval.runId,
-    (approval) => approval.payload.kind,
+    (request) => request.runId,
+    (request) => request.payload.kind,
   ),
 );
 
@@ -141,25 +120,19 @@ interface AttentionRequest {
   readonly requestId: string;
   readonly runId: RunId;
   readonly kind: PendingApprovalKind;
-  /** The fact's payload; the host payload replaces it when presented. */
+  /** The fact's payload; a staged presentation replaces it when there is one. */
   readonly payload: PendingApprovalFact['payload'];
 }
 
 /**
- * What a host hook holds for one request beside the fact: the payload it
- * presents, and for the hook-settled kinds the latch its promise waits on.
- * A retry enters unpresentable (its keychain lookup runs first) and presents
- * once prepared; a `decided` entry stays until its hook releases it.
+ * What a host staged for one request beside the fact: the payload it
+ * presents. A tool edit's preview arrives with the request; a retry's
+ * key-availability lookup lands once it finishes, which is what keeps the
+ * retry card off the screen until it can say whether `k` is offered.
  */
-interface HostRequest {
-  readonly payload: ApprovalPayload;
-  readonly presentable: boolean;
-  readonly settle: ((decision: ApprovalDecision) => void) | undefined;
-  readonly preparation: AbortController | undefined;
-  readonly owner: object | undefined;
-}
-
-const hostRequests = signal<ReadonlyMap<string, HostRequest>>(new Map());
+const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
+  new Map(),
+);
 
 /** Decided on this surface; hidden until the fold drops the fact. */
 const decided = signal<ReadonlySet<string>>(new Set());
@@ -173,12 +146,24 @@ const promoted = signal<
   | undefined
 >(undefined);
 
-const INTERRUPT: ApprovalDecision = {
-  accepted: false,
-  rejectionCause: 'Session interrupted.',
-};
+/**
+ * The host capabilities a decision can name (`approvalDecisionArms`'s host
+ * arms): the attached TUI host installs its executor for as long as it is
+ * attached. A capability named while nothing is attached cannot be dropped
+ * quietly — the request would stay pending with nobody working on it.
+ */
+let hostCapability: ((arm: HostRequest) => void) | undefined;
 
-/** Whether `payload` presents; a hook keys its host entry by the same id. */
+export function useHostCapability(
+  execute: (arm: HostRequest) => void,
+): () => void {
+  hostCapability = execute;
+  return () => {
+    if (hostCapability === execute) hostCapability = undefined;
+  };
+}
+
+/** Whether `payload` presents; a stager keys its entry by the same id. */
 export function approvalPayloadRunId(
   payload: Pick<ApprovalPayload, 'data'>,
 ): RunId | undefined {
@@ -186,21 +171,21 @@ export function approvalPayloadRunId(
 }
 
 /**
- * Every request awaiting the user, from the fold: the outstanding approvals
- * in commit order. The promoted stream's requests lead; nothing is settled,
- * resolved, or re-notified by a promotion. The status bar, the title, and
- * the modal all read this one list.
+ * Every request awaiting the user, from the fold: the outstanding requests
+ * in commit order. The promoted stream's requests lead; nothing is decided
+ * or re-notified by a promotion. The status bar, the title, and the modal
+ * all read this one list.
  */
 export function attentionRequests(
   view: SessionView,
   lead = promoted.get(),
 ): readonly AttentionRequest[] {
   const requests = pendingApprovalFacts(view).map(
-    (approval): AttentionRequest => ({
-      requestId: approval.requestId,
-      runId: approval.runId,
-      kind: approval.payload.kind,
-      payload: approval.payload,
+    (pending): AttentionRequest => ({
+      requestId: pending.requestId,
+      runId: pending.runId,
+      kind: pending.payload.kind,
+      payload: pending.payload,
     }),
   );
   if (!lead) return requests;
@@ -209,13 +194,14 @@ export function attentionRequests(
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
 }
 
-/** The payload the modal renders: the host's when presented, else the fact's. */
+/** The payload the modal renders: the staged one when there is one, else the
+ *  fact's, for the kinds that need nothing staged. */
 function presentedPayload(
   request: AttentionRequest,
-  host: ReadonlyMap<string, HostRequest>,
+  staged: ReadonlyMap<string, ApprovalPayload>,
 ): ApprovalPayload | undefined {
-  const entry = host.get(request.requestId);
-  if (entry) return entry.presentable ? entry.payload : undefined;
+  const entry = staged.get(request.requestId);
+  if (entry) return entry;
   const payload = request.payload;
   switch (payload.kind) {
     case 'bash':
@@ -225,7 +211,7 @@ function presentedPayload(
       return payload;
     case 'toolEdit':
     case 'retry':
-      // Presentable only through the hook that carries its adornments.
+      // Presentable only once the host stages its adornments.
       return undefined;
   }
   assertNever(payload, 'Unhandled approval payload kind');
@@ -241,7 +227,7 @@ const presentedOrder = new Map<string, number>();
  *  stream's lead. */
 export const currentApproval = computed<PendingApproval | undefined>(() => {
   const view = sessionView().get();
-  const host = hostRequests.get();
+  const staged = stagedPresentations.get();
   const done = decided.get();
   const candidates: Array<{
     readonly request: AttentionRequest;
@@ -250,7 +236,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   }> = [];
   attentionRequests(view).forEach((request, rank) => {
     if (done.has(request.requestId)) return;
-    const payload = presentedPayload(request, host);
+    const payload = presentedPayload(request, staged);
     if (!payload) return;
     if (!presentedOrder.has(request.requestId)) {
       presentedOrder.set(request.requestId, presentedOrder.size);
@@ -294,285 +280,138 @@ export function promoteApprovalsForRun(
   });
 }
 
-function markDecided(requestId: string): void {
-  const view = sessionView().get();
-  const live = new Set(
-    attentionRequests(view).map((request) => request.requestId),
+/** Staged presentations whose request the fold has listed at least once. A
+ *  host stages a tool edit's preview before its `request.opened` commits, so
+ *  "not listed" alone cannot mean "settled". */
+const stagedSeenListed = new Set<string>();
+
+/**
+ * Forget what this surface holds for requests the fold no longer lists: a
+ * settled request leaves with its staged presentation. Called for every
+ * level of pending requests, not only for the decisions taken here: a
+ * request settled by a run interruption or by another surface takes its
+ * staged edit contents with it too.
+ */
+export function forgetSettledRequests(live: ReadonlySet<string>): void {
+  const staged = stagedPresentations.get();
+  for (const id of staged.keys()) if (live.has(id)) stagedSeenListed.add(id);
+  const remaining = [...staged].filter(
+    ([id]) => live.has(id) || !stagedSeenListed.has(id),
   );
-  const next = new Set([...decided.get()].filter((id) => live.has(id)));
-  next.add(requestId);
-  decided.set(next);
+  if (remaining.length !== staged.size) {
+    stagedPresentations.set(new Map(remaining));
+    for (const id of stagedSeenListed) {
+      if (!live.has(id)) stagedSeenListed.delete(id);
+    }
+  }
   for (const id of presentedOrder.keys()) {
     if (!live.has(id)) presentedOrder.delete(id);
   }
 }
 
-function updateHost(
-  mutate: (
-    previous: ReadonlyMap<string, HostRequest>,
-  ) => ReadonlyMap<string, HostRequest>,
-): void {
-  hostRequests.set(mutate(hostRequests.get()));
+function markDecided(requestId: string): void {
+  const live = new Set(
+    attentionRequests(sessionView().get()).map((request) => request.requestId),
+  );
+  const next = new Set([...decided.get()].filter((id) => live.has(id)));
+  next.add(requestId);
+  decided.set(next);
+  forgetSettledRequests(live);
 }
 
-/** A hook-settled request leaves the surface with its decision. */
-function settleHost(
+/**
+ * Publish the presentation a host prepared for one request: the payload the
+ * modal renders from here on. A tool edit stages before its request opens
+ * and a retry's key lookup lands after, so this takes either order; the
+ * entry leaves when the fold drops the request it names.
+ */
+export function stagePresentation(payload: ApprovalPayload): void {
+  stagedPresentations.set(
+    new Map(stagedPresentations.get()).set(payload.data.requestId, payload),
+  );
+}
+
+/**
+ * Issue the runtime requests one decision names, in order; a refusal reads
+ * in the conversation and puts `requestId` back on this surface, since the
+ * durable request it answered is still pending and nobody else will re-ask.
+ * `onRefused` is the same undo for a caller keeping its own "already acted"
+ * guard beside this one (the TUI host's automatic answers): a guard left set
+ * over a refused decision parks the run on a request nobody answers again.
+ */
+function issue(
+  runId: RunId,
   requestId: string,
-  decision: ApprovalDecision,
-  options: { readonly cancelled?: boolean } = {},
-): boolean {
-  const entry = hostRequests.get().get(requestId);
-  if (!entry) return false;
-  if (options.cancelled) {
-    entry.preparation?.abort(new Error('Approval request was cancelled.'));
-    updateHost((previous) => {
-      const next = new Map(previous);
-      next.delete(requestId);
-      return next;
-    });
-  }
-  entry.settle?.(decision);
-  return true;
-}
-
-/** Issue runtime requests in order; a refusal reads in the conversation. */
-function issue(runId: RunId, ...requests: RuntimeRequest[]): void {
+  onRefused: (() => void) | undefined,
+  ...requests: RuntimeRequest[]
+): void {
   const session = currentSession();
   void effectRuntime().runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
-        onFailure: (error) => appendLocalRequestRefusal(error, runId),
+        onFailure: (error) => {
+          const next = new Set(decided.get());
+          next.delete(requestId);
+          decided.set(next);
+          onRefused?.();
+          appendLocalRequestRefusal(error, runId);
+        },
         onSuccess: () => undefined,
       }),
     ),
   );
 }
 
-/** The runtime requests `arms` names, in the order they name them. */
-function issueArms(
-  runId: RunId,
-  arms: readonly { readonly runtime: RuntimeRequest }[],
-): void {
-  issue(runId, ...arms.map((arm) => arm.runtime));
-}
-
 /**
- * The TUI decision in the shared vocabulary's terms: the bag the modals hand
- * over is host-neutral plus the bypass the card named, and a bypass on an
- * accepted decision IS one of that vocabulary's actions. A refusal's
- * provenance (queue failure, policy denial, typed text) collapses into the
- * one `feedback` string the protocol carries.
- */
-function rejectDecision(decision: ApprovalDecision): {
-  readonly action: 'reject';
-  readonly feedback: string | undefined;
-} {
-  const { rejectionCause, rejectionReason, userMessage } = decision;
-  return {
-    action: 'reject',
-    feedback: rejectionCause ?? rejectionReason ?? userMessage,
-  };
-}
-
-function bashDecision(decision: ApprovalDecision): PermissionDecision<'bash'> {
-  if (!decision.accepted) return rejectDecision(decision);
-  return {
-    action: decision.bypass === 'bash' ? APPROVE_SESSION_ACTION : 'approve',
-  };
-}
-
-function proposalDecision(
-  decision: ApprovalDecision,
-): PermissionDecision<'proposal'> {
-  if (!decision.accepted) return rejectDecision(decision);
-  return {
-    action:
-      decision.bypass === 'superYolo'
-        ? APPROVE_ALL_DELEGATED_WORK_ACTION
-        : 'approve',
-  };
-}
-
-function planDecision(
-  decision: ApprovalDecision,
-): PermissionDecision<'planApproval'> {
-  if (!decision.accepted) return rejectDecision(decision);
-  if (decision.planAction === 'approve_and_goal') {
-    return {
-      action: 'approve_and_goal',
-      autoApproveAll: decision.goalAutoApproveAll,
-    };
-  }
-  return { action: 'approve' };
-}
-
-function userQuestionDecision(
-  decision: ApprovalDecision,
-): PermissionDecision<'userQuestion'> {
-  if (decision.accepted && decision.userQuestionAnswers) {
-    return { action: 'submit', answers: decision.userQuestionAnswers };
-  }
-  if (decision.rejectionCause !== undefined) return rejectDecision(decision);
-  return {
-    action: 'skip',
-    feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
-  };
-}
-
-/**
- * Apply one decision: the three kinds a host hook answers resolve their
- * latch, the rest become the `decision.*` requests the shared vocabulary
- * names (PRD 8.2), each preceded by the `policy.set` the modal's bypass
- * choice names.
+ * Apply one decision: the arms the shared vocabulary names (PRD 8.2), in the
+ * order it names them — the `policy.set` a session bypass implies before the
+ * `request.decide` it precedes, and the host capability a retry on the
+ * user's own key needs instead of a decision, since that host lands the
+ * decision itself once the credential is in place.
  */
 function decideRequest(
   request: AttentionRequest,
-  payload: ApprovalPayload,
-  decision: ApprovalDecision,
+  payload: PermissionPayload,
+  decision: SurfaceDecision,
+  onRefused?: () => void,
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  switch (payload.kind) {
-    case 'toolEdit':
-    case 'retry':
-      if (decision.accepted && decision.bypass === 'toolEdit') {
-        issue(runId, sessionBypassRequest(runId, 'toolEdit'));
-      }
-      settleHost(request.requestId, decision);
-      return;
-    case 'bash':
-      issueArms(
-        runId,
-        approvalDecisionArms<'bash'>(payload, bashDecision(decision)),
-      );
-      return;
-    case 'planApproval':
-      issueArms(
-        runId,
-        approvalDecisionArms<'planApproval'>(payload, planDecision(decision)),
-      );
-      return;
-    case 'proposal':
-      issueArms(
-        runId,
-        approvalDecisionArms<'proposal'>(payload, proposalDecision(decision)),
-      );
-      if (decision.accepted && decision.bypass === 'superYolo') {
-        approveQueuedDelegatedWorkForRun(runId);
-      }
-      return;
-    case 'userQuestion':
-      issueArms(
-        runId,
-        approvalDecisionArms<'userQuestion'>(
-          payload,
-          userQuestionDecision(decision),
-        ),
-      );
-      return;
+  const arms = approvalDecisionArms(payload, decision);
+  const runtimeArms = arms.flatMap((arm) =>
+    'runtime' in arm ? [arm.runtime] : [],
+  );
+  if (runtimeArms.length > 0) {
+    issue(runId, request.requestId, onRefused, ...runtimeArms);
   }
-  assertNever(payload, 'Unhandled approval payload kind');
-}
-
-/**
- * A host hook's hold on one request from before it can be shown until the
- * hook has acted on the decision: the latch its promise awaits, the abort
- * that stops its preparation and commit work, and the presentation payload.
- * Every operation is a no-op once the entry has left the surface.
- */
-export interface HostReservation {
-  /** Resolves with the surface's decision: the modal's, an auto-decision
-   *  passed to {@link settle}, a replacement, or a cancel. */
-  readonly decided: Promise<ApprovalDecision>;
-  /** Aborts when the entry is cancelled or replaced, never on its own
-   *  decision, so work running for it stops at its next await. */
-  readonly signal: AbortSignal;
-  /** Publish the finished payload; the modal can show it from here on. */
-  readonly present: (payload: ApprovalPayload) => void;
-  /** Answer without showing a modal. */
-  readonly settle: (decision: ApprovalDecision) => void;
-  /** Hand the entry back once the decision has been acted on. */
-  readonly release: () => void;
-}
-
-/**
- * Take a host entry for a request the runtime has published and this host's
- * hook will settle.
- */
-export function reserveHostRequest(
-  payload: ApprovalPayload,
-  options: { readonly owner?: object; readonly presentable?: boolean } = {},
-): HostReservation {
-  const requestId = payload.data.requestId;
-  const preparation = new AbortController();
-  let decide!: (decision: ApprovalDecision) => void;
-  const decidedPromise = new Promise<ApprovalDecision>((resolve) => {
-    decide = resolve;
-  });
-  const entry: HostRequest = {
-    payload,
-    presentable: options.presentable ?? false,
-    settle: decide,
-    preparation,
-    owner: options.owner,
-  };
-  updateHost((previous) => new Map(previous).set(requestId, entry));
-  const live = (): boolean =>
-    hostRequests.get().get(requestId)?.settle === decide;
-  return {
-    decided: decidedPromise,
-    signal: preparation.signal,
-    present: (presented) => {
-      if (!live()) return;
-      updateHost((previous) =>
-        new Map(previous).set(requestId, {
-          ...entry,
-          payload: presented,
-          presentable: true,
-        }),
+  for (const arm of arms) {
+    if (!('host' in arm)) continue;
+    if (!hostCapability) {
+      logWarning(
+        'cli.tui',
+        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
       );
-    },
-    settle: (decision) => {
-      if (!live()) return;
-      markDecided(requestId);
-      decide(decision);
-    },
-    release: () => {
-      if (!live()) return;
-      updateHost((previous) => {
-        const next = new Map(previous);
-        next.delete(requestId);
-        return next;
-      });
-    },
-  };
-}
-
-/**
- * Settle the host entries `predicate` selects with `decision`, aborting their
- * work. The runtime's own pending set is not touched: cancelling a runtime
- * request is `session.interactions.cancel(selector)`, which calls back into
- * the host's `cancel` hook, which is where this runs.
- */
-export function settleHostRequestsWhere(
-  predicate: (payload: ApprovalPayload, owner: object | undefined) => boolean,
-  decision: ApprovalDecision = INTERRUPT,
-): number {
-  let count = 0;
-  for (const [requestId, entry] of hostRequests.get()) {
-    if (!predicate(entry.payload, entry.owner)) continue;
-    if (settleHost(requestId, decision, { cancelled: true })) count += 1;
+      continue;
+    }
+    hostCapability(arm.host);
   }
-  return count;
+  // Both approve-all actions on a proposal turn the run's delegated-work
+  // bypass on, so the work already queued behind it follows.
+  if (
+    payload.kind === 'proposal' &&
+    (decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION ||
+      decision.action === APPROVE_SESSION_ACTION)
+  ) {
+    approveQueuedDelegatedWorkForRun(runId);
+  }
 }
 
 /** Approve every delegated request pending on `runId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
 function approveQueuedDelegatedWorkForRun(runId: RunId): void {
   const view = sessionView().get();
-  const host = hostRequests.get();
   const done = decided.get();
   for (const request of attentionRequests(view)) {
     if (request.runId !== runId || done.has(request.requestId)) continue;
@@ -583,16 +422,63 @@ function approveQueuedDelegatedWorkForRun(runId: RunId): void {
     ) {
       continue;
     }
-    const payload = presentedPayload(request, host);
-    if (!payload) continue;
-    decideRequest(request, payload, { accepted: true });
+    decideRequest(request, request.payload, { action: 'approve' });
   }
 }
 
-/** Forget every host entry and decision latch: the Surface reset (`/clear`). */
+/**
+ * Decide one pending request by id, for a surface answer that is not the
+ * modal's: the CLI policy's own answer for the kinds it settles without a
+ * person, and the retry a stored credential lets this host take. A request
+ * the fold no longer lists cannot be answered, and saying so is the point —
+ * a decision dropped in silence reads as a run waiting on nobody.
+ */
+export function decidePendingRequest(
+  requestId: string,
+  decision: SurfaceDecision,
+  onRefused?: () => void,
+): void {
+  const request = attentionRequests(sessionView().get()).find(
+    (pending) => pending.requestId === requestId,
+  );
+  if (!request) {
+    logWarning(
+      'cli.tui',
+      `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+    );
+    return;
+  }
+  decideRequest(request, request.payload, decision, onRefused);
+}
+
+/**
+ * Land one durable decision a host capability took itself — the retry a
+ * stored credential let this host switch onto the user's own key. The
+ * `request.decide` alone, with no arm decomposition: the decomposition is
+ * what named the capability, so re-entering it here would hand the
+ * capability back to itself and the request would never be answered.
+ */
+export function landRequestDecision(
+  runId: RunId,
+  requestId: string,
+  decision: RequestDecision,
+  onRefused?: () => void,
+): void {
+  markDecided(requestId);
+  issue(runId, requestId, onRefused, {
+    kind: 'request.decide',
+    runId,
+    requestId,
+    decision,
+  });
+}
+
+/** Forget every staged presentation and local decision: the Surface reset
+ *  (`/clear`). The pending requests themselves are the fold's, closed by the
+ *  runs they belong to. */
 function resetApprovalSurface(): void {
-  settleHostRequestsWhere(() => true);
-  hostRequests.set(new Map());
+  stagedPresentations.set(new Map());
+  stagedSeenListed.clear();
   decided.set(new Set());
   promoted.set(undefined);
   presentedOrder.clear();

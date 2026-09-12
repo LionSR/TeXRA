@@ -1,113 +1,106 @@
 // Third-party imports
 import { Effect, Result } from 'effect';
-import { z } from 'zod';
 
 // Local imports - agent storage
-import { getRunStore, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runWithInactiveRunLease } from '@agent/storage/runLease';
 import {
-  RunLeaseLostError,
-  runWithInactiveRunLease,
-} from '@agent/storage/runLease';
-import type { RunKVStore } from '@agent/storage/RunKVStore';
-import { createLog } from '@logger/logUtils';
-import {
-  RunIdSchema,
+  aggregateId,
   RUN_OUTCOME,
   type RunEnd,
   type RunId,
+  type StableSubagentPhase,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
-// Version 1 covers all four phases (reserved, launched, committed,
-// retryable) by decision (#10663). A present but unknown version or phase
-// fails closed: no defaults, no coercion.
-const STABLE_SUBAGENT_STATE_SCHEMA_VERSION = 1;
-const STABLE_SUBAGENT_ATTEMPT_KV_KEY = 'stable-subagent-attempt';
-const STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX = 'stable-subagent-sequence-';
-
-const StableSubagentAttemptSchema = z.strictObject({
-  schemaVersion: z.literal(STABLE_SUBAGENT_STATE_SCHEMA_VERSION),
-  logicalRunId: RunIdSchema,
-  parentRunId: RunIdSchema,
-  phase: z.enum(['reserved', 'launched', 'committed', 'retryable']),
-});
-
-export type StableSubagentAttempt = z.infer<typeof StableSubagentAttemptSchema>;
-
-const StableSubagentSequenceSchema = z.strictObject({
-  schemaVersion: z.literal(STABLE_SUBAGENT_STATE_SCHEMA_VERSION),
-  logicalRunId: RunIdSchema,
-  parentRunId: RunIdSchema,
-  nextAttempt: z.int().nonnegative(),
-});
-
-type StableSubagentSequence = z.infer<typeof StableSubagentSequenceSchema>;
-
-function stableSubagentSequenceKvKey(logicalRunId: RunId): string {
-  return `${STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX}${logicalRunId}`;
+/**
+ * The stable-call marker for one physical attempt (#10663): the parent-owned
+ * `run.subagentAttempt` row on the launching run's aggregate, keyed by the
+ * attempt's run. A present but unknown phase fails closed at the row schema:
+ * no defaults, no coercion.
+ */
+export interface StableSubagentAttempt {
+  readonly runId: RunId;
+  readonly logicalRunId: RunId;
+  readonly parentRunId: RunId;
+  readonly phase: StableSubagentPhase;
 }
 
-export function isStableSubagentStateKvKey(key: string): boolean {
-  return (
-    key === STABLE_SUBAGENT_ATTEMPT_KV_KEY ||
-    key.startsWith(STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX)
-  );
+/** The parent's stable-subagent facts, folded latest per key from its rows. */
+interface StableSubagentMarkers {
+  /** Physical attempts reserved so far, by logical call. */
+  readonly nextAttempt: ReadonlyMap<RunId, number>;
+  /** Each attempt's latest phase, by the attempt's run. */
+  readonly attempts: ReadonlyMap<RunId, StableSubagentAttempt>;
 }
 
-/** Read the parent-owned attempt sequence for one stable logical call. */
-async function readStableSubagentSequence(
-  store: RunKVStore,
-  logicalRunId: RunId,
-): Promise<StableSubagentSequence | null> {
-  const raw = await store.read(stableSubagentSequenceKvKey(logicalRunId));
-  return raw === undefined ? null : StableSubagentSequenceSchema.parse(raw);
-}
-
-/** Atomically publish the number of child attempts reserved for this call. */
-async function writeStableSubagentSequence(
-  store: RunKVStore,
-  logicalRunId: RunId,
+const readStableSubagentMarkers = (
+  session: SessionHandle,
   parentRunId: RunId,
+): Effect.Effect<StableSubagentMarkers, Error> =>
+  session.readAggregate(aggregateId('run', parentRunId)).pipe(
+    Effect.map((rows) => {
+      const nextAttempt = new Map<RunId, number>();
+      const attempts = new Map<RunId, StableSubagentAttempt>();
+      for (const row of rows) {
+        if (row.type === 'run.subagentSequence') {
+          nextAttempt.set(row.logicalRunId, row.nextAttempt);
+        } else if (row.type === 'run.subagentAttempt') {
+          attempts.set(row.runId, {
+            runId: row.runId,
+            logicalRunId: row.logicalRunId,
+            parentRunId,
+            phase: row.phase,
+          });
+        }
+      }
+      return { nextAttempt, attempts };
+    }),
+  );
+
+/** Publish the number of child attempts reserved for this call. */
+const writeStableSubagentSequence = (
+  session: SessionHandle,
+  parentRunId: RunId,
+  logicalRunId: RunId,
   nextAttempt: number,
-): Promise<void> {
-  const sequence = StableSubagentSequenceSchema.parse({
-    schemaVersion: STABLE_SUBAGENT_STATE_SCHEMA_VERSION,
-    logicalRunId,
-    parentRunId,
-    nextAttempt,
-  });
-  await store.write(
-    stableSubagentSequenceKvKey(sequence.logicalRunId),
-    sequence,
-  );
-}
+): Effect.Effect<void, Error> =>
+  session
+    .commit([
+      {
+        type: 'run.subagentSequence',
+        aggregateId: aggregateId('run', parentRunId),
+        logicalRunId,
+        nextAttempt,
+      },
+    ])
+    .pipe(Effect.asVoid);
 
-/** Read a stable-call marker. Malformed present state fails validation. */
-async function readStableSubagentAttempt(
-  store: RunKVStore,
-): Promise<StableSubagentAttempt | null> {
-  const raw = await store.read(STABLE_SUBAGENT_ATTEMPT_KV_KEY);
-  return raw === undefined ? null : StableSubagentAttemptSchema.parse(raw);
-}
-
-/** Atomically replace the stable-call marker at a durable lifecycle edge. */
-export async function writeStableSubagentAttempt(
-  store: RunKVStore,
+/** Replace the stable-call marker at a durable lifecycle edge. */
+export const writeStableSubagentAttempt = (
+  session: SessionHandle,
   attempt: StableSubagentAttempt,
-): Promise<void> {
-  await store.write(
-    STABLE_SUBAGENT_ATTEMPT_KV_KEY,
-    StableSubagentAttemptSchema.parse(attempt),
-  );
-}
+): Effect.Effect<void, Error> =>
+  session
+    .commit([
+      {
+        type: 'run.subagentAttempt',
+        aggregateId: aggregateId('run', attempt.parentRunId),
+        runId: attempt.runId,
+        logicalRunId: attempt.logicalRunId,
+        phase: attempt.phase,
+      },
+    ])
+    .pipe(Effect.asVoid);
 
 /**
  * The existing physical-attempt protocol, including its recovery restrictions.
- * Reservation, reconciliation and commit operate on the same persisted keys;
- * live run and its serialization remain with the native caller.
+ * Reservation, reconciliation and commit operate on the same parent-owned
+ * rows; live run and its serialization remain with the native caller.
  */
 interface StableSubagentCallIdentity {
   readonly runId: RunId;
@@ -119,8 +112,6 @@ interface StableSubagentResult {
   readonly runId: RunId;
   readonly result: RunEnd;
 }
-
-const log = createLog('stableSubagentAttempt');
 
 type StableAttemptInspection =
   | { readonly kind: 'absent' }
@@ -158,25 +149,13 @@ function stableAttemptRunId(logicalRunId: RunId, attempt: number): RunId {
   return deriveRunId({ attempt, logicalRunId });
 }
 
-function stableStorageOperation<A>(
-  session: SessionHandle,
-  operation: () => Promise<A>,
-): Effect.Effect<A, Error> {
-  return Effect.tryPromise({
-    try: () => runInSession(session, operation),
-    catch: ensureError,
-  });
-}
-
 const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
   options: StableSubagentCallIdentity,
   runId: RunId,
+  attempt: StableSubagentAttempt | null,
   session: SessionHandle,
 ): Effect.fn.Return<StableAttemptInspection, Error> {
-  const store = runInSession(session, () => getRunStore(runId));
   const persisted = yield* Effect.all([
-    stableStorageOperation(session, () => store.listKeys()),
-    stableStorageOperation(session, () => readStableSubagentAttempt(store)),
     getRunRecords(session, runId).readResultMeta(),
     getRunRecords(session, runId).exists(),
     getRunRecords(session, runId).readRunEnd(),
@@ -189,14 +168,12 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
         ),
     ),
   );
-  const [keys, attempt, resultMeta, exists, runEnd] = persisted;
-  if (keys.length === 0 && !exists && resultMeta === null)
+  const [resultMeta, exists, runEnd] = persisted;
+  if (attempt === null && !exists && resultMeta === null)
     return { kind: 'absent' };
-  if (
-    !attempt ||
-    attempt.logicalRunId !== options.runId ||
-    attempt.parentRunId !== options.parentRunId
-  ) {
+  // The marker was read from this call's parent aggregate, so a parent
+  // mismatch is already impossible; only the logical call can disagree.
+  if (attempt === null || attempt.logicalRunId !== options.runId) {
     return yield* Effect.fail(
       new SubagentReconciliationError(
         `Persisted subagent ${runId} does not belong to this stable workflow call; refusing to reuse or repeat it.`,
@@ -214,15 +191,13 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
     if (attempt.phase !== 'launched') return { kind: 'advance' };
     // A launched attempt without a manifest is unsafe to repeat only if the
     // child may have finished side-effectful work whose manifest was lost:
-    // a recorded completed turn or a persisted COMPLETED outcome proves the
+    // a settled child turn or a persisted COMPLETED outcome proves the
     // settle path ran, so those stay irreconcilable. Otherwise the child
     // never reached terminal persistence (interrupted, or its artifact drain
-    // failed and the parent's failure-time retryable write was refused as
-    // lease-lost); repair the marker here, under the inactive-lease fence
-    // so a live child's still-held lease keeps refusing the write.
-    const turnState = yield* stableStorageOperation(session, () =>
-      store.readTurnState(),
-    ).pipe(
+    // failed and the parent's failure-time retryable write was refused);
+    // repair the marker here, under the inactive-lease fence so a live
+    // child's still-held lease keeps refusing the write.
+    const turns = yield* readChildTurnState(session, runId).pipe(
       Effect.mapError(
         (cause) =>
           new SubagentReconciliationError(
@@ -232,22 +207,36 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
       ),
     );
     const settledEvidence =
-      turnState?.lastCompletedTurn !== undefined ||
-      runEnd?.outcome === RUN_OUTCOME.COMPLETED;
+      turns.lastCompleted !== null || runEnd?.outcome === RUN_OUTCOME.COMPLETED;
     if (!settledEvidence) {
-      const repair = yield* stableStorageOperation(session, () =>
-        runWithInactiveRunLease(runId, () =>
-          writeStableSubagentAttempt(store, { ...attempt, phase: 'retryable' }),
-        ),
-      ).pipe(
-        Effect.mapError(
-          (cause) =>
-            new SubagentReconciliationError(
-              `Failed to repair the unsettled launched subagent ${runId}.`,
-              { cause },
-            ),
-        ),
-      );
+      const retryable: StableSubagentAttempt = {
+        ...attempt,
+        phase: 'retryable',
+      };
+      const repair = yield* Effect.tryPromise({
+        try: () =>
+          runInSession(session, () =>
+            runWithInactiveRunLease(runId, async () => {
+              // The session's ordered publisher, awaited to durability
+              // inside the fence, as the checkpoint journal is.
+              session.publish([
+                {
+                  type: 'run.subagentAttempt',
+                  aggregateId: aggregateId('run', retryable.parentRunId),
+                  runId: retryable.runId,
+                  logicalRunId: retryable.logicalRunId,
+                  phase: retryable.phase,
+                },
+              ]);
+              await session.settlePublications();
+            }),
+          ),
+        catch: (cause) =>
+          new SubagentReconciliationError(
+            `Failed to repair the unsettled launched subagent ${runId}.`,
+            { cause },
+          ),
+      });
       if (repair.status === 'performed') return { kind: 'advance' };
       return yield* Effect.fail(
         new SubagentReconciliationError(
@@ -311,40 +300,17 @@ export const throwRetryableDurabilityError = Effect.fn(
   session: SessionHandle,
 ): Effect.fn.Return<never, Error> {
   if (!stableAttempt) return yield* Effect.fail(error);
-  const marker = { ...stableAttempt, phase: 'retryable' as const };
-  const written = yield* stableStorageOperation(session, () =>
-    writeStableSubagentAttempt(getRunStore(runId), marker),
-  ).pipe(Effect.result);
+  const written = yield* writeStableSubagentAttempt(session, {
+    ...stableAttempt,
+    phase: 'retryable',
+  }).pipe(Effect.result);
   if (Result.isFailure(written)) {
-    const cause = written.failure;
-    if (cause instanceof RunLeaseLostError) {
-      const repair = yield* stableStorageOperation(session, () =>
-        runWithInactiveRunLease(runId, () =>
-          writeStableSubagentAttempt(getRunStore(runId), marker),
-        ),
-      ).pipe(
-        Effect.catch((repairError) =>
-          Effect.sync(() => {
-            log.warn('Retryable-marker repair write failed', {
-              data: { runId, error: repairError },
-            });
-            return undefined;
-          }),
-        ),
-      );
-      if (repair?.status !== 'performed')
-        log.warn(
-          'Deferred retryable marker to resume-time reconciliation: the child lease is still held',
-          { data: { runId } },
-        );
-      return yield* Effect.fail(error);
-    }
     return yield* Effect.fail(
       new SubagentDurabilityError(
         `${error.message} Failed to mark the stable attempt as retryable.`,
         {
           cause: new AggregateError(
-            [error, cause],
+            [error, written.failure],
             `Subagent ${runId} durability recovery also failed.`,
           ),
         },
@@ -372,11 +338,9 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
       try: () => options.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    const parentStore = runInSession(session, () =>
-      getRunStore(options.parentRunId),
-    );
-    const sequence = yield* stableStorageOperation(session, () =>
-      readStableSubagentSequence(parentStore, options.runId),
+    const markers = yield* readStableSubagentMarkers(
+      session,
+      options.parentRunId,
     ).pipe(
       Effect.mapError(
         (cause) =>
@@ -386,17 +350,9 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
           ),
       ),
     );
-    if (
-      sequence &&
-      (sequence.logicalRunId !== options.runId ||
-        sequence.parentRunId !== options.parentRunId)
-    )
-      return yield* Effect.fail(
-        new SubagentReconciliationError(
-          `Persisted attempt sequence for subagent ${options.runId} has different ownership.`,
-        ),
-      );
-    let nextAttempt = sequence?.nextAttempt ?? 0;
+    const markerOf = (runId: RunId): StableSubagentAttempt | null =>
+      markers.attempts.get(runId) ?? null;
+    let nextAttempt = markers.nextAttempt.get(options.runId) ?? 0;
     if (nextAttempt > MAX_STABLE_ATTEMPTS)
       return yield* Effect.fail(
         new SubagentReconciliationError(
@@ -409,6 +365,7 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
       const inspected = yield* inspectStableAttempt(
         options,
         candidate,
+        markerOf(candidate),
         session,
       ).pipe(Effect.result);
       if (Result.isFailure(inspected)) {
@@ -438,18 +395,17 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
       candidateInspection = yield* inspectStableAttempt(
         options,
         runId,
+        markerOf(runId),
         session,
       );
       if (candidateInspection.kind === 'recovered') return candidateInspection;
       if (candidateInspection.kind !== 'advance') break;
       nextAttempt += 1;
-      yield* stableStorageOperation(session, () =>
-        writeStableSubagentSequence(
-          parentStore,
-          options.runId,
-          options.parentRunId,
-          nextAttempt,
-        ),
+      yield* writeStableSubagentSequence(
+        session,
+        options.parentRunId,
+        options.runId,
+        nextAttempt,
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -461,15 +417,13 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
       );
     }
     const attempt: StableSubagentAttempt = {
-      schemaVersion: STABLE_SUBAGENT_STATE_SCHEMA_VERSION,
+      runId,
       logicalRunId: options.runId,
       parentRunId: options.parentRunId,
       phase: 'reserved',
     };
     if (candidateInspection.kind === 'absent')
-      yield* stableStorageOperation(session, () =>
-        writeStableSubagentAttempt(getRunStore(runId), attempt),
-      ).pipe(
+      yield* writeStableSubagentAttempt(session, attempt).pipe(
         Effect.mapError(
           (cause) =>
             new SubagentDurabilityError(
@@ -478,13 +432,11 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
             ),
         ),
       );
-    yield* stableStorageOperation(session, () =>
-      writeStableSubagentSequence(
-        parentStore,
-        options.runId,
-        options.parentRunId,
-        nextAttempt + 1,
-      ),
+    yield* writeStableSubagentSequence(
+      session,
+      options.parentRunId,
+      options.runId,
+      nextAttempt + 1,
     ).pipe(
       Effect.mapError(
         (cause) =>
@@ -502,7 +454,6 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
 export const commitStableSubagentAttempt = Effect.fn(
   'commitStableSubagentAttempt',
 )(function* (
-  store: RunKVStore,
   runId: RunId,
   stableAttempt: StableSubagentAttempt,
   session: SessionHandle,
@@ -524,9 +475,10 @@ export const commitStableSubagentAttempt = Effect.fn(
         `Failed to persist result for subagent ${runId}.`,
       ),
     );
-  yield* stableStorageOperation(session, () =>
-    writeStableSubagentAttempt(store, { ...stableAttempt, phase: 'committed' }),
-  ).pipe(
+  yield* writeStableSubagentAttempt(session, {
+    ...stableAttempt,
+    phase: 'committed',
+  }).pipe(
     Effect.mapError(
       (cause) =>
         new SubagentCommitError(

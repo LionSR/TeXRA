@@ -11,14 +11,11 @@ import {
   type RunPhase,
 } from '@shared/schemas';
 import {
-  canTransitionRunPhase,
   deriveRunOutcome,
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
   runOutcomeToCliRunStatus,
-  RUN_TRANSITION_CAUSE,
-  type RunTransitionCause,
 } from '@shared/runs/runStatus';
 
 describe('run outcome algebra', () => {
@@ -63,80 +60,12 @@ describe('run outcome algebra', () => {
   });
 });
 
-describe('stream phase transition table', () => {
-  const phases = RunPhaseSchema.options;
-  const causes = Object.values(RUN_TRANSITION_CAUSE) as RunTransitionCause[];
-
-  type CauseRow = Record<RunTransitionCause, readonly RunPhase[]>;
-
-  const NO_TRANSITIONS = Object.fromEntries(
-    causes.map((cause): [RunTransitionCause, readonly RunPhase[]] => [
-      cause,
-      [],
-    ]),
-  ) as CauseRow;
-  const RESUME_ONLY: CauseRow = {
-    ...NO_TRANSITIONS,
-    [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
-  };
-
-  const allowed: Record<RunPhase, CauseRow> = {
-    [RUN_PHASE.RUNNING]: {
-      [RUN_TRANSITION_CAUSE.LIFECYCLE]: [
-        RUN_PHASE.COMPLETED,
-        RUN_PHASE.CANCELLED,
-        RUN_PHASE.FAILED,
-      ],
-      [RUN_TRANSITION_CAUSE.WAIT]: [RUN_PHASE.WAITING],
-      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
-      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
-    },
-    [RUN_PHASE.WAITING]: {
-      ...NO_TRANSITIONS,
-      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
-      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
-    },
-    [RUN_PHASE.COMPLETED]: RESUME_ONLY,
-    [RUN_PHASE.CANCELLED]: RESUME_ONLY,
-    [RUN_PHASE.FAILED]: RESUME_ONLY,
-  };
-
-  it('is exhaustive over every phase, cause, and destination phase', () => {
-    for (const from of phases) {
-      for (const cause of causes) {
-        for (const to of phases) {
-          expect(canTransitionRunPhase(from, to, cause)).toBe(
-            allowed[from][cause].includes(to),
-          );
-        }
-      }
-    }
-  });
-
-  it('admits only named start causes from idle', () => {
-    const fromIdle: CauseRow = {
-      ...NO_TRANSITIONS,
-      [RUN_TRANSITION_CAUSE.LIFECYCLE]: [RUN_PHASE.RUNNING],
-      [RUN_TRANSITION_CAUSE.RESUME]: [RUN_PHASE.RUNNING],
-      [RUN_TRANSITION_CAUSE.USER_STOP]: [RUN_PHASE.CANCELLED],
-    };
-
-    for (const cause of causes) {
-      for (const to of phases) {
-        expect(canTransitionRunPhase(undefined, to, cause)).toBe(
-          fromIdle[cause].includes(to),
-        );
-      }
-    }
-  });
-});
-
 // The membership sets these three predicates answer used to be derived from
 // the legacy 7-value STREAM_STATUS_TRAITS table, deleted with the rest of the
 // legacy vocabulary's production surface (#7993 step 4). They are now the only
 // enumeration of "which phases are active / in flight / terminal", so pin them
 // exhaustively over the phase vocabulary rather than by example.
-describe('stream phase membership predicates', () => {
+describe('run phase membership predicates', () => {
   const membership: Record<
     RunPhase,
     { active: boolean; inFlight: boolean; terminalOutcome: boolean }

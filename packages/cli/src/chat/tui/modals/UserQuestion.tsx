@@ -28,18 +28,18 @@ import type {
   UserQuestionPrompt,
 } from '@shared/schemas';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
   userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import type { ApprovalDecision } from '../state/approvalQueue';
 
 interface UserQuestionProps {
   readonly availableRows?: number;
   readonly payload: UserQuestionPermission;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 interface UserQuestionPromptLine {
@@ -446,10 +446,7 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const question = questions[index];
 
   function cancel(): void {
-    onDecide({
-      accepted: false,
-      userMessage: USER_QUESTION_SKIPPED_FEEDBACK,
-    });
+    onDecide({ action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK });
   }
 
   function submitAnswer(answer: string | string[] | undefined): void {

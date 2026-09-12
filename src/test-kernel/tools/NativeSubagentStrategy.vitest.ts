@@ -14,10 +14,12 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   RUN_PHASE,
   RunIdSchema,
   RunUsageTotalsSchema,
   USER_FOLLOW_UP_SUPPORT,
+  type FlowStep,
   type RunId,
 } from '@shared/schemas';
 
@@ -27,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   persistChildRunDelivery: vi.fn(),
   readConfig: vi.fn(),
-  writeTurnState: vi.fn(),
   resumeToolUseTurn: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
@@ -62,9 +63,6 @@ vi.mock('@agent/storage', () => ({
   finalizeRun: mocks.finalizeRun,
   getRunRecords: vi.fn(() => ({
     readConfig: mocks.readConfig,
-  })),
-  getRunStore: vi.fn(() => ({
-    writeTurnState: mocks.writeTurnState,
   })),
 }));
 
@@ -142,6 +140,25 @@ function toolUseTurnResult(
     output: { category: 'toolUse', response: '', files: [] },
     ...extras,
   };
+}
+
+/**
+ * Move a child's phase the way its loop does: a `flow.step` row, the one fact
+ * the fold derives a live phase from (one run model, 3.3). `waiting` parks the
+ * run, any other step runs it.
+ */
+function publishFlowStep(
+  session: SessionHandle,
+  runId: RunId,
+  step: FlowStep,
+): void {
+  session.publish([
+    {
+      type: 'flow.step',
+      aggregateId: aggregateId('run', runId),
+      payload: { family: 'toolUse', step },
+    },
+  ]);
 }
 
 /** The run-cumulative usage totals a turn reports, keyed by its spend. */
@@ -234,7 +251,6 @@ describe('NativeSubagentStrategy', () => {
     mocks.throwErrorFormatting = false;
     mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.persistChildRunDelivery.mockReturnValue(Effect.void);
-    mocks.writeTurnState.mockResolvedValue(undefined);
     mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   });
 
@@ -324,6 +340,9 @@ describe('NativeSubagentStrategy', () => {
 
   it('records a failed turn cost once through interactive loop settlement', async () => {
     const params = baseParams();
+    // The loop commits the child's `child.turn` rows, which its aggregate
+    // refuses until the run has begun.
+    publishTestRunStart(params.session, params.runId);
     const recordCost = vi.fn();
     mocks.executeAgent.mockResolvedValueOnce(
       toolUseTurnResult('failed', params.runId, {
@@ -357,6 +376,7 @@ describe('NativeSubagentStrategy', () => {
 
   it('persists a typed result-only failure without formatting error prose', async () => {
     const params = { ...baseParams(), resultOnly: true };
+    publishTestRunStart(params.session, params.runId);
     const failure = new Error('provider failed');
     mocks.throwErrorFormatting = true;
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
@@ -635,13 +655,11 @@ describe('NativeSubagentStrategy', () => {
 
     mocks.executeAgent.mockImplementationOnce(
       async (_config, _runId, options) => {
-        session.status.transition(childRunId, RUN_PHASE.RUNNING, 'lifecycle');
-        session.runs.trackAgentRun(handle, {
-          status: RUN_PHASE.RUNNING,
-        });
+        publishFlowStep(session, childRunId, 'turn.begin');
+        session.runs.track(handle);
         options.onRunResolved?.(childRunId);
         options.onRun?.(handle);
-        session.status.transitionToWaiting(childRunId, 'wait');
+        publishFlowStep(session, childRunId, 'waiting');
         return waitingTurn('initial response');
       },
     );
@@ -658,7 +676,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
     mocks.resumeToolUseTurn.mockImplementation(async (_snapshot, options) => {
       options.onRun?.(handle);
-      session.status.transitionToWaiting(childRunId, 'wait');
+      publishFlowStep(session, childRunId, 'waiting');
       return waitingTurn(
         `follow-up response ${mocks.resumeToolUseTurn.mock.calls.length}`,
       );
@@ -740,7 +758,9 @@ describe('NativeSubagentStrategy', () => {
         ],
       ]);
       expect(session.followUps.getAll(childRunId)).toEqual([]);
-      expect(session.status.get(childRunId)).toBe(RUN_PHASE.WAITING);
+      await vi.waitFor(() =>
+        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING),
+      );
       const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
         ([, followUp]) => followUp.text.includes('follow-up response'),
       );
@@ -752,7 +772,6 @@ describe('NativeSubagentStrategy', () => {
       await Effect.runPromise(session.runs.kill(childRunId).settlement);
       await completion;
       session.followUps.terminalize(childRunId);
-      session.status.clearRun(childRunId);
     }
   });
 
@@ -796,6 +815,7 @@ describe('NativeSubagentStrategy', () => {
       parentRunId,
       interactions,
     };
+    publishTestRunStart(session, childRunId);
 
     mocks.executeAgent.mockResolvedValueOnce({
       outcome: 'completed',
@@ -835,7 +855,6 @@ describe('NativeSubagentStrategy', () => {
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
       session.followUps.terminalize(childRunId);
-      session.status.clearRun(childRunId);
     }
   });
 });

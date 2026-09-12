@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -134,10 +135,9 @@ describe('BashTool error feedback', () => {
   });
 
   it('reports an explicit approval rejection to the agent', async () => {
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      action: 'reject',
-      feedback: 'No thanks.',
-    });
+    vi.mocked(requestBashApproval).mockReturnValueOnce(
+      Effect.succeed({ action: 'reject', feedback: 'No thanks.' }),
+    );
     const rejected = await new BashTool().call({ command: 'echo rejected' });
     expect(rejected.status).toBe('error');
     expect(rejected.error).toContain('User rejected command');
@@ -145,7 +145,9 @@ describe('BashTool error feedback', () => {
   });
 
   it('does not present generated rejection guidance as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({ action: 'reject' });
+    vi.mocked(requestBashApproval).mockReturnValueOnce(
+      Effect.succeed({ action: 'reject' }),
+    );
     const rejected = await new BashTool().call({ command: 'echo rejected' });
 
     expect(rejected.status).toBe('error');
@@ -159,10 +161,12 @@ describe('BashTool error feedback', () => {
   });
 
   it('does not present an approval-policy denial as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      action: 'reject',
-      reason: 'Denied by TeXRA approval policy.',
-    });
+    vi.mocked(requestBashApproval).mockReturnValueOnce(
+      Effect.succeed({
+        action: 'deny',
+        reason: 'Denied by TeXRA approval policy.',
+      }),
+    );
     const rejected = await new BashTool().call({ command: 'echo rejected' });
 
     expect(rejected.status).toBe('error');
@@ -178,10 +182,9 @@ describe('BashTool error feedback', () => {
   });
 
   it('preserves policy-denial provenance when its reason is blank', async () => {
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      action: 'reject',
-      reason: '   ',
-    });
+    vi.mocked(requestBashApproval).mockReturnValueOnce(
+      Effect.succeed({ action: 'deny', reason: '   ' }),
+    );
     const rejected = await new BashTool().call({ command: 'echo rejected' });
 
     expect(rejected.error).toContain('Command denied');
@@ -191,13 +194,12 @@ describe('BashTool error feedback', () => {
   });
 
   it('does not present an automatic cancellation as user feedback', async () => {
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      action: 'reject',
-      cause: 'Session disposed.',
-    });
+    vi.mocked(requestBashApproval).mockReturnValueOnce(
+      Effect.succeed({ action: 'cancel', cause: 'Session disposed.' }),
+    );
     const rejected = await new BashTool().call({ command: 'echo rejected' });
 
-    expect(rejected.error).toContain('Command approval cancelled');
+    expect(rejected.error).toContain('Command cancelled');
     expect(rejected.error).toContain('Session disposed.');
     expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.userInstruction).toBeUndefined();

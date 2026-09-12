@@ -7,7 +7,11 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import {
+  MODEL_AVAILABILITY_STATUS,
+  type AgentOptionData,
+  type ModelOptionData,
+} from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { AGENT_DECORATORS, getModelProviderDecorator } from '@shared/wa/icons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -85,10 +89,16 @@ export function renderAgentOptions(options: AgentOptionData[]): TemplateResult {
 
 function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
-  // `computeModelOptionsData` is the sole producer of both fields; a row
-  // without them came from the secret-free basic list, which has no
-  // availability verdict to show.
-  const { availability, availabilityLabel } = opt;
+  // `computeModelOptionsData` is the sole producer of the kind; a row without
+  // one came from the secret-free basic list, which has no availability
+  // verdict to show.
+  const { availability } = opt;
+  const status =
+    availability === undefined
+      ? undefined
+      : MODEL_AVAILABILITY_STATUS[availability];
+  const availabilityLabel = status?.label;
+  const disabled = status !== undefined && !status.available;
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);
@@ -99,20 +109,20 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
   return html`
     <wa-option
       value=${opt.value}
-      ?disabled=${opt.disabled}
+      ?disabled=${disabled}
       title=${tooltip || nothing}
       data-provider=${opt.provider || nothing}
       data-context=${opt.context || nothing}
       data-cost=${opt.cost || nothing}
       data-availability=${availability || nothing}
-      data-requires-key=${opt.requiresKey ? 'true' : nothing}
+      data-requires-key=${status?.requiresKey ? 'true' : nothing}
       aria-label=${
         availabilityLabel ? `${opt.label} (${availabilityLabel})` : opt.label
       }
     >
       <span class="agent-icon">${waIcon(decorator.icon)} </span>${opt.label}
       ${
-        opt.disabled
+        disabled
           ? html`<span class="model-option-status">
               ${availabilityLabel}
             </span>`

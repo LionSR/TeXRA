@@ -4,7 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache } from '@agent/storage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
@@ -38,9 +37,7 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
 describe('ExecutionsTool resumability fallback', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
-  beforeEach(() => {
-    clearStoreCache();
-  });
+  beforeEach(() => {});
 
   it('does not label a metadata-free run carrying a snapshot as completed', async () => {
     const runId = 'abc123abc123' as RunId;

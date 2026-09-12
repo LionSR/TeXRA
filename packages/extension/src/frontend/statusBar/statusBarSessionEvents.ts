@@ -4,19 +4,21 @@ import { Effect, Fiber, Stream } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
 import { aggregateTarget } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 
 interface StatusBarSessionEventOptions {
-  session: Pick<SessionHandle, 'events' | 'now' | 'status'>;
+  session: Pick<SessionHandle, 'folded' | 'now' | 'runView'>;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
 }
 
 /**
- * Refreshes the extension status bar when the canonical session status and
- * usage facts change. The facts themselves are not mirrored here: the status
- * bar's tracker projects live from the session status plane and the session
- * snapshot store, which the runtime updates before these readers run. Reads
- * the session's event plane from now on (PRD one-fold-three-renderers, 7.1).
+ * Refreshes the extension status bar when a run's phase or usage moves. The
+ * facts themselves are not mirrored here: both callbacks read the session's
+ * fold, so this reads the fold-gated tail (`SessionHandle.folded`, PRD 7.2)
+ * and not the raw plane. A row reaches these readers only once the view holds
+ * the state that row produced, so a terminal `run.end` never refreshes a
+ * status bar that still projects the run as running.
  */
 export function subscribeStatusBarSessionEvents({
   session,
@@ -24,12 +26,16 @@ export function subscribeStatusBarSessionEvents({
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
   const fiber = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
+    Stream.runForEach(session.folded(session.now()), (event) =>
       Effect.sync(() => {
-        // A run's terminal phase rides `run.end`, not a `status` row (one run
-        // model, section 3.3), so both rows are status changes here exactly as
-        // the session treats them for its own status readers.
-        if (event.type === 'status' || event.type === 'run.end') {
+        // The rows the phase is folded from (one run model, section 3.3):
+        // an activation, a step (the park and the steps that leave it), and
+        // the terminal `run.end`.
+        if (
+          event.type === 'run.activate' ||
+          event.type === 'flow.step' ||
+          event.type === 'run.end'
+        ) {
           onStatusChanged();
         }
         // The runtime publishes the in-flight status before usage for a
@@ -37,7 +43,10 @@ export function subscribeStatusBarSessionEvents({
         // total, so stale async events skip the refresh.
         if (event.type === 'usage') {
           const target = aggregateTarget(event.aggregateId);
-          if (target.kind === 'run' && session.status.isInFlight(target.id)) {
+          if (
+            target.kind === 'run' &&
+            isInFlightPhase(session.runView(target.id)?.status)
+          ) {
             onUsageChanged();
           }
         }

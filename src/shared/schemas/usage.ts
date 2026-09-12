@@ -2,23 +2,6 @@ import { z } from 'zod';
 
 export const TokenCountSchema = z.int().nonnegative();
 
-/** Provider identifiers for usage tracking. */
-export const UsageProviderSchema = z.enum([
-  'anthropic',
-  'openai',
-  'openai-response',
-  'google',
-  'deepseek',
-  'openrouter',
-  'dashscope',
-  'xai',
-  'moonshot',
-  'minimax',
-  'glm',
-  'meta',
-  'unknown',
-]);
-
 export const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
   'xai-subscription',
@@ -136,3 +119,5 @@ export const RunUsageTotalsSchema = z.object({
   totalToolUsePromptTokens: TokenCountSchema.prefault(0),
   totalServerToolRequests: TokenCountSchema.prefault(0),
 });
+
+export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;

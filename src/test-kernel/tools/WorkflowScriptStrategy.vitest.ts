@@ -1,11 +1,10 @@
 import '@test/support/defaultSessionTestSetup';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpointKey';
-import { runPersistedWorkflowScript } from '@agent/workflowScript/persistence';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
+import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
@@ -20,6 +19,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
 import {
@@ -55,9 +55,15 @@ const finalResult: RunEnd = {
   },
 };
 
+/**
+ * A checkpoint id of this test's own. The journal lives on the session's
+ * `workflow-checkpoint` aggregate, which outlives one test, so two tests
+ * sharing a `meta.name` under one parent would otherwise share a journal and
+ * replay each other's calls.
+ */
 function checkpointIdFor(name: string): string {
   return deriveWorkflowScriptCheckpointId({
-    name,
+    name: `${name}-${checkpointGeneration}`,
     defaultAgent: 'correct',
     parentRunId: runId,
   });
@@ -78,6 +84,7 @@ function fakePorts() {
 }
 
 let workflowControls: WorkflowControlRegistry;
+let checkpointGeneration = 0;
 
 function strategyParams(
   overrides: Partial<WorkflowScriptStrategyParams> & {
@@ -87,13 +94,13 @@ function strategyParams(
 ): WorkflowScriptStrategyParams {
   return {
     runId,
+    parentRunId: runId,
     session: currentSession(),
     fingerprintAgentDependencies: (options) =>
       Effect.runPromise(
         fingerprintWorkflowAgentDependencies(currentSession(), runId, options),
       ),
     logger: new TraceEmitter(),
-    store: getRunStore(runId),
     checkpointId: checkpointIdFor(overrides.name),
     script,
     scriptPath: '.texra/workflow-scripts/draft-strategy.mjs',
@@ -103,9 +110,16 @@ function strategyParams(
   };
 }
 
+// The checkpoint aggregate hangs under the run that invoked the workflow, so
+// that run has to exist before a script row can name it.
+beforeAll(async () => {
+  publishTestRunStart(currentSession(), runId);
+  await currentSession().settlePublications();
+});
+
 beforeEach(() => {
-  clearStoreCache();
   workflowControls = new WorkflowControlRegistry();
+  checkpointGeneration += 1;
 });
 
 describe('createWorkflowScriptStrategy', () => {
@@ -191,13 +205,15 @@ return await agent('Solve.', {
   });
 
   it('settles zero for a pure checkpoint replay', async () => {
-    await runPersistedWorkflowScript({
-      store: getRunStore(runId),
-      checkpointId: checkpointIdFor('strategy-test'),
-      script,
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
+    await Effect.runPromise(
+      runPersistedWorkflowScript({
+        session: currentSession(),
+        parentRunId: runId,
+        checkpointId: checkpointIdFor('strategy-test'),
+        script,
+        runAgent: async () => finalResult,
+      }),
+    );
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
@@ -252,14 +268,16 @@ return args`,
   description: 'retains omitted retry arguments',
 }
 return args`;
-    await runPersistedWorkflowScript({
-      store: getRunStore(runId),
-      checkpointId: checkpointIdFor('retained-arguments'),
-      script: argsScript,
-      args: { topic: 'geometry' },
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
+    await Effect.runPromise(
+      runPersistedWorkflowScript({
+        session: currentSession(),
+        parentRunId: runId,
+        checkpointId: checkpointIdFor('retained-arguments'),
+        script: argsScript,
+        args: { topic: 'geometry' },
+        runAgent: async () => finalResult,
+      }),
+    );
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'retained-arguments',
@@ -312,14 +330,16 @@ return 'done'`,
 await agent('saved call')
 throw new Error('script failed after replay')`;
     await expect(
-      runPersistedWorkflowScript({
-        store: getRunStore(runId),
-        checkpointId: checkpointIdFor('retained-settlement'),
-        script: failingScript,
-        runAgent: async () => finalResult,
-      }),
+      Effect.runPromise(
+        runPersistedWorkflowScript({
+          session: currentSession(),
+          parentRunId: runId,
+          checkpointId: checkpointIdFor('retained-settlement'),
+          script: failingScript,
+          runAgent: async () => finalResult,
+        }),
+      ),
     ).rejects.toThrow('script failed after replay');
-    clearStoreCache();
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
@@ -372,14 +392,16 @@ return await agent('malformed stale')`;
         diffs: [],
       },
     };
-    await runPersistedWorkflowScript({
-      store: getRunStore(runId),
-      checkpointId: checkpointIdFor(name),
-      script: baselineScript,
-      runAgent: async ({ prompt }) =>
-        prompt === 'stale file' ? staleResult : { malformed: true },
-    });
-    clearStoreCache();
+    await Effect.runPromise(
+      runPersistedWorkflowScript({
+        session: currentSession(),
+        parentRunId: runId,
+        checkpointId: checkpointIdFor(name),
+        script: baselineScript,
+        runAgent: async ({ prompt }) =>
+          prompt === 'stale file' ? staleResult : { malformed: true },
+      }),
+    );
 
     const currentResult: RunEnd = {
       ...finalResult,

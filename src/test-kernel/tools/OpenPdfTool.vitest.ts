@@ -45,7 +45,6 @@ describe('OpenPdfTool', () => {
     detachHostInteractions();
     detachHostInteractions = defaultSession().interactions.use({
       openPdf,
-      cancel: () => undefined,
     });
     return openPdf;
   }

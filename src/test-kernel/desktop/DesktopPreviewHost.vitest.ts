@@ -119,10 +119,7 @@ describe('desktop preview host', () => {
         await import('@controllers/session/hostSnapshotSource');
       const session = createTestSession();
       const present = vi.fn<(...args: unknown[]) => boolean>(() => true);
-      const detachPresentation = session.interactions.use({
-        emit: present,
-        cancel: () => {},
-      });
+      const detachPresentation = session.interactions.use({ emit: present });
       const { createDesktopFileSelection } =
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =

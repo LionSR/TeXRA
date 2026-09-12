@@ -8,13 +8,12 @@ import { property } from 'lit/decorators.js';
 import type { PermissionPayload } from '@shared/schemas';
 import {
   approvalDecisionArms,
-  type PermissionDecision,
-  type PermissionKind,
+  type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 
 export abstract class BaseRequestPanel<
-  K extends PermissionKind = PermissionKind,
+  K extends PermissionPayload['kind'] = PermissionPayload['kind'],
 > extends LitElement {
   @property({ attribute: false }) permission!: Extract<
     PermissionPayload,
@@ -33,7 +32,7 @@ export abstract class BaseRequestPanel<
   /** Handle keyboard shortcut from container. Returns true if handled. */
   abstract handleKeyboardShortcut(key: string): boolean;
 
-  protected emitAction(decision: PermissionDecision<K>): void {
+  protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
     for (const arm of approvalDecisionArms(this.permission, decision)) {
       this.dispatchEvent(

@@ -10,7 +10,6 @@ import {
   inspectRunLease,
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import {
   defaultSession,
@@ -31,7 +30,6 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   agentKey,
   AgentCategory,
 } from '@shared/schemas';
@@ -44,10 +42,6 @@ import {
   fakeProcessServices,
   installPlatform,
 } from '@test/support/setupPlatform';
-import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
 import { generateRunId } from '@utils/core';
 
 import {
@@ -121,14 +115,12 @@ function lifecycleFixture(
   category: AgentCategory = AgentCategory.ToolUse,
 ): {
   runId: RunId;
-  runStatus: RunStatusMachine;
   ctx: AgentLaunchContext;
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   return {
     runId,
-    runStatus: defaultSession().status,
     ctx: createTestLaunchContext({ runId, agent, category }),
   };
 }
@@ -171,10 +163,10 @@ function waitingResult(runId: RunId): WaitingToolUseFlowResult {
 /**
  * Returns the suspended handle for a run that reported WAITING.
  *
- * The fake runners below return the WAITING outcome without driving the real
- * `transitionToWaiting()`, so the run phase never reaches WAITING here —
- * which is the point: the handle's own suspension is what makes a stop tear
- * the run down, so no phase seeding is needed to reach that path.
+ * The fake runners below report the WAITING outcome without writing the
+ * loop's own `flow.step` park, so the folded phase never reaches WAITING
+ * here — which is the point: the handle's own suspension is what makes a
+ * stop tear the run down.
  */
 function takeWaitingHandle(runId: RunId): RunHandle {
   const handle = defaultSession().runs.getHandle(runId);
@@ -233,24 +225,20 @@ describe('runFlowWithLifecycle', () => {
   // `workflow` on both without either side re-deriving the string.
 
   it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
-    try {
-      const result = await Effect.runPromise(
-        runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
-          onRunEnd: stopSessionsForRun,
-        }),
-      );
+    const result = await Effect.runPromise(
+      runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
+        onRunEnd: stopSessionsForRun,
+      }),
+    );
 
-      // WAITING is a suspension, not a terminal run end: the server must
-      // survive the parked run so a resume reuses it instead of paying a cold
-      // spawn.
-      expect(result.outcome).toBe(RUN_PHASE.WAITING);
-      expect(stopSessionsForRun).not.toHaveBeenCalled();
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    // WAITING is a suspension, not a terminal run end: the server must
+    // survive the parked run so a resume reuses it instead of paying a cold
+    // spawn.
+    expect(result.outcome).toBe(RUN_PHASE.WAITING);
+    expect(stopSessionsForRun).not.toHaveBeenCalled();
   });
 
   // A completed session marks first-run onboarding done, except for the
@@ -272,164 +260,43 @@ describe('runFlowWithLifecycle', () => {
   for (const { label, agent, expectedDone } of onboardingCases) {
     it(label, async () => {
       const fake = await initLifecycleTestPlatform(false);
-      const { runId, runStatus, ctx } = lifecycleFixture(agent);
+      const { runId, ctx } = lifecycleFixture(agent);
 
-      try {
-        await Effect.runPromise(
-          runFlow(ctx, () =>
-            Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
-          ),
-        );
-
-        expect(
-          fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
-        ).toBe(expectedDone);
-      } finally {
-        clearRunStatusForTest(runStatus, runId);
-      }
-    });
-  }
-
-  it('projects run config before the RUNNING status projection', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-    publishTestRunStart(ctx.runScope.session, runId);
-    const trace = new TraceEmitter();
-    const detachTrace = ctx.runScope.session.attachRunTrace(trace, runId);
-    // One plane in commit order: run.config and the status fact both land
-    // on it, so the ordering assertion reads one log.
-    const recorded = recordSessionEvents(ctx.runScope.session);
-    ctx.logger = trace;
-    ctx.disposeTrace = detachTrace;
-
-    try {
       await Effect.runPromise(
         runFlow(ctx, () =>
           Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
         ),
       );
 
-      const runConfigIndex = (await recorded.read()).findIndex(
-        (event) => event.type === 'run.config',
-      );
-      const runningIndex = (await recorded.read()).findIndex(
-        (event) =>
-          event.type === 'status' &&
-          event.aggregateId === qualifyAggregateId('run', runId) &&
-          event.phase === RUN_PHASE.RUNNING,
-      );
-
-      expect(runConfigIndex).toBeGreaterThanOrEqual(0);
-      expect(runningIndex).toBeGreaterThanOrEqual(0);
-      expect(runConfigIndex).toBeLessThan(runningIndex);
-    } finally {
-      detachTrace();
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('admits run start from a stale terminal phase via resume semantics', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.FAILED,
-      });
-
-      await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.sync(() => {
-            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-          }),
-        ),
-      );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('clears a stale resuming substate when a resumed run starts', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-        substate: RUN_SUBSTATE.RESUMING,
-      });
-
-      await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.sync(() => {
-            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-            expect(runStatus.getSubstate(runId)).toBeUndefined();
-            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-          }),
-        ),
-      );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('does not emit a status event when starting an already-running run with no substate', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    const recorded = recordSessionEvents(ctx.runScope.session);
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.gen(function* () {
-            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-            expect(runStatus.getSubstate(runId)).toBeUndefined();
-            const published = yield* Effect.promise(() => recorded.read());
-            expect(eventsOfType(published, 'status')).toEqual([]);
-            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-          }),
-        ),
-      );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
+      expect(
+        fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
+      ).toBe(expectedDone);
+    });
+  }
 
   it('delivers subagent aborts through the terminal callback', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     ctx.attachedMemoryMisses = [
       { path: '/memories/missing.md', reason: 'not found' },
     ];
     const onError = vi.fn();
 
-    try {
-      const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-          { parentRunId: PARENT_RUN_ID, onError },
-        ),
-      );
+    const result = await Effect.runPromise(
+      runFlow(
+        ctx,
+        () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
+        { parentRunId: PARENT_RUN_ID, onError },
+      ),
+    );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-      expect(onError).toHaveBeenCalledOnce();
-      expect(onError.mock.calls[0][1]).toEqual(result);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][1]).toEqual(result);
   });
 
   it('keeps subagent errors registered until terminal delivery runs', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const onError = vi.fn(() => {
       expect(defaultSession().runs.getHandle(runId)).toBeDefined();
     });
@@ -443,40 +310,29 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
       expect(onError).toHaveBeenCalledOnce();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('keeps native subagent WAITING results registered and nonterminal', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const onError = vi.fn();
     await acquireResumedRunLease(runId);
 
     try {
       const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () =>
-            Effect.sync(() => {
-              expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-              expect(
-                runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
-              ).toBe(true);
-              return waitingResult(runId);
-            }),
-          { parentRunId: PARENT_RUN_ID, onError },
-        ),
+        runFlow(ctx, () => Effect.sync(() => waitingResult(runId)), {
+          parentRunId: PARENT_RUN_ID,
+          onError,
+        }),
       );
 
       expect(result.outcome).toBe(RUN_PHASE.WAITING);
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
       expect(defaultSession().runs.getHandle(runId)).toBeDefined();
       await expect(inspectRunLease(runId)).resolves.toMatchObject({
         status: 'owned',
@@ -484,7 +340,6 @@ describe('runFlowWithLifecycle', () => {
     } finally {
       await releaseOwnedRunLease(runId);
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
@@ -494,7 +349,7 @@ describe('runFlowWithLifecycle', () => {
     // persist await with the handle still tracked. Only the WAITING branch
     // parks a handle, so there is no suspension for the stop to find and
     // nothing the exit has to remember to clear.
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const parked = parkNextFinalize();
 
     try {
@@ -516,16 +371,14 @@ describe('runFlowWithLifecycle', () => {
       parked.release();
       const result = await running;
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('carries workflowPhase on the first child roster emission', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const parentRunId = generateRunId();
     const rosters = recordChildRosters(ctx.runScope.session.runs);
     // `track()` emits the roster synchronously, so onRun — which fires after
@@ -557,7 +410,6 @@ describe('runFlowWithLifecycle', () => {
       expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
@@ -567,11 +419,9 @@ describe('runFlowWithLifecycle', () => {
     const result = await Effect.runPromise(
       runFlow(
         ctx,
-        () =>
+        (handle) =>
           Effect.sync(() => {
-            expect(defaultSession().status.get(runId)).toBe(
-              RUN_PHASE.CANCELLED,
-            );
+            expect(handle.stopRequested).toBe(true);
             // linkAbortSignals has separate pre-aborted replay coverage; this
             // lifecycle test proves the signal already carries the early stop.
             expect(ctx.runScope.signal.aborted).toBe(true);
@@ -590,168 +440,104 @@ describe('runFlowWithLifecycle', () => {
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
   });
 
-  // The status record is reused across runs, so a run that never claims it
-  // inherits whatever the last one left. A stop landing in the track()-to-start
-  // window is refused by the phase table while that leftover is terminal, so
-  // without the start-time claim this run would adopt the previous run's
-  // COMPLETED as its own verdict and drop its abort facts.
-  it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.COMPLETED,
-      });
-
-      const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () =>
-            Effect.gen(function* () {
-              expect(ctx.runScope.signal.aborted).toBe(true);
-              return yield* Effect.fail(
-                new DOMException('Request aborted', 'AbortError'),
-              );
-            }),
-          {
-            onRun: async () => {
-              const stop = defaultSession().runs.kill(runId);
-              expect(stop.accepted).toBe(true);
-              await Effect.runPromise(stop.settlement);
-            },
-          },
-        ),
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
-        expect.objectContaining({
-          outcome: RUN_OUTCOME.CANCELLED,
-          error: expect.objectContaining({ kind: 'abort' }),
-        }),
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  // The claim above is a repair for an inherited phase, not a second start: a
-  // stop that already reads CANCELLED on the run is this run's outcome too,
-  // so a run that never ran must not publish a RUNNING blip on the way out.
-  it('publishes no RUNNING blip when the stop that beat run start already cancelled the run', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+  // A stop that beat run start is this run's outcome: the run never runs a
+  // turn, and the only fact it leaves is the cancelled terminal row.
+  it('writes the cancelled terminal fact when the stop beat run start', async () => {
+    const { runId, ctx } = lifecycleFixture();
     publishTestRunStart(ctx.runScope.session, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
       aggregateId: qualifyAggregateId('run', runId),
     });
 
-    try {
-      const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-          {
-            onRun: async () => {
-              const stop = defaultSession().runs.kill(runId);
-              expect(stop.accepted).toBe(true);
-              await Effect.runPromise(stop.settlement);
-            },
-          },
-        ),
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      await ctx.runScope.session.settlePublications();
-      // The terminal phase is `run.end`'s, so a run that never ran publishes
-      // no status row at all.
-      expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.CANCELLED,
-        error: {
-          kind: 'abort',
-          message: 'Request aborted',
-          userRetryable: false,
-        },
-        usage: undefined,
-        output: EMPTY_TOOL_USE_OUTPUT,
-      });
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  // The phase owns the outcome: a run the phase says was interrupted ends
-  // cancelled, even when its own report reached completion first.
-  it('relabels a stopped run whose report says completed', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      const result = await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.gen(function* () {
+    const result = await Effect.runPromise(
+      runFlow(
+        ctx,
+        () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
+        {
+          onRun: async () => {
             const stop = defaultSession().runs.kill(runId);
             expect(stop.accepted).toBe(true);
-            yield* stop.settlement;
-            expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-          }),
-        ),
-      );
+            await Effect.runPromise(stop.settlement);
+          },
+        },
+      ),
+    );
 
-      // The caller receives the same verdict persistence carries: the stop
-      // won on the run, so the flow's COMPLETED report is relabeled.
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-        defaultSession(),
-        expect.objectContaining({
-          outcome: RUN_OUTCOME.CANCELLED,
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    await ctx.runScope.session.settlePublications();
+    // A run that never ran a turn writes no step of its own: `run.end` is
+    // the whole of what it says.
+    expect(eventsOfType(await recorded.read(), 'flow.step')).toEqual([]);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      error: {
+        kind: 'abort',
+        message: 'Request aborted',
+        userRetryable: false,
+      },
+      usage: undefined,
+      output: EMPTY_TOOL_USE_OUTPUT,
+    });
+  });
+
+  // The stop latch owns the outcome: a run a stop reached ends cancelled,
+  // even when its own report reached completion first.
+  it('relabels a stopped run whose report says completed', async () => {
+    const { runId, ctx } = lifecycleFixture();
+
+    const result = await Effect.runPromise(
+      runFlow(ctx, (handle) =>
+        Effect.gen(function* () {
+          const stop = defaultSession().runs.kill(runId);
+          expect(stop.accepted).toBe(true);
+          yield* stop.settlement;
+          expect(handle.stopRequested).toBe(true);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
-      );
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+      ),
+    );
+
+    // The caller receives the same verdict persistence carries: the stop
+    // won on the run, so the flow's COMPLETED report is relabeled.
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+      defaultSession(),
+      expect.objectContaining({
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    );
   });
 
   // The parent's delivery is a projection of the same terminal fact as the
   // persisted history, so a stopped child never arrives formatted as a failure.
   it('delivers a stopped subagent as cancelled when its flow reports a failure', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const onError = vi.fn();
 
-    try {
-      const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () =>
-            Effect.gen(function* () {
-              const stop = defaultSession().runs.kill(runId);
-              expect(stop.accepted).toBe(true);
-              yield* stop.settlement;
-              return yield* Effect.fail(
-                new Error('child exited with code 143'),
-              );
-            }),
-          { parentRunId: PARENT_RUN_ID, onError },
-        ),
-      );
+    const result = await Effect.runPromise(
+      runFlow(
+        ctx,
+        () =>
+          Effect.gen(function* () {
+            const stop = defaultSession().runs.kill(runId);
+            expect(stop.accepted).toBe(true);
+            yield* stop.settlement;
+            return yield* Effect.fail(new Error('child exited with code 143'));
+          }),
+        { parentRunId: PARENT_RUN_ID, onError },
+      ),
+    );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
-        expect.objectContaining({
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
-      expect(onError).toHaveBeenCalledOnce();
-      expect(onError.mock.calls[0][1]).toEqual(result);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+      defaultSession(),
+      expect.objectContaining({
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    );
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][1]).toEqual(result);
   });
 
   it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
@@ -791,7 +577,6 @@ describe('runFlowWithLifecycle', () => {
       await Effect.runPromise(stop.settlement);
 
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
-      expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
       expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
       // The bypassed runFlowWithLifecycle can't write the terminal row, so
       // terminateWaitingHandle must — session subscribers would otherwise
@@ -817,7 +602,6 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(defaultSession().status, runId);
     }
   });
 
@@ -848,56 +632,36 @@ describe('runFlowWithLifecycle', () => {
       expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(defaultSession().status, runId);
     }
   });
 
-  it('projects returned outcomes to terminal status, stage end, and run status', async () => {
+  it('projects returned outcomes to the terminal row and stage end', async () => {
     const cases = [
-      {
-        outcome: RUN_OUTCOME.COMPLETED,
-        phase: RUN_PHASE.COMPLETED,
-      },
-      {
-        outcome: RUN_OUTCOME.CANCELLED,
-        phase: RUN_PHASE.CANCELLED,
-      },
-      {
-        outcome: RUN_OUTCOME.FAILED,
-        phase: RUN_PHASE.FAILED,
-      },
+      RUN_OUTCOME.COMPLETED,
+      RUN_OUTCOME.CANCELLED,
+      RUN_OUTCOME.FAILED,
     ] as const;
 
-    for (const expected of cases) {
-      const { runId, runStatus, ctx } = lifecycleFixture();
+    for (const outcome of cases) {
+      const { runId, ctx } = lifecycleFixture();
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-      try {
-        const result = await Effect.runPromise(
-          runFlow(ctx, () =>
-            Effect.succeed(toolUseResult(runId, expected.outcome)),
-          ),
-        );
+      const result = await Effect.runPromise(
+        runFlow(ctx, () => Effect.succeed(toolUseResult(runId, outcome))),
+      );
 
-        expect(result.outcome).toBe(expected.outcome);
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          defaultSession(),
-          {
-            runId,
-            outcome: expected.outcome,
-            output: EMPTY_TOOL_USE_OUTPUT,
-          },
-        );
-        expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
-        expect(runStatus.get(runId)).toBe(expected.phase);
-      } finally {
-        clearRunStatusForTest(runStatus, runId);
-      }
+      expect(result.outcome).toBe(outcome);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+        runId,
+        outcome,
+        output: EMPTY_TOOL_USE_OUTPUT,
+      });
+      expect(stageEnd).toHaveBeenCalledWith(outcome);
     }
   });
 
   it('finalizes an outcome-only failure without fabricating provider error facts', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     const onError = vi.fn();
 
@@ -921,98 +685,63 @@ describe('runFlowWithLifecycle', () => {
         output: carriedResult.output,
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
       expect(onError).not.toHaveBeenCalled();
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('projects a thrown abort as cancelled on its own stage outcome', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-    try {
-      const result = await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        ),
-      );
+    const result = await Effect.runPromise(
+      runFlow(ctx, () =>
+        Effect.fail(new DOMException('Request aborted', 'AbortError')),
+      ),
+    );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.CANCELLED,
-        error: {
-          kind: 'abort',
-          message: 'Request aborted',
-          userRetryable: false,
-        },
-        usage: undefined,
-        output: EMPTY_TOOL_USE_OUTPUT,
-      });
-      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      error: {
+        kind: 'abort',
+        message: 'Request aborted',
+        userRetryable: false,
+      },
+      usage: undefined,
+      output: EMPTY_TOOL_USE_OUTPUT,
+    });
+    expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
   });
 
   it('projects an unexpected throw as failed', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlow(ctx, () => Effect.fail(new Error('model exploded'))),
-        ),
-      ).rejects.toThrow('model exploded');
+    await expect(
+      Effect.runPromise(
+        runFlow(ctx, () => Effect.fail(new Error('model exploded'))),
+      ),
+    ).rejects.toThrow('model exploded');
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: {
-          kind: 'unexpected',
-          message: 'Error executing agent test-agent: model exploded',
-          userRetryable: true,
-        },
-        usage: undefined,
-        output: EMPTY_TOOL_USE_OUTPUT,
-      });
-      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('terminalizes a waiting run when the lifecycle catch path fails', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
-
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlow(ctx, () =>
-            Effect.gen(function* () {
-              expect(
-                runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
-              ).toBe(true);
-              return yield* Effect.fail(new Error('wait node failed'));
-            }),
-          ),
-        ),
-      ).rejects.toThrow('wait node failed');
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
+      runId,
+      outcome: RUN_OUTCOME.FAILED,
+      error: {
+        kind: 'unexpected',
+        message: 'Error executing agent test-agent: model exploded',
+        userRetryable: true,
+      },
+      usage: undefined,
+      output: EMPTY_TOOL_USE_OUTPUT,
+    });
+    expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
   });
 
   it('passes flow-carried terminal results to subagent error delivery', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const carriedResult = {
       outcome: RUN_OUTCOME.FAILED,
       runId,
@@ -1022,10 +751,6 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
       const result = await Effect.runPromise(
         runFlow(ctx, () => Effect.succeed(carriedResult), {
           parentRunId: PARENT_RUN_ID,
@@ -1040,12 +765,11 @@ describe('runFlowWithLifecycle', () => {
       );
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
   it('publishes the structured error facts a flow carried out on its result', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture();
+    const { runId, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
     try {
@@ -1086,10 +810,8 @@ describe('runFlowWithLifecycle', () => {
         }),
       );
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
     } finally {
       defaultSession().runs.untrack(runId);
-      clearRunStatusForTest(runStatus, runId);
     }
   });
 
@@ -1129,31 +851,24 @@ describe('runFlowWithLifecycle', () => {
   });
 });
 
-/** The session fake, handle, status machine, and spies every finalize test drives. */
+/** The session fake, handle, and spies every finalize test drives. */
 function finalizeFixture(): {
   runId: RunId;
   session: SessionHandle;
-  runStatus: RunStatusMachine;
   handle: ReturnType<typeof testRunHandle>;
   untrack: Mock<(runId: RunId) => void>;
   flushArtifacts: Mock<() => Promise<void>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  const runStatus = new RunStatusMachine(
-    () => {},
-    () => {},
-  );
   const untrack = vi.fn<(runId: RunId) => void>();
   const flushArtifacts = vi.fn(async () => {});
   return {
     runId,
     session: {
       runs: { untrack },
-      status: runStatus,
       flushArtifacts,
     } as unknown as SessionHandle,
-    runStatus,
     untrack,
     flushArtifacts,
     handle: testRunHandle({
@@ -1174,49 +889,41 @@ describe('finalizeRunTerminal', () => {
   // handle) would otherwise both pass the check before the first settles and
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
-    const { runId, session, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, handle, untrack } = finalizeFixture();
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
     const parked = parkNextFinalize();
 
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-      const params = {
-        session,
-        handle,
+    const params = {
+      session,
+      handle,
+      outcome: RUN_OUTCOME.COMPLETED,
+    } as const;
+
+    const first = Effect.runPromise(finalizeRunTerminal(params));
+    const second = Effect.runPromise(finalizeRunTerminal(params));
+
+    // The loser no-ops without waiting on (or duplicating) the persist.
+    await expect(second).resolves.toBeUndefined();
+    expect(parked.started()).toBe(true);
+    parked.release();
+    const event = await first;
+
+    expect(event).toMatchObject({
+      event: {
+        type: 'run.end',
         outcome: RUN_OUTCOME.COMPLETED,
-      } as const;
-
-      const first = Effect.runPromise(finalizeRunTerminal(params));
-      const second = Effect.runPromise(finalizeRunTerminal(params));
-
-      // The loser no-ops without waiting on (or duplicating) the persist.
-      await expect(second).resolves.toBeUndefined();
-      expect(parked.started()).toBe(true);
-      parked.release();
-      const event = await first;
-
-      expect(event).toMatchObject({
-        event: {
-          type: 'run.end',
-          outcome: RUN_OUTCOME.COMPLETED,
-          runId,
-        },
-      });
-      // `run.end` is not a trace arm: the storage finalizer is its one
-      // writer, so writing it once is what "exactly once" means here.
-      expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
-      expect(untrack).toHaveBeenCalledTimes(1);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+        runId,
+      },
+    });
+    // `run.end` is not a trace arm: the storage finalizer is its one
+    // writer, so writing it once is what "exactly once" means here.
+    expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
+    expect(untrack).toHaveBeenCalledTimes(1);
   });
 
   it('flushes display artifacts before publishing and untracking', async () => {
-    const { runId, session, runStatus, handle, untrack, flushArtifacts } =
+    const { runId, session, handle, untrack, flushArtifacts } =
       finalizeFixture();
     let releaseFlush: (() => void) | undefined;
     flushArtifacts.mockImplementation(
@@ -1225,35 +932,27 @@ describe('finalizeRunTerminal', () => {
           releaseFlush = resolve;
         }),
     );
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-      const finalization = Effect.runPromise(
-        finalizeRunTerminal({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-        }),
-      );
+    const finalization = Effect.runPromise(
+      finalizeRunTerminal({
+        session,
+        handle,
+        outcome: RUN_OUTCOME.COMPLETED,
+      }),
+    );
 
-      await vi.waitFor(() => expect(flushArtifacts).toHaveBeenCalledOnce());
-      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-      expect(untrack).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(flushArtifacts).toHaveBeenCalledOnce());
+    expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+    expect(untrack).not.toHaveBeenCalled();
 
-      releaseFlush?.();
-      await finalization;
+    releaseFlush?.();
+    await finalization;
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
-      expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+    expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
+    expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
   });
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
-    const { runId, session, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, handle, untrack } = finalizeFixture();
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeRun.mockReturnValueOnce(
       Effect.succeed({
@@ -1263,119 +962,70 @@ describe('finalizeRunTerminal', () => {
       }),
     );
 
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      const event = await Effect.runPromise(
-        finalizeRunTerminal({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.FAILED,
-        }),
-      );
-
-      expect(event).toMatchObject({
-        event: {
-          type: 'run.end',
-          outcome: RUN_OUTCOME.FAILED,
-          runId,
-        },
-      });
-      expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-      expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-        'Failed to finalize durable run state',
-        {
-          data: {
-            agentIdentifier: 'test-agent',
-            runId,
-            outcomePersisted: false,
-            error: durabilityError,
-          },
-        },
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  // The run phase is the single owner of a run's terminal outcome. A
-  // stop/kill transitions the phase behind the run's back, and the run it
-  // killed then reports its own non-zero exit as a failure — so the phase, not
-  // the report, has to decide, and no caller may cross-check it for itself.
-  it('resolves the terminal outcome from an already-cancelled run phase', async () => {
-    const { runId, session, runStatus, handle } = finalizeFixture();
-    const stage = { end: vi.fn() };
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.CANCELLED,
-      });
-
-      const finalized = await Effect.runPromise(
-        finalizeRunTerminal({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.FAILED,
-          error: { kind: 'unexpected', message: 'exited with code 143' },
-          stage,
-        }),
-      );
-
-      expect(finalized?.event).toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-        runId,
-      });
-      // Error facts classified for a failure that the phase says never
-      // happened must not ride the cancelled result.
-      expect(finalized?.event.error).toBeUndefined();
-      expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+    const event = await Effect.runPromise(
+      finalizeRunTerminal({
         session,
-        expect.objectContaining({
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-      // The resolution is what keeps the terminal transition from being
-      // refused, so nothing is left to warn about.
-      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
+        handle,
+        outcome: RUN_OUTCOME.FAILED,
+      }),
+    );
 
-  // The same ownership rule in the other direction: a phase that already
-  // published FAILED is a terminal fact a later stop cannot rewrite, so a
-  // caller reporting `cancelled` does not get to relabel it.
-  it('keeps an already-failed run phase over a later cancelled report', async () => {
-    const { runId, session, runStatus, handle } = finalizeFixture();
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.FAILED,
-      });
-
-      const finalized = await Effect.runPromise(
-        finalizeRunTerminal({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
-
-      expect(finalized?.event).toMatchObject({
+    expect(event).toMatchObject({
+      event: {
         type: 'run.end',
         outcome: RUN_OUTCOME.FAILED,
         runId,
-      });
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
-      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
+      },
+    });
+    expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+    expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+      'Failed to finalize durable run state',
+      {
+        data: {
+          agentIdentifier: 'test-agent',
+          runId,
+          outcomePersisted: false,
+          error: durabilityError,
+        },
+      },
+    );
+  });
+
+  // The handle's stop latch is the single owner of a run's terminal outcome.
+  // A stop/kill trips the latch behind the run's back, and the run it killed
+  // then reports its own non-zero exit as a failure — so the latch, not the
+  // report, has to decide, and no caller may cross-check it for itself.
+  it('resolves the terminal outcome from a stop that reached the handle', async () => {
+    const { runId, session, handle } = finalizeFixture();
+    const stage = { end: vi.fn() };
+
+    handle.interrupt();
+
+    const finalized = await Effect.runPromise(
+      finalizeRunTerminal({
+        session,
+        handle,
+        outcome: RUN_OUTCOME.FAILED,
+        error: { kind: 'unexpected', message: 'exited with code 143' },
+        stage,
+      }),
+    );
+
+    expect(finalized?.event).toMatchObject({
+      type: 'run.end',
+      outcome: RUN_OUTCOME.CANCELLED,
+      runId,
+    });
+    // Error facts classified for a failure that the stop says never
+    // happened must not ride the cancelled result.
+    expect(finalized?.event.error).toBeUndefined();
+    expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    );
+    expect(channelTraceMocks.warn).not.toHaveBeenCalled();
   });
 });

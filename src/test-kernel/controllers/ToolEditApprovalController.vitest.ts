@@ -11,11 +11,15 @@ import {
   type ToolEditPreview,
   type ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import type { RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RunIdSchema,
+  type SessionEvent,
+} from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
-const STREAM_ID = 'TestAgent@model: paper.tex' as RunId;
+const RUN = RunIdSchema.parse('ab12cd');
 
 function approvalRequest(): ToolEditApprovalRequest {
   return toolEditApprovalRequest({
@@ -23,8 +27,22 @@ function approvalRequest(): ToolEditApprovalRequest {
     originalContent: 'old',
     proposedContent: 'new',
     sourceTool: 'edit_file',
-    runId: STREAM_ID,
+    runId: RUN,
   });
+}
+
+/** The fold's answer to a request, as the plane hands it to the controller. */
+function decided(requestId: string): SessionEvent {
+  return {
+    type: 'request.decided',
+    aggregateId: qualifyAggregateId('run', RUN),
+    requestId,
+    decision: { action: 'approve' },
+    seq: 1,
+    commit: 1,
+    ownerId: null,
+    at: 0,
+  };
 }
 
 /**
@@ -62,6 +80,7 @@ function createTestHost() {
       revealApprovalSurface: async () => {},
       openBuildDisplay: async () => {},
       reportError: vi.fn(),
+      decide: vi.fn(async () => {}),
     },
   };
 }
@@ -75,64 +94,71 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
 }
 
 describe('tool edit approval controller', () => {
-  it('settles a request cancelled while its preview is still staging', async () => {
+  it('decides a request discarded while its preview is still staging', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const approval = controller.requestApproval(approvalRequest());
+    const presented = controller.present(approvalRequest());
     await vi.waitFor(() => testHost.contextForRequest());
-    controller.cancel({ cause: 'Stream resources released.' });
+    const requestId = testHost.contextForRequest().requestId;
+    testHost.contextForRequest().discard();
     expect(testHost.contextForRequest().isSettled()).toBe(true);
     testHost.staging.resolve();
+    await presented;
 
-    await expect(approval).resolves.toEqual({
+    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
       action: 'reject',
-      cause: 'Stream resources released.',
     });
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
     expect(testHost.preview.present).not.toHaveBeenCalled();
   });
 
-  it('approves a still-staging request from its stream without reading the staged file', async () => {
+  it('approves a still-staging request from its run without reading the staged file', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const approval = controller.requestApproval(approvalRequest());
+    const presented = controller.present(approvalRequest());
     await vi.waitFor(() => testHost.contextForRequest());
-    await controller.approvePendingForRun(STREAM_ID);
+    const requestId = testHost.contextForRequest().requestId;
+    await controller.approvePendingForRun(RUN);
     testHost.staging.resolve();
+    await presented;
 
-    await expect(approval).resolves.toEqual({
-      action: 'apply',
-      appliedContent: 'new',
+    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
+      action: 'approve',
+      content: 'new',
     });
     expect(testHost.preview.readProposedContent).not.toHaveBeenCalled();
   });
 
-  it('ignores actions that arrive after the request settled', async () => {
+  it('ignores actions that arrive after the request was decided', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
 
-    const approval = controller.requestApproval(approvalRequest());
     testHost.staging.resolve();
-    const requestId = await vi.waitFor(() => {
-      const id = testHost.contextForRequest().requestId;
-      expect(testHost.preview.present).toHaveBeenCalled();
-      return id;
-    });
+    await controller.present(approvalRequest());
+    const requestId = testHost.contextForRequest().requestId;
+    expect(testHost.preview.present).toHaveBeenCalled();
 
     controller.handleAction({ requestId, action: 'approve' });
-    await expect(approval).resolves.toEqual({
-      action: 'apply',
-      appliedContent: 'edited by the user',
+    await vi.waitFor(() => {
+      expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
+        action: 'approve',
+        content: 'edited by the user',
+      });
+    });
+
+    // The fold's answer releases the preview; nothing acts on it afterwards.
+    controller.handleSessionEvent(decided(requestId));
+    await vi.waitFor(() => {
+      expect(testHost.preview.dispose).toHaveBeenCalledOnce();
     });
 
     controller.handleAction({ requestId, action: 'openDiff' });
     controller.handleAction({ requestId, action: 'reject' });
     await Promise.resolve();
 
-    // A settled request cannot reopen its preview.
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
-    expect(testHost.contextForRequest().isSettled()).toBe(true);
+    expect(testHost.host.decide).toHaveBeenCalledOnce();
   });
 });

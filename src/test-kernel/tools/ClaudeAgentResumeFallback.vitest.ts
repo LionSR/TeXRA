@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
   getCurrentToolContexts: vi.fn(),
   registerRun: vi.fn(),
-  getRunStore: vi.fn(),
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
@@ -73,7 +72,6 @@ const ClaudeAgentSessions = claudeAgentSessionsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
-  getRunStore: mocks.getRunStore,
 }));
 
 vi.mock('@agent/storage/runLease', () => ({
@@ -161,10 +159,11 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
     mocks.findClaudeBinaryPath.mockReset();
-    mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
+    mocks.requestBashApproval.mockReturnValue(
+      Effect.succeed({ action: 'approve' }),
+    );
     mocks.getCurrentToolContexts.mockReturnValue(fakeToolContexts());
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.getRunStore.mockReturnValue({ write: async () => {} });
     mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
     mocks.findClaudeBinaryPath.mockResolvedValue(undefined);
     mocks.createChildRun.mockReturnValue(

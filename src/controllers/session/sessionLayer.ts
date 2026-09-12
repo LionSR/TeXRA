@@ -301,15 +301,12 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
-        acquireRunClaims: (runId) =>
-          eventLog.acquireClaims([qualifyAggregateId('run', runId)]).pipe(
+        acquireClaims: (id) =>
+          eventLog.acquireClaims([id]).pipe(
             Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
             Effect.orDie,
           ),
-        releaseRunClaims: (runId) =>
-          eventLog
-            .releaseClaims([qualifyAggregateId('run', runId)])
-            .pipe(Effect.orDie),
+        releaseClaims: (id) => eventLog.releaseClaims([id]).pipe(Effect.orDie),
         runRecords: (id) =>
           eventLog
             .readRunRecords(qualifyAggregateId('run', id))
@@ -319,6 +316,7 @@ const sessionHandleLayer = (
             .readRunChildren(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         recordListing: () => eventLog.readListing().pipe(Effect.orDie),
+        aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
         publishRegistration: (events) =>
@@ -435,6 +433,13 @@ const sessionHandleLayer = (
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
+      // The registry's phase notification rides the fold-gated tail, not the
+      // raw one above: its waiters and child rosters read `RunView.status`
+      // synchronously, so a row must reach them only once the view holds the
+      // state that row produced.
+      yield* Stream.runForEach(session.folded(anchor), (event) =>
+        Effect.sync(() => session.receiveFoldedEvent(event)),
+      ).pipe(Effect.forkIn(consumerScope));
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
@@ -867,9 +872,10 @@ export function installProcessRuntime({
  *
  * The runtime stays reachable for the whole of its own disposal. Its layer
  * finalizers are what release the open sessions, and they still publish
- * through `effectRuntime()` while they unwind -- `SessionHandle.unwind()`
- * disposes pending host interactions, whose `approval.resolved` facts go out
- * through `SessionHandle.publish`, which forks on this very runtime. Clearing
+ * through `effectRuntime()` while they unwind -- a session's release unwinds
+ * the handle and then awaits the publications that teardown left in flight
+ * (`SessionHandle.settlePublications`), each of which forks on this very
+ * runtime. Clearing
  * the reference first made those finalizers throw "not initialized" mid
  * shutdown. It is cleared afterwards, and only if this runtime is still the
  * installed one, so a replacement installed while this one unwound survives.

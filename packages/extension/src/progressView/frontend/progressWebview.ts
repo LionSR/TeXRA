@@ -15,7 +15,12 @@ import { createTicker } from '@utils/core';
 import { createSessionSurfaces } from './sessionSurfaces';
 import type { ProgressApp } from './ProgressApp';
 
-export function mountProgressWebview(app: ProgressApp): void {
+/**
+ * Mount the shell on `app`. Returns the unmount: the window's listener, the
+ * clock, and the sessions released, as leaving the page does; a host that
+ * remounts (the trace viewer's scrubber) calls it and mounts a fresh element.
+ */
+export function mountProgressWebview(app: ProgressApp): () => void {
   const sessionKey = app.dataset.session;
   if (!sessionKey) {
     throw new Error('<progress-app> is missing its data-session key');
@@ -70,14 +75,13 @@ export function mountProgressWebview(app: ProgressApp): void {
   });
   assign();
 
-  window.addEventListener(
-    'pagehide',
-    () => {
-      window.removeEventListener('message', receive);
-      clock.dispose();
-      unsubscribe();
-      sessions.dispose();
-    },
-    { once: true },
-  );
+  const dispose = (): void => {
+    window.removeEventListener('pagehide', dispose);
+    window.removeEventListener('message', receive);
+    clock.dispose();
+    unsubscribe();
+    sessions.dispose();
+  };
+  window.addEventListener('pagehide', dispose, { once: true });
+  return dispose;
 }

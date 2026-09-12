@@ -23,12 +23,8 @@ vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
 
 // Local imports - agent runtime
 import { registerInlineAgents } from '@agent/index';
-import {
-  clearStoreCache,
-  getRunStore,
-  getRunRecords,
-  registerRun,
-} from '@agent/storage';
+import { getRunRecords, registerRun } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
@@ -247,7 +243,6 @@ function scriptedBoundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: config.contextWindow,
     supportsVision: false,
@@ -487,7 +482,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
-    clearStoreCache();
     clearInlineAgents();
     registerInlineAgents([inlineAgent(PARENT_AGENT), inlineAgent(CHILD_AGENT)]);
     // The process session over a persistent store: one session per root,
@@ -507,7 +501,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await releaseOwnedRunLease(PARENT_RUN_ID);
     teardownDefaultSession();
     clearInlineAgents();
-    clearStoreCache();
     vi.restoreAllMocks();
   });
 
@@ -727,16 +720,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForCompletedResumes(1);
 
     // The loop minted a stable logical identity for turn 1's delivery.
-    const store = getRunStore(runId);
-    const turnState = await store.readTurnState();
-    expect(turnState?.activeTurn).toBeUndefined();
-    const completed = turnState?.lastCompletedTurn;
-    expect(completed?.token).toBeTruthy();
-    await expect(
-      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
-    ).resolves.toMatchObject({
-      turnToken: completed!.token,
-    });
+    const turnState = await Effect.runPromise(
+      readChildTurnState(session, runId),
+    );
+    expect(turnState.active).toBeNull();
+    const completed = turnState.lastCompleted;
+    expect(completed).not.toBeNull();
+    // The delivery id the loop derives from that turn's identity.
+    const deliveryId = `${runId}:${completed!.attemptId}:${completed!.turnIndex}:delivery`;
 
     // Replay the identical logical delivery 100 times through the real
     // admission path: no additional parent message, no additional wake.
@@ -750,8 +741,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           {
             text: report!,
             origin: 'subagent_result',
-            // Derived from the persisted turn token exactly as production does.
-            deliveryId: `${completed!.token}:delivery`,
+            deliveryId,
           },
           { session },
         ),
@@ -776,7 +766,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         {
           text: report!,
           origin: 'subagent_result',
-          deliveryId: `${completed!.token}:delivery:other`,
+          deliveryId: `${deliveryId}:other`,
         },
         { session },
       ),
@@ -813,9 +803,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
-    const store = getRunStore(runId);
-    const completed1 = (await store.readTurnState())?.lastCompletedTurn;
-    expect(completed1?.token).toBeTruthy();
+    const completed1 = (
+      await Effect.runPromise(readChildTurnState(session, runId))
+    ).lastCompleted;
+    expect(completed1).not.toBeNull();
 
     // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
     await queueSecondAssertionFollowUp(parentContext, runAsParentOwner, runId);
@@ -824,17 +815,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // persisted result still belongs to the latest completed turn (turn 1).
     await vi.waitFor(
       async () => {
-        const state = await store.readTurnState();
-        expect(state?.activeTurn?.token).toBeTruthy();
-        expect(state?.activeTurn?.token).not.toBe(completed1!.token);
-        expect(state?.lastCompletedTurn?.token).toBe(completed1!.token);
+        const state = await Effect.runPromise(
+          readChildTurnState(session, runId),
+        );
+        expect(state.active).not.toBeNull();
+        expect(state.active).not.toEqual(completed1);
+        expect(state.lastCompleted).toEqual(completed1);
       },
       { timeout: 10_000 },
     );
     await expect(
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
-      turnToken: completed1!.token,
       output: { response: 'Result A.' },
     });
 
@@ -850,13 +842,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
     // the interrupted active turn instead of turn 1 posing as current.
-    const finalState = await store.readTurnState();
-    expect(finalState?.lastCompletedTurn?.token).toBe(completed1!.token);
-    expect(finalState?.activeTurn?.token).toBeTruthy();
+    const finalState = await Effect.runPromise(
+      readChildTurnState(session, runId),
+    );
+    expect(finalState.lastCompleted).toEqual(completed1);
+    expect(finalState.active).not.toBeNull();
     await expect(
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
-      turnToken: completed1!.token,
       output: { response: 'Result A.' },
     });
     // How the run ended is the `run.end` row's fact, not the manifest's: the

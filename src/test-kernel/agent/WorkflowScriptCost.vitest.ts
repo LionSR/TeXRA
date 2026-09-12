@@ -1,20 +1,24 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-} from '@agent/workflowScript/persistence';
+} from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowJournalEntry,
   WorkflowScriptControl,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
-const runId = '7154c0570057' as RunId;
 const key = '0000000000000000';
 const meta = `export const meta = {
   name: 'cost-test',
@@ -66,8 +70,6 @@ function settleJournalCost(journal: readonly WorkflowJournalEntry[]): number {
   for (const journalEntry of journal) tracker.record(journalEntry, 0);
   return tracker.total(journal);
 }
-
-beforeEach(() => clearStoreCache());
 
 describe('workflow attempt cost', () => {
   it('aggregates observability cost across physical interactive attempts', async () => {
@@ -194,6 +196,16 @@ return await agent('retry cost')`,
 });
 
 describe('workflow-script completed journal cost', () => {
+  let session: SessionHandle;
+  // The checkpoint aggregate hangs under the run that invoked the workflow,
+  // so that run has to exist before a script row can name it.
+  let parentRunId: RunId;
+  beforeEach(async () => {
+    session = createProcessSession();
+    parentRunId = publishTestRunStart(session);
+    await session.settlePublications();
+  });
+
   it('sums canonical workflow and tool-use results independent of entry order', () => {
     const journal = [
       entry(4, toolUseResult(0.25)),
@@ -224,25 +236,29 @@ describe('workflow-script completed journal cost', () => {
   });
 
   it('produces the same total after a checkpoint replay', async () => {
-    const store = getRunStore(runId);
     const script = `${meta}
 await agent('first')
 return await agent('second')`;
     const results = [workflowResult(0.4), toolUseResult(0.6)];
-    const first = await runPersistedWorkflowScript({
-      store,
-      checkpointId: 'replay',
-      script,
-      runAgent: async ({ index }) => results[index],
-    });
+    const first = await Effect.runPromise(
+      runPersistedWorkflowScript({
+        session,
+        parentRunId,
+        checkpointId: 'replay',
+        script,
+        runAgent: async ({ index }) => results[index],
+      }),
+    );
 
-    clearStoreCache();
     const runner = vi.fn(() => Promise.reject(new Error('must replay')));
-    const replayed = await runPersistedWorkflowScript({
-      store: getRunStore(runId),
-      checkpointId: 'replay',
-      runAgent: runner,
-    });
+    const replayed = await Effect.runPromise(
+      runPersistedWorkflowScript({
+        session,
+        parentRunId,
+        checkpointId: 'replay',
+        runAgent: runner,
+      }),
+    );
 
     expect(runner).not.toHaveBeenCalled();
     expect(settleJournalCost(first.journal)).toBe(1);
@@ -250,21 +266,25 @@ return await agent('second')`;
   });
 
   it('can settle completed entries retained after a script failure', async () => {
-    const store = getRunStore(runId);
     const script = `${meta}
 await agent('completed')
 throw new Error('later failure')`;
 
     await expect(
-      runPersistedWorkflowScript({
-        store,
-        checkpointId: 'failure',
-        script,
-        runAgent: async () => workflowResult(0.75),
-      }),
+      Effect.runPromise(
+        runPersistedWorkflowScript({
+          session,
+          parentRunId,
+          checkpointId: 'failure',
+          script,
+          runAgent: async () => workflowResult(0.75),
+        }),
+      ),
     ).rejects.toThrow('later failure');
 
-    const checkpoint = await readWorkflowScriptCheckpoint(store, 'failure');
+    const checkpoint = await Effect.runPromise(
+      readWorkflowScriptCheckpoint(session, 'failure'),
+    );
     expect(settleJournalCost(checkpoint?.journal ?? [])).toBe(0.75);
   });
 });

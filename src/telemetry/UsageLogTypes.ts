@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
-import {
-  AgentCategory,
-  UsageProviderSchema,
-  UsageRouteSchema,
-} from '@shared/schemas';
+import { TurnProtocolSchema } from '@llm/turn';
+import { AgentCategory, UsageRouteSchema } from '@shared/schemas';
 
 const UsageLogMetadataSchema = z.object({
   model: z.string(),
-  provider: UsageProviderSchema,
+  /** Wire surface of the turn (`openai-responses`, `anthropic-messages`, ...).
+   * The edge function stores it in the `provider` column; the column takes
+   * protocol names under the same versioning rule as the rest of this wire. */
+  provider: TurnProtocolSchema,
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
   /** Canonical route used to account for API-key/subscription usage. */

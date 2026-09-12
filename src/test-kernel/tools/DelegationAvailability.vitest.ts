@@ -194,9 +194,9 @@ describe('delegation model availability', () => {
     expect(
       availableModelNamesFromOptions([
         model('sonnet46T'),
-        model('opus48T', { disabled: true }),
-        model('gemini31p', { requiresKey: true, availability: 'missing-key' }),
-        model('deepseekT', { disabled: false, requiresKey: false }),
+        model('opus48T', { availability: 'retired' }),
+        model('gemini31p', { availability: 'missing-key' }),
+        model('deepseekT', { availability: 'provider-key' }),
       ]),
     ).toEqual(['sonnet46T', 'deepseekT']);
   });
@@ -311,8 +311,7 @@ describe('resolveAgentTools delegation annotation', () => {
       {
         value: 'deepseekT',
         label: 'DeepSeek',
-        disabled: false,
-        requiresKey: false,
+        availability: 'provider-key',
       },
     ]);
   });

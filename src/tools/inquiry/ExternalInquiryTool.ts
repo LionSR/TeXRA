@@ -2,12 +2,13 @@
  * Inquiry tool — human-in-the-loop bridge to external AI models.
  *
  * The agent dispatches a self-contained question; the user later pastes
- * the external model's answer back via the inquiry panel. Dispatch is
- * non-blocking: the tool returns immediately with `dispatched` and the
- * cycle continues. When an answer (or rejection) arrives — even hours
- * later, even after extension reload — the action handler injects a
- * `[inquiry] …` continuation message that auto-resumes the originating
- * run.
+ * the external model's answer back via the inquiry panel. The question is a
+ * request like any other (`request.opened { kind: 'externalInquiry' }`, one
+ * run model, 3.7), whose `thread` names the earlier turn it follows up;
+ * dispatch is non-blocking: the tool returns immediately with `dispatched`
+ * and the cycle continues. When the decision arrives, even hours later,
+ * even after a restart, `recordInquiryDecision` records it on the thread and
+ * delivers a `[inquiry]` follow-up that wakes or resumes the run.
  *
  * Three subcommands:
  *   - `ask`  → dispatch (default behavior)
@@ -27,7 +28,6 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import {
@@ -45,7 +45,6 @@ import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
@@ -286,8 +285,16 @@ export class ExternalInquiryTool extends defineTool({
       // A re-read would only reintroduce the write/read race the continuation
       // injectors already avoid via writer snapshots.
 
+      // The first turn's request is the thread itself; a follow-up turn is
+      // its own request whose `thread` names the first, which is the whole
+      // of the inquiry's multi-turn.
+      const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
+      const requestId =
+        turnIndex === 1
+          ? manifest.threadId
+          : `${manifest.threadId}:${turnIndex}`;
       const permission: ExternalInquiryPermission = {
-        requestId: manifest.threadId, // The panel addresses the inquiry by threadId.
+        requestId,
         question: input.question,
         threadId: manifest.threadId,
         context: questionContext,
@@ -298,13 +305,42 @@ export class ExternalInquiryTool extends defineTool({
         sessionLinks: collectKnownSessionLinks(manifest),
         transcript: manifest.turns,
       };
-      const interaction = session.interactions.openExternalInquiry(permission);
-      if (!interaction) {
-        return yield* Effect.fail(
-          new Error('HostInteractions.openExternalInquiry is required'),
+      yield* session
+        .commit([
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', runId),
+            requestId,
+            payload: { kind: 'externalInquiry', data: permission },
+            thread: turnIndex === 1 ? null : manifest.threadId,
+          },
+        ])
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new Error(`The inquiry request could not be opened: ${error}`),
+          ),
+          // The turn is committed in the global inquiry database before the
+          // request that renders it, and the two stores cannot share a
+          // transaction. A publication that fails or is interrupted takes
+          // the turn back down with it: left open, no surface would list it
+          // and no later `ask` could re-dispatch on the thread.
+          Effect.onError(() =>
+            records
+              .markDropped({ threadId: manifest.threadId, turnIndex })
+              .pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    logger.warn(
+                      `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+                      { data: error },
+                    );
+                  }),
+                ),
+                Effect.asVoid,
+              ),
+          ),
         );
-      }
-      yield* hostPort(() => interaction).pipe(Effect.mapError(ensureError));
 
       // Background Tasks panel: announce the open thread.
       const summary = yield* records.getThreadSummary(manifest.threadId);

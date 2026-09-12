@@ -155,7 +155,6 @@ function boundModel(): BoundModel {
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
@@ -196,7 +195,7 @@ const freshState = (): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: {},
-  approvals: {},
+  requests: {},
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
 });

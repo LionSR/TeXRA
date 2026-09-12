@@ -15,7 +15,10 @@ import {
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import {
+  APPROVE_SESSION_ACTION,
+  type SurfaceDecision,
+} from '@shared/session/approvalDecision';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -25,11 +28,13 @@ import {
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import type { ApprovalDecision } from '../state/approvalQueue';
 
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
 export const CONFIRM_CARD_FEEDBACK_PLACEHOLDER =
   'Feedback to send with rejection';
+
+/** What the approve key answers with unless a card names its own. */
+const PLAIN_APPROVE: SurfaceDecision = { action: 'approve' };
 
 interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];
@@ -39,21 +44,27 @@ interface ConfirmCardProps {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly rejectionMode: ConfirmCardRejectionMode;
-  readonly alwaysAllow?: {
-    readonly kind: ApprovalBypassKind;
-    readonly label: string;
-  };
+  /**
+   * What the approve key answers with, for a request a plain approve does not
+   * answer: the retry card's `y` is `{ action: 'retry' }`, because a retry
+   * request reads its consent off that arm and nothing else. Defaults to a
+   * plain approve.
+   */
+  readonly approveDecision?: SurfaceDecision;
+  /** Label of the `a` session-bypass action; omitted where the request kind
+   *  offers none. */
+  readonly alwaysAllowLabel?: string;
   readonly extraActions?: readonly {
     readonly key: string;
     readonly label: string;
-    readonly decision: ApprovalDecision;
+    readonly decision: SurfaceDecision;
   }[];
   readonly feedbackPlaceholder?: string;
   readonly compact?: boolean;
   readonly onFeedbackModeChange?: (active: boolean) => void;
   readonly onFeedbackValueChange?: (value: string) => void;
   readonly children: React.ReactNode;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 export function ConfirmCard({
@@ -63,7 +74,8 @@ export function ConfirmCard({
   approveLabel,
   rejectLabel,
   rejectionMode,
-  alwaysAllow,
+  approveDecision = PLAIN_APPROVE,
+  alwaysAllowLabel,
   extraActions = [],
   feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
   compact = false,
@@ -101,7 +113,7 @@ export function ConfirmCard({
           placeholder={feedbackPlaceholder}
           onChange={updateFeedback}
           onSubmit={(value) =>
-            onDecide({ accepted: false, userMessage: value.trim() })
+            onDecide({ action: 'reject', feedback: value.trim() })
           }
         />
       </Box>
@@ -119,19 +131,21 @@ export function ConfirmCard({
       }
       switch (
         confirmCardKeyAction(input, key, {
-          allowAlways: alwaysAllow != null,
+          allowAlways: alwaysAllowLabel != null,
           rejectionMode,
         })
       ) {
         case 'approve':
-          onDecide({ accepted: true });
+          onDecide(approveDecision);
           return;
         case 'reject':
-          onDecide({ accepted: false });
+          onDecide({ action: 'reject' });
           return;
         case 'approveAlways':
-          if (alwaysAllow) {
-            onDecide({ accepted: true, bypass: alwaysAllow.kind });
+          if (alwaysAllowLabel != null) {
+            // Surface-only (ruling A9-6): `approvalDecisionArms` decomposes
+            // it into the request's own session bypass plus a plain approve.
+            onDecide({ action: APPROVE_SESSION_ACTION });
           }
           return;
         case 'feedback':
@@ -162,7 +176,7 @@ export function ConfirmCard({
           approveLabel,
           rejectLabel,
           rejectionMode,
-          alwaysAllowLabel: alwaysAllow?.label,
+          alwaysAllowLabel,
           extraActions: mappedExtraActions,
           columns,
         })
@@ -177,7 +191,7 @@ export function ConfirmCard({
       approveLabel,
       rejectLabel,
       rejectionMode,
-      alwaysAllowLabel: alwaysAllow?.label,
+      alwaysAllowLabel,
       extraActions: mappedExtraActions,
       maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
     });
