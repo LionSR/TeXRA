@@ -100,6 +100,13 @@ return 'done'`,
         expect(
           WorkflowRunSnapshotSchema.safeParse(openTerminalAttempt).success,
         ).toBe(false);
+        // The inverse of the terminal checks: a completion stamp with no
+        // outcome is corruption, not a run still in flight.
+        const endedWithoutOutcome = structuredClone(result.snapshot);
+        endedWithoutOutcome.outcome = undefined;
+        expect(
+          WorkflowRunSnapshotSchema.safeParse(endedWithoutOutcome).success,
+        ).toBe(false);
 
         const { snapshots: failedSnapshots, onSnapshot: failedOnSnapshot } =
           recordingSnapshots();
@@ -486,9 +493,50 @@ throw new Error('reduce only')`,
       const terminal = finalSnapshot(snapshots);
       expect(terminal.outcome).toBe('failed');
       // A stage owns no state of its own: with no call to fail, Merge shows
-      // nothing and the run's outcome carries the throw.
-      expect(stageState(terminal, 0).outcome).toBe('completed');
+      // nothing and the run's outcome carries the throw. Owning no call, it
+      // also has no end of its own, so the run's end is when it ended.
+      expect(stageState(terminal, 0)).toMatchObject({
+        outcome: 'completed',
+        completedAt: terminal.timestamps.completedAt,
+      });
     }),
+  );
+
+  it.effect(
+    'leaves a stage whose only calls are hydrated history unstarted',
+    () =>
+      Effect.gen(function* () {
+        const first = yield* runWorkflowScript({
+          script: `${META}phase('Draft')
+await agent('draft privately', { id: 'draft' })
+return 'done'`,
+          runAgent: () => Effect.succeed('done'),
+        });
+        expect(first.snapshot.calls[0]?.status).toBe('completed');
+
+        const { snapshots, onSnapshot } = recordingSnapshots();
+        yield* runWorkflowScript({
+          script: `${META}return 'resumed'`,
+          runAgent: () => Effect.fail(new Error('must not run')),
+          initialSnapshot: first.snapshot,
+          onSnapshot,
+        });
+
+        // Hydration carries the previous attempt's completed call, stage and
+        // all. This attempt has not entered Draft, so the phase must read
+        // unreached rather than opened — let alone finished — before the
+        // script gets there.
+        const hydrated = snapshots[0]!;
+        expect(hydrated.calls[0]).toMatchObject({
+          id: 'draft',
+          stageId: 'stage-1',
+          status: 'completed',
+        });
+        expect(stageState(hydrated, 0)).toMatchObject({
+          started: false,
+          outcome: undefined,
+        });
+      }),
   );
 
   it.effect(
