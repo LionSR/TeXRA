@@ -5,10 +5,10 @@
  * Deploy with `--no-verify-jwt`: this endpoint verifies GitHub's OIDC token,
  * not a Supabase user JWT.
  */
+import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 import {
-  bearerToken,
   parseRepositoryClaim,
   validateWorkflowIdentity,
   verifyGitHubActionsToken,
