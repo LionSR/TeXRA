@@ -47,6 +47,12 @@ function productionDependencies(): ExchangeDependencies {
   };
 }
 
+/**
+ * Deliberately not imported from `../_shared/auth.ts`: that module's
+ * `authenticateJwt` pulls in `@supabase/supabase-js` at module scope, and
+ * this Supabase-free OIDC-only endpoint shouldn't gain that dependency just
+ * to reuse a three-line header parse.
+ */
 function bearerToken(req: Request): string | null {
   const header = req.headers.get('Authorization');
   return header?.startsWith('Bearer ') ? header.slice(7) : null;
