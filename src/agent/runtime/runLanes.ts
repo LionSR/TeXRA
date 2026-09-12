@@ -60,6 +60,17 @@ export class RunLanes {
     return this.onLane(runId, operation, hasRetainedOwner);
   }
 
+  /**
+   * Whether a generation of `runId` is live in this process: a step holding or
+   * waiting on its lane, or a generation still unwinding. A parked turn holds
+   * neither — its lane was released with its generation, which is what leaves
+   * it resumable.
+   */
+  isHeld(runId: string): boolean {
+    const lane = this.lanes.get(runId);
+    return this.live.has(runId) || (lane !== undefined && lane.fibers > 0);
+  }
+
   /** Hold a generation's lane until its Effect and finalizers settle. */
   launch<A, E, R>(
     runId: string,
@@ -117,8 +128,9 @@ export class RunLanes {
    * until `operation` settles — including the finalizers it registered, since
    * `withPerKeyLane` releases the lane only once the whole effect leaves.
    *
-   * `refuseWhenOwned` makes the claim conditional. Its check reads the lane in
-   * the same synchronous step as the tail swap inside `withPerKeyLane`, so no
+   * `refuseWhenOwned` makes the claim conditional, and it is `withPerKeyLane`
+   * that runs it: the check reads the retained owners, the generation gate and
+   * the lane's occupant in the same synchronous step as the tail swap, so no
    * launch can claim the lane between the two, and refusing leaves the lane
    * exactly as it was found — nothing was acquired and nothing is released.
    *
@@ -134,16 +146,6 @@ export class RunLanes {
     refuseWhenOwned?: () => boolean,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
-      if (refuseWhenOwned !== undefined) {
-        const occupied = this.lanes.get(runId);
-        if (
-          refuseWhenOwned() ||
-          this.live.has(runId) ||
-          (occupied !== undefined && occupied.fibers > 0)
-        ) {
-          return Effect.fail(new RunBusy({ runId }));
-        }
-      }
       const refusal = Deferred.makeUnsafe<never, Error>();
       this.waiting.add(refusal);
       const step = Effect.gen({ self: this }, function* () {
@@ -163,7 +165,17 @@ export class RunLanes {
       });
       return Effect.raceFirst(
         Deferred.await(refusal),
-        withPerKeyLane(this.lanes, runId)(step),
+        withPerKeyLane(
+          this.lanes,
+          runId,
+          refuseWhenOwned &&
+            ((occupant) =>
+              refuseWhenOwned() ||
+              this.live.has(runId) ||
+              (occupant !== undefined && occupant.fibers > 0)
+                ? new RunBusy({ runId })
+                : undefined),
+        )(step),
       ).pipe(Effect.ensuring(Effect.sync(() => this.waiting.delete(refusal))));
     });
   }

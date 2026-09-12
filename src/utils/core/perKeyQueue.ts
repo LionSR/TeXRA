@@ -105,15 +105,26 @@ export interface PerKeyLanes<Key> {
  * body still on the caller's fiber, and it measured 84 lines against these
  * 65 while adding two lifecycle cases (raced creation, ended queue) that the
  * chain does not have.
+ *
+ * `refuseClaim` makes the claim conditional: it reads the lane's current
+ * occupant in the same synchronous step that would install the caller's own
+ * tail, so nothing can claim the lane between the decision and the claim.
+ * Returning a value refuses with it and leaves the lane exactly as it was
+ * found; returning `undefined` claims as usual.
  */
-export function withPerKeyLane<Key>(
+export function withPerKeyLane<Key, RefusalE = never>(
   lanes: PerKeyLanes<Key>,
   key: Key,
-): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
-  return (self) =>
-    Effect.suspend(() => {
-      const mine = Deferred.makeUnsafe<void>();
+  refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined,
+): <A, E, R>(
+  self: Effect.Effect<A, E, R>,
+) => Effect.Effect<A, E | RefusalE, R> {
+  return <A, E, R>(self: Effect.Effect<A, E, R>) =>
+    Effect.suspend((): Effect.Effect<A, E | RefusalE, R> => {
       const existing = lanes.get(key);
+      const refusal = refuseClaim?.(existing);
+      if (refusal !== undefined) return Effect.fail(refusal);
+      const mine = Deferred.makeUnsafe<void>();
       const previous = existing?.tail;
       const held = existing ?? { tail: mine, fibers: 0 };
       if (!existing) lanes.set(key, held);

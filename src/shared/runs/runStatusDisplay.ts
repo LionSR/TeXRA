@@ -250,6 +250,19 @@ export function formatFlowPositionLabel(
   });
 }
 
+/** Spelled-out counterpart of {@link formatFlowPositionLabel} on the same
+ *  family-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
+ *  word the position instead of abbreviating it. Only `round` gains one, for
+ *  the reason {@link flowPosition} states. */
+export function formatFlowPositionTitle(
+  position: Readonly<FlowPosition> | undefined,
+): string | undefined {
+  if (position === undefined) return undefined;
+  return position.kind === 'round'
+    ? `Round ${position.index + 1}`
+    : `Turn ${position.index}`;
+}
+
 /**
  * One section per `group` arm, and the order the sections are painted in.
  * Both surfaces that group a run list — the webview tab strip and the

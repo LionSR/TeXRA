@@ -3,6 +3,7 @@ import type { ConversationProgress, RunFlow } from '@shared/schemas';
 import {
   flowPosition,
   formatFlowPositionLabel,
+  formatFlowPositionTitle,
 } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -37,7 +38,7 @@ export function getProgressBadgeTitle(
   flow: RunFlow | null,
 ): string | undefined {
   const parts: string[] = [];
-  const flowTitle = flowBadgeTitle(flow);
+  const flowTitle = formatFlowPositionTitle(flowPosition(flow));
   if (flowTitle) {
     parts.push(flowTitle);
   }
@@ -45,13 +46,4 @@ export function getProgressBadgeTitle(
     parts.push(`Tool calls: ${progress.toolCallCount}`);
   }
   return parts.length > 0 ? parts.join(', ') : undefined;
-}
-
-/** Spelled-out counterpart of the compact position label, on the same
- *  family-selected coordinate. */
-function flowBadgeTitle(flow: RunFlow | null): string | undefined {
-  const position = flowPosition(flow);
-  if (position === undefined) return undefined;
-  const noun = position.kind === 'round' ? 'Round' : 'Turn';
-  return `${noun} ${position.index + 1}`;
 }

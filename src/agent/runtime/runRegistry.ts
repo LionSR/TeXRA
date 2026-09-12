@@ -209,16 +209,18 @@ export class RunRegistry {
   }
 
   /**
-   * Whether `runId` is running, resuming, or parked with a live flow in this
-   * process: the states in which a resume must be refused outright rather than
-   * queued on the run lane, since it would otherwise start a fresh
-   * generation of a run that just finished.
+   * Whether a generation of `runId` is live in this process — holding its
+   * lane, still unwinding, or parked with a live tool-use flow: the states in
+   * which a resume must be refused outright rather than queued on the run
+   * lane, since it would otherwise start a fresh generation over a live one.
+   *
+   * Local ownership, never the durable phase: a crash leaves the phase RUNNING
+   * by design (owner loss is the fold's interrupted reading, 5.2), and an
+   * orphaned run in that phase is exactly what a resume exists to take over.
    */
   isActiveOrResuming(runId: RunId): boolean {
-    const run = this.runView(runId);
     return (
-      isActivePhase(run?.status) ||
-      run?.substate === RUN_SUBSTATE.RESUMING ||
+      this.lanes.isHeld(runId) ||
       this.getToolUseFlowContext(runId) !== undefined
     );
   }

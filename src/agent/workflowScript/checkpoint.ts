@@ -10,7 +10,6 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
 import {
   aggregateId,
   JsonValueSchema,
@@ -58,8 +57,6 @@ export function deriveWorkflowScriptCheckpointId(identity: {
     32,
   );
 }
-
-const log = createLog('workflowCheckpoint');
 
 const checkpointAggregate = (checkpointId: string) =>
   aggregateId('workflow-checkpoint', checkpointId);
@@ -312,20 +309,21 @@ export const runPersistedWorkflowScript = Effect.fn(
           });
         }),
       // A release that fails leaves the claim standing: the next process reads
-      // it as a live owner and refuses, so say why rather than let the journal
-      // look permanently taken.
+      // it as a live owner and refuses, so the invocation fails with it. The
+      // journal is already durable, so the caller loses no work by hearing
+      // that the checkpoint is still owned.
       () =>
-        session.releaseClaims(target).pipe(
-          Effect.tapError((error) =>
-            Effect.sync(() => {
-              log.warn(
-                `Workflow checkpoint ${checkpointId} claim was not released.`,
-                { data: error },
-              );
-            }),
+        session
+          .releaseClaims(target)
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new Error(
+                  `Workflow checkpoint ${checkpointId} claim was not released.`,
+                  { cause },
+                ),
+            ),
           ),
-          Effect.ignore,
-        ),
     );
   },
   (self, options: PersistedWorkflowScriptRunOptions) =>

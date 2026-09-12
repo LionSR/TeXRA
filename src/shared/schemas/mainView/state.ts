@@ -81,7 +81,9 @@ export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
  *
  * Written with `as const satisfies` so each `available` literal survives for
  * `computeModelOptions`'s derivation of the unavailable kinds, while a missing
- * or misshapen kind is still a compile error.
+ * or misshapen kind is still a compile error, and frozen to the depth it is
+ * read at: the table crosses into every host that decides whether a model can
+ * run, and `readonly` is compile-time only.
  */
 export const MODEL_AVAILABILITY_STATUS = {
   'openrouter-key': {
@@ -142,6 +144,9 @@ export const MODEL_AVAILABILITY_STATUS = {
     readonly requiresKey: boolean;
   }
 >;
+for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
+  Object.freeze(status);
+Object.freeze(MODEL_AVAILABILITY_STATUS);
 
 /**
  * Resolved per-model access. Computed once by `computeModelOptionsData` and
