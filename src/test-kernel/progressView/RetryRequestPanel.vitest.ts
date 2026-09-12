@@ -116,9 +116,9 @@ describe('retry-request-panel', () => {
 
     expect(actions).toEqual([
       {
-        kind: 'decision.retry',
+        kind: 'request.decide',
         runId: 'run-1',
-        approvalId: 'retry-1',
+        requestId: 'retry-1',
         decision: { action: 'retry' },
       },
     ]);

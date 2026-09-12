@@ -158,7 +158,7 @@ export class RequestPanels extends LitElement {
     commonViewStyles,
     requestPanelSharedStyles,
     css`
-      /* Run caption above each request, only rendered when approvals span
+      /* Run caption above each request, only rendered when requests span
          more than one run (see renderRequest). */
       .request-run-group__label {
         margin-block-end: var(--wa-space-3xs);
@@ -188,7 +188,7 @@ export class RequestPanels extends LitElement {
   /**
    * The session, for the run captions: `permissions` is already scoped to
    * the selected stream, so the "more than one run is asking" question is
-   * answered by `view.approvals`, the unfiltered set.
+   * answered by `view.requests`, the unfiltered set.
    */
   @property({ attribute: false }) view: SessionView | null = null;
 
@@ -227,7 +227,7 @@ export class RequestPanels extends LitElement {
     if (changedProperties.has('permissions') || changedProperties.has('view')) {
       // Captions key off every pending run, not the stream-filtered prop.
       const runIds = new Set<RunId>(
-        (this.view?.approvals ?? []).map((approval) => approval.runId),
+        (this.view?.requests ?? []).map((request) => request.runId),
       );
       this.multiRunPending = runIds.size > 1;
     }
@@ -344,7 +344,7 @@ export class RequestPanels extends LitElement {
 
   /**
    * One request panel, captioned with its originating run's label when
-   * approvals from more than one run are pending: sections group by kind,
+   * requests from more than one run are pending: sections group by kind,
    * not by run, so the kind title alone cannot say which run is asking.
    * A single pending run keeps the clean chrome.
    */

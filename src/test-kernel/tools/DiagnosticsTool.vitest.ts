@@ -72,7 +72,7 @@ describe('DiagnosticsTool', () => {
       const readDiagnostics = vi.fn(async (_path: string) => {
         return [] as GenericDiagnostic[];
       });
-      session.interactions.use({ readDiagnostics, cancel: vi.fn() });
+      session.interactions.use({ readDiagnostics });
 
       const result = await withRunContext(worktreeContext(session), () =>
         new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
@@ -90,7 +90,6 @@ describe('DiagnosticsTool', () => {
     await withSession(async (session) => {
       session.interactions.use({
         addCriticism: () => ({ accepted: false, resolvedPath: '' }),
-        cancel: vi.fn(),
       });
 
       const result = await withRunContext(worktreeContext(session), () =>
@@ -109,7 +108,6 @@ describe('DiagnosticsTool', () => {
           entries.push(entry);
           return { accepted: true, resolvedPath: entry.absolutePath };
         },
-        cancel: vi.fn(),
       });
 
       const result = await withRunContext(worktreeContext(session), () =>

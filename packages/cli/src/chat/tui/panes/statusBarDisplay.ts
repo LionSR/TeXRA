@@ -18,7 +18,6 @@ import {
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
   type RunPhase,
-  type RunStage,
   type ApprovalPolicySnapshot,
   type RunId,
   type TokenUsageStats,
@@ -32,8 +31,8 @@ import {
   SUBAGENT,
 } from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/runs/runStatus';
-import { formatStageLabel } from '@shared/runs/runStatusDisplay';
-import type { SessionView } from '@shared/session/sessionView';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   assertNever,
   filterNotNullish,
@@ -137,7 +136,9 @@ export interface StatusBarDisplayInput {
   /** Run-authoritative context occupancy for the displayed stream
    *  (`RunView.context`). */
   readonly contextState: ContextStateData | undefined;
-  readonly stage: RunStage | undefined;
+  /** The displayed run's loop position (`RunView.flow`); undefined before
+   *  its first step. */
+  readonly flow: RunView['flow'] | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
@@ -323,29 +324,23 @@ function locationSegment(
   };
 }
 
-// One status-bar slot carries whichever stage this stream has (mirrors the
-// SubagentList row's `stageLabel`).
-function stageSegment(
-  stage: RunStage | undefined,
+// One status-bar slot carries the loop position this stream is at (mirrors
+// the SubagentList row's `flowLabel`).
+function flowSegment(
+  flow: RunView['flow'] | undefined,
 ): StatusBarSegment | undefined {
-  if (stage === undefined) return undefined;
-  const text = formatStageLabel(stage);
-  if (text === undefined) return undefined;
+  if (flow?.round == null) return undefined;
   return {
-    text,
-    // Keep stage visibility on narrow terminals: degrade to the bare
-    // current round/phase label instead of dropping the planned total's
-    // context.
-    compactText: formatStageLabel({ ...stage, total: undefined }),
+    text: formatRoundStageLabel({ index: flow.round }),
     color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.stage,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
   };
 }
 
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeSubagent: 20,
-  stage: 30,
+  flow: 30,
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
@@ -1041,7 +1036,7 @@ export function buildStatusBarDisplay(
       subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
       locationSegment(input.location),
-      stageSegment(input.stage),
+      flowSegment(input.flow),
       formatUsage(input.contextState, input.usage),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
       subagentsSegment(input.subagents),

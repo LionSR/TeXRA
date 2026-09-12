@@ -62,7 +62,7 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   }
   const command = input.command.trim();
 
-  const approval = yield* hostPort(() => requestBashApproval({ command }));
+  const approval = yield* requestBashApproval({ command });
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(command, approval);
   }

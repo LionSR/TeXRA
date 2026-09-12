@@ -44,6 +44,7 @@ import {
 } from './inquiry';
 import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
+import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
   FlowSnapshotPayloadSchema,
@@ -53,12 +54,7 @@ import {
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
-import {
-  RunPhaseSchema,
-  RunSubstateSchema,
-  UserFollowUpSupportSchema,
-  WorktreeInfoSchema,
-} from './run';
+import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { StreamLogEntrySchema } from './streamLogEntry';
 import {
   ApprovalBypassesSchema,
@@ -329,16 +325,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * row; the fold derives the terminal phase from it and from nothing else.
    */
   durable('run.end', RunEndSchema.shape),
-  /** A non-terminal phase transition; the terminal phase is `run.end`'s. */
-  durable('status', {
-    phase: RunPhaseSchema,
-    previousPhase: RunPhaseSchema.nullish(),
-    /** `RUN_TRANSITION_CAUSE` (`@shared/runs/runStatus`); diagnostic,
-     *  not a fold input. */
-    cause: z.string(),
-    substate: RunSubstateSchema.nullish(),
-    runStartedAt: z.int().positive().nullish(),
-  }),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('updateTodos', { todos: z.array(TodoItemSchema) }),
   durable('updatePlan', { plan: PlanSchema.nullable() }),
@@ -364,30 +350,34 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     'inquiry',
   ),
   durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
-  durable('approval.requested', {
-    requestId: z.string(),
-    /** What the UI shows (diff, command, question), never host handles. */
+  /**
+   * A run asking a person (one run model, section 3.7): what the UI shows
+   * (diff, command, question), never host handles. `thread` names an earlier
+   * request this one continues, which is the whole of the inquiry's
+   * multi-turn: an inquiry is a request whose thread names its predecessor.
+   * Pending is the fold, opened without decided.
+   */
+  durable('request.opened', {
+    requestId: z.string().min(1),
     payload: PermissionPayloadSchema,
+    thread: z.string().min(1).nullish(),
   }),
   /**
-   * `decision` and `cause` are the durable recovery facts (R5): a
-   * `model-retry` or `tool-outcome` resolution names what was decided so a
-   * resumed run never reads consent off a snapshot alone. The interaction
-   * plane's own settlement rows carry neither: they close a request, the
-   * loop's row carries its meaning.
+   * The answer, whatever surface gave it and whatever its provenance. The
+   * decision is the durable recovery fact (R5): a `model-retry` or
+   * `tool-outcome` binding reads its consent off this row, never off a
+   * snapshot alone, and an automatic close names its cause here.
    */
-  durable('approval.resolved', {
-    requestId: z.string(),
-    decision: z
-      .enum(['approved', 'denied', 'skipped', 'cancelled', 'interrupted'])
-      .optional(),
-    cause: z.string().optional(),
+  durable('request.decided', {
+    requestId: z.string().min(1),
+    decision: RequestDecisionSchema,
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
    * The loop's position: family, step, and the coordinates it carries. The
-   * one run-ledger row renderers read (the CLI's waiting-on row and the
-   * progress board fold it); its five siblings below are ledger-private.
+   * one run-ledger row renderers read: the fold derives the live phase from
+   * it (`waiting` parks the run, any other step is running) and `RunView.flow`
+   * carries its coordinates; its five siblings below are ledger-private.
    */
   durable('flow.step', { payload: FlowStepPayloadSchema }),
   /**
@@ -514,11 +504,13 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
 
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
- * but the transcript tier. The approval pair shares one entry because it
+ * but the transcript tier. The request pair shares one entry because it
  * folds to one set, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read (5.2, "Existence").
+ * tombstone final under every read (5.2, "Existence"). `flow.step` is a
+ * listing key of its own: the phase is folded from it, so a cold listing
+ * that dropped it would paint every parked run as ready.
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -536,20 +528,20 @@ export function listingTypeOf(
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
-    case 'flow.step':
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
     case 'tool.result':
     case 'flow.snapshot':
-      // The run ledger's rows stay out of the listing: a cold hydrate must
-      // never pull a run's latest `flow.snapshot` into every renderer. Not
-      // compiler-enforced (the switch ends in `default`); the fold suite pins
-      // it.
+      // The run ledger's private rows stay out of the listing: a cold hydrate
+      // must never pull a run's latest `flow.snapshot` into every renderer.
+      // `flow.step` is the one ledger row that is listed (its own key, the
+      // `default` below). Not compiler-enforced (the switch ends in
+      // `default`); the fold suite pins it.
       return null;
-    case 'approval.requested':
-    case 'approval.resolved':
-      return 'approval';
+    case 'request.opened':
+    case 'request.decided':
+      return 'request';
     case 'run.start':
     case 'run.removed':
       return 'lifecycle';

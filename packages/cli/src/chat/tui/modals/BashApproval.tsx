@@ -14,12 +14,12 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { ApprovalDecision } from '../state/approvalQueue';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface BashApprovalProps {
   readonly availableRows?: number;
   readonly payload: BashPermission;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 const COMMAND_APPROVAL_TITLE = 'Run command?';
@@ -60,7 +60,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
-      alwaysAllow={{ kind: 'bash', label: 'approve commands for session' }}
+      alwaysAllowLabel="approve commands for session"
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >

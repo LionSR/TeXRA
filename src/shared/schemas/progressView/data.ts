@@ -135,8 +135,8 @@ export const WebFetchPayloadSchema = z.object({
   content: z.string().optional(),
 });
 
-/** What a pending approval shows (diff, command, question), never host
- *  handles: the payload of `approval.requested`. */
+/** What a pending request shows (diff, command, question), never host
+ *  handles: the payload of `request.opened`. */
 export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('toolEdit'), data: ToolEditPermissionSchema }),
   z.object({ kind: z.literal('bash'), data: BashPermissionSchema }),
@@ -162,8 +162,8 @@ export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
 /**
- * The one approval/prompt kind vocabulary, read off the payload union. The
- * `approval.requested` fact, the runtime host-interaction kinds, and the CLI
- * approval queue all key off it, so a spelling that drifts fails to compile.
+ * The one request kind vocabulary, read off the payload union. The
+ * `request.opened` fact and every surface that lists pending requests key
+ * off it, so a spelling that drifts fails to compile.
  */
 export type ProgressPermissionKind = PermissionPayload['kind'];

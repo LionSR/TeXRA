@@ -5,12 +5,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
-import type {
-  ConversationProgress,
-  GoalState,
-  RunStage,
-  RunId,
-} from '@shared/schemas';
+import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
 import {
   isPlainAgentIdentity,
   RUN_LIFECYCLE_UNAVAILABLE,
@@ -541,7 +536,7 @@ export class RunHeader extends LitElement {
     const shownButtons = toolbarButtonViews.filter((view) => !view.hidden);
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
-      run.stage ?? undefined,
+      run.flow,
     );
 
     return html`
@@ -568,7 +563,7 @@ export class RunHeader extends LitElement {
           </wa-tooltip>
           <span class="status-label" aria-hidden="true">${statusLabel}</span>
           ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-          ${this.renderProgressBadge(run.conversationProgress, run.stage)}
+          ${this.renderProgressBadge(run.conversationProgress, run.flow)}
         </div>
         <div class="header-actions">
           <wa-button-group
@@ -653,21 +648,19 @@ export class RunHeader extends LitElement {
 
   private renderProgressBadge(
     progress: ConversationProgress | undefined,
-    stage: RunStage | null,
+    flow: RunView['flow'],
   ): TemplateResult | typeof nothing {
-    const stageValue = stage ?? undefined;
-    if (!stageValue && !progress?.toolCallCount) {
+    if (!flow && !progress?.toolCallCount) {
       return nothing;
     }
-    const progressTitle = getProgressBadgeTitle(progress, stageValue);
+    const progressTitle = getProgressBadgeTitle(progress, flow);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')}
-        ${renderProgressBadgeContent(progress, stageValue)}
+        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, flow)}
       </wa-tag>
       ${
         progressTitle

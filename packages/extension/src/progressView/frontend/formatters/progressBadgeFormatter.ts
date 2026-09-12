@@ -1,24 +1,28 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress, RunStage } from '@shared/schemas';
-import { formatStageLabel } from '@shared/runs/runStatusDisplay';
+import type { ConversationProgress } from '@shared/schemas';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import type { RunView } from '@shared/session/sessionView';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+/** The loop position the fold carries for a run (`RunView.flow`). */
+type RunFlow = NonNullable<RunView['flow']>;
+
 /**
- * Render progress badge with the stage slot and tool call count.
+ * Render progress badge with the loop position and tool call count.
  * Used by RunHeader.
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
-  stage: RunStage | undefined,
+  flow: RunFlow | null,
 ): TemplateResult | typeof nothing {
-  const stageLabel = formatStageLabel(stage);
+  const flowLabel = compactFlowLabel(flow);
   const tools = progress?.toolCallCount ?? 0;
-  if (!stageLabel && tools <= 0) return nothing;
+  if (!flowLabel && tools <= 0) return nothing;
 
-  const accessibleLabel = getProgressBadgeTitle(progress, stage);
+  const accessibleLabel = getProgressBadgeTitle(progress, flow);
   return html`<span aria-hidden="true"
-      >${stageLabel ? html`<bdi dir="auto">${stageLabel}</bdi>` : nothing}${
-        stageLabel && tools > 0 ? ', ' : nothing
+      >${flowLabel ? html`<bdi dir="auto">${flowLabel}</bdi>` : nothing}${
+        flowLabel && tools > 0 ? ', ' : nothing
       }${tools > 0 ? formatResultCount(tools, 'tool call') : nothing}</span
     >${
       accessibleLabel
@@ -31,12 +35,12 @@ export function renderProgressBadgeContent(
 
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
-  stage: RunStage | undefined,
+  flow: RunFlow | null,
 ): string | undefined {
   const parts: string[] = [];
-  const stageTitle = stageBadgeTitle(stage);
-  if (stageTitle) {
-    parts.push(stageTitle);
+  const flowTitle = flowBadgeTitle(flow);
+  if (flowTitle) {
+    parts.push(flowTitle);
   }
   if (progress?.toolCallCount) {
     parts.push(`Tool calls: ${progress.toolCallCount}`);
@@ -44,17 +48,20 @@ export function getProgressBadgeTitle(
   return parts.length > 0 ? parts.join(', ') : undefined;
 }
 
-/** Spelled-out counterpart of the compact stage label. */
-function stageBadgeTitle(stage: RunStage | undefined): string | undefined {
-  if (stage === undefined) return undefined;
-  if (stage.kind === 'phase') {
-    if (stage.index === undefined) return `Phase: ${stage.label}`;
-    const position =
-      stage.total === undefined
-        ? `Phase ${stage.index + 1}`
-        : `Phase ${stage.index + 1} of ${stage.total}`;
-    return `${position}: ${stage.label}`;
-  }
-  const round = `Round ${stage.index + 1}`;
-  return stage.total !== undefined ? `${round} of ${stage.total}` : round;
+/** The loop's position in the compact form the status surfaces share: the
+ *  round a reflection run is on, else the turn a tool-use run is on. A step
+ *  that carries neither coordinate has no position to paint. */
+function compactFlowLabel(flow: RunFlow | null): string | undefined {
+  if (flow == null) return undefined;
+  if (flow.round != null) return formatRoundStageLabel({ index: flow.round });
+  if (flow.turn != null) return `t${flow.turn + 1}`;
+  return undefined;
+}
+
+/** Spelled-out counterpart of the compact position label. */
+function flowBadgeTitle(flow: RunFlow | null): string | undefined {
+  if (flow == null) return undefined;
+  if (flow.round != null) return `Round ${flow.round + 1}`;
+  if (flow.turn != null) return `Turn ${flow.turn + 1}`;
+  return undefined;
 }

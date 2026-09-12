@@ -107,12 +107,6 @@ export interface ChildRunPorts {
  */
 interface ChildRunPort {
   readonly logger: AgentTrace;
-  /** The child loop is idle and waiting for the next follow-up instruction. */
-  waitForInput(): void;
-  /** The child loop has started processing a turn. */
-  beginTurn(): void;
-  /** The active turn failed; preserve explicit user stops. */
-  failTurn(): void;
   /**
    * Complete the child stream lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
@@ -1058,7 +1052,6 @@ export function startChildRunLoop<TTurn, R = never>(
                   new Error(
                     `${strategy.stageLabel} reported a failed turn without throwing.`,
                   );
-                childRun?.failTurn();
                 pendingDelivery = delivery;
                 break;
               }
@@ -1079,7 +1072,6 @@ export function startChildRunLoop<TTurn, R = never>(
               // follow-up already raced into the queue resumes immediately instead
               // of genuinely waiting.
               yield* submitPendingDelivery(delivery, runSession, runId, logger);
-              childRun?.waitForInput();
               if (loop.isInterrupted()) break;
 
               const batch = yield* Effect.tryPromise({
@@ -1090,7 +1082,6 @@ export function startChildRunLoop<TTurn, R = never>(
 
               const nextRunTurn = strategy.runTurn;
               runner = (signal) => nextRunTurn(batch.items, ports, signal);
-              childRun?.beginTurn();
             }
           }),
         ),

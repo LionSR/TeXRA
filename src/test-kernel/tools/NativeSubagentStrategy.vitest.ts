@@ -14,10 +14,12 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   RUN_PHASE,
   RunIdSchema,
   RunUsageTotalsSchema,
   USER_FOLLOW_UP_SUPPORT,
+  type FlowStep,
   type RunId,
 } from '@shared/schemas';
 
@@ -142,6 +144,25 @@ function toolUseTurnResult(
     output: { category: 'toolUse', response: '', files: [] },
     ...extras,
   };
+}
+
+/**
+ * Move a child's phase the way its loop does: a `flow.step` row, the one fact
+ * the fold derives a live phase from (one run model, 3.3). `waiting` parks the
+ * run, any other step runs it.
+ */
+function publishFlowStep(
+  session: SessionHandle,
+  runId: RunId,
+  step: FlowStep,
+): void {
+  session.publish([
+    {
+      type: 'flow.step',
+      aggregateId: aggregateId('run', runId),
+      payload: { family: 'toolUse', step },
+    },
+  ]);
 }
 
 /** The run-cumulative usage totals a turn reports, keyed by its spend. */
@@ -635,13 +656,11 @@ describe('NativeSubagentStrategy', () => {
 
     mocks.executeAgent.mockImplementationOnce(
       async (_config, _runId, options) => {
-        session.status.transition(childRunId, RUN_PHASE.RUNNING, 'lifecycle');
-        session.runs.trackAgentRun(handle, {
-          status: RUN_PHASE.RUNNING,
-        });
+        publishFlowStep(session, childRunId, 'turn.begin');
+        session.runs.track(handle);
         options.onRunResolved?.(childRunId);
         options.onRun?.(handle);
-        session.status.transitionToWaiting(childRunId, 'wait');
+        publishFlowStep(session, childRunId, 'waiting');
         return waitingTurn('initial response');
       },
     );
@@ -658,7 +677,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
     mocks.resumeToolUseTurn.mockImplementation(async (_snapshot, options) => {
       options.onRun?.(handle);
-      session.status.transitionToWaiting(childRunId, 'wait');
+      publishFlowStep(session, childRunId, 'waiting');
       return waitingTurn(
         `follow-up response ${mocks.resumeToolUseTurn.mock.calls.length}`,
       );
@@ -740,7 +759,9 @@ describe('NativeSubagentStrategy', () => {
         ],
       ]);
       expect(session.followUps.getAll(childRunId)).toEqual([]);
-      expect(session.status.get(childRunId)).toBe(RUN_PHASE.WAITING);
+      await vi.waitFor(() =>
+        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING),
+      );
       const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
         ([, followUp]) => followUp.text.includes('follow-up response'),
       );
@@ -752,7 +773,6 @@ describe('NativeSubagentStrategy', () => {
       await Effect.runPromise(session.runs.kill(childRunId).settlement);
       await completion;
       session.followUps.terminalize(childRunId);
-      session.status.clearRun(childRunId);
     }
   });
 
@@ -835,7 +855,6 @@ describe('NativeSubagentStrategy', () => {
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
       session.followUps.terminalize(childRunId);
-      session.status.clearRun(childRunId);
     }
   });
 });

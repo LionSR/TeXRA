@@ -66,10 +66,10 @@ import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget'
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
+  aggregateId as qualifyAggregateId,
+  emptyRunEndOutput,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RunId,
-  type RunPhase,
   AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -80,7 +80,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
@@ -109,20 +108,41 @@ function loopRunId(): RunId {
   return runId;
 }
 
-function trackChildHandle(
-  runId: RunId,
-  parentRunId: RunId,
-  status: RunPhase = RUN_PHASE.RUNNING,
-): RunHandle {
+function trackChildHandle(runId: RunId, parentRunId: RunId): RunHandle {
   const handle = testRunHandle({
     runId,
     parent: parentRunId,
     agent: 'fake',
     trace: { emit: vi.fn() } as never,
   });
-  session.runs.trackAgentRun(handle, { status });
+  session.runs.track(handle);
   trackedRunIds.add(runId);
   return handle;
+}
+
+/**
+ * Move the parent run's folded phase, the way the runtime does: an
+ * activation row makes it running, the terminal row ends it. The fold is
+ * the one phase authority, so a follow-up test states its premise in rows.
+ */
+async function foldParentPhase(active: boolean): Promise<void> {
+  const aggregateId = qualifyAggregateId('run', PARENT_RUN_ID);
+  session.publish([
+    active
+      ? {
+          type: 'run.activate',
+          aggregateId,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+        }
+      : {
+          type: 'run.end',
+          aggregateId,
+          outcome: RUN_OUTCOME.COMPLETED,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
+        },
+  ]);
+  await session.settlePublications();
 }
 
 /** A turn the fake strategy can produce: interim (loop continues) or terminal. */
@@ -514,9 +534,7 @@ describe('childRunLoop E2E fixtures', () => {
     await launchStarted.promise;
 
     try {
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
+      await foldParentPhase(true);
       await expect(
         Effect.runPromise(
           realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
@@ -526,9 +544,7 @@ describe('childRunLoop E2E fixtures', () => {
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.COMPLETED,
-      });
+      await foldParentPhase(false);
       const userAdmission = vi.fn();
       await expect(
         Effect.runPromise(
@@ -577,9 +593,7 @@ describe('childRunLoop E2E fixtures', () => {
       notifyProgress({ kind: 'started' });
       expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(terminalQueue);
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
+      await foldParentPhase(true);
       notifyProgress({ kind: 'started' });
       const progressQueue = session.followUps.getAll(PARENT_RUN_ID);
       expect(progressQueue).toHaveLength(terminalQueue.length + 1);
@@ -847,9 +861,8 @@ describe('childRunLoop E2E fixtures', () => {
     await waitForLiveOwner(runId);
 
     // Mirrors what a real native turn's runFlowWithLifecycle does: track a
-    // fresh handle for this runId/runId, WAITING, once the
-    // turn suspends.
-    const handle = trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
+    // fresh handle for this run once the turn suspends.
+    const handle = trackChildHandle(runId, PARENT_RUN_ID);
 
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
@@ -1013,7 +1026,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLiveOwner(runId);
 
-    trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
+    trackChildHandle(runId, PARENT_RUN_ID);
 
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
@@ -1031,7 +1044,11 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.runs.getHandle(runId)).toBeUndefined();
   });
 
-  it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
+  // The handle's stop latch is the one precedence authority
+  // (`finalizeRunTerminal`): a stop that reached the run before its exit
+  // outranks the turn's own report, so the terminal row says cancelled even
+  // though the turn failed first.
+  it('lets a stop landing after a turn failure win the terminal outcome', async () => {
     const runId = 'fa11ed01' as RunId;
     publishTestRunStart(session, runId);
     const childRun = await Effect.runPromise(
@@ -1044,9 +1061,8 @@ describe('childRunLoop E2E fixtures', () => {
     );
     trackedRunIds.add(runId);
     const { strategy, rejectTurn } = createFakeStrategy();
-    // Fires between the turn failure landing FAILED on the stream phase and
-    // the loop's finalize, so the loop reports an interrupted run for a stream
-    // whose phase already carries the failure.
+    // Fires between the turn failure and the loop's finalize, which is the
+    // window the stop latch has to win.
     const stopSettlements: Promise<void>[] = [];
     const interruptAfterFailure = vi.fn(() => {
       stopSettlements.push(
@@ -1066,15 +1082,14 @@ describe('childRunLoop E2E fixtures', () => {
 
     await Promise.all(stopSettlements);
     expect(interruptAfterFailure).toHaveBeenCalledOnce();
-    expect(session.status.get(runId)).toBe(RUN_PHASE.FAILED);
     expect(mocks.finalizeRun).toHaveBeenCalledWith(
       session,
       expect.objectContaining({
         runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: expect.objectContaining({
-          message: expect.stringContaining('turn blew up'),
-        }),
+        outcome: RUN_OUTCOME.CANCELLED,
+        // Error facts classified for a failure the stop outranked are not
+        // facts about this run's outcome.
+        error: undefined,
       }),
     );
   });

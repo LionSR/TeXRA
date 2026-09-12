@@ -26,12 +26,12 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { ApprovalDecision } from '../state/approvalQueue';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface AgentProposalProps {
   readonly availableRows?: number;
   readonly payload: AgentProposalPermission;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 const FILE_LIMIT = 5;
@@ -269,10 +269,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       color={COLOR_ACCENT}
       title={title}
       rejectionMode="feedback"
-      alwaysAllow={{
-        kind: 'superYolo',
-        label: DELEGATION_APPROVAL_COPY.cliAction,
-      }}
+      alwaysAllowLabel={DELEGATION_APPROVAL_COPY.cliAction}
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >

@@ -42,12 +42,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type {
-  AgentEvent,
-  AgentTrace,
-  ResultEvent,
-  StatusEvent,
-} from '@agent/trace';
+import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   ownsRunLease,
@@ -71,13 +66,13 @@ import {
   interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
-  RUN_PHASE,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
+  type PermissionPayload,
+  type RequestDecision,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
-  type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type {
@@ -90,13 +85,13 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLogStore,
   StreamLogStoreMode,
@@ -109,12 +104,12 @@ import {
   tryUseRunContext,
 } from './RunContext';
 import { RunRegistry } from './runRegistry';
-import { RunStatusMachine } from './RunStatusService';
 import {
   SessionHostInteractions,
   type HostInteractions,
 } from './HostInteractions';
-import { runEventDraft, statusDraft } from './SessionEvents';
+import { redactedForFact } from './loop/rows';
+import { runEventDraft } from './SessionEvents';
 import {
   defaultRootSession,
   openSession,
@@ -132,15 +127,15 @@ const logger = createLog('sessionHandle');
 
 /**
  * What opening a session supplies (`openSession`): persistence mode and
- * host-owned policies. The graph constructs its store over its event database. `interactions` is the host the
- * session is born with, attached for its whole life, for an opener with no
- * later attach step of its own (the SDK's headless host).
+ * host-owned policies. The graph constructs its store over its event
+ * database. `interactions` is a presentation host the session is born with,
+ * attached for its whole life, for an opener with no later attach step of its
+ * own.
  *
- * `status` and `events` are deliberately absent: the machine publishes
- * canonical `status` through the session, and the event plane is the
- * session's graph, built by the session owner per workspace root, so a
- * separately-injected machine or plane could not silently drop every fact
- * of a session onto a plane nobody reads. The session co-constructs them.
+ * `events` is deliberately absent: the event plane is the session's graph,
+ * built by the session owner per workspace root, so a separately-injected
+ * plane could not silently drop every fact of a session onto a plane nobody
+ * reads. The session co-constructs it.
  */
 export type SessionHandleInit = Partial<
   Pick<SessionHandle, 'responseTextProcessing' | 'roots'>
@@ -169,8 +164,9 @@ export class SessionHandle {
   readonly viewChanges: Stream.Stream<SessionView>;
   /**
    * Per-run run handles: registration, lookup, change listeners, and
-   * subagent lineage. Hears every canonical `status` fact from
-   * {@link publishStatus}, in publish order.
+   * subagent lineage. Hears every phase-moving row this process committed
+   * ({@link receiveCommittedEvent}), in commit order; the phase itself is
+   * the fold's (`RunView.status`), never a second map here.
    */
   readonly runs: RunRegistry;
   /**
@@ -206,8 +202,6 @@ export class SessionHandle {
    * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
-  /** Session-scoped status plane. */
-  readonly status: RunStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
   /**
@@ -270,12 +264,8 @@ export class SessionHandle {
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
-    const status = new RunStatusMachine(
-      (event) => this.publishStatus(event),
-      (runId, detail) => this.setUnreadable(runId, detail),
-    );
     this.followUps = new ToolUseFollowUpQueue();
-    const interactions = new SessionHostInteractions(this);
+    const interactions = new SessionHostInteractions();
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
     // same snapshot when the policy half moves.
@@ -283,14 +273,13 @@ export class SessionHandle {
       this.publishApprovalPolicy(runId),
     );
     this.runs = new RunRegistry({
-      runStatus: status,
+      runView: (runId) => this.runView(runId),
       publish: (events) => this.publish(events),
       approvals,
       finalizeRun: (input) => finalizeRun(this, input),
       releaseRootRunLease: (runId) => this.releaseRunLease(runId),
     });
 
-    this.status = status;
     this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = new ModelRetryGate();
@@ -522,36 +511,114 @@ export class SessionHandle {
   }
 
   /**
-   * Publish one canonical status fact from the session's status machine. The
-   * runtime's status consumers hear it only after the event batch commits:
-   * the recorders' status ports and the run registry's waiters and
-   * child rosters cannot announce a rejected write.
+   * The final-text facts that close every streaming row still open for
+   * `runId`: the loop commits them in the batch that parks the run (its
+   * `waiting` step), so a parked transcript never shows a permanently
+   * streaming block.
    */
-  publishStatus(event: StatusEvent): void {
-    if (this.disposed) return;
-    this.schedulePublication(
-      Effect.suspend(() => {
-        const closure = this.statusClosureFacts(event.runId, event.phase);
-        return this.graph.publish([...closure, statusDraft(event)]);
-      }),
+  streamClosureFacts(
+    runId: RunId,
+  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
+    const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
+    for (const entry of this.transcripts.get(runId)?.getRange(0) ?? []) {
+      if (!isRunningStreamingTextEntry(entry)) continue;
+      closure.push({
+        type: 'stream.end',
+        aggregateId: qualifyAggregateId('run', runId),
+        id: entry.id,
+        finalText: this.graph.readText(runId, entry.id) ?? entry.text,
+      });
+    }
+    return closure;
+  }
+
+  /**
+   * The `request.decided` row that answers `requestId`, read from the plane's
+   * tail above `from` (one run model, 3.7): what a run parked on a request
+   * waits on, in process, whichever surface decides it. Fails when the plane
+   * closes before a decision lands, which a waiting caller reads as a
+   * cancellation.
+   */
+  decisionFor(
+    runId: RunId,
+    requestId: string,
+    from: CommitOrdinal,
+  ): Effect.Effect<Extract<SessionEvent, { type: 'request.decided' }>, Error> {
+    const aggregate = qualifyAggregateId('run', runId);
+    return this.events.all(from).pipe(
+      Stream.filter(
+        (event): event is Extract<SessionEvent, { type: 'request.decided' }> =>
+          event.type === 'request.decided' &&
+          event.aggregateId === aggregate &&
+          event.requestId === requestId,
+      ),
+      Stream.runHead,
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new Error(
+                `The session closed before request ${requestId} was decided.`,
+              ),
+            ),
+          onSome: Effect.succeed,
+        }),
+      ),
     );
   }
 
-  /** Final text facts committed immediately before a status closes its entries. */
-  statusClosureFacts(runId: RunId, phase: RunPhase): SessionEventDraft[] {
-    const closure: SessionEventDraft[] = [];
-    if (phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
-      for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
-        if (!isRunningStreamingTextEntry(entry)) continue;
-        closure.push({
-          type: 'stream.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          id: entry.id,
-          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-        });
-      }
-    }
-    return closure;
+  /**
+   * Ask a person: open the request on its run and wait for the decision. The
+   * one door for a request outside the loop's own batches (a command, an
+   * edit, a plan, a delegation, a question); a loop-owned request commits
+   * its row with its recovery binding through the ledger and waits with
+   * {@link decisionFor} directly. An interrupted wait (the run stopped, the
+   * session unwound) closes the request as cancelled, so a pending set is
+   * never left behind in the fold.
+   */
+  openRequest(
+    runId: RunId,
+    payload: PermissionPayload,
+    thread: string | null = null,
+  ): Effect.Effect<RequestDecision, DatabaseNotOwner | DatabaseWriteFailed> {
+    const requestId = payload.data.requestId;
+    const aggregateId = qualifyAggregateId('run', runId);
+    return Effect.gen({ self: this }, function* () {
+      const from = this.now();
+      yield* this.commit([
+        {
+          type: 'request.opened',
+          aggregateId,
+          requestId,
+          payload: redactedForFact(payload),
+          thread,
+        },
+      ]);
+      const decided = yield* this.decisionFor(runId, requestId, from).pipe(
+        Effect.map((row) => row.decision),
+        Effect.catch((cause) =>
+          Effect.sync((): RequestDecision => {
+            logger.warn(`Request ${requestId} closed without a decision`, {
+              data: cause,
+            });
+            return { action: 'cancel', cause: cause.message };
+          }),
+        ),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            this.publish([
+              {
+                type: 'request.decided',
+                aggregateId,
+                requestId,
+                decision: { action: 'cancel', cause: 'Run interrupted.' },
+              },
+            ]);
+          }),
+        ),
+      );
+      return decided;
+    });
   }
 
   /**
@@ -727,7 +794,15 @@ export class SessionHandle {
             }
           }
 
-          if (event.type !== 'status' && event.type !== 'run.end') return;
+          // The rows that move a run's phase (one run model, 3.3): every
+          // activation, the park and the step that leaves it, the end.
+          const phaseMoved =
+            event.type === 'run.activate' ||
+            event.type === 'run.end' ||
+            (event.type === 'flow.step' &&
+              (event.payload.step === 'waiting' ||
+                event.payload.step === 'turn.begin'));
+          if (!phaseMoved) return;
           this.runs.handleStatus(target.id);
         }),
       ),
@@ -770,13 +845,28 @@ export class SessionHandle {
     );
   }
 
-  /** The status machine's hold on a stream this process cannot read, or its
-   *  release: local truth the fold reads as `readOnly` (PRD 5.1). */
+  /**
+   * Record why this process cannot act on a run (another live TeXRA process
+   * holds it, its state could not be read): local truth the fold reads as
+   * `readOnly` with the detail as `statusDetail` (PRD 5.1), never a row.
+   */
+  markUnreadable(runId: RunId, detail: string): void {
+    this.setUnreadable(runId, detail);
+  }
+
+  /** Drop a run's unreadable detail: a read that found it free disproved it. */
+  clearUnreadable(runId: RunId): void {
+    this.setUnreadable(runId, null);
+  }
+
   private setUnreadable(runId: RunId, detail: string | null): void {
     if (this.disposed) return;
     effectRuntime().runFork(
       SubscriptionRef.update(this.graph.local, (local) => {
         const rest = local.unreadable.filter((u) => u.runId !== runId);
+        if (detail === null && rest.length === local.unreadable.length) {
+          return local;
+        }
         return {
           ...local,
           unreadable: detail === null ? rest : [...rest, { runId, detail }],

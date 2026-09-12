@@ -26,10 +26,8 @@ import {
   maxScrollableRowOffset,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
-import type {
-  ApprovalDecision,
-  ToolEditApprovalPayload,
-} from '../state/approvalQueue';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { ToolEditApprovalPayload } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
@@ -40,7 +38,7 @@ const DEFAULT_EDIT_DIFF_ROWS = 30;
 interface EditApprovalProps {
   readonly availableRows?: number;
   readonly payload: ToolEditApprovalPayload;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 export function editApprovalDiffRowsBudget({
@@ -174,7 +172,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       color={COLOR_HINT}
       title={title}
       rejectionMode="feedback"
-      alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
+      alwaysAllowLabel="approve edits for session"
       feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
       onFeedbackModeChange={handleFeedbackModeChange}

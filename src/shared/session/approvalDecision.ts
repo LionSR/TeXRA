@@ -1,10 +1,10 @@
 /**
- * The approval decision vocabulary and the arms one decision names (PRD
- * one-fold-three-renderers, 8.2): what each permission kind may be answered
- * with, and the `policy.set` / `decision.*` / `host.request` arms that answer
- * carries. Both surfaces that present approvals — the progress view's request
- * panels and the TUI's approval modal — map through here, so one decision
- * means one thing on both.
+ * What a surface does with one decision on a pending request (PRD
+ * one-fold-three-renderers, 8.2): the `request.decide`, `policy.set`, and
+ * `host.request` arms it names, and the one wording of a refusal. Both
+ * surfaces that present requests, the progress view's request panels and the
+ * TUI's approval modal, map through here, so one decision means one thing on
+ * both.
  *
  * Pure and host-neutral: it reaches `@shared/schemas` and the two request
  * protocols beside it, and nothing else.
@@ -12,10 +12,11 @@
 
 import type {
   PermissionPayload,
+  RequestDecision,
+  RequestRefusal,
   RunId,
-  UserQuestionAnswers,
 } from '@shared/schemas';
-import { getExhaustionReason } from '@shared/schemas';
+import { getExhaustionReason, isRequestRefusal } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 
 import type { HostRequest } from './hostRequest';
@@ -24,112 +25,36 @@ import type { RuntimeRequest } from './runtimeRequest';
 /**
  * Surface-only approval action emitted by the inline edit/command approval
  * button / `a` shortcut on the edit and bash approval prompts. It never
- * reaches the backend approval protocol: {@link approvalDecisionArms}
- * decomposes it into a normal approve plus a session-bypass enable. Single
- * source of truth shared by the surfaces that emit it.
+ * becomes a durable decision: {@link approvalDecisionArms} decomposes it into
+ * a plain approve plus a session-bypass enable (ruling A9-6).
  */
 export const APPROVE_SESSION_ACTION = 'approveSession';
 
 /**
  * Surface-only approval action emitted by the approve-all-delegated-work item
  * on the agent-proposal Approve menu. Like {@link APPROVE_SESSION_ACTION},
- * {@link approvalDecisionArms} decomposes it — into a normal proposal approve
- * plus a per-stream delegated-work bypass enable — so it never reaches the
- * backend proposal protocol (whose action enum stays
- * `approve | reject | setup`).
+ * {@link approvalDecisionArms} decomposes it into a plain proposal approve
+ * plus a per-run delegated-work bypass enable.
  */
 export const APPROVE_ALL_DELEGATED_WORK_ACTION = 'approveSuperYolo';
 
-interface PermissionPayloadFields {
-  feedback: string;
-  model: string;
-  agent: string;
-  answer: string;
-  sessionLinks: string[];
-  answers: UserQuestionAnswers;
-  autoApproveAll: true;
-}
+/** A tool-edit prompt's verbs over the preview the host staged; they leave
+ *  the request pending. */
+type ToolEditPreviewAction = 'openDiff' | 'showLatexdiff' | 'previewProposed';
 
-type Decision<
-  A extends string,
-  Payload extends Partial<PermissionPayloadFields> = object,
-> = { action: A } & Payload & {
-    [K in Exclude<keyof PermissionPayloadFields, keyof Payload>]?: never;
-  };
-
-type RejectDecision = Decision<'reject', { feedback?: string }>;
-
-interface PermissionDecisionByKind {
-  toolEdit:
-    | Decision<'approve'>
-    | Decision<typeof APPROVE_SESSION_ACTION>
-    | RejectDecision
-    | Decision<'openDiff' | 'showLatexdiff' | 'previewProposed'>;
-  bash:
-    | Decision<'approve'>
-    | Decision<typeof APPROVE_SESSION_ACTION>
-    | RejectDecision;
-  retry: Decision<'retry' | 'useOwnApiKey' | 'cancel'>;
-  proposal:
-    | Decision<
-        'approve',
-        {
-          model?: string;
-          agent?: string;
-        }
-      >
-    | Decision<
-        typeof APPROVE_ALL_DELEGATED_WORK_ACTION,
-        {
-          model?: string;
-          agent?: string;
-        }
-      >
-    | RejectDecision
-    | Decision<'setup'>;
-  planApproval:
-    | Decision<'approve'>
-    | Decision<'approve_and_goal', { autoApproveAll?: true }>
-    | RejectDecision;
-  externalInquiry:
-    | Decision<
-        'submit',
-        {
-          answer: string;
-          sessionLinks?: string[];
-        }
-      >
-    | RejectDecision;
-  userQuestion:
-    | Decision<'submit', { answers: UserQuestionAnswers }>
-    | RejectDecision
-    | Decision<'skip', { feedback?: string }>;
-}
-
-export type PermissionKind = keyof PermissionDecisionByKind;
-
-export type PermissionDecision<K extends PermissionKind> =
-  PermissionDecisionByKind[K];
-
-type PermissionKindsWithAction<A extends string> = {
-  [K in PermissionKind]: Extract<
-    PermissionDecisionByKind[K],
-    { action: A }
-  > extends never
-    ? never
-    : K;
-}[PermissionKind];
-
-export type FeedbackPermissionKind = PermissionKindsWithAction<'reject'>;
-export type ApprovalPermissionKind = PermissionKindsWithAction<'approve'>;
-
-/** The plain-approve arm of a kind that has one. Named for the action, not
- *  the domain: `ApprovalDecision` is already the host-neutral decision record
- *  at `@shared/schemas`. */
-export type ApproveDecision<K extends ApprovalPermissionKind> = Extract<
-  PermissionDecisionByKind[K],
-  { action: 'approve' }
->;
+/**
+ * What a surface emits for one request: a durable {@link RequestDecision},
+ * one of the two session-bypass approvals, or a tool-edit preview verb.
+ */
+export type SurfaceDecision =
+  | RequestDecision
+  | { readonly action: typeof APPROVE_SESSION_ACTION }
+  | {
+      readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION;
+      readonly model?: string | null;
+      readonly agent?: string | null;
+    }
+  | { readonly action: ToolEditPreviewAction };
 
 /**
  * One wire arm a decision names: a request to the run's runtime, or a
@@ -137,14 +62,10 @@ export type ApproveDecision<K extends ApprovalPermissionKind> = Extract<
  * preview the host staged and a retry's own-key switch stores a credential,
  * so those two kinds are the only ones that name a host arm.
  */
-type ApprovalArm =
+export type ApprovalArm =
   { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
 
-/** Kinds whose every arm is a runtime request, so a surface that answers only
- *  through the request protocol dispatches them with no host branch. */
-type RuntimeOnlyPermissionKind = Exclude<PermissionKind, 'toolEdit' | 'retry'>;
-
-/** Enable a session-wide bypass on one stream: the field-level mutation the
+/** Enable a session-wide bypass on one run: the field-level mutation the
  *  approval authority applies, not a snapshot. */
 export function sessionBypassRequest(
   runId: RunId,
@@ -156,202 +77,155 @@ export function sessionBypassRequest(
   };
 }
 
+const BYPASS_OF_KIND: Partial<
+  Record<PermissionPayload['kind'], ApprovalBypassKind>
+> = {
+  toolEdit: 'toolEdit',
+  bash: 'bash',
+  proposal: 'superYolo',
+};
+
 /**
  * The arms one decision names (PRD 8.2): a session-wide approval is the
  * bypass change and the approval itself, in that order; a tool-edit preview
- * is a host capability that leaves the approval pending.
+ * verb is a host capability that leaves the request pending; a retry on the
+ * user's own key is the host's `useOwnApiKey`, which stores the key and then
+ * decides the retry itself. Everything else is one `request.decide`.
  */
-export function approvalDecisionArms<K extends RuntimeOnlyPermissionKind>(
-  permission: Extract<PermissionPayload, { kind: K }>,
-  decision: PermissionDecision<K>,
-): readonly { readonly runtime: RuntimeRequest }[];
-export function approvalDecisionArms<K extends PermissionKind>(
-  permission: Extract<PermissionPayload, { kind: K }>,
-  decision: PermissionDecision<K>,
-): readonly ApprovalArm[];
 export function approvalDecisionArms(
   permission: PermissionPayload,
-  decision: PermissionDecision<PermissionKind>,
+  decision: SurfaceDecision,
 ): readonly ApprovalArm[] {
-  const { runId, requestId: approvalId } = permission.data;
+  const { runId, requestId } = permission.data;
   if (runId === '') {
     throw new Error(
-      `Permission ${permission.kind}:${approvalId} names no run to decide on.`,
+      `Permission ${permission.kind}:${requestId} names no run to decide on.`,
     );
   }
-  const bypass = (kind: ApprovalBypassKind): ApprovalArm => ({
-    runtime: sessionBypassRequest(runId, kind),
+  const decide = (d: RequestDecision): ApprovalArm => ({
+    runtime: { kind: 'request.decide', runId, requestId, decision: d },
   });
-  switch (permission.kind) {
-    case 'toolEdit': {
-      // The host staged the preview and applies the proposed file as the
-      // user left it, so every tool-edit verb is a host capability.
-      const d = decision as PermissionDecision<'toolEdit'>;
-      const host = (
-        action: Extract<HostRequest, { kind: 'toolEdit' }>['action'],
-        feedback?: string | null,
-      ): ApprovalArm => ({
-        host: {
-          kind: 'toolEdit',
-          requestId: approvalId,
-          action,
-          feedback: feedback ?? null,
-        },
-      });
-      if (d.action === APPROVE_SESSION_ACTION) {
-        return [bypass('toolEdit'), host('approve')];
+  switch (decision.action) {
+    case APPROVE_SESSION_ACTION:
+    case APPROVE_ALL_DELEGATED_WORK_ACTION: {
+      const bypass = BYPASS_OF_KIND[permission.kind];
+      if (bypass === undefined) {
+        throw new Error(
+          `A ${permission.kind} request has no session bypass to enable.`,
+        );
       }
-      if (d.action === 'reject') return [host('reject', d.feedback)];
-      return [host(d.action)];
+      const approve: RequestDecision =
+        decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION
+          ? {
+              action: 'approve',
+              model: decision.model ?? null,
+              agent: decision.agent ?? null,
+            }
+          : { action: 'approve' };
+      return [
+        { runtime: sessionBypassRequest(runId, bypass) },
+        decide(approve),
+      ];
     }
-    case 'bash': {
-      const d = decision as PermissionDecision<'bash'>;
-      const approve: ApprovalArm = {
-        runtime: {
-          kind: 'decision.bash',
-          runId,
-          approvalId,
-          decision:
-            d.action === 'reject'
-              ? { action: 'reject', feedback: d.feedback ?? null }
-              : { action: 'approve' },
+    case 'openDiff':
+    case 'showLatexdiff':
+    case 'previewProposed':
+      return [
+        {
+          host: {
+            kind: 'toolEdit',
+            requestId,
+            action: decision.action,
+            feedback: null,
+          },
         },
-      };
-      return d.action === APPROVE_SESSION_ACTION
-        ? [bypass('bash'), approve]
-        : [approve];
-    }
+      ];
     case 'retry': {
-      const d = decision as PermissionDecision<'retry'>;
+      if (decision.credentials !== 'personal' || permission.kind !== 'retry') {
+        return [decide(decision)];
+      }
       const { data } = permission;
-      if (d.action === 'useOwnApiKey') {
-        return [
-          {
-            host: {
-              kind: 'useOwnApiKey',
-              runId,
-              requestId: approvalId,
-              model: data.model,
-              provider: data.errorDetails?.provider ?? null,
-              exhaustionReason: getExhaustionReason(data.errorDetails),
-              kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure ?? null,
-            },
-          },
-        ];
-      }
       return [
         {
-          runtime: {
-            kind: 'decision.retry',
+          host: {
+            kind: 'useOwnApiKey',
             runId,
-            approvalId,
-            decision:
-              d.action === 'retry' ? { action: 'retry' } : { action: 'cancel' },
+            requestId,
+            model: data.model,
+            provider: data.errorDetails?.provider ?? null,
+            exhaustionReason: getExhaustionReason(data.errorDetails),
+            kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure ?? null,
           },
         },
       ];
     }
-    case 'proposal': {
-      const d = decision as PermissionDecision<'proposal'>;
-      const arm = (
-        inner: Extract<
-          RuntimeRequest,
-          { kind: 'decision.proposal' }
-        >['decision'],
-      ): ApprovalArm => ({
-        runtime: {
-          kind: 'decision.proposal',
-          runId,
-          approvalId,
-          decision: inner,
-        },
-      });
-      if (d.action === 'reject') {
-        return [arm({ action: 'reject', feedback: d.feedback ?? null })];
-      }
-      if (d.action === 'setup') return [arm({ action: 'setup' })];
-      const approve = arm({
-        action: 'approve',
-        model: d.model ?? null,
-        agent: d.agent ?? null,
-      });
-      return d.action === APPROVE_ALL_DELEGATED_WORK_ACTION
-        ? [bypass('superYolo'), approve]
-        : [approve];
-    }
-    case 'planApproval': {
-      const d = decision as PermissionDecision<'planApproval'>;
-      return [
-        {
-          runtime: {
-            kind: 'decision.plan',
-            runId,
-            approvalId,
-            decision: planDecision(d),
-          },
-        },
-      ];
-    }
-    case 'externalInquiry': {
-      const d = decision as PermissionDecision<'externalInquiry'>;
-      const { threadId, transcript } = permission.data;
-      return [
-        {
-          runtime:
-            d.action === 'submit'
-              ? {
-                  kind: 'externalInquiry.submit',
-                  runId,
-                  threadId,
-                  turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
-                  answer: d.answer,
-                  sessionLinks: d.sessionLinks ?? null,
-                }
-              : {
-                  kind: 'externalInquiry.drop',
-                  runId,
-                  threadId,
-                  turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
-                  feedback: d.feedback ?? null,
-                },
-        },
-      ];
-    }
-    case 'userQuestion': {
-      const d = decision as PermissionDecision<'userQuestion'>;
-      return [
-        {
-          runtime: {
-            kind: 'decision.userQuestion',
-            runId,
-            approvalId,
-            decision: userQuestionDecision(d),
-          },
-        },
-      ];
-    }
+    case 'approve':
+    case 'approve_and_goal':
+    case 'setup':
+    case 'submit':
+    case 'answer':
+    case 'skip':
+    case 'reject':
+    case 'deny':
+    case 'cancel':
+      return [decide(decision)];
+    default:
+      return decision satisfies never;
   }
 }
 
-function planDecision(
-  d: PermissionDecision<'planApproval'>,
-): Extract<RuntimeRequest, { kind: 'decision.plan' }>['decision'] {
-  if (d.action === 'reject')
-    return { action: 'reject', feedback: d.feedback ?? null };
-  if (d.action === 'approve_and_goal') {
-    return {
-      action: 'approve_and_goal',
-      autoApproveAll: d.autoApproveAll ?? null,
-    };
-  }
-  return { action: 'approve' };
+/**
+ * A decision that is not one the caller accepts, read as the refusal it is
+ * or, for an arm the request's kind never offered (a surface defect), as a
+ * loud denial naming it: a run never proceeds on an answer it cannot read.
+ */
+export function refusalOf(
+  kind: PermissionPayload['kind'],
+  decision: RequestDecision,
+): RequestRefusal {
+  if (isRequestRefusal(decision)) return decision;
+  return {
+    action: 'deny',
+    reason: `The ${kind} request was answered with "${decision.action}", which it does not offer.`,
+  };
 }
 
-function userQuestionDecision(
-  d: PermissionDecision<'userQuestion'>,
-): Extract<RuntimeRequest, { kind: 'decision.userQuestion' }>['decision'] {
-  if (d.action === 'submit') return { action: 'submit', answers: d.answers };
-  if (d.action === 'skip')
-    return { action: 'skip', feedback: d.feedback ?? null };
-  return { action: 'reject', feedback: d.feedback ?? null };
+/**
+ * The one wording of a declined request, over the union's three refusal
+ * arms: what the summary says about `subject` (a command, a plan, a
+ * delegation), the detail that names why, and the feedback a person left for
+ * the agent, which only a `reject` carries.
+ */
+export function refusalCopy(
+  subject: string,
+  refusal: RequestRefusal,
+): {
+  readonly summary: string;
+  readonly detail: string | undefined;
+  readonly feedback: string | undefined;
+} {
+  const trimmed = (value: string | null | undefined) => {
+    const text = value?.trim();
+    return text ? text : undefined;
+  };
+  switch (refusal.action) {
+    case 'deny':
+      return {
+        summary: `${subject} denied`,
+        detail: trimmed(refusal.reason),
+        feedback: undefined,
+      };
+    case 'cancel':
+      return {
+        summary: `${subject} cancelled`,
+        detail: trimmed(refusal.cause),
+        feedback: undefined,
+      };
+    case 'reject':
+      return {
+        summary: `${subject} rejected by the user`,
+        detail: undefined,
+        feedback: trimmed(refusal.feedback),
+      };
+  }
 }

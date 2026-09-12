@@ -11,10 +11,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
-import { RunIdSchema, type RunId, type TodoItem } from '@shared/schemas';
+import {
+  RunIdSchema,
+  type RunId,
+  type RunPhase,
+  type TodoItem,
+} from '@shared/schemas';
 import {
   createFakeKv,
   createFakeRunRecords,
@@ -25,7 +31,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -34,6 +39,28 @@ import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
+
+/**
+ * Move a run's phase the way its loop does: a `flow.step` row, which is the
+ * one fact the fold derives a live phase from (one run model, 3.3).
+ */
+async function foldRunPhase(
+  session: SessionHandle,
+  runId: RunId,
+  step: 'waiting' | 'turn.begin',
+  expected: RunPhase,
+): Promise<void> {
+  session.publish([
+    {
+      type: 'flow.step',
+      aggregateId: aggregateId('run', runId),
+      payload: { family: 'toolUse', step },
+    },
+  ]);
+  await vi.waitFor(() => {
+    expect(session.runView(runId)?.status).toBe(expected);
+  });
+}
 
 const tempDirs = useTempDirs();
 
@@ -176,10 +203,10 @@ describe('ExecutionsTool', () => {
     });
 
     try {
+      publishTestRunStart(session, parentRunId);
+      publishTestRunStart(session, childRunId, { parent: parentRunId });
       session.runs.track(handle);
-      seedRunStatusForTest(session.status, childRunId, {
-        phase: RUN_PHASE.WAITING,
-      });
+      await foldRunPhase(session, childRunId, 'waiting', RUN_PHASE.WAITING);
       mocks.readReport.mockResolvedValue(
         '<subagent-result>full report</subagent-result>',
       );
@@ -243,9 +270,12 @@ describe('ExecutionsTool', () => {
         publishTestRunStart(session, childRunId, { parent: parentRunId });
         await session.settlePublications();
         session.runs.track(handle);
-        seedRunStatusForTest(session.status, childRunId, {
-          phase: RUN_PHASE.RUNNING,
-        });
+        await foldRunPhase(
+          session,
+          childRunId,
+          'turn.begin',
+          RUN_PHASE.RUNNING,
+        );
         session.publish([
           {
             type: 'updateTodos',

@@ -86,24 +86,27 @@ const FlowStepSchema = z.enum([
 ]);
 export type FlowStep = z.infer<typeof FlowStepSchema>;
 
-export const FlowStepPayloadSchema = z
-  .strictObject({
-    family: RunFamilySchema,
-    step: FlowStepSchema,
-    round: z.int().nonnegative().nullish(),
-    turn: z.int().nonnegative().nullish(),
-    /** Reflection's within-round response-cycle index. Not `continuation`:
-     *  the package's `Continuation` anchor lives in the same `RunState`, and
-     *  two fields one word apart is a live foot-gun. */
-    continuationIndex: z.int().nonnegative().nullish(),
-    /** The loop's own terminal word. Listing status stays the canonical
-     *  `status` fact, which also covers failures before the runtime starts. */
-    outcome: RunOutcomeSchema.nullish(),
-  })
-  .refine(
-    (p) => (p.step === 'halted') === (p.outcome != null),
-    'Only a halted step carries an outcome, and it always carries one.',
-  );
+/** The loop's coordinates: the step and where it sits. What `RunView.flow`
+ *  carries, so a renderer paints the position without the halt's outcome. */
+export const RunFlowSchema = z.strictObject({
+  family: RunFamilySchema,
+  step: FlowStepSchema,
+  round: z.int().nonnegative().nullish(),
+  turn: z.int().nonnegative().nullish(),
+  /** Reflection's within-round response-cycle index. Not `continuation`:
+   *  the package's `Continuation` anchor lives in the same `RunState`, and
+   *  two fields one word apart is a live foot-gun. */
+  continuationIndex: z.int().nonnegative().nullish(),
+});
+
+export const FlowStepPayloadSchema = RunFlowSchema.extend({
+  /** The loop's own terminal word. The canonical terminal fact stays
+   *  `run.end`, which also covers failures before the runtime starts. */
+  outcome: RunOutcomeSchema.nullish(),
+}).refine(
+  (p) => (p.step === 'halted') === (p.outcome != null),
+  'Only a halted step carries an outcome, and it always carries one.',
+);
 
 /* ---------------------------------------------------------- model.message */
 

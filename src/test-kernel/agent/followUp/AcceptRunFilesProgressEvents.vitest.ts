@@ -16,24 +16,43 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { RunId } from '@shared/schemas';
+import type { RequestDecision, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
-import {
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
-import { createRecordingHost } from '../progressTestUtils';
+import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
 
-let testApprovalHandler:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
+/**
+ * The previews the host was handed, by request id: the durable request payload
+ * carries the edit's coordinates, and the content a decision is taken on
+ * reaches the host through `presentToolEdit`.
+ */
+const stagedToolEdits = new Map<string, ToolEditApprovalRequest>();
 let detachHostInteractions = (): void => {};
+let detachDecider = (): void => {};
+
+/**
+ * Answer every tool-edit request this run opens from the staged preview, the
+ * way a surface's `request.decide` does.
+ */
+function decideToolEdits(
+  decide: (request: ToolEditApprovalRequest) => RequestDecision,
+): void {
+  detachDecider = autoDecideRequests(defaultSession(), (opened) => {
+    if (opened.payload.kind !== 'toolEdit') return null;
+    const preview = stagedToolEdits.get(opened.payload.data.requestId);
+    if (!preview) {
+      throw new Error('The tool-edit request staged no preview.');
+    }
+    return decide(preview);
+  }).detach;
+}
 
 const runId = 'abcdef' as RunId;
 const workspacePath = '/workspace';
@@ -47,15 +66,11 @@ function installTestPlatform(): Promise<void> {
   }).then(() => {
     detachHostInteractions();
     detachHostInteractions = defaultSession().interactions.use({
-      requestToolEditApproval: (request) => {
-        const handler = testApprovalHandler;
-        if (!handler) {
-          throw new Error('No test handler. Set `testApprovalHandler`.');
-        }
-        return handler(request);
+      presentToolEdit: (request) => {
+        stagedToolEdits.set(request.permission.requestId, request);
       },
-      cancel: () => undefined,
     });
+    publishTestRunStart(defaultSession(), runId);
   });
 }
 
@@ -107,12 +122,6 @@ function runAccept(
   );
 }
 
-async function acceptAll(
-  request: ToolEditApprovalRequest,
-): Promise<ToolEditApprovalResult> {
-  return { action: 'apply', appliedContent: request.proposedContent };
-}
-
 /** Collects workspaceFilesWritten payloads until disposed. */
 function recordWrittenFiles(): { written: string[][]; dispose: () => void } {
   const written: string[][] = [];
@@ -127,10 +136,9 @@ function recordWrittenFiles(): { written: string[][]; dispose: () => void } {
 
 describe('accept_run_files progress events', () => {
   beforeEach(async () => {
-    testApprovalHandler = undefined;
+    stagedToolEdits.clear();
     await installTestPlatform();
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
     // Shared by every test below that stubs the run/workspace paths;
     // the test that doesn't need it (missing runtime host) fails before
     // reaching either function.
@@ -146,11 +154,12 @@ describe('accept_run_files progress events', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    testApprovalHandler = undefined;
+    detachDecider();
+    detachDecider = () => {};
     detachHostInteractions();
     detachHostInteractions = () => {};
+    stagedToolEdits.clear();
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('publishes accepted workspace files through app signals', async () => {
@@ -164,7 +173,7 @@ describe('accept_run_files progress events', () => {
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
-    testApprovalHandler = acceptAll;
+    decideToolEdits(() => ({ action: 'approve' }));
 
     const result = await runAccept(
       tool,
@@ -187,10 +196,10 @@ describe('accept_run_files progress events', () => {
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
-    testApprovalHandler = async () => ({
+    decideToolEdits(() => ({
       action: 'reject',
       feedback: 'keep the original normalization',
-    });
+    }));
 
     const result = await runAccept(tool, [
       { path: 'output.tex', original: 'paper.tex' },
@@ -212,14 +221,14 @@ describe('accept_run_files progress events', () => {
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
-    testApprovalHandler = async () => ({ action: 'reject', cause: undefined });
+    decideToolEdits(() => ({ action: 'cancel', cause: null }));
 
     const result = await runAccept(tool, [
       { path: 'output.tex', original: 'paper.tex' },
     ]);
 
     expect(result.summary).toBe(
-      'Tool edit approval cancelled: accept_run_files for paper.tex.',
+      'Tool edit cancelled: accept_run_files for paper.tex.',
     );
     expect(result.userInstruction).toBeUndefined();
   });
@@ -233,10 +242,11 @@ describe('accept_run_files progress events', () => {
     });
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('proposed content');
-    testApprovalHandler = async (request) =>
+    decideToolEdits((request) =>
       request.path === 'first.tex'
-        ? { action: 'reject', reason: 'Denied by approval policy.' }
-        : { action: 'reject', cause: 'Session disposed.' };
+        ? { action: 'deny', reason: 'Denied by approval policy.' }
+        : { action: 'cancel', cause: 'Session disposed.' },
+    );
 
     const result = await runAccept(tool, [
       { path: 'first.tex', original: 'first.tex' },
@@ -244,10 +254,11 @@ describe('accept_run_files progress events', () => {
     ]);
 
     expect(result.status).toBe('error');
+    // A cancellation outranks a denial: the one refusal reported names the
+    // cancelled file and carries its cause.
     expect(result.summary).toBe(
-      'Tool edit approval cancelled: accept_run_files for multiple files.',
+      'Tool edit cancelled: accept_run_files for second.tex.',
     );
-    expect(result.error).toContain('Denied by approval policy.');
     expect(result.error).toContain('Session disposed.');
     expect(result.userInstruction).toBeUndefined();
   });
@@ -266,11 +277,11 @@ describe('accept_run_files progress events', () => {
     vi.spyOn(AbsoluteFS, 'read').mockImplementation(async (target) =>
       target === snapshotPath ? 'old content' : 'new content',
     );
-    testApprovalHandler = async (request) => {
+    decideToolEdits((request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
-      return { action: 'apply', appliedContent: request.proposedContent };
-    };
+      return { action: 'approve' };
+    });
 
     const result = await runAccept(tool, [
       { path: 'draft.tex', original: 'draft.tex' },
@@ -295,10 +306,10 @@ describe('accept_run_files progress events', () => {
     const write = stubWorkspaceFiles(true, 'same content');
     vi.spyOn(AbsoluteFS, 'isFile').mockResolvedValue(false);
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('same content');
-    testApprovalHandler = async (request) => {
+    decideToolEdits(() => {
       approvals++;
-      return { action: 'apply', appliedContent: request.proposedContent };
-    };
+      return { action: 'approve' };
+    });
 
     const result = await runAccept(tool, [
       { path: 'draft.tex', original: 'draft.tex' },
@@ -322,10 +333,10 @@ describe('accept_run_files progress events', () => {
         FileType.SymbolicLink | FileType.File,
     });
     const write = stubWorkspaceFiles(true, '');
-    testApprovalHandler = async (request) => {
+    decideToolEdits(() => {
       approvals++;
-      return { action: 'apply', appliedContent: request.proposedContent };
-    };
+      return { action: 'approve' };
+    });
 
     const result = await runAccept(tool, [
       { path: 'r1/Draft/appendices.tex', original: 'Draft/appendices.tex' },

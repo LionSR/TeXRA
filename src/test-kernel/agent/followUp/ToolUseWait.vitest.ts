@@ -57,10 +57,6 @@ import type { RunState } from '@shared/session/runStateFold';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
-import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
@@ -72,6 +68,7 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import {
   eventsOfType,
   recordSessionEvents,
+  seedTerminalRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
 
@@ -366,16 +363,12 @@ const waitFor = (condition: () => boolean, label: string) =>
  */
 function goalSession(overrides: Record<string, unknown> = {}): SessionHandle {
   const session = createProcessSession();
-  session.interactions.use({ emit: () => {}, cancel: () => {}, ...overrides });
+  session.interactions.use({ emit: () => {}, ...overrides });
   return session;
 }
 
 function quietSession(overrides: Record<string, unknown> = {}): SessionHandle {
-  return sessionWithInteractions({
-    emit: () => {},
-    cancel: () => {},
-    ...overrides,
-  });
+  return sessionWithInteractions({ emit: () => {}, ...overrides });
 }
 
 function startedRun(session: SessionHandle): RunId {
@@ -576,7 +569,7 @@ describe('a parked root run', () => {
         yield* waitFor(
           () =>
             requests.length >= 2 &&
-            session.status.get(runId) === RUN_PHASE.WAITING,
+            session.runView(runId)?.status === RUN_PHASE.WAITING,
           'the second turn and the park after it',
         );
         yield* Fiber.interrupt(fiber);
@@ -656,7 +649,6 @@ describe('a parked root run', () => {
     Effect.gen(function* () {
       const session = quietSession();
       const runId = startedRun(session);
-      const status = session.status;
       const recorded = recordSessionEvents(session);
 
       const { fiber, requests } = yield* forkLoop({
@@ -665,73 +657,63 @@ describe('a parked root run', () => {
         script: [textTurn('first'), textTurn('second')],
       });
       yield* waitFor(
-        () => status.get(runId) === RUN_PHASE.WAITING,
+        () => session.runView(runId)?.status === RUN_PHASE.WAITING,
         'the parked run',
       );
       enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
       yield* waitFor(
-        () => requests.length >= 2 && status.get(runId) === RUN_PHASE.WAITING,
+        () =>
+          requests.length >= 2 &&
+          session.runView(runId)?.status === RUN_PHASE.WAITING,
         'the second turn and the park after it',
       );
       yield* Fiber.interrupt(fiber);
 
-      // Status is a session fact on the session's plane, the single rail.
-      const phases = eventsOfType(
+      // The phase is the loop's own step on the session's plane, the single
+      // rail: the park, then the step that leaves it.
+      const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'status',
-      ).map((event) => [event.previousPhase, event.phase, event.cause]);
-      expect(phases).toContainEqual([
-        RUN_PHASE.RUNNING,
-        RUN_PHASE.WAITING,
-        'wait',
-      ]);
-      expect(phases).toContainEqual([
-        RUN_PHASE.WAITING,
-        RUN_PHASE.RUNNING,
-        'resume',
-      ]);
+        'flow.step',
+      ).map((event) => event.payload.step);
+      const parked = steps.indexOf('waiting');
+      expect(parked).toBeGreaterThanOrEqual(0);
+      expect(steps.slice(parked + 1).some((step) => step !== 'waiting')).toBe(
+        true,
+      );
     }),
   );
 
-  it.effect('repairs a retry-cancelled run to waiting before it blocks', () =>
+  it.effect('parks a run a retry cancelled, rather than leaving it there', () =>
     Effect.gen(function* () {
       const session = quietSession();
       const runId = startedRun(session);
-      const status = session.status;
+      yield* Effect.promise(() =>
+        seedTerminalRun(session, runId, RUN_OUTCOME.CANCELLED),
+      );
       const recorded = recordSessionEvents(session);
-      seedRunStatusForTest(status, runId, { phase: RUN_PHASE.CANCELLED });
 
-      try {
-        const { fiber } = yield* forkLoop({
-          runId,
-          session,
-          script: [textTurn('first')],
-        });
-        yield* waitFor(
-          () => status.get(runId) === RUN_PHASE.WAITING,
-          'the parked run',
-        );
-        yield* Fiber.interrupt(fiber);
+      const { fiber } = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* waitFor(
+        () => session.runView(runId)?.status === RUN_PHASE.WAITING,
+        'the parked run',
+      );
+      yield* Fiber.interrupt(fiber);
 
-        // A cancelled run cannot park directly: it is resumed first, so the
-        // phase table sees RUNNING between the two.
-        const phases = eventsOfType(
-          yield* Effect.promise(() => recorded.read()),
-          'status',
-        ).map((event) => [event.previousPhase, event.phase, event.cause]);
-        expect(phases).toContainEqual([
-          RUN_PHASE.CANCELLED,
-          RUN_PHASE.RUNNING,
-          'resume',
-        ]);
-        expect(phases).toContainEqual([
-          RUN_PHASE.RUNNING,
-          RUN_PHASE.WAITING,
-          'wait',
-        ]);
-      } finally {
-        clearRunStatusForTest(status, runId);
-      }
+      // The loop's steps carry the run out of its cancelled terminal: it runs
+      // before it parks.
+      const steps = eventsOfType(
+        yield* Effect.promise(() => recorded.read()),
+        'flow.step',
+      ).map((event) => event.payload.step);
+      const parked = steps.indexOf('waiting');
+      expect(parked).toBeGreaterThan(0);
+      expect(steps.slice(0, parked).every((step) => step !== 'waiting')).toBe(
+        true,
+      );
     }),
   );
 });
@@ -762,7 +744,7 @@ describe('the batch a parked run consumes', () => {
         yield* waitFor(
           () =>
             requests.length >= 2 &&
-            session.status.get(runId) === RUN_PHASE.WAITING,
+            session.runView(runId)?.status === RUN_PHASE.WAITING,
           'the second turn and the park after it',
         );
         yield* Fiber.interrupt(fiber);
@@ -835,7 +817,7 @@ describe('the batch a parked run consumes', () => {
       yield* waitFor(
         () =>
           requests.length >= 2 &&
-          session.status.get(runId) === RUN_PHASE.WAITING,
+          session.runView(runId)?.status === RUN_PHASE.WAITING,
         'the second turn and the park after it',
       );
       yield* Fiber.interrupt(fiber);
@@ -874,7 +856,7 @@ describe('the batch a parked run consumes', () => {
         yield* waitFor(
           () =>
             requests.length >= 2 &&
-            session.status.get(runId) === RUN_PHASE.WAITING,
+            session.runView(runId)?.status === RUN_PHASE.WAITING,
           'the second turn and the park after it',
         );
         yield* Fiber.interrupt(fiber);
@@ -945,7 +927,7 @@ describe('an active goal at the wait', () => {
       );
 
       try {
-        const { state } = yield* runUntilSpent({
+        const { requests, state } = yield* runUntilSpent({
           runId,
           session,
           logger,
@@ -958,9 +940,10 @@ describe('an active goal at the wait', () => {
             text.includes('Finish the autonomous proof audit.'),
           ),
         ).toBe(true);
-        // The run never parked, and a synthetic turn is not the user's: it
-        // is neither logged nor acknowledged as consumed input.
-        expect(session.status.get(runId)).not.toBe(RUN_PHASE.WAITING);
+        // The run ran again instead of blocking for input, and a synthetic
+        // turn is not the user's: it is neither logged nor acknowledged as
+        // consumed input.
+        expect(requests.length).toBeGreaterThan(1);
         expect(onFollowUpConsumed).not.toHaveBeenCalled();
         expect(info).not.toHaveBeenCalledWith(
           expect.stringContaining('<goal_context>'),

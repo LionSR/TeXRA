@@ -4,7 +4,7 @@
 // registry, event hub, run status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   runAgent: vi.fn(),
   request: vi.fn(),
   notifyFollowUpSent: vi.fn(),
-  cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
   getRunRecords: vi.fn(),
@@ -147,13 +146,21 @@ import {
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
-import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  RUN_OUTCOME,
+  RUN_PHASE,
+  type RunId,
+} from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -163,7 +170,6 @@ import {
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
@@ -293,7 +299,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     interactions: {
       use: vi.fn(() => mocks.detachHostInteractions),
-      cancel: mocks.cancelInteractions,
     },
     requests: { request: mocks.request },
     followUps: {
@@ -583,10 +588,6 @@ describe('createChatSessionController', () => {
 
     expect(session.stopRequested).toBe(true);
     expect(session.interruptedRunId).toBe('b00001');
-    expect(mocks.cancelInteractions).toHaveBeenCalledWith({
-      runId: 'b00001',
-      cause: 'Run interrupted.',
-    });
     expect(mocks.request).toHaveBeenCalledWith({
       kind: 'run.stop',
       runId: 'b00001',
@@ -605,10 +606,6 @@ describe('createChatSessionController', () => {
 
     expect(session.stopRequested).toBe(false);
     expect(session.interruptedRunId).toBeUndefined();
-    expect(mocks.cancelInteractions).toHaveBeenCalledWith({
-      runId: 'ca0001',
-      cause: 'Run interrupted.',
-    });
     expect(mocks.request).toHaveBeenCalledWith({
       kind: 'run.stop',
       runId: 'ca0001',
@@ -618,9 +615,7 @@ describe('createChatSessionController', () => {
 
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
     const childRun = 'c00001' as RunId;
-    const { runs, interactions } = installOwnerSession();
-    const adapterDecision = pDefer<{ action: 'approve' | 'reject' }>();
-    const requestBashApproval = vi.fn(() => adapterDecision.promise);
+    const { session: runtimeSession, runs } = installOwnerSession();
     const disposeAdapter = vi.fn();
     const detachResultToast = vi.fn();
     const presentationHost = {
@@ -630,8 +625,6 @@ describe('createChatSessionController', () => {
     } as unknown as CliRuntimeHost;
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
     mocks.createTuiHostInteractions.mockReturnValue({
-      requestBashApproval,
-      cancel: vi.fn(),
       dispose: disposeAdapter,
     });
     mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
@@ -666,12 +659,8 @@ describe('createChatSessionController', () => {
             });
           },
         });
-        runs.trackAgentRun(rootHandle, {
-          status: RUN_PHASE.RUNNING,
-        });
-        runs.trackAgentRun(childHandle, {
-          status: RUN_PHASE.RUNNING,
-        });
+        runs.track(rootHandle);
+        runs.track(childHandle);
         options.onRunResolved?.(runId);
         return rootRunResult.promise;
       },
@@ -696,14 +685,36 @@ describe('createChatSessionController', () => {
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
-    const approval = interactions.requestBashApproval(
-      bashApprovalRequest({
-        command: 'printf child',
-        runId: childRun,
+    // The detached child's own aggregate, so its request opens on a run the
+    // plane holds.
+    publishTestRunStart(runtimeSession, childRun);
+    const requestId = 'bash-detached-child';
+    const approval = Effect.runPromise(
+      runtimeSession.openRequest(childRun, {
+        kind: 'bash',
+        data: {
+          requestId,
+          command: 'printf child',
+          allowBypass: true,
+          runId: childRun,
+        },
       }),
     );
-    await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
-    adapterDecision.resolve({ action: 'approve' });
+    await vi.waitFor(() =>
+      expect(
+        SubscriptionRef.getUnsafe(runtimeSession.view).requests.map(
+          (request) => request.requestId,
+        ),
+      ).toEqual([requestId]),
+    );
+    runtimeSession.publish([
+      {
+        type: 'request.decided',
+        aggregateId: aggregateId('run', childRun),
+        requestId,
+        decision: { action: 'approve' },
+      },
+    ]);
     await expect(approval).resolves.toEqual({ action: 'approve' });
 
     // The host lives for the chat session, not for the runs it served.

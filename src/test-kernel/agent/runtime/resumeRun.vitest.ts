@@ -431,13 +431,14 @@ describe('resumeRun tool-use queue ownership', () => {
   it.live('refuses with `finished` when no checkpoint remains', () =>
     Effect.gen(function* () {
       const session = createSession();
+      const markUnreadable = vi.spyOn(session, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
       expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      expect(session.status.holdState(RUN)).toBeUndefined();
+      expect(markUnreadable).not.toHaveBeenCalled();
     }),
   );
 
@@ -447,6 +448,7 @@ describe('resumeRun tool-use queue ownership', () => {
   it.live('refuses an empty retrieval held elsewhere as owned elsewhere', () =>
     Effect.gen(function* () {
       const session = createSession();
+      const markUnreadable = vi.spyOn(session, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
       classifyRunMock.mockResolvedValueOnce({
         kind: 'held_elsewhere',
@@ -456,7 +458,10 @@ describe('resumeRun tool-use queue ownership', () => {
       expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
         failed: 'owned_elsewhere',
       });
-      expect(session.status.holdState(RUN)).toContain('4321');
+      expect(markUnreadable).toHaveBeenCalledWith(
+        RUN,
+        expect.stringContaining('4321'),
+      );
     }),
   );
 
@@ -516,6 +521,7 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = createSession();
+        const markUnreadable = vi.spyOn(session, 'markUnreadable');
         const owner = { pid: 4321, hostname: 'other-host' };
         inspectRunLeaseMock.mockResolvedValue({ status: 'held', owner });
         const onResumeResolved = vi.fn();
@@ -529,7 +535,10 @@ describe('resumeRun tool-use queue ownership', () => {
         ).toEqual({ failed: 'owned_elsewhere' });
         expect(onResumeResolved).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-        expect(session.status.holdState(RUN)).toBe(runHeldMessage(owner.pid));
+        expect(markUnreadable).toHaveBeenCalledWith(
+          RUN,
+          runHeldMessage(owner.pid),
+        );
       }),
   );
 });

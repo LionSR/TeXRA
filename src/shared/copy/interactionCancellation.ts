@@ -1,8 +1,0 @@
-/**
- * Cancellation causes that reach the agent verbatim, separately from human
- * feedback on a dropped interaction. One event gets one explanation across
- * every host, so a model never has to reconcile host-specific wording.
- */
-
-/** The session that owned the interaction was torn down. */
-export const SESSION_DISPOSED_CAUSE = 'Session disposed.';

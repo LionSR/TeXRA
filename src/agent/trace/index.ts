@@ -10,7 +10,7 @@
  *
  * See `.agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md` for the design.
  */
-export type { AgentEvent, ResultEvent, StatusEvent } from './events';
+export type { AgentEvent, ResultEvent } from './events';
 
 export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 

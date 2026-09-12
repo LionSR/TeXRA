@@ -67,6 +67,7 @@ export * from './workPlan';
 export * from './subagentProgress';
 export * from './inquiry';
 export * from './prompts';
+export * from './request';
 export * from './proposalInput';
 export * from './diffResult';
 

@@ -1,39 +1,35 @@
 /**
- * Host-neutral tool-edit approval state machine.
+ * Host-neutral tool-edit preview controller.
  *
- * One controller per session owns the requests that session has in flight, so
- * a request can never be settled by another session's controller. Everything
- * a host owns — staging the preview files, opening its diff view, reading back
- * what the user edited — lives behind {@link ToolEditApprovalHost}.
+ * One controller per session stages the previews of that session's tool-edit
+ * requests, so a request can never be settled by another session's
+ * controller. The request itself is a `request.opened` row the fold lists
+ * and a `request.decide` command answers (one run model, 3.7); what lives
+ * here is the preview the durable payload cannot carry (the original and
+ * proposed content the host shows in its diff view) and the verbs over it.
+ * Everything a host owns, staging the preview files, opening its diff view,
+ * reading back what the user edited, lives behind {@link ToolEditApprovalHost}.
  */
 
 // Local imports
-import {
-  cancellationResultFor,
-  matchesCancelSelector,
-  type HostInteractionCancelSelector,
-} from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type {
+  RequestDecision,
   SessionEvent,
   RunId,
   ToolEditApprovalAction,
 } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import {
   previewProposedLatex,
   runLatexdiff,
   type BuildDisplayFn,
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
-import {
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-/** The host view of one staged request, live until the approval settles. */
+/** The host view of one staged request, live until the request is decided. */
 export interface ToolEditPreview {
   readonly originalPath: string;
   readonly proposedPath: string;
@@ -57,9 +53,9 @@ export interface ToolEditPreview {
 export interface ToolEditPreviewContext {
   readonly requestId: string;
   readonly relativePath: string;
-  /** True once the approval settled, so hosts can drop late view work. */
+  /** True once the request settled, so hosts can drop late view work. */
   isSettled(): boolean;
-  /** Reject the approval because the user closed the host's view. */
+  /** Reject the request because the user closed the host's view. */
   discard(): void;
 }
 
@@ -69,22 +65,32 @@ export interface ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview>;
-  /** Reopen the host surface containing the pending approval's controls. */
+  /** Reopen the host surface containing the pending request's controls. */
   revealApprovalSurface(): Promise<void>;
   readonly openBuildDisplay: BuildDisplayFn;
   reportError(message: string): void;
+  /**
+   * Send the decision for a staged request: the host's `request.decide` on
+   * its session. Resolves once the runtime answered; a refusal (the request
+   * already decided, the run gone) is the host's to word.
+   */
+  decide(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+  ): Promise<void>;
 }
 
 interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
 }
 
-/** A request whose preview is still being staged, so it cannot be settled yet. */
+/** A request whose preview is still being staged, so it cannot act yet. */
 interface InitializingToolEditApproval {
   readonly phase: 'initializing';
   readonly request: ToolEditApprovalRequest;
-  /** The result an approve or cancel produced while staging was still running. */
-  resolution?: ToolEditApprovalResult;
+  /** The decision an approve or discard produced while staging was still running. */
+  resolution?: RequestDecision;
 }
 
 /** A staged request awaiting the user. Membership in the map is what "unsettled" means. */
@@ -94,7 +100,6 @@ interface PendingToolEditApproval extends LatexPreviewEntry {
   readonly request: ToolEditApprovalRequest;
   readonly relativePath: string;
   readonly preview: ToolEditPreview;
-  settle: (result: ToolEditApprovalResult) => void;
 }
 
 type ToolEditApprovalState =
@@ -102,28 +107,32 @@ type ToolEditApprovalState =
 
 export class ToolEditApprovalController {
   /**
-   * Every request this controller owns, in either phase. Settling removes the
-   * entry, so no separate settled flag can disagree with the map.
+   * Every request this controller stages, in either phase. The request's
+   * `request.decided` removes the entry, so no separate settled flag can
+   * disagree with the map.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
   private disposed = false;
 
   constructor(private readonly options: ToolEditApprovalControllerOptions) {}
 
-  /** Release staged previews when the owning session resolves an approval. */
+  /** Release a staged preview when its request is decided, by any surface. */
   handleSessionEvent(event: SessionEvent): void {
-    if (event.type !== 'approval.resolved') return;
-    this.handleAction({ requestId: event.requestId, action: 'reject' });
+    if (event.type !== 'request.decided') return;
+    void this.release(event.requestId);
   }
 
-  async requestApproval(
-    request: ToolEditApprovalRequest,
-  ): Promise<ToolEditApprovalResult> {
+  /**
+   * Stage the preview for a tool-edit request the fold lists (the runtime's
+   * `presentToolEdit`). The decision reaches the runtime through
+   * {@link ToolEditApprovalHost.decide}, never through this call.
+   */
+  async present(request: ToolEditApprovalRequest): Promise<void> {
     if (this.disposed) {
       throw new Error('Tool edit approval controller is disposed.');
     }
 
-    // The request id the tool boundary minted for the `approval.requested`
+    // The request id the tool boundary minted for the `request.opened`
     // fact is the one every surface shows and answers.
     const { requestId, relativePath } = request.permission;
     const initialization: InitializingToolEditApproval = {
@@ -145,10 +154,21 @@ export class ToolEditApprovalController {
       throw error;
     }
 
+    // A dispose that landed while the host was staging: `release` already
+    // dropped this entry, and an initializing entry has no preview to
+    // dispose, so the preview that just finished staging is this call's to
+    // clean up. Presenting it would open a diff view for a disposed session
+    // and leave the staged files behind.
+    if (this.disposed) {
+      await preview.dispose();
+      return;
+    }
+
     if (initialization.resolution) {
       this.requests.delete(requestId);
       await preview.dispose();
-      return initialization.resolution;
+      await this.send(request, initialization.resolution);
+      return;
     }
 
     const entry: PendingToolEditApproval = {
@@ -162,35 +182,16 @@ export class ToolEditApprovalController {
       originalContent: request.originalContent,
       proposedContent: request.proposedContent,
       isSettled: () => this.requests.get(requestId) !== entry,
-      settle: () => {},
       workspaceTempCleanup: [],
       latexOperationInProgress: false,
       onError: (message) => this.options.host.reportError(message),
     };
-    const settlement = new Promise<ToolEditApprovalResult>((resolve) => {
-      entry.settle = resolve;
-    });
     this.requests.set(requestId, entry);
 
-    try {
-      await preview.present();
-      if (!entry.isSettled()) {
-        void this.runAction(entry, () =>
-          this.options.host.revealApprovalSurface(),
-        );
-      }
-      // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
-      // from the content this returns; `ToolEditApprovalResult` requires
-      // `appliedContent` on acceptance, so every settle() call below already
-      // supplies it.
-      return await settlement;
-    } finally {
-      this.requests.delete(requestId);
-      await preview.dispose();
-      await Promise.all(
-        entry.workspaceTempCleanup.map((cleanup) =>
-          cleanup().catch(() => undefined),
-        ),
+    await preview.present();
+    if (!entry.isSettled()) {
+      void this.runAction(entry, () =>
+        this.options.host.revealApprovalSurface(),
       );
     }
   }
@@ -208,10 +209,12 @@ export class ToolEditApprovalController {
         void this.runAction(entry, () => this.approve(entry));
         return;
       case 'reject':
-        this.settle(payload.requestId, {
-          action: 'reject',
-          feedback: payload.feedback?.trim() || undefined,
-        });
+        void this.runAction(entry, () =>
+          this.send(entry.request, {
+            action: 'reject',
+            feedback: payload.feedback?.trim() || null,
+          }),
+        );
         return;
       case 'openDiff':
         void this.runAction(entry, () => entry.preview.showDiff());
@@ -232,15 +235,15 @@ export class ToolEditApprovalController {
     payload.action satisfies never;
   }
 
-  /** Approve requests already awaiting the user on one stream. */
+  /** Approve requests already awaiting the user on one run. */
   async approvePendingForRun(runId: RunId): Promise<void> {
     const staged: PendingToolEditApproval[] = [];
     for (const state of this.requests.values()) {
       if (state.request.runId !== runId) continue;
       if (state.phase === 'initializing') {
         state.resolution ??= {
-          action: 'apply',
-          appliedContent: state.request.proposedContent,
+          action: 'approve',
+          content: state.request.proposedContent,
         };
         continue;
       }
@@ -251,30 +254,13 @@ export class ToolEditApprovalController {
     );
   }
 
-  /** Reject the requests this controller owns in the selected scope. */
-  cancel(selector: HostInteractionCancelSelector = {}): void {
-    for (const state of [...this.requests.values()]) {
-      if (
-        !matchesCancelSelector(
-          { kind: 'toolEdit', runId: state.request.runId ?? undefined },
-          selector,
-        )
-      ) {
-        continue;
-      }
-      const rejection = cancellationResultFor('toolEdit', selector.cause);
-      if (state.phase === 'initializing') {
-        state.resolution ??= rejection;
-        continue;
-      }
-      this.settle(state.requestId, rejection);
-    }
-  }
-
+  /** Drop every staged preview. The requests stay pending in the fold: the
+   *  runs that opened them close them with the fibers waiting on them. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.cancel({ cause: SESSION_DISPOSED_CAUSE });
+    for (const requestId of [...this.requests.keys()])
+      void this.release(requestId);
   }
 
   private isSettled(requestId: string): boolean {
@@ -289,15 +275,43 @@ export class ToolEditApprovalController {
       state.resolution ??= { action: 'reject' };
       return;
     }
-    this.settle(requestId, { action: 'reject' });
+    if (state?.phase === 'pending') {
+      void this.runAction(state, () =>
+        this.send(state.request, { action: 'reject' }),
+      );
+    }
   }
 
-  private settle(requestId: string, result: ToolEditApprovalResult): void {
-    const entry = this.requests.get(requestId);
-    if (entry?.phase !== 'pending') return;
+  /** Send one decision for a staged request; the fold's `request.decided`
+   *  then releases the preview through {@link handleSessionEvent}. */
+  private async send(
+    request: ToolEditApprovalRequest,
+    decision: RequestDecision,
+  ): Promise<void> {
+    const runId = request.runId;
+    if (!runId) {
+      throw new Error(
+        `Tool edit request ${request.permission.requestId} names no run to decide on.`,
+      );
+    }
+    await this.options.host.decide(
+      runId,
+      request.permission.requestId,
+      decision,
+    );
+  }
 
+  private async release(requestId: string): Promise<void> {
+    const entry = this.requests.get(requestId);
+    if (!entry) return;
     this.requests.delete(requestId);
-    entry.settle(result);
+    if (entry.phase !== 'pending') return;
+    try {
+      await entry.preview.dispose();
+      await Promise.all(entry.workspaceTempCleanup.map((cleanup) => cleanup()));
+    } catch (error) {
+      this.options.host.reportError(toErrorMessage(error));
+    }
   }
 
   private async runAction(
@@ -324,12 +338,10 @@ export class ToolEditApprovalController {
   }
 
   private async approve(entry: PendingToolEditApproval): Promise<void> {
-    let appliedContent: string;
+    let content: string;
     try {
       // Normalize: this read bypasses BaseFS so may contain CRLF.
-      appliedContent = normalizeLineEndings(
-        await entry.preview.readProposedContent(),
-      );
+      content = normalizeLineEndings(await entry.preview.readProposedContent());
     } catch (error) {
       if (entry.isSettled()) return;
       this.options.host.reportError(
@@ -337,6 +349,6 @@ export class ToolEditApprovalController {
       );
       return;
     }
-    this.settle(entry.requestId, { action: 'apply', appliedContent });
+    await this.send(entry.request, { action: 'approve', content });
   }
 }

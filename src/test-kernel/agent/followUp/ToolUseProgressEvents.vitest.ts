@@ -349,7 +349,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 });
 
 function quietSession(): SessionHandle {
-  return sessionWithInteractions({ emit: () => {}, cancel: () => {} });
+  return sessionWithInteractions({ emit: () => {} });
 }
 
 function startedRun(session: SessionHandle): RunId {

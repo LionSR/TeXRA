@@ -12,7 +12,6 @@ import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   runIdentityDisplayName,
-  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type DisplaySessionEvent,
   type DisplaySessionEventDraft,
@@ -89,6 +88,22 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       description: meta.description,
     });
   }
+  // `meta.outcome` is the one terminal fact the document carries; a trace
+  // with none folds as interrupted: an exported file has no producer that
+  // could still be running it.
+  const { outcome } = meta;
+  if (outcome !== null) {
+    // `run.end` carries the outcome but no run window; the activation is what
+    // opens it, so the folded view reads its `runStartedAt` from this row's
+    // stamp (the trace's first entry). It leads the facts it activated: an
+    // activation resets the run's progress counters.
+    bodies.push({
+      type: 'run.activate',
+      aggregateId: qualifyAggregateId('run', runId),
+      category,
+      isRemote: false,
+    });
+  }
   bodies.push(
     {
       type: 'conversation.progress',
@@ -131,31 +146,13 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       },
     );
   }
-  // `meta.outcome` is the one terminal fact the document carries; a trace
-  // with none folds as interrupted: an exported file has no producer that
-  // could still be running it.
-  const { outcome } = meta;
   if (outcome !== null) {
-    bodies.push(
-      // `run.end` carries the outcome but no run window; the non-terminal
-      // status row is what gives the folded view its `runStartedAt`, so an
-      // exported trace still renders an elapsed time.
-      {
-        type: 'status',
-        aggregateId: qualifyAggregateId('run', runId),
-        phase: RUN_PHASE.RUNNING,
-        previousPhase: null,
-        cause: 'trace',
-        substate: null,
-        runStartedAt: trace.entries[0]?.timestamp ?? null,
-      },
-      {
-        type: 'run.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome,
-        output: emptyRunEndOutput(category),
-      },
-    );
+    bodies.push({
+      type: 'run.end',
+      aggregateId: qualifyAggregateId('run', runId),
+      outcome,
+      output: emptyRunEndOutput(category),
+    });
   }
   return bodies;
 }

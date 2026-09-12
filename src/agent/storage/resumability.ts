@@ -45,7 +45,7 @@ export function isLegacyFlowRecordFile(name: string): boolean {
  * is a retired checkpoint (R10).
  */
 const RETIRED_CHECKPOINT_NOTICE =
-  'This run was recorded before the run ledger and is not resumable under this release.';
+  'This run was recorded before the run ledger and is not resumable under this release; a request it left pending (an approval, a retry, a question) is not resumable either.';
 
 /**
  * The rename, never silent: the transcript names the file, its new name, and

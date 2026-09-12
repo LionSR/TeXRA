@@ -124,7 +124,7 @@ const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */

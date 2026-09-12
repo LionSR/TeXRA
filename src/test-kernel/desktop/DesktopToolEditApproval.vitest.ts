@@ -2,40 +2,36 @@ import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
 import type { RunId } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   createStubDesktopAgentRunHost,
   disposeAfterTest,
 } from './desktopAgentRunTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
-import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);
 };
 
 /**
- * The approval handler a loaded module registry routes `tryUseRunContext` to.
- * One holder per `loadApprovalModules` call, so a test only ever reaches the
- * controller its own fixture registered.
+ * The session the loaded module registry resolves `currentSession()` to. One
+ * holder per `loadApprovalModules` call, so a test only ever reaches the
+ * session its own fixture opened.
  */
-interface ActiveApproval {
-  requestApproval?: (
-    request: ToolEditApprovalRequest,
-  ) => Promise<ToolEditApprovalResult>;
+interface ActiveSession {
+  session?: ReturnType<typeof createTestSession>;
 }
 
 const mocks = createModuleMocks();
@@ -57,7 +53,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
-  const activeApproval: ActiveApproval = {};
+  const activeSession: ActiveSession = {};
   type MockLocation =
     | { kind: 'workspace'; absolutePath: string; relativePath: string }
     | { kind: 'external'; absolutePath: string };
@@ -87,28 +83,16 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       <T>(_path: string, _schema: unknown, defaultValue: T) => defaultValue,
     ),
   }));
+  // The tool boundary reads its owning session from the run context; every
+  // request a test makes is opened on the fixture's own session.
   mocks.doMock('@agent/runtime/RunContext', async () => {
     const actual = await vi.importActual<
       typeof import('@agent/runtime/RunContext')
     >('@agent/runtime/RunContext');
-    const { createSessionApprovals } = await vi.importActual<
-      typeof import('@agent/runtime/runApprovalQueue')
-    >('@agent/runtime/runApprovalQueue');
-    // Session-owned approval state (bypass reads) for the fake run session.
-    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>
-        activeApproval.requestApproval
-          ? {
-              session: {
-                approvals,
-                interactions: {
-                  requestToolEditApproval: activeApproval.requestApproval,
-                },
-              },
-            }
-          : undefined,
+        activeSession.session ? { session: activeSession.session } : undefined,
       ),
     };
   });
@@ -144,21 +128,15 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   await installPlatform({ workspacePath }, { fs: nodeFilesystem });
   await import('@test/support/sessionGraphTestSetup');
 
-  const [
-    { requestToolEditApproval },
-    { releaseRunResources },
-    controllerModule,
-    desktopModule,
-  ] = await Promise.all([
-    import('@tools/approval/toolEditApproval'),
-    import('@tools/approval'),
-    import('@controllers/approval/ToolEditApprovalController'),
-    loadSourceModule('@desktop/main/desktopToolEditApproval'),
-  ]);
+  const [{ requestToolEditApproval }, controllerModule, desktopModule] =
+    await Promise.all([
+      import('@tools/approval/toolEditApproval'),
+      import('@controllers/approval/ToolEditApprovalController'),
+      loadSourceModule('@desktop/main/desktopToolEditApproval'),
+    ]);
   return {
-    activeApproval,
+    activeSession,
     requestToolEditApproval,
-    releaseRunResources,
     controllerModule,
     desktopModule,
   };
@@ -173,8 +151,16 @@ async function createApprovalFixture(
 ) {
   const modules = await loadApprovalModules(options.workspacePath);
   const session = disposeAfterTest(createTestSession());
+  modules.activeSession.session = session;
   const host = new modules.desktopModule.DesktopToolEditApprovalHost({
     ui: options.ui ?? createStubDesktopAgentRunHost(),
+    // The desktop surface's decision: the session's one `request.decide`.
+    decide: (runId, requestId, decision) =>
+      Effect.runPromise(
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
+      ),
   });
   const stagePreview = vi.spyOn(host, 'stagePreview');
   const controller = disposeAfterTest(
@@ -186,12 +172,31 @@ async function createApprovalFixture(
     ),
   );
   onTestFinished(() => Effect.runPromise(Fiber.interrupt(sessionEvents)));
-  modules.activeApproval.requestApproval = (request) =>
-    controller.requestApproval(request);
+  // The attached host stages the preview the durable payload cannot carry.
+  const detach = session.interactions.use({
+    presentToolEdit: (request) => {
+      void controller.present(request);
+    },
+  });
+  onTestFinished(detach);
+  const started = new Set<RunId>();
   return {
     ...modules,
     controller,
     session,
+    /**
+     * Ask for one edit through the tool boundary, as a tool call does. The
+     * run's existence fact comes first: a request row is only ever appended
+     * to a run the ledger already knows.
+     */
+    requestApproval(request: Omit<ToolEditApprovalRequest, 'permission'>) {
+      const { runId } = request;
+      if (runId && !started.has(runId)) {
+        started.add(runId);
+        publishTestRunStart(session, runId);
+      }
+      return Effect.runPromise(modules.requestToolEditApproval(request));
+    },
     /** Waits until every staged preview's directory has been removed. */
     async waitForStagedCleanup() {
       await vi.waitFor(async () => {
@@ -204,8 +209,17 @@ async function createApprovalFixture(
           ).resolves.toBe(false);
       });
     },
+    /**
+     * Wait until `count` requests are both staged on the host and listed by
+     * the fold, which is where a surface's decision finds them.
+     */
     async waitForPreviews(count = 1) {
-      await vi.waitFor(() => expect(stagePreview).toHaveBeenCalledTimes(count));
+      await vi.waitFor(() => {
+        expect(stagePreview).toHaveBeenCalledTimes(count);
+        expect(SubscriptionRef.getUnsafe(session.view).requests).toHaveLength(
+          count,
+        );
+      });
       await Promise.all(stagePreview.mock.results.map(({ value }) => value));
       return stagePreview.mock.calls.map(([request]) => request.permission);
     },
@@ -218,42 +232,37 @@ describe('desktop tool edit approval', () => {
   });
 
   approvalTest('approves pending edits only in the selected run', async () => {
-    const { controller, waitForPreviews } = await createApprovalFixture();
+    const { controller, requestApproval, waitForPreviews } =
+      await createApprovalFixture();
 
-    const target = controller.requestApproval(
-      toolEditApprovalRequest({
-        path: '/workspace/target.txt',
-        originalContent: 'old target\n',
-        proposedContent: 'new target\n',
-        sourceTool: 'write_file',
-        runId: 'run-target' as RunId,
-      }),
-    );
-    const other = controller.requestApproval(
-      toolEditApprovalRequest({
-        path: '/workspace/other.txt',
-        originalContent: 'old other\n',
-        proposedContent: 'new other\n',
-        sourceTool: 'write_file',
-        runId: 'run-other' as RunId,
-      }),
-    );
+    const target = requestApproval({
+      path: '/workspace/target.txt',
+      originalContent: 'old target\n',
+      proposedContent: 'new target\n',
+      sourceTool: 'write_file',
+      runId: 'a0b0c0' as RunId,
+    });
+    const other = requestApproval({
+      path: '/workspace/other.txt',
+      originalContent: 'old other\n',
+      proposedContent: 'new other\n',
+      sourceTool: 'write_file',
+      runId: 'd0e0f0' as RunId,
+    });
     const requests = await waitForPreviews(2);
 
     let targetSettled = false;
     void target.then(() => {
       targetSettled = true;
     });
-    await controller.approvePendingForRun('run-target' as RunId);
+    await controller.approvePendingForRun('a0b0c0' as RunId);
     await expect(target).resolves.toMatchObject({
       action: 'apply',
       appliedContent: 'new target\n',
     });
     expect(targetSettled).toBe(true);
 
-    const otherRequest = requests.find(
-      (request) => request.runId === 'run-other',
-    );
+    const otherRequest = requests.find((request) => request.runId === 'd0e0f0');
     expect(otherRequest).toBeDefined();
     controller.handleAction({
       requestId: otherRequest!.requestId,
@@ -266,7 +275,7 @@ describe('desktop tool edit approval', () => {
     'routes proposed-file previews through desktop temp files before rejection',
     async () => {
       const opened: string[] = [];
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
@@ -275,12 +284,12 @@ describe('desktop tool edit approval', () => {
           }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: '/workspace/notes.txt',
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'run-2' as RunId,
+        runId: 'a20000' as RunId,
       });
       const [request] = await waitForPreviews();
 
@@ -318,16 +327,17 @@ describe('desktop tool edit approval', () => {
           _title: string,
         ): Promise<void> => undefined,
       );
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           ui: createStubDesktopAgentRunHost({ openPath, openDiff }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: '/workspace/main.tex',
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
+        runId: 'a30000' as RunId,
       });
       const [request] = await waitForPreviews();
       await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
@@ -356,7 +366,7 @@ describe('desktop tool edit approval', () => {
     'applies user edits made in the proposed preview file',
     async () => {
       const opened: string[] = [];
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
@@ -365,12 +375,12 @@ describe('desktop tool edit approval', () => {
           }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: '/workspace/notes.txt',
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'run-edited-preview' as RunId,
+        runId: 'a40000' as RunId,
       });
       const [request] = await waitForPreviews();
 
@@ -402,7 +412,7 @@ describe('desktop tool edit approval', () => {
     async () => {
       const opened: string[] = [];
       const messages: string[] = [];
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
@@ -414,12 +424,12 @@ describe('desktop tool edit approval', () => {
           }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: '/workspace/notes.txt',
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'run-failed-read' as RunId,
+        runId: 'a50000' as RunId,
       });
       const [request] = await waitForPreviews();
       const { requestId } = request;
@@ -455,16 +465,17 @@ describe('desktop tool edit approval', () => {
       });
 
       const openBuildDisplay = vi.fn(async () => {});
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           ui: createStubDesktopAgentRunHost({ openBuildDisplay }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: '/workspace/main.tex',
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
+        runId: 'a60000' as RunId,
       });
       const [request] = await waitForPreviews();
       let settled = false;
@@ -504,7 +515,7 @@ describe('desktop tool edit approval', () => {
         options?: { preserveFocus?: boolean };
       }> = [];
       const messages: string[] = [];
-      const { requestToolEditApproval, controller, waitForPreviews } =
+      const { requestApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           workspacePath: workspaceRoot,
           ui: createStubDesktopAgentRunHost({
@@ -517,13 +528,14 @@ describe('desktop tool edit approval', () => {
           }),
         });
 
-      const resultPromise = requestToolEditApproval({
+      const resultPromise = requestApproval({
         path: path.join(workspaceRoot, 'main.tex'),
         originalContent:
           '\\documentclass{article}\\begin{document}old\\end{document}\n',
         proposedContent:
           '\\documentclass{article}\\begin{document}new\\end{document}\n',
         sourceTool: 'write_file',
+        runId: 'a70000' as RunId,
       });
       const [request] = await waitForPreviews();
 
@@ -542,7 +554,12 @@ describe('desktop tool edit approval', () => {
       );
       await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
 
-      controller.dispose();
+      // The request's own decision releases the preview and everything the
+      // LaTeX inspection staged beside it.
+      controller.handleAction({
+        requestId: request.requestId,
+        action: 'reject',
+      });
       await expect(resultPromise).resolves.toMatchObject({ action: 'reject' });
       await vi.waitFor(async () => {
         await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
@@ -553,150 +570,26 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'cleans up a run approval cancelled during initialization',
-    async () => {
-      const { requestToolEditApproval, controller, waitForStagedCleanup } =
-        await createApprovalFixture();
-
-      const resultPromise = requestToolEditApproval({
-        path: '/workspace/cancel-during-init.tex',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        runId: 'run-cancel-during-init' as RunId,
-      });
-      controller.cancel({
-        kind: 'toolEdit',
-        runId: 'run-cancel-during-init' as RunId,
-        cause: 'Owning run ended.',
-      });
-
-      await expect(resultPromise).resolves.toMatchObject({
-        action: 'reject',
-        cause: 'Owning run ended.',
-      });
-      await waitForStagedCleanup();
-    },
-  );
-
-  approvalTest(
-    'cleans up an approval when disposed during initialization',
-    async () => {
-      const { requestToolEditApproval, controller, waitForStagedCleanup } =
-        await createApprovalFixture();
-
-      const resultPromise = requestToolEditApproval({
-        path: '/workspace/dispose-during-init.tex',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        runId: 'run-dispose-during-init' as RunId,
-      });
-      controller.dispose();
-
-      await expect(resultPromise).resolves.toMatchObject({
-        action: 'reject',
-        cause: SESSION_DISPOSED_CAUSE,
-      });
-      await waitForStagedCleanup();
-    },
-  );
-
-  approvalTest(
-    'cancels only tool-edit approvals selected for the owning run',
+    'releases every staged preview when the controller is disposed',
     async () => {
       const {
-        requestToolEditApproval,
+        requestApproval,
         controller,
         waitForPreviews,
         waitForStagedCleanup,
       } = await createApprovalFixture();
 
-      const cancelledPromise = requestToolEditApproval({
-        path: '/workspace/cancelled.tex',
+      void requestApproval({
+        path: '/workspace/disposed.tex',
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        runId: 'run-cancelled' as RunId,
+        runId: 'a80000' as RunId,
       });
-      const retainedPromise = requestToolEditApproval({
-        path: '/workspace/retained.tex',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        runId: 'run-retained' as RunId,
-      });
-      const requests = await waitForPreviews(2);
-      const cancelledRequest = requests.find(
-        (request) => request.runId === 'run-cancelled',
-      );
-      const retainedRequest = requests.find(
-        (request) => request.runId === 'run-retained',
-      );
-      if (!cancelledRequest || !retainedRequest) {
-        throw new Error('Expected both run-scoped approval prompts.');
-      }
-
-      controller.cancel({
-        kind: 'toolEdit',
-        runId: 'run-cancelled' as RunId,
-        cause: 'Owning run ended.',
-      });
-
-      await expect(cancelledPromise).resolves.toMatchObject({
-        action: 'reject',
-        cause: 'Owning run ended.',
-      });
-
-      controller.handleAction({
-        requestId: retainedRequest.requestId,
-        action: 'reject',
-        feedback: 'Retained request resolved normally.',
-      });
-      await expect(retainedPromise).resolves.toMatchObject({
-        action: 'reject',
-        feedback: 'Retained request resolved normally.',
-      });
-      await waitForStagedCleanup();
-    },
-  );
-
-  approvalTest(
-    'cleans pending entries and temp files when run cleanup rejects a request',
-    async () => {
-      const {
-        releaseRunResources,
-        controller,
-        waitForPreviews,
-        session,
-        waitForStagedCleanup,
-      } = await createApprovalFixture();
-      session.interactions.use({
-        requestToolEditApproval: (request) =>
-          controller.requestApproval(request),
-        cancel: (selector) => controller.cancel(selector),
-      });
-
-      // Hex id: this request is published on the run aggregate, whose key
-      // RunIdSchema validates.
-      const resultPromise = session.interactions.requestToolEditApproval(
-        toolEditApprovalRequest({
-          path: '/workspace/cleanup.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          runId: 'dec0de' as RunId,
-        }),
-      );
       await waitForPreviews();
 
-      // Pending interactions are session-owned: sweep the owning session.
-      releaseRunResources('dec0de' as RunId, session);
+      controller.dispose();
 
-      await expect(resultPromise).resolves.toMatchObject({
-        action: 'reject',
-        cause: 'Stream resources released.',
-      });
       await waitForStagedCleanup();
     },
   );

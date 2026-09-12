@@ -170,12 +170,13 @@ class StorageFSKVStore extends KVStore implements RunKVStore {
 /**
  * The run's terminal fact for the lifecycle it is in now, or null while this
  * lifecycle has not ended. "Ended" is a fact about the current lifecycle, not
- * about the aggregate: a resume publishes a RUNNING `status` row after the
- * previous `run.end`, so a later `status` row means the run started again and
- * the earlier terminal fact belongs to the lifecycle before it. Reading the
- * aggregate's last `run.end` instead would leave a resumed run carrying the
- * outcome of a lifecycle it has already left. Shared with `finalizeRun`, the
- * row's one writer, so writer and readers scope it identically.
+ * about the aggregate: every activation publishes a `run.activate` row (the
+ * launch and each resume), so a `run.activate` after the previous `run.end`
+ * means the run started again and the earlier terminal fact belongs to the
+ * lifecycle before it. Reading the aggregate's last `run.end` instead would
+ * leave a resumed run carrying the outcome of a lifecycle it has already
+ * left. Shared with `finalizeRun`, the row's one writer, so writer and
+ * readers scope it identically.
  */
 export function runEndFromEvents(
   rows: readonly SessionEvent[],
@@ -183,9 +184,9 @@ export function runEndFromEvents(
 ): Extract<SessionEvent, { type: 'run.end' }> | null {
   const id = aggregateId('run', runId);
   const lifecycle = rows.findLast(
-    (row): row is Extract<SessionEvent, { type: 'run.end' | 'status' }> =>
+    (row): row is Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> =>
       row.aggregateId === id &&
-      (row.type === 'run.end' || row.type === 'status'),
+      (row.type === 'run.end' || row.type === 'run.activate'),
   );
   return lifecycle?.type === 'run.end' ? lifecycle : null;
 }

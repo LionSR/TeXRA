@@ -27,7 +27,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { isInFlightPhase } from '@shared/runs/runStatus';
-import { formatPhaseStageLabel } from '@shared/runs/runStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -135,16 +135,17 @@ export function anyRunRunning(
   );
 }
 
-/** The nearest ancestor's workflow-phase heading, for a child's location. */
-export function ancestorPhaseLabel(
+/** The nearest ancestor's round, for a child's location: the loop's own
+ *  coordinate off `RunView.flow`, which is what the fold now carries. */
+export function ancestorRoundLabel(
   view: SessionView,
   runId: RunId,
 ): string | undefined {
   const ancestors = runViewOf(view, runId)?.ancestors ?? [];
-  // Root first in the view; the nearest ancestor's phase wins.
+  // Root first in the view; the nearest ancestor's round wins.
   for (const ancestor of ancestors.toReversed()) {
-    const stage = runViewOf(view, ancestor.id)?.stage;
-    if (stage?.kind === 'phase') return formatPhaseStageLabel(stage);
+    const round = runViewOf(view, ancestor.id)?.flow?.round;
+    if (round != null) return formatRoundStageLabel({ index: round });
   }
   return undefined;
 }

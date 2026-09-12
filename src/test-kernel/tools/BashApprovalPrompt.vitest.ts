@@ -2,35 +2,67 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect, Fiber, Stream } from 'effect';
 import pDefer from 'p-defer';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type {
-  BashSettlement,
-  HostBashApprovalRequest,
-} from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { BashPermissionSchema } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { BashPermission } from '@shared/schemas';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { generateRunId } from '@utils/core';
+
+/**
+ * Watch the bash requests a run opens the way a surface does: off the
+ * session's `request.opened` rows, which is the whole of a pending request
+ * now that no host port holds a queue.
+ */
+function watchBashRequests(session: SessionHandle) {
+  const opened: BashPermission[] = [];
+  const firstOpened = pDefer<void>();
+  const decisions: Array<() => void> = [];
+  const fiber = Effect.runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type !== 'request.opened') return;
+        if (event.payload.kind !== 'bash') return;
+        opened.push(event.payload.data);
+        decisions.push(() =>
+          session.publish([
+            {
+              type: 'request.decided',
+              aggregateId: event.aggregateId,
+              requestId: event.requestId,
+              decision: { action: 'approve' },
+            },
+          ]),
+        );
+        firstOpened.resolve();
+      }),
+    ),
+  );
+  return {
+    opened,
+    firstOpened: firstOpened.promise,
+    /** Answer the request opened at `index` with a plain approval. */
+    approve: (index: number) => decisions[index]?.(),
+    stop: () => Effect.runPromise(Fiber.interrupt(fiber)),
+  };
+}
 
 describe('requestBashApproval queueing', () => {
   it('lets never override a run bypass at the shared boundary', async () => {
     const session = createTestSession();
     const runId = generateRunId();
     let policyDenials = 0;
-    let prompts = 0;
     session.setApprovalPolicy('never');
     session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
-    session.interactions.use({
-      requestBashApproval: async () => {
-        prompts += 1;
-        return { action: 'approve' };
-      },
-      cancel: () => undefined,
-    });
+    const requests = watchBashRequests(session);
 
     try {
       const result = await withRunContext(
@@ -41,16 +73,18 @@ describe('requestBashApproval queueing', () => {
             policyDenials += 1;
           },
         }),
-        () => requestBashApproval({ command: 'echo denied' }),
+        () =>
+          Effect.runPromise(requestBashApproval({ command: 'echo denied' })),
       );
 
       expect(result).toEqual({
-        action: 'reject',
+        action: 'deny',
         reason: 'Denied by TeXRA approval policy.',
       });
       expect(policyDenials).toBe(1);
-      expect(prompts).toBe(0);
+      expect(requests.opened).toEqual([]);
     } finally {
+      await requests.stop();
       session.dispose();
     }
   });
@@ -58,39 +92,34 @@ describe('requestBashApproval queueing', () => {
   it('auto-approves a queued request once the run is bypassed while it waits', async () => {
     const session = createTestSession();
     const runId = generateRunId();
-    const firstPrompted = pDefer<void>();
-    const firstAnswer = pDefer<BashSettlement>();
-    let prompts = 0;
-
-    session.interactions.use({
-      requestBashApproval: () => {
-        prompts += 1;
-        firstPrompted.resolve();
-        return firstAnswer.promise;
-      },
-      cancel: () => undefined,
-    });
+    // A request is a row on its run, so the run must exist first.
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    const requests = watchBashRequests(session);
 
     const request = (command: string) =>
       withRunContext(createRunContext({ runId, session }), () =>
-        requestBashApproval({ command }),
+        Effect.runPromise(requestBashApproval({ command })),
       );
 
     try {
       const first = request('echo first');
       const second = request('echo second');
-      await firstPrompted.promise;
-      expect(prompts).toBe(1);
+      await requests.firstOpened;
+      expect(requests.opened.map((permission) => permission.command)).toEqual([
+        'echo first',
+      ]);
 
-      // The user answers the first prompt with "approve and stop asking";
-      // the second must honor that instead of prompting again.
+      // The user answers the first request with "approve and stop asking";
+      // the second must honor that instead of opening a request of its own.
       session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
-      firstAnswer.resolve({ action: 'approve' });
+      requests.approve(0);
 
       expect(await first).toEqual({ action: 'approve' });
       expect(await second).toEqual({ action: 'approve' });
-      expect(prompts).toBe(1);
+      expect(requests.opened).toHaveLength(1);
     } finally {
+      await requests.stop();
       session.dispose();
     }
   });

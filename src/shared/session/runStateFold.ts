@@ -36,6 +36,7 @@ import {
   type ModelCompatibilityKey,
   type NormalizedUsage,
   type PermissionPayload,
+  type RequestDecision,
   type RetryErrorInfo,
   type RunFamily,
   type RunLoopPhase,
@@ -55,7 +56,9 @@ import type { z } from 'zod';
  * settles with its `tool.result` — `tool.end` for a card the dispatcher
  * already opened, both card rows for a fast tool whose card opens and closes
  * in that one batch; an approval's recovery binding is the `flow.snapshot`
- * committed in the same batch. Publishing those companions separately is the
+ * committed in the same batch; a streaming row still open when the loop
+ * parks closes with the `waiting` step, in that step's batch. Publishing
+ * those companions separately is the
  * crash window where a settled tool keeps an active card, or a terminal card
  * claims a result no row holds, or an approval survives with nothing to
  * recover it by. An explicit list narrowed from `SessionEventDraft`, never
@@ -74,8 +77,9 @@ export type RunLedgerDraft = Extract<
       | 'flow.snapshot'
       | 'tool.start'
       | 'tool.end'
-      | 'approval.requested'
-      | 'approval.resolved';
+      | 'stream.end'
+      | 'request.opened'
+      | 'request.decided';
   }
 >;
 
@@ -145,9 +149,9 @@ type PendingIntent = {
 type Approval = {
   readonly payload: PermissionPayload;
   readonly resolved: boolean;
-  /** The recorded decision, when the resolving row carried one (R5). */
-  readonly decision:
-    'approved' | 'denied' | 'skipped' | 'cancelled' | 'interrupted' | null;
+  /** The recorded decision (R5): the `request.decided` row's, null while
+   *  the request is open. */
+  readonly decision: RequestDecision | null;
 };
 
 /**
@@ -212,7 +216,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.end': true,
   'run.removed': true,
   'run.description': true,
-  status: true,
   'conversation.progress': true,
   updateTodos: true,
   updatePlan: true,
@@ -233,7 +236,6 @@ const IGNORED_ROW_TYPES: Readonly<
   usage: true,
   'context.state': true,
   'stream.start': true,
-  'stream.end': true,
   'response.finalized': true,
   domain: true,
   'run.record': true,
@@ -913,14 +915,16 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     }
     case 'tool.start':
     case 'tool.end':
-      // Committed with its `tool.result`; the settlement is the ledger fact.
+    case 'stream.end':
+      // Committed with its `tool.result` or its `waiting` step; the ledger
+      // row beside it is the fact.
       return null;
-    case 'approval.requested': {
+    case 'request.opened': {
       if (current === null) return null;
       if (Object.hasOwn(current.approvals, row.requestId)) {
         return refuse(
           'out-of-order',
-          `approval ${row.requestId} requested twice`,
+          `request ${row.requestId} opened twice`,
           commit,
         );
       }
@@ -936,13 +940,13 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ]),
       });
     }
-    case 'approval.resolved': {
+    case 'request.decided': {
       if (current === null) return null;
       const approval = current.approvals[row.requestId];
       if (approval === undefined) {
         return refuse(
           'dangling-binding',
-          `resolution names no approval ${row.requestId}`,
+          `decision names no request ${row.requestId}`,
           commit,
         );
       }
@@ -953,11 +957,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           ...Object.entries(current.approvals),
           [
             row.requestId,
-            {
-              ...approval,
-              resolved: true,
-              decision: row.decision ?? approval.decision,
-            },
+            { ...approval, resolved: true, decision: row.decision },
           ],
         ]),
       });

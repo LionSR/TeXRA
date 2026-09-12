@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { TraceEmitter, type StatusEvent } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -12,7 +12,6 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import { StreamLog } from '@shared/session/traceEntries';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -24,12 +23,7 @@ import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
-function attachRecorder(runId: RunId = 'stream:test' as RunId): {
-  trace: TraceEmitter;
-  handleStatus: (event: StatusEvent) => void;
-  rows: () => StreamLogEntry[];
-  row: (id: string | undefined) => StreamLogEntry | undefined;
-} {
+function attachRecorder(runId: RunId = 'stream:test' as RunId) {
   const trace = new TraceEmitter();
   const store = new StreamLog();
 
@@ -37,9 +31,10 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId): {
   const rows = (): StreamLogEntry[] => store.toJSON();
   return {
     trace,
-    handleStatus: recorder.handleStatus,
+    settlePhase: recorder.settlePhase,
     rows,
-    row: (id) => rows().find((entry) => entry.id === id),
+    row: (id: string | undefined): StreamLogEntry | undefined =>
+      rows().find((entry) => entry.id === id),
   };
 }
 
@@ -224,7 +219,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
 describe('attachTestTranscriptFold workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, handleStatus, row, rows } = attachRecorder(runId);
+    const { trace, settlePhase, row, rows } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -244,12 +239,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       },
     });
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.CANCELLED,
-      cause: RUN_TRANSITION_CAUSE.USER_STOP,
-    });
+    settlePhase(RUN_PHASE.CANCELLED);
 
     expect(row(phase.id)).toMatchObject({
       settlementSeqNo: 1,
@@ -308,13 +298,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       data: { status: 'skipped', reason: 'not-reached' },
     });
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.RUNNING,
-      previousPhase: RUN_PHASE.CANCELLED,
-      cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
-    });
+    settlePhase(RUN_PHASE.RUNNING);
     trace.responseFinalized('Fresh turn response');
     const responses = rows().filter(
       (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
@@ -335,7 +319,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
     const runId = 'stream:waiting-settlement' as RunId;
-    const { trace, handleStatus, rows } = attachRecorder(runId);
+    const { trace, settlePhase, rows } = attachRecorder(runId);
 
     const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
@@ -344,12 +328,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       toolName: 'read',
       input: { path: 'waiting.tex' },
     });
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.WAITING,
-      cause: RUN_TRANSITION_CAUSE.WAIT,
-    });
+    settlePhase(RUN_PHASE.WAITING);
 
     expect(rows()).toMatchObject([
       {
@@ -365,13 +344,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       },
     ]);
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.RUNNING,
-      previousPhase: RUN_PHASE.WAITING,
-      cause: RUN_TRANSITION_CAUSE.RESUME,
-    });
+    settlePhase(RUN_PHASE.RUNNING);
     const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     resumedResponse.append('Resumed response');
     resumedResponse.finalize();

@@ -4,14 +4,17 @@ import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   emptyRunEndOutput,
   RunIdSchema,
   type RunEnd,
   type RunOutcome,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 
 const RUN_ID = RunIdSchema.parse('ec1000000001');
 
@@ -40,6 +43,26 @@ beforeEach(() => {
 afterEach(() => {
   session.dispose();
 });
+
+/**
+ * End the run for real: `run.end` is the terminal fact the fold reads a
+ * terminal phase from, so a tracked handle reports it the way the registry
+ * does in production.
+ */
+async function endRun(outcome: RunOutcome): Promise<void> {
+  publishTestRunStart(session, RUN_ID);
+  session.publish([
+    {
+      type: 'run.end',
+      aggregateId: aggregateId('run', RUN_ID),
+      outcome,
+      output: emptyRunEndOutput('toolUse'),
+    },
+  ]);
+  await vi.waitFor(() => {
+    assert.strictEqual(session.runView(RUN_ID)?.status, outcome);
+  });
+}
 
 /** The one persisted fact the ladder reads: the run's terminal row. */
 function persisted(outcome: RunOutcome | null): void {
@@ -167,7 +190,7 @@ describe('turnAttributionNote', () => {
     // alone must not word the note as "still running".
     const handle = testRunHandle({ runId: RUN_ID, agent: 'test' });
     session.runs.track(handle);
-    seedRunStatusForTest(session.status, RUN_ID, { phase: 'completed' });
+    await endRun('completed');
     const store = {
       getRunId: () => RUN_ID,
       readTurnState: async () => ({

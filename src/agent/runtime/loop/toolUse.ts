@@ -78,7 +78,7 @@ const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
@@ -196,7 +196,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ownerSession: session,
     interrupt(): void {
       run.interrupt();
-      session.interactions.cancel({ runId, cause: 'Run interrupted.' });
       followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
@@ -761,7 +760,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             batch = yield* followUps.drain;
             if (batch === null) {
-              session.status.transitionToWaiting(runId, 'wait');
               return { state, waiting: true } as const satisfies LoopExit;
             }
           }
@@ -791,9 +789,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            if (!followUps.hasQueued()) {
-              session.status.transitionToWaiting(runId, 'wait');
-            }
             detach();
             batch = yield* followUps.wait;
             if (batch === null) {
@@ -806,7 +801,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             attach();
           }
-          session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
@@ -825,11 +819,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
-      // turn and its wait cannot leave the turn unended.
+      // turn and its wait cannot leave the turn unended. The `waiting` step
+      // parks the run (one run model, 3.3), so the streaming rows still open
+      // close in its batch: a parked transcript never streams.
       state = yield* commit(
         yield* ledger.appendBatch(runId, state, [
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]),
       );
@@ -859,7 +856,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // One child cycle per invocation: the child loop delivers this
         // turn's facts and owns the next wait.
-        session.status.transitionToWaiting(runId, 'wait');
         return { state, waiting: true } as const satisfies LoopExit;
       }
     }

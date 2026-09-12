@@ -371,6 +371,7 @@ export class BashTool extends defineTool({
     ) {
       throw new ToolError(SHELL_BACKGROUNDING_MESSAGE);
     }
+    const runtime = effectRuntime();
 
     const contexts = getCurrentToolContexts();
     const callContext = contexts?.callContext;
@@ -396,7 +397,9 @@ export class BashTool extends defineTool({
       workspaceRoots().workspace;
 
     // Request approval before executing the command.
-    const approval = await requestBashApproval({ command: input.command, cwd });
+    const approval = await runtime.runPromise(
+      requestBashApproval({ command: input.command, cwd }),
+    );
 
     if (approval.action !== 'approve') {
       return buildBashApprovalRejectedResult(input.command, approval);
@@ -409,7 +412,7 @@ export class BashTool extends defineTool({
 
     if (input.run_in_background) {
       const { runId } = requireLiveRun('bash run_in_background', runContext);
-      return effectRuntime().runPromise(
+      return runtime.runPromise(
         this.executeBackground(
           currentSession(),
           input.command,

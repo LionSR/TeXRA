@@ -26,7 +26,6 @@ function runPair(): {
 describe('child subagent stream approval inheritance', () => {
   afterEach(() => {
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('mirrors the parent tool-edit bypass onto the child stream', () => {

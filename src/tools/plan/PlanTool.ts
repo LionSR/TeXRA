@@ -23,10 +23,6 @@ import { z } from 'zod';
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import {
-  classifyRejection,
-  type PlanApprovalResult,
-} from '@agent/runtime/HostInteractions';
-import {
   getRunContextInteractions,
   getRunContextRunId,
 } from '@agent/runtime/RunContext';
@@ -43,6 +39,7 @@ import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
+import { refusalOf } from '@shared/session/approvalDecision';
 import { requireRunId } from '@tools/contextHelpers';
 import {
   GoalStore,
@@ -53,7 +50,7 @@ import {
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import { assertNever, generateShortId } from '@utils/core';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -288,19 +285,9 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   logger.info('Requesting approval for plan objective');
 
-  // Dispatching inside the port keeps a host that throws on the request
-  // itself on the same failure channel as one that rejects the interaction.
-  const result: PlanApprovalResult = yield* hostPort(() => {
-    const interaction = ports.session.interactions.requestPlanApproval({
-      requestId,
-      runId,
-      plan,
-      goalEnabled,
-    });
-    if (!interaction) {
-      throw new Error('HostInteractions.requestPlanApproval is required');
-    }
-    return interaction;
+  const result = yield* ports.session.openRequest(runId, {
+    kind: 'planApproval',
+    data: { requestId, runId, plan, goalEnabled },
   });
 
   if (result.action === 'approve') {
@@ -321,7 +308,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   // Rejected — clear the plan from UI
   workPlanState.updatePlan(null);
 
-  const classification = classifyRejection(result);
+  const refusal = refusalOf('planApproval', result);
 
   // 'cancelled' and 'policy' differ only in wording: a host cancel with an
   // optional cause vs a policy denial with its reason.
@@ -339,13 +326,13 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     );
   };
 
-  switch (classification.kind) {
-    case 'cancelled':
-      return denialResult('cancelled', classification.cause);
-    case 'policy':
-      return denialResult('denied', classification.reason);
-    case 'feedback': {
-      const feedback = classification.feedback?.trim();
+  switch (refusal.action) {
+    case 'cancel':
+      return denialResult('cancelled', refusal.cause ?? undefined);
+    case 'deny':
+      return denialResult('denied', refusal.reason);
+    case 'reject': {
+      const feedback = refusal.feedback?.trim();
       const feedbackNote = feedback
         ? `\nUser feedback: ${feedback}`
         : '\nNo specific feedback was provided.';
@@ -363,8 +350,6 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
         },
       );
     }
-    default:
-      return assertNever(classification, 'Unhandled rejection classification');
   }
 });
 

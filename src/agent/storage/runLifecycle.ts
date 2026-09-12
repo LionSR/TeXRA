@@ -157,18 +157,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
             : {}),
         },
       );
-      if (
-        options.identity.kind === 'agent' &&
-        options.identity.tool === undefined
-      )
-        events.push({
-          type: 'status',
-          aggregateId: target,
-          phase: RUN_PHASE.RUNNING,
-          substate: RUN_SUBSTATE.STARTING,
-          runStartedAt: Date.now(),
-          cause: 'lifecycle',
-        });
       if (options.description !== undefined)
         events.push({
           type: 'run.description',
@@ -342,7 +330,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       if (ended === persisted) return { events: [], value: persisted };
       return {
         events: [
-          ...session.statusClosureFacts(runId, persisted),
+          ...session.streamClosureFacts(runId),
           {
             type: 'run.end' as const,
             aggregateId: target,

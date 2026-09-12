@@ -50,7 +50,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
         return true;
       case 'k':
         if (this.canUseOwnApiKey()) {
-          this.emitAction({ action: 'useOwnApiKey' });
+          this.emitAction({ action: 'retry', credentials: 'personal' });
           return true;
         }
         return false;
@@ -117,7 +117,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
                 : 'Retry with your own API key (k)',
               action: 'useOwnApiKey',
               disabled,
-              onClick: () => this.emitAction({ action: 'useOwnApiKey' }),
+              onClick: () =>
+                this.emitAction({ action: 'retry', credentials: 'personal' }),
             }),
           )}
           ${renderLabeledActionButton({
