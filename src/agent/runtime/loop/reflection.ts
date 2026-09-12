@@ -15,8 +15,9 @@
  *
  * A turn the provider refused for exceeding its context window is recovered
  * once per round: the history is compacted (`model.compaction`) and the cycle
- * continues against it. A second overflow in the same round stops, because
- * nothing further would change.
+ * continues against it. A second overflow in the same round stops, and so does
+ * a compaction that shortened nothing, because the same history would overflow
+ * again.
  *
  * Reflection dispatches no tools: a turn advertises none, so a response never
  * carries a local call and the assistant message enters history with its
@@ -650,25 +651,53 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
     let endTurn = false;
     let continueCycle = false;
-    // Set when the cycle continues only to retry a context-window overflow
-    // against a compacted history.
-    let compactBeforeContinuing = false;
+    // The state the continuation is issued against: an overflow retry
+    // replaces it with the compacted history the retry needs.
+    let base = initial;
+    // Set when this continuation is the overflow retry rather than a
+    // response that was merely cut off.
+    let retryingAfterCompaction = false;
     /**
      * A context-window overflow is recoverable once per round: force the
-     * compaction the history needs and retry the cycle. The second overflow
-     * of a round stops, because nothing further would change.
+     * compaction the history needs and retry the cycle against it. A second
+     * overflow, or a compaction that shortened nothing, stops, because the
+     * same history would overflow again.
      */
-    const admitOverflowRetry = (): boolean => {
-      if (contextWindowRecoveryAttempted) {
-        logger.warn(
-          'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
+    const admitOverflowRetry = Effect.fn('reflection.overflowRetry')(
+      function* (): Effect.fn.Return<boolean, Error> {
+        if (contextWindowRecoveryAttempted) {
+          logger.warn(
+            'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
+          );
+          return false;
+        }
+        contextWindowRecoveryAttempted = true;
+        const bound = yield* SynchronizedRef.get(run.model);
+        // The retry pays for a summary first: the compaction row is committed
+        // before the continuation prompt, so the retried request is issued
+        // against the compacted history the fold returns.
+        const compacted = yield* commit(
+          yield* compactIfNeeded(base, {
+            runId,
+            ledger,
+            logger,
+            bound,
+            system: undefined,
+            tools: [],
+            force: true,
+          }),
         );
-        return false;
-      }
-      contextWindowRecoveryAttempted = true;
-      compactBeforeContinuing = true;
-      return true;
-    };
+        if (compacted === base) {
+          logger.warn(
+            'Model context window exceeded and compaction shortened nothing; stopping to avoid a futile retry.',
+          );
+          return false;
+        }
+        base = compacted;
+        retryingAfterCompaction = true;
+        return true;
+      },
+    );
     if (text) {
       const connector = yield* Effect.tryPromise({
         try: () =>
@@ -723,12 +752,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           },
         });
       } else if (finish === 'context-window-exceeded') {
-        continueCycle = admitOverflowRetry();
+        continueCycle = yield* admitOverflowRetry();
       } else if (finish === 'length') {
         continueCycle = true;
       }
     } else if (finish === 'context-window-exceeded') {
-      continueCycle = admitOverflowRetry();
+      continueCycle = yield* admitOverflowRetry();
     }
 
     if (continueCycle) {
@@ -736,33 +765,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       logger.info(`Starting continuation #${next}`, {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
-      logger.info('Continuing after hitting the model token limit', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
+      logger.info(
+        retryingAfterCompaction
+          ? 'Retrying after forcing model context compaction'
+          : 'Continuing after hitting the model token limit',
+        { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
+      );
       const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
       const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
       flow = { ...flow, endTurn: false };
-      // The overflow retry pays for a summary first: the compaction row is
-      // committed before the continuation prompt, so the retried request is
-      // issued against the compacted history the fold returns.
-      let base = initial;
-      if (compactBeforeContinuing) {
-        logger.info('Retrying after forcing model context compaction', {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        });
-        const bound = yield* SynchronizedRef.get(run.model);
-        base = yield* commit(
-          yield* compactIfNeeded(base, {
-            runId,
-            ledger,
-            logger,
-            bound,
-            system: undefined,
-            tools: [],
-            force: true,
-          }),
-        );
-      }
       const continued = yield* ledger.appendBatch(runId, base, [
         appendRow(runId, [
           {

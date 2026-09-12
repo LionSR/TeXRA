@@ -337,7 +337,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
             resolvedToolNames,
             hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isSubagent: isChild,
+            isChild,
           }),
         ),
       catch: ensureError,

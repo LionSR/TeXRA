@@ -1,4 +1,5 @@
 // Third-party imports
+import { Deferred, Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 import { vi } from 'vitest';
 
@@ -62,6 +63,7 @@ export function createTestLaunchContext({
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
   const abortController = new AbortController();
+  const stopped = Deferred.makeUnsafe<void>();
   const config = AgentConfigSchema.parse({
     agent,
     model: 'test-model',
@@ -95,7 +97,11 @@ export function createTestLaunchContext({
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelCell,
-    interrupt: () => abortController.abort(),
+    interrupt: () => {
+      Deferred.doneUnsafe(stopped, Effect.void);
+    },
+    stopped,
+    abortRunSignal: () => abortController.abort(),
     disposeTrace: vi.fn(),
   };
 }

@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Deferred, Effect } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -444,13 +444,19 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     // synchronously, so anything assigned later (e.g. from `onRun`) misses the
     // parent's first roster snapshot.
     if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
+    const cancelHostPrompts = () =>
+      session.interactions.cancel({
+        runId,
+        cause: 'Run interrupted.',
+      });
+    // The host's stop: the run's one stop latch, which the runner races, plus
+    // the prompts this run left open. The run signal is not aborted here — the
+    // interruption the latch causes aborts it (below), so the Promise-tier
+    // bridge stays downstream of the stop rather than beside it.
     const runInterruptHandler = {
       interrupt(): void {
         ctx.interrupt();
-        session.interactions.cancel({
-          runId,
-          cause: 'Run interrupted.',
-        });
+        cancelHostPrompts();
       },
     };
     const detachRunInterrupt =
@@ -633,18 +639,26 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // set run status themselves. Either branch leaves the run carrying
       // this run's own phase, which is what makes the terminal phase a verdict
       // about this run rather than whatever the last one left behind.
-      if (ctx.runScope.signal.aborted) {
+      if (Deferred.isDoneUnsafe(ctx.stopped)) {
+        // The stop landed before this run had a program to interrupt, so it is
+        // recorded on the run signal here: the launch's own Promise-tier work
+        // is all there is to cancel.
+        ctx.abortRunSignal();
         transitionStopBeforeRunStart(ctx);
       } else {
         transitionRunStart(ctx);
       }
       // The flow is an Effect: a fiber interruption reaches its provider work
       // directly, and its own finalizers settle before the model and trace
-      // resources below are disposed. The run signal is aborted alongside so
-      // Promise-tier work the flow still retains observes the same stop.
+      // resources below are disposed. The run signal is aborted from that
+      // interruption, so Promise-tier work the flow still retains observes the
+      // same stop.
       const result = yield* Effect.suspend(() => runner(handle)).pipe(
         Effect.onInterrupt(() =>
-          Effect.sync(() => runInterruptHandler.interrupt()),
+          Effect.sync(() => {
+            ctx.abortRunSignal();
+            cancelHostPrompts();
+          }),
         ),
         Effect.ensuring(Effect.sync(detachRunInterrupt)),
       );

@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -56,7 +56,7 @@ import {
 } from '@shared/schemas';
 import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { isObject, linkAbortSignals } from '@utils/core';
+import { isObject, linkAbortSignals, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
@@ -117,8 +117,27 @@ export interface AgentLaunchContext {
   usageMonitor: UsageMonitor;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Abort the sticky signal published on {@link AgentLaunchContext.runScope}. */
+  /**
+   * The run's one stop. Every stop entry — a host kill through the run
+   * handle, the live tool-use flow context, an aborted launch signal —
+   * completes {@link AgentLaunchContext.stopped}, and the run's program is
+   * interrupted from it. Nothing else stops a run.
+   */
   interrupt: () => void;
+  /**
+   * Completed by {@link AgentLaunchContext.interrupt}. The runner races it
+   * once, at the boundary that owns the run's program, so a stop reaches the
+   * loop as a fiber interruption whose finalizers record the halt.
+   */
+  readonly stopped: Deferred.Deferred<void>;
+  /**
+   * Abort the sticky signal published on {@link AgentLaunchContext.runScope}.
+   * Driven by the program's interruption — and, before that program exists,
+   * by the lifecycle's stop-before-start branch: the signal is how the
+   * Promise-tier work a run still owns hears the stop, never a second way to
+   * stop the run.
+   */
+  abortRunSignal: () => void;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -531,6 +550,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const agentPath = path.dirname(resolution.entry.path);
     const workingDirectory = config.workingDirectory?.trim() || undefined;
     const runAbortController = new AbortController();
+    // The run's one stop. `interrupt()` completes it; the runner races it and
+    // the program is interrupted from it.
+    const stopped = Deferred.makeUnsafe<void>();
+    const stopRun = () => {
+      Deferred.doneUnsafe(stopped, Effect.void);
+    };
     // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
     // every listener still attached to it) reachable from the caller's signal
     // until that signal aborts. A parent run's signal outlives each subagent it
@@ -541,6 +566,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       runAbortController,
     );
     resources.push(detachRunAbortLink);
+    // A caller that aborts the launch signal is asking this run to stop, so it
+    // enters through the same stop as every other stop entry. Detached with
+    // the run trace at end-of-run, for the same reason the link above is: a
+    // parent's signal outlives every subagent it launches.
+    const detachLaunchStop = onAbort(input.signal, stopRun);
+    resources.push(detachLaunchStop);
     const runSignal = runAbortController.signal;
     const runScope = createRunScope({
       runId,
@@ -612,12 +643,15 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       attachedMemoryMisses,
       usageMonitor,
       runScope,
-      interrupt: () => runAbortController.abort(),
+      interrupt: stopRun,
+      stopped,
+      abortRunSignal: () => runAbortController.abort(),
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
       disposeTrace: () => {
         detachRunAbortLink();
+        detachLaunchStop();
         runTrace.dispose();
       },
     };

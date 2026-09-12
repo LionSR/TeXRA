@@ -1,7 +1,6 @@
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
-import { redactSecrets } from '@logger/redaction';
 import {
   aggregateId as qualifyAggregateId,
   type AgentProposalPermission,
@@ -24,6 +23,7 @@ import type {
 } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import { redactedForFact } from './loop/rows';
 import type {
   AgentRuntimeEmitOptions,
   RuntimePresentationEvent,
@@ -445,40 +445,6 @@ type PermissionPayloadFor<K extends SettledInteractionKind> = Extract<
   PermissionPayload,
   { kind: K }
 >;
-
-/**
- * The durable copy of a request payload. A retry carries the provider error,
- * whose body can echo the request URL or an `Authorization` header: the
- * transcript fold redacts these fields, and canonical publication scrubs
- * request payloads here, at their one
- * emission point, dropping the raw body outright. Bash commands and question
- * text are what the user typed and stay as they are.
- */
-function redactedForFact(payload: PermissionPayload): PermissionPayload {
-  if (payload.kind !== 'retry') return payload;
-  const { errorMessage, errorDetails, ...data } = payload.data;
-  const redactedDetails = (() => {
-    if (!errorDetails) return errorDetails;
-    const { rawErrorBody: _dropped, ...details } = errorDetails;
-    for (const key of ['message', 'statusText', 'partialText'] as const) {
-      const value = details[key];
-      if (typeof value === 'string') details[key] = redactSecrets(value);
-    }
-    return details;
-  })();
-  return {
-    kind: 'retry',
-    data: {
-      ...data,
-      ...(errorMessage === undefined
-        ? {}
-        : { errorMessage: redactSecrets(errorMessage) }),
-      ...(redactedDetails === undefined
-        ? {}
-        : { errorDetails: redactedDetails }),
-    },
-  };
-}
 
 /**
  * Stable per-session interaction owner. The `SessionHandle` exposes this

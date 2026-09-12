@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Cause, Effect, Exit, Layer } from 'effect';
+import { Cause, Deferred, Effect, Exit, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -32,7 +32,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
-import { onAbort } from '@utils/core';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -161,26 +160,27 @@ function runLayerFor(
 }
 
 /**
- * The host's stop is the run signal. It interrupts the program's fiber,
- * whose masked exit protocol records the halt before this returns; a stop
- * that wins reports the cancelled shell result of the run's category.
+ * The one boundary that races the run's stop. `ctx.stopped` is completed by
+ * every stop entry (a host kill through the run handle, the live tool-use
+ * flow context, an aborted launch signal); winning it interrupts the
+ * program's fiber, whose masked exit protocol records the halt before this
+ * returns, and reports the cancelled shell result of the run's category.
+ * The run's `AbortSignal` is aborted from that interruption — the loop reads
+ * the fiber's own interruption (`Effect.abortSignal`) for the provider
+ * request and the tool bodies that still need a signal — so the signal is
+ * downstream of the stop rather than a second way to stop the run.
  */
-function raceWithStop(
+function runUntilStopped(
   ctx: AgentLaunchContext,
   program: Effect.Effect<AgentRuntimeFlowResult, Error>,
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
-  const { runId, signal } = ctx.runScope;
-  const stopped = Effect.callback<void>((resume) => {
-    if (signal.aborted) {
-      resume(Effect.void);
-      return;
-    }
-    const detach = onAbort(signal, () => resume(Effect.void));
-    return Effect.sync(detach);
-  });
+  const { runId } = ctx.runScope;
   return Effect.raceFirst(
-    program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
-    stopped.pipe(Effect.as({ kind: 'stopped' as const })),
+    program.pipe(
+      Effect.onInterrupt(() => Effect.sync(() => ctx.abortRunSignal())),
+      Effect.map((result) => ({ kind: 'result' as const, result })),
+    ),
+    Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
   ).pipe(
     Effect.map((winner): AgentRuntimeFlowResult => {
       if (winner.kind === 'result') return winner.result;
@@ -265,7 +265,7 @@ function launchToolUseRun(
         : {}),
     })),
   );
-  return raceWithStop(ctx, program);
+  return runUntilStopped(ctx, program);
 }
 
 /**
@@ -322,7 +322,7 @@ function launchReflectionRun(
       }),
     ),
   );
-  return raceWithStop(ctx, program);
+  return runUntilStopped(ctx, program);
 }
 
 /**

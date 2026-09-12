@@ -124,7 +124,11 @@ export interface AgentRunShape {
   readonly inScope: <A>(operation: () => A) => A;
   readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
-  /** Abort the run's sticky signal: the host stop that interrupts the loop. */
+  /**
+   * The run's one stop: completes the launch context's stop latch, so the
+   * boundary that owns the run's program interrupts it. The run's
+   * `AbortSignal` is aborted from that interruption, not from here.
+   */
   readonly interrupt: () => void;
 }
 
