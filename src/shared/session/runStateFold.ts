@@ -33,7 +33,7 @@ import {
   type DispatchFacts,
   type FlowStep,
   type InvocationRef,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type NormalizedUsage,
   type PermissionPayload,
   type RetryErrorInfo,
@@ -172,7 +172,7 @@ export type RunState = {
   readonly turn: number;
   readonly continuationIndex: number;
   readonly modelId: string | null;
-  readonly modelHandlerCompatibilityKey: ModelHandlerCompatibilityKey | null;
+  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   readonly lastError: RetryErrorInfo | null;
   readonly pendingRetry: SnapshotRuntime['pendingRetry'];
   /** Canonical provider history, in order. The pending response's assistant
@@ -274,7 +274,7 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   turn: 0,
   continuationIndex: 0,
   modelId: null,
-  modelHandlerCompatibilityKey: null,
+  modelCompatibilityKey: null,
   lastError: null,
   pendingRetry: null,
   messages: [],

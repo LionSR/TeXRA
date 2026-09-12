@@ -16,7 +16,7 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
@@ -453,7 +453,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
 }
@@ -513,7 +513,7 @@ export function executeAgent(
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
       session: options.session,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      modelCompatibilityKey: options.modelCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       signal: options.launchSignal,
       toolPolicy: {
@@ -674,7 +674,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
           definition,
           runId: resume.runId,
           resumed: true,
-          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
+          modelCompatibilityKey: resume.modelCompatibilityKey,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,

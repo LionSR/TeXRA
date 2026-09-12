@@ -124,7 +124,7 @@ interface SnapshotCoordinates {
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
-      'modelId' | 'modelHandlerCompatibilityKey' | 'lastError' | 'pendingRetry'
+      'modelId' | 'modelCompatibilityKey' | 'lastError' | 'pendingRetry'
     >
   >;
   /**
@@ -166,11 +166,10 @@ function buildSnapshot(
     turn: patch.turn ?? state.turn,
     continuationIndex: patch.continuationIndex ?? state.continuationIndex,
     modelId,
-    modelHandlerCompatibilityKey:
-      patch.runtime !== undefined &&
-      'modelHandlerCompatibilityKey' in patch.runtime
-        ? (patch.runtime.modelHandlerCompatibilityKey ?? null)
-        : state.modelHandlerCompatibilityKey,
+    modelCompatibilityKey:
+      patch.runtime !== undefined && 'modelCompatibilityKey' in patch.runtime
+        ? (patch.runtime.modelCompatibilityKey ?? null)
+        : state.modelCompatibilityKey,
     lastError:
       patch.runtime !== undefined && 'lastError' in patch.runtime
         ? (patch.runtime.lastError ?? null)

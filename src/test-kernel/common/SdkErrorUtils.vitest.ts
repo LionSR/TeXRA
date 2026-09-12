@@ -23,12 +23,9 @@ import {
   attachContextWindowError,
   attachMissingApiKeyError,
   attachProviderError,
-  attachSdkErrorMetadata,
-  attachStreamDiagnostics,
 } from '@common/errors/sdkError/errorMetadata';
 import {
   isContextWindowError,
-  isPreviousResponseIdError,
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
 import { detectStatusText } from '@common/errors/sdkError/errorInspection';
@@ -39,7 +36,6 @@ import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import {
   ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
@@ -62,17 +58,6 @@ function withHeaders<T extends Error>(
   headers: Record<string, string>,
 ): T & { headers: Headers } {
   return Object.assign(error, { headers: new Headers(headers) });
-}
-
-function taggedRawBodyError(
-  message: string,
-  body: unknown,
-  metadata: Parameters<typeof attachSdkErrorMetadata>[1],
-): Error {
-  const error = new Error(message) as Error & { error: unknown };
-  error.error = body;
-  attachSdkErrorMetadata(error, metadata);
-  return error;
 }
 
 function providerAttributedError(body: unknown): Error {
@@ -280,48 +265,8 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
-  it('formats symbol-tagged SDK errors without SDK prototype matching', () => {
-    const error = new Error('provider quota');
-    attachSdkErrorMetadata(error, {
-      provider: 'fixture',
-      kind: 'rate_limit',
-      statusCode: 429,
-    });
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.provider).toBe('fixture');
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.message).toBe(
-      'HTTP 429 Too Many Requests – provider quota',
-    );
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('carries an SDK exhaustion reason into the provider error', () => {
-    const error = new Error('Copilot quota exceeded');
-    attachSdkErrorMetadata(error, {
-      provider: 'copilot',
-      kind: 'rate_limit',
-      exhaustionReason: 'copilot-subscription',
-    });
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted).toMatchObject({
-      provider: 'copilot',
-      statusCode: 429,
-      classification: { kind: 'copilot-subscription' },
-      userRetryable: true,
-    });
-  });
-
-  it('formats tagged OpenAI connection errors with existing retry behavior', () => {
+  it('formats OpenAI connection errors with existing retry behavior', () => {
     const error = new OpenAIAPIConnectionTimeoutError();
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'connection_timeout',
-    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -340,7 +285,6 @@ describe('formatProviderHttpError', () => {
       param: null,
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -358,7 +302,6 @@ describe('formatProviderHttpError', () => {
       param: null,
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -378,10 +321,6 @@ describe('formatProviderHttpError', () => {
       codeOnlyBody.message,
       undefined,
     );
-    attachSdkErrorMetadata(codeOnlyError, {
-      provider: 'openai',
-      kind: 'api_error',
-    });
 
     expect(formatProviderHttpError(codeOnlyError).statusCode).toBe(503);
   });
@@ -393,7 +332,6 @@ describe('formatProviderHttpError', () => {
       message: 'Unexpected provider failure.',
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-    attachSdkErrorMetadata(error, { provider: 'openai', kind: 'api_error' });
 
     const formatted = formatProviderHttpError(error);
 
@@ -401,18 +339,13 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
-  it('formats tagged OpenAI HTTP errors with status metadata', () => {
+  it('formats OpenAI HTTP errors with status metadata', () => {
     const error = new OpenAIBadRequestError(
       400,
       { message: 'bad payload' },
       'bad payload',
       new Headers([['x-request-id', 'req_123']]),
     );
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -437,11 +370,6 @@ describe('formatProviderHttpError', () => {
       `400 ${JSON.stringify(body)}`,
       new Headers(),
     );
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -449,53 +377,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).not.toContain(privatePrompt);
     expect(formatted.message).not.toContain('opaque credential');
     expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('does not promote a pretty-printed provider response body into the message', () => {
-    const privatePrompt = 'private pretty-printed request content';
-    const body = {
-      request: { prompt: privatePrompt },
-      authorization: 'opaque pretty-printed credential',
-    };
-    const reorderedBody = {
-      authorization: body.authorization,
-      request: body.request,
-    };
-    const error = taggedRawBodyError(
-      `400 ${JSON.stringify(reorderedBody, null, 2)}`,
-      body,
-      {
-        provider: 'openai',
-        kind: 'bad_request',
-        statusCode: 400,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
-    expect(formatted.message).not.toContain(privatePrompt);
-    expect(formatted.message).not.toContain('opaque pretty-printed credential');
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('retains a useful wrapper explanation when the raw body is plain text', () => {
-    const error = taggedRawBodyError(
-      'The provider rejected this request because the model is unavailable.',
-      'upstream plain-text response',
-      {
-        provider: 'openai',
-        kind: 'bad_request',
-        statusCode: 400,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The provider rejected this request because the model is unavailable.',
-    );
-    expect(formatted.rawErrorBody).toBe('upstream plain-text response');
   });
 
   it('does not promote a serialized plain-text response body into the message', () => {
@@ -506,101 +387,12 @@ describe('formatProviderHttpError', () => {
       'ignored by the OpenAI error constructor',
       new Headers(),
     );
-    attachSdkErrorMetadata(error, {
-      provider: 'openai',
-      kind: 'bad_request',
-      statusCode: 400,
-    });
 
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
     expect(formatted.message).not.toContain(privateBody);
     expect(formatted.rawErrorBody).toBe(privateBody);
-  });
-
-  it('formats cyclic diagnostic bodies without throwing', () => {
-    const body: { kind: string; self?: unknown } = { kind: 'provider-error' };
-    body.self = body;
-    const error = taggedRawBodyError(
-      'The provider failed while reporting {"kind":"provider-error"}.',
-      body,
-      {
-        provider: 'openai',
-        kind: 'bad_request',
-        statusCode: 400,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The provider failed while reporting {"kind":"provider-error"}.',
-    );
-    expect(formatted.rawErrorBody).toBe(body);
-  });
-
-  it('retains a wrapper explanation that does not serialize its response body', () => {
-    const body = { code: 'unsupported_response_format' };
-    const error = taggedRawBodyError(
-      'The selected model does not support this response format.',
-      body,
-      {
-        provider: 'openai',
-        kind: 'bad_request',
-        statusCode: 400,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The selected model does not support this response format.',
-    );
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('classifies OpenAI insufficient_quota bodies as credential exhaustion', () => {
-    const error = taggedRawBodyError(
-      'quota exhausted',
-      {
-        message: 'You exceeded your current quota.',
-        type: 'insufficient_quota',
-        code: 'insufficient_quota',
-      },
-      {
-        provider: 'openai',
-        kind: 'rate_limit',
-        statusCode: 429,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.provider).toBe('openai');
-    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('classifies OpenAI quota messages without code as credential exhaustion', () => {
-    const error = taggedRawBodyError(
-      'quota exhausted',
-      {
-        message:
-          'You exceeded your current quota, please check your plan and billing details.',
-      },
-      {
-        provider: 'openai',
-        kind: 'rate_limit',
-        statusCode: 429,
-      },
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.provider).toBe('openai');
-    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
-    expect(formatted.userRetryable).toBe(true);
   });
 
   it('classifies provider-attributed OpenAI quota bodies without SDK metadata', () => {
@@ -643,12 +435,8 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
-  it('formats tagged Anthropic user abort errors', () => {
+  it('formats Anthropic user abort errors', () => {
     const error = new AnthropicAPIUserAbortError();
-    attachSdkErrorMetadata(error, {
-      provider: 'anthropic',
-      kind: 'user_abort',
-    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -657,7 +445,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
-  it('formats tagged Anthropic HTTP errors with status-derived metadata', () => {
+  it('formats Anthropic HTTP errors with status-derived metadata', () => {
     const error = new AnthropicAuthenticationError(
       401,
       {
@@ -667,11 +455,6 @@ describe('formatProviderHttpError', () => {
       'invalid key',
       new Headers([['request-id', 'req_anthropic']]),
     );
-    attachSdkErrorMetadata(error, {
-      provider: 'anthropic',
-      kind: 'authentication',
-      statusCode: 401,
-    });
 
     const formatted = formatProviderHttpError(error);
 
@@ -682,67 +465,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).toContain('invalid key');
     expect(formatted.requestId).toBe('req_anthropic');
     expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('formats tagged Google API errors with inferred kind from status', () => {
-    const error = new GoogleApiError({
-      message: 'quota exceeded',
-      status: 429,
-    });
-    attachSdkErrorMetadata(error, {
-      provider: 'google',
-      kind: 'rate_limit',
-      statusCode: 429,
-    });
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.provider).toBe('google');
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.message).toBe(
-      'HTTP 429 Too Many Requests – quota exceeded',
-    );
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('does not cache a fresh normalization, so metadata attached afterward is still surfaced', () => {
-    const error = new Error('stream failed');
-    attachSdkErrorMetadata(error, {
-      provider: 'fixture',
-      kind: 'api_error',
-      statusCode: 500,
-    });
-
-    // Mirrors the Anthropic stream path: an early debug-log call formats the
-    // error before stream diagnostics are attached to it.
-    const before = normalizeProviderError(error);
-    expect(before.provider).toBe('fixture');
-    expect(before.statusCode).toBe(500);
-    expect(before.streamDiagnostics).toBeUndefined();
-
-    const diagnostics = {
-      thinkingChars: 0,
-      textChars: 12,
-      toolInputChars: 0,
-      blockTypesSeen: ['text'],
-      eventsProcessed: 7,
-      lastEventType: 'content_block_delta',
-      elapsedSecs: 1.2,
-      secsSinceLastEvent: 0.3,
-      finalized: false,
-      messageStartReceived: true,
-      messageStopReceived: false,
-      stopReason: null,
-      anthropicMessageId: null,
-    };
-    attachStreamDiagnostics(error, diagnostics);
-
-    // A fresh normalize must reflect the newly-attached diagnostics — i.e. the
-    // earlier call must NOT have cached a diagnostics-less ProviderError on the
-    // error (which would otherwise be returned here and lose the diagnostics).
-    const after = normalizeProviderError(error);
-    expect(after.streamDiagnostics).toEqual(diagnostics);
-    expect(after.statusCode).toBe(500);
   });
 });
 
@@ -759,7 +481,7 @@ describe('provider marker classification', () => {
 
 describe('isContextWindowError', () => {
   it('recognizes a TeXRA-internal throw via its typed marker, independent of wording', () => {
-    // ModelHandler.validateTokenLimits tags its own throw with
+    // run/modelFailure.ts tags its own throw with
     // attachContextWindowError() instead of relying on isContextWindowError
     // string-matching the exact message it owns.
     const err = new Error(
@@ -775,7 +497,7 @@ describe('isContextWindowError', () => {
 
   it('still recognizes the marker after the internal message wording changes', () => {
     // The marker decouples classification from message text: even if
-    // ModelHandler reworks its wording entirely, the marker still matches.
+    // the thrower reworks its wording entirely, the marker still matches.
     const err = new Error('Input is too large for this model to process.');
     attachContextWindowError(err);
 
@@ -846,53 +568,6 @@ describe('isContextWindowError', () => {
     );
 
     expect(isContextWindowError(err)).toBe(false);
-  });
-});
-
-describe('isPreviousResponseIdError', () => {
-  it("recognizes OpenAI's native param field naming previous_response_id", () => {
-    // The SDK flattens error.param from the JSON body onto the thrown
-    // APIError/BadRequestError instance — this identifies the invalid
-    // parameter directly, independent of how OpenAI phrases the message.
-    const err = new OpenAIBadRequestError(
-      400,
-      { param: 'previous_response_id', message: 'Some brand-new wording' },
-      'Some brand-new wording',
-      new Headers(),
-    );
-
-    expect(isPreviousResponseIdError(err)).toBe(true);
-  });
-
-  it('recognizes a nested error.param (e.g. a WebSocket error wrapper)', () => {
-    const err = new Error('response.create rejected') as Error & {
-      error?: unknown;
-    };
-    err.error = { param: 'previous_response_id', message: 'invalid' };
-
-    expect(isPreviousResponseIdError(err)).toBe(true);
-  });
-
-  it('falls back to message matching for a 404 with no param (missing resource, not an invalid parameter)', () => {
-    const err = new OpenAINotFoundError(
-      404,
-      { message: "Previous response with id 'resp_123' not found." },
-      "Previous response with id 'resp_123' not found.",
-      new Headers(),
-    );
-
-    expect(isPreviousResponseIdError(err)).toBe(true);
-  });
-
-  it('does not match an unrelated invalid-parameter error', () => {
-    const err = new OpenAIBadRequestError(
-      400,
-      { param: 'temperature', message: 'temperature must be between 0 and 2' },
-      'temperature must be between 0 and 2',
-      new Headers(),
-    );
-
-    expect(isPreviousResponseIdError(err)).toBe(false);
   });
 });
 

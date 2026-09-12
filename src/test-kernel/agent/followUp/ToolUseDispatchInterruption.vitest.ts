@@ -75,7 +75,7 @@ function testBoundModel(): BoundModel {
   return {
     modelId: 'test-model',
     config: buildTestModelConfig(),
-    compatibilityKey: 'ModelHandlerDeepSeek',
+    compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
     usageProvider: 'openai',

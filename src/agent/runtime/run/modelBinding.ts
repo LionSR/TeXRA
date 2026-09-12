@@ -15,12 +15,12 @@ import { Context, Effect, Option, type Scope } from 'effect';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
-  resolveModelHandlerCompatibilityKey,
+  resolveModelCompatibilityKey,
   resolveRouteCredential,
   resolveSubscriptionCredential,
   routeBearer,
   type RouteCredential,
-} from '@agent/runtime/ModelFactory';
+} from '@agent/runtime/modelRoutes';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
 import { googleInteractionsModel } from '@llm/googleInteractions';
 import { openaiChatModel } from '@llm/openaiChat';
@@ -42,7 +42,7 @@ import {
 } from '@model/kimiCodeSubscriptionRouting';
 import {
   AgentCategory,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type UsageProviderSchema,
   type UsageRoute,
 } from '@shared/schemas';
@@ -119,7 +119,7 @@ export interface BoundModel {
   /** Registry short name; the run's `modelId` on every snapshot. */
   readonly modelId: string;
   readonly config: ModelConfig;
-  readonly compatibilityKey: ModelHandlerCompatibilityKey;
+  readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
   readonly usageProvider: UsageProvider;
@@ -145,7 +145,7 @@ export interface BindModelInput {
   /** The run's process secret store and global state, from the launch. */
   readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
-  readonly compatibilityKey?: ModelHandlerCompatibilityKey | null;
+  readonly compatibilityKey?: ModelCompatibilityKey | null;
   readonly copilotRouteOverride?: CopilotRouteOverride;
   readonly agentCategory: AgentCategory;
   /** The route default's temperature; the request may override per turn. */
@@ -159,25 +159,23 @@ type Protocol = ModelConfiguration['protocol'];
 type HttpProtocol = Exclude<Protocol, 'vscode-lm'>;
 type HttpConfiguration = Exclude<ModelConfiguration, { protocol: 'vscode-lm' }>;
 
-const PROTOCOL_BY_KEY: Record<
-  ModelHandlerCompatibilityKey,
-  Protocol | 'validation'
-> = {
-  ModelHandlerValidation: 'validation',
-  ModelHandlerOpenAIResponse: 'openai-responses',
-  ModelHandlerOpenRouterNative: 'openrouter-chat',
-  ModelHandlerVscodeLm: 'vscode-lm',
-  ModelHandlerAnthropic: 'anthropic-messages',
-  ModelHandlerOpenAI: 'openai-chat',
-  ModelHandlerGoogleInteractions: 'google-interactions',
-  ModelHandlerDeepSeek: 'deepseek-chat',
-  ModelHandlerXAI: 'xai-chat',
-  ModelHandlerKimi: 'kimi-chat',
-  ModelHandlerDashScope: 'dashscope-chat',
-  ModelHandlerMiniMax: 'minimax-chat',
-  ModelHandlerGLM: 'glm-chat',
-  ModelHandlerMeta: 'openai-responses',
-};
+const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
+  {
+    Validation: 'validation',
+    OpenAIResponse: 'openai-responses',
+    OpenRouterNative: 'openrouter-chat',
+    VscodeLm: 'vscode-lm',
+    Anthropic: 'anthropic-messages',
+    OpenAI: 'openai-chat',
+    GoogleInteractions: 'google-interactions',
+    DeepSeek: 'deepseek-chat',
+    XAI: 'xai-chat',
+    Kimi: 'kimi-chat',
+    DashScope: 'dashscope-chat',
+    MiniMax: 'minimax-chat',
+    GLM: 'glm-chat',
+    Meta: 'openai-responses',
+  };
 
 const USAGE_PROVIDER_BY_MODEL_PROVIDER: Record<ModelProvider, UsageProvider> = {
   [ModelProvider.ANTHROPIC]: 'anthropic',
@@ -629,7 +627,7 @@ function backgroundCapable(configuration: HttpConfiguration): boolean {
  */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
-  compatibilityKey: ModelHandlerCompatibilityKey,
+  compatibilityKey: ModelCompatibilityKey,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const editor = yield* Effect.serviceOption(EditorModel);
   if (Option.isNone(editor)) {
@@ -713,7 +711,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     input.compatibilityKey ??
     (yield* Effect.try({
       try: () =>
-        resolveModelHandlerCompatibilityKey(
+        resolveModelCompatibilityKey(
           input.config,
           input.stores.globalState,
           useOpenRouter,
@@ -730,12 +728,9 @@ export const bindModel = Effect.fn('bindModel')(function* (
   if (protocol === 'vscode-lm') {
     return yield* bindEditorModel(input.config, compatibilityKey);
   }
-  const onOpenRouter = compatibilityKey === 'ModelHandlerOpenRouterNative';
+  const onOpenRouter = compatibilityKey === 'OpenRouterNative';
   let config = input.config;
-  if (
-    compatibilityKey === 'ModelHandlerKimi' &&
-    isKimiSubscriptionEligible(config)
-  ) {
+  if (compatibilityKey === 'Kimi' && isKimiSubscriptionEligible(config)) {
     config = yield* Effect.tryPromise({
       try: () =>
         input.inScope(async () =>

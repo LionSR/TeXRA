@@ -54,15 +54,6 @@ describe('isOpenRouterRoutingUnsupported', () => {
     expect(isOpenRouterRoutingUnsupported(modeSelectedConfig, true)).toBe(true);
   });
 
-  it('allows an explicitly direct model to preserve its mode', () => {
-    expect(
-      isOpenRouterRoutingUnsupported(
-        { ...modeSelectedConfig, forceDirectProvider: true },
-        true,
-      ),
-    ).toBe(false);
-  });
-
   it('does not silently change access routes for a Responses API model', () => {
     expect(
       isOpenRouterRoutingUnsupported(

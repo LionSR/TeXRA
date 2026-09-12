@@ -30,8 +30,8 @@ const binaryPath = process.env.TEXRA_CLI_RUN_VALIDATOR_BINARY?.trim()
   : defaultValidationBinaryPath;
 const validationRoot = path.dirname(path.dirname(binaryPath));
 const validationResourcesPath = path.join(validationRoot, 'resources');
-const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
-const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL';
+const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
 const validationBundleMarker = validationFlagContent.trim();
 const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';

@@ -66,7 +66,7 @@ function reflectionSnapshot(
       turn: 0,
       continuationIndex: 0,
       modelId: config.model,
-      modelHandlerCompatibilityKey: null,
+      modelCompatibilityKey: null,
       lastError: null,
       pendingRetry: null,
     },

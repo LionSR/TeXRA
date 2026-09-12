@@ -43,11 +43,11 @@ export async function tryResumeFromResumeData(
           session,
           recovery,
           isCancellationRequested,
-          executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+          executeWorkflow: (config, id, modelCompatibilityKey) =>
             runExecuteCommand({
               config,
               runId: id,
-              modelHandlerCompatibilityKey,
+              modelCompatibilityKey,
             }),
         },
         (failure) => {

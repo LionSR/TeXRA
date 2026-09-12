@@ -15,7 +15,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
-export interface OpenAIResponseProviderCapabilities {
+interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';
   readonly streaming: 'base' | 'forced';
   readonly webSocket: 'base' | 'global-toggle';
@@ -85,7 +85,7 @@ function isCodexSubscriptionEligible(model: ModelConfig): boolean {
 }
 
 /** Resolve the active ChatGPT-subscription (Codex) provider profile. */
-export function resolveCodexSubscriptionProfile({
+function resolveCodexSubscriptionProfile({
   model,
   useOpenRouter,
 }: ProviderCapabilityKey): ProviderCapabilityProfile | null {

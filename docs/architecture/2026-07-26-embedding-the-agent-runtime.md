@@ -77,13 +77,10 @@ injections are present either way.
 
 ### Step 2 — credential resolution
 
-There is no model-access bootstrap call. Production model-client constructors
-call `ModelHandler.resolveClientCredential` directly
-(`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
-`src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
-`src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
-`src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
-`src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`).
+There is no model-access bootstrap call. A run binds its model through
+`src/agent/runtime/run/modelBinding.ts`, which resolves the route's credential
+in `src/agent/runtime/modelRoutes.ts` (`resolveRouteCredential` for API keys,
+`resolveSubscriptionCredential` for the ChatGPT and Grok subscriptions).
 
 Credential resolution uses the caller's own provider API keys or subscription
 credentials only; there is no server-side model access to configure. A

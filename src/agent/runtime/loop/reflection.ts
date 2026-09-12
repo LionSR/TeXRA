@@ -339,7 +339,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     turn: 0,
     continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
+    modelCompatibilityKey: bound.compatibilityKey,
     lastError: null,
     pendingRetry: null,
     messages: [],
@@ -375,7 +375,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         round: 0,
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(),
       }),

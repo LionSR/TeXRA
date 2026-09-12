@@ -56,9 +56,7 @@ function hasConfigurableReasoningEffort(
 
 /**
  * Whether the model exposes a user-selectable reasoning level. This is the one
- * definition behind both the handler getter (`ModelHandler
- * .supportsReasoningLevelOverride`, read on every handler construction) and the
- * model choices, so the controls and the runtime share the same definition.
+ * definition behind both the model binding and the model choices, so the controls and the runtime share the same definition.
  *
  * DeepSeek is the extra term: its models declare `supportsReasoning` without a
  * configurable effort range, yet still honour a level override.

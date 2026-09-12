@@ -55,8 +55,7 @@ Things the tree won't tell you:
   `architecture-edges`, and `effect-migration` (per-file allowlists of
   shrink-only counts: `platform()`, `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
-  `effect`-importing files, and imports reaching into
-  `src/agent/modelHandlers/` from outside it; it admits a new `Effect.run*`
+  `effect`-importing files; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` or
   `src/tools/**/*Tool.ts`, R1's three boundary kinds, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
@@ -87,8 +86,7 @@ Things the tree won't tell you:
 - **`src/common/webview/` does not exist.** Webview base classes are in
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
-  surface. Import the file that defines the symbol — this includes model
-  handlers (`src/agent/modelHandlers/`, see that directory's `README.md`).
+  surface. Import the file that defines the symbol.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
@@ -184,9 +182,9 @@ that calls the `packages/llm` `Model`. `core/flows/` keeps only the one helper
 both families use (`toolCallParsing`). `implementations/flows/reflection/output/` is the reflection
 output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
 filename: it is one linear async function (`runAgentCreator`) with a single
-production caller. `modelHandlers/` abstracts provider APIs for the helper
-paths only (`helperModel`, `agentCreatorFlow`, `userVars`); the run loop never
-calls it. Agents are configured by YAML in
+production caller. Provider APIs are reached only through the `packages/llm`
+`Model` that `runtime/run/modelBinding.ts` binds; the helper paths
+(`helperModel`, `agentCreatorFlow`) bind through that same route. Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.
 

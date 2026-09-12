@@ -38,7 +38,7 @@ export interface RunAgentOptions extends Pick<
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
   | 'tools'
-  | 'modelHandlerCompatibilityKey'
+  | 'modelCompatibilityKey'
   | 'copilotRouteOverride'
   | 'onRun'
   | 'onRunResolved'

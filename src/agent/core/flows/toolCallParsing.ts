@@ -9,7 +9,6 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -75,7 +74,7 @@ export function partitionDuplicateCalls<
 }
 
 /** Parse tool input, handling JSON strings and other formats from model providers. */
-export function parseToolInput(
+function parseToolInput(
   raw: unknown,
   callId: string,
   logger: AgentTrace,
@@ -99,21 +98,6 @@ export function parseToolInput(
     return raw;
   }
   return parsed.success;
-}
-
-/**
- * Same as {@link parseToolInput}, but always returns a plain object — for
- * handlers (e.g. streamed argument buffers) whose tool-call arguments must
- * be a Record rather than a possibly-raw string.
- */
-export function parseToolInputAsObject(
-  raw: string,
-  callId: string,
-  logger: AgentTrace,
-): Record<string, unknown> {
-  if (!raw) return {};
-  const parsed = parseToolInput(raw, callId, logger);
-  return isObject(parsed) ? parsed : {};
 }
 
 /** Normalize a tool call error into a user-friendly message with optional diagnostics. */

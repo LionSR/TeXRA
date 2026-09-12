@@ -104,7 +104,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     turn: 0,
     continuationIndex: 0,
     modelId: 'gpt54',
-    modelHandlerCompatibilityKey: null,
+    modelCompatibilityKey: null,
     lastError: null,
     pendingRetry: null,
   },
@@ -220,7 +220,7 @@ describe('runResumeCommand', () => {
       type: 'workflow',
       agentConfig: WORKFLOW_CONFIG,
       runId: RUN_ID,
-      modelHandlerCompatibilityKey: 'anthropic',
+      modelCompatibilityKey: 'anthropic',
     });
 
     // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
@@ -232,7 +232,7 @@ describe('runResumeCommand', () => {
       expect.any(Object),
       expect.objectContaining({
         runId: RUN_ID,
-        modelHandlerCompatibilityKey: 'anthropic',
+        modelCompatibilityKey: 'anthropic',
       }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');

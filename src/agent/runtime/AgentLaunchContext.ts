@@ -38,14 +38,14 @@ import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
   type AttachedMemoryMiss,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
   type UserVariableChannels,
 } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
-  ModelHandlerCompatibilityKeySchema,
+  ModelCompatibilityKeySchema,
   RUN_OUTCOME,
   RUN_PHASE,
 } from '@shared/schemas';
@@ -89,14 +89,14 @@ export interface AgentLaunchContext {
   /**
    * The registry config of the launch model. The run's `AgentRun` service
    * binds it (or the model a resumed run's snapshot names) under the route
-   * `modelHandlerCompatibilityKey` records; a mid-run switch rebinds there.
+   * `modelCompatibilityKey` records; a mid-run switch rebinds there.
    */
   readonly modelConfig: ModelConfig;
   /**
    * The conversation format a resumed run persisted, or null for a fresh run
    * whose route the binding resolves from today's settings.
    */
-  readonly modelHandlerCompatibilityKey: ModelHandlerCompatibilityKey | null;
+  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   /** Immutable per-run tool policy; the loop reads it instead of the ambient RunContext. */
   readonly toolPolicy: ToolPolicy;
   /**
@@ -169,7 +169,7 @@ interface AgentLaunchInput {
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
   /** Cancel launch preparation and the resulting live run. */
@@ -280,12 +280,12 @@ async function validateModelExists(
  * `flow.snapshot` (the one indexed read); a run with no snapshot has no
  * persisted format and binds today's default route.
  */
-const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
-  'inferLaunchModelHandlerCompatibilityKey',
+const inferLaunchModelCompatibilityKey = Effect.fn(
+  'inferLaunchModelCompatibilityKey',
 )(function* (runId: RunId, session: SessionHandle) {
   const snapshot = yield* session.ledger.latestSnapshot(runId);
   if (snapshot === null) return undefined;
-  return snapshot.payload.runtime.modelHandlerCompatibilityKey ?? undefined;
+  return snapshot.payload.runtime.modelCompatibilityKey ?? undefined;
 });
 
 /**
@@ -438,9 +438,9 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const session = input.session;
-    const modelHandlerCompatibilityKey =
-      input.modelHandlerCompatibilityKey ??
-      (yield* inferLaunchModelHandlerCompatibilityKey(runId, session)) ??
+    const modelCompatibilityKey =
+      input.modelCompatibilityKey ??
+      (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
       null;
     yield* failIfAborted(input.signal);
     // The run's model is bound from the process stores the launch already
@@ -603,7 +603,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       setting,
       prompt,
       modelConfig,
-      modelHandlerCompatibilityKey,
+      modelCompatibilityKey,
       // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
       // the nested tool-name array gets its own frozen copy rather than
       // aliasing the caller's (still mutable) array.

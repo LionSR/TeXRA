@@ -41,9 +41,8 @@ const sdkErrorMetadata = createErrorMetadata<SdkErrorMetadata>(
   isSdkErrorMetadata,
 );
 
-/** Tags SDK errors at provider boundaries so common error formatting does not
- *  need to import SDK classes or inspect SDK-specific prototypes. */
-export const attachSdkErrorMetadata = sdkErrorMetadata.attach;
+/** Reads the SDK error metadata a provider boundary tagged, so common error
+ *  formatting does not import SDK classes or inspect SDK-specific prototypes. */
 export const detectSdkErrorMetadata = sdkErrorMetadata.detect;
 
 const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
@@ -51,8 +50,6 @@ const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
   (v): v is StreamDiagnostics => isObject(v) && 'eventsProcessed' in v,
 );
 
-/** Attaches stream diagnostics to an error before rethrowing. */
-export const attachStreamDiagnostics = streamDiagnosticsMetadata.attach;
 export const detectStreamDiagnostics = streamDiagnosticsMetadata.detect;
 
 const partialTextMetadata = createErrorMetadata<string>(
@@ -60,13 +57,7 @@ const partialTextMetadata = createErrorMetadata<string>(
   (v): v is string => isString(v) && v.length > 0,
 );
 
-/** Attaches partial text (generated before a stream failure) to an error.
- *  Lets the caller surface the partial content to the user or use it as the
- *  basis for a continuation prompt on retry. No-op if the text is empty. */
-export function attachPartialText(err: unknown, text: string): void {
-  if (text) partialTextMetadata.attach(err, text);
-}
-
+/** Partial text generated before a stream failure, when the thrower kept it. */
 export const detectPartialText = partialTextMetadata.detect;
 
 /** Presence-only marker: attached at a throw site, detected anywhere in the
@@ -90,7 +81,7 @@ const contextWindowErrorMarker = createErrorMarker('contextWindowError');
 
 /**
  * Marks an error as a TeXRA-internal context-window violation at the throw
- * site (e.g. `ModelHandler.validateTokenLimits`). Lets `isContextWindowError`
+ * site (`run/modelFailure.ts`, `AgentRunLifecycle.ts`). Lets `isContextWindowError`
  * recognize the internal case without string-matching a message whose exact
  * wording the thrower owns — third-party provider error text is still
  * matched via `CONTEXT_WINDOW_PATTERNS`.
@@ -100,17 +91,16 @@ export const hasContextWindowErrorMarker = contextWindowErrorMarker.has;
 
 const missingApiKeyErrorMarker = createErrorMarker('missingApiKeyError');
 
-/** Marks "no usable credential for this provider" at its one throw site,
- *  `ModelHandler.fetchApiKeyOrThrow`. `classifyAgentError` reads this instead
- *  of matching the per-provider wording that method owns; the cause-chain
+/** Marks "no usable credential for this provider" at its throw site,
+ *  `resolveRouteCredential` in `runtime/modelRoutes.ts`. `classifyAgentError`
+ *  reads this instead of matching the per-provider wording that function owns; the cause-chain
  *  lookup keeps it reachable through any later rethrow. */
 export const attachMissingApiKeyError = missingApiKeyErrorMarker.attach;
 export const hasMissingApiKeyErrorMarker = missingApiKeyErrorMarker.has;
 
 const manualRetryOnlyErrorMarker = createErrorMarker('manualRetryOnlyError');
 
-/** Marks a user-retryable failure that must not repeat automatically. */
-export const attachManualRetryOnlyError = manualRetryOnlyErrorMarker.attach;
+/** A user-retryable failure that must not repeat automatically. */
 export const hasManualRetryOnlyErrorMarker = manualRetryOnlyErrorMarker.has;
 
 const errorPresentationClaimedMarker = createErrorMarker(

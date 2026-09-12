@@ -244,7 +244,7 @@ function scriptedBoundModel(
   return {
     modelId: config.name,
     config,
-    compatibilityKey: 'ModelHandlerOpenAI',
+    compatibilityKey: 'OpenAI',
     model,
     origin,
     usageProvider: 'openai',

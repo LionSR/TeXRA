@@ -5,7 +5,7 @@ import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import OpenAI from 'openai';
 
-import { resolveRouteCredential } from '@agent/runtime/ModelFactory';
+import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLog } from '@logger/logUtils';

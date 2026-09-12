@@ -205,7 +205,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly categoryMismatchMessage: string;
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
-      readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
+      readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const stores = { secrets: yield* Secrets, globalState: yield* AppState };
@@ -266,7 +266,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       });
     const run = yield* executeCliConfig(config, runContext, {
       runId: options.runId,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      modelCompatibilityKey: options.modelCompatibilityKey,
       onInterruptedRunFinalized: recoveryInputIsDurable
         ? (runId) => writeResumeHint(runId, true)
         : undefined,

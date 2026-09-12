@@ -13,7 +13,7 @@ import {
   resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
-import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
@@ -359,10 +359,7 @@ describe('computeModelOptionsData availability', () => {
         ([, config]) =>
           !config.retired &&
           !config.deprecated &&
-          resolveCodexSubscriptionProfile({
-            model: config,
-            useOpenRouter: false,
-          }) !== null,
+          resolveCodexSubscriptionCapabilities(config, false) !== null,
       )
       .map(([model]) => model);
 

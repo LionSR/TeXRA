@@ -63,7 +63,7 @@ async function isGlmCodingPlanActive(
 /**
  * Whether the model currently routes through the Kimi Code coding endpoint
  * (Moonshot coding subscription, authenticated by the Kimi Code API key).
- * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
+ * Mirrors the `modelRoutes` route facts: registry eligibility, the OpenRouter
  * toggle, a stored key, and the "Prefer Kimi Code" switch.
  */
 async function isKimiCodeSubscriptionActive(

@@ -503,7 +503,7 @@ describe('completedRunArchive facade', () => {
                 turn: 0,
                 continuationIndex: 0,
                 modelId: config.model,
-                modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+                modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,
                 pendingRetry: null,
               },

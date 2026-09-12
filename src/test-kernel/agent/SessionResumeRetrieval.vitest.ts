@@ -19,7 +19,7 @@ import {
   aggregateId,
   AgentCategory,
   type FlowSnapshotPayload,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -40,19 +40,18 @@ const WORKFLOW_CONFIG: AgentConfig = {
   ...CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
-const COMPATIBILITY_KEY: ModelHandlerCompatibilityKey =
-  'ModelHandlerOpenAIResponse';
+const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
 
 const runtimeOf = (
   modelId: string,
-  compatibilityKey: ModelHandlerCompatibilityKey | null,
+  compatibilityKey: ModelCompatibilityKey | null,
 ): Extract<FlowSnapshotPayload, { family: 'toolUse' }>['runtime'] => ({
   phase: 'initial',
   round: 0,
   turn: 0,
   continuationIndex: 0,
   modelId,
-  modelHandlerCompatibilityKey: compatibilityKey,
+  modelCompatibilityKey: compatibilityKey,
   lastError: null,
   pendingRetry: null,
 });
@@ -61,7 +60,7 @@ const references = { pendingIntents: [], pendingResponse: null } as const;
 
 function toolUseSnapshot(
   modelId: string,
-  compatibilityKey: ModelHandlerCompatibilityKey | null = COMPATIBILITY_KEY,
+  compatibilityKey: ModelCompatibilityKey | null = COMPATIBILITY_KEY,
 ): FlowSnapshotPayload {
   return {
     family: 'toolUse',
@@ -126,7 +125,7 @@ describe('retrieveSessionResumeData', () => {
       type: 'toolUse',
       runId,
       agentConfig: { model: 'gpt55' },
-      modelHandlerCompatibilityKey: COMPATIBILITY_KEY,
+      modelCompatibilityKey: COMPATIBILITY_KEY,
     });
   });
 
@@ -136,7 +135,7 @@ describe('retrieveSessionResumeData', () => {
 
     await expect(
       Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
-    ).resolves.toMatchObject({ modelHandlerCompatibilityKey: null });
+    ).resolves.toMatchObject({ modelCompatibilityKey: null });
   });
 
   it('reports a run with no snapshot as nothing to resume', async () => {

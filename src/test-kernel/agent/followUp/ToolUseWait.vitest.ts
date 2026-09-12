@@ -108,7 +108,7 @@ function testBoundModel(supportsVision: boolean): BoundModel {
   return {
     modelId: 'test-model',
     config: buildTestModelConfig({ capabilities: { supportsVision } }),
-    compatibilityKey: 'ModelHandlerDeepSeek',
+    compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
     usageProvider: 'openai',
@@ -405,7 +405,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       turn: 0,
       continuationIndex: 0,
       modelId: 'test-model',
-      modelHandlerCompatibilityKey: 'ModelHandlerDeepSeek',
+      modelCompatibilityKey: 'DeepSeek',
       lastError: null,
       pendingRetry: null,
       messages: [],

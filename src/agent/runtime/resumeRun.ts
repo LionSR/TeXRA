@@ -28,7 +28,7 @@ import {
   AgentCategory,
   RUN_PHASE,
   RUN_SUBSTATE,
-  type ModelHandlerCompatibilityKey,
+  type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
@@ -124,8 +124,7 @@ export interface ResumeRunOptions extends Pick<
   readonly executeWorkflow: (
     config: AgentConfig,
     runId: RunId,
-    modelHandlerCompatibilityKey:
-      ModelHandlerCompatibilityKey | null | undefined,
+    modelCompatibilityKey: ModelCompatibilityKey | null | undefined,
   ) => Promise<void>;
 }
 
@@ -294,7 +293,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
           options.executeWorkflow(
             resume.agentConfig,
             resume.runId,
-            resume.modelHandlerCompatibilityKey,
+            resume.modelCompatibilityKey,
           ),
         catch: ensureError,
       }),

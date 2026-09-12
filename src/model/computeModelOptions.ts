@@ -269,7 +269,7 @@ interface ModelAvailabilityContext {
   /**
    * The Kimi Code route facts in their canonical shape, so this module feeds
    * the shared resolver ({@link kimiCodeEffectiveConfig}) the same assembly
-   * ModelFactory's dispatch uses instead of a hand-renamed copy.
+   * `modelRoutes` uses instead of a hand-renamed copy.
    */
   kimiRouting: KimiCodeRoutingFacts;
   /** The process global state the picker's persisted choices come from. */
@@ -578,7 +578,7 @@ async function buildModelOptionData(
       availabilityStatus('unknown-model'),
     );
   }
-  // Mirror ModelFactory: a dual-backend Kimi model routed to the coding
+  // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
   // endpoint runs with the synthesized runtime config, so the row reflects it.
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
 

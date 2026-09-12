@@ -55,7 +55,7 @@ function validationLaunch(
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
     modelConfig: buildTestModelConfig(),
-    modelHandlerCompatibilityKey: 'ModelHandlerValidation',
+    modelCompatibilityKey: 'Validation',
   };
 }
 

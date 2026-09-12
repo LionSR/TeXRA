@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { ExhaustionReasonSchema, type ExhaustionReason } from '@shared/schemas';
 import { isFiniteNumber, isObject, isString } from '@utils/core';
 
-export type SdkErrorKind =
+type SdkErrorKind =
   | 'connection_timeout'
   | 'connection'
   | 'user_abort'
@@ -119,22 +119,6 @@ export const SDK_ERRORS: readonly SdkErrorEntry[] = [
 export const SDK_ERRORS_BY_KIND = new Map(
   SDK_ERRORS.map((entry) => [entry.kind, entry] as const),
 );
-
-const SDK_ERROR_KIND_BY_FALLBACK_STATUS = new Map(
-  SDK_ERRORS.flatMap((entry) =>
-    entry.fallbackStatusCode === undefined
-      ? []
-      : [[entry.fallbackStatusCode, entry.kind] as const],
-  ),
-);
-
-/** Maps known provider HTTP status codes to the shared SDK error kind table. */
-export function sdkErrorKindFromStatusCode(
-  statusCode: number | undefined,
-): SdkErrorKind {
-  if (statusCode === undefined) return 'api_error';
-  return SDK_ERROR_KIND_BY_FALLBACK_STATUS.get(statusCode) ?? 'api_error';
-}
 
 /** Server errors (5xx), conflicts (409), rate limits (429), and request timeouts
  *  (408) are retryable — these are transient. Other client errors (4xx) are

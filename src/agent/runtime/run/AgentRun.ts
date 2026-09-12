@@ -239,8 +239,8 @@ export const agentRunLayer = (
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey =
         persisted !== null
-          ? persisted.modelHandlerCompatibilityKey
-          : ctx.modelHandlerCompatibilityKey;
+          ? persisted.modelCompatibilityKey
+          : ctx.modelCompatibilityKey;
       const modelConfig =
         modelId === config.model
           ? ctx.modelConfig

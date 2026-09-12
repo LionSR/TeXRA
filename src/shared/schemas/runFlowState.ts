@@ -96,7 +96,6 @@ const ThinkingBlockSchema = z.object({
   signature: z.string().optional(),
   data: z.string().optional(),
 });
-export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
 /** Response assembly state. */
 const ResponseAssemblyStateSchema = z.object({
@@ -294,27 +293,24 @@ export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 
 // ------------------------------------------------- handler compatibility
 
-const MODEL_HANDLER_COMPATIBILITY_KEYS = [
-  'ModelHandlerValidation',
-  'ModelHandlerOpenAIResponse',
-  'ModelHandlerOpenRouterNative',
-  'ModelHandlerVscodeLm',
-  'ModelHandlerAnthropic',
-  'ModelHandlerOpenAI',
-  'ModelHandlerGoogleInteractions',
-  'ModelHandlerDeepSeek',
-  'ModelHandlerXAI',
-  'ModelHandlerKimi',
-  'ModelHandlerDashScope',
-  'ModelHandlerMiniMax',
-  'ModelHandlerGLM',
-  'ModelHandlerMeta',
+const MODEL_COMPATIBILITY_KEYS = [
+  'Validation',
+  'OpenAIResponse',
+  'OpenRouterNative',
+  'VscodeLm',
+  'Anthropic',
+  'OpenAI',
+  'GoogleInteractions',
+  'DeepSeek',
+  'XAI',
+  'Kimi',
+  'DashScope',
+  'MiniMax',
+  'GLM',
+  'Meta',
 ] as const;
-export type ModelHandlerCompatibilityKey =
-  (typeof MODEL_HANDLER_COMPATIBILITY_KEYS)[number];
-export const ModelHandlerCompatibilityKeySchema = z.enum(
-  MODEL_HANDLER_COMPATIBILITY_KEYS,
-);
+export type ModelCompatibilityKey = (typeof MODEL_COMPATIBILITY_KEYS)[number];
+export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
 
 // -------------------------------------------------------- family cores
 
@@ -343,8 +339,8 @@ export const ToolUseSnapshotStateSchema = z.object({
    */
   modelId: z.string().optional(),
   /** Provider-message format of the persisted messages. Absent for an
-   *  untagged handler (see `modelHandlersShareConversationFormat`). */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
+   *  untagged run. */
+  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
   shouldSkipCycle: z.boolean(),
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
@@ -374,8 +370,8 @@ export const ReflectionSnapshotStateSchema = z.object({
   endTurn: z.boolean(),
 
   /** Provider-message format used by the persisted `context` messages.
-   *  Absent for an untagged handler. */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
+   *  Absent for an untagged run. */
+  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
 
   /** One-shot compile-failure feedback injected into the next round prompt. */
   compileFailureContext: z.string().optional(),

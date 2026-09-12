@@ -19,7 +19,7 @@ interface DesktopAgentLaunchContext {
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
   | 'copilotRouteOverride'
-  | 'modelHandlerCompatibilityKey'
+  | 'modelCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'
   | 'onRunResolved'
@@ -39,7 +39,7 @@ export async function launchDesktopAgent(
     runAgent(request, {
       session: context.session,
       runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      modelCompatibilityKey: options.modelCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
       ...(options.preferHelperModel && { preferHelperModel: true }),
       onRun: options.onRun,

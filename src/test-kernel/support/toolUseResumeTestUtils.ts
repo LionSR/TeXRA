@@ -18,7 +18,7 @@ export function createToolUseResumeData(
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
-    modelHandlerCompatibilityKey: null,
+    modelCompatibilityKey: null,
     ...overrides,
   };
 }

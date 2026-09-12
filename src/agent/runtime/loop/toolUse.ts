@@ -26,7 +26,7 @@ import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuati
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { resolveModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage } from '@agent/trace';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
@@ -147,9 +147,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const previous = toolUseFlowState(state);
     return {
       modelId: state.modelId ?? previous?.modelId,
-      ...(state.modelHandlerCompatibilityKey === null
+      ...(state.modelCompatibilityKey === null
         ? {}
-        : { modelHandlerCompatibilityKey: state.modelHandlerCompatibilityKey }),
+        : { modelCompatibilityKey: state.modelCompatibilityKey }),
       shouldSkipCycle: false,
       stateSlices: {
         runStateSnapshot: {
@@ -216,7 +216,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (current.modelId === model) return undefined;
       const nextConfig = getRuntimeModelConfig(model);
       if (!nextConfig) return `Model ${model} is not registered`;
-      const nextKey = resolveModelHandlerCompatibilityKey(
+      const nextKey = resolveModelCompatibilityKey(
         nextConfig,
         run.stores.globalState,
       );
@@ -297,7 +297,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           phase: state.phase ?? 'model.ready',
           runtime: {
             modelId: next.modelId,
-            modelHandlerCompatibilityKey: next.compatibilityKey,
+            modelCompatibilityKey: next.compatibilityKey,
           },
         }),
       ]);
@@ -388,7 +388,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
-          modelHandlerCompatibilityKey: bound.compatibilityKey,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
         state: flowState(fresh(bound)),
       }),
@@ -410,7 +410,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     turn: 0,
     continuationIndex: 0,
     modelId: bound.modelId,
-    modelHandlerCompatibilityKey: bound.compatibilityKey,
+    modelCompatibilityKey: bound.compatibilityKey,
     lastError: null,
     pendingRetry: null,
     messages: [],

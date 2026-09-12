@@ -36,12 +36,12 @@ import {
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { ModelHandlerCompatibilityKey, UsageRoute } from '@shared/schemas';
+import type { ModelCompatibilityKey, UsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 
-const log = createLog('ModelFactory');
+const log = createLog('modelRoutes');
 
 /**
  * The Grok subscription's OAuth token is accepted by xAI's own API surface
@@ -53,20 +53,20 @@ const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
 // A new enum value in llm-zoo without an entry here will fail typecheck.
 const PROVIDER_COMPATIBILITY_KEYS: Record<
   ModelProvider,
-  ModelHandlerCompatibilityKey
+  ModelCompatibilityKey
 > = {
-  [ModelProvider.ANTHROPIC]: 'ModelHandlerAnthropic',
-  [ModelProvider.OPENAI]: 'ModelHandlerOpenAI',
-  [ModelProvider.GOOGLE]: 'ModelHandlerGoogleInteractions',
-  [ModelProvider.DEEPSEEK]: 'ModelHandlerDeepSeek',
-  [ModelProvider.XAI]: 'ModelHandlerXAI',
-  [ModelProvider.MOONSHOT]: 'ModelHandlerKimi',
-  [ModelProvider.DASHSCOPE]: 'ModelHandlerDashScope',
-  [ModelProvider.MINIMAX]: 'ModelHandlerMiniMax',
-  [ModelProvider.GLM]: 'ModelHandlerGLM',
-  [ModelProvider.META]: 'ModelHandlerMeta',
-  [ModelProvider.OTHERS]: 'ModelHandlerOpenRouterNative',
-  [ModelProvider.COPILOT]: 'ModelHandlerVscodeLm',
+  [ModelProvider.ANTHROPIC]: 'Anthropic',
+  [ModelProvider.OPENAI]: 'OpenAI',
+  [ModelProvider.GOOGLE]: 'GoogleInteractions',
+  [ModelProvider.DEEPSEEK]: 'DeepSeek',
+  [ModelProvider.XAI]: 'XAI',
+  [ModelProvider.MOONSHOT]: 'Kimi',
+  [ModelProvider.DASHSCOPE]: 'DashScope',
+  [ModelProvider.MINIMAX]: 'MiniMax',
+  [ModelProvider.GLM]: 'GLM',
+  [ModelProvider.META]: 'Meta',
+  [ModelProvider.OTHERS]: 'OpenRouterNative',
+  [ModelProvider.COPILOT]: 'VscodeLm',
 };
 
 /** Check if OpenAI Responses API should be used for this config. */
@@ -310,14 +310,14 @@ function applyShortModelNamePreference(
 }
 
 /** Returns the conversation-history format used by the handler for this model. */
-export function resolveModelHandlerCompatibilityKey(
+export function resolveModelCompatibilityKey(
   originalConfig: ModelConfig,
   globalState: StateStore,
   useOpenRouter = getUseOpenRouter(),
   copilotRouteOverride?: CopilotRouteOverride,
-): ModelHandlerCompatibilityKey | undefined {
+): ModelCompatibilityKey | undefined {
   if (shouldUseInternalValidationModel()) {
-    return 'ModelHandlerValidation';
+    return 'Validation';
   }
 
   // Editor-supplied models cannot be proxied through OpenRouter. Both Copilot
@@ -335,10 +335,10 @@ export function resolveModelHandlerCompatibilityKey(
       globalState,
     );
     if (unavailableReason) throw new AgentError(unavailableReason);
-    return 'ModelHandlerVscodeLm';
+    return 'VscodeLm';
   }
   if (originalConfig.provider === ModelProvider.COPILOT) {
-    return 'ModelHandlerVscodeLm';
+    return 'VscodeLm';
   }
 
   // Re-application is identity on an already-shortened config, so the live
@@ -348,10 +348,10 @@ export function resolveModelHandlerCompatibilityKey(
     getPreferShortModelNames(globalState),
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
-    return 'ModelHandlerOpenAIResponse';
+    return 'OpenAIResponse';
   }
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return 'ModelHandlerOpenRouterNative';
+    return 'OpenRouterNative';
   }
   return providerCompatibilityKey(config.provider);
 }
@@ -364,7 +364,7 @@ export function resolveModelHandlerCompatibilityKey(
  */
 function providerCompatibilityKey(
   provider: ModelProvider,
-): ModelHandlerCompatibilityKey | undefined {
+): ModelCompatibilityKey | undefined {
   const key = PROVIDER_COMPATIBILITY_KEYS[provider];
   if (!key) {
     log.warn(`No model route is registered for provider ${provider}`);

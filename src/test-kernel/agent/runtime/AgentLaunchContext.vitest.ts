@@ -278,7 +278,7 @@ describe('AgentLaunchContext', () => {
           runId: EXECUTION_ID,
           session,
           resumed: true,
-          modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+          modelCompatibilityKey: 'OpenAIResponse',
         }),
       ).rejects.toThrow('trace failed');
       expect(
@@ -366,7 +366,7 @@ describe('AgentLaunchContext', () => {
         config,
         runId: EXECUTION_ID,
         session,
-        modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+        modelCompatibilityKey: 'OpenAIResponse',
       });
       try {
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
@@ -447,7 +447,7 @@ describe('AgentLaunchContext', () => {
           session,
           resumed: true,
           suppressErrorNotification: true,
-          modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+          modelCompatibilityKey: 'OpenAIResponse',
         }),
       ).rejects.toBe(failure);
 

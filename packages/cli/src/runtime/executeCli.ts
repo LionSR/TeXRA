@@ -77,7 +77,7 @@ interface CliExecuteOptions {
    *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
-  readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
+  readonly modelCompatibilityKey?: RunAgentOptions['modelCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
@@ -527,7 +527,7 @@ export function executeCliRequest(
                     tryCommitWorkflowOutputPublication,
                   ),
                 ),
-        modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+        modelCompatibilityKey: options.modelCompatibilityKey,
         launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();

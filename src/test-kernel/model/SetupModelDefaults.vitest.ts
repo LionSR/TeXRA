@@ -6,7 +6,7 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
+import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -16,7 +16,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
  * never probes a dead model and never swaps one silently at runtime.
  */
 describe('SETUP_MODEL_BY_PROVIDER', () => {
-  setupPlatform();
+  setupPlatform({ config: { 'texra.chatgptCodex.preferSubscription': true } });
 
   it('pins every provider to a live, non-deprecated, directly reachable model', () => {
     for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
@@ -42,10 +42,10 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     // Codex-eligible model ids.
     assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
     assert.ok(
-      resolveCodexSubscriptionProfile({
-        model: MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
-        useOpenRouter: false,
-      }),
+      resolveCodexSubscriptionCapabilities(
+        MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
+        false,
+      ),
     );
   });
 

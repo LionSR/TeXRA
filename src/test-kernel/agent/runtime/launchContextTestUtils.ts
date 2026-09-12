@@ -94,7 +94,7 @@ export function createTestLaunchContext({
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelConfig: buildTestModelConfig(),
-    modelHandlerCompatibilityKey: null,
+    modelCompatibilityKey: null,
     interrupt: () => {
       Deferred.doneUnsafe(stopped, Effect.void);
     },
