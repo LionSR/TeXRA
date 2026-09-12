@@ -1558,14 +1558,12 @@ describe('headless delegation', () => {
           {
             value: 'deepseekT',
             label: 'DeepSeek',
-            disabled: false,
-            requiresKey: false,
+            availability: 'provider-key',
           },
           {
             value: 'gpt5',
             label: 'GPT-5',
-            disabled: false,
-            requiresKey: false,
+            availability: 'provider-key',
           },
         ]);
 
