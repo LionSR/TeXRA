@@ -570,6 +570,7 @@ export class ProgressApp extends LitElement {
                 <div class="active-label">Active now</div>
                 <run-tabs
                   activeOnly
+                  topLevelOnly
                   .view=${view}
                   .surface=${surface}
                 ></run-tabs>
