@@ -1,4 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+import { subset } from 'semver';
 import stripAnsi from 'strip-ansi';
 
 import {
@@ -13,6 +19,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',
@@ -193,8 +200,10 @@ describe('CLI doctor', () => {
       ['21.9.9', 'fail'],
       ['22.9.0', 'fail'],
       ['22.15.0', 'fail'],
-      ['22.16.0', 'pass'],
-      ['v22.16.0', 'pass'],
+      ['22.16.0', 'fail'],
+      ['22.18.0', 'fail'],
+      ['22.19.0', 'pass'],
+      ['v22.19.0', 'pass'],
       ['23.0.0', 'fail'],
       ['23.11.0', 'fail'],
       ['24.0.0', 'pass'],
@@ -210,8 +219,34 @@ describe('CLI doctor', () => {
     const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
     expect(checkById(unsupportedRelease, 'node')).toMatchObject({
       message: 'Node 21.0.0 is outside the supported range.',
-      hint: 'Install Node ^22.16.0 || >=24.0.0 before running TeXRA CLI.',
+      hint: 'Install Node ^22.19.0 || >=24.0.0 before running TeXRA CLI.',
     });
+  });
+
+  it('keeps the supported Node range inside the bundled undici requirement', () => {
+    const require = createRequire(import.meta.url);
+    const undiciNodeRange = (
+      require('undici/package.json') as { engines: { node: string } }
+    ).engines.node;
+    const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
+    const publishedRanges = [
+      TEXRA_CLI_SUPPORTED_NODE_RANGE,
+      ...['packages/cli', 'packages/agent'].map(
+        (packageDir) =>
+          (
+            JSON.parse(
+              readFileSync(join(repoRoot, packageDir, 'package.json'), 'utf8'),
+            ) as { engines: { node: string } }
+          ).engines.node,
+      ),
+    ];
+
+    for (const range of publishedRanges) {
+      expect(
+        subset(range, undiciNodeRange),
+        `${range} must satisfy undici's engines.node ${undiciNodeRange}`,
+      ).toBe(true);
+    }
   });
 
   it('reports loaded workspace config warnings', async () => {
