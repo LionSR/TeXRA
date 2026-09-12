@@ -8,12 +8,19 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { BashPermission } from '@shared/schemas';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  BASH_APPROVAL_CONFIG_KEY,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+  type BashPermission,
+} from '@shared/schemas';
+import { createFakeHost, installedHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { generateRunId } from '@utils/core';
 
@@ -54,6 +61,63 @@ function watchBashRequests(session: SessionHandle) {
 }
 
 describe('requestBashApproval queueing', () => {
+  it.effect(
+    'uses the invoking project approval settings outside its ambient scope',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const session = createTestSession();
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => session.dispose()),
+          );
+          session.setApprovalPolicy('ask');
+          const keys = [
+            BASH_APPROVAL_CONFIG_KEY,
+            TOOL_EDIT_APPROVAL_CONFIG_KEY,
+          ];
+          const processConfig = installedHost().roots.config;
+          const previous = keys.map((key) => processConfig.get(key));
+          yield* Effect.addFinalizer(() =>
+            Effect.promise(() =>
+              Promise.all(
+                keys.map((key, index) =>
+                  processConfig.update(key, previous[index]),
+                ),
+              ),
+            ),
+          );
+          yield* Effect.promise(() =>
+            Promise.all(keys.map((key) => processConfig.update(key, false))),
+          );
+          const project = createFakeHost({
+            config: Object.fromEntries(keys.map((key) => [key, true])),
+          });
+          const layer = nativeToolTestLayer({
+            run: {
+              session,
+              runId: generateRunId(),
+              toolPolicy: { approvalPromptsUnavailable: true },
+            },
+            inScope: (operation) =>
+              runWithWorkspaceRoots(project.roots, operation),
+          });
+          const bash = yield* requestBashApproval({
+            command: 'echo scoped',
+          }).pipe(Effect.provide(layer));
+          const edit = yield* requestToolEditApproval({
+            path: 'Proof.lean',
+            originalContent: '',
+            proposedContent: 'theorem',
+            sourceTool: 'write',
+          }).pipe(Effect.provide(layer));
+          // Process defaults would auto-approve both; the project requires a prompt,
+          // so this headless invocation must refuse both operations.
+          expect(bash.action).toBe('deny');
+          expect(edit.action).toBe('deny');
+        }),
+      ),
+  );
+
   it.effect('lets never override a run bypass at the shared boundary', () =>
     Effect.scoped(
       Effect.gen(function* () {

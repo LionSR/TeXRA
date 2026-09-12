@@ -14,6 +14,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -144,12 +146,10 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
   return { tree, matchCount };
 }
 
-const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* ({
-  query,
-  library,
-}: ZoteroCollectionsInput) {
-  const port = getZoteroPort();
-
+const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
+  { query, library }: ZoteroCollectionsInput,
+  port: number,
+) {
   const libraries = yield* callBetterBibTeX(
     'user.groups',
     [true],
@@ -223,7 +223,10 @@ export class ZoteroCollectionsTool extends defineTool({
 }) {
   protected execute(
     input: ZoteroCollectionsInput,
-  ): Effect.Effect<ToolResult, unknown> {
-    return listCollections(input);
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* listCollections(input, call.inScope(getZoteroPort));
+    });
   }
 }

@@ -6,10 +6,12 @@ import type {
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentTrace } from '@agent/trace';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { RunScope } from './RunScope';
 import type { AgentRunShape } from './run/AgentRun';
 
 export interface ToolCallShape {
+  readonly config: ConfigProvider;
   readonly toolCallId?: string;
   readonly delegationAgentScope?: RunScope['delegationAgentScope'];
   readonly model?: string;

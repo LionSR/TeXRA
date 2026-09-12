@@ -1,10 +1,12 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
+import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
+import { resolveAndFormat } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -163,7 +165,7 @@ Tips:
 }) {
   protected execute(
     input: LeanDiagnosticsInput,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     const { command, file } = input;
     return this.diagnose(file, command).pipe(
       catchLeanFailure(
@@ -175,8 +177,13 @@ Tips:
 
   private readonly diagnose = Effect.fn('LeanDiagnosticsTool.execute')(
     function* (file: string, command: 'list' | 'count') {
+      const call = yield* ToolCall;
       const services = getLeanLanguageServices();
-      const result = yield* services.fetchDiagnosticsForFile(file);
+      const absoluteFile = leanFilePath(file, call);
+      const result = yield* services.fetchDiagnosticsForFile(
+        absoluteFile,
+        call.run?.runId,
+      );
       if (!result.ok) {
         // The adapter distinguishes a genuinely missing file from a broken or
         // absent Lean toolchain — only the former is a "could not open file";
@@ -198,7 +205,8 @@ Tips:
       // Host capability: VS Code moves the editor cursor to the first error;
       // CLI/desktop adapters omit it and this is a no-op rather than a pretend
       // navigation. The tool result below still carries the diagnostic list.
-      yield* services.navigateToFirstError?.(file, diagnostics) ?? Effect.void;
+      yield* services.navigateToFirstError?.(absoluteFile, diagnostics) ??
+        Effect.void;
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
@@ -238,13 +246,17 @@ ${FILE_COMMAND_PROSE}
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanFileInputSchema,
 }) {
-  protected execute(input: LeanFileInput): Effect.Effect<ToolResult, unknown> {
+  protected execute(
+    input: LeanFileInput,
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
+      const call = yield* ToolCall;
       const success = yield* getLeanLanguageServices().executeFileCommand(
         command,
-        file,
+        leanFilePath(file, call),
+        call.run?.runId,
       );
       if (!success) {
         return errorResult(
@@ -273,11 +285,15 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
 }) {
   protected execute(
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
-      yield* getLeanLanguageServices().executeProjectCommand(command);
+      const call = yield* ToolCall;
+      yield* getLeanLanguageServices().executeProjectCommand(
+        command,
+        call.run?.runId,
+      );
 
       if (command === 'build') {
         return executed(
@@ -316,7 +332,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
 }) {
   protected execute(
     input: LeanInspectInput,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     const { type, file, line, column } = input;
     // Convert to 0-indexed for LSP
     const line0 = line - 1;
@@ -326,7 +342,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     // Each dispatch composes one program, run once below: a failed
     // language-server request settles as this run's Exit and becomes the
     // ToolError carrying the summary that names which inspection failed.
-    let program: Effect.Effect<ToolResult, unknown>;
+    let program: Effect.Effect<ToolResult, unknown, ToolCall>;
     switch (type) {
       case 'goal':
         program = this.executeGoal(file, line0, col0, location);
@@ -352,12 +368,14 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     return Effect.gen(function* () {
+      const call = yield* ToolCall;
       const { data, error } = yield* getLeanLanguageServices().getGoalState(
-        file,
+        leanFilePath(file, call),
         line,
         column,
+        call.run?.runId,
       );
 
       if (!data) {
@@ -388,12 +406,14 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     return Effect.gen(function* () {
+      const call = yield* ToolCall;
       const { data, error } = yield* getLeanLanguageServices().getTermGoal(
-        file,
+        leanFilePath(file, call),
         line,
         column,
+        call.run?.runId,
       );
 
       if (!data) {
@@ -414,12 +434,14 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall> {
     return Effect.gen(function* () {
+      const call = yield* ToolCall;
       const { data, error } = yield* getLeanLanguageServices().getHoverInfo(
-        file,
+        leanFilePath(file, call),
         line,
         column,
+        call.run?.runId,
       );
 
       if (!data) {
@@ -457,5 +479,12 @@ function noPositionData(
   return errorResult(
     `${message} at ${location}${error ? `\nError: ${error}` : ''}`,
     { summary },
+  );
+}
+
+/** Resolve a Lean file once in the invoking project before the host program runs. */
+function leanFilePath(file: string, call: ToolCallShape): string {
+  return call.inScope(
+    () => resolveAndFormat(file, call.workingDirectory).path.absolute,
   );
 }

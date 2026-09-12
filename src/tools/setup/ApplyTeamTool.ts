@@ -15,6 +15,7 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 import {
   createWorkspaceAgentRosterController,
@@ -73,8 +74,9 @@ type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
 const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
+  const call = yield* ToolCall;
   const state = { getAgents: getAgentsByCategory };
-  const roster = createWorkspaceAgentRosterController();
+  const roster = call.inScope(() => createWorkspaceAgentRosterController());
   const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
 
@@ -91,26 +93,29 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       return {
         ok: true,
         preset,
-        resolution: resolveTeamRoster(state, preset),
+        resolution: call.inScope(() => resolveTeamRoster(state, preset)),
       };
     },
-    commitPreset: async (preset) => {
-      await roster.setTeam(preset.id);
-      await roster.setDefaultTeam(preset.id);
-      // The setup agent runs this mid-conversation, so an open settings
-      // view is showing a roster this call just replaced.
-      appSignals.emit('agentRosterChanged', undefined);
-    },
+    commitPreset: (preset) =>
+      call.inScope(async () => {
+        await roster.setTeam(preset.id);
+        await roster.setDefaultTeam(preset.id);
+        // The setup agent runs this mid-conversation, so an open settings
+        // view is showing a roster this call just replaced.
+        appSignals.emit('agentRosterChanged', undefined);
+      }),
   };
 
   const result = yield* applyTeamRosterWithPreflight(input.teamId, {
     catalog,
-    loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+    loadLocalCatalog: () =>
+      call.inScope(() => loadAgents({ includeRemote: false })),
     canAccessRemoteCatalog: async () => authStatus.authenticated,
     providedChoice: input.unavailableAction ?? undefined,
     choose: async () => undefined,
     signIn,
-    forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+    forceRefreshRemoteCatalog: () =>
+      call.inScope(() => refresh({ includeRemote: true })),
   });
 
   if (result.status === 'unknown') {

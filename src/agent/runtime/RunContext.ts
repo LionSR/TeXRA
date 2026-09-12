@@ -181,13 +181,6 @@ function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
     : context?.[field];
 }
 
-/** Return the run id for a context, reading launch contexts through RunScope. */
-export function getRunContextRunId(
-  context: RunContext | undefined = tryUseRunContext(),
-): RunId | undefined {
-  return getRunContextField('runId', context);
-}
-
 /** Return the working directory for a context, reading launch contexts through RunScope. */
 export function getRunContextWorkingDirectory(
   context: RunContext | undefined = tryUseRunContext(),

@@ -17,7 +17,6 @@ import {
 import {
   getChatGptSubscriptionStatus,
   getSetupAuthStatus,
-  texraScopedConfig,
 } from '@tools/setup/platform';
 
 setupPlatform(
@@ -37,12 +36,6 @@ afterEach(() => {
 });
 
 describe('shared setup capabilities', () => {
-  it('keeps the configuration boundary at texra.* keys', () => {
-    expect(() => texraScopedConfig.get('editor.fontSize')).toThrow(
-      'Setup config adapter is scoped to texra.* keys',
-    );
-  });
-
   it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
     Effect.gen(function* () {
       expect(

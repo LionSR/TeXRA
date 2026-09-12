@@ -60,7 +60,6 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { RunId } from '@shared/schemas';
 import {
   createDirectLspLeanAdapter,
@@ -755,18 +754,10 @@ describe('createDirectLspLeanAdapter', () => {
       ),
   );
 
-  fakeLakeIt('attributes a request to the ambient agent run', () =>
+  fakeLakeIt('attributes a request to its explicitly supplied agent run', () =>
     withAdapter({ lakeCommand: fakeLakePath, idleTimeoutMs: 0 }, (adapter) =>
       Effect.gen(function* () {
-        // The run id is captured when the method is called, so the call
-        // itself happens inside the ambient run context. `withRunContext`'s
-        // `T | Promise<T>` covers its async users; this callback is
-        // synchronous, so the cast only narrows that union back.
-        const program = withRunContext(
-          createRunContext({ runId: run('e00001') }),
-          () => adapter.fetchDiagnosticsForFile(filePath),
-        ) as ReturnType<(typeof adapter)['fetchDiagnosticsForFile']>;
-        yield* program;
+        yield* adapter.fetchDiagnosticsForFile(filePath, run('e00001'));
         expect(activeServerRoots()).toEqual([projectRoot]);
 
         yield* Effect.promise(async () => {

@@ -10,6 +10,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -129,16 +131,17 @@ function collectionPath(chain: BbtCollectionChain): string {
   return parts.join(' / ');
 }
 
-const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({
-  query,
-  title,
-  author,
-  year,
-  library,
-  include_collections,
-}: ZoteroSearchInput) {
-  const port = getZoteroPort();
-
+const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
+  {
+    query,
+    title,
+    author,
+    year,
+    library,
+    include_collections,
+  }: ZoteroSearchInput,
+  port: number,
+) {
   // Build search params: use advanced tuple search when structured fields
   // are provided, otherwise fall back to simple quick-search string.
   const searchTerms: unknown =
@@ -205,7 +208,10 @@ export class ZoteroSearchTool extends defineTool({
 }) {
   protected execute(
     input: ZoteroSearchInput,
-  ): Effect.Effect<ToolResult, unknown> {
-    return searchZotero(input);
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* searchZotero(input, call.inScope(getZoteroPort));
+    });
   }
 }

@@ -388,6 +388,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         Effect.scoped(
           tool.call(parsedInput).pipe(
             Effect.provideService(ToolCall, {
+              config: run.session.roots.config,
               run,
               delegationAgentScope: run.delegationAgentScope,
               model: run.config.model,

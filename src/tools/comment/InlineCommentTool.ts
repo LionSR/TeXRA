@@ -3,10 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
@@ -194,12 +191,12 @@ function threadNotFound(threadId: string): ToolResult {
 const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
   input: AddCommentInput,
 ) {
+  const call = yield* ToolCall;
   const { path, line, endLine, body } = input;
   const resolved = yield* Effect.try({
     try: () =>
-      resolveWorkspaceRelativePath(
-        path,
-        getRunContextWorkingDirectory(tryUseRunContext()),
+      call.inScope(() =>
+        resolveWorkspaceRelativePath(path, call.workingDirectory),
       ),
     catch: addCommentFailure,
   });
@@ -253,14 +250,17 @@ const setThreadResolved = Effect.fn('InlineCommentTool.setResolved')(function* (
 const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   input: ListCommentInput,
 ) {
-  let absolutePath: string | undefined;
-  if (input.path != null) {
-    const workingDirectory = getRunContextWorkingDirectory(tryUseRunContext());
-    absolutePath = resolveWorkspaceRelativePath(
-      input.path,
-      workingDirectory,
-    ).absolute;
-  }
+  const call = yield* ToolCall;
+  const absolutePath =
+    input.path == null
+      ? undefined
+      : call.inScope(
+          () =>
+            resolveWorkspaceRelativePath(
+              input.path ?? undefined,
+              call.workingDirectory,
+            ).absolute,
+        );
   const threads = (yield* requireProvider()).list({ absolutePath });
   if (threads.length === 0) {
     return executed(
@@ -276,7 +276,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, ToolError> {
+): Effect.Effect<ToolResult, ToolError, ToolCall> {
   switch (input.command) {
     case 'add':
       return addThread(input);

@@ -186,9 +186,10 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
     request: Omit<ToolEditApprovalRequest, 'permission'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
-    const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
-
     const call = yield* ToolCall;
+    const approvalsEnabled = call.inScope(() =>
+      getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY),
+    );
     const run = call.run;
     if (!run) {
       return yield* Effect.fail(
@@ -231,7 +232,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const permission = prepareToolEditApprovalPrompt(session, {
       requestId: `approval-${generateShortId()}`,
       request: preparedRequest,
-      relativePath: WorkspaceFS.relativePath(preparedRequest.path),
+      relativePath: call.inScope(() =>
+        WorkspaceFS.relativePath(preparedRequest.path),
+      ),
     });
     const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
     return yield* session.approvals.toolEdit.enqueue(runId, {
@@ -241,7 +244,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // listed with nothing to show for it. An interrupted open closes the
       // request as cancelled, which is the release.
       prompt: Effect.suspend(() => {
-        session.interactions.presentToolEdit(staged);
+        call.inScope(() => session.interactions.presentToolEdit(staged));
         return session
           .openRequest(runId, { kind: 'toolEdit', data: permission })
           .pipe(

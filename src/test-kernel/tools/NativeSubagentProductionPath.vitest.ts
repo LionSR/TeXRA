@@ -486,6 +486,7 @@ async function launchWaitingChild(options: {
     session,
   });
   const parentCall = {
+    config: session.roots.config,
     model: PARENT_MODEL,
     tracker: new FileInteractionState(),
     workingDirectory: process.cwd(),

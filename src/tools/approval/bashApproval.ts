@@ -69,9 +69,10 @@ function prepareBashApprovalPrompt(
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<BashDecision, Error, ToolCall> {
-  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
-
   const call = yield* ToolCall;
+  const approvalsEnabled = call.inScope(() =>
+    getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY),
+  );
   const run = call.run;
   if (!run) {
     return yield* Effect.fail(

@@ -12,6 +12,8 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { ToolCall } from '@agent/runtime/ToolCall';
+import { hostPort } from '@common/hostPort';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
@@ -21,7 +23,6 @@ import {
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { texraScopedConfig } from './platform';
 
 /**
  * Keys `update_config` may write. Read access (`read_config`) is open across
@@ -77,8 +78,9 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   schema: ReadConfigInputSchema,
 }) {
   protected execute(input: ReadConfigInput) {
-    return Effect.sync(() => {
-      const value = texraScopedConfig.get(input.key);
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      const value = call.config.get(input.key);
       const json = JSON.stringify(value, null, 2) ?? 'undefined';
       const description = settingByKey(input.key)?.description;
       return executed(
@@ -124,8 +126,16 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
     );
   }
 
-  const previous = texraScopedConfig.get(input.key);
-  yield* texraScopedConfig.update(input.key, parsed.data, input.target);
+  const call = yield* ToolCall;
+  const config = call.config;
+  const previous = config.get(input.key);
+  yield* hostPort(() =>
+    config.update(
+      input.key,
+      parsed.data,
+      input.target === 'workspace' ? 'workspace' : 'global',
+    ),
+  );
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(parsed.data);
