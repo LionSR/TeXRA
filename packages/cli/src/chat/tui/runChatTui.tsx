@@ -198,18 +198,15 @@ export async function runChat(
   await effectRuntime().runPromise(loadAgents());
   const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await effectRuntime().runPromise(
-    resolveChatDefaults(
-      {
-        cwd: context.cwd,
-        agentOverride: explicitAgent ?? setupAgentOverride,
-        modelOverride: initialResume?.config.model ?? init.modelOverride,
-        envAgent: context.envAgent,
-        envModel: context.envModel,
-        visibleToolUseAgents,
-        quiet: context.quietLogs,
-      },
-      runtimeSession,
-    ),
+    resolveChatDefaults({
+      cwd: context.cwd,
+      agentOverride: explicitAgent ?? setupAgentOverride,
+      modelOverride: initialResume?.config.model ?? init.modelOverride,
+      envAgent: context.envAgent,
+      envModel: context.envModel,
+      visibleToolUseAgents,
+      quiet: context.quietLogs,
+    }),
   );
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {

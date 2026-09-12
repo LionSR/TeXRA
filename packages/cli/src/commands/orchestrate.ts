@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { defineCommand } from 'citty';
-import type { SessionHandle } from '@agent/runtime';
 
 import { getVisibleAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -16,7 +15,6 @@ import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
 import {
   firstRunSetupAgentOverride,
@@ -87,20 +85,16 @@ const log = createLog('orchestrate');
 const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
-  session: SessionHandle,
   stores: ModelOptionStores,
 ): Effect.fn.Return<boolean, Error> {
   if (models.length === 0) return true;
 
-  const defaults = yield* resolveChatDefaults(
-    {
-      cwd: context.cwd,
-      envAgent: context.envAgent,
-      envModel: context.envModel,
-      quiet: context.quietLogs,
-    },
-    session,
-  );
+  const defaults = yield* resolveChatDefaults({
+    cwd: context.cwd,
+    envAgent: context.envAgent,
+    envModel: context.envModel,
+    quiet: context.quietLogs,
+  });
   return yield* Effect.tryPromise({
     try: () =>
       selectCliRunnableModel(defaults.model, {
@@ -149,9 +143,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
     ...context,
     quietLogs: true,
   });
-  // Every model-availability read below goes through the stores this entry
-  // point already wired, rather than looking a host up again.
-  const session = await initializeCliTranscriptSession(services);
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the models read below re-reads the freshly-set credentials
@@ -232,7 +223,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       loadCliApiStatus(services.secrets, authProfile),
     ]);
     const allowDefaultModelLaunch = await effectRuntime().runPromise(
-      canLaunchWithDefaultModel(context, models, session, services),
+      canLaunchWithDefaultModel(context, models, services),
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');

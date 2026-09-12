@@ -5,9 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
-import type { SessionHandle } from '@agent/runtime';
-import type { RunListingEntry } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   __resetUserConfigWarningDedupeForTests,
   resolveChatDefaults as nativeResolveChatDefaults,
@@ -17,10 +14,7 @@ import {
   loadWorkspaceCliConfig,
 } from '@cli/runtime/cliConfig';
 import * as logSinks from '@cli/runtime/logSinks';
-import type { RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { ensureError } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
@@ -46,21 +40,9 @@ function enoentError(): NodeJS.ErrnoException {
   return error;
 }
 
-const mocks = vi.hoisted(() => ({
-  listRuns: vi.fn(async (): Promise<RunListingEntry[]> => []),
-}));
 const resolveChatDefaults = (
   options: Parameters<typeof nativeResolveChatDefaults>[0],
-) => Effect.runPromise(nativeResolveChatDefaults(options, {} as SessionHandle));
-
-vi.mock('@agent/storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage')>()),
-  listRuns: () =>
-    Effect.tryPromise({
-      try: () => mocks.listRuns(),
-      catch: ensureError,
-    }),
-}));
+) => Effect.runPromise(nativeResolveChatDefaults(options));
 
 // Spied, not stubbed: the workspace tiers below still read real `.texra`
 // config files, while the fast-path tests assert the loader is never reached.
@@ -73,28 +55,7 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
   };
 });
 
-const mockedListRuns = mocks.listRuns;
 const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
-
-function historyEntry(
-  agent: string,
-  overrides: Record<string, unknown> = {},
-  timestamp = '2026-05-21T08:00:00.000Z',
-) {
-  return {
-    kind: 'run',
-    id: 'abc123' as RunId,
-    timestamp,
-    identity: { kind: 'agent', agent },
-    checkpointPresent: false,
-    record: AgentConfigSchema.parse({
-      agent,
-      model: 'sonnet46T',
-      agentCategory: AgentCategory.ToolUse,
-      ...overrides,
-    }),
-  } satisfies RunListingEntry;
-}
 
 vi.mock('@utils/files/storageFS', () => ({
   GlobalStorageFS: {
@@ -108,8 +69,6 @@ const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
 beforeEach(() => {
   mockedLoadWorkspaceCliConfig.mockClear();
-  mockedListRuns.mockReset();
-  mockedListRuns.mockResolvedValue([]);
   mockedReadJson.mockReset();
   // A missing user config (the common case) mirrors a real ENOENT rejection.
   mockedReadJson.mockRejectedValue(enoentError());
@@ -192,100 +151,6 @@ describe('CLI chat defaults', () => {
     );
   });
 
-  it('inherits only the model from recent single-agent tool-use history', async () => {
-    mockedListRuns.mockResolvedValueOnce([historyEntry('research')]);
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        // History contributes the model only; the agent stays on the built-in
-        // default rather than the history row's agent.
-        agent: 'assistant',
-        model: 'sonnet46T',
-        modelSource: 'history',
-      },
-    );
-  });
-
-  it('ignores a history model that the CLI cannot run', async () => {
-    mockedListRuns.mockResolvedValueOnce([
-      historyEntry('research', { model: 'Copilot GPT-4o' }),
-    ]);
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'deepseekproT',
-        modelSource: 'builtin-default',
-      },
-    );
-  });
-
-  it('does not inherit the model from a multi-agent team run', async () => {
-    // A `texra multi-agent run physicist` is stored as a tool-use run
-    // whose root is the team orchestrator. It must not affect plain
-    // `texra chat` defaults — fall back to the built-ins instead.
-    mockedListRuns.mockResolvedValueOnce([
-      historyEntry('leanOrchestrator', {
-        cli: { multiAgentPresetId: 'lean-project' },
-      }),
-    ]);
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'deepseekproT',
-      },
-    );
-  });
-
-  // A stale `bash` row used to win the agent tier and crash on first submit
-  // with "Could not find agent: bash" — see #4397. History is now model-only,
-  // so the single-chat agent stays on the built-in `assistant` default; the
-  // same holds for `simplifier`, which is never a default chat agent.
-  it.each(['bash', 'simplifier'])(
-    'does not inherit %s as the default single-chat agent',
-    async (agent) => {
-      mockedListRuns.mockResolvedValueOnce([
-        historyEntry(agent, {}, '2026-05-21T08:02:00.000Z'),
-        historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-      ]);
-
-      await expectChatDefaults(
-        { cwd: NO_WORKSPACE },
-        {
-          agent: 'assistant',
-          model: 'sonnet46T',
-          modelSource: 'history',
-        },
-      );
-    },
-  );
-
-  it('skips a team run to reach an earlier single-agent model', async () => {
-    mockedListRuns.mockResolvedValueOnce([
-      historyEntry(
-        'orchestrator',
-        {
-          cli: { multiAgentPresetId: 'physicist' },
-        },
-        '2026-05-21T08:02:00.000Z',
-      ),
-      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-    ]);
-
-    await expectChatDefaults(
-      { cwd: NO_WORKSPACE },
-      {
-        agent: 'assistant',
-        model: 'sonnet46T',
-        modelSource: 'history',
-      },
-    );
-  });
-
   it('ignores simplifier from configured chat default tiers', async () => {
     const workspace = await workspaceWithConfig({
       'texra.chat': { agent: 'simplifier', model: 'sonnet46T' },
@@ -336,7 +201,7 @@ describe('CLI chat defaults', () => {
     );
   });
 
-  it('skips workspace, user, and history I/O when explicit overrides resolve agent and model', async () => {
+  it('skips workspace and user I/O when explicit overrides resolve agent and model', async () => {
     const workspace = await workspaceWithConfig({
       'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
@@ -355,7 +220,6 @@ describe('CLI chat defaults', () => {
     );
     expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
     expect(mockedReadJson).not.toHaveBeenCalled();
-    expect(mockedListRuns).not.toHaveBeenCalled();
   });
 
   it('keeps default-tier loading when only the model is directly resolved', async () => {
@@ -374,7 +238,7 @@ describe('CLI chat defaults', () => {
     expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
   });
 
-  it('skips user and history I/O when environment resolves agent and model', async () => {
+  it('skips user I/O when environment resolves agent and model', async () => {
     await expectChatDefaults(
       { cwd: NO_WORKSPACE, envAgent: 'assistant', envModel: 'sonnet46T' },
       {
@@ -384,21 +248,22 @@ describe('CLI chat defaults', () => {
       },
     );
     expect(mockedReadJson).not.toHaveBeenCalled();
-    expect(mockedListRuns).not.toHaveBeenCalled();
   });
 
-  it('still loads history when only the agent is directly resolved', async () => {
-    mockedListRuns.mockResolvedValueOnce([historyEntry('research')]);
+  it('still loads the model tiers when only the agent is directly resolved', async () => {
+    const workspace = await workspaceWithConfig({
+      'texra.chat': { model: 'sonnet46T' },
+    });
 
     await expectChatDefaults(
-      { cwd: NO_WORKSPACE, agentOverride: 'simplifier' },
+      { cwd: workspace, agentOverride: 'simplifier' },
       {
         agent: 'simplifier',
         model: 'sonnet46T',
-        modelSource: 'history',
+        modelSource: 'workspace-config',
       },
     );
-    expect(mockedListRuns).toHaveBeenCalledOnce();
+    expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {

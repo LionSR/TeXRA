@@ -1,19 +1,12 @@
 import { Effect } from 'effect';
-import type { SessionHandle } from '@agent/runtime';
-import {
-  isUserVisibleRun,
-  listRuns,
-  type RunListingEntry,
-} from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
-import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
-import { isObject, toNewestFirstByTimestamp } from '@utils/core';
+import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
@@ -22,7 +15,6 @@ import {
   loadWorkspaceCliConfig,
   parseCliConfigValues,
   resolveConfiguredAgent,
-  resolveKnownCliModelId,
   type CliConfigValues,
 } from './cliConfig';
 import { pickDefaultToolUseAgent } from './defaultAgents';
@@ -52,7 +44,6 @@ type ChatDefaultValueSource = Extract<
   | 'environment'
   | 'workspace-config'
   | 'user-config'
-  | 'history'
   | 'builtin-default'
 >;
 
@@ -147,28 +138,6 @@ const loadUserDefaults = Effect.fn(function* (
   return defaultsFromConfigValues(values);
 });
 
-const loadHistoryDefaults = Effect.fn(function* (
-  session: SessionHandle,
-): Effect.fn.Return<PartialDefaults> {
-  // An unreadable history listing means no history defaults.
-  const entries: RunListingEntry[] = yield* listRuns(session).pipe(
-    Effect.catch(() => Effect.succeed([])),
-  );
-  const candidates = toNewestFirstByTimestamp(
-    entries.filter(isUserVisibleRun).filter(
-      (entry) =>
-        entry.record.agentCategory === AgentCategory.ToolUse &&
-        // A multi-agent team run's root is an orchestrator agent, not a
-        // sensible default for a plain single-agent chat session.
-        !entry.record.cli?.multiAgentPresetId,
-    ),
-    (item) => item.timestamp,
-  );
-  const mostRecent = candidates[0];
-  if (!mostRecent) return {};
-  return { model: resolveKnownCliModelId(mostRecent.record.model) };
-});
-
 interface ResolveChatDefaultsInit {
   readonly cwd: string;
   readonly agentOverride?: string;
@@ -184,15 +153,13 @@ interface ResolveChatDefaultsInit {
 }
 
 /**
- * Four-tier lookup per `.agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-10-architecture.md#entrypoint-default`:
+ * Three-tier lookup per `.agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-10-architecture.md#entrypoint-default`:
  * workspace `.texra/config.json` → user `<global-storage>/config.json` →
- * last single-agent toolUse run's model → built-in. Per-field
- * independence: a workspace that only sets `agent` still falls through to
- * user/history for `model`, but history never changes the single-chat agent.
+ * built-in. Per-field independence: a workspace that only sets `agent` still
+ * falls through to the user config for `model`.
  */
 export const resolveChatDefaults = Effect.fn(function* (
   init: ResolveChatDefaultsInit,
-  session: SessionHandle,
 ): Effect.fn.Return<ChatDefaults, Error> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
@@ -204,24 +171,21 @@ export const resolveChatDefaults = Effect.fn(function* (
 
   let workspace: PartialDefaults = {};
   let user: PartialDefaults = {};
-  let history: PartialDefaults = {};
 
   if (!skipDefaultTierIo) {
     // Tiers are independent I/O — fan out in parallel.
     // Workspace defaults use the same .texra/config.json reader as the CLI
     // context so startup does not depend on platform initialization.
-    [workspace, user, history] = yield* Effect.all(
+    [workspace, user] = yield* Effect.all(
       [
         loadWorkspaceCliConfig(init.cwd).pipe(
           Effect.map((loaded) => defaultsFromConfigValues(loaded.values)),
         ),
         loadUserDefaults(init.quiet ?? false),
-        loadHistoryDefaults(session),
       ],
       { concurrency: 'unbounded' },
     );
-    // History never changes the chat agent, so only the two config tiers can
-    // supply one; the order below is the per-field fallthrough.
+    // The order below is the per-field fallthrough.
     for (const defaults of [workspace, user]) {
       if (!agent && defaults.agent) agent = defaults.agent;
     }
@@ -232,7 +196,6 @@ export const resolveChatDefaults = Effect.fn(function* (
     { model: envModel, reason: 'environment' },
     { model: workspace.model, reason: 'workspace-config' },
     { model: user.model, reason: 'user-config' },
-    { model: history.model, reason: 'history' },
     { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
   ]);
 
