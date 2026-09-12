@@ -12,6 +12,13 @@
       aria-label="Trace viewer"
       data-session="trace"
     ></progress-app>
+    <div class="trace-scrubber" hidden>
+      <label>
+        <span>Step</span>
+        <input type="range" min="0" max="0" value="0" step="1" />
+      </label>
+      <output></output>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

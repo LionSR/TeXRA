@@ -3,12 +3,10 @@ import {
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  type PhaseStage,
   type RoundStage,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { RunGroup } from '@shared/session/sessionView';
 
 export type RunStatusDisplayKey =
@@ -195,21 +193,6 @@ export function formatRoundStageLabel(
   if (stage === undefined) return undefined;
   const current = `r${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
-}
-
-/** Phase progress label for a workflow-script run, spelled by the one owner of
- *  phase heading copy so this slot cannot drift from the transcript divider and
- *  the run-status band that render beside it. Occupies the same row slot as
- *  `formatRoundStageLabel` — a run opens phases or rounds, never both. */
-export function formatPhaseStageLabel(
-  stage: Readonly<PhaseStage> | undefined,
-): string | undefined {
-  if (stage === undefined) return undefined;
-  return formatWorkflowPhaseHeading({
-    phaseLabel: stage.label,
-    phaseIndex: stage.index,
-    phaseTotal: stage.total,
-  });
 }
 
 /**

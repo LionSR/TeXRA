@@ -169,8 +169,6 @@ export type UserQuestionPermission = z.infer<
 // Plan Approval
 // ============================================================================
 
-export type PlanApprovalAction = 'approve' | 'reject' | 'approve_and_goal';
-
 export type ToolEditApprovalAction =
   'approve' | 'reject' | 'openDiff' | 'showLatexdiff' | 'previewProposed';
 

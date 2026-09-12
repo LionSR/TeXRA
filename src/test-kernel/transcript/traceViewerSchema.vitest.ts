@@ -67,6 +67,7 @@ function trace(
       compileFailures: {},
     },
     entries: [],
+    steps: [],
     ...overrides,
   };
 }

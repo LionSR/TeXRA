@@ -30,6 +30,7 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       compileFailures: {},
     },
     entries: [],
+    steps: [],
     ...overrides,
   };
 }

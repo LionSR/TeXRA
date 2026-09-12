@@ -67,7 +67,7 @@ export type ApprovalArm =
 
 /** Enable a session-wide bypass on one run: the field-level mutation the
  *  approval authority applies, not a snapshot. */
-export function sessionBypassRequest(
+function sessionBypassRequest(
   runId: RunId,
   bypass: ApprovalBypassKind,
 ): Extract<RuntimeRequest, { kind: 'policy.set' }> {
