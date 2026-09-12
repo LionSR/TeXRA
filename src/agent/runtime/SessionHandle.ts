@@ -80,6 +80,10 @@ import {
   type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
+import type {
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
@@ -215,7 +219,9 @@ export class SessionHandle {
   private readonly graph: SessionGraph;
   private disposed = false;
   private readonly publicationGate = Semaphore.makeUnsafe(1);
-  private readonly publications = new Set<Promise<Exit.Exit<unknown>>>();
+  private readonly publications = new Set<
+    Promise<Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>>
+  >();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -555,30 +561,41 @@ export class SessionHandle {
     this.schedulePublication(this.graph.publish(events));
   }
 
-  /** Native metadata publication shares the existing ordered publisher. */
+  /** Native metadata publication shares the existing ordered publisher. A
+   *  refused batch wrote nothing and comes back typed (D6 b): the caller
+   *  stops on it, it is never retried or converted here. */
   commit(
     events: readonly SessionEventDraft[],
-  ): Effect.Effect<readonly SessionEvent[]> {
+  ): Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseNotOwner | DatabaseWriteFailed
+  > {
     return this.publicationGate.withPermit(this.graph.publish(events));
   }
 
-  /** Registration owns birth claims as soon as append commits, before its tail drains. */
+  /** Registration owns birth claims as soon as append commits, before its
+   *  tail drains. Its refusal is typed like {@link commit}'s. */
   commitRegistration(
     events: readonly SessionEventDraft[],
-  ): Effect.Effect<readonly SessionEvent[]> {
+  ): Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseNotOwner | DatabaseWriteFailed
+  > {
     return this.publicationGate.withPermit(
       this.graph.publishRegistration(events),
     );
   }
 
-  /** Read and append under the same local publisher permit. C5 excludes foreign writers. */
+  /** Read and append under the same local publisher permit. C5 excludes
+   *  foreign writers; losing the claim between the read and the append comes
+   *  back as `DatabaseNotOwner` with nothing written. */
   updateRecordFacts<A>(
     runId: RunId,
     update: (rows: readonly SessionEvent[]) => {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
     },
-  ): Effect.Effect<A> {
+  ): Effect.Effect<A, DatabaseNotOwner | DatabaseWriteFailed> {
     const graph = this.graph;
     return this.publicationGate.withPermit(
       Effect.gen(function* () {
@@ -645,10 +662,21 @@ export class SessionHandle {
     return this.graph.recordListing();
   }
 
-  private schedulePublication(program: Effect.Effect<unknown>): void {
+  /**
+   * Run one fire-and-forget publication under the session's ordered permit.
+   * A refused batch wrote nothing and is never retried here (D6 b, R7):
+   * `DatabaseNotOwner` says this process no longer holds the aggregate, and
+   * `DatabaseWriteFailed` says the transaction rolled back. The whole cause
+   * is logged as itself, and the Exit carries it to
+   * {@link settlePublications}, which throws it at the caller waiting for
+   * the session's facts to settle.
+   */
+  private schedulePublication(
+    program: Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+  ): void {
     const publication = effectRuntime().runPromise(
       this.publicationGate.withPermit(program).pipe(
-        Effect.tapDefect((cause) =>
+        Effect.tapCause((cause) =>
           Effect.sync(() => {
             logger.error('Session publication failed', { data: cause });
           }).pipe(Effect.ignoreCause),

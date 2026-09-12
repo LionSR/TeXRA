@@ -3,9 +3,9 @@
  * `Database`, writes through `SessionEvents.publish` (the one transaction),
  * `foldRunState` on both paths. Mirrors `sessionEventsLayer`'s placement.
  *
- * Reads use `Database.readAggregate`, never `SessionEvents.aggregate`: the
- * latter filters to display rows and would silently drop every
- * ledger-private row.
+ * Reads use `Database.readAggregate` and `Database.readRunSnapshot`, never
+ * `SessionEvents.aggregate`: the latter filters to display rows and would
+ * silently drop every ledger-private row.
  */
 import { Effect, Layer, Result } from 'effect';
 
@@ -23,6 +23,7 @@ import {
 import {
   Database,
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
@@ -243,6 +244,13 @@ const unprepared = (
       });
 };
 
+/** What a lost claim says, from the sequence row that refused the write. */
+function notOwnerDetail(failure: DatabaseNotOwner): string {
+  if (failure.closed) return 'the run aggregate is closed';
+  if (failure.ownerId === null) return 'the claim is unheld';
+  return `held by ${failure.ownerId}`;
+}
+
 export const runLedgerLayer: Layer.Layer<
   RunLedger,
   never,
@@ -271,6 +279,12 @@ export const runLedgerLayer: Layer.Layer<
             : error,
         ),
       );
+    });
+
+    const latestSnapshot = Effect.fn('RunLedger.latestSnapshot')(function* (
+      run: RunId,
+    ) {
+      return yield* log.readRunSnapshot(qualifyAggregateId('run', run));
     });
 
     const load = Effect.fn('RunLedger.load')(function* (run: RunId) {
@@ -363,7 +377,20 @@ export const runLedgerLayer: Layer.Layer<
         if (refusal !== null) return yield* refusal;
       }
       const drafts: readonly SessionEventDraft[] = rows;
-      const committed = yield* events.publish(drafts);
+      // A target this process no longer holds open is the ledger's
+      // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
+      // write failure it is (F3).
+      const committed = yield* events.publish(drafts).pipe(
+        Effect.mapError((failure) =>
+          failure instanceof DatabaseNotOwner
+            ? new RunLedgerRefused({
+                reason: 'not-owner',
+                runId: run,
+                detail: notOwnerDetail(failure),
+              })
+            : failure,
+        ),
+      );
       // The same fold over the same rows, at the commits the publisher
       // actually assigned: that is the state the loop continues from. It
       // differs from the candidate fold only in those ordinals, so a failure
@@ -385,6 +412,6 @@ export const runLedgerLayer: Layer.Layer<
       return folded.success;
     });
 
-    return { acquire, load, appendBatch };
+    return { acquire, load, latestSnapshot, appendBatch };
   }),
 );

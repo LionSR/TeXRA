@@ -19,6 +19,7 @@ import type {
   DisplaySessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
+import type { DatabaseNotOwner, DatabaseWriteFailed } from './database';
 
 /** A publisher's position in the commit space: what `all` reads from. */
 export type SessionCursor = CommitOrdinal;
@@ -41,10 +42,20 @@ export class ProcessIdentity extends Context.Service<
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    /** Return the committed rows of one ordered transaction (C6). */
+    /** Return the committed rows of one ordered transaction (C6), or one of
+     *  two typed refusals, both meaning nothing was written (D6 b):
+     *  `DatabaseNotOwner`, a target the process does not hold open (the
+     *  single-owner race lost, or a closed aggregate), and
+     *  `DatabaseWriteFailed`, the batch rolled back for any other reason.
+     *  Neither is retried or converted here: a caller that lost its claim
+     *  stops and reports, a disk failure surfaces as itself, and neither is
+     *  ever read as the other (F3, R7). */
     readonly publish: (
       events: readonly SessionEventDraft[],
-    ) => Effect.Effect<readonly SessionEvent[]>;
+    ) => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseNotOwner | DatabaseWriteFailed
+    >;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
