@@ -437,19 +437,6 @@ const CORE_SETTING_ROWS: Record<
       warningUrlLabel: 'Check your tier',
     },
   }),
-  'model.useOpenAIResponsesAPI': modelProviderToggle({
-    default: true,
-    title: 'Use the Responses API',
-    description:
-      "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    honoredBy: everyHost('src/agent/runtime/modelRoutes.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Use the Responses API',
-      description:
-        'Use the OpenAI Responses API instead of Chat Completions when available.',
-    },
-  }),
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',

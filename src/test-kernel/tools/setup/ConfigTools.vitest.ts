@@ -94,7 +94,7 @@ describe('ConfigTools — update_config allowlist', () => {
   it.each([
     {
       case: 'a non-allowlisted key',
-      key: 'texra.model.useOpenAIResponsesAPI',
+      key: 'texra.model.useGoogleInteractionsServerState',
       value: true,
     },
     {

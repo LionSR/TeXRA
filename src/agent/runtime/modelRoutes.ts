@@ -22,7 +22,6 @@ import {
   prefersCopilotRoute,
   type CopilotRouteOverride,
 } from '@model/copilotRouting';
-import { isGpt5ModelName } from '@model/modelNames';
 import {
   codexBackendModelId,
   resolveCodexSubscriptionCapabilities,
@@ -39,7 +38,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelCompatibilityKey, UsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
 
 const log = createLog('modelRoutes');
 
@@ -69,7 +67,16 @@ const PROVIDER_COMPATIBILITY_KEYS: Record<
   [ModelProvider.COPILOT]: 'VscodeLm',
 };
 
-/** Check if OpenAI Responses API should be used for this config. */
+/**
+ * Check if OpenAI Responses API should be used for this config. Talking to
+ * OpenAI directly always means Responses: the OpenAI-direct Chat Completions
+ * route is gone. The only non-Responses OpenAI route left is OpenRouter,
+ * which proxies these models on /v1/chat/completions and rejects
+ * Responses-shaped payloads — so an OpenRouter-only config, or any config
+ * under the global OpenRouter preference, falls through to
+ * {@link shouldRouteModelThroughOpenRouter} below. A model that requires
+ * Responses has no OpenRouter route at all and stays on Responses.
+ */
 function shouldUseResponsesAPI(
   config: ModelConfig,
   useOpenRouter: boolean,
@@ -77,22 +84,7 @@ function shouldUseResponsesAPI(
   if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
     return false;
   }
-  if (config.requiresResponsesAPI) return true;
-
-  // Everything below only applies when we are talking to OpenAI directly.
-  // OpenRouter proxies these models on /v1/chat/completions and rejects
-  // Responses-shaped payloads.
-  if (useOpenRouter) return false;
-
-  const { capabilities } = config;
-  return (
-    (isGpt5ModelName(config.fullName) &&
-      capabilities.supportsReasoningEffort !== false &&
-      capabilities.supportsFunctionCalling !== false) ||
-    config.fullName.startsWith('gpt-oss') ||
-    (capabilities.supportsFunctionCalling !== false &&
-      getConfig<boolean>('texra.model.useOpenAIResponsesAPI'))
-  );
+  return config.requiresResponsesAPI === true || !useOpenRouter;
 }
 
 /**
