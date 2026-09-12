@@ -226,10 +226,17 @@ export function stageTitleFor(
  * How one stage is doing, derived from the calls it owns rather than stored
  * beside them, so a stage state can never disagree with its calls.
  *
- * A stage is `started` once the script has entered it or any of its calls has
- * been issued — before that there is nothing to show. It settles once it is
- * no longer current and every call it owns is terminal, and its `outcome` is
- * then the worst of those calls: failed beats cancelled beats completed.
+ * A stage is `started` once the script has entered it or one of its calls has
+ * actually been issued. A call the terminal sweep skipped was never issued, so
+ * a stage the run never reached stays unstarted and carries no outcome at all
+ * rather than reading completed for work that never ran.
+ *
+ * A started stage settles once it is no longer current and every call it owns
+ * is terminal, and its `outcome` is then the worst of those calls: failed
+ * beats cancelled beats completed. A reached stage whose every call the sweep
+ * skipped settled on the run's own end, so the run's outcome is its outcome;
+ * one that issued no call at all had nothing the run could cut short and
+ * simply completed.
  */
 export interface WorkflowStageState {
   readonly current: boolean;
@@ -239,15 +246,20 @@ export interface WorkflowStageState {
 }
 
 export function deriveWorkflowStageState(
-  snapshot: Pick<WorkflowRunSnapshot, 'calls' | 'currentStageId'>,
+  snapshot: Pick<WorkflowRunSnapshot, 'calls' | 'currentStageId' | 'outcome'>,
   stage: Pick<WorkflowRunSnapshot['stages'][number], 'id' | 'startedAt'>,
 ): WorkflowStageState {
   const current = stage.id === snapshot.currentStageId;
   const calls = snapshot.calls.filter((call) => call.stageId === stage.id);
-  const started =
-    current ||
-    stage.startedAt !== undefined ||
-    calls.some((call) => call.status !== WORKFLOW_CALL_STATUS.DECLARED);
+  // A plan label is not an invocation, and neither is one the terminal sweep
+  // skipped: the run ended before issuing it. Every other call was issued.
+  const issued = calls.filter(
+    (call) =>
+      call.status !== WORKFLOW_CALL_STATUS.DECLARED &&
+      (call.status !== WORKFLOW_CALL_STATUS.SKIPPED ||
+        call.settledBySweep !== true),
+  );
+  const started = current || stage.startedAt !== undefined || issued.length > 0;
   const settled =
     !current &&
     started &&
@@ -256,12 +268,17 @@ export function deriveWorkflowStageState(
     return { current, started, outcome: undefined, completedAt: undefined };
   }
   // Worst wins: one failed call fails the stage, one cancelled call cancels
-  // it, and a stage whose calls all skipped simply completed.
-  let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
-  if (calls.some((call) => call.status === WORKFLOW_CALL_STATUS.CANCELLED)) {
+  // it. A reached stage the sweep settled outright has no call of its own to
+  // read, so the run's end is the stage's end; a stage that issued nothing at
+  // all completed.
+  let outcome: RunOutcome =
+    calls.length > 0 && issued.length === 0
+      ? (snapshot.outcome ?? RUN_OUTCOME.COMPLETED)
+      : RUN_OUTCOME.COMPLETED;
+  if (issued.some((call) => call.status === WORKFLOW_CALL_STATUS.CANCELLED)) {
     outcome = RUN_OUTCOME.CANCELLED;
   }
-  if (calls.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED)) {
+  if (issued.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED)) {
     outcome = RUN_OUTCOME.FAILED;
   }
   return {

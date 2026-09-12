@@ -77,11 +77,16 @@ return 'done'`,
         expect(declaredReviewStages.filter(Boolean)).toEqual([]);
         // Drain-time cloning: every delivered snapshot is its own isolated copy.
         expect(new Set(snapshots).size).toBe(snapshots.length);
+        // Draft ran and completed; Review was never entered, so it stays
+        // unstarted with no outcome — its swept plan label is not work done.
         expect(
-          result.snapshot.stages.map(
-            (stage) => deriveWorkflowStageState(result.snapshot, stage).outcome,
+          result.snapshot.stages.map((stage) =>
+            deriveWorkflowStageState(result.snapshot, stage),
           ),
-        ).toEqual(['completed', 'completed']);
+        ).toMatchObject([
+          { started: true, outcome: 'completed' },
+          { started: false, outcome: undefined },
+        ]);
         expect(result.snapshot.calls.map((call) => call.status)).toEqual([
           'completed',
           'skipped',

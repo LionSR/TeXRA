@@ -1655,11 +1655,12 @@ return 'delivered'`,
           script: `export const meta = {
   name: 'sweep-stage',
   description: 'distinguishes settled work from terminal-sweep work',
-  phases: ['Settled', 'A', 'B'],
+  phases: ['Settled', 'A', 'B', 'C'],
   tasks: [
     { id: 'settled', label: 'Settled normally', phase: 'Settled' },
     { id: 'live', label: 'Ignores cancellation', phase: 'A' },
     { id: 'unreached', label: 'Never issued', phase: 'B' },
+    { id: 'bypassed', label: 'Never reached', phase: 'C' },
   ],
 }
 phase('Settled')
@@ -1674,29 +1675,44 @@ return 'done'`,
               : Effect.never,
         });
 
+        expect(run.snapshot.outcome).toBe('completed');
         expect(run.snapshot.calls).toMatchObject([
           { id: 'settled', status: 'completed' },
           { id: 'live', status: 'failed', settledBySweep: true },
           { id: 'unreached', status: 'skipped', settledBySweep: true },
+          { id: 'bypassed', status: 'skipped', settledBySweep: true },
         ]);
         expect(run.snapshot.calls[0]).not.toHaveProperty(
           'settledBySweep',
           true,
         );
-        const [settledStage, sweptStage, plannedStage] =
+        const [settledStage, sweptStage, enteredStage, bypassedStage] =
           run.snapshot.stages.map((stage) =>
             deriveWorkflowStageState(run.snapshot, stage),
           );
         const terminalAt = run.snapshot.timestamps.completedAt;
         expect(settledStage).toMatchObject({ outcome: 'completed' });
         expect(settledStage?.completedAt).toBeDefined();
+        // A stage whose own call the sweep failed reads failed, at the run's
+        // terminal instant rather than an end of its own.
         expect(sweptStage).toMatchObject({
           outcome: 'failed',
           completedAt: terminalAt,
         });
-        expect(plannedStage).toMatchObject({
+        // B was entered and issued nothing before the run ended, so the run's
+        // own outcome is its outcome.
+        expect(enteredStage).toMatchObject({
+          started: true,
           outcome: 'completed',
           completedAt: terminalAt,
+        });
+        // C was never entered: a swept plan label is not work it did, so it
+        // has no end and no outcome at all rather than reading completed.
+        expect(bypassedStage).toEqual({
+          current: false,
+          started: false,
+          outcome: undefined,
+          completedAt: undefined,
         });
       }),
   );

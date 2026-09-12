@@ -37,8 +37,10 @@ function workflowPhaseView(
     id: compactWorkflowText(stage.id),
     title: compactWorkflowText(stage.title),
     order: stage.order,
-    // Live while the run is still inside the phase or its calls are still
-    // running; the triad once every call it owns has settled.
+    // The triad once every call the phase owns has settled. Absent while the
+    // run is still inside the phase or its calls are still running, and
+    // absent alongside `startedAt` for a phase the run never reached, which
+    // therefore reads as the not-started phase it is rather than as done.
     outcome: state.outcome,
     startedAt: stage.startedAt,
     completedAt: state.completedAt,

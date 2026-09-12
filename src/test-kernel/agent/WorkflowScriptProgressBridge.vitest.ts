@@ -1217,18 +1217,16 @@ throw new Error('script failed')`,
         ),
       ).toMatchObject({ message: expect.stringContaining('script failed') });
 
-      // The engine settled 'One' cleanly before the script threw inside 'Two';
-      // only the phase the failure happened in reads failed.
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: stageId(events, 'One'),
-        status: RUN_OUTCOME.COMPLETED,
-      });
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: stageId(events, 'Two'),
-        status: RUN_OUTCOME.FAILED,
-      });
+      // Every opened phase closes on the state its own calls derive — the
+      // one `/executions/{id}` reads. Neither phase owns a failed call, so
+      // neither reads failed and the throw stays the run's own fact.
+      for (const title of ['One', 'Two']) {
+        expect(events).toContainEqual({
+          type: 'stage.end',
+          id: stageId(events, title),
+          status: RUN_OUTCOME.COMPLETED,
+        });
+      }
     }),
   );
 });
