@@ -33,6 +33,7 @@ import type {
   AnthropicToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
+import { estimateTokensFromText } from '@agent/runtime/run/compaction';
 import {
   attachPartialText,
   attachStreamDiagnostics,
@@ -55,7 +56,6 @@ import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
 import { getAnthropicMaxPdfPages } from '../contextManagementConstants';
-import { estimateTokensFromText } from '@agent/runtime/run/compaction';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import {
   AUXILIARY_MAX_RETRIES,

@@ -17,6 +17,7 @@ import type {
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -64,7 +65,6 @@ import {
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
 import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 
 // Third-party type imports
 import type {

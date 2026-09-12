@@ -22,6 +22,7 @@ import type {
   OpenAIToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import { detectRequestId } from '@common/errors/sdkError/errorInspection';
 import {
   isMissingFinishReasonError,
@@ -70,7 +71,6 @@ import {
 import { toOpenAITools } from '../toolConversion';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
