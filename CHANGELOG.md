@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
-- Node.js 22.16.0 or later in 22.x, or Node.js 24 or later is required.
+- Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
 - **`texra history show --export html` no longer takes `--assets-dir`** — the
   shared-assets export mode, which staged the trace viewer into a directory and
   wrote only the trace JSON to stdout, is gone. The default single-file HTML
