@@ -32,15 +32,7 @@
  * session is justified only as the ownership container.
  */
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  Option,
-  Semaphore,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -87,7 +79,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
@@ -97,7 +89,6 @@ import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
-import { throwAggregated } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunContextSession,
@@ -174,10 +165,10 @@ export class SessionHandle {
   /**
    * The session's event plane (PRD 7.1, contract C7): what a renderer reads
    * with `events.all(session.now())`. The reads only: publishing goes
-   * through {@link publish}, which runs the session's ordering-sensitive
-   * bookkeeping before the log moves, and nothing else can append.
+   * through {@link publish} and {@link commit}, the session's doors onto
+   * the graph's one publisher, and nothing else can append.
    */
-  readonly events: Omit<SessionEventsShape, 'publish'>;
+  readonly events: SessionEventReads;
   /**
    * The one handler of every request a surface issues to this session (PRD
    * 7.6, 8.2): an in-process surface runs it on the process runtime
@@ -217,10 +208,6 @@ export class SessionHandle {
   readonly followUps: ToolUseFollowUpQueue;
   private readonly graph: SessionGraph;
   private disposed = false;
-  private readonly publicationGate = Semaphore.makeUnsafe(1);
-  private readonly publications = new Set<
-    Promise<Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>>
-  >();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -470,10 +457,12 @@ export class SessionHandle {
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
 
   /**
-   * Subscribe to the `run.end` rows of this session's runs, as they commit.
-   * Hosts hold the session, so this is how they receive a run's outcome —
-   * per-run traces are created inside the run and are not reachable from the
-   * host otherwise.
+   * Subscribe to the `run.end` rows of this session's runs, each delivered
+   * once the view has folded it, so a listener that reads the run's view
+   * (its parent, its status) reads the state the row produced. Hosts hold
+   * the session, so this is how they receive a run's outcome — per-run
+   * traces are created inside the run and are not reachable from the host
+   * otherwise.
    */
   onResult(listener: (event: ResultEvent) => void): () => void {
     this.resultListeners.add(listener);
@@ -502,32 +491,32 @@ export class SessionHandle {
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
-      this.schedulePublication(
-        this.graph.publishText(runId, event.id, redactSecrets(event.text)),
-      );
+      const text = redactSecrets(event.text);
+      this.graph.detach(() => this.graph.publishText(runId, event.id, text));
       return;
     }
-    this.schedulePublication(
-      Effect.suspend(() => {
-        const draft = runEventDraft(
-          runId,
-          event.type === 'stream.end'
-            ? {
-                ...event,
-                finalText:
-                  event.finalText ?? this.graph.readText(runId, event.id),
-              }
-            : event,
-        );
-        return draft === null
-          ? Effect.void
-          : this.graph.publish([
-              isTranscriptEvent(draft)
-                ? { ...draft, transcriptDebug: isDebugModeEnabled() }
-                : draft,
-            ]);
-      }),
-    );
+    // The call fixes the row's place in the publication order; the draft is
+    // built when the job runs, after every chunk detached before it has
+    // reached the text source, so a `stream.end` with no final text of its
+    // own closes on the complete streamed text.
+    this.graph.detach((append) => {
+      const draft = runEventDraft(
+        runId,
+        event.type === 'stream.end'
+          ? {
+              ...event,
+              finalText:
+                event.finalText ?? this.graph.readText(runId, event.id),
+            }
+          : event,
+      );
+      if (draft === null) return Effect.void;
+      return append([
+        isTranscriptEvent(draft)
+          ? { ...draft, transcriptDebug: isDebugModeEnabled() }
+          : draft,
+      ]);
+    });
   }
 
   /**
@@ -630,11 +619,13 @@ export class SessionHandle {
       Effect.onInterrupt(() =>
         Effect.sync(() => {
           if (this.disposed) return;
-          this.schedulePublication(
-            this.decisionRow(runId, requestId, {
-              action: 'cancel',
-              cause: 'Run interrupted.',
-            }),
+          this.graph.detach((append) =>
+            this.decisionRow(
+              runId,
+              requestId,
+              { action: 'cancel', cause: 'Run interrupted.' },
+              append,
+            ),
           );
         }),
       ),
@@ -644,10 +635,10 @@ export class SessionHandle {
   /**
    * Answer a request, if it is still open: the one writer of a decision (one
    * run model, 3.7). The check reads the committed rows and the
-   * `request.decided` row lands under the same publication permit, so two
-   * surfaces answering at once record exactly one decision — a run
+   * `request.decided` row lands as one job of the session's publisher, so
+   * two surfaces answering at once record exactly one decision — a run
    * aggregate takes appends from its claim holder alone, and inside this
-   * process the permit orders them. `false` is that lost race, or an id
+   * process the publisher orders them. `false` is that lost race, or an id
    * never opened: nothing was written and the live waiter keeps the
    * decision that was.
    */
@@ -656,18 +647,19 @@ export class SessionHandle {
     requestId: string,
     decision: RequestDecision,
   ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
-    return this.publicationGate.withPermit(
-      this.decisionRow(runId, requestId, decision),
+    return this.graph.exclusive((append) =>
+      this.decisionRow(runId, requestId, decision, append),
     );
   }
 
-  /** {@link decideRequest} without the permit: the body the session's one
-   *  publisher runs, whether a surface awaits it or an interrupted
-   *  {@link openRequest} schedules it. */
+  /** {@link decideRequest}'s job: the body the session's one publisher
+   *  runs, whether a surface awaits it or an interrupted
+   *  {@link openRequest} detaches it. */
   private decisionRow(
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
+    append: Append,
   ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
     const aggregateId = qualifyAggregateId('run', runId);
     return Effect.gen({ self: this }, function* () {
@@ -683,7 +675,7 @@ export class SessionHandle {
         }
       }
       if (!open) return false;
-      yield* this.graph.publish([
+      yield* append([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);
       return true;
@@ -691,26 +683,30 @@ export class SessionHandle {
   }
 
   /**
-   * The one publisher of this session's facts (PRD 7.1). Durable subscribers
+   * Publish facts the session authors with no fiber to wait on (PRD 7.1):
+   * a registry's roster change, a policy snapshot. The batch takes its
+   * place in the graph's one publication order at this call and commits in
+   * that order; {@link settlePublications} waits for it. Durable subscribers
    * read committed facts from the table tail; publication never delivers
-   * payloads directly. A publish after teardown goes
-   * nowhere: the session's owners have unwound and a late fact has no reader.
+   * payloads directly. A publish after teardown goes nowhere: the session's
+   * owners have unwound and a late fact has no reader.
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    this.schedulePublication(this.graph.publish(events));
+    this.graph.detach((append) => append(events));
   }
 
-  /** Native metadata publication shares the existing ordered publisher. A
-   *  refused batch wrote nothing and comes back typed (D6 b): the caller
-   *  stops on it, it is never retried or converted here. */
+  /** Native metadata publication through the same ordered publisher,
+   *  awaited: returns once the view has folded the batch. A refused batch
+   *  wrote nothing and comes back typed (D6 b): the caller stops on it, it
+   *  is never retried or converted here. */
   commit(
     events: readonly SessionEventDraft[],
   ): Effect.Effect<
     readonly SessionEvent[],
     DatabaseNotOwner | DatabaseWriteFailed
   > {
-    return this.publicationGate.withPermit(this.graph.publish(events));
+    return this.graph.publish(events);
   }
 
   /** Registration owns birth claims as soon as append commits, before its
@@ -721,14 +717,13 @@ export class SessionHandle {
     readonly SessionEvent[],
     DatabaseNotOwner | DatabaseWriteFailed
   > {
-    return this.publicationGate.withPermit(
-      this.graph.publishRegistration(events),
-    );
+    return this.graph.publishRegistration(events);
   }
 
-  /** Read and append under the same local publisher permit. C5 excludes
-   *  foreign writers; losing the claim between the read and the append comes
-   *  back as `DatabaseNotOwner` with nothing written. */
+  /** Read and append as one job of the publisher, with no other write
+   *  between them. C5 excludes foreign writers; losing the claim between
+   *  the read and the append comes back as `DatabaseNotOwner` with nothing
+   *  written. */
   updateRecordFacts<A>(
     runId: RunId,
     update: (rows: readonly SessionEvent[]) => {
@@ -737,10 +732,10 @@ export class SessionHandle {
     },
   ): Effect.Effect<A, DatabaseNotOwner | DatabaseWriteFailed> {
     const graph = this.graph;
-    return this.publicationGate.withPermit(
+    return graph.exclusive((append) =>
       Effect.gen(function* () {
         const updateResult = update(yield* graph.runRecords(runId));
-        yield* graph.publish(updateResult.events);
+        yield* append(updateResult.events);
         return updateResult.value;
       }),
     );
@@ -809,81 +804,44 @@ export class SessionHandle {
   }
 
   /**
-   * Run one fire-and-forget publication under the session's ordered permit.
-   * A refused batch wrote nothing and is never retried here (D6 b, R7):
-   * `DatabaseNotOwner` says this process no longer holds the aggregate, and
-   * `DatabaseWriteFailed` says the transaction rolled back. The whole cause
-   * is logged as itself, and the Exit carries it to
-   * {@link settlePublications}, which throws it at the caller waiting for
-   * the session's facts to settle.
+   * Await every detached publication enqueued so far and the view's fold of
+   * what they committed. A refused batch wrote nothing and is never retried
+   * (D6 b, R7): `DatabaseNotOwner` says this process no longer holds the
+   * aggregate, and `DatabaseWriteFailed` says the transaction rolled back;
+   * the publisher logs each as itself and this throws them, aggregated, at
+   * the caller waiting for the session's facts to settle.
    */
-  private schedulePublication(
-    program: Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
-  ): void {
-    const publication = effectRuntime().runPromise(
-      this.publicationGate.withPermit(program).pipe(
-        Effect.tapCause((cause) =>
-          Effect.sync(() => {
-            logger.error('Session publication failed', { data: cause });
-          }).pipe(Effect.ignoreCause),
-        ),
-        Effect.exit,
-      ),
-    );
-    this.publications.add(publication);
-    void publication.finally(() => {
-      this.publications.delete(publication);
-    });
-  }
-
-  /** Await in-flight publications. Failures belong to those Exits, not a
-   *  session-wide leftover array a later settler would drain. */
-  async settlePublications(): Promise<void> {
-    const exits = await Promise.all([...this.publications]);
-    throwAggregated(
-      exits.flatMap((exit) =>
-        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-      ),
-      'Session publication failed',
-    );
+  settlePublications(): Promise<void> {
+    return effectRuntime().runPromise(this.graph.settle);
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return this.transcripts.acceptCommitted(event).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          // Host notifications belong to the authoring process.
-          const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-          if (event.ownerId == null || !self.includes(event.ownerId)) return;
-
-          const target = aggregateTarget(event.aggregateId);
-          if (target.kind !== 'run' || event.type !== 'run.end') return;
-          for (const listener of [...this.resultListeners]) {
-            try {
-              listener({ ...event, runId: target.id });
-            } catch (error) {
-              logger.warn('Session result listener threw', { data: error });
-            }
-          }
-        }),
-      ),
-    );
+    return this.transcripts.acceptCommitted(event);
   }
 
   /**
    * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
-   * phase notification, which is why it is not on the raw tail above. A woken
-   * waiter and a refreshed child roster both read `RunView.status` from the
-   * view synchronously, so a notification ahead of the fold would hand them
-   * the phase the row just replaced.
+   * phase notification and the result listeners, which is why neither is on
+   * the raw tail above. A woken waiter, a refreshed child roster, and a
+   * result listener all read the run's view synchronously, so a notification
+   * ahead of the fold would hand them the state the row just replaced.
    */
   receiveFoldedEvent(event: SessionEvent): void {
-    // Runtime waiters belong to the authoring process.
+    // Runtime waiters and host notifications belong to the authoring process.
     const { self } = SubscriptionRef.getUnsafe(this.graph.local);
     if (event.ownerId == null || !self.includes(event.ownerId)) return;
     const target = aggregateTarget(event.aggregateId);
     if (target.kind !== 'run') return;
+    if (event.type === 'run.end') {
+      for (const listener of [...this.resultListeners]) {
+        try {
+          listener({ ...event, runId: target.id });
+        } catch (error) {
+          logger.warn('Session result listener threw', { data: error });
+        }
+      }
+    }
     // The rows that move a run's phase (one run model, 3.3): every
     // activation, the park and the step that leaves it, the end.
     const phaseMoved =

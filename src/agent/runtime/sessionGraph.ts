@@ -37,17 +37,31 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type {
+  SessionEventReads,
+  SessionEventsShape,
+} from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
 export interface SessionGraph {
-  /** The plane's reads. Publishing is the session's alone (`publish`
+  /** The plane's reads. Publishing is the session's alone (the four doors
    *  below), so nothing holding a session can append past its bookkeeping. */
-  readonly events: Omit<SessionEventsShape, 'publish'>;
+  readonly events: SessionEventReads;
+  /** Append one batch in publication order and return once the view has
+   *  folded it: what a caller that reads the view next awaits. */
   readonly publish: SessionEventsShape['publish'];
   readonly publishRegistration: SessionEventsShape['publish'];
+  /** A read of committed rows and the append that depends on it, as one
+   *  job of the publisher, settled like `publish`. */
+  readonly exclusive: SessionEventsShape['exclusive'];
+  /** Enqueue a job in publication order and return: the door for a
+   *  producer with no fiber of its own to wait on. */
+  readonly detach: SessionEventsShape['detach'];
+  /** Every detached job enqueued before this call has run and the view has
+   *  folded what they committed; fails with their aggregated refusals. */
+  readonly settle: Effect.Effect<void, Error>;
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
