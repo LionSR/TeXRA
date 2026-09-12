@@ -131,6 +131,20 @@ describe('agent registry', () => {
     await Effect.runPromise(refresh({ includeRemote: false }));
   });
 
+  it('skips root registration when called before agent directory initialization', async () => {
+    await expect(
+      registerAgentDirectoryRoots({
+        extensionPath,
+      } as vscode.ExtensionContext),
+    ).resolves.toBeUndefined();
+
+    expect(registerExternalRoot).toHaveBeenCalledTimes(1);
+    expect(registerExternalRoot).toHaveBeenCalledWith(
+      resolve(resourcesPath, 'docs', 'agent-creation'),
+      expect.objectContaining({ kind: 'agentDocs', writable: false }),
+    );
+  });
+
   it('registers packaged roots and loads the local catalog in startup order', async () => {
     agentDirectories.initialize(globalState, resourcesPath);
 
