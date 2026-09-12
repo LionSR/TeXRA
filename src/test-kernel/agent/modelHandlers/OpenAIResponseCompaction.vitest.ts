@@ -404,9 +404,9 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
   });
 
   it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {
-    // PocketFlow's Node._exec retries a failed exec() with the identical
-    // prepRes, so a same-turn retry resends the exact same `messages` array
-    // reference. Compaction's chain-anchor clear (on ServerChainState)
+    // `ModelInvoker`'s automatic retry schedule re-runs a failed attempt on
+    // the identical prepared turn, so a same-turn retry resends the exact
+    // same `messages` array reference. Compaction's chain-anchor clear (on ServerChainState)
     // commits immediately and survives that retry permanently; its computed
     // payload (compactionResult) must now survive the same retry too, or the
     // retry silently redoes the compact() call for no reason.
@@ -459,14 +459,13 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
 
   it('does not reuse a stale compaction across a genuinely new turn that keeps the same messages array reference', async () => {
     // Unlike the two synthetic test helpers above (which pass a fresh array
-    // per turn), PocketFlow's ModelInvocationNode.post() mutates
-    // `shared.messages` IN PLACE (replaceMessagesInPlace: length=0 + push),
-    // so the array reference is typically IDENTICAL across turns, not just
-    // across retries of one turn. Keying compaction-result reuse on
+    // per turn), a caller is free to write `ModelInvoker`'s accepted response
+    // back into the SAME array object it handed in, so the array reference
+    // can be IDENTICAL across turns, not just across retries of one turn. Keying compaction-result reuse on
     // `sourceMessages === messages` alone would therefore also match the next
     // turn and resend the stale post-compaction payload, silently dropping
     // whatever was appended since (see cursor[bot]/codex[bot] review on this
-    // PR). This test drives the handler the way the real flow does: one
+    // PR). This test drives the handler the way such a caller does: one
     // array object, mutated across three turns.
     const handler = createHandler();
     const requests: any[] = [];
@@ -494,16 +493,16 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       },
     });
 
-    // One shared array, exactly as `shared.messages` is across the real
-    // PocketFlow cycle.
+    // One shared array, exactly as a caller that reuses one buffer across
+    // turns hands in.
     const sharedMessages = createMessages(2);
 
     // Turn 1: below threshold, no compaction.
     await sendTurn(handler, client, sharedMessages);
 
     // Turn 2 begins: a new message arrives, appended onto the SAME array
-    // (mirrors ToolUseDispatchNode / a new user turn `.push()`-ing onto
-    // `shared.messages`).
+    // (mirrors a tool result or a new user turn being `.push()`-ed onto the
+    // caller's buffer).
     const turn2NewMessage = { role: 'user', content: 'message 3' };
     sharedMessages.push(turn2NewMessage as ResponseInputItem);
 
@@ -513,9 +512,8 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(compactRequests).toHaveLength(1);
     expect(turn2Result.updatedMessages).toEqual(compactedMessages);
 
-    // Mirror ModelInvocationNode.post(): replaceMessagesInPlace mutates the
-    // SAME array object to hold the compacted content instead of replacing
-    // the reference.
+    // Mirror the accepted-response step: the accepted content is written
+    // into the SAME array object instead of replacing the reference.
     sharedMessages.length = 0;
     sharedMessages.push(...(turn2Result.updatedMessages ?? []));
 

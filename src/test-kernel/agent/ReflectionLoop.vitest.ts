@@ -1,3 +1,11 @@
+/**
+ * The reflection family's loop-boundary suite: `runReflection` driven over a
+ * real session ledger with the model faked at the `ModelInvoker` seam. It
+ * pins what the durable rows must say at the boundary — the round loop's
+ * compile repair, resume from the last snapshot, the output facts a round
+ * publishes, the token-limited response, and the interrupt — replacing the
+ * per-node suites the retired engine's internals used to pin.
+ */
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports

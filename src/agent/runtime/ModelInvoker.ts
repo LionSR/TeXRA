@@ -32,6 +32,7 @@ import {
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import {
+  logContextManagementEvent,
   logErrorData,
   logProgressStatus,
   type StreamHandle,
@@ -48,6 +49,7 @@ import {
   type TurnResult,
 } from '@llm/turn';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   AgentCategory,
   MESSAGE_TYPES,
@@ -73,10 +75,31 @@ import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import { priceTurnUsage } from './run/pricing';
 import { dispatchFactsFor } from './run/tools';
-import { rowAggregate, runtimeSnapshotRow, stepRow } from './loop/rows';
+import {
+  redactedForFact,
+  rowAggregate,
+  runtimeSnapshotRow,
+  stepRow,
+} from './loop/rows';
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
+
+/**
+ * The output-budget preflight's constants (R4), as the retired handler
+ * preflight used them: the buffer covers tokenization differences and API
+ * framing, and a reduction below the floor is not worth taking.
+ */
+const TOKEN_SAFETY_BUFFER = 10;
+const TOOL_USE_SAFETY_BUFFER = 2000;
+const MIN_COMPLETION_TOKENS = 100;
+
+/** The output budget that fits in what the input leaves of the window. */
+function reducedOutputBudget(available: number, buffer: number): number {
+  if (available <= 0) return 1;
+  const buffered = available - buffer;
+  return buffered >= MIN_COMPLETION_TOKENS ? buffered : available;
+}
 
 /**
  * How long accepted background work is observed after its submission, as
@@ -534,7 +557,7 @@ export const modelInvokerLayer: Layer.Layer<
         if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
         return yield* failAttempt(Cause.squash(prepared.cause), state);
       }
-      const resolved = prepared.value;
+      let resolved = prepared.value;
       yield* saveDebug(
         state.messages,
         'messages',
@@ -543,7 +566,9 @@ export const modelInvokerLayer: Layer.Layer<
       );
       // R4: the input estimate where the provider offers one. A count that
       // fails is logged and the provider enforces its own limit; an input
-      // that alone exceeds the window is refused before it is billed.
+      // that alone exceeds the window is refused before it is billed, and an
+      // input that leaves too little room for the requested output shrinks
+      // that output rather than letting the provider reject the request.
       if (
         resolved.mode === 'foreground' &&
         bound.model.estimateInputTokens &&
@@ -567,6 +592,54 @@ export const modelInvokerLayer: Layer.Layer<
             }),
             state,
           );
+        } else {
+          const inputTokens = estimate.value.inputTokens;
+          const { controls } = resolved;
+          const requested =
+            'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
+          if (
+            requested !== null &&
+            inputTokens + requested > bound.contextWindow
+          ) {
+            const reduced = reducedOutputBudget(
+              bound.contextWindow - inputTokens,
+              run.config.agentCategory === AgentCategory.ToolUse
+                ? TOOL_USE_SAFETY_BUFFER
+                : TOKEN_SAFETY_BUFFER,
+            );
+            logContextManagementEvent(
+              logger,
+              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.contextWindow}). Reducing to ${reduced}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow: bound.contextWindow,
+                utilizationBefore: roundedUtilizationPercent(
+                  inputTokens,
+                  bound.contextWindow,
+                ),
+                originalMaxTokens: requested,
+                reducedMaxTokens: reduced,
+                details: request.debugName,
+              },
+            );
+            // The clamp is part of the request, so the request is prepared
+            // again with it: execution never reapplies defaults over a
+            // resolved turn.
+            const clamped = yield* Effect.exit(
+              bound.model.prepareTurn({
+                ...turnRequest,
+                maxOutputTokens: reduced,
+              }),
+            );
+            if (Exit.isFailure(clamped)) {
+              if (Cause.hasInterrupts(clamped.cause)) {
+                return yield* Effect.interrupt;
+              }
+              return yield* failAttempt(Cause.squash(clamped.cause), state);
+            }
+            resolved = clamped.value;
+          }
         }
       }
       logRetryLifecycle(operationId, 'attempt_started', bound, {
@@ -851,7 +924,11 @@ export const modelInvokerLayer: Layer.Layer<
               type: 'approval.requested',
               aggregateId,
               requestId,
-              payload: { kind: 'retry', data: request },
+              // The row is committed here rather than at the interaction
+              // owner's publish door (`requestRowCommitted`), so the scrub
+              // that door applies happens here: a provider message echoing
+              // an `Authorization` header never reaches a durable row.
+              payload: redactedForFact({ kind: 'retry', data: request }),
             },
             retrySnapshot(state, {
               pendingRetry: pendingRetry('waiting'),

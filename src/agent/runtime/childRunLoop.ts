@@ -167,7 +167,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly ownsBackgroundProcess?: boolean;
 
   /**
-   * Drop the child's stream tab when the run finalizes. For a child whose tab
+   * Drop the child's run tab when the run finalizes. For a child whose tab
    * is ephemeral by construction (a background shell), the tab exists only
    * while the process does; every other child type keeps its tab for reading
    * back.
@@ -292,7 +292,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    * Presentation/lifecycle wrapper for agent-CLI child runs. Native
    * strategies omit this; `executeAgent`/`resumeToolUseFromResumeData`
    * already own handle creation, tracking, and terminal finalization for
-   * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
+   * every turn via `runFlowWithLifecycle`, so there is no separate run tab
    * for this loop to finalize.
    */
   readonly childRun?: ChildRunPort;
@@ -716,7 +716,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   });
   if (delivery.status === 'failed') {
     logger.warn(
-      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the run report.`,
+      `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
       {
         data: {
           runId,

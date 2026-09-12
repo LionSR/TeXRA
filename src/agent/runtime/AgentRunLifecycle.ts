@@ -430,7 +430,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
   ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
-    const isChild = options?.parentRunId !== undefined;
     const handle = new RunHandle(
       {
         runId,
@@ -522,7 +521,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // Root-agent failures are surfaced in the stream log. Subagent failures
       // are delivered to the orchestrator below, so avoid adding a second
       // wrapper error that makes a child failure look like the parent failed.
-      if (kind !== 'abort' && !isChild) {
+      if (kind !== 'abort' && !handle.isChild) {
         logSdkError(ctx.logger, errorMsg, err, {
           operation: `execute ${agentIdentifier}`,
         });
@@ -549,7 +548,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
               message,
               ...providerErrorInfo,
             };
-      const subagentResult = isChild
+      const subagentResult = handle.isChild
         ? (carried ??
           buildTerminalFlowResult(
             handle.category,

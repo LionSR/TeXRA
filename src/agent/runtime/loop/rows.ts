@@ -6,10 +6,12 @@
  */
 
 import type { MessageSchema } from '@llm/turn';
+import { redactSecrets } from '@logger/redaction';
 import {
   aggregateId as qualifyAggregateId,
   type FlowStep,
   type FlowSnapshotPayload,
+  type PermissionPayload,
   type RunId,
   type RunLoopPhase,
   type RunOutcome,
@@ -147,16 +149,23 @@ function buildSnapshot(
   patch: SnapshotCoordinates,
   flow: FamilyState,
 ): RunLedgerDraft {
+  // A snapshot's model id is a required durable fact (resume and every
+  // listing read it back); no caller may reach here without one, so refuse
+  // at the constructor rather than let `appendBatch` reject the batch on a
+  // schema refinement far from whatever lost the binding.
+  const modelId =
+    patch.runtime?.modelId ??
+    state.modelId ??
+    (flow.family === 'toolUse' ? flow.state.modelId : undefined);
+  if (modelId === undefined || modelId === null || modelId === '') {
+    throw new Error('A flow.snapshot presupposes a bound model id.');
+  }
   const runtime: SnapshotRuntime = {
     phase: patch.phase,
     round: patch.round ?? state.round,
     turn: patch.turn ?? state.turn,
     continuationIndex: patch.continuationIndex ?? state.continuationIndex,
-    modelId:
-      patch.runtime?.modelId ??
-      state.modelId ??
-      (flow.family === 'toolUse' ? flow.state.modelId : undefined) ??
-      '',
+    modelId,
     modelHandlerCompatibilityKey:
       patch.runtime !== undefined &&
       'modelHandlerCompatibilityKey' in patch.runtime
@@ -255,4 +264,39 @@ export function displayRow(
   draft: Omit<Extract<SessionEventDraft, { type: 'tool.end' }>, 'aggregateId'>,
 ): RunLedgerDraft {
   return { ...draft, aggregateId: rowAggregate(runId) };
+}
+
+/**
+ * The durable copy of an approval request payload. A retry carries the
+ * provider error, whose body can echo the request URL or an `Authorization`
+ * header, so the raw body is dropped and the text fields are scrubbed before
+ * the row is written. Bash commands and question text are what the user
+ * typed and stay as they are. Every writer of an `approval.requested` row
+ * passes its payload through here, whether the row is published by the
+ * interaction owner or appended by a loop that already committed it.
+ */
+export function redactedForFact(payload: PermissionPayload): PermissionPayload {
+  if (payload.kind !== 'retry') return payload;
+  const { errorMessage, errorDetails, ...data } = payload.data;
+  const redactedDetails = (() => {
+    if (!errorDetails) return errorDetails;
+    const { rawErrorBody: _dropped, ...details } = errorDetails;
+    for (const key of ['message', 'statusText', 'partialText'] as const) {
+      const value = details[key];
+      if (typeof value === 'string') details[key] = redactSecrets(value);
+    }
+    return details;
+  })();
+  return {
+    kind: 'retry',
+    data: {
+      ...data,
+      ...(errorMessage === undefined
+        ? {}
+        : { errorMessage: redactSecrets(errorMessage) }),
+      ...(redactedDetails === undefined
+        ? {}
+        : { errorDetails: redactedDetails }),
+    },
+  };
 }

@@ -27,7 +27,7 @@ import { normalizeToolCallError } from '@agent/core/flows/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import { emitToolUseCard, endToolUseCard } from '@agent/trace';
+import { emitToolUseCard, endToolUseCard, type AgentTrace } from '@agent/trace';
 import {
   type DispatchFacts,
   type FileLocation,
@@ -166,10 +166,19 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
   return captured;
 });
 
-/** The model-visible content of one settlement: text, then inline media. */
+/**
+ * The model-visible content of one settlement: text, then inline media.
+ *
+ * An attachment the binding cannot carry inline (a PDF on a route without
+ * native PDF support, an image on a text-only route, any other type) reaches
+ * the model as the text mention only. The provider upload paths that carried
+ * those bytes are not on the loop yet (ruling R3), so the degradation is
+ * named in the transcript instead of being silent.
+ */
 function settlementContent(
   settlement: Settlement,
   capabilities: Parameters<typeof inlineMediaPart>[2],
+  logger: AgentTrace,
 ): readonly InputPart[] {
   const attachments: ToolFileAttachment[] = settlement.attachments.map(
     (attachment) => ({
@@ -186,13 +195,24 @@ function settlementContent(
     true,
   );
   const media = settlement.attachments.flatMap((attachment) => {
-    if (attachment.content.kind !== 'base64') return [];
+    if (attachment.content.kind !== 'base64') {
+      logger.warn(
+        `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
+      );
+      return [];
+    }
     const part = inlineMediaPart(
       attachment.mimeType,
       attachment.content.data,
       capabilities,
     );
-    return part === null ? [] : [part];
+    if (part === null) {
+      logger.warn(
+        `The model receives "${attachment.path}" as a mention only: the bound model carries no ${attachment.mimeType} attachment inline.`,
+      );
+      return [];
+    }
+    return [part];
   });
   return [{ kind: 'text', text }, ...media];
 }
@@ -477,8 +497,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   ): Effect.fn.Return<'rerun' | 'skip', never> {
     const current = yield* SynchronizedRef.get(stateRef);
     const bound = current.approvals[intent.approvalRequestId ?? ''];
+    // Only an answered barrier is decided. A resolution carrying anything
+    // else (`cancelled`, `interrupted`, a denial, or no decision at all) was
+    // written by a cleanup, not by a person, so it decides nothing and the
+    // barrier is asked again.
     if (bound !== undefined && bound.resolved) {
-      return bound.decision === 'approved' ? 'rerun' : 'skip';
+      if (bound.decision === 'approved') return 'rerun';
+      if (bound.decision === 'skipped') return 'skip';
     }
     const requestId =
       intent.approvalRequestId ?? `tool-outcome-${generateShortId()}`;
@@ -502,7 +527,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ],
       context: call.argumentsText,
     };
-    if (bound === undefined) {
+    // A request row is committed whenever no live request stands: either the
+    // call never raised one, or the standing one was retired without an
+    // answer and this asks again on the same request id (the fold reopens it).
+    if (bound === undefined || bound.resolved) {
       const flow = toolUseFlowState(current);
       if (flow === null) {
         return yield* Effect.die(
@@ -532,16 +560,22 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }).pipe(
       Effect.catch((cause) =>
         Effect.sync(() => {
-          logger.warn('The tool-outcome prompt failed; the call is skipped.', {
-            data: cause,
-          });
+          logger.warn(
+            'The tool-outcome prompt failed; the call stays outcome-unknown and the next resume asks again.',
+            { data: cause },
+          );
           return { action: 'reject' as const, answers: undefined };
         }),
       ),
     );
-    const rerun =
-      settlement.action === 'submit' &&
-      settlement.answers[question] === 'Run again';
+    // A settlement that is not a submitted answer is a cancellation: a host
+    // Stop or a session teardown retires the pending question, and the prompt
+    // failure above lands here too. Neither is a decision, so no row is
+    // written: the `tool.intent` keeps its binding, the request stays the
+    // barrier's, and the next resume asks the same question again. Writing
+    // `skipped` here would tell the model a person skipped the call.
+    if (settlement.action !== 'submit') return yield* Effect.interrupt;
+    const rerun = settlement.answers[question] === 'Run again';
     const decision = rerun ? 'rerun' : 'skip';
     yield* append([
       {
@@ -700,7 +734,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         settlement.result.status === 'executed'
           ? ('success' as const)
           : ('error' as const),
-      content: settlementContent({ ...settlement, stateMutation: [] }, bound),
+      content: settlementContent(
+        { ...settlement, stateMutation: [] },
+        bound,
+        logger,
+      ),
     };
   });
   const group: Message = { role: 'tool', results };

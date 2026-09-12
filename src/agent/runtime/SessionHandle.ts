@@ -789,7 +789,7 @@ export class SessionHandle {
    * Unwind this session ({@link unwind}) and release it from its owner,
    * which frees the root's graph after it. A teardown failure surfaces to
    * the caller and still releases the session. Settles nothing: a host that
-   * needs the session's live executions ended first closes through
+   * needs the session's live runs ended first closes through
    * `closeSession`, which ends here. Idempotent, so a handle released once
    * never reaches the session its owner built over the same root later.
    */
@@ -827,7 +827,7 @@ export function forEachLiveSession(
 }
 
 /**
- * Settle executions still owned when the host exits. Hosts register this as
+ * Settle runs still owned when the host exits. Hosts register this as
  * their first ON-phase handler, after reachable drivers have unwound and
  * before sessions or persistence services are disposed.
  *

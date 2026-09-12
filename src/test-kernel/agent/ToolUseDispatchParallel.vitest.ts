@@ -367,7 +367,7 @@ function countStarts(probe: DispatchProbe, toolName = ''): number {
 }
 
 describe('tool-use dispatch', () => {
-  it.live('converts a malformed attachment result into a tool error', () =>
+  it.effect('converts a malformed attachment result into a tool error', () =>
     Effect.gen(function* () {
       const malformedAttachmentTool: ITool = {
         definition: {
@@ -376,11 +376,12 @@ describe('tool-use dispatch', () => {
           parameters: {},
         },
         async call(): Promise<ToolResult> {
-          return {
-            status: 'executed',
-            output: 'not accepted',
-            files: [{ path: 42, mimeType: 'image/png' }],
-          } as unknown as ToolResult;
+          // Deliberately malformed (`path` is a number): parsed from JSON so
+          // the shape reaches the dispatch boundary unchecked, as a real tool
+          // returning bad data would, without a cast asserting it is valid.
+          return JSON.parse(
+            '{"status":"executed","output":"not accepted","files":[{"path":42,"mimeType":"image/png"}]}',
+          );
         },
       } as ITool;
       const kit = yield* openDispatch({
@@ -399,7 +400,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('preserves the unwrapped root instruction across delegation', () =>
+  it.effect('preserves the unwrapped root instruction across delegation', () =>
     Effect.gen(function* () {
       let observedInstruction: string | undefined;
       let observedTrace: unknown;
@@ -433,7 +434,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
+  it.effect('runs contiguous parallel-safe calls concurrently, in order', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -461,7 +462,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('treats non-safe tools as ordering barriers', () =>
+  it.effect('treats non-safe tools as ordering barriers', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -491,7 +492,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('stops dispatch and ends the turn after a terminal result', () =>
+  it.effect('stops dispatch and ends the turn after a terminal result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -524,7 +525,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live(
+  it.effect(
     'executes duplicate parallel calls once and fans the result out',
     () =>
       Effect.gen(function* () {
@@ -550,7 +551,7 @@ describe('tool-use dispatch', () => {
 
   // No fail-fast sibling interruption and no fabricated settlement: an
   // interrupted call is outcome-unknown, and resume asks rather than guesses.
-  it.live('commits no settlement for a call interrupted in flight', () =>
+  it.effect('commits no settlement for a call interrupted in flight', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -568,7 +569,9 @@ describe('tool-use dispatch', () => {
       });
 
       const fiber = yield* Effect.forkChild(dispatch(kit));
-      yield* Effect.sleep(15);
+      // A real wait, matching the probe tools' own real timers: the point is
+      // that both calls are genuinely in flight when the interrupt lands.
+      yield* Effect.promise(() => delay(15));
       expect(probe.maxInFlight).toBe(2);
       yield* Fiber.interrupt(fiber);
 
@@ -591,7 +594,7 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('does not share read results across a mutating barrier', () =>
+  it.effect('does not share read results across a mutating barrier', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({
@@ -617,32 +620,34 @@ describe('tool-use dispatch', () => {
     }),
   );
 
-  it.live('allows an identical mutation again after a different mutation', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          write_file: probeTool(probe, 'write_file', 5),
-          edit_file: probeTool(probe, 'edit_file', 5),
-        },
-        calls: [
-          makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
-          makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
-          makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
-        ],
-      });
+  it.effect(
+    'allows an identical mutation again after a different mutation',
+    () =>
+      Effect.gen(function* () {
+        const probe = newProbe();
+        const kit = yield* openDispatch({
+          tools: {
+            write_file: probeTool(probe, 'write_file', 5),
+            edit_file: probeTool(probe, 'edit_file', 5),
+          },
+          calls: [
+            makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
+            makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
+            makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
+          ],
+        });
 
-      const { state } = yield* dispatch(kit);
+        const { state } = yield* dispatch(kit);
 
-      // The edit changed state, so re-issuing the identical write is a
-      // plausible restore — it must execute, not be swallowed as a glitch.
-      expect(countStarts(probe, 'write_file')).toBe(2);
-      expect(deliveredResults(state)[2]?.status).toBe('success');
-      kit.session.dispose();
-    }),
+        // The edit changed state, so re-issuing the identical write is a
+        // plausible restore — it must execute, not be swallowed as a glitch.
+        expect(countStarts(probe, 'write_file')).toBe(2);
+        expect(deliveredResults(state)[2]?.status).toBe('success');
+        kit.session.dispose();
+      }),
   );
 
-  it.live('shares the primary result for side-effect tool duplicates', () =>
+  it.effect('shares the primary result for side-effect tool duplicates', () =>
     Effect.gen(function* () {
       const probe = newProbe();
       const kit = yield* openDispatch({

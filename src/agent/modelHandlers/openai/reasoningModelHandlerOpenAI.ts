@@ -20,17 +20,10 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
  * - `convertContentToStringUnlessVision` — every provider in this family
  *   ships both vision and non-vision variants and stringifies only the
  *   non-vision ones.
- * - `requiresBatchedParallelToolResults` — most providers with separate
- *   reasoning channels need one batched follow-up message to preserve that
- *   reasoning across parallel tool calls. Unconditional here (not gated on
- *   `capabilities.supportsReasoning`) because it's a family-wide wire-format
- *   fact, not a per-model reasoning toggle — see the base getter's doc
- *   comment (#7101 triage).
  *
  * Overrides that vary between these providers stay on the concrete handlers:
- * the GLM batching exception, DeepSeek's `mergeConsecutiveRoles`, the
- * `thinking`/`reasoning_split` parameter shape, and each provider's
- * reasoning-field extraction.
+ * DeepSeek's `mergeConsecutiveRoles`, the `thinking`/`reasoning_split`
+ * parameter shape, and each provider's reasoning-field extraction.
  *
  * Providers that merely tolerate reasoning tokens without a separate channel
  * (xAI, DashScope) intentionally keep extending {@link ModelHandlerOpenAI}.

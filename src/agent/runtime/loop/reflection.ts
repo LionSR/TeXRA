@@ -13,6 +13,11 @@
  * any file write; `round.end` with the snapshot of the next round or of the
  * finished run; and the `halted` step at every exit that ends the run.
  *
+ * A turn the provider refused for exceeding its context window is recovered
+ * once per round: the history is compacted (`model.compaction`) and the cycle
+ * continues against it. A second overflow in the same round stops, because
+ * nothing further would change.
+ *
  * Reflection dispatches no tools: a turn advertises none, so a response never
  * carries a local call and the assistant message enters history with its
  * `response` row. That narrows the retired flow, which forwarded a workflow's
@@ -98,6 +103,7 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 import { AgentRun } from '../run/AgentRun';
+import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { ModelInvoker, turnText } from '../ModelInvoker';
 import {
@@ -236,6 +242,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   // value a listing or a resume reads (`runtime.lastError`) is the value the
   // live loop holds, and a resumed run that retries clears it for good.
   let lastError: RetryErrorInfo | undefined;
+  /**
+   * One forced-compaction recovery per round: a turn that overflowed the
+   * context window is retried once against a compacted history, and a second
+   * overflow in the same round stops rather than paying for a futile retry.
+   */
+  let contextWindowRecoveryAttempted = false;
   // The scalar family state; the snapshot re-derives the collections below.
   let flow: ReflectionFlowState = {
     currentRound: 0,
@@ -345,6 +357,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     RunState,
     Error
   > {
+    // A workflow YAML may still declare `tools:`. This family advertises
+    // none (header), so the narrowing is stated rather than silent.
+    if (setting.tools.length > 0) {
+      const declared = setting.tools.map((tool) => tool.name).join(', ');
+      logger.warn(
+        `The workflow family advertises no tools under this release, so the tools resolved for this run are not offered to the model: ${declared}. Run the agent in the tool-use family if it needs them.`,
+        { messageType: MESSAGE_TYPES.INTERNAL },
+      );
+    }
     yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
@@ -376,6 +397,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
     // invocation its failure interrupted rather than failing again at once.
     flow = { ...persisted, totalRounds };
+    // The run's error fact resumes with it: the loop carries the durable
+    // `lastError` forward so the next snapshot restates it, and only a
+    // response that actually arrives clears it (below).
+    lastError = state.lastError ?? undefined;
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
     outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
     // Mid-round, the raw output file holds the text every earlier response
@@ -407,6 +432,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): Effect.fn.Return<RunState, Error> {
     const round = flow.currentRound;
     const bound = yield* SynchronizedRef.get(run.model);
+    contextWindowRecoveryAttempted = false;
     workspace = AgentWorkspaceState.create();
     flow = {
       ...flow,
@@ -624,6 +650,25 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
     let endTurn = false;
     let continueCycle = false;
+    // Set when the cycle continues only to retry a context-window overflow
+    // against a compacted history.
+    let compactBeforeContinuing = false;
+    /**
+     * A context-window overflow is recoverable once per round: force the
+     * compaction the history needs and retry the cycle. The second overflow
+     * of a round stops, because nothing further would change.
+     */
+    const admitOverflowRetry = (): boolean => {
+      if (contextWindowRecoveryAttempted) {
+        logger.warn(
+          'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
+        );
+        return false;
+      }
+      contextWindowRecoveryAttempted = true;
+      compactBeforeContinuing = true;
+      return true;
+    };
     if (text) {
       const connector = yield* Effect.tryPromise({
         try: () =>
@@ -678,16 +723,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           },
         });
       } else if (finish === 'context-window-exceeded') {
-        logger.warn(
-          'Model context window exceeded and no compaction is available; stopping to avoid a futile retry.',
-        );
+        continueCycle = admitOverflowRetry();
       } else if (finish === 'length') {
         continueCycle = true;
       }
     } else if (finish === 'context-window-exceeded') {
-      logger.warn(
-        'Model context window exceeded with no output; stopping to avoid a futile retry.',
-      );
+      continueCycle = admitOverflowRetry();
     }
 
     if (continueCycle) {
@@ -701,15 +742,36 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
       const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
       flow = { ...flow, endTurn: false };
-      const continued = yield* ledger.appendBatch(runId, initial, [
+      // The overflow retry pays for a summary first: the compaction row is
+      // committed before the continuation prompt, so the retried request is
+      // issued against the compacted history the fold returns.
+      let base = initial;
+      if (compactBeforeContinuing) {
+        logger.info('Retrying after forcing model context compaction', {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        });
+        const bound = yield* SynchronizedRef.get(run.model);
+        base = yield* commit(
+          yield* compactIfNeeded(base, {
+            runId,
+            ledger,
+            logger,
+            bound,
+            system: undefined,
+            tools: [],
+            force: true,
+          }),
+        );
+      }
+      const continued = yield* ledger.appendBatch(runId, base, [
         appendRow(runId, [
           {
             role: 'user',
             content: [{ kind: 'text', text: continuationPrompt }],
           },
         ]),
-        snapshot(initial, { phase: 'model.ready', continuationIndex: next }),
-        stepRow(runId, coordinates(initial, next), 'response.processed'),
+        snapshot(base, { phase: 'model.ready', continuationIndex: next }),
+        stepRow(runId, coordinates(base, next), 'response.processed'),
       ]);
       return yield* commit(continued);
     }
@@ -1020,6 +1082,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
               roundOutcome = RUN_OUTCOME.FAILED;
               return { state, kind: 'failed' } as const;
             }
+            // The retry succeeded: the run is no longer failed, and the next
+            // snapshot is what records that.
+            lastError = undefined;
             flow = {
               ...flow,
               runStateSnapshot: {
@@ -1140,10 +1205,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     for (;;) {
       if (state.phase === 'halted') {
         // A finished run launched again continues only if rounds remain
-        // under the current configuration.
-        if (!shouldContinueNextRound()) {
+        // under the current configuration. The restored error fact does not
+        // decide this: relaunching is the admission of a new attempt, and it
+        // clears the error the way a consumed follow-up does in the tool-use
+        // loop, so the next snapshot no longer restates a failure the run has
+        // moved past.
+        if (!(
+          flow.continueRounds && flow.currentRound + 1 < flow.totalRounds
+        )) {
           return { state, outcome: resolveOutcome() } satisfies LoopExit;
         }
+        lastError = undefined;
         flow = {
           ...flow,
           currentRound: flow.currentRound + 1,
