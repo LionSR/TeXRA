@@ -20,7 +20,6 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   };
 });
 
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -50,6 +49,7 @@ import {
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
@@ -79,20 +79,40 @@ function useCliHostInteractions(
   );
 }
 
-function requestNewProofEdit(): ReturnType<typeof requestToolEditApproval> {
-  return requestToolEditApproval({
-    path: '/tmp/new-proof.tex',
-    originalContent: '',
-    proposedContent: '\\section{Proof}\nA concise proof.\n',
-    sourceTool: 'write_file',
-    runId: ROOT_RUN,
-  });
-}
-
 const ROOT_RUN = 'a00001' as RunId;
 /** The runs this file opens requests on; a request is a row on its run, so
  *  the run exists before the first one opens. */
 const started = new Set<RunId>();
+
+function ensureRun(runId: RunId) {
+  return Effect.gen(function* () {
+    if (started.has(runId)) return;
+    started.add(runId);
+    publishTestRunStart(defaultSession(), runId);
+    yield* Effect.promise(() => defaultSession().settlePublications());
+  });
+}
+
+function approvalLayer(runId: RunId, onApprovalPolicyDenial?: () => void) {
+  return nativeToolTestLayer({
+    workingDirectory: '/tmp',
+    run: { runId, session: defaultSession(), toolPolicy: {} },
+    onApprovalPolicyDenial,
+  });
+}
+
+function requestNewProofEdit(onApprovalPolicyDenial?: () => void) {
+  return Effect.gen(function* () {
+    yield* ensureRun(ROOT_RUN);
+    return yield* requestToolEditApproval({
+      path: '/tmp/new-proof.tex',
+      originalContent: '',
+      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      sourceTool: 'write_file',
+      runId: ROOT_RUN,
+    }).pipe(Effect.provide(approvalLayer(ROOT_RUN, onApprovalPolicyDenial)));
+  });
+}
 
 /**
  * Ask through the protocol the headless host answers: `request.opened` on the
@@ -105,11 +125,7 @@ function openRequestOn(
 ): Effect.Effect<RequestDecision, Error> {
   return Effect.gen(function* () {
     const session = defaultSession();
-    if (!started.has(runId)) {
-      started.add(runId);
-      publishTestRunStart(session, runId);
-      yield* Effect.promise(() => session.settlePublications());
-    }
+    yield* ensureRun(runId);
     return yield* session.openRequest(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
@@ -230,16 +246,9 @@ describe('human input approval policy', () => {
         useCliHostInteractions(ctx);
         let policyDenials = 0;
 
-        const result = yield* Effect.promise(() =>
-          withRunContext(
-            createRunContext({
-              onApprovalPolicyDenial: () => {
-                policyDenials += 1;
-              },
-            }),
-            () => Effect.runPromise(requestNewProofEdit()),
-          ),
-        );
+        const result = yield* requestNewProofEdit(() => {
+          policyDenials += 1;
+        });
         // A policy refusal with nobody to ask is a denial, not a person's
         // rejection: the model reads the reason and routes around it.
         expect(result).toMatchObject({ action: 'deny' });
@@ -731,13 +740,14 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
+      yield* ensureRun(ROOT_RUN);
       const result = yield* requestToolEditApproval({
         path: '/tmp/auto-approved.tex',
         originalContent: '',
         proposedContent: '\\section{Auto-approved}\n',
         sourceTool: 'write_file',
         runId: ROOT_RUN,
-      });
+      }).pipe(Effect.provide(approvalLayer(ROOT_RUN)));
 
       expect(result).toMatchObject({
         action: 'apply',

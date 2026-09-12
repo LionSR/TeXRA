@@ -1,4 +1,5 @@
 // Third-party imports
+import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
@@ -10,6 +11,8 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -22,75 +25,69 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  *
  * Subclasses must implement the execute() method.
  */
-export abstract class BaseTool<T> implements ITool {
+export abstract class BaseTool<T, R = never> implements ITool<unknown, R> {
   readonly definition: ToolDefinition;
-  private readonly schema: ZodType<T, T>;
+  private readonly schema: ZodType<T, unknown>;
 
-  protected constructor(definition: ToolDefinition, schema: ZodType<T, T>) {
+  protected constructor(
+    definition: ToolDefinition,
+    schema: ZodType<T, unknown>,
+  ) {
     this.definition = definition;
     this.schema = schema;
   }
 
-  /**
-   * Execute the tool with centralized error handling.
-   *
-   * This method validates the input using Zod schema, executes the tool's
-   * implementation, and wraps any errors in a ToolResult with diagnostic
-   * information.
-   *
-   * @param rawInput - The raw input to validate and pass to the tool
-   * @returns A ToolResult containing either the output or error information
-   *
-   * Error handling behavior:
-   * - ZodError: Returns error result with validation issues in diagnostics
-   * - ToolError or other Error: Returns error result with error name (stack traces excluded to save tokens)
-   * - Other thrown values: Returns error result with string representation
-   */
-  async call(rawInput: unknown, signal?: AbortSignal): Promise<ToolResult> {
-    try {
-      // Synchronous validation must stay synchronous: awaiting unconditionally
-      // would defer execute() by a microtask, so a tool that dispatches a host
-      // interaction before its first await would no longer do so in the
-      // caller's synchronous turn. Only a schema with async refinements —
-      // which reports itself by throwing $ZodAsyncError — pays for the await.
-      let input: T;
-      try {
-        input = this.schema.parse(rawInput);
-      } catch (error) {
-        if (!(error instanceof z.core.$ZodAsyncError)) throw error;
-        input = await this.schema.parseAsync(rawInput);
-      }
-      // await is required here - without it, rejections bypass the catch block
-      return await this.execute(input, signal);
-    } catch (err) {
-      if (err instanceof ZodError) {
-        return {
-          status: 'error',
-          error: `Invalid input:\n${z.prettifyError(err)}`,
-          diagnostics: {
-            type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-            formatted: formatZodIssuesForDiagnostics(err.issues),
-          },
-        };
-      }
-      const message = toErrorMessage(err).trim();
-      // Only include error name - stack traces waste tokens and aren't actionable by models
-      const diagnostics = err instanceof Error ? { name: err.name } : undefined;
-      const summary = err instanceof ToolError ? err.summary : undefined;
-      return {
-        status: 'error',
-        error: message || 'Tool execution failed.',
-        ...(summary !== undefined && { summary }),
-        ...(diagnostics !== undefined && { diagnostics }),
-      };
-    }
+  /** Validate lazily in the caller's fiber; interruption never becomes a tool result. */
+  call(
+    rawInput: unknown,
+  ): Effect.Effect<ToolResult, unknown, Exclude<R, Scope.Scope>> {
+    const validate = Effect.try({
+      try: () => this.schema.parse(rawInput),
+      catch: (error) => error,
+    }).pipe(
+      Effect.catch((error) =>
+        error instanceof z.core.$ZodAsyncError
+          ? Effect.tryPromise({
+              try: () => this.schema.parseAsync(rawInput),
+              catch: (cause) => cause,
+            })
+          : Effect.fail(error),
+      ),
+    );
+    return Effect.scoped(
+      validate.pipe(
+        Effect.flatMap((input) => this.execute(input)),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+          const error = Cause.squash(cause);
+          if (
+            error instanceof DatabaseWriteFailed ||
+            error instanceof RunLedgerRefused
+          )
+            return Effect.failCause(cause);
+          if (error instanceof ZodError) {
+            return Effect.succeed<ToolResult>({
+              status: 'error',
+              error: `Invalid input:\n${z.prettifyError(error)}`,
+              diagnostics: {
+                type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+                formatted: formatZodIssuesForDiagnostics(error.issues),
+              },
+            });
+          }
+          return Effect.succeed<ToolResult>({
+            status: 'error',
+            error: toErrorMessage(error).trim() || 'Tool execution failed.',
+            ...(error instanceof ToolError &&
+              error.summary !== undefined && { summary: error.summary }),
+            ...(error instanceof Error && {
+              diagnostics: { name: error.name },
+            }),
+          });
+        }),
+      ),
+    );
   }
 
-  /** `signal` is the call's cancellation, forwarded from {@link call}: a
-   *  tool that waits on a person or runs an Effect program of its own passes
-   *  it to that wait; one that cannot be cancelled mid-call ignores it. */
-  protected abstract execute(
-    input: T,
-    signal?: AbortSignal,
-  ): Promise<ToolResult>;
+  protected abstract execute(input: T): Effect.Effect<ToolResult, unknown, R>;
 }

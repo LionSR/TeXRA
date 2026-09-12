@@ -42,6 +42,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -337,7 +338,11 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
   const result = yield* runToolUse({ resume: false }).pipe(
     Effect.provide(
-      Layer.mergeAll(invokerLayer(init.script, requests), followUpsLayer).pipe(
+      Layer.mergeAll(
+        invokerLayer(init.script, requests),
+        followUpsLayer,
+        nativeToolTestLayer(),
+      ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
       ),
@@ -371,10 +376,12 @@ function userTexts(state: RunState | null): string[] {
 function echoTool(name: string): ITool {
   return {
     definition: { name },
-    call: vi.fn(async () => ({
-      status: 'executed' as const,
-      output: `${name} done`,
-    })),
+    call: vi.fn(() =>
+      Effect.succeed({
+        status: 'executed' as const,
+        output: `${name} done`,
+      }),
+    ),
   } as ITool;
 }
 
@@ -468,14 +475,16 @@ describe('the tool-use turn', () => {
       const structured: { value: JsonValue | undefined } = { value: undefined };
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
-        call: vi.fn(async () => {
-          structured.value = { answer: 'done' };
-          return {
-            status: 'executed' as const,
-            output: 'recorded',
-            endTurn: true,
-          };
-        }),
+        call: vi.fn(() =>
+          Effect.sync(() => {
+            structured.value = { answer: 'done' };
+            return {
+              status: 'executed' as const,
+              output: 'recorded',
+              endTurn: true,
+            };
+          }),
+        ),
       } as ITool;
 
       const { result } = yield* runScript({

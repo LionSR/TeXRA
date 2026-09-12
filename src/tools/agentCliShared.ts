@@ -1,8 +1,10 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
+// Third-party imports
 import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
+// Local imports
 import { registerRun } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -14,19 +16,14 @@ import {
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { CurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import {
-  runInSession,
-  getRunContextRunId,
-  getRunContextWorkingDirectory,
-  type RunContext,
-} from '@agent/runtime/RunContext';
+import { runInSession } from '@agent/runtime/RunContext';
 import {
   emptyUsageStats,
   RUN_OUTCOME,
@@ -37,7 +34,6 @@ import {
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireLiveRun } from '@tools/contextHelpers';
 import {
   type requestBashApproval,
   buildBashApprovalRejectedResult,
@@ -92,8 +88,8 @@ export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
 
 /**
  * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's `execute()` edge so `runPromise` rejects with the instance the
- * collaborator raised (see ExecutionsTool for the same edge shape).
+ * tool's native `execute()` edge so BaseTool normalizes the original error
+ * without hiding the collaborator's diagnostics.
  */
 export const reraiseAgentCliCallFailure = <A, R>(
   effect: Effect.Effect<A, AgentCliToolFailure, R>,
@@ -212,7 +208,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
   },
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, R> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -372,13 +368,13 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
   function* <R>(
     toolName: string,
     approvalLabel: string,
-    contexts: CurrentToolContexts | undefined,
+    toolCall: ToolCallShape,
     requestApproval: typeof requestBashApproval,
     run: (
-      runContext: RunContext | undefined,
+      run: ToolCallShape['run'],
     ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R> {
-    if (contexts?.runContext?.stopAfterCycle) {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+    if (toolCall.stopAfterCycle) {
       return yield* Effect.fail(
         new ToolError(
           `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
@@ -393,8 +389,8 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
       return buildBashApprovalRejectedResult(approvalLabel, approval);
     }
 
-    contexts?.callContext?.hooks?.onRunReady?.();
-    return yield* run(contexts?.runContext);
+    toolCall.hooks?.onRunReady?.();
+    return yield* run(toolCall.run);
   },
 );
 
@@ -424,7 +420,7 @@ interface AgentCliLaunchContext {
  */
 export function dispatchAgentCliTool<R = never>(params: {
   session: SessionHandle;
-  contexts: CurrentToolContexts | undefined;
+  toolCall: ToolCallShape;
   /** Bound at the tool entry so approval retains the parent run's policy. */
   requestApproval: typeof requestBashApproval;
   agentName: string;
@@ -438,7 +434,7 @@ export function dispatchAgentCliTool<R = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
-}): Effect.Effect<ToolResult, AgentCliToolFailure, R> {
+}): Effect.Effect<ToolResult, AgentCliToolFailure, R | ToolCall> {
   const {
     agentName,
     approvalLabel,
@@ -452,12 +448,12 @@ export function dispatchAgentCliTool<R = never>(params: {
   return withAgentCliApproval(
     agentName,
     approvalLabel,
-    params.contexts,
+    params.toolCall,
     params.requestApproval,
-    (runContext) =>
+    (run) =>
       Effect.gen(function* () {
         const registry = store(params.session);
-        const callerRunId = getRunContextRunId(runContext);
+        const callerRunId = run?.runId;
         if (sourceId) {
           yield* requireCallerOwnership(
             sourceId,
@@ -473,15 +469,14 @@ export function dispatchAgentCliTool<R = never>(params: {
           callerRunId,
           labels,
           launch: (releaseFallbackClaim) => {
-            // A missing in-memory entry denotes a disk-based SDK fallback.
-            // requireLiveRun throws its ToolError synchronously; as a defect
-            // it still reaches the tool runner as the same instance and the
-            // claim-release in resumeOrLaunchAgentCliSession still fires
-            // (onError observes every cause).
-            const { runId } = requireLiveRun(agentName, runContext);
+            if (!run) {
+              return Effect.fail(
+                new ToolError(`${agentName} requires an active run context.`),
+              );
+            }
             return launch({
-              parentRunId: runId,
-              parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
+              parentRunId: run.runId,
+              parentWorkingDirectory: params.toolCall.workingDirectory,
               releaseFallbackClaim,
             });
           },

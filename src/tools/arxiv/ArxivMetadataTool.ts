@@ -3,10 +3,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ArxivProcessor } from '@latex/arxivProcessor';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   type ArxivPaperMetadata,
@@ -88,9 +86,9 @@ export class ArxivMetadataTool extends defineTool({
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
 }) {
-  protected execute(input: ArxivMetadataInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(fetchMetadata(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(
+    input: ArxivMetadataInput,
+  ): Effect.Effect<ToolResult, unknown> {
+    return fetchMetadata(input);
   }
 }

@@ -11,10 +11,9 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { TodoItemSchema, countByStatus } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 
@@ -34,9 +33,9 @@ type TodoWriteInput = z.infer<typeof TodoWriteInputSchema>;
 const writeTodos = Effect.fn('TodoWriteTool.execute')(function* (
   input: TodoWriteInput,
 ) {
-  const context = getCurrentToolCallContext();
+  const context = yield* ToolCall;
 
-  if (!context?.workPlanState) {
+  if (!context.workPlanState) {
     return yield* Effect.fail(
       new ToolError(
         'todo_write requires an active agent tool-use turn: there is no work plan to update.',
@@ -66,7 +65,7 @@ Each task needs two forms: content (imperative, e.g. "Run tests") and activeForm
 Keep the list current as you work; one task in_progress at a time.`,
   schema: TodoWriteInputSchema,
 }) {
-  protected execute(input: TodoWriteInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(writeTodos(input));
+  protected execute(input: TodoWriteInput) {
+    return writeTodos(input);
   }
 }

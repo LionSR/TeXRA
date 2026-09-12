@@ -116,7 +116,8 @@ function delegationRegistry(tools: readonly ToolInput[]) {
         tool.name,
         {
           definition: tool,
-          call: async () => ({ status: 'executed', summary: '', output: '' }),
+          call: () =>
+            Effect.succeed({ status: 'executed', summary: '', output: '' }),
         },
       ]),
     ),

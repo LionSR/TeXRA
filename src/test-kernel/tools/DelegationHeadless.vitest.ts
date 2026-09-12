@@ -6,12 +6,7 @@ import { Effect, Fiber, Stream } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  createRunContext,
-  withRunContext,
-  type RunContext,
-} from '@agent/runtime/RunContext';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -32,6 +27,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -166,27 +162,55 @@ function parentRunContext(
     stopAfterCycle: boolean;
     session: SessionHandle;
     approvalPromptsUnavailable: boolean;
+    userInstruction: string;
+    hooks: NonNullable<ToolCallShape['hooks']>;
   }> = {},
-): RunContext {
-  return createRunContext({
-    runId: PARENT_RUN_ID,
-    config: { model: 'deepseekT' },
-    session: defaultSession(),
-    ...overrides,
-  });
+): Partial<ToolCallShape> {
+  const session = overrides.session ?? defaultSession();
+  const stopAfterCycle = overrides.stopAfterCycle ?? false;
+  return {
+    model: 'deepseekT',
+    ...(overrides.userInstruction !== undefined && {
+      userInstruction: overrides.userInstruction,
+    }),
+    ...(overrides.hooks !== undefined && { hooks: overrides.hooks }),
+    stopAfterCycle,
+    run: {
+      runId: overrides.runId ?? PARENT_RUN_ID,
+      session,
+      toolPolicy: {
+        stopAfterCycle,
+        approvalPromptsUnavailable:
+          overrides.approvalPromptsUnavailable ?? false,
+        runtimeUnavailableTools: [],
+      },
+    },
+  };
 }
 
 /** The shared delegation call used by nearly every case. */
-function callDelegateReview() {
-  return new DelegateAgentTool().call({
-    agent: 'review',
-    model: null,
-    instruction: 'Check the proof.',
-    memories: [],
-    working_directory: null,
-    execution_id: null,
-  });
+function callDelegateReview(call = parentRunContext()) {
+  return new DelegateAgentTool()
+    .call({
+      agent: 'review',
+      model: null,
+      instruction: 'Check the proof.',
+      memories: [],
+      working_directory: null,
+      execution_id: null,
+    })
+    .pipe(Effect.provide(nativeToolTestLayer(call)));
 }
+
+const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (
+  session: SessionHandle,
+) {
+  while (true) {
+    const active = session.runs.getActiveIds();
+    if (active.length === 0) return;
+    yield* session.runs.waitForAnyChange(active);
+  }
+});
 
 /** Await actual child activation release before disposing its test session. */
 async function waitForChildren(session: SessionHandle): Promise<void> {
@@ -225,38 +249,43 @@ function answerOpenedRequests(
   );
   return {
     openedKinds,
-    stop: () => Effect.runPromise(Fiber.interrupt(fiber)),
+    stop: () => Fiber.interrupt(fiber),
   };
 }
 
 /** The same delegation routed through the request protocol, with `decision`
  *  answering the proposal the run opens. The session owns the decider, so it
  *  is created and disposed per case. */
-async function delegateWithProposalDecision(
+function delegateWithProposalDecision(
   decision: RequestDecision,
   options: { expectLaunch?: boolean } = {},
 ) {
-  mocks.isProposalBypassed.mockReturnValue(false);
-  const session = createTestSession();
-  // A request is a row on its run, so the parent run must exist first.
-  publishTestRunStart(session, PARENT_RUN_ID);
-  await session.settlePublications();
-  const decider = answerOpenedRequests(session, decision);
-  try {
-    const result = await withRunContext(parentRunContext({ session }), () =>
-      callDelegateReview(),
-    );
-    // A detached child commits its `child.turn` row before its first turn
-    // runs, so the launch is not observable the moment the tool returns and
-    // the session must not be disposed out from under it.
-    if (options.expectLaunch)
-      await vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalled());
-    await waitForChildren(session);
-    return result;
-  } finally {
-    await decider.stop();
-    session.dispose();
-  }
+  return Effect.scoped(
+    Effect.gen(function* () {
+      mocks.isProposalBypassed.mockReturnValue(false);
+      const session = createTestSession();
+      const decider = answerOpenedRequests(session, decision);
+      yield* Effect.addFinalizer(() =>
+        decider
+          .stop()
+          .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+      );
+      // A request is a row on its run, so the parent run must exist first.
+      publishTestRunStart(session, PARENT_RUN_ID);
+      yield* Effect.promise(() => session.settlePublications());
+      const result = yield* callDelegateReview(parentRunContext({ session }));
+      // A detached child commits its `child.turn` row before its first turn
+      // runs, so the launch is not observable the moment the tool returns and
+      // the session must not be disposed out from under it.
+      if (options.expectLaunch) {
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalled()),
+        );
+      }
+      yield* waitForChildrenEffect(session);
+      return result;
+    }),
+  );
 }
 
 const STABLE_PARENT_RUN_ID = 'abcdef123456' as RunId;
@@ -690,34 +719,35 @@ describe('headless delegation', () => {
     stableSession.dispose();
   });
 
-  it('awaits child delegation during one-shot tool-use runs', async () => {
-    const result = await withRunContext(
-      parentRunContext({ stopAfterCycle: true }),
-      () => callDelegateReview(),
-    );
+  effectIt.effect('awaits child delegation during one-shot tool-use runs', () =>
+    Effect.gen(function* () {
+      const result = yield* callDelegateReview(
+        parentRunContext({ stopAfterCycle: true }),
+      );
 
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          instruction: expect.stringContaining('Check the proof.'),
-          model: 'deepseekT',
+      expect(mocks.executeAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({
+            agent: 'review',
+            agentCategory: AgentCategory.ToolUse,
+            instruction: expect.stringContaining('Check the proof.'),
+            model: 'deepseekT',
+          }),
         }),
-      }),
-      expect.any(String),
-      expect.objectContaining({
-        parentRunId: PARENT_RUN_ID,
-        session: expect.any(Object),
-        stopAfterCycle: true,
-      }),
-    );
-    expect(result.summary).toBe("Completed 'review'");
-    expect(result.output).toContain('<subagent-result');
-    expect(result.output).toContain('<response>');
-    expect(result.output).toContain('The proof is correct.');
-    expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
-  });
+        expect.any(String),
+        expect.objectContaining({
+          parentRunId: PARENT_RUN_ID,
+          session: expect.any(Object),
+          stopAfterCycle: true,
+        }),
+      );
+      expect(result.summary).toBe("Completed 'review'");
+      expect(result.output).toContain('<subagent-result');
+      expect(result.output).toContain('<response>');
+      expect(result.output).toContain('The proof is correct.');
+      expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+    }),
+  );
 
   it('composes durable workflow calls through the native launch primitive', async () => {
     const result = await runInBand(
@@ -1305,263 +1335,309 @@ describe('headless delegation', () => {
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
-  it('carries the validated agent source to executeAgent for source-pinned launch', async () => {
-    // The delegation validates against the visible roster and must hand the
-    // resolved entry's source to executeAgent, so getAgentPath resolves the exact
-    // (source, name) key instead of re-resolving the ambiguous bare name.
-    await withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
-      callDelegateReview(),
-    );
+  effectIt.effect(
+    'carries the validated agent source to executeAgent for source-pinned launch',
+    () =>
+      Effect.gen(function* () {
+        // The delegation validates against the visible roster and must hand the
+        // resolved entry's source to executeAgent, so getAgentPath resolves the exact
+        // (source, name) key instead of re-resolving the ambiguous bare name.
+        yield* callDelegateReview(parentRunContext({ stopAfterCycle: true }));
 
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          agent: 'review',
-          agentSource: 'builtInToolUse',
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: expect.objectContaining({
+              agent: 'review',
+              agentSource: 'builtInToolUse',
+            }),
+          }),
+          expect.any(String),
+          expect.anything(),
+        );
+      }),
+  );
+
+  effectIt.effect(
+    'extends the bare instruction with injected handoff guidance',
+    () =>
+      Effect.gen(function* () {
+        // Regression pin for #5864: delegation must inject handoff guidance rather
+        // than hand the caller's instruction through verbatim. Deliberately
+        // wording-free — the injected copy churns (#9568) without behavior changing.
+        yield* callDelegateReview();
+        yield* waitForChildrenEffect(defaultSession());
+
+        const instruction =
+          mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
+        expect(instruction).toContain('Check the proof.');
+        expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
+      }),
+  );
+
+  effectIt.effect(
+    'carries the current parent instruction into the subagent constraint context',
+    () =>
+      Effect.gen(function* () {
+        const parentInstruction =
+          'Do not use plans, todos, files, bash, Wolfram, or other child tools. Delegate exactly once.';
+        yield* callDelegateReview(
+          parentRunContext({ userInstruction: parentInstruction }),
+        );
+        yield* waitForChildrenEffect(defaultSession());
+
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: expect.objectContaining({
+              rootUserInstruction: parentInstruction,
+              instruction: expect.stringContaining(
+                `Parent user request (constraint context only):\n${parentInstruction}`,
+              ),
+            }),
+          }),
+          expect.any(String),
+          expect.anything(),
+        );
+      }),
+  );
+
+  effectIt.effect(
+    'formats returned child error results as subagent errors',
+    () =>
+      Effect.gen(function* () {
+        const recordSubagentCost = vi.fn();
+        mockExecuteAgentErrorOnce(0.42);
+
+        const result = yield* callDelegateReview(
+          parentRunContext({
+            stopAfterCycle: true,
+            hooks: { recordSubagentCost },
+          }),
+        );
+
+        expect(result.summary).toBe("Subagent 'review' failed");
+        expect(result.status).toBe('error');
+        expect(result.error).toBe('review model failed');
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining('<subagent-error'),
+        );
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining('review model failed'),
+        );
+        expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+        expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            agentName: 'review',
+          }),
+        );
+      }),
+  );
+
+  effectIt.effect(
+    'rolls up failed async subagent cost from the error callback',
+    () =>
+      Effect.gen(function* () {
+        const recordSubagentCost = vi.fn();
+        mockExecuteAgentErrorOnce(0.31);
+
+        const result = yield* callDelegateReview(
+          parentRunContext({ hooks: { recordSubagentCost } }),
+        );
+
+        expect(result.summary).toBe("Launched 'review' (async)");
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+          }),
+        );
+        expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
+      }),
+  );
+
+  effectIt.effect(
+    'composes interactive delegation through the same native launch primitive',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* callDelegateReview();
+
+        expect(result.summary).toBe("Launched 'review' (async)");
+        expect(result.output).toContain(
+          "Subagent 'review' launched. Result will be delivered automatically",
+        );
+        yield* waitForChildrenEffect(defaultSession());
+        const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
+        expect(executeOptions).toEqual(
+          expect.objectContaining({
+            parentRunId: PARENT_RUN_ID,
+            onRun: expect.any(Function),
+            session: expect.any(Object),
+          }),
+        );
+        expect(executeOptions).not.toEqual(
+          expect.objectContaining({ stopAfterCycle: true }),
+        );
+      }),
+  );
+
+  effectIt.effect('does not attribute proposal cancellation to the user', () =>
+    Effect.gen(function* () {
+      const result = yield* delegateWithProposalDecision({
+        action: 'cancel',
+        cause: 'CLI approval prompt failed.',
+      });
+
+      expect(result.summary).toBe("Delegation approval cancelled for 'review'");
+      expect(result.error).toContain('CLI approval prompt failed.');
+      expect(result.error).not.toContain('User feedback:');
+      expect(mocks.executeAgent).not.toHaveBeenCalled();
+    }),
+  );
+
+  effectIt.effect(
+    'proceeds without a proposal when the run cannot present approval prompts',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Headless `--approval-policy never` withholds `requiresApproval` tools up
+          // front, so a delegation tool that still executes was deliberately offered
+          // (delegate_multi_agents). The proposal gate must not settle a
+          // guaranteed denial; the child stays on inherited approval state.
+          mocks.isProposalBypassed.mockReturnValue(false);
+          const session = createTestSession();
+          const decider = answerOpenedRequests(session, { action: 'approve' });
+          yield* Effect.addFinalizer(() =>
+            decider
+              .stop()
+              .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+          );
+          const result = yield* callDelegateReview(
+            parentRunContext({ session, approvalPromptsUnavailable: true }),
+          );
+
+          yield* waitForChildrenEffect(session);
+          expect(decider.openedKinds).toEqual([]);
+          expect(result.status).toBe('executed');
+          expect(result.summary).toBe("Launched 'review' (async)");
+          expect(mocks.executeAgent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              config: expect.objectContaining({ agent: 'review' }),
+            }),
+            expect.any(String),
+            expect.anything(),
+          );
         }),
+      ),
+  );
+
+  effectIt.effect(
+    'rejects an approved model override unavailable in the active API mode',
+    () =>
+      Effect.gen(function* () {
+        // Only deepseekT is available (see beforeEach); gpt5 is not, so the
+        // override must be rejected synchronously, mirroring the initial delegate
+        // path's availability gate.
+        const result = yield* delegateWithProposalDecision({
+          action: 'approve',
+          model: 'gpt5',
+        });
+
+        expect(result.status).toBe('error');
+        expect(result.summary).toBe(
+          "Approved model override 'gpt5' is not available",
+        );
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
-      expect.any(String),
-      expect.anything(),
-    );
-  });
+  );
 
-  it('extends the bare instruction with injected handoff guidance', async () => {
-    // Regression pin for #5864: delegation must inject handoff guidance rather
-    // than hand the caller's instruction through verbatim. Deliberately
-    // wording-free — the injected copy churns (#9568) without behavior changing.
-    await withRunContext(parentRunContext(), () => callDelegateReview());
-    await waitForChildren(defaultSession());
+  effectIt.effect(
+    'launches with an approved model override that is available',
+    () =>
+      Effect.gen(function* () {
+        mocks.computeModelOptionsData.mockResolvedValue([
+          {
+            value: 'deepseekT',
+            label: 'DeepSeek',
+            availability: 'provider-key',
+          },
+          {
+            value: 'gpt5',
+            label: 'GPT-5',
+            availability: 'provider-key',
+          },
+        ]);
 
-    const instruction =
-      mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
-    expect(instruction).toContain('Check the proof.');
-    expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
-  });
+        const result = yield* delegateWithProposalDecision(
+          { action: 'approve', model: 'gpt5' },
+          { expectLaunch: true },
+        );
 
-  it('carries the current parent instruction into the subagent constraint context', async () => {
-    const parentInstruction =
-      'Do not use plans, todos, files, bash, Wolfram, or other child tools. Delegate exactly once.';
-    await withToolFileInteractionContext(
-      {
-        tracker: {} as never,
-        userInstruction: parentInstruction,
-      },
-      () => withRunContext(parentRunContext(), () => callDelegateReview()),
-    );
-    await waitForChildren(defaultSession());
-
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          rootUserInstruction: parentInstruction,
-          instruction: expect.stringContaining(
-            `Parent user request (constraint context only):\n${parentInstruction}`,
-          ),
-        }),
+        expect(result.status).toBe('executed');
+        expect(result.summary).toBe("Launched 'review' (async)");
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: expect.objectContaining({ model: 'gpt5' }),
+          }),
+          expect.any(String),
+          expect.anything(),
+        );
       }),
-      expect.any(String),
-      expect.anything(),
-    );
-  });
+  );
 
-  it('formats returned child error results as subagent errors', async () => {
-    const recordSubagentCost = vi.fn();
-    mockExecuteAgentErrorOnce(0.42);
+  effectIt.effect(
+    'includes memory misses in interactive early-delivered reports',
+    () =>
+      Effect.gen(function* () {
+        // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
+        // WAITING result it returns is what the loop's single delivery site sees.
+        mockWaitingChildOnce({
+          memoryMisses: [
+            { path: '/memories/missing.md', reason: 'not found & unreadable' },
+          ],
+        });
 
-    const result = await withToolFileInteractionContext(
-      { tracker: {} as never, hooks: { recordSubagentCost } },
-      () =>
-        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
-          callDelegateReview(),
-        ),
-    );
+        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-    expect(result.summary).toBe("Subagent 'review' failed");
-    expect(result.status).toBe('error');
-    expect(result.error).toBe('review model failed');
-    expect(mocks.writeReport).toHaveBeenCalledWith(
-      expect.stringContaining('<subagent-error'),
-    );
-    expect(mocks.writeReport).toHaveBeenCalledWith(
-      expect.stringContaining('review model failed'),
-    );
-    expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-    expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({ producer: 'subagent', agentName: 'review' }),
-    );
-  });
-
-  it('rolls up failed async subagent cost from the error callback', async () => {
-    const recordSubagentCost = vi.fn();
-    mockExecuteAgentErrorOnce(0.31);
-
-    const result = await withToolFileInteractionContext(
-      { tracker: {} as never, hooks: { recordSubagentCost } },
-      () => withRunContext(parentRunContext(), () => callDelegateReview()),
-    );
-
-    expect(result.summary).toBe("Launched 'review' (async)");
-    await vi.waitFor(() => {
-      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-    });
-    expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
-  });
-
-  it('composes interactive delegation through the same native launch primitive', async () => {
-    const result = await withRunContext(parentRunContext(), () =>
-      callDelegateReview(),
-    );
-
-    expect(result.summary).toBe("Launched 'review' (async)");
-    expect(result.output).toContain(
-      "Subagent 'review' launched. Result will be delivered automatically",
-    );
-    await waitForChildren(defaultSession());
-    const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
-    expect(executeOptions).toEqual(
-      expect.objectContaining({
-        parentRunId: PARENT_RUN_ID,
-        onRun: expect.any(Function),
-        session: expect.any(Object),
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(mocks.writeReport).toHaveBeenCalledWith(
+              expect.stringContaining(
+                '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+              ),
+            );
+          }),
+        );
       }),
-    );
-    expect(executeOptions).not.toEqual(
-      expect.objectContaining({ stopAfterCycle: true }),
-    );
-  });
+  );
 
-  it('does not attribute proposal cancellation to the user', async () => {
-    const result = await delegateWithProposalDecision({
-      action: 'cancel',
-      cause: 'CLI approval prompt failed.',
-    });
+  effectIt.effect(
+    'does not deliver detached subagent results back to the released parent',
+    () =>
+      Effect.gen(function* () {
+        let capturedHandle: RunHandle | undefined;
 
-    expect(result.summary).toBe("Delegation approval cancelled for 'review'");
-    expect(result.error).toContain('CLI approval prompt failed.');
-    expect(result.error).not.toContain('User feedback:');
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
+        mockWaitingChildOnce({
+          // Detach happens between the loop capturing the handle (onRun) and the
+          // loop delivering this turn's result (after the mock resolves) — the
+          // same ordering a real stop-with-detach produces mid-turn.
+          afterRun: (handle) => {
+            capturedHandle = handle;
+            defaultSession().runs.detachActiveChildren(PARENT_RUN_ID);
+          },
+        });
 
-  it('proceeds without a proposal when the run cannot present approval prompts', async () => {
-    // Headless `--approval-policy never` withholds `requiresApproval` tools up
-    // front, so a delegation tool that still executes was deliberately offered
-    // (delegate_multi_agents). The proposal gate must not settle a
-    // guaranteed denial; the child stays on inherited approval state.
-    mocks.isProposalBypassed.mockReturnValue(false);
-    const session = createTestSession();
-    const decider = answerOpenedRequests(session, { action: 'approve' });
-    try {
-      const result = await withRunContext(
-        parentRunContext({ session, approvalPromptsUnavailable: true }),
-        () => callDelegateReview(),
-      );
+        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-      await waitForChildren(session);
-      expect(decider.openedKinds).toEqual([]);
-      expect(result.status).toBe('executed');
-      expect(result.summary).toBe("Launched 'review' (async)");
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ agent: 'review' }),
-        }),
-        expect.any(String),
-        expect.anything(),
-      );
-    } finally {
-      await decider.stop();
-      session.dispose();
-    }
-  });
-
-  it('rejects an approved model override unavailable in the active API mode', async () => {
-    // Only deepseekT is available (see beforeEach); gpt5 is not, so the
-    // override must be rejected synchronously, mirroring the initial delegate
-    // path's availability gate.
-    const result = await delegateWithProposalDecision({
-      action: 'approve',
-      model: 'gpt5',
-    });
-
-    expect(result.status).toBe('error');
-    expect(result.summary).toBe(
-      "Approved model override 'gpt5' is not available",
-    );
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
-  it('launches with an approved model override that is available', async () => {
-    mocks.computeModelOptionsData.mockResolvedValue([
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        availability: 'provider-key',
-      },
-      { value: 'gpt5', label: 'GPT-5', availability: 'provider-key' },
-    ]);
-
-    const result = await delegateWithProposalDecision(
-      { action: 'approve', model: 'gpt5' },
-      { expectLaunch: true },
-    );
-
-    expect(result.status).toBe('executed');
-    expect(result.summary).toBe("Launched 'review' (async)");
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({ model: 'gpt5' }),
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(mocks.writeReport).toHaveBeenCalledWith(
+              expect.stringContaining('The proof is correct.'),
+            );
+          }),
+        );
+        expect(capturedHandle?.deliveryTarget).toBeUndefined();
+        expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
+        expect(defaultSession().followUps.getAll(CHILD_RUN_ID)).toEqual([]);
       }),
-      expect.any(String),
-      expect.anything(),
-    );
-  });
-
-  it('includes memory misses in interactive early-delivered reports', async () => {
-    // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
-    // WAITING result it returns is what the loop's single delivery site sees.
-    mockWaitingChildOnce({
-      memoryMisses: [
-        { path: '/memories/missing.md', reason: 'not found & unreadable' },
-      ],
-    });
-
-    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
-      callDelegateReview(),
-    );
-
-    await vi.waitFor(() => {
-      expect(mocks.writeReport).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-        ),
-      );
-    });
-  });
-
-  it('does not deliver detached subagent results back to the released parent', async () => {
-    let capturedHandle: RunHandle | undefined;
-
-    mockWaitingChildOnce({
-      // Detach happens between the loop capturing the handle (onRun) and the
-      // loop delivering this turn's result (after the mock resolves) — the
-      // same ordering a real stop-with-detach produces mid-turn.
-      afterRun: (handle) => {
-        capturedHandle = handle;
-        defaultSession().runs.detachActiveChildren(PARENT_RUN_ID);
-      },
-    });
-
-    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
-      callDelegateReview(),
-    );
-
-    await vi.waitFor(() => {
-      expect(mocks.writeReport).toHaveBeenCalledWith(
-        expect.stringContaining('The proof is correct.'),
-      );
-    });
-    expect(capturedHandle?.deliveryTarget).toBeUndefined();
-    expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
-    expect(defaultSession().followUps.getAll(CHILD_RUN_ID)).toEqual([]);
-  });
+  );
 });

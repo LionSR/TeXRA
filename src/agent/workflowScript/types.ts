@@ -10,6 +10,7 @@ import {
 } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { Effect } from 'effect';
 
 /** One title form for `meta.phases` entries and runtime `phase()` calls. */
 export const WorkflowScriptPhaseTitleSchema = z
@@ -297,9 +298,9 @@ export interface WorkflowAttemptFacts {
  * string. The journal records that result; the script sees
  * {@link WorkflowScriptRunOptions.toScriptValue} of it.
  */
-export type WorkflowAgentRunner = (
+type WorkflowAgentRunner<R = never> = (
   invocation: WorkflowAgentInvocation,
-) => Promise<unknown>;
+) => Effect.Effect<unknown, Error, R>;
 
 /**
  * One completed agent() call, cached for resume. Identity is `key` alone;
@@ -352,14 +353,14 @@ export type WorkflowScriptControl = (
   action: WorkflowControlAction,
 ) => boolean;
 
-export interface WorkflowScriptRunOptions {
+export interface WorkflowScriptRunOptions<R = never> {
   /** Full script source, starting with `export const meta = {...}`. */
   script: string;
   /** Exposed verbatim to the script as the global `args`. */
   args?: unknown;
   /** Exposed to the script as the immutable global `files` object. */
   files?: WorkflowScriptFiles;
-  runAgent: WorkflowAgentRunner;
+  runAgent: WorkflowAgentRunner<R>;
   /**
    * Host projection from a runner result (live, or replayed from the journal)
    * to the value `agent()` resolves to in the script. The journal keeps the
@@ -375,7 +376,7 @@ export interface WorkflowScriptRunOptions {
    */
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
-  ) => Promise<string>;
+  ) => Effect.Effect<string, Error, R>;
   /** Parent cancellation signal; aborts guest run and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. The host passes the session's
@@ -390,7 +391,9 @@ export interface WorkflowScriptRunOptions {
    * engine awaits it before the result becomes visible to the script, so a
    * host restart cannot expose work whose journal entry was never persisted.
    */
-  onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
+  onJournalEntry?: (
+    entry: WorkflowJournalEntry,
+  ) => Effect.Effect<void, Error, R>;
   /**
    * Synchronous observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal
@@ -405,7 +408,7 @@ export interface WorkflowScriptRunOptions {
    * snapshot after a transition, with writes coalesced under backpressure —
    * intermediate states may be skipped, the latest always lands.
    */
-  onSnapshot?: (snapshot: WorkflowRunSnapshot) => void | Promise<void>;
+  onSnapshot?: (snapshot: WorkflowRunSnapshot) => Effect.Effect<void, Error, R>;
   /**
    * Synchronous per-transition observer for live projections: fires on every
    * state transition, never coalesced, with the LIVE snapshot reference —

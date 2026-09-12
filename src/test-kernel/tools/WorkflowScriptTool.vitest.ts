@@ -1,6 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit, Fiber } from 'effect';
+import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import '@test/support/defaultSessionTestSetup';
 
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -9,9 +10,6 @@ import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { LaunchRunContext } from '@agent/runtime/RunContext';
-import { withRunContext } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -27,6 +25,7 @@ import {
 import { deriveRunId } from '@utils/core/idHash';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
@@ -145,17 +144,19 @@ const script = `export const meta = {
 }
 return await agent('saved call')`;
 
-function parentContext(stopAfterCycle = false): LaunchRunContext {
-  return {
-    kind: 'launch',
+function toolLayer(stopAfterCycle = false) {
+  return nativeToolTestLayer({
     model: 'parent-model',
     stopAfterCycle,
-    runScope: {
+    trace: new TraceEmitter(),
+    toolCallId: 'tool-call',
+    hooks: { recordSubagentCost: vi.fn() },
+    run: {
       runId: parentRunId,
       session: currentSession(),
-      signal: new AbortController().signal,
+      toolPolicy: { stopAfterCycle },
     },
-  };
+  });
 }
 
 /** The tool's durable identity for one meta.name under the test parent. */
@@ -212,7 +213,7 @@ function mockPersistedReport(
   );
 }
 
-async function callTool(
+function callTool(
   options: {
     script?: string;
     files?: WorkflowScriptFiles;
@@ -230,7 +231,7 @@ async function callTool(
   );
 }
 
-async function callToolInput(
+function callToolInput(
   input: {
     agent: string;
     script?: string | null;
@@ -239,17 +240,9 @@ async function callToolInput(
   },
   stopAfterCycle = false,
 ) {
-  return withRunContext(parentContext(stopAfterCycle), () =>
-    withToolFileInteractionContext(
-      {
-        tracker: {} as never,
-        toolCallId: 'tool-call',
-        trace: new TraceEmitter(),
-        hooks: { recordSubagentCost: vi.fn() },
-      },
-      () => new WorkflowScriptTool().call(input),
-    ),
-  );
+  return new WorkflowScriptTool()
+    .call(input)
+    .pipe(Effect.provide(toolLayer(stopAfterCycle)));
 }
 
 // The tool runs under a registered parent run, and a checkpoint aggregate
@@ -305,61 +298,68 @@ beforeEach(async () => {
 });
 
 describe('WorkflowScriptTool', () => {
-  it('does not register or execute the workflow before approval', async () => {
-    let approve!: () => void;
-    const decided = new Promise<{
-      result: { action: 'approve' };
-      autoApproved: boolean;
-    }>((resolve) => {
-      approve = () =>
-        resolve({ result: { action: 'approve' }, autoApproved: false });
-    });
-    mocks.requestDelegationProposal.mockReturnValueOnce(
-      Effect.promise(() => decided),
-    );
+  it.effect('does not register or execute the workflow before approval', () =>
+    Effect.gen(function* () {
+      let approve!: () => void;
+      const decided = new Promise<{
+        result: { action: 'approve' };
+        autoApproved: boolean;
+      }>((resolve) => {
+        approve = () =>
+          resolve({ result: { action: 'approve' }, autoApproved: false });
+      });
+      mocks.requestDelegationProposal.mockReturnValueOnce(
+        Effect.promise(() => decided),
+      );
 
-    const pending = callTool();
-    await vi.waitFor(() =>
-      expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce(),
-    );
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      const pending = yield* Effect.forkChild(callTool());
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce(),
+        ),
+      );
+      expect(mocks.registerRun).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-    approve();
-    await pending;
-    expect(mocks.registerRun).toHaveBeenCalledOnce();
-    expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
-  });
+      approve();
+      yield* Fiber.join(pending);
+      expect(mocks.registerRun).toHaveBeenCalledOnce();
+      expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
+    }),
+  );
 
-  it('pins the workflow child edit grant when proposal bypass approved it', async () => {
-    mocks.requestDelegationProposal.mockReturnValueOnce(
-      Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
-    );
+  it.effect(
+    'pins the workflow child edit grant when proposal bypass approved it',
+    () =>
+      Effect.gen(function* () {
+        mocks.requestDelegationProposal.mockReturnValueOnce(
+          Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
+        );
 
-    await callTool();
+        yield* callTool();
 
-    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      runIdFor('tool-test'),
-      parentRunId,
-      'auto-approved',
-      currentSession(),
-    );
-  });
+        expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+          runIdFor('tool-test'),
+          parentRunId,
+          'auto-approved',
+          currentSession(),
+        );
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       decision: { action: 'reject', feedback: 'Use fewer agents.' } as const,
       status: 'error',
     },
     { decision: { action: 'setup' } as const, status: 'executed' },
-  ])(
-    'does not execute after $decision.action',
-    async ({ decision, status }) => {
+  ])('does not execute after $decision.action', ({ decision, status }) =>
+    Effect.gen(function* () {
       mocks.requestDelegationProposal.mockReturnValueOnce(
         Effect.succeed({ result: decision, autoApproved: false }),
       );
 
-      const result = await callTool();
+      const result = yield* callTool();
 
       expect(result.status).toBe(status);
       expect(mocks.registerRun).not.toHaveBeenCalled();
@@ -369,11 +369,14 @@ describe('WorkflowScriptTool', () => {
           error: expect.stringContaining('Use fewer agents.'),
         });
       }
-    },
+    }),
   );
 
-  it('includes workflow identity, agent, phases, tasks, and script path in the approval payload', async () => {
-    const plannedScript = `export const meta = {
+  it.effect(
+    'includes workflow identity, agent, phases, tasks, and script path in the approval payload',
+    () =>
+      Effect.gen(function* () {
+        const plannedScript = `export const meta = {
   name: 'review-team',
   description: 'Review the draft in parallel',
   phases: ['Review', 'Synthesize'],
@@ -384,54 +387,60 @@ describe('WorkflowScriptTool', () => {
 }
 return null`;
 
-    await callTool({ script: plannedScript, agent: 'correct' });
+        yield* callTool({ script: plannedScript, agent: 'correct' });
 
-    expect(mocks.requestDelegationProposal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'correct',
-        model: 'parent-model',
-        instruction: 'Review the draft in parallel',
-        workflowScript: expect.objectContaining({
-          name: 'review-team',
-          description: 'Review the draft in parallel',
-          scriptPath: expect.stringMatching(
-            /^\.texra\/workflow-scripts\/draft-tool-call(?:-\d+)?\.mjs$/,
-          ),
-          phases: [{ title: 'Review' }, { title: 'Synthesize' }],
-          tasks: [
-            { id: 'review', label: 'Review draft', phase: 'Review' },
-            { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
-          ],
-        }),
+        expect(mocks.requestDelegationProposal).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agent: 'correct',
+            model: 'parent-model',
+            instruction: 'Review the draft in parallel',
+            workflowScript: expect.objectContaining({
+              name: 'review-team',
+              description: 'Review the draft in parallel',
+              scriptPath: expect.stringMatching(
+                /^\.texra\/workflow-scripts\/draft-tool-call(?:-\d+)?\.mjs$/,
+              ),
+              phases: [{ title: 'Review' }, { title: 'Synthesize' }],
+              tasks: [
+                { id: 'review', label: 'Review draft', phase: 'Review' },
+                { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
+              ],
+            }),
+          }),
+          expect.objectContaining({
+            model: 'parent-model',
+            run: expect.objectContaining({ runId: parentRunId }),
+          }),
+        );
       }),
-      parentRunId,
-      currentSession(),
-      expect.objectContaining({ kind: 'launch' }),
-    );
-  });
+  );
 
-  it('owns a detached run completion rejection without delivering a second error', async () => {
-    const lateFailure = new Error('late finalization failed');
-    mocks.startChildRunLoop.mockReturnValueOnce(
-      Effect.forkDetach(Effect.fail(lateFailure)),
-    );
+  it.effect(
+    'owns a detached run completion rejection without delivering a second error',
+    () =>
+      Effect.gen(function* () {
+        const lateFailure = new Error('late finalization failed');
+        mocks.startChildRunLoop.mockReturnValueOnce(
+          Effect.forkDetach(Effect.fail(lateFailure)),
+        );
 
-    const result = await callTool();
+        const result = yield* callTool();
 
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Launched workflow script 'tool-test' (async)",
-    });
-    await vi.waitFor(() => {
-      expect(mocks.childLoggerError).toHaveBeenCalledWith(
-        "Workflow script 'tool-test' run loop failed after launch",
-        { data: lateFailure },
-      );
-    });
-    // The detached completion owner logs only; it does not manufacture a
-    // second parent follow-up or replace the already returned launch result.
-    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-  });
+        expect(result).toMatchObject({
+          status: 'executed',
+          summary: "Launched workflow script 'tool-test' (async)",
+        });
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(mocks.childLoggerError).toHaveBeenCalledWith(
+              "Workflow script 'tool-test' run loop failed after launch",
+              { data: lateFailure },
+            );
+          }),
+        );
+        expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+      }),
+  );
 
   it('pins the provider schema shape at the model-facing boundary', () => {
     const definition = new WorkflowScriptTool().definition;
@@ -472,398 +481,495 @@ return null`;
     ).toBe(true);
   });
 
-  it('rejects invalid JSON arguments at the schema boundary', async () => {
-    const result = await new WorkflowScriptTool().call({
-      agent: 'correct',
-      script,
-      scriptPath: null,
-      args: { invalid: undefined },
-    });
+  it.effect('rejects invalid JSON arguments at the schema boundary', () =>
+    Effect.gen(function* () {
+      const result = yield* new WorkflowScriptTool()
+        .call({
+          agent: 'correct',
+          script,
+          scriptPath: null,
+          args: { invalid: undefined },
+        })
+        .pipe(Effect.provide(nativeToolTestLayer()));
 
-    expect(result.status).toBe('error');
-    expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
+      expect(result.status).toBe('error');
+      expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('requires a launched tool context', async () => {
-    const outside = await new WorkflowScriptTool().call({
-      agent: 'correct',
-      script,
-      scriptPath: null,
-    });
-    expect(outside).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('active launched agent session'),
-    });
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
+  it.effect('requires a launched tool context', () =>
+    Effect.gen(function* () {
+      const outside = yield* new WorkflowScriptTool()
+        .call({
+          agent: 'correct',
+          script,
+          scriptPath: null,
+        })
+        .pipe(Effect.provide(nativeToolTestLayer()));
+      expect(outside).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining('active launched agent session'),
+      });
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('launches the run as a detached child with a deterministic run id', async () => {
-    const result = await callTool();
+  it.effect(
+    'launches the run as a detached child with a deterministic run id',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* callTool();
 
-    const runId = runIdFor('tool-test');
-    // The run id is derived from the checkpoint identity (NOT random), so a
-    // relaunch with the same meta.name re-roots at the same anchor and resume
-    // still works (#8712).
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      currentSession(),
-      runId,
-      // The durable record is honest: workflow name, launch summary, and the
-      // real delegation model. It has no fabricated agent identity or category.
-      registrationRecordFor('tool-test'),
-      'tool-test',
-      registrationOptionsFor('tool-test'),
-    );
-    expect(mocks.createChildRun).toHaveBeenCalledWith(
-      currentSession(),
-      runId,
-      parentRunId,
-      expect.objectContaining({
-        run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
+        const runId = runIdFor('tool-test');
+        // The run id is derived from the checkpoint identity (NOT random), so a
+        // relaunch with the same meta.name re-roots at the same anchor and resume
+        // still works (#8712).
+        expect(mocks.registerRun).toHaveBeenCalledWith(
+          currentSession(),
+          runId,
+          // The durable record is honest: workflow name, launch summary, and the
+          // real delegation model. It has no fabricated agent identity or category.
+          registrationRecordFor('tool-test'),
+          'tool-test',
+          registrationOptionsFor('tool-test'),
+        );
+        expect(mocks.createChildRun).toHaveBeenCalledWith(
+          currentSession(),
+          runId,
+          parentRunId,
+          expect.objectContaining({
+            run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
+          }),
+        );
+        // The child run inherits the orchestrator's approval ancestry.
+        expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+          runId,
+          parentRunId,
+          'inherit',
+          currentSession(),
+        );
+        expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+        const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
+        expect(loopParams).toMatchObject({
+          parentRunId,
+          runId,
+          agentName: 'tool-test',
+        });
+        expect(loopParams.strategy).toMatchObject({
+          stageLabel: "Workflow script 'tool-test'",
+          launch: expect.any(Function),
+          isTerminal: expect.any(Function),
+        });
+        // Terminal-only: no runTurn (workflow-script is the only strategy that
+        // omits it — the native subagent strategy declares one unconditionally,
+        // even for a workflow-category child).
+        expect(loopParams.strategy.runTurn).toBeUndefined();
+        expect(loopParams.recordCost).toEqual(expect.any(Function));
+
+        expect(result).toMatchObject({
+          status: 'executed',
+          summary: "Launched workflow script 'tool-test' (async)",
+        });
+        expect(result.output).toContain(`Run ID: ${runId}`);
+        expect(result.output).toContain(
+          'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
+        );
+        expect(result.output).toContain('same meta.name');
       }),
-    );
-    // The child run inherits the orchestrator's approval ancestry.
-    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      runId,
-      parentRunId,
-      'inherit',
-      currentSession(),
-    );
-    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-    const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
-    expect(loopParams).toMatchObject({
-      parentRunId,
-      runId,
-      agentName: 'tool-test',
-    });
-    expect(loopParams.strategy).toMatchObject({
-      stageLabel: "Workflow script 'tool-test'",
-      launch: expect.any(Function),
-      isTerminal: expect.any(Function),
-    });
-    // Terminal-only: no runTurn (workflow-script is the only strategy that
-    // omits it — the native subagent strategy declares one unconditionally,
-    // even for a workflow-category child).
-    expect(loopParams.strategy.runTurn).toBeUndefined();
-    expect(loopParams.recordCost).toEqual(expect.any(Function));
+  );
 
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Launched workflow script 'tool-test' (async)",
-    });
-    expect(result.output).toContain(`Run ID: ${runId}`);
-    expect(result.output).toContain(
-      'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
-    );
-    expect(result.output).toContain('same meta.name');
-  });
+  it.effect('never overwrites an edited submitted-source draft', () =>
+    Effect.gen(function* () {
+      const originalPath = '.texra/workflow-scripts/draft-tool-call.mjs';
+      yield* Effect.promise(() =>
+        writeWorkspaceScript(originalPath, '// edited by the model'),
+      );
 
-  it('never overwrites an edited submitted-source draft', async () => {
-    const originalPath = '.texra/workflow-scripts/draft-tool-call.mjs';
-    await writeWorkspaceScript(originalPath, '// edited by the model');
+      const result = yield* callTool();
+      const savedPath = result.output?.match(
+        /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
+      )?.[1];
 
-    const result = await callTool();
-    const savedPath = result.output?.match(
-      /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
-    )?.[1];
+      expect(savedPath).toBeTruthy();
+      expect(savedPath).not.toBe(originalPath);
+      expect(yield* Effect.promise(() => WorkspaceFS.read(originalPath))).toBe(
+        '// edited by the model',
+      );
+      expect(
+        yield* Effect.promise(() => WorkspaceFS.read(savedPath ?? '')),
+      ).toBe(script);
+    }),
+  );
 
-    expect(savedPath).toBeTruthy();
-    expect(savedPath).not.toBe(originalPath);
-    expect(await WorkspaceFS.read(originalPath)).toBe('// edited by the model');
-    expect(await WorkspaceFS.read(savedPath ?? '')).toBe(script);
-  });
+  it.effect('loads an edited workflow script from scriptPath', () =>
+    Effect.gen(function* () {
+      const editedScript = script
+        .replace("name: 'tool-test'", "name: 'edited-tool-test'")
+        .replace('saved call', 'edited saved call');
+      const scriptPath = '.texra/workflow-scripts/edited.mjs';
+      yield* Effect.promise(() =>
+        writeWorkspaceScript(scriptPath, editedScript),
+      );
 
-  it('loads an edited workflow script from scriptPath', async () => {
-    const editedScript = script
-      .replace("name: 'tool-test'", "name: 'edited-tool-test'")
-      .replace('saved call', 'edited saved call');
-    const scriptPath = '.texra/workflow-scripts/edited.mjs';
-    await writeWorkspaceScript(scriptPath, editedScript);
-
-    const result = await callToolInput({
-      agent: 'correct',
-      script: null,
-      scriptPath,
-    });
-
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Launched workflow script 'edited-tool-test' (async)",
-    });
-    expect(result.output).toContain(`Script file: ${scriptPath}`);
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      currentSession(),
-      runIdFor('edited-tool-test'),
-      registrationRecordFor('edited-tool-test'),
-      'edited-tool-test',
-      registrationOptionsFor('edited-tool-test'),
-    );
-  });
-
-  it('saves invalid submitted source and returns its editable draft path', async () => {
-    const invalidScript = 'return await agent("missing meta")';
-
-    const result = await callTool({ script: invalidScript });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('Script file:'),
-    });
-    const draftPath = result.error?.match(
-      /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
-    )?.[1];
-    expect(draftPath).toBeTruthy();
-    expect(await WorkspaceFS.read(draftPath ?? '')).toBe(invalidScript);
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-  });
-
-  it('reports the same editable file when file-mode parsing fails', async () => {
-    const scriptPath = '.texra/workflow-scripts/broken.mjs';
-    await writeWorkspaceScript(scriptPath, 'return null');
-
-    const result = await callToolInput({
-      agent: 'correct',
-      scriptPath,
-    });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(`Script file: ${scriptPath}`),
-    });
-    expect(result.error).toContain('with scriptPath:');
-  });
-
-  it('requires exactly one script source', async () => {
-    for (const input of [
-      { agent: 'correct' },
-      {
+      const result = yield* callToolInput({
         agent: 'correct',
-        script,
-        scriptPath: '.texra/workflow-scripts/stale.mjs',
-      },
-    ]) {
-      const result = await new WorkflowScriptTool().call(input);
+        script: null,
+        scriptPath,
+      });
+
+      expect(result).toMatchObject({
+        status: 'executed',
+        summary: "Launched workflow script 'edited-tool-test' (async)",
+      });
+      expect(result.output).toContain(`Script file: ${scriptPath}`);
+      expect(mocks.registerRun).toHaveBeenCalledWith(
+        currentSession(),
+        runIdFor('edited-tool-test'),
+        registrationRecordFor('edited-tool-test'),
+        'edited-tool-test',
+        registrationOptionsFor('edited-tool-test'),
+      );
+    }),
+  );
+
+  it.effect(
+    'saves invalid submitted source and returns its editable draft path',
+    () =>
+      Effect.gen(function* () {
+        const invalidScript = 'return await agent("missing meta")';
+
+        const result = yield* callTool({ script: invalidScript });
+
+        expect(result).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining('Script file:'),
+        });
+        const draftPath = result.error?.match(
+          /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
+        )?.[1];
+        expect(draftPath).toBeTruthy();
+        expect(
+          yield* Effect.promise(() => WorkspaceFS.read(draftPath ?? '')),
+        ).toBe(invalidScript);
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('reports the same editable file when file-mode parsing fails', () =>
+    Effect.gen(function* () {
+      const scriptPath = '.texra/workflow-scripts/broken.mjs';
+      yield* Effect.promise(() =>
+        writeWorkspaceScript(scriptPath, 'return null'),
+      );
+
+      const result = yield* callToolInput({
+        agent: 'correct',
+        scriptPath,
+      });
+
       expect(result).toMatchObject({
         status: 'error',
-        diagnostics: { type: 'validation_error' },
+        error: expect.stringContaining(`Script file: ${scriptPath}`),
       });
-      expect(result.error).toContain(
-        'Provide exactly one of script or scriptPath',
+      expect(result.error).toContain('with scriptPath:');
+    }),
+  );
+
+  it.effect('requires exactly one script source', () =>
+    Effect.gen(function* () {
+      for (const input of [
+        { agent: 'correct' },
+        {
+          agent: 'correct',
+          script,
+          scriptPath: '.texra/workflow-scripts/stale.mjs',
+        },
+      ]) {
+        const result = yield* new WorkflowScriptTool()
+          .call(input)
+          .pipe(Effect.provide(nativeToolTestLayer()));
+        expect(result).toMatchObject({
+          status: 'error',
+          diagnostics: { type: 'validation_error' },
+        });
+        expect(result.error).toContain(
+          'Provide exactly one of script or scriptPath',
+        );
+      }
+    }),
+  );
+
+  it.effect(
+    'does not offer an edit-and-retry hint when the script file is unreadable',
+    () =>
+      Effect.gen(function* () {
+        const scriptPath = '.texra/workflow-scripts/missing.mjs';
+
+        const result = yield* callToolInput({
+          agent: 'correct',
+          scriptPath,
+        });
+
+        expect(result).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining(
+            `Unable to read workflow script '${scriptPath}'`,
+          ),
+        });
+        expect(result.error).not.toContain('To revise and rerun it');
+      }),
+  );
+
+  it.effect('waits for the workflow report in a one-cycle headless run', () =>
+    Effect.gen(function* () {
+      const scriptReference =
+        'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
+      mockPersistedReport(
+        'tool-test',
+        `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
+        RUN_OUTCOME.COMPLETED,
       );
-    }
-  });
 
-  it('does not offer an edit-and-retry hint when the script file is unreadable', async () => {
-    const scriptPath = '.texra/workflow-scripts/missing.mjs';
+      const result = yield* callTool({ stopAfterCycle: true });
 
-    const result = await callToolInput({
-      agent: 'correct',
-      scriptPath,
-    });
+      const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
+      expect(loopParams.strategy.deliveryMode).toBe('persistOnly');
+      expect(loopParams.strategy.resolveDeliveryTarget).toBeUndefined();
+      expect(result).toMatchObject({
+        status: 'executed',
+        summary: "Completed workflow script 'tool-test'",
+        output: expect.stringContaining(
+          '<workflow-script-result>solved</workflow-script-result>',
+        ),
+      });
+      expect(result.output?.split(scriptReference)).toHaveLength(2);
+    }),
+  );
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(
-        `Unable to read workflow script '${scriptPath}'`,
-      ),
-    });
-    expect(result.error).not.toContain('To revise and rerun it');
-  });
+  it.effect.each([
+    { cause: Cause.interrupt(), name: 'an interrupt', hasDefect: false },
+    {
+      cause: Cause.fromReasons([
+        Cause.makeInterruptReason(),
+        Cause.makeDieReason(new Error('launch cleanup failed')),
+      ]),
+      name: 'an interrupted cleanup defect',
+      hasDefect: true,
+    },
+  ])('preserves $name from workflow launch', ({ cause, hasDefect }) =>
+    Effect.gen(function* () {
+      mocks.startChildRunLoop.mockReturnValueOnce(Effect.failCause(cause));
 
-  it('waits for the workflow report in a one-cycle headless run', async () => {
-    const scriptReference =
-      'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
-    mockPersistedReport(
-      'tool-test',
-      `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
-      RUN_OUTCOME.COMPLETED,
-    );
+      const exit = yield* Effect.exit(callTool());
 
-    const result = await callTool({ stopAfterCycle: true });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        expect(Cause.hasDies(exit.cause)).toBe(hasDefect);
+      }
+    }),
+  );
 
-    const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
-    expect(loopParams.strategy.deliveryMode).toBe('persistOnly');
-    expect(loopParams.strategy.resolveDeliveryTarget).toBeUndefined();
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Completed workflow script 'tool-test'",
-      output: expect.stringContaining(
-        '<workflow-script-result>solved</workflow-script-result>',
-      ),
-    });
-    expect(result.output?.split(scriptReference)).toHaveLength(2);
-  });
+  it.effect(
+    'returns a persisted headless failure without duplicating its script reference',
+    () =>
+      Effect.gen(function* () {
+        const scriptReference =
+          'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
+        mockPersistedReport(
+          'tool-test',
+          `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
+          RUN_OUTCOME.FAILED,
+        );
 
-  it('returns a persisted headless failure without duplicating its script reference', async () => {
-    const scriptReference =
-      'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
-    mockPersistedReport(
-      'tool-test',
-      `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
-      RUN_OUTCOME.FAILED,
-    );
+        const result = yield* callTool({ stopAfterCycle: true });
 
-    const result = await callTool({ stopAfterCycle: true });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      summary: "Workflow script 'tool-test' failed",
-      error: expect.stringContaining(
-        '<workflow-script-error>broken</workflow-script-error>',
-      ),
-    });
-    expect(result.error?.split(scriptReference)).toHaveLength(2);
-  });
-
-  it('does not return a prior report when a resumed headless run is interrupted before delivery', async () => {
-    const resumedScript = script.replace(
-      "name: 'tool-test'",
-      "name: 'interrupted-resume'",
-    );
-    const runId = runIdFor('interrupted-resume');
-    const store = getRunRecords(currentSession(), runId);
-    await Effect.runPromise(
-      store.writeReport('stale success from the prior attempt'),
-    );
-    vi.spyOn(store, 'readRunEnd').mockReturnValue(
-      Effect.succeed({
-        outcome: RUN_OUTCOME.FAILED,
-        output: emptyRunEndOutput('workflow'),
+        expect(result).toMatchObject({
+          status: 'error',
+          summary: "Workflow script 'tool-test' failed",
+          error: expect.stringContaining(
+            '<workflow-script-error>broken</workflow-script-error>',
+          ),
+        });
+        expect(result.error?.split(scriptReference)).toHaveLength(2);
       }),
-    );
+  );
 
-    // The default resolved completion writes no report, matching an
-    // interruption before childRunLoop reaches deliverTurn.
-    const result = await callTool({
-      script: resumedScript,
-      stopAfterCycle: true,
-    });
+  it.effect(
+    'does not return a prior report when a resumed headless run is interrupted before delivery',
+    () =>
+      Effect.gen(function* () {
+        const resumedScript = script.replace(
+          "name: 'tool-test'",
+          "name: 'interrupted-resume'",
+        );
+        const runId = runIdFor('interrupted-resume');
+        const store = getRunRecords(currentSession(), runId);
+        yield* store.writeReport('stale success from the prior attempt');
+        vi.spyOn(store, 'readRunEnd').mockReturnValue(
+          Effect.succeed({
+            outcome: RUN_OUTCOME.FAILED,
+            output: emptyRunEndOutput('workflow'),
+          }),
+        );
 
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(
-        "Workflow script 'interrupted-resume' completed without a persisted report.",
-      ),
-    });
-    expect(result.error).not.toContain('stale success from the prior attempt');
-    await expect(Effect.runPromise(store.readReport())).resolves.toBeNull();
-  });
+        // The default resolved completion writes no report, matching an
+        // interruption before childRunLoop reaches deliverTurn.
+        const result = yield* callTool({
+          script: resumedScript,
+          stopAfterCycle: true,
+        });
 
-  it('rejects an unknown default agent before registering a detached run', async () => {
-    const result = await callTool({ agent: 'missing-agent' });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining("Unknown workflow agent 'missing-agent'"),
-    });
-    expect(result.error).toContain('Script file: .texra/workflow-scripts/');
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.createChildRun).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('gates the run model through delegation model availability', async () => {
-    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
-      Effect.succeed('served-model'),
-    );
-
-    await callTool();
-
-    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
-      parentModel: 'parent-model',
-      withScope: expect.any(Function),
-    });
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      currentSession(),
-      runIdFor('tool-test'),
-      registrationRecordFor('tool-test', 'served-model'),
-      'tool-test',
-      registrationOptionsFor('tool-test'),
-    );
-  });
-
-  it('rejects an unserveable run model before registering a detached run', async () => {
-    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
-      Effect.fail(
-        new Error('No models are currently available for delegation.'),
-      ),
-    );
-
-    const result = await callTool();
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(
-        'No models are currently available for delegation.',
-      ),
-    });
-    expect(result.error).toContain('Script file: .texra/workflow-scripts/');
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.createChildRun).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('validates files and binds them to the live workflow run', async () => {
-    const files = {
-      inputFiles: ['paper.tex'],
-      contextFiles: ['references.bib'],
-      mediaFiles: ['figure.pdf'],
-    } as const satisfies WorkflowScriptFiles;
-    const result = await callTool({ files });
-
-    expect(result.status).toBe('executed');
-    // The durable record stays honest (no file lists); the binding rides the
-    // checkpoint and the live run config the agent steps consume.
-    expect(mocks.createChildRun).toHaveBeenCalledWith(
-      currentSession(),
-      runIdFor('tool-test'),
-      expect.anything(),
-      expect.objectContaining({
-        config: expect.objectContaining({
-          inputFiles: ['paper.tex'],
-          contextFiles: ['references.bib'],
-          mediaFiles: ['figure.pdf'],
-        }),
+        expect(result).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining(
+            "Workflow script 'interrupted-resume' completed without a persisted report.",
+          ),
+        });
+        expect(result.error).not.toContain(
+          'stale success from the prior attempt',
+        );
+        expect(yield* store.readReport()).toBeNull();
       }),
-    );
-  });
+  );
 
-  it('rejects an oversized bibliography bound as workflow context', async () => {
-    await WorkspaceFS.write('large.bib', 'x'.repeat(100 * 1024 + 1));
+  it.effect(
+    'rejects an unknown default agent before registering a detached run',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* callTool({ agent: 'missing-agent' });
 
-    const result = await callTool({
-      files: {
+        expect(result).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining(
+            "Unknown workflow agent 'missing-agent'",
+          ),
+        });
+        expect(result.error).toContain('Script file: .texra/workflow-scripts/');
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.createChildRun).not.toHaveBeenCalled();
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('gates the run model through delegation model availability', () =>
+    Effect.gen(function* () {
+      mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+        Effect.succeed('served-model'),
+      );
+
+      yield* callTool();
+
+      expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+        parentModel: 'parent-model',
+        withScope: expect.any(Function),
+      });
+      expect(mocks.registerRun).toHaveBeenCalledWith(
+        currentSession(),
+        runIdFor('tool-test'),
+        registrationRecordFor('tool-test', 'served-model'),
+        'tool-test',
+        registrationOptionsFor('tool-test'),
+      );
+    }),
+  );
+
+  it.effect(
+    'rejects an unserveable run model before registering a detached run',
+    () =>
+      Effect.gen(function* () {
+        mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+          Effect.fail(
+            new Error('No models are currently available for delegation.'),
+          ),
+        );
+
+        const result = yield* callTool();
+
+        expect(result).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining(
+            'No models are currently available for delegation.',
+          ),
+        });
+        expect(result.error).toContain('Script file: .texra/workflow-scripts/');
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.createChildRun).not.toHaveBeenCalled();
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('validates files and binds them to the live workflow run', () =>
+    Effect.gen(function* () {
+      const files = {
         inputFiles: ['paper.tex'],
-        contextFiles: ['large.bib'],
-        mediaFiles: [],
-      },
-    });
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      } as const satisfies WorkflowScriptFiles;
+      const result = yield* callTool({ files });
 
-    expect(result).toMatchObject({
-      status: 'error',
-      summary: 'Rejected oversized BibTeX attachment',
-      diagnostics: {
-        type: 'oversized_bib_attachment',
-        path: 'large.bib',
-        sizeBytes: 100 * 1024 + 1,
-        limitBytes: 100 * 1024,
-      },
-    });
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
+      expect(result.status).toBe('executed');
+      // The durable record stays honest (no file lists); the binding rides the
+      // checkpoint and the live run config the agent steps consume.
+      expect(mocks.createChildRun).toHaveBeenCalledWith(
+        currentSession(),
+        runIdFor('tool-test'),
+        expect.anything(),
+        expect.objectContaining({
+          config: expect.objectContaining({
+            inputFiles: ['paper.tex'],
+            contextFiles: ['references.bib'],
+            mediaFiles: ['figure.pdf'],
+          }),
+        }),
+      );
+    }),
+  );
 
-  it('registers checkpoint files when a resume omits files', async () => {
-    const resumeScript = script.replace("name: 'tool-test'", "name: 'resume'");
-    const files = {
-      inputFiles: ['paper.tex'],
-      contextFiles: ['references.bib'],
-      mediaFiles: ['figure.pdf'],
-    } as const satisfies WorkflowScriptFiles;
-    // The checkpoint's source of record: one `workflow.script` row on the
-    // aggregate the run's `checkpointId` names, with no journal behind it.
-    await Effect.runPromise(
-      currentSession().commit([
+  it.effect('rejects an oversized bibliography bound as workflow context', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        WorkspaceFS.write('large.bib', 'x'.repeat(100 * 1024 + 1)),
+      );
+
+      const result = yield* callTool({
+        files: {
+          inputFiles: ['paper.tex'],
+          contextFiles: ['large.bib'],
+          mediaFiles: [],
+        },
+      });
+
+      expect(result).toMatchObject({
+        status: 'error',
+        summary: 'Rejected oversized BibTeX attachment',
+        diagnostics: {
+          type: 'oversized_bib_attachment',
+          path: 'large.bib',
+          sizeBytes: 100 * 1024 + 1,
+          limitBytes: 100 * 1024,
+        },
+      });
+      expect(mocks.registerRun).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect('registers checkpoint files when a resume omits files', () =>
+    Effect.gen(function* () {
+      const resumeScript = script.replace(
+        "name: 'tool-test'",
+        "name: 'resume'",
+      );
+      const files = {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      } as const satisfies WorkflowScriptFiles;
+      // The checkpoint's source of record: one `workflow.script` row on the
+      // aggregate the run's `checkpointId` names, with no journal behind it.
+      yield* currentSession().commit([
         {
           type: 'workflow.script',
           aggregateId: aggregateId(
@@ -875,116 +981,132 @@ return null`;
           args: { kind: 'undefined' },
           files,
         },
-      ]),
-    );
+      ]);
 
-    const result = await callTool({ script: resumeScript });
+      const result = yield* callTool({ script: resumeScript });
 
-    expect(result.status).toBe('executed');
-    expect(mocks.createChildRun).toHaveBeenCalledWith(
-      currentSession(),
-      runIdFor('resume'),
-      expect.anything(),
-      expect.objectContaining({
-        config: expect.objectContaining({
-          inputFiles: ['paper.tex'],
-          contextFiles: ['references.bib'],
-          mediaFiles: ['figure.pdf'],
+      expect(result.status).toBe('executed');
+      expect(mocks.createChildRun).toHaveBeenCalledWith(
+        currentSession(),
+        runIdFor('resume'),
+        expect.anything(),
+        expect.objectContaining({
+          config: expect.objectContaining({
+            inputFiles: ['paper.tex'],
+            contextFiles: ['references.bib'],
+            mediaFiles: ['figure.pdf'],
+          }),
         }),
+      );
+    }),
+  );
+
+  it.effect(
+    'regenerates the same run id across relaunches of one meta.name',
+    () =>
+      Effect.gen(function* () {
+        yield* callTool();
+        const first = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
+        mocks.startChildRunLoop.mockClear();
+        // A retrying model rewrites its source; the deterministic run id and the
+        // meta.name-anchored checkpoint keep resume intact.
+        yield* callTool({ script: `${script}\n// retry rewrote me` });
+        const second = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
+
+        expect(first).toBe(runIdFor('tool-test'));
+        expect(second).toBe(first);
       }),
-    );
-  });
+  );
 
-  it('regenerates the same run id across relaunches of one meta.name', async () => {
-    await callTool();
-    const first = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
-    mocks.startChildRunLoop.mockClear();
-    // A retrying model rewrites its source; the deterministic run id and the
-    // meta.name-anchored checkpoint keep resume intact.
-    await callTool({ script: `${script}\n// retry rewrote me` });
-    const second = mocks.startChildRunLoop.mock.calls[0]?.[0].runId;
-
-    expect(first).toBe(runIdFor('tool-test'));
-    expect(second).toBe(first);
-  });
-
-  it('hydrates the committed workflow snapshot when reopening a named run', async () => {
-    const runId = runIdFor('tool-test');
-    const store = getRunRecords(currentSession(), runId);
-    const priorWorkflow = {
-      lifecycle: 'active' as const,
-      stages: [],
-      calls: [
-        {
-          id: 'interrupted',
-          label: 'Interrupted call',
-          kind: 'document' as const,
-          files: { input: [], context: [], media: [] },
-          attempts: [
+  it.effect(
+    'hydrates the committed workflow snapshot when reopening a named run',
+    () =>
+      Effect.gen(function* () {
+        const runId = runIdFor('tool-test');
+        const store = getRunRecords(currentSession(), runId);
+        const priorWorkflow = {
+          lifecycle: 'active' as const,
+          stages: [],
+          calls: [
             {
-              number: 1,
-              id: 'bbbbbb222222' as RunId,
-              startedAt: '2026-08-01T00:00:00.000Z',
+              id: 'interrupted',
+              label: 'Interrupted call',
+              kind: 'document' as const,
+              files: { input: [], context: [], media: [] },
+              attempts: [
+                {
+                  number: 1,
+                  id: 'bbbbbb222222' as RunId,
+                  startedAt: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              status: 'running' as const,
+              costUsd: 1.25,
+              childRunId: 'bbbbbb222222' as RunId,
+              timestamps: {
+                createdAt: '2026-08-01T00:00:00.000Z',
+                updatedAt: '2026-08-01T00:00:01.000Z',
+                startedAt: '2026-08-01T00:00:00.000Z',
+              },
             },
           ],
-          status: 'running' as const,
-          costUsd: 1.25,
-          childRunId: 'bbbbbb222222' as RunId,
           timestamps: {
             createdAt: '2026-08-01T00:00:00.000Z',
             updatedAt: '2026-08-01T00:00:01.000Z',
-            startedAt: '2026-08-01T00:00:00.000Z',
           },
-        },
-      ],
-      timestamps: {
-        createdAt: '2026-08-01T00:00:00.000Z',
-        updatedAt: '2026-08-01T00:00:01.000Z',
-      },
-    };
-    const callOrder: string[] = [];
-    const readStrict = vi.spyOn(store, 'readWorkflow').mockImplementation(() =>
-      Effect.sync(() => {
-        callOrder.push('readWorkflow');
-        return priorWorkflow;
+        };
+        const callOrder: string[] = [];
+        const readStrict = vi
+          .spyOn(store, 'readWorkflow')
+          .mockImplementation(() =>
+            Effect.sync(() => {
+              callOrder.push('readWorkflow');
+              return priorWorkflow;
+            }),
+          );
+        mocks.registerRun.mockImplementation(() =>
+          Effect.sync(() => {
+            callOrder.push('registerRun');
+          }),
+        );
+
+        const result = yield* callTool();
+
+        expect(result.status).toBe('executed');
+        expect(callOrder).toEqual(['readWorkflow', 'registerRun']);
+        // Strategy must receive the pre-register snapshot, not a post-wipe read.
+        expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(
+          priorWorkflow,
+        );
+        readStrict.mockRestore();
       }),
-    );
-    mocks.registerRun.mockImplementation(() =>
-      Effect.sync(() => {
-        callOrder.push('registerRun');
+  );
+
+  it.effect(
+    'reports already-running when the deterministic id is still leased',
+    () =>
+      Effect.gen(function* () {
+        const runId = runIdFor('tool-test');
+        mocks.registerRun.mockReturnValueOnce(
+          Effect.fail(
+            new RunLeaseActiveError(runId, {
+              pid: 1,
+              processStart: '1',
+              hostname: 'test-host',
+            }),
+          ),
+        );
+
+        const result = yield* callTool();
+
+        expect(result).toMatchObject({
+          status: 'executed',
+          summary: "Workflow script 'tool-test' is already running",
+        });
+        expect(result.output).toContain(`Run ID: ${runId}`);
+        // A relaunch over a live run never starts a second competing loop.
+        expect(mocks.createChildRun).not.toHaveBeenCalled();
+        expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }),
-    );
-
-    const result = await callTool();
-
-    expect(result.status).toBe('executed');
-    expect(callOrder).toEqual(['readWorkflow', 'registerRun']);
-    // Strategy must receive the pre-register snapshot, not a post-wipe read.
-    expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(priorWorkflow);
-    readStrict.mockRestore();
-  });
-
-  it('reports already-running when the deterministic id is still leased', async () => {
-    const runId = runIdFor('tool-test');
-    mocks.registerRun.mockReturnValueOnce(
-      Effect.fail(
-        new RunLeaseActiveError(runId, {
-          pid: 1,
-          processStart: '1',
-          hostname: 'test-host',
-        }),
-      ),
-    );
-
-    const result = await callTool();
-
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Workflow script 'tool-test' is already running",
-    });
-    expect(result.output).toContain(`Run ID: ${runId}`);
-    // A relaunch over a live run never starts a second competing loop.
-    expect(mocks.createChildRun).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
+  );
 });

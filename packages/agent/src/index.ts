@@ -10,7 +10,7 @@
  * here and nowhere below it.
  */
 // Third-party imports
-import { Effect, Exit, Fiber, Stream } from 'effect';
+import { Effect, Exit, Fiber, Stream, type Context } from 'effect';
 
 // Local imports - agent runtime
 //
@@ -41,11 +41,8 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 // Local imports - the Effect surface this entry renders
 import { RunFailure } from './effect/errors.js';
 import { composeProcess, type AgentPlatform } from './effect/runtime.js';
-import {
-  admitTools,
-  makeSessions,
-  type SessionView,
-} from './effect/sessions.js';
+import { admitTools } from './effect/sessionPrograms.js';
+import type { Sessions, SessionView } from './effect/sessions.js';
 
 /**
  * The owner's session effects supply their own context, so every run site
@@ -63,8 +60,8 @@ export type {
   ToolHost,
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-export { defineTool } from '@tools/core/define';
-export type { DefinedToolClass } from '@tools/core/define';
+export { defineTool } from '@tools/core/definition';
+export type { DefinedToolClass } from '@tools/core/definition';
 export type {
   AgentFlowResult,
   ToolUseFlowResult,
@@ -155,7 +152,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 let composition:
   | {
       readonly platform: AgentPlatform;
-      readonly sessions: ReturnType<typeof makeSessions>;
+      readonly sessions: Context.Service.Shape<typeof Sessions>;
     }
   | undefined;
 
@@ -179,7 +176,7 @@ let composition:
  */
 function agentServices(
   platform: AgentPlatform,
-): ReturnType<typeof makeSessions> {
+): Context.Service.Shape<typeof Sessions> {
   if (platform.lifecycle.shutdownRan) {
     throw new Error(
       "This platform's shutdown has already run, and it runs once: a session opened now would have no shutdown path to close and flush it, and the runtime under it none to dispose it. Run further agents in a new process, or take the Effect surface (@texra-ai/agent/effect), whose scope owns each composition.",
@@ -189,7 +186,7 @@ function agentServices(
   // A different platform reaches `composeProcess`, which is what states the
   // refusal.
   const hold = composeProcess(platform);
-  const sessions = makeSessions(hold.runtime);
+  const sessions = hold.sessions;
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
     runSettlement: (settlement) => effectRuntime().runPromise(settlement),

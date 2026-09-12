@@ -195,9 +195,6 @@ importers:
       p-retry:
         specifier: ^8.0.1
         version: 8.0.1
-      p-timeout:
-        specifier: ^7.0.1
-        version: 7.0.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -526,9 +523,6 @@ importers:
       p-retry:
         specifier: ^8.0.1
         version: 8.0.1
-      p-timeout:
-        specifier: ^7.0.1
-        version: 7.0.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3

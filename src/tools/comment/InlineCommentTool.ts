@@ -3,12 +3,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -195,12 +191,12 @@ function threadNotFound(threadId: string): ToolResult {
 const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
   input: AddCommentInput,
 ) {
+  const call = yield* ToolCall;
   const { path, line, endLine, body } = input;
   const resolved = yield* Effect.try({
     try: () =>
-      resolveWorkspaceRelativePath(
-        path,
-        getRunContextWorkingDirectory(tryUseRunContext()),
+      call.inScope(() =>
+        resolveWorkspaceRelativePath(path, call.workingDirectory),
       ),
     catch: addCommentFailure,
   });
@@ -254,14 +250,17 @@ const setThreadResolved = Effect.fn('InlineCommentTool.setResolved')(function* (
 const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   input: ListCommentInput,
 ) {
-  let absolutePath: string | undefined;
-  if (input.path != null) {
-    const workingDirectory = getRunContextWorkingDirectory(tryUseRunContext());
-    absolutePath = resolveWorkspaceRelativePath(
-      input.path,
-      workingDirectory,
-    ).absolute;
-  }
+  const call = yield* ToolCall;
+  const absolutePath =
+    input.path == null
+      ? undefined
+      : call.inScope(
+          () =>
+            resolveWorkspaceRelativePath(
+              input.path ?? undefined,
+              call.workingDirectory,
+            ).absolute,
+        );
   const threads = (yield* requireProvider()).list({ absolutePath });
   if (threads.length === 0) {
     return executed(
@@ -277,7 +276,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, ToolError> {
+): Effect.Effect<ToolResult, ToolError, ToolCall> {
   switch (input.command) {
     case 'add':
       return addThread(input);
@@ -300,7 +299,7 @@ export class InlineCommentTool extends defineTool({
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,
 }) {
-  protected execute(input: InlineCommentInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(inlineComment(input));
+  protected execute(input: InlineCommentInput) {
+    return inlineComment(input);
   }
 }

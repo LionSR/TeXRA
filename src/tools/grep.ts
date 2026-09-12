@@ -1,19 +1,19 @@
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
 import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -117,6 +117,7 @@ function buildArguments(input: GrepInput, outputMode: OutputMode): string[] {
 interface GrepPorts {
   readonly signal: AbortSignal | undefined;
   readonly toolRoot: () => string | undefined;
+  readonly inScope: <A>(operation: () => A) => A;
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
@@ -125,8 +126,12 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
 ): Effect.fn.Return<ToolResult, unknown> {
   const { output_mode: outputMode } = input;
   const root = ports.toolRoot();
-  const { path, display } = resolveAndFormat(input.path ?? undefined, root);
-  const gitignore = yield* getGitignoreMatcher();
+  const { path, display } = ports.inScope(() =>
+    resolveAndFormat(input.path ?? undefined, root),
+  );
+  const gitignore = yield* getGitignoreMatcher(
+    ports.inScope(() => WorkspaceFS.getPath()),
+  );
   const args = buildArguments(input, outputMode);
   const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
   const ignoreArgs = applyWorkspaceIgnores
@@ -151,15 +156,17 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   ];
 
   const result = yield* hostPort(() =>
-    executeCommand(command, {
-      cwd: root,
-      channel: CHANNEL,
-      truncate: false,
-      maxBuffer: GREP_MAX_BUFFER_CHARS,
-      // Cancellation for the owning agent run — parallel batches must be
-      // able to terminate large-repo rg subprocesses on interrupt.
-      signal: ports.signal,
-    }),
+    ports.inScope(() =>
+      executeCommand(command, {
+        cwd: root,
+        channel: CHANNEL,
+        truncate: false,
+        maxBuffer: GREP_MAX_BUFFER_CHARS,
+        // Cancellation for the owning agent run — parallel batches must be
+        // able to terminate large-repo rg subprocesses on interrupt.
+        signal: ports.signal,
+      }),
+    ),
   );
 
   if (result.outputLimitExceeded) {
@@ -220,13 +227,16 @@ export class GrepTool extends defineTool({
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',
   schema: GrepInputSchema,
 }) {
-  protected execute(input: GrepInput): Promise<ToolResult> {
-    // The working directory belongs to the calling turn, so it is bound here
-    // and handed to the program rather than read from a fiber.
+  protected readonly execute = Effect.fn('GrepTool.call')(function* (
+    this: GrepTool,
+    input: GrepInput,
+  ) {
+    const call = yield* ToolCall;
     const ports: GrepPorts = {
-      signal: getCurrentToolCallContext()?.signal,
-      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      signal: yield* Effect.abortSignal,
+      toolRoot: () => parseWorkingDirectory(call.workingDirectory),
+      inScope: call.inScope,
     };
-    return effectRuntime().runPromise(runGrep(ports, input));
-  }
+    return yield* runGrep(ports, input);
+  });
 }

@@ -8,8 +8,10 @@ import {
   ArxivProcessor,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
+import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'arXivCommands';
 const log = createLog(CHANNEL);
@@ -75,6 +77,8 @@ export async function downloadArXivSource(): Promise<void> {
           ArxivProcessor.downloadSource(arxivId, {
             progressCallback: (message, increment) =>
               progress.report({ message, increment }),
+            workspaceRoot: WorkspaceFS.getPath() ?? '',
+            formatter: autoIndent ? resolveLatexFormatter() : null,
             autoIndent,
             destination,
           }),

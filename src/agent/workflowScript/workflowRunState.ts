@@ -415,7 +415,7 @@ export class WorkflowRunState {
                 attempts,
                 status: WORKFLOW_CALL_STATUS.FAILED,
                 settledBySweep: true,
-                error: WORKFLOW_CALL_UNFINISHED_NOTE,
+                error: error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
                 timestamps,
               };
       }

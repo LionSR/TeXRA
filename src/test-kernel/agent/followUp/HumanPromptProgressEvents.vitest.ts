@@ -1,17 +1,18 @@
+import '@test/support/defaultSessionTestSetup';
+
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
 // Test composition imports
 
 // Local imports
-import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { proposalApprovals } from '@tools/approval';
@@ -23,23 +24,23 @@ import { generateRunId } from '@utils/core';
 // Local file imports
 import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
 
-async function inToolContext<T>(
+function inToolContext<A, E, R>(
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
   runId: RunId,
-  run: () => T,
-): Promise<Awaited<T>> {
-  const detach = defaultSession().interactions.use(interactions);
-  try {
-    return await withRunContext(
-      createRunContext({
-        runId,
-        session: defaultSession(),
-      }),
-      () => withToolFileInteractionContext({ tracker: {} as never }, run),
-    );
-  } finally {
-    detach();
-  }
+  run: () => Effect.Effect<A, E, R>,
+) {
+  return Effect.acquireUseRelease(
+    Effect.sync(() => defaultSession().interactions.use(interactions)),
+    () =>
+      run().pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { runId, session: defaultSession(), toolPolicy: {} },
+          }),
+        ),
+      ),
+    (detach) => Effect.sync(detach),
+  );
 }
 
 /** A run whose existence fact the request rows below hang off. */
@@ -58,93 +59,106 @@ describe('human prompt progress events', () => {
     defaultSession().approvals.clearAll();
   });
 
-  it('opens a bash request on the run and settles on its decision', async () => {
-    const explicit = createRecordingHost();
-    const runId = startedRun();
-    const decided = autoDecideRequests(defaultSession(), () => ({
-      action: 'approve',
-    }));
+  it.live('opens a bash request on the run and settles on its decision', () =>
+    Effect.gen(function* () {
+      const explicit = createRecordingHost();
+      const runId = startedRun();
+      const decided = autoDecideRequests(defaultSession(), () => ({
+        action: 'approve',
+      }));
 
-    try {
-      const approval = await inToolContext(explicit.interactions, runId, () =>
-        effectRuntime().runPromise(
-          requestBashApproval({
-            command: 'echo hello',
-            cwd: '/tmp/texra-project',
-          }),
-        ),
-      );
+      try {
+        const approval = yield* inToolContext(
+          explicit.interactions,
+          runId,
+          () =>
+            requestBashApproval({
+              command: 'echo hello',
+              cwd: '/tmp/texra-project',
+            }),
+        );
 
-      expect(approval).toMatchObject({ action: 'approve' });
-      expect(decided.opened.map((request) => request.payload)).toEqual([
-        {
-          kind: 'bash',
-          data: {
-            requestId: expect.stringContaining('bash-'),
-            command: 'echo hello',
-            cwd: '/tmp/texra-project',
-            allowBypass: true,
-            runId,
-          },
-        },
-      ]);
-    } finally {
-      decided.detach();
-    }
-  });
-
-  it('opens a user-question request and reports the submitted answers', async () => {
-    const explicit = createRecordingHost();
-    const runId = startedRun();
-    const tool = new AskUserQuestionTool();
-    const question = 'Which path should the agent take?';
-    const decided = autoDecideRequests(defaultSession(), () => ({
-      action: 'submit',
-      answers: { [question]: 'Run the build' },
-    }));
-
-    try {
-      const result = await inToolContext(explicit.interactions, runId, () =>
-        tool.call({
-          context: 'Choose the next step.',
-          questions: [
-            {
-              question,
-              header: 'Path',
-              options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
+        expect(approval).toMatchObject({ action: 'approve' });
+        expect(decided.opened.map((request) => request.payload)).toEqual([
+          {
+            kind: 'bash',
+            data: {
+              requestId: expect.stringContaining('bash-'),
+              command: 'echo hello',
+              cwd: '/tmp/texra-project',
+              allowBypass: true,
+              runId,
             },
-          ],
-        }),
-      );
-
-      expect(result).toMatchObject({
-        summary: 'Answered 1 user question(s).',
-      });
-      expect(decided.opened.map((request) => request.payload)).toEqual([
-        {
-          kind: 'userQuestion',
-          data: {
-            requestId: expect.stringContaining('user-question-'),
-            questions: [
-              {
-                question,
-                header: 'Path',
-                options: [
-                  { label: 'Inspect logs' },
-                  { label: 'Run the build' },
-                ],
-              },
-            ],
-            context: 'Choose the next step.',
-            allowBypass: false,
-            runId,
           },
-        },
-      ]);
-    } finally {
-      decided.detach();
-    }
-  });
+        ]);
+      } finally {
+        decided.detach();
+      }
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
+
+  it.live(
+    'opens a user-question request and reports the submitted answers',
+    () =>
+      Effect.gen(function* () {
+        const explicit = createRecordingHost();
+        const runId = startedRun();
+        const tool = new AskUserQuestionTool();
+        const question = 'Which path should the agent take?';
+        const decided = autoDecideRequests(defaultSession(), () => ({
+          action: 'submit',
+          answers: { [question]: 'Run the build' },
+        }));
+
+        try {
+          const result = yield* inToolContext(
+            explicit.interactions,
+            runId,
+            () =>
+              tool.call({
+                context: 'Choose the next step.',
+                questions: [
+                  {
+                    question,
+                    header: 'Path',
+                    options: [
+                      { label: 'Inspect logs' },
+                      { label: 'Run the build' },
+                    ],
+                  },
+                ],
+              }),
+          );
+
+          expect(result).toMatchObject({
+            summary: 'Answered 1 user question(s).',
+          });
+          expect(decided.opened.map((request) => request.payload)).toEqual([
+            {
+              kind: 'userQuestion',
+              data: {
+                requestId: expect.stringContaining('user-question-'),
+                questions: [
+                  {
+                    question,
+                    header: 'Path',
+                    options: [
+                      { label: 'Inspect logs' },
+                      { label: 'Run the build' },
+                    ],
+                  },
+                ],
+                context: 'Choose the next step.',
+                allowBypass: false,
+                runId,
+              },
+            },
+          ]);
+        } finally {
+          decided.detach();
+        }
+      }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 
   it.each([
     {
@@ -187,72 +201,74 @@ describe('human prompt progress events', () => {
     },
   );
 
-  it('keeps bash and edit session bypasses independent', async () => {
-    const explicit = createRecordingHost();
-    const runId = startedRun();
-    const decided = autoDecideRequests(defaultSession(), () => ({
-      action: 'approve',
-    }));
+  it.live('keeps bash and edit session bypasses independent', () =>
+    Effect.gen(function* () {
+      const explicit = createRecordingHost();
+      const runId = startedRun();
+      const decided = autoDecideRequests(defaultSession(), () => ({
+        action: 'approve',
+      }));
 
-    try {
-      currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
-        silent: true,
-      });
+      try {
+        currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
+          silent: true,
+        });
 
-      const approval = await inToolContext(explicit.interactions, runId, () =>
-        effectRuntime().runPromise(
-          requestBashApproval({ command: 'echo still asks' }),
-        ),
-      );
+        const approval = yield* inToolContext(
+          explicit.interactions,
+          runId,
+          () => requestBashApproval({ command: 'echo still asks' }),
+        );
 
-      expect(approval).toMatchObject({ action: 'approve' });
-      expect(decided.opened.at(-1)?.payload).toMatchObject({
-        kind: 'bash',
-        data: { command: 'echo still asks' },
-      });
+        expect(approval).toMatchObject({ action: 'approve' });
+        expect(decided.opened.at(-1)?.payload).toMatchObject({
+          kind: 'bash',
+          data: { command: 'echo still asks' },
+        });
 
-      // A bash bypass answers without asking; the edit bypass above is not
-      // what silenced it.
-      currentSession().approvals.bash.bypass.setBypass(runId, true, {
-        silent: true,
-      });
+        // A bash bypass answers without asking; the edit bypass above is not
+        // what silenced it.
+        currentSession().approvals.bash.bypass.setBypass(runId, true, {
+          silent: true,
+        });
 
-      const bypassed = await inToolContext(explicit.interactions, runId, () =>
-        effectRuntime().runPromise(
-          requestBashApproval({ command: 'echo bypassed' }),
-        ),
-      );
+        const bypassed = yield* inToolContext(
+          explicit.interactions,
+          runId,
+          () => requestBashApproval({ command: 'echo bypassed' }),
+        );
 
-      expect(bypassed).toEqual({ action: 'approve' });
-      expect(decided.opened).toHaveLength(1);
+        expect(bypassed).toEqual({ action: 'approve' });
+        expect(decided.opened).toHaveLength(1);
 
-      currentSession().approvals.toolEdit.bypass.setBypass(runId, false, {
-        silent: true,
-      });
+        currentSession().approvals.toolEdit.bypass.setBypass(runId, false, {
+          silent: true,
+        });
 
-      const editApproval = await inToolContext(
-        explicit.interactions,
-        runId,
-        () =>
-          effectRuntime().runPromise(
+        const editApproval = yield* inToolContext(
+          explicit.interactions,
+          runId,
+          () =>
             requestToolEditApproval({
               path: 'draft.tex',
               originalContent: 'old',
               proposedContent: 'new',
               sourceTool: 'test',
             }),
-          ),
-      );
+        );
 
-      expect(
-        decided.opened.filter((request) => request.payload.kind === 'toolEdit'),
-      ).toHaveLength(1);
-      expect(editApproval).toMatchObject({
-        action: 'apply',
-        appliedContent: 'new',
-      });
-    } finally {
-      decided.detach();
-    }
-  });
+        expect(
+          decided.opened.filter(
+            (request) => request.payload.kind === 'toolEdit',
+          ),
+        ).toHaveLength(1);
+        expect(editApproval).toMatchObject({
+          action: 'apply',
+          appliedContent: 'new',
+        });
+      } finally {
+        decided.detach();
+      }
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 });

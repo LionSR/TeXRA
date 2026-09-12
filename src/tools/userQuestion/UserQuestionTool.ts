@@ -1,13 +1,8 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   ToolError,
   UserQuestionAnswersSchema,
@@ -15,7 +10,6 @@ import {
 } from '@shared/schemas';
 import type { ToolResult, UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
-import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
@@ -46,14 +40,14 @@ type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
 ) {
-  const context = tryUseRunContext();
-  requireInteractions('ask_user_question', context);
-  const runId = getRunContextRunId(context);
-  if (!runId) {
+  const call = yield* ToolCall;
+  const run = call.run;
+  if (!run) {
     return yield* Effect.fail(
       new ToolError('ask_user_question requires an active run context.'),
     );
   }
+  const { runId, session } = run;
   const requestId = `user-question-${generateShortId()}`;
 
   logger.info('User question requested', {
@@ -67,7 +61,6 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     allowBypass: false,
     runId,
   };
-  const session = currentSession();
   const decision = yield* session.openRequest(runId, {
     kind: 'userQuestion',
     data: permission,
@@ -124,13 +117,7 @@ Use this when the task has several reasonable paths and continuing without the u
 The tool returns a JSON object whose keys are the original question texts and whose values are the selected option labels, arrays of labels for multi-select questions, or free-text answers.`,
   schema: AskUserQuestionInputSchema,
 }) {
-  protected execute(
-    input: AskUserQuestionInput,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
-    // The call's signal is the wait's stop: aborted when this tool call is
-    // interrupted, it interrupts the request fiber so `openRequest` closes a
-    // pending request instead of leaving it approvable after the run stopped.
-    return effectRuntime().runPromise(askUserQuestion(input), { signal });
+  protected execute(input: AskUserQuestionInput) {
+    return askUserQuestion(input);
   }
 }

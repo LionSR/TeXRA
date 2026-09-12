@@ -1,12 +1,16 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, vi } from 'vitest';
 
 // Local imports
 import { apiKeyEnvName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as apiProviders from '@model/apiProviders';
 import * as setupCredentialAccess from '@model/setupCredentialAccess';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
@@ -71,79 +75,112 @@ afterEach(() => {
 });
 
 describe('setup credential reporting', () => {
-  it('reports the active host and provider-key origin without secret values', async () => {
-    await installPlatform(
-      { secretsEnv: { [apiKeyEnvName('deepseek')]: 'private-test-value' } },
-      { setup: createFakeSetupPlatform() },
-    );
+  it.effect(
+    'reports the active host and provider-key origin without secret values',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.tryPromise(() =>
+          installPlatform(
+            {
+              secretsEnv: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
+            },
+            { setup: createFakeSetupPlatform() },
+          ),
+        );
 
-    const result = await new ProbeEnvironmentTool().call({});
+        const result = yield* new ProbeEnvironmentTool()
+          .call({})
+          .pipe(Effect.provide(nativeToolTestLayer()));
 
-    assert.match(outputOf(result), /"host": "cli"/);
-    assert.match(outputOf(result), /"provider": "deepseek"/);
-    assert.match(outputOf(result), /"origin": "env"/);
-    assert.match(outputOf(result), /provider API key in environment/);
-    assert.doesNotMatch(outputOf(result), /private-test-value/);
-  });
+        assert.match(outputOf(result), /"host": "cli"/);
+        assert.match(outputOf(result), /"provider": "deepseek"/);
+        assert.match(outputOf(result), /"origin": "env"/);
+        assert.match(outputOf(result), /provider API key in environment/);
+        assert.doesNotMatch(outputOf(result), /private-test-value/);
+      }),
+  );
 
-  it('reports a usable non-API-key credential in the environment probe headline', async () => {
-    installChatGptOnlySetupPlatform();
+  it.effect(
+    'reports a usable non-API-key credential in the environment probe headline',
+    () =>
+      Effect.gen(function* () {
+        installChatGptOnlySetupPlatform();
 
-    const result = await new ProbeEnvironmentTool().call({});
+        const result = yield* new ProbeEnvironmentTool()
+          .call({})
+          .pipe(Effect.provide(nativeToolTestLayer()));
 
-    assert.equal(result.status, 'executed');
-    assert.match(outputOf(result), /credentials: ChatGPT subscription enabled/);
-    assert.doesNotMatch(
-      outputOf(result),
-      /ChatGPT subscription enabled \+ usable credential/,
-    );
-    assert.match(outputOf(result), /"hasAnyUsableCredential": true/);
-    assert.match(outputOf(result), /"anyApiKeySet": false/);
-    assert.match(outputOf(result), /"chatGptSubscription"/);
-    assert.match(outputOf(result), /"enabled": true/);
-    assert.doesNotMatch(outputOf(result), /researcher@example\.com/);
-  });
+        assert.equal(result.status, 'executed');
+        assert.match(
+          outputOf(result),
+          /credentials: ChatGPT subscription enabled/,
+        );
+        assert.doesNotMatch(
+          outputOf(result),
+          /ChatGPT subscription enabled \+ usable credential/,
+        );
+        assert.match(outputOf(result), /"hasAnyUsableCredential": true/);
+        assert.match(outputOf(result), /"anyApiKeySet": false/);
+        assert.match(outputOf(result), /"chatGptSubscription"/);
+        assert.match(outputOf(result), /"enabled": true/);
+        assert.doesNotMatch(outputOf(result), /researcher@example\.com/);
+      }),
+  );
 
-  it('keeps probing when one provider key origin is unavailable', async () => {
-    vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockRejectedValue(
-      new Error('Keychain unavailable'),
-    );
-    vi.spyOn(
-      setupCredentialAccess,
-      'hasUsableSetupCredential',
-    ).mockRejectedValue(new Error('Credential scan unavailable'));
+  it.effect('keeps probing when one provider key origin is unavailable', () =>
+    Effect.gen(function* () {
+      vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockRejectedValue(
+        new Error('Keychain unavailable'),
+      );
+      vi.spyOn(
+        setupCredentialAccess,
+        'hasUsableSetupCredential',
+      ).mockRejectedValue(new Error('Credential scan unavailable'));
 
-    const result = await new ProbeEnvironmentTool().call({});
+      const result = yield* new ProbeEnvironmentTool()
+        .call({})
+        .pipe(Effect.provide(nativeToolTestLayer()));
 
-    assert.equal(result.status, 'executed');
-    assert.match(outputOf(result), /"origin": "unknown"/);
-    assert.match(outputOf(result), /provider API key status unavailable/);
-    assert.match(outputOf(result), /"anyApiKeySet": false/);
-    assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
-  });
+      assert.equal(result.status, 'executed');
+      assert.match(outputOf(result), /"origin": "unknown"/);
+      assert.match(outputOf(result), /provider API key status unavailable/);
+      assert.match(outputOf(result), /"anyApiKeySet": false/);
+      assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
+    }),
+  );
 
-  it('reports when aggregate credential readiness is unavailable', async () => {
-    vi.spyOn(
-      setupCredentialAccess,
-      'hasUsableSetupCredential',
-    ).mockRejectedValue(new Error('Credential scan unavailable'));
+  it.effect('reports when aggregate credential readiness is unavailable', () =>
+    Effect.gen(function* () {
+      vi.spyOn(
+        setupCredentialAccess,
+        'hasUsableSetupCredential',
+      ).mockRejectedValue(new Error('Credential scan unavailable'));
 
-    const result = await new ProbeEnvironmentTool().call({});
+      const result = yield* new ProbeEnvironmentTool()
+        .call({})
+        .pipe(Effect.provide(nativeToolTestLayer()));
 
-    assert.equal(result.status, 'executed');
-    assert.match(outputOf(result), /overall credential status unavailable/);
-    assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
-  });
+      assert.equal(result.status, 'executed');
+      assert.match(outputOf(result), /overall credential status unavailable/);
+      assert.match(outputOf(result), /"usableCredentialStatus": "unknown"/);
+    }),
+  );
 
-  it('reports a usable non-API-key credential in setup verification', async () => {
-    installChatGptOnlySetupPlatform();
+  it.effect(
+    'reports a usable non-API-key credential in setup verification',
+    () =>
+      Effect.gen(function* () {
+        installChatGptOnlySetupPlatform();
 
-    const result = await new VerifySetupTool().call({});
+        const result = yield* new VerifySetupTool()
+          .call({})
+          .pipe(Effect.provide(nativeToolTestLayer()));
 
-    assert.equal(result.status, 'executed');
-    assert.match(
-      outputOf(result),
-      /Credentials: usable model credential available\./,
-    );
-  });
+        assert.equal(result.status, 'executed');
+        assert.match(
+          outputOf(result),
+          /Credentials: usable model credential available\./,
+        );
+      }),
+  );
 });

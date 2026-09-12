@@ -1,33 +1,30 @@
 import * as path from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
-
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
+import type { RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { createFakeHost } from '@test/support/setupPlatform';
 import { DiagnosticsTool, type DiagnosticsInput } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
 const WORKTREE_PATH = path.join(path.sep, 'worktree');
 const PAPER_PATH = path.join(WORKTREE_PATH, 'paper.tex');
 
-function worktreeContext(session: SessionHandle) {
-  return createRunContext({
-    workingDirectory: WORKTREE_PATH,
-    session,
-  });
-}
-
-/** Runs `run` against a fresh test session, always disposing it afterward. */
-async function withSession(
-  run: (session: SessionHandle) => Promise<void>,
-): Promise<void> {
-  const session = createTestSession();
-  try {
-    await run(session);
-  } finally {
-    session.dispose();
-  }
+/** The test scope owns its session and exposes its tool capabilities directly. */
+function withSession<A, E, R>(
+  run: (session: SessionHandle) => Effect.Effect<A, E, R>,
+) {
+  return Effect.acquireUseRelease(
+    Effect.sync(createTestSession),
+    run,
+    (session) => Effect.sync(() => session.dispose()),
+  );
 }
 
 function addCriticismCall(): Extract<DiagnosticsInput, { command: 'add' }> {
@@ -42,7 +39,7 @@ function addCriticismCall(): Extract<DiagnosticsInput, { command: 'add' }> {
 }
 
 describe('DiagnosticsTool', () => {
-  it.each([
+  it.effect.each([
     {
       name: 'reports a capability error when the session has no diagnostics reader',
       input: { command: 'list', path: 'paper.tex' } as DiagnosticsInput,
@@ -53,79 +50,181 @@ describe('DiagnosticsTool', () => {
       input: addCriticismCall(),
       message: 'Diagnostics add capability unavailable',
     },
-  ])('$name', async ({ input, message }) => {
-    await withSession(async (session) => {
-      const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call(input),
+  ])('$name', ({ input, message }) =>
+    Effect.gen(function* () {
+      yield* withSession((session) =>
+        Effect.gen(function* () {
+          const result = yield* new DiagnosticsTool().call(input).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                workingDirectory: WORKTREE_PATH,
+                run: {
+                  session,
+                  runId: 'diagnostics-test' as RunId,
+                  toolPolicy: {},
+                },
+              }),
+            ),
+          );
+
+          expect(result).toMatchObject({
+            status: 'error',
+            diagnostics: { name: 'ToolError' },
+          });
+          expect(result.error).toContain(message);
+        }),
       );
+    }),
+  );
 
-      expect(result).toMatchObject({
-        status: 'error',
-        diagnostics: { name: 'ToolError' },
-      });
-      expect(result.error).toContain(message);
-    });
-  });
+  it.effect('reads diagnostics through the run context session', () =>
+    Effect.gen(function* () {
+      yield* withSession((session) =>
+        Effect.gen(function* () {
+          const readDiagnostics = vi.fn(async (_path: string) => {
+            return [] as GenericDiagnostic[];
+          });
+          session.interactions.use({ readDiagnostics });
 
-  it('reads diagnostics through the run context session', async () => {
-    await withSession(async (session) => {
-      const readDiagnostics = vi.fn(async (_path: string) => {
-        return [] as GenericDiagnostic[];
-      });
-      session.interactions.use({ readDiagnostics });
+          const result = yield* new DiagnosticsTool()
+            .call({ command: 'list', path: 'paper.tex' })
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  workingDirectory: WORKTREE_PATH,
+                  run: {
+                    session,
+                    runId: 'diagnostics-test' as RunId,
+                    toolPolicy: {},
+                  },
+                }),
+              ),
+            );
 
-      const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
+          expect(readDiagnostics).toHaveBeenCalledWith(PAPER_PATH);
+          expect(result.diagnostics).toMatchObject({
+            path: PAPER_PATH,
+            command: 'list',
+          });
+        }),
       );
+    }),
+  );
 
-      expect(readDiagnostics).toHaveBeenCalledWith(PAPER_PATH);
-      expect(result.diagnostics).toMatchObject({
-        path: PAPER_PATH,
-        command: 'list',
-      });
-    });
-  });
+  it.effect(
+    'reports when the criticism sink does not accept (feature disabled)',
+    () =>
+      Effect.gen(function* () {
+        yield* withSession((session) =>
+          Effect.gen(function* () {
+            session.interactions.use({
+              addCriticism: () => ({ accepted: false, resolvedPath: '' }),
+            });
 
-  it('reports when the criticism sink does not accept (feature disabled)', async () => {
-    await withSession(async (session) => {
-      session.interactions.use({
-        addCriticism: () => ({ accepted: false, resolvedPath: '' }),
-      });
+            const result = yield* new DiagnosticsTool()
+              .call(addCriticismCall())
+              .pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    workingDirectory: WORKTREE_PATH,
+                    run: {
+                      session,
+                      runId: 'diagnostics-test' as RunId,
+                      toolPolicy: {},
+                    },
+                  }),
+                ),
+              );
 
-      const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call(addCriticismCall()),
+            expect(result.summary).toBe('Criticism not accepted');
+          }),
+        );
+      }),
+  );
+
+  it.effect('resolves the path and summarizes an accepted criticism', () =>
+    Effect.gen(function* () {
+      yield* withSession((session) =>
+        Effect.gen(function* () {
+          const entries: unknown[] = [];
+          session.interactions.use({
+            addCriticism: (entry) => {
+              entries.push(entry);
+              return { accepted: true, resolvedPath: entry.absolutePath };
+            },
+          });
+
+          const result = yield* new DiagnosticsTool()
+            .call(addCriticismCall())
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  workingDirectory: WORKTREE_PATH,
+                  run: {
+                    session,
+                    runId: 'diagnostics-test' as RunId,
+                    toolPolicy: {},
+                  },
+                }),
+              ),
+            );
+
+          expect(entries).toEqual([
+            {
+              absolutePath: PAPER_PATH,
+              line: 3,
+              message: 'tighten this claim',
+              severity: 4,
+              confidence: 5,
+            },
+          ]);
+          expect(result.summary).toBe(
+            `Added criticism for ${PAPER_PATH}:3 (S4/C5)`,
+          );
+        }),
       );
+    }),
+  );
 
-      expect(result.summary).toBe('Criticism not accepted');
-    });
-  });
-
-  it('resolves the path and summarizes an accepted criticism', async () => {
-    await withSession(async (session) => {
-      const entries: unknown[] = [];
-      session.interactions.use({
-        addCriticism: (entry) => {
-          entries.push(entry);
-          return { accepted: true, resolvedPath: entry.absolutePath };
-        },
+  it.effect('resolves an added criticism in the invoking project scope', () =>
+    Effect.gen(function* () {
+      const project = createFakeHost({
+        workspacePath: path.join(path.sep, 'project', 'diagnostics'),
       });
+      const projectPath = path.join(project.roots.workspace!, 'paper.tex');
 
-      const result = await withRunContext(worktreeContext(session), () =>
-        new DiagnosticsTool().call(addCriticismCall()),
-      );
+      yield* withSession((session) =>
+        Effect.gen(function* () {
+          const addCriticism = vi.fn((entry) => ({
+            accepted: true,
+            resolvedPath: entry.absolutePath,
+          }));
+          session.interactions.use({ addCriticism });
 
-      expect(entries).toEqual([
-        {
-          absolutePath: PAPER_PATH,
-          line: 3,
-          message: 'tighten this claim',
-          severity: 4,
-          confidence: 5,
-        },
-      ]);
-      expect(result.summary).toBe(
-        `Added criticism for ${PAPER_PATH}:3 (S4/C5)`,
+          const result = yield* new DiagnosticsTool()
+            .call(addCriticismCall())
+            .pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: {
+                    session,
+                    runId: 'diagnostics-project-scope' as RunId,
+                    toolPolicy: {},
+                  },
+                  inScope: (operation) =>
+                    runWithWorkspaceRoots(project.roots, operation),
+                }),
+              ),
+            );
+
+          expect(addCriticism).toHaveBeenCalledWith(
+            expect.objectContaining({ absolutePath: projectPath }),
+          );
+          expect(result.summary).toBe(
+            `Added criticism for ${projectPath}:3 (S4/C5)`,
+          );
+        }),
       );
-    });
-  });
+    }),
+  );
 });

@@ -10,8 +10,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -42,12 +42,10 @@ const ZoteroExportInputSchema = z.strictObject({
 
 type ZoteroExportInput = z.infer<typeof ZoteroExportInputSchema>;
 
-const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* ({
-  citekeys,
-  format,
-  library,
-}: ZoteroExportInput) {
-  const port = getZoteroPort();
+const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
+  { citekeys, format, library }: ZoteroExportInput,
+  port: number,
+) {
   const translator = format || 'biblatex';
 
   const params: unknown[] = [citekeys, translator];
@@ -85,9 +83,12 @@ export class ZoteroExportTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
 }) {
-  protected execute(input: ZoteroExportInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(exportEntries(input), {
-      signal: getCurrentToolCallContext()?.signal,
+  protected execute(
+    input: ZoteroExportInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      return yield* exportEntries(input, call.inScope(getZoteroPort));
     });
   }
 }

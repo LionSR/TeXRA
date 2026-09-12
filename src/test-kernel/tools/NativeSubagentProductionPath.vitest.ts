@@ -33,6 +33,7 @@ import {
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
@@ -67,6 +68,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -366,16 +368,52 @@ async function queueSecondAssertionFollowUp(
   runId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
+  const parentRun =
+    parentContext.kind === 'launch'
+      ? parentContext.runScope
+      : {
+          runId: parentContext.runId,
+          session: parentContext.session,
+          workingDirectory: parentContext.workingDirectory,
+          delegationAgentScope: undefined,
+        };
+  if (!parentRun.runId || !parentRun.session) {
+    throw new Error('Test parent context requires a run id and session.');
+  }
+  const parentRunId = parentRun.runId;
+  const parentSession = parentRun.session;
   const resumed = await runAsParentOwner(() =>
-    withRunContext(parentContext, () =>
-      new DelegateAgentTool().call({
-        agent: null,
-        model: null,
-        instruction,
-        memories: [],
-        working_directory: null,
-        execution_id: runId,
-      }),
+    effectRuntime().runPromise(
+      new DelegateAgentTool()
+        .call({
+          agent: null,
+          model: null,
+          instruction,
+          memories: [],
+          working_directory: null,
+          execution_id: runId,
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              model: parentContext.model,
+              tracker: new FileInteractionState(),
+              workingDirectory: parentRun.workingDirectory,
+              delegationAgentScope: parentRun.delegationAgentScope,
+              run: {
+                runId: parentRunId,
+                session: parentSession,
+                toolPolicy: {
+                  approvalPromptsUnavailable:
+                    parentContext.approvalPromptsUnavailable,
+                  runtimeUnavailableTools:
+                    parentContext.runtimeUnavailableTools,
+                  stopAfterCycle: parentContext.stopAfterCycle,
+                },
+              },
+            }),
+          ),
+        ),
     ),
   );
   expect(resumed.status).toBe('executed');
@@ -447,28 +485,40 @@ async function launchWaitingChild(options: {
     config: { model: PARENT_MODEL },
     session,
   });
+  const parentCall = {
+    config: session.roots.config,
+    model: PARENT_MODEL,
+    tracker: new FileInteractionState(),
+    workingDirectory: process.cwd(),
+    run: {
+      runId: PARENT_RUN_ID,
+      session,
+      toolPolicy: {
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: [],
+      },
+    },
+    inScope: <A>(operation: () => A): A => operation(),
+  };
   const runAsParentOwner: ParentOwnerRunner = (operation) => {
     assertOwnedRunLease(PARENT_RUN_ID);
     return operation();
   };
   const launch = await runAsParentOwner(() =>
-    withRunContext(parentContext, () =>
-      effectRuntime().runPromise(
-        executeSubagent(
-          parentContext,
-          undefined,
-          {
-            agent: CHILD_AGENT,
-            agentSource: 'inline',
-            agentCategory: AgentCategory.ToolUse,
-            model: CHILD_MODEL,
-            instruction: 'Prove the first assertion.',
-            memories: [],
-            workingDirectory: process.cwd(),
-          },
-          CHILD_AGENT,
-          PARENT_RUN_ID,
-        ),
+    effectRuntime().runPromise(
+      executeSubagent(
+        parentCall,
+        {
+          agent: CHILD_AGENT,
+          agentSource: 'inline',
+          agentCategory: AgentCategory.ToolUse,
+          model: CHILD_MODEL,
+          instruction: 'Prove the first assertion.',
+          memories: [],
+          workingDirectory: process.cwd(),
+        },
+        CHILD_AGENT,
+        PARENT_RUN_ID,
       ),
     ),
   );
@@ -860,15 +910,29 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // /report and /result distinguish the interrupted turn from the latest
     // completed one.
-    const reportView = await new ExecutionsTool().call({
-      path: `/executions/${runId}/report`,
+    const executionToolLayer = nativeToolTestLayer({
+      run: {
+        runId: PARENT_RUN_ID,
+        session,
+        toolPolicy: {
+          approvalPromptsUnavailable: false,
+          runtimeUnavailableTools: [],
+        },
+      },
     });
+    const reportView = await Effect.runPromise(
+      new ExecutionsTool()
+        .call({ path: `/executions/${runId}/report` })
+        .pipe(Effect.provide(executionToolLayer)),
+    );
     expect(reportView.status).toBe('executed');
     expect(reportView.output).toContain('Result A.');
     expect(reportView.output).toContain('interrupted');
-    const resultView = await new ExecutionsTool().call({
-      path: `/executions/${runId}/result`,
-    });
+    const resultView = await Effect.runPromise(
+      new ExecutionsTool()
+        .call({ path: `/executions/${runId}/result` })
+        .pipe(Effect.provide(executionToolLayer)),
+    );
     expect(resultView.status).toBe('executed');
     // /result is the machine-readable chaining endpoint: the attribution
     // rides inside the JSON, never as prefixed prose.

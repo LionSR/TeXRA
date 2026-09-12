@@ -848,7 +848,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context);
+  registerLanguageModelTools(context, runtime, statusBarSession.roots.config);
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },

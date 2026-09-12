@@ -1,5 +1,5 @@
 /**
- * A workflow run's conversation: the header, its pending approvals, the
+ * A workflow run's conversation: the header, its pending requests, the
  * inquiries it is waiting on, then the run board for a workflow-script run
  * or the transcript log for any other, and the files and usage it closes
  * with. Reads the view and the surface; every send is a child's event.

@@ -1,14 +1,12 @@
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
-import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolResult, ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
@@ -121,18 +119,16 @@ export class WolframTool extends defineTool({
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
 }) {
-  protected execute(
+  protected readonly execute = Effect.fn('WolframTool.call')(function* (
+    this: WolframTool,
     input: WolframInput,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
+  ) {
+    const call = yield* ToolCall;
     const ports: WolframPorts = {
-      requestApproval: AsyncLocalStorage.bind(requestBashApproval),
-      runTool: AsyncLocalStorage.bind(runToolWithCheck),
-      onRunReady: getCurrentToolContexts()?.callContext?.hooks?.onRunReady,
+      requestApproval: requestBashApproval,
+      runTool: (...args) => call.inScope(() => runToolWithCheck(...args)),
+      onRunReady: call.hooks?.onRunReady,
     };
-    // The call's signal is the wait's stop: aborted when this tool call is
-    // interrupted, it interrupts the request fiber so `openRequest` closes a
-    // pending request instead of leaving it approvable after the run stopped.
-    return effectRuntime().runPromise(runWolfram(ports, input), { signal });
-  }
+    return yield* runWolfram(ports, input);
+  });
 }

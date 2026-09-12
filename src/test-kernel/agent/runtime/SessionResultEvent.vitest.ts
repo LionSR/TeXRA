@@ -36,7 +36,7 @@ let counter = 0;
  * it on the default runtime rather than a process runtime, so the services it
  * requires are provided here.
  */
-function runFlow(...args: Parameters<typeof runFlowWithLifecycle>) {
+function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
   return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
 }
 

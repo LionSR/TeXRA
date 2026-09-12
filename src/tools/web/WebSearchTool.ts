@@ -4,8 +4,6 @@ import ky from 'ky';
 import { z } from 'zod';
 
 // Internal imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -188,12 +186,10 @@ export class WebSearchTool extends defineTool({
     'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
 }) {
-  protected execute(input: WebSearchInput): Promise<ToolResult> {
+  protected execute(input: WebSearchInput): Effect.Effect<ToolResult, unknown> {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out searches (and their
     // retries) that only observe the internal timeout.
-    return effectRuntime().runPromise(searchWeb(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+    return searchWeb(input);
   }
 }

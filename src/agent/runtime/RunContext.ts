@@ -5,7 +5,6 @@ import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
-import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 interface RunContextCommon {
@@ -20,7 +19,7 @@ interface RunContextCommon {
   readonly stopAfterCycle?: boolean;
 }
 
-export interface LaunchRunContext extends RunContextCommon {
+interface LaunchRunContext extends RunContextCommon {
   readonly kind: 'launch';
   readonly runScope: RunScope;
 }
@@ -180,20 +179,6 @@ function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
   return context?.kind === 'launch'
     ? context.runScope[field]
     : context?.[field];
-}
-
-/** Return the session's host interactions for a context, reading launch contexts through RunScope. */
-export function getRunContextInteractions(
-  context: RunContext | undefined = tryUseRunContext(),
-): SessionHostInteractions | undefined {
-  return getRunContextSession(context)?.interactions;
-}
-
-/** Return the run id for a context, reading launch contexts through RunScope. */
-export function getRunContextRunId(
-  context: RunContext | undefined = tryUseRunContext(),
-): RunId | undefined {
-  return getRunContextField('runId', context);
 }
 
 /** Return the working directory for a context, reading launch contexts through RunScope. */

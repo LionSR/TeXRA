@@ -12,18 +12,17 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { effectRuntime } from '@platform/processRuntime';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import { hostPort } from '@common/hostPort';
 import {
   settingByKey,
   settingSchemaWithoutPrefault,
   ToolError,
   type StateSettingEntry,
-  type ToolResult,
 } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { texraScopedConfig } from './platform';
 
 /**
  * Keys `update_config` may write. Read access (`read_config`) is open across
@@ -78,15 +77,17 @@ export class ReadConfigTool extends defineTool({
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
 }) {
-  // Reading configuration is synchronous; there is no program to run.
-  protected async execute(input: ReadConfigInput): Promise<ToolResult> {
-    const value = texraScopedConfig.get(input.key);
-    const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    const description = settingByKey(input.key)?.description;
-    return executed(
-      `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
-      `Read ${input.key}`,
-    );
+  protected execute(input: ReadConfigInput) {
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      const value = call.config.get(input.key);
+      const json = JSON.stringify(value, null, 2) ?? 'undefined';
+      const description = settingByKey(input.key)?.description;
+      return executed(
+        `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
+        `Read ${input.key}`,
+      );
+    });
   }
 }
 
@@ -125,8 +126,16 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
     );
   }
 
-  const previous = texraScopedConfig.get(input.key);
-  yield* texraScopedConfig.update(input.key, parsed.data, input.target);
+  const call = yield* ToolCall;
+  const config = call.config;
+  const previous = config.get(input.key);
+  yield* hostPort(() =>
+    config.update(
+      input.key,
+      parsed.data,
+      input.target === 'workspace' ? 'workspace' : 'global',
+    ),
+  );
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(parsed.data);
@@ -149,7 +158,7 @@ ${ALLOWLIST_TEXT}
 Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
 }) {
-  protected execute(input: UpdateConfigInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(updateConfig(input));
+  protected execute(input: UpdateConfigInput) {
+    return updateConfig(input);
   }
 }

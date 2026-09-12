@@ -106,6 +106,7 @@ import {
 } from '@shared/session/approvalDecision';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
@@ -173,6 +174,23 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
     publishTestRunStart(session, runId);
     yield* Effect.promise(() => session.settlePublications());
   });
+}
+
+function requestEdit(runId: RunId) {
+  return requestToolEditApproval({
+    path: '/work/main.tex',
+    originalContent: 'old',
+    proposedContent: 'new',
+    sourceTool: 'edit',
+    runId,
+  }).pipe(
+    Effect.provide(
+      nativeToolTestLayer({
+        workingDirectory: '/work',
+        run: { runId, session: defaultSession(), toolPolicy: {} },
+      }),
+    ),
+  );
 }
 
 /** Ask through the protocol the TUI host answers: `request.opened` on the
@@ -495,15 +513,7 @@ describe('TUI request decisions', () => {
       const { presentationHost } = tui();
       const runId = runIdFor('edit-bypass');
       yield* ensureRun(runId);
-      const applied = yield* Effect.forkChild(
-        requestToolEditApproval({
-          path: '/work/main.tex',
-          originalContent: 'old',
-          proposedContent: 'new',
-          sourceTool: 'edit',
-          runId,
-        }),
-      );
+      const applied = yield* Effect.forkChild(requestEdit(runId));
 
       yield* waitForApproval('toolEdit', { runId });
       decideCurrent({ action: APPROVE_SESSION_ACTION });
@@ -569,15 +579,7 @@ describe('TUI request decisions', () => {
           data: proposalPayload('proposal-current', runId),
         }),
       );
-      const edit = yield* Effect.forkChild(
-        requestToolEditApproval({
-          path: '/work/main.tex',
-          originalContent: 'old',
-          proposedContent: 'new',
-          sourceTool: 'edit',
-          runId,
-        }),
-      );
+      const edit = yield* Effect.forkChild(requestEdit(runId));
       const bash = yield* Effect.forkChild(
         openRequest(runId, {
           kind: 'bash',

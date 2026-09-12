@@ -1,13 +1,7 @@
 import { Effect } from 'effect';
 
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
@@ -22,7 +16,6 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
@@ -75,12 +68,19 @@ function prepareBashApprovalPrompt(
  */
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
-): Effect.fn.Return<BashDecision, Error> {
-  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
-
-  const context = tryUseRunContext();
-  const session = currentSession();
-  const runId = request.runId ?? getRunContextRunId(context);
+): Effect.fn.Return<BashDecision, Error, ToolCall> {
+  const call = yield* ToolCall;
+  const approvalsEnabled = call.inScope(() =>
+    getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY),
+  );
+  const run = call.run;
+  if (!run) {
+    return yield* Effect.fail(
+      new Error('A bash approval needs an active run.'),
+    );
+  }
+  const { session } = run;
+  const runId = request.runId ?? run.runId;
   const isRunBypassed = Boolean(
     runId && session.approvals.bash.bypass.isBypassed(runId),
   );
@@ -88,16 +88,15 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     policy: session.approvalPolicy,
     promptRequired: approvalsEnabled,
     scopedBypass: isRunBypassed,
-    canPresent: context?.approvalPromptsUnavailable !== true,
+    canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
   });
 
   if (decision === 'allow') return { action: 'approve' };
   if (isTexraApprovalDenied(decision)) {
-    context?.onApprovalPolicyDenial?.();
+    call.onApprovalPolicyDenial?.();
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 
-  requireInteractions('bash approval', context);
   if (!runId) {
     return yield* Effect.fail(
       new Error('A bash approval needs a run to open its request on.'),

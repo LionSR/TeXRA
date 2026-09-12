@@ -1,6 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
-import { Effect, Exit } from 'effect';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { it } from '@effect/vitest';
+import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
@@ -67,7 +68,9 @@ function workflowCallEvent(
   );
 }
 
-type ScriptRunOptions = Parameters<typeof projectWorkflowScriptProgress>[1];
+type ScriptRunOptions = Parameters<
+  typeof projectWorkflowScriptProgress<never>
+>[1];
 
 const LIFECYCLE_STATUSES = ['planned', 'running', 'completed'] as const;
 
@@ -82,11 +85,14 @@ function runScript(
   checkpointId: string,
   script: string,
   options: Partial<Omit<ScriptRunOptions, 'session' | 'parentRunId'>> = {},
-): Promise<WorkflowScriptRunResult> {
+): Effect.Effect<WorkflowScriptRunResult, Error> {
   return runProjected(trace, {
     checkpointId,
     script,
-    runAgent: async () => 'done',
+    runAgent: () =>
+      Effect.sync(function () {
+        return 'done';
+      }),
     ...options,
   });
 }
@@ -95,19 +101,17 @@ function runScript(
 function runProjected(
   trace: TraceEmitter,
   options: Omit<ScriptRunOptions, 'session' | 'parentRunId'>,
-): Promise<WorkflowScriptRunResult> {
+): Effect.Effect<WorkflowScriptRunResult, Error> {
   const projection = projectWorkflowScriptProgress(trace, {
     session: currentSession(),
     parentRunId,
     ...options,
   });
-  return Effect.runPromise(
-    runPersistedWorkflowScript(projection.options).pipe(
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          projection.settle(Exit.isSuccess(exit));
-        }),
-      ),
+  return runPersistedWorkflowScript(projection.options).pipe(
+    Effect.onExit((exit) =>
+      Effect.sync(() => {
+        projection.settle(Exit.isSuccess(exit));
+      }),
     ),
   );
 }
@@ -121,6 +125,10 @@ function collectActivities(): {
   return { activities, onActivity: (line) => activities.push(line) };
 }
 
+/**
+ * The current card set, one entry per `logId` — what a host progress tree
+ * holds after applying every update.
+ */
 /**
  * The current card set, one entry per `logId` — what a host progress tree
  * holds after applying every update.
@@ -139,12 +147,13 @@ function latestWorkflowCallEvents(
 }
 
 describe('workflow-script progress bridge', () => {
-  it('records the declared plan once, before any phase opens', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'plan-marker',
-      `export const meta = {
+  it.live('records the declared plan once, before any phase opens', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      yield* runScript(
+        trace,
+        'plan-marker',
+        `export const meta = {
   name: 'plan-marker-test',
   description: 'records the declared plan',
   phases: [{ title: 'Research' }, { title: 'Write' }],
@@ -155,114 +164,129 @@ describe('workflow-script progress bridge', () => {
 }
 phase('Research')
 return await agent('Inspect', { id: 'inspect' })`,
-    );
+      );
 
-    const plans = events.filter((event) => event.type === 'workflow.plan');
-    expect(plans).toHaveLength(1);
-    expect(plans[0]).toMatchObject({
-      attemptId: expect.any(String),
-      phases: [{ title: 'Research' }, { title: 'Write' }],
-      tasks: [
-        { id: 'inspect', label: 'Inspect source', phase: 'Research' },
-        { id: 'draft', label: 'Draft the section', phase: 'Write' },
-      ],
-    });
-    // The plan precedes the first phase stage and every card.
-    const planIndex = events.indexOf(plans[0]!);
-    const firstStage = events.findIndex(
-      (event) => event.type === 'stage.start',
-    );
-    const firstCard = events.findIndex(
-      (event) => event.type === 'workflow.call',
-    );
-    expect(planIndex).toBeLessThan(firstStage);
-    expect(planIndex).toBeLessThan(firstCard);
-  });
+      const plans = events.filter((event) => event.type === 'workflow.plan');
+      expect(plans).toHaveLength(1);
+      expect(plans[0]).toMatchObject({
+        attemptId: expect.any(String),
+        phases: [{ title: 'Research' }, { title: 'Write' }],
+        tasks: [
+          { id: 'inspect', label: 'Inspect source', phase: 'Research' },
+          { id: 'draft', label: 'Draft the section', phase: 'Write' },
+        ],
+      });
+      // The plan precedes the first phase stage and every card.
+      const planIndex = events.indexOf(plans[0]!);
+      const firstStage = events.findIndex(
+        (event) => event.type === 'stage.start',
+      );
+      const firstCard = events.findIndex(
+        (event) => event.type === 'workflow.call',
+      );
+      expect(planIndex).toBeLessThan(firstStage);
+      expect(planIndex).toBeLessThan(firstCard);
+    }),
+  );
 
-  it('keeps planned call cards in their phase stage across incremental updates', async () => {
-    const { trace, events } = recordingTrace();
-    const parent = trace.openStage('Parent');
-    const plannedMeta = `export const meta = {
+  it.live(
+    'keeps planned call cards in their phase stage across incremental updates',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const parent = trace.openStage('Parent');
+        const plannedMeta = `export const meta = {
   name: 'planned-progress-test',
   description: 'tests planned workflow progress projection',
   phases: [{ title: 'Research' }, { title: 'Write' }],
   tasks: [{ id: 'inspect', label: 'Inspect source', phase: 'Research' }],
 }`;
 
-    await parent.within(() =>
-      runScript(
-        trace,
-        'phase-log',
-        `${plannedMeta}
+        const projected = yield* Effect.promise(() =>
+          parent.within(() =>
+            runScript(
+              trace,
+              'phase-log',
+              `${plannedMeta}
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
 return await agent('Inspect', { id: 'inspect' })`,
-      ),
-    );
+            ),
+          ),
+        );
+        yield* projected;
 
-    const phaseId = stageId(events, 'Research');
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Preparing the workflow',
-        stageId: parent.id,
+        const phaseId = stageId(events, 'Research');
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'log',
+            message: 'Preparing the workflow',
+            stageId: parent.id,
+          }),
+        );
+        const planned = workflowCallEvent(events, 'Inspect source', 'planned');
+        const running = workflowCallEvent(events, 'Inspect source', 'running');
+        const completed = workflowCallEvent(
+          events,
+          'Inspect source',
+          'completed',
+        );
+        // One stable, phase-derived stage across the whole lifecycle: the card is
+        // classified into its phase group when it is planned and never moves.
+        expect(planned).toMatchObject({
+          type: 'workflow.call',
+          stageId: phaseId,
+          call: { attemptId: expect.any(String) },
+        });
+        expect(running).toMatchObject({
+          type: 'workflow.call',
+          logId: planned?.logId,
+          stageId: phaseId,
+          call: { attemptId: planned?.call.attemptId },
+        });
+        expect(completed).toMatchObject({
+          type: 'workflow.call',
+          logId: planned?.logId,
+          stageId: phaseId,
+          call: { attemptId: planned?.call.attemptId },
+        });
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'stage.start',
+            id: phaseId,
+            parentId: parent.id,
+            kind: 'phase',
+            index: 0,
+            total: 2,
+          }),
+        );
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'log',
+            message: 'Checking the source',
+            stageId: phaseId,
+          }),
+        );
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'stage.end',
+            id: phaseId,
+            status: RUN_OUTCOME.COMPLETED,
+          }),
+        );
       }),
-    );
-    const planned = workflowCallEvent(events, 'Inspect source', 'planned');
-    const running = workflowCallEvent(events, 'Inspect source', 'running');
-    const completed = workflowCallEvent(events, 'Inspect source', 'completed');
-    // One stable, phase-derived stage across the whole lifecycle: the card is
-    // classified into its phase group when it is planned and never moves.
-    expect(planned).toMatchObject({
-      type: 'workflow.call',
-      stageId: phaseId,
-      call: { attemptId: expect.any(String) },
-    });
-    expect(running).toMatchObject({
-      type: 'workflow.call',
-      logId: planned?.logId,
-      stageId: phaseId,
-      call: { attemptId: planned?.call.attemptId },
-    });
-    expect(completed).toMatchObject({
-      type: 'workflow.call',
-      logId: planned?.logId,
-      stageId: phaseId,
-      call: { attemptId: planned?.call.attemptId },
-    });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'stage.start',
-        id: phaseId,
-        parentId: parent.id,
-        kind: 'phase',
-        index: 0,
-        total: 2,
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Checking the source',
-        stageId: phaseId,
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'stage.end',
-        id: phaseId,
-        status: RUN_OUTCOME.COMPLETED,
-      }),
-    );
-  });
+  );
 
-  it('separates declared plan labels from the calls the script issues', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'declared-vs-issued',
-      `export const meta = {
+  it.live(
+    'separates declared plan labels from the calls the script issues',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        yield* runScript(
+          trace,
+          'declared-vs-issued',
+          `export const meta = {
   name: 'declared-vs-issued',
   description: 'one declared item, one structured call, one document call',
   phases: [{ title: 'Investigate' }, { title: 'Revise' }],
@@ -286,56 +310,70 @@ return await agent('Rewrite', {
   inputFiles: ['paper/introduction.tex'],
   contextFiles: ['paper/main.tex'],
 })`,
-      {
-        fingerprintAgentDependencies: async () => 'fingerprint',
-        runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report({
-            agent: invocation.options.agentName,
-            model: invocation.options.model ?? 'gemini37f',
-          });
-          return 'done';
-        },
-      },
-    );
+          {
+            fingerprintAgentDependencies: () =>
+              Effect.sync(function () {
+                return 'fingerprint';
+              }),
+            runAgent: (invocation: WorkflowAgentInvocation) =>
+              Effect.sync(function () {
+                invocation.report({
+                  agent: invocation.options.agentName,
+                  model: invocation.options.model ?? 'gemini37f',
+                });
+                return 'done';
+              }),
+          },
+        );
 
-    // A plan label carries no invocation facts until the script issues it…
-    const declared = workflowCallEvent(events, 'Extract claims', 'declared');
-    expect(declared?.call).not.toHaveProperty('kind');
-    expect(declared?.call).not.toHaveProperty('files');
-    // …and the issued call reports its real contract, agent, model, and files.
-    expect(
-      workflowCallEvent(events, 'Extract claims', 'queued')?.call,
-    ).toMatchObject({
-      kind: 'structured',
-      agent: 'researcher',
-      model: 'gpt56',
-      files: { input: [], context: [], media: [] },
-    });
-    // The host-resolved model lands on the card once the runner reports it.
-    expect(
-      latestWorkflowCallEvents(events).find(
-        (event) => event.call.label === 'Rewrite introduction',
-      )?.call,
-    ).toMatchObject({
-      status: 'completed',
-      kind: 'document',
-      agent: 'polish',
-      model: 'gemini37f',
-      files: { input: ['introduction.tex'], context: ['main.tex'], media: [] },
-    });
-    // The never-issued label ends as not-reached and stays a bare label.
-    const unreached = workflowCallEvent(events, 'Never issued', 'skipped');
-    expect(unreached?.call).toMatchObject({ reason: 'not-reached' });
-    expect(unreached?.call).not.toHaveProperty('kind');
-  });
+        // A plan label carries no invocation facts until the script issues it…
+        const declared = workflowCallEvent(
+          events,
+          'Extract claims',
+          'declared',
+        );
+        expect(declared?.call).not.toHaveProperty('kind');
+        expect(declared?.call).not.toHaveProperty('files');
+        // …and the issued call reports its real contract, agent, model, and files.
+        expect(
+          workflowCallEvent(events, 'Extract claims', 'queued')?.call,
+        ).toMatchObject({
+          kind: 'structured',
+          agent: 'researcher',
+          model: 'gpt56',
+          files: { input: [], context: [], media: [] },
+        });
+        // The host-resolved model lands on the card once the runner reports it.
+        expect(
+          latestWorkflowCallEvents(events).find(
+            (event) => event.call.label === 'Rewrite introduction',
+          )?.call,
+        ).toMatchObject({
+          status: 'completed',
+          kind: 'document',
+          agent: 'polish',
+          model: 'gemini37f',
+          files: {
+            input: ['introduction.tex'],
+            context: ['main.tex'],
+            media: [],
+          },
+        });
+        // The never-issued label ends as not-reached and stays a bare label.
+        const unreached = workflowCallEvent(events, 'Never issued', 'skipped');
+        expect(unreached?.call).toMatchObject({ reason: 'not-reached' });
+        expect(unreached?.call).not.toHaveProperty('kind');
+      }),
+  );
 
-  it('marks declared tasks not reached by the script as skipped', async () => {
-    const { trace, events } = recordingTrace();
-    const { activities, onActivity } = collectActivities();
-    await runScript(
-      trace,
-      'not-reached-plan',
-      `export const meta = {
+  it.live('marks declared tasks not reached by the script as skipped', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      const { activities, onActivity } = collectActivities();
+      yield* runScript(
+        trace,
+        'not-reached-plan',
+        `export const meta = {
   name: 'conditional-plan',
   description: 'declares all possible work',
   phases: [{ title: 'Research' }],
@@ -346,29 +384,37 @@ return await agent('Rewrite', {
 }
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
-      { onActivity },
-    );
+        { onActivity },
+      );
 
-    const unusedPlanned = workflowCallEvent(events, 'Unused task', 'declared');
-    expect(workflowCallEvent(events, 'Used task', 'completed')).toBeDefined();
-    expect(workflowCallEvent(events, 'Unused task', 'skipped')).toMatchObject({
-      logId: unusedPlanned?.logId,
-      stageId: unusedPlanned?.stageId,
-      call: {
-        reason: 'not-reached',
-      },
-    });
-    expect(activities).toContain(
-      'Skipped: Unused task — The workflow ended before this call was reached.',
-    );
-  });
+      const unusedPlanned = workflowCallEvent(
+        events,
+        'Unused task',
+        'declared',
+      );
+      expect(workflowCallEvent(events, 'Used task', 'completed')).toBeDefined();
+      expect(workflowCallEvent(events, 'Unused task', 'skipped')).toMatchObject(
+        {
+          logId: unusedPlanned?.logId,
+          stageId: unusedPlanned?.stageId,
+          call: {
+            reason: 'not-reached',
+          },
+        },
+      );
+      expect(activities).toContain(
+        'Skipped: Unused task — The workflow ended before this call was reached.',
+      );
+    }),
+  );
 
-  it('opens and closes a declared phase the run never reached', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'unreached-phase',
-      `export const meta = {
+  it.live('opens and closes a declared phase the run never reached', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      yield* runScript(
+        trace,
+        'unreached-phase',
+        `export const meta = {
   name: 'unreached-phase',
   description: 'declares a phase the run never enters',
   phases: [{ title: 'Research' }, { title: 'Write' }],
@@ -379,35 +425,39 @@ return await agent('Run one', { id: 'used' })`,
 }
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
-    );
+      );
 
-    // The skipped card still belongs to its own phase group, so the sweep has
-    // to open that stage even though the script never entered it.
-    const writeId = stageId(events, 'Write');
-    expect(workflowCallEvent(events, 'Later task', 'skipped')).toMatchObject({
-      stageId: writeId,
-      call: { reason: 'not-reached' },
-    });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'stage.start',
+      // The skipped card still belongs to its own phase group, so the sweep has
+      // to open that stage even though the script never entered it.
+      const writeId = stageId(events, 'Write');
+      expect(workflowCallEvent(events, 'Later task', 'skipped')).toMatchObject({
+        stageId: writeId,
+        call: { reason: 'not-reached' },
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'stage.start',
+          id: writeId,
+          kind: 'phase',
+        }),
+      );
+      expect(events).toContainEqual({
+        type: 'stage.end',
         id: writeId,
-        kind: 'phase',
-      }),
-    );
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: writeId,
-      status: RUN_OUTCOME.COMPLETED,
-    });
-  });
+        status: RUN_OUTCOME.COMPLETED,
+      });
+    }),
+  );
 
-  it('keeps a phase-less declared task out of the phase active at call time', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'phase-less-declared-task',
-      `export const meta = {
+  it.live(
+    'keeps a phase-less declared task out of the phase active at call time',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        yield* runScript(
+          trace,
+          'phase-less-declared-task',
+          `export const meta = {
   name: 'phase-less-declared-task',
   description: 'declares a task with no phase',
   phases: [{ title: 'Research' }],
@@ -415,38 +465,42 @@ return await agent('Run one', { id: 'used' })`,
 }
 phase('Research')
 return await agent('Run loose', { id: 'loose' })`,
-    );
+        );
 
-    // meta.tasks[].phase is optional, so the plan can declare a task with no
-    // phase while a phase() is active. Its card must stay where it was first
-    // classified — a progress tree cannot move a card between groups — and the
-    // payload every host folds `done/total` by must say the same thing, so a
-    // phase-less task is counted under no phase rather than under the wrong one.
-    for (const status of LIFECYCLE_STATUSES) {
-      const event = workflowCallEvent(events, 'Loose task', status);
-      expect(event).toMatchObject({ stageId: undefined });
-      expect(event?.call.phase).toBeUndefined();
-    }
+        // meta.tasks[].phase is optional, so the plan can declare a task with no
+        // phase while a phase() is active. Its card must stay where it was first
+        // classified — a progress tree cannot move a card between groups — and the
+        // payload every host folds `done/total` by must say the same thing, so a
+        // phase-less task is counted under no phase rather than under the wrong one.
+        for (const status of LIFECYCLE_STATUSES) {
+          const event = workflowCallEvent(events, 'Loose task', status);
+          expect(event).toMatchObject({ stageId: undefined });
+          expect(event?.call.phase).toBeUndefined();
+        }
 
-    // The two answers agree by construction: the phase whose group holds the
-    // card and the phase the shared fold reads off the payload are the same
-    // recorded value. Under the active phase both are empty.
-    const researchId = stageId(events, 'Research');
-    const latest = latestWorkflowCallEvents(events);
-    expect(
-      latest.filter((event) => event.call.phase === 'Research'),
-    ).toHaveLength(0);
-    expect(latest.filter((event) => event.stageId === researchId)).toHaveLength(
-      0,
-    );
-  });
+        // The two answers agree by construction: the phase whose group holds the
+        // card and the phase the shared fold reads off the payload are the same
+        // recorded value. Under the active phase both are empty.
+        const researchId = stageId(events, 'Research');
+        const latest = latestWorkflowCallEvents(events);
+        expect(
+          latest.filter((event) => event.call.phase === 'Research'),
+        ).toHaveLength(0);
+        expect(
+          latest.filter((event) => event.stageId === researchId),
+        ).toHaveLength(0);
+      }),
+  );
 
-  it('does not fail an active phase for a failed phase-less declared task', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'failed-phase-less-declared-task',
-      `export const meta = {
+  it.live(
+    'does not fail an active phase for a failed phase-less declared task',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        yield* runScript(
+          trace,
+          'failed-phase-less-declared-task',
+          `export const meta = {
   name: 'failed-phase-less-declared-task',
   description: 'keeps a phase-less failure outside the active phase',
   phases: [{ title: 'Research' }],
@@ -454,34 +508,38 @@ return await agent('Run loose', { id: 'loose' })`,
 }
 phase('Research')
 return await agent('Run loose', { id: 'loose' })`,
-      {
-        runAgent: async () => {
-          throw new Error('model unavailable');
-        },
-      },
-    );
+          {
+            runAgent: () =>
+              Effect.sync(function () {
+                throw new Error('model unavailable');
+              }),
+          },
+        );
 
-    const researchId = stageId(events, 'Research');
-    const failed = workflowCallEvent(events, 'Loose task', 'failed');
-    expect(failed).toMatchObject({
-      stageId: undefined,
-      call: { error: 'model unavailable' },
-    });
-    expect(failed?.call.phase).toBeUndefined();
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: researchId,
-      status: RUN_OUTCOME.COMPLETED,
-    });
-  });
+        const researchId = stageId(events, 'Research');
+        const failed = workflowCallEvent(events, 'Loose task', 'failed');
+        expect(failed).toMatchObject({
+          stageId: undefined,
+          call: { error: 'model unavailable' },
+        });
+        expect(failed?.call.phase).toBeUndefined();
+        expect(events).toContainEqual({
+          type: 'stage.end',
+          id: researchId,
+          status: RUN_OUTCOME.COMPLETED,
+        });
+      }),
+  );
 
-  it('marks a planned task failed when the live-call cap refuses it', async () => {
-    const { trace, events } = recordingTrace();
-    await expect(
-      runScript(
-        trace,
-        'planned-call-cap',
-        `export const meta = {
+  it.live('marks a planned task failed when the live-call cap refuses it', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      expect(
+        yield* Effect.flip(
+          runScript(
+            trace,
+            'planned-call-cap',
+            `export const meta = {
   name: 'planned-call-cap',
   description: 'distinguishes refused work from work not reached',
   phases: [{ title: 'Audit' }],
@@ -492,175 +550,210 @@ return await agent('Run loose', { id: 'loose' })`,
 }
 await agent('Run first', { id: 'first' })
 return await agent('Run refused', { id: 'refused' })`,
-        { maxAgentCalls: 1 },
-      ),
-    ).rejects.toThrow(/agent-call cap/);
+            { maxAgentCalls: 1 },
+          ),
+        ),
+      ).toMatchObject({ message: expect.stringMatching(/agent-call cap/) });
 
-    expect(workflowCallEvent(events, 'Refused audit', 'failed')).toMatchObject({
-      call: {
-        error: expect.stringContaining('agent-call cap'),
-      },
-    });
-    expect(
-      workflowCallEvent(events, 'Refused audit', 'skipped'),
-    ).toBeUndefined();
-  });
+      expect(
+        workflowCallEvent(events, 'Refused audit', 'failed'),
+      ).toMatchObject({
+        call: {
+          error: expect.stringContaining('agent-call cap'),
+        },
+      });
+      expect(
+        workflowCallEvent(events, 'Refused audit', 'skipped'),
+      ).toBeUndefined();
+    }),
+  );
 
-  it('rejects duplicate dynamic logical call ids', async () => {
-    const { trace } = recordingTrace();
-    await expect(
-      runScript(
-        trace,
-        'duplicate-logical-id',
-        `${meta}
+  it.live('rejects duplicate dynamic logical call ids', () =>
+    Effect.gen(function* () {
+      const { trace } = recordingTrace();
+      expect(
+        yield* Effect.flip(
+          runScript(
+            trace,
+            'duplicate-logical-id',
+            `${meta}
 return await parallel([
   () => agent('First prompt', { id: 'shared-journal-id' }),
   () => agent('Second prompt', { id: 'shared-journal-id' }),
 ])`,
-      ),
-    ).rejects.toThrow(/call id "shared-journal-id" may be issued only once/i);
-  });
+          ),
+        ),
+      ).toMatchObject({
+        message: expect.stringMatching(
+          /call id "shared-journal-id" may be issued only once/i,
+        ),
+      });
+    }),
+  );
 
-  it('projects a cached completion without synthesizing a start event', async () => {
-    const script = `${meta}
+  it.live(
+    'projects a cached completion without synthesizing a start event',
+    () =>
+      Effect.gen(function* () {
+        const script = `${meta}
 return await agent('Read', { phase: 'Review' })`;
-    await runScript(recordingTrace().trace, 'cached', script, {
-      runAgent: async () => 'saved',
-    });
+        yield* runScript(recordingTrace().trace, 'cached', script, {
+          runAgent: () =>
+            Effect.sync(function () {
+              return 'saved';
+            }),
+        });
 
-    const { trace, events } = recordingTrace();
-    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
-    await runProjected(trace, {
-      checkpointId: 'cached',
-      runAgent: runner,
-    });
+        const { trace, events } = recordingTrace();
+        const runner = vi.fn(() => Effect.fail(new Error('must not run')));
+        yield* runProjected(trace, {
+          checkpointId: 'cached',
+          runAgent: runner,
+        });
 
-    const phaseId = stageId(events, 'Review');
-    expect(runner).not.toHaveBeenCalled();
-    expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
-      type: 'workflow.call',
-      stageId: phaseId,
-    });
-    expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
-  });
+        const phaseId = stageId(events, 'Review');
+        expect(runner).not.toHaveBeenCalled();
+        expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
+          type: 'workflow.call',
+          stageId: phaseId,
+        });
+        expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
+      }),
+  );
 
-  it('re-emits a cached card on a second durable resume', async () => {
-    const script = `${meta}
-phase('Review')
-return await agent('Read', { id: 'read' })`;
-    const first = await runScript(
-      recordingTrace().trace,
-      'twice-resumed',
-      script,
-      { runAgent: async () => 'saved' },
-    );
-
-    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
-    const second = await runProjected(recordingTrace().trace, {
-      checkpointId: 'twice-resumed',
-      runAgent: runner,
-      initialSnapshot: first.snapshot,
-    });
-    expect(second.snapshot.calls[0]?.status).toBe('cached');
-
-    // The second resume hydrates an already-cached call. Re-issuing it must
-    // still project a card: a host that starts watching here would otherwise
-    // never see the call at all.
-    const { trace, events } = recordingTrace();
-    await runProjected(trace, {
-      checkpointId: 'twice-resumed',
-      runAgent: runner,
-      initialSnapshot: second.snapshot,
-    });
-
-    expect(runner).not.toHaveBeenCalled();
-    expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
-      type: 'workflow.call',
-      stageId: stageId(events, 'Review'),
-    });
-  });
-
-  it('reissues hydrated calls when hydration and issue share a timestamp', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-08-15T20:00:00.000Z'));
-    try {
+  it.live('re-emits a cached card on a second durable resume', () =>
+    Effect.gen(function* () {
       const script = `${meta}
 phase('Review')
-return await agent('Retry review', { id: 'retry-review' })`;
-      const failed = await runScript(
+return await agent('Read', { id: 'read' })`;
+      const first = yield* runScript(
         recordingTrace().trace,
-        'failed-hydrated-call',
+        'twice-resumed',
         script,
         {
-          runAgent: vi.fn(() =>
-            Promise.reject(new Error('first attempt failed')),
-          ),
+          runAgent: () =>
+            Effect.sync(function () {
+              return 'saved';
+            }),
         },
+      );
+
+      const runner = vi.fn(() => Effect.fail(new Error('must not run')));
+      const second = yield* runProjected(recordingTrace().trace, {
+        checkpointId: 'twice-resumed',
+        runAgent: runner,
+        initialSnapshot: first.snapshot,
+      });
+      expect(second.snapshot.calls[0]?.status).toBe('cached');
+
+      // The second resume hydrates an already-cached call. Re-issuing it must
+      // still project a card: a host that starts watching here would otherwise
+      // never see the call at all.
+      const { trace, events } = recordingTrace();
+      yield* runProjected(trace, {
+        checkpointId: 'twice-resumed',
+        runAgent: runner,
+        initialSnapshot: second.snapshot,
+      });
+
+      expect(runner).not.toHaveBeenCalled();
+      expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
+        type: 'workflow.call',
+        stageId: stageId(events, 'Review'),
+      });
+    }),
+  );
+
+  it.live(
+    'reissues hydrated calls when hydration and issue share a timestamp',
+    () =>
+      Effect.gen(function* () {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-08-15T20:00:00.000Z'));
+        try {
+          const script = `${meta}
+phase('Review')
+return await agent('Retry review', { id: 'retry-review' })`;
+          const failed = yield* runScript(
+            recordingTrace().trace,
+            'failed-hydrated-call',
+            script,
+            {
+              runAgent: vi.fn(() =>
+                Effect.fail(new Error('first attempt failed')),
+              ),
+            },
+          );
+          expect(failed.snapshot.calls[0]?.status).toBe('failed');
+
+          const retry = recordingTrace();
+          // Keep the exact same millisecond for constructor hydration and
+          // issueCall: projection admission must use the explicit issue fact.
+          yield* runScript(retry.trace, 'failed-hydrated-call', script);
+
+          const reviewId = stageId(retry.events, 'Review');
+          expect(
+            workflowCallEvent(retry.events, 'Retry review', 'planned'),
+          ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+          expect(
+            workflowCallEvent(retry.events, 'Retry review', 'completed'),
+          ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
+        } finally {
+          vi.useRealTimers();
+        }
+      }),
+  );
+
+  it.live('does not project a failed hydrated call omitted by the retry', () =>
+    Effect.gen(function* () {
+      const failed = yield* runScript(
+        recordingTrace().trace,
+        'omitted-hydrated-call',
+        `${meta}
+return await agent('Historical call', { id: 'historical' })`,
+        { runAgent: vi.fn(() => Effect.fail(new Error('failed'))) },
       );
       expect(failed.snapshot.calls[0]?.status).toBe('failed');
 
       const retry = recordingTrace();
-      // Keep the exact same millisecond for constructor hydration and
-      // issueCall: projection admission must use the explicit issue fact.
-      await runScript(retry.trace, 'failed-hydrated-call', script);
-
-      const reviewId = stageId(retry.events, 'Review');
-      expect(
-        workflowCallEvent(retry.events, 'Retry review', 'planned'),
-      ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
-      expect(
-        workflowCallEvent(retry.events, 'Retry review', 'completed'),
-      ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not project a failed hydrated call omitted by the retry', async () => {
-    const failed = await runScript(
-      recordingTrace().trace,
-      'omitted-hydrated-call',
-      `${meta}
-return await agent('Historical call', { id: 'historical' })`,
-      { runAgent: vi.fn(() => Promise.reject(new Error('failed'))) },
-    );
-    expect(failed.snapshot.calls[0]?.status).toBe('failed');
-
-    const retry = recordingTrace();
-    await runScript(
-      retry.trace,
-      'omitted-hydrated-call',
-      `${meta}
+      yield* runScript(
+        retry.trace,
+        'omitted-hydrated-call',
+        `${meta}
 return 'done'`,
-    );
+      );
 
-    expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
-      false,
-    );
+      expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
+        false,
+      );
 
-    // The same omission when the prior snapshot is hydrated too: the dropped
-    // call is reset to `declared`, then the settle sweep terminalizes it to
-    // not-reached. That sweep is bookkeeping for the previous attempt, so it
-    // must stay out of this attempt's cards.
-    const hydrated = recordingTrace();
-    const resumed = await runScript(
-      hydrated.trace,
-      'omitted-hydrated-call-resumed',
-      `${meta}
+      // The same omission when the prior snapshot is hydrated too: the dropped
+      // call is reset to `declared`, then the settle sweep terminalizes it to
+      // not-reached. That sweep is bookkeeping for the previous attempt, so it
+      // must stay out of this attempt's cards.
+      const hydrated = recordingTrace();
+      const resumed = yield* runScript(
+        hydrated.trace,
+        'omitted-hydrated-call-resumed',
+        `${meta}
 return 'done'`,
-      { initialSnapshot: failed.snapshot },
-    );
-    expect(
-      resumed.snapshot.calls.map((call) => [call.id, call.status]),
-    ).toEqual([['historical', 'skipped']]);
-    expect(
-      hydrated.events.some((event) => event.type === 'workflow.call'),
-    ).toBe(false);
-  });
+        { initialSnapshot: failed.snapshot },
+      );
+      expect(
+        resumed.snapshot.calls.map((call) => [call.id, call.status]),
+      ).toEqual([['historical', 'skipped']]);
+      expect(
+        hydrated.events.some((event) => event.type === 'workflow.call'),
+      ).toBe(false);
+    }),
+  );
 
-  it('keeps phase counts when an agent opens the stage before phase()', async () => {
-    const { trace, events } = recordingTrace();
-    const script = `export const meta = {
+  it.live(
+    'keeps phase counts when an agent opens the stage before phase()',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const script = `export const meta = {
   name: 'early-phase-agent',
   description: 'opens a declared phase from an agent event',
   phases: [{ title: 'Research' }, { title: 'Write' }],
@@ -669,22 +762,26 @@ const early = agent('Draft', { phase: 'Write' })
 phase('Write')
 return await early`;
 
-    await runScript(trace, 'early-phase-agent', script);
+        yield* runScript(trace, 'early-phase-agent', script);
 
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'stage.start',
-        id: stageId(events, 'Write'),
-        kind: 'phase',
-        index: 1,
-        total: 2,
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'stage.start',
+            id: stageId(events, 'Write'),
+            kind: 'phase',
+            index: 1,
+            total: 2,
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('projects trimmed runtime and declared task phases onto one stage', async () => {
-    const { trace, events } = recordingTrace();
-    const script = `export const meta = {
+  it.live(
+    'projects trimmed runtime and declared task phases onto one stage',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const script = `export const meta = {
   name: 'trimmed-declared-task-phase',
   description: 'keeps task and runtime phase identity canonical',
   phases: [{ title: '  Review  ' }],
@@ -697,347 +794,390 @@ return await early`;
 phase('  Review  ')
 return await agent('Review the argument', { id: 'review-task' })`;
 
-    await runScript(trace, 'trimmed-declared-task-phase', script);
+        yield* runScript(trace, 'trimmed-declared-task-phase', script);
 
-    const phaseStarts = events.filter(
-      (event) => event.type === 'stage.start' && event.kind === 'phase',
-    );
-    expect(phaseStarts).toEqual([
-      expect.objectContaining({
-        label: 'Review',
-        index: 0,
-        total: 1,
+        const phaseStarts = events.filter(
+          (event) => event.type === 'stage.start' && event.kind === 'phase',
+        );
+        expect(phaseStarts).toEqual([
+          expect.objectContaining({
+            label: 'Review',
+            index: 0,
+            total: 1,
+          }),
+        ]);
+        const planned = workflowCallEvent(events, 'Review argument', 'planned');
+        for (const status of LIFECYCLE_STATUSES) {
+          expect(
+            workflowCallEvent(events, 'Review argument', status),
+          ).toMatchObject({
+            logId: planned?.logId,
+            call: {
+              id: 'review-task',
+              label: 'Review argument',
+              phase: 'Review',
+              status,
+            },
+          });
+        }
       }),
-    ]);
-    const planned = workflowCallEvent(events, 'Review argument', 'planned');
-    for (const status of LIFECYCLE_STATUSES) {
-      expect(
-        workflowCallEvent(events, 'Review argument', status),
-      ).toMatchObject({
-        logId: planned?.logId,
-        call: {
-          id: 'review-task',
-          label: 'Review argument',
-          phase: 'Review',
-          status,
-        },
-      });
-    }
-  });
+  );
 
-  it('renders each call cost on live finish lines only', async () => {
-    const script = `${meta}
+  it.live('renders each call cost on live finish lines only', () =>
+    Effect.gen(function* () {
+      const script = `${meta}
 await agent('First')
 return await agent('Second')`;
-    const { trace, events } = recordingTrace();
-    // The runner reports spend the way production does; the engine folds it
-    // into the run snapshot and stamps it on the terminal event.
-    await runScript(trace, 'live-cost', script, {
-      runAgent: async (invocation: WorkflowAgentInvocation) => {
-        invocation.report({ costUsd: 0.05 });
-        return 'done';
-      },
-    });
+      const { trace, events } = recordingTrace();
+      // The runner reports spend the way production does; the engine folds it
+      // into the run snapshot and stamps it on the terminal event.
+      yield* runScript(trace, 'live-cost', script, {
+        runAgent: (invocation: WorkflowAgentInvocation) =>
+          Effect.sync(function () {
+            invocation.report({ costUsd: 0.05 });
+            return 'done';
+          }),
+      });
 
-    expect(workflowCallEvent(events, 'First', 'completed')?.call).toMatchObject(
-      {
+      expect(
+        workflowCallEvent(events, 'First', 'completed')?.call,
+      ).toMatchObject({
         costUsd: 0.05,
-      },
-    );
-    expect(
-      workflowCallEvent(events, 'Second', 'completed')?.call,
-    ).toMatchObject({
-      costUsd: 0.05,
-    });
+      });
+      expect(
+        workflowCallEvent(events, 'Second', 'completed')?.call,
+      ).toMatchObject({
+        costUsd: 0.05,
+      });
 
-    const replay = recordingTrace();
-    await runScript(replay.trace, 'live-cost', script, {
-      runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
-    });
+      const replay = recordingTrace();
+      yield* runScript(replay.trace, 'live-cost', script, {
+        runAgent: vi.fn(() => Effect.fail(new Error('must not run'))),
+      });
 
-    expect(
-      workflowCallEvent(replay.events, 'First', 'cached')?.call,
-    ).not.toHaveProperty('costUsd');
-  });
+      expect(
+        workflowCallEvent(replay.events, 'First', 'cached')?.call,
+      ).not.toHaveProperty('costUsd');
+    }),
+  );
 
-  it('enriches live finish lines with the reported model and duration', async () => {
-    const { trace, events } = recordingTrace();
-    const { activities, onActivity } = collectActivities();
-    await runScript(
-      trace,
-      'model-duration',
-      `${meta}
+  it.live(
+    'enriches live finish lines with the reported model and duration',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const { activities, onActivity } = collectActivities();
+        yield* runScript(
+          trace,
+          'model-duration',
+          `${meta}
 return await agent('Draft')`,
-      {
-        runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report({ model: 'deepseekT' });
-          invocation.report({
-            childRunId: 'draft@deepseekT#abcdef' as RunId,
-          });
-          invocation.report({ costUsd: 0.02 });
-          return 'done';
-        },
-        onActivity,
-      },
-    );
-
-    expect(workflowCallEvent(events, 'Draft', 'completed')?.call).toMatchObject(
-      {
-        model: 'deepseekT',
-        childRunId: 'draft@deepseekT#abcdef',
-        durationMs: expect.any(Number),
-        costUsd: 0.02,
-      },
-    );
-    const draftEvents = events.filter(
-      (event): event is Extract<AgentEvent, { type: 'workflow.call' }> =>
-        event.type === 'workflow.call' && event.call.label === 'Draft',
-    );
-    const logIds = new Set(draftEvents.map((event) => event.logId));
-    expect(logIds.size).toBe(1);
-    expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
-    expect(activities).toContainEqual(
-      expect.stringMatching(
-        /^Finished: Draft · Document · deepseekT · .+ · \$0\.020$/,
-      ),
-    );
-  });
-
-  it('uses a new task-card identity for a deterministic relaunch', async () => {
-    const script = `${meta}
-return await agent('Draft')`;
-    const first = recordingTrace();
-    await runScript(first.trace, 'relaunch-card-id', script, {
-      runAgent: vi.fn(() => Promise.resolve('done')),
-    });
-
-    const second = recordingTrace();
-    await runScript(second.trace, 'relaunch-card-id', script, {
-      runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
-    });
-
-    const firstId = workflowCallEvent(
-      first.events,
-      'Draft',
-      'completed',
-    )?.logId;
-    const secondId = workflowCallEvent(second.events, 'Draft', 'cached')?.logId;
-    expect(firstId).toBeDefined();
-    expect(secondId).toBeDefined();
-    expect(secondId).not.toBe(firstId);
-  });
-
-  it('preserves live metadata when the user skips a running call', async () => {
-    const { trace, events } = recordingTrace();
-    const { activities, onActivity } = collectActivities();
-    let control!: WorkflowScriptControl;
-    let markStarted: (() => void) | undefined;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    const run = runScript(
-      trace,
-      'late-user-skip',
-      `${meta}
-return await agent('Late skip')`,
-      {
-        runAgent: async (invocation: WorkflowAgentInvocation) => {
-          invocation.report({
-            model: 'kimiK2',
-            childRunId: 'da7e5c1b' as RunId,
-            costUsd: 0.04,
-          });
-          markStarted?.();
-          return await new Promise<never>((_resolve, reject) => {
-            invocation.signal.addEventListener(
-              'abort',
-              () => reject(new Error('skipped')),
-              { once: true },
-            );
-          });
-        },
-        onControl: (handle) => {
-          control = handle;
-        },
-        onActivity,
-      },
-    );
-
-    await started;
-    control('da7e5c1b' as RunId, 'skip');
-    await run;
-
-    expect(
-      workflowCallEvent(events, 'Late skip', 'skipped')?.call,
-    ).toMatchObject({
-      reason: 'user',
-      model: 'kimiK2',
-      durationMs: expect.any(Number),
-      costUsd: 0.04,
-    });
-    expect(activities).toContain('Running: Late skip');
-    expect(activities).toContainEqual(
-      expect.stringMatching(
-        /^Skipped: Late skip · Document · kimiK2 · .+ · \$0\.040$/,
-      ),
-    );
-  });
-
-  it('marks a phase failed when an agent call fails', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'agent-failure',
-      `${meta}
-phase('Analysis')
-return await agent('Unsuccessful')`,
-      {
-        runAgent: async () => {
-          throw new Error('model unavailable');
-        },
-      },
-    );
-
-    const phaseId = stageId(events, 'Analysis');
-    expect(workflowCallEvent(events, 'Unsuccessful', 'failed')).toMatchObject({
-      type: 'workflow.call',
-      stageId: phaseId,
-      call: {
-        error: 'model unavailable',
-      },
-    });
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: phaseId,
-      status: RUN_OUTCOME.FAILED,
-    });
-  });
-
-  it('keeps out-of-order parallel completions in their starting phases', async () => {
-    const { trace, events } = recordingTrace();
-    const pending = new Map<string, (value: string) => void>();
-    const runAgent = vi.fn(
-      ({ prompt }: WorkflowAgentInvocation) =>
-        new Promise<string>((resolve) => pending.set(prompt, resolve)),
-    );
-    const run = runScript(
-      trace,
-      'parallel-phases',
-      `${meta}
-phase('First')
-const slow = agent('slow')
-phase('Second')
-const fast = agent('fast')
-return await Promise.all([slow, fast])`,
-      { runAgent },
-    );
-
-    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledTimes(2));
-    pending.get('fast')?.('fast result');
-    pending.get('slow')?.('slow result');
-    await run;
-
-    const firstId = stageId(events, 'First');
-    const secondId = stageId(events, 'Second');
-    expect(workflowCallEvent(events, 'slow', 'completed')).toMatchObject({
-      stageId: firstId,
-    });
-    expect(workflowCallEvent(events, 'fast', 'completed')).toMatchObject({
-      stageId: secondId,
-    });
-  });
-
-  it('does not move an unphased live call into a later phase', async () => {
-    const { trace, events } = recordingTrace();
-    await runScript(
-      trace,
-      'late-phase',
-      `${meta}
-const pending = agent('before phase')
-phase('Later')
-return await pending`,
-    );
-
-    const completion = workflowCallEvent(events, 'before phase', 'completed');
-    expect(completion).toMatchObject({
-      type: 'workflow.call',
-      stageId: undefined,
-    });
-    expect(completion).not.toMatchObject({ stageId: stageId(events, 'Later') });
-  });
-
-  it('preserves the exact cause when a runner aborts a started phase', async () => {
-    const { trace, events } = recordingTrace();
-    const { activities, onActivity } = collectActivities();
-    await expect(
-      runScript(
-        trace,
-        'runner-abort',
-        `${meta}
-return await agent('Abort', { phase: 'Run' })`,
-        {
-          runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.report({ model: 'abort-model', costUsd: 0.06 });
-            throw new WorkflowRunAbortError('fatal runner error');
+          {
+            runAgent: (invocation: WorkflowAgentInvocation) =>
+              Effect.sync(function () {
+                invocation.report({ model: 'deepseekT' });
+                invocation.report({
+                  childRunId: 'draft@deepseekT#abcdef' as RunId,
+                });
+                invocation.report({ costUsd: 0.02 });
+                return 'done';
+              }),
+            onActivity,
           },
-          onActivity,
-        },
-      ),
-    ).rejects.toThrow('fatal runner error');
+        );
 
-    const phaseId = stageId(events, 'Run');
-    expect(workflowCallEvent(events, 'Abort', 'failed')).toMatchObject({
-      stageId: phaseId,
-      call: {
-        error: 'fatal runner error',
-        model: 'abort-model',
-        durationMs: expect.any(Number),
-        costUsd: 0.06,
-      },
-    });
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: phaseId,
-      status: RUN_OUTCOME.FAILED,
-    });
-    expect(activities).toContainEqual(
-      expect.stringMatching(
-        /^Failed: Abort · Document · abort-model · .+ · \$0\.060 — fatal runner error$/,
-      ),
-    );
-  });
+        expect(
+          workflowCallEvent(events, 'Draft', 'completed')?.call,
+        ).toMatchObject({
+          model: 'deepseekT',
+          childRunId: 'draft@deepseekT#abcdef',
+          durationMs: expect.any(Number),
+          costUsd: 0.02,
+        });
+        const draftEvents = events.filter(
+          (event): event is Extract<AgentEvent, { type: 'workflow.call' }> =>
+            event.type === 'workflow.call' && event.call.label === 'Draft',
+        );
+        const logIds = new Set(draftEvents.map((event) => event.logId));
+        expect(logIds.size).toBe(1);
+        expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
+        expect(activities).toContainEqual(
+          expect.stringMatching(
+            /^Finished: Draft · Document · deepseekT · .+ · \$0\.020$/,
+          ),
+        );
+      }),
+  );
 
-  it('marks a phase failed when an abandoned call outlives cleanup', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
+  it.live('uses a new task-card identity for a deterministic relaunch', () =>
+    Effect.gen(function* () {
+      const script = `${meta}
+return await agent('Draft')`;
+      const first = recordingTrace();
+      yield* runScript(first.trace, 'relaunch-card-id', script, {
+        runAgent: vi.fn(() => Effect.succeed('done')),
+      });
+
+      const second = recordingTrace();
+      yield* runScript(second.trace, 'relaunch-card-id', script, {
+        runAgent: vi.fn(() => Effect.fail(new Error('must not run'))),
+      });
+
+      const firstId = workflowCallEvent(
+        first.events,
+        'Draft',
+        'completed',
+      )?.logId;
+      const secondId = workflowCallEvent(
+        second.events,
+        'Draft',
+        'cached',
+      )?.logId;
+      expect(firstId).toBeDefined();
+      expect(secondId).toBeDefined();
+      expect(secondId).not.toBe(firstId);
+    }),
+  );
+
+  it.live('preserves live metadata when the user skips a running call', () =>
+    Effect.gen(function* () {
       const { trace, events } = recordingTrace();
       const { activities, onActivity } = collectActivities();
-      let markStarted: (() => void) | undefined;
-      const started = new Promise<void>((resolve) => {
-        markStarted = resolve;
-      });
+      let control!: WorkflowScriptControl;
+      const started = yield* Deferred.make<void>();
       const run = runScript(
         trace,
-        'orphaned-runner',
+        'late-user-skip',
         `${meta}
-agent('Orphaned', { phase: 'Run' })
-return 'guest success'`,
+return await agent('Late skip')`,
         {
-          runAgent: async (invocation: WorkflowAgentInvocation) => {
-            invocation.report({
-              childRunId: 'orphaned@model#abcdef' as RunId,
-              costUsd: 0.03,
-            });
-            markStarted?.();
-            return await new Promise<never>(() => undefined);
+          runAgent: (invocation: WorkflowAgentInvocation) =>
+            Effect.gen(function* () {
+              invocation.report({
+                model: 'kimiK2',
+                childRunId: 'da7e5c1b' as RunId,
+                costUsd: 0.04,
+              });
+              yield* Deferred.succeed(started, undefined);
+              return yield* Effect.never;
+            }),
+          onControl: (handle) => {
+            control = handle;
           },
           onActivity,
         },
       );
 
-      await started;
-      await vi.advanceTimersByTimeAsync(5_000);
-      await run;
+      const fiber = yield* run.pipe(Effect.forkScoped);
+      yield* Deferred.await(started);
+      control('da7e5c1b' as RunId, 'skip');
+      yield* Fiber.join(fiber);
+
+      expect(
+        workflowCallEvent(events, 'Late skip', 'skipped')?.call,
+      ).toMatchObject({
+        reason: 'user',
+        model: 'kimiK2',
+        durationMs: expect.any(Number),
+        costUsd: 0.04,
+      });
+      expect(activities).toContain('Running: Late skip');
+      expect(activities).toContainEqual(
+        expect.stringMatching(
+          /^Skipped: Late skip · Document · kimiK2 · .+ · \$0\.040$/,
+        ),
+      );
+    }),
+  );
+
+  it.live('marks a phase failed when an agent call fails', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      yield* runScript(
+        trace,
+        'agent-failure',
+        `${meta}
+phase('Analysis')
+return await agent('Unsuccessful')`,
+        {
+          runAgent: () =>
+            Effect.sync(function () {
+              throw new Error('model unavailable');
+            }),
+        },
+      );
+
+      const phaseId = stageId(events, 'Analysis');
+      expect(workflowCallEvent(events, 'Unsuccessful', 'failed')).toMatchObject(
+        {
+          type: 'workflow.call',
+          stageId: phaseId,
+          call: {
+            error: 'model unavailable',
+          },
+        },
+      );
+      expect(events).toContainEqual({
+        type: 'stage.end',
+        id: phaseId,
+        status: RUN_OUTCOME.FAILED,
+      });
+    }),
+  );
+
+  it.live(
+    'keeps out-of-order parallel completions in their starting phases',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const started = yield* Deferred.make<void>();
+        const pending = new Map<string, Deferred.Deferred<string>>();
+        const runAgent = vi.fn(
+          Effect.fn(function* ({ prompt }: WorkflowAgentInvocation) {
+            const result = yield* Deferred.make<string>();
+            pending.set(prompt, result);
+            if (pending.size === 2) yield* Deferred.succeed(started, undefined);
+            return yield* Deferred.await(result);
+          }),
+        );
+        const run = runScript(
+          trace,
+          'parallel-phases',
+          `${meta}
+phase('First')
+const slow = agent('slow')
+phase('Second')
+const fast = agent('fast')
+return await Promise.all([slow, fast])`,
+          { runAgent },
+        );
+
+        const fiber = yield* run.pipe(Effect.forkScoped);
+        yield* Deferred.await(started);
+        const fast = pending.get('fast');
+        const slow = pending.get('slow');
+        if (!fast || !slow) throw new Error('Both calls must have started');
+        yield* Deferred.succeed(fast, 'fast result');
+        yield* Deferred.succeed(slow, 'slow result');
+        yield* Fiber.join(fiber);
+
+        const firstId = stageId(events, 'First');
+        const secondId = stageId(events, 'Second');
+        expect(workflowCallEvent(events, 'slow', 'completed')).toMatchObject({
+          stageId: firstId,
+        });
+        expect(workflowCallEvent(events, 'fast', 'completed')).toMatchObject({
+          stageId: secondId,
+        });
+      }),
+  );
+
+  it.live('does not move an unphased live call into a later phase', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      yield* runScript(
+        trace,
+        'late-phase',
+        `${meta}
+const pending = agent('before phase')
+phase('Later')
+return await pending`,
+      );
+
+      const completion = workflowCallEvent(events, 'before phase', 'completed');
+      expect(completion).toMatchObject({
+        type: 'workflow.call',
+        stageId: undefined,
+      });
+      expect(completion).not.toMatchObject({
+        stageId: stageId(events, 'Later'),
+      });
+    }),
+  );
+
+  it.live(
+    'preserves the exact cause when a runner aborts a started phase',
+    () =>
+      Effect.gen(function* () {
+        const { trace, events } = recordingTrace();
+        const { activities, onActivity } = collectActivities();
+        expect(
+          yield* Effect.flip(
+            runScript(
+              trace,
+              'runner-abort',
+              `${meta}
+return await agent('Abort', { phase: 'Run' })`,
+              {
+                runAgent: (invocation: WorkflowAgentInvocation) =>
+                  Effect.sync(function () {
+                    invocation.report({ model: 'abort-model', costUsd: 0.06 });
+                    throw new WorkflowRunAbortError('fatal runner error');
+                  }),
+                onActivity,
+              },
+            ),
+          ),
+        ).toMatchObject({
+          message: expect.stringContaining('fatal runner error'),
+        });
+
+        const phaseId = stageId(events, 'Run');
+        expect(workflowCallEvent(events, 'Abort', 'failed')).toMatchObject({
+          stageId: phaseId,
+          call: {
+            error: 'fatal runner error',
+            model: 'abort-model',
+            durationMs: expect.any(Number),
+            costUsd: 0.06,
+          },
+        });
+        expect(events).toContainEqual({
+          type: 'stage.end',
+          id: phaseId,
+          status: RUN_OUTCOME.FAILED,
+        });
+        expect(activities).toContainEqual(
+          expect.stringMatching(
+            /^Failed: Abort · Document · abort-model · .+ · \$0\.060 — fatal runner error$/,
+          ),
+        );
+      }),
+  );
+
+  it.live('marks an abandoned call failed after interruption', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      const { activities, onActivity } = collectActivities();
+      const started = yield* Deferred.make<void>();
+      const run = runScript(
+        trace,
+        'orphaned-runner',
+        `${meta}
+agent('Orphaned', { phase: 'Run' })
+await agent('Confirm started')
+return 'guest success'`,
+        {
+          runAgent: (invocation: WorkflowAgentInvocation) =>
+            Effect.gen(function* () {
+              if (invocation.prompt === 'Confirm started') {
+                yield* Deferred.await(started);
+                return 'ready';
+              }
+              invocation.report({
+                childRunId: 'orphaned@model#abcdef' as RunId,
+                costUsd: 0.03,
+              });
+              yield* Deferred.succeed(started, undefined);
+              return yield* Effect.never;
+            }),
+          onActivity,
+        },
+      );
+
+      const fiber = yield* run.pipe(Effect.forkScoped);
+      yield* Deferred.await(started);
+      yield* Fiber.join(fiber);
 
       const phaseId = stageId(events, 'Run');
       expect(workflowCallEvent(events, 'Orphaned', 'failed')).toMatchObject({
@@ -1057,36 +1197,38 @@ return 'guest success'`,
       expect(activities).toContain(
         'Failed: Orphaned · Document · $0.030 — The workflow ended before this call completed.',
       );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    }),
+  );
 
-  it('closes every opened phase after a script failure', async () => {
-    const { trace, events } = recordingTrace();
-    await expect(
-      runScript(
-        trace,
-        'script-failure',
-        `${meta}
+  it.live('closes every opened phase after a script failure', () =>
+    Effect.gen(function* () {
+      const { trace, events } = recordingTrace();
+      expect(
+        yield* Effect.flip(
+          runScript(
+            trace,
+            'script-failure',
+            `${meta}
 phase('One')
 log('first')
 phase('Two')
 throw new Error('script failed')`,
-      ),
-    ).rejects.toThrow('script failed');
+          ),
+        ),
+      ).toMatchObject({ message: expect.stringContaining('script failed') });
 
-    // The engine settled 'One' cleanly before the script threw inside 'Two';
-    // only the phase the failure happened in reads failed.
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: stageId(events, 'One'),
-      status: RUN_OUTCOME.COMPLETED,
-    });
-    expect(events).toContainEqual({
-      type: 'stage.end',
-      id: stageId(events, 'Two'),
-      status: RUN_OUTCOME.FAILED,
-    });
-  });
+      // The engine settled 'One' cleanly before the script threw inside 'Two';
+      // only the phase the failure happened in reads failed.
+      expect(events).toContainEqual({
+        type: 'stage.end',
+        id: stageId(events, 'One'),
+        status: RUN_OUTCOME.COMPLETED,
+      });
+      expect(events).toContainEqual({
+        type: 'stage.end',
+        id: stageId(events, 'Two'),
+        status: RUN_OUTCOME.FAILED,
+      });
+    }),
+  );
 });

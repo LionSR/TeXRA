@@ -7,8 +7,8 @@
  * and derives its primary's result with no edits, attachments or mutation;
  * a result that ends the turn stops dispatch after its partition settles;
  * one interrupt cancels the whole in-flight batch through the fiber; and no
- * sibling failure interrupts another call, because a call never fails: its
- * error is its result.
+ * ordinary tool failures become model-visible results. Durable write failures
+ * halt dispatch so an unsettled call is never recorded as successful.
  *
  * Write points: `tool.intent` before every barrier call; `tool.result` plus
  * its `tool.end` card per settled call, in one batch, with attachment bytes
@@ -25,9 +25,10 @@ import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { endToolUseCard, type AgentTrace } from '@agent/trace';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   type DispatchFacts,
   type FileLocation,
@@ -39,8 +40,8 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
-import { RunLedger, type RunLedgerRefused } from '@shared/session/runLedger';
-import type { DatabaseWriteFailed } from '@shared/session/database';
+import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   foldRunState,
   type RunLedgerDraft,
@@ -233,7 +234,11 @@ function settlementContent(
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   initial: RunState,
   turn: TurnContext,
-): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | RunLedger> {
+): Effect.fn.Return<
+  DispatchOutcome,
+  InvokeError,
+  AgentRun | RunLedger | ProcessServices
+> {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
   const { runId, logger } = run;
@@ -333,7 +338,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
     attempt: number,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -381,49 +386,55 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     } else {
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          Effect.gen(function* () {
-            // This call's stop, bridged from the fiber: the scope aborts it
-            // when the call is interrupted. It reaches the tool as an
-            // argument as well as through the call context, because a tool
-            // that runs an Effect program of its own starts a root fiber
-            // this one does not own, and the signal is what reaches that
-            // root's waits.
-            const signal = yield* Effect.abortSignal;
-            return yield* Effect.tryPromise({
-              try: () =>
-                run.inScope(() =>
-                  withToolFileInteractionContext(
-                    {
-                      tracker: turn.workspace.interactions,
-                      workPlanState: turn.workspace.workPlan,
-                      trace: logger,
-                      userInstruction:
-                        run.config.rootUserInstruction ?? turn.userInstruction,
-                      toolCallId: fact.callId,
-                      signal,
-                      hooks: {
-                        onRunReady,
-                        onToolOutput,
-                        // Subagent cost lands in the parent's totals only, so
-                        // per-round usage reporting never double-counts it.
-                        recordSubagentCost: (costUsd) => {
-                          if (costUsd > 0) subagentCost += costUsd;
-                        },
-                      },
-                    },
-                    () => tool.call(parsedInput, signal),
-                  ),
-                ),
-              catch: (cause) => cause,
-            });
-          }),
+          tool.call(parsedInput).pipe(
+            Effect.provideService(ToolCall, {
+              config: run.session.roots.config,
+              run,
+              delegationAgentScope: run.delegationAgentScope,
+              model: run.config.model,
+              workingDirectory: run.workingDirectory,
+              stopAfterCycle: run.toolPolicy.stopAfterCycle,
+              onApprovalPolicyDenial: run.onApprovalPolicyDenial,
+              inScope: run.inScope,
+              tracker: turn.workspace.interactions,
+              workPlanState: turn.workspace.workPlan,
+              trace: logger,
+              userInstruction:
+                run.config.rootUserInstruction ?? turn.userInstruction,
+              toolCallId: fact.callId,
+              hooks: {
+                onRunReady,
+                onToolOutput,
+                recordSubagentCost: (costUsd) => {
+                  if (costUsd > 0) subagentCost += costUsd;
+                },
+              },
+            }),
+          ),
         ),
       );
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
-        return yield* Effect.interrupt;
+        // A finalizer may also have failed while cancellation drained a write.
+        // Preserve that cause instead of replacing it with a bare interrupt.
+        return yield* Effect.failCause(
+          Cause.fromReasons<never>(
+            invoked.cause.reasons.map((reason) =>
+              Cause.isFailReason(reason)
+                ? Cause.makeDieReason(reason.error)
+                : reason,
+            ),
+          ),
+        );
       } else {
+        const failure = Cause.squash(invoked.cause);
+        if (
+          failure instanceof DatabaseWriteFailed ||
+          failure instanceof RunLedgerRefused
+        ) {
+          return yield* Effect.fail(failure);
+        }
         const { message, diagnostics } = normalizeToolCallError(
           fact.toolName,
           Cause.squash(invoked.cause),
@@ -713,7 +724,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const dispatchCall = Effect.fn('toolUse.dispatchCall')(function* (
     fact: DispatchFacts,
     afterEndTurn: boolean,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
@@ -763,7 +774,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const deriveDuplicate = Effect.fn('toolUse.duplicate')(function* (
     fact: DispatchFacts,
     primaryId: string,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);

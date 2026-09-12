@@ -10,10 +10,8 @@ import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
-import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
@@ -194,7 +192,7 @@ export class ProbeEnvironmentTool extends defineTool({
   description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
 }) {
-  protected execute(_input: ProbeInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(probe());
+  protected execute(_input: ProbeInput) {
+    return probe();
   }
 }

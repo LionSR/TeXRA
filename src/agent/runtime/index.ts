@@ -109,3 +109,7 @@ export {
   type RunRequest,
   type ValidatedRunRequest,
 } from '../core/state/runRequests';
+
+// Native tool host capabilities, supplied per standalone invocation.
+export { ToolCall } from './ToolCall';
+export { FileInteractionState } from '../core/state/AgentWorkspaceState';
