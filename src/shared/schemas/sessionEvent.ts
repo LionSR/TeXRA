@@ -118,6 +118,7 @@ const AggregateKindSchema = z.enum([
   'desktop-projects',
   'global-inquiry',
   'update-check',
+  'app-state',
 ]);
 type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
@@ -471,7 +472,8 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
     phase: z.enum(['accepted', 'settled']),
   }),
 ]);
-/** A script value as the journal keeps it: `undefined` is not JSON. */
+/** A stored value as the journal and the state store keep it: `undefined` is
+ *  not JSON, so absence is an arm rather than a missing field. */
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('undefined') }),
   z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
@@ -526,6 +528,17 @@ const UpdateCheckDraftSchema = durable(
   { record: UpdateCheckRecordSchema },
   'update-check',
 );
+/**
+ * One host or application state key's latest value: the row behind every
+ * `StateStore`, one aggregate per key so latest-per-key is latest-per-
+ * aggregate. `{ kind: 'undefined' }` is the delete, the `vscode.Memento`
+ * contract every host's store mirrors.
+ */
+const AppStateDraftSchema = durable(
+  'state.value.set',
+  { value: PersistedJsonValueSchema },
+  'app-state',
+);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
@@ -534,6 +547,7 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   DesktopProjectsDraftSchema,
   GlobalInquiryDraftSchema,
   UpdateCheckDraftSchema,
+  AppStateDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -565,6 +579,7 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   DesktopProjectsDraftSchema.extend(envelope),
   GlobalInquiryDraftSchema.extend(envelope),
   UpdateCheckDraftSchema.extend(envelope),
+  AppStateDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

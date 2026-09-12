@@ -17,7 +17,7 @@ import { CLI_SETTING_PATHS } from './cliSettings';
  * - Settings no CLI reader honors and no exceptional CLI path writes
  *   (`agentReview.*`). Other hosts may write them to the shared TeXRA config,
  *   but they have no CLI behavior.
- * - Settings the CLI reads from its `state.json` store (workflow/latexdiff):
+ * - Settings the CLI reads from its state store (workflow/latexdiff):
  *   putting those in `config.json` is a no-op.
  */
 export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([

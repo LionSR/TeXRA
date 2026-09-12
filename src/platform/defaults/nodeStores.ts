@@ -6,7 +6,8 @@
  * {@link WorkspaceStorageProvider}, so the derivations live here once: which
  * store backs workspace configuration (the project `.texra/config.json` when
  * it is usable, the internal workspace store otherwise), where global
- * configuration lives, and where workspace state lives.
+ * configuration lives. Workspace and global state are not here: they are rows
+ * in the root's database (`@controllers/session/appStateStore`), not files.
  */
 
 // Node imports
@@ -30,9 +31,6 @@ import {
 } from './nodeStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { WorkspaceStorageProvider } from './workspaceStorage';
-
-/** File name of a state store inside a storage directory. */
-const STATE_FILE_NAME = 'state.json';
 
 /**
  * Whether a write through a `JsonStore` at `filePath` could succeed:
@@ -137,17 +135,4 @@ export const openTexraConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   return { workspace, global } satisfies JsonConfigProviderOptions;
-});
-
-/**
- * Open the workspace state store. The CLI and desktop hosts address the same
- * physical `<storageRoot>/v1/workspace-storage/<id>/state.json` in production, so
- * the path is derived once here.
- */
-export const openNodeWorkspaceStateStore = Effect.fn(
-  'nodeStores.openNodeWorkspaceStateStore',
-)(function* (workspaceStoragePath: string) {
-  return yield* JsonStore.open(
-    path.join(workspaceStoragePath, STATE_FILE_NAME),
-  );
 });

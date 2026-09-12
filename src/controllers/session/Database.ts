@@ -53,6 +53,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   type AggregateId,
+  type JsonValue,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -205,6 +206,15 @@ ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
+/**
+ * Every application-state aggregate's latest row: one state key per
+ * aggregate, so the store's whole open-time snapshot is one join against the
+ * `(aggregate_id, seq)` index.
+ */
+const APP_STATE_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
+JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event
+  WHERE type = 'state.value.set.1' GROUP BY aggregate_id)
+  latest USING (aggregate_id, seq)`;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
@@ -532,7 +542,8 @@ export const databaseLayer = (
             if (
               draft.type === 'desktop.projects.changed' ||
               draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded'
+              draft.type === 'update.check.recorded' ||
+              draft.type === 'state.value.set'
             ) {
               // Profile-state writes own their aggregate only during this transaction.
               yield* sql.unsafe<Record<string, unknown>>(claim, [
@@ -712,7 +723,8 @@ export const databaseLayer = (
             if (
               draft.type === 'desktop.projects.changed' ||
               draft.type === 'inquiry.recorded' ||
-              draft.type === 'update.check.recorded'
+              draft.type === 'update.check.recorded' ||
+              draft.type === 'state.value.set'
             ) {
               yield* sql.unsafe<Record<string, unknown>>(release, [
                 JSON.stringify([draft.aggregateId]),
@@ -782,6 +794,21 @@ export const databaseLayer = (
             [id],
           )
           .pipe(Effect.map((rows) => rows[0]));
+      const readAppState = Effect.gen(function* () {
+        const rows = yield* sql.unsafe<Record<string, unknown>>(
+          APP_STATE_ROWS,
+          [],
+        );
+        const values = new Map<string, JsonValue>();
+        for (const row of rows) {
+          const event = decodeEvent(row);
+          if (event.type !== 'state.value.set')
+            throw new Error('Invalid application state row');
+          if (event.value.kind === 'undefined') continue;
+          values.set(aggregateTarget(event.aggregateId).id, event.value.value);
+        }
+        return values;
+      });
       const readUpdateCheck = (host: string) =>
         Effect.gen(function* () {
           const row = yield* latestEventRow(
@@ -854,6 +881,7 @@ export const databaseLayer = (
               ])).map(decodeEvent);
             }),
           ),
+        readAppState: () => query(readAppState),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
           transact(

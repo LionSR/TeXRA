@@ -120,6 +120,7 @@ describe('desktop composition root and launch environment', () => {
             processRoots: host.roots,
             globalConfigStore: config,
             records,
+            runWrite: (write) => Effect.runPromise(write),
             stores: {
               secrets: host.platform.secrets,
               globalState: host.platform.globalState,

@@ -16,6 +16,10 @@ import {
 import { hostPort } from '@common/hostPort';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import {
+  openAppStateStore,
+  type RunStateWrite,
+} from '@controllers/session/appStateStore';
+import {
   createTexraResponseTextProcessing,
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
@@ -25,10 +29,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  openNodeWorkspaceStateStore,
-  openTexraWorkspaceConfigStore,
-} from '@platform/defaults/nodeStores';
+import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
@@ -66,6 +67,9 @@ interface DesktopProjectRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly records: DesktopProjectRecords;
+  /** Runs each project state store's durable writes on the process runtime,
+   *  the one Promise boundary those stores have. */
+  readonly runWrite: RunStateWrite;
   /**
    * The process secret store and global state the helper model behind the
    * latex text-connector resolves against, threaded from the composition root
@@ -263,7 +267,7 @@ export function openDesktopProjectRegistry(
           ).getStoragePath();
           const [workspaceState, workspaceConfig] = yield* Effect.all(
             [
-              openNodeWorkspaceStateStore(storage),
+              openAppStateStore(storage, options.runWrite),
               openTexraWorkspaceConfigStore(storage, root, options.warn),
             ],
             { concurrency: 'unbounded' },

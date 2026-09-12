@@ -256,6 +256,7 @@ const IGNORED_ROW_TYPES: Readonly<
   'desktop.projects.changed': true,
   'inquiry.recorded': true,
   'update.check.recorded': true,
+  'state.value.set': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 

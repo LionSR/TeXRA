@@ -78,7 +78,7 @@
       "packages/desktop/src/main/desktopWindowTitle.ts": 2,
       "packages/desktop/src/main/index.ts": 26,
       "packages/desktop/src/main/platform/electronSecrets.ts": 2,
-      "packages/desktop/src/main/platform/index.ts": 5,
+      "packages/desktop/src/main/platform/index.ts": 4,
       "packages/extension/src/commands/agent/executeCommand.ts": 1,
       "packages/extension/src/commands/agent/resumeFromResumeData.ts": 1,
       "packages/extension/src/commands/git/gitCommands.ts": 1,
