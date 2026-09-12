@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
 
 import { commandOnly } from './messageFactories';
@@ -54,7 +54,7 @@ export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 // ============================================================
 
 export const UpdateProfileMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.UPDATE_PROFILE),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
   authenticated: z.boolean(),
   user: ProfileUserSchema.nullable(),
   /**
@@ -72,6 +72,8 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 // ============================================================
 
 // Inbound messages with command literals
-export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
+export const SignInMessageSchema = commandOnly(SETTINGS_VIEW_COMMANDS.SIGN_IN);
 
-export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);
+export const SignOutMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT,
+);

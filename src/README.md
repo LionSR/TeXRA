@@ -62,7 +62,7 @@ way `tsc` will not catch.
   renderer, client ↔ backend): if both sides must agree on the shape, it goes
   here. Second, the **shared browser UI kit** — `shared/wa/` (Web Awesome icon
   and component helpers), `shared/styles/`, `shared/litControllers/`,
-  `shared/markdown/`, `BaseWebviewApp.ts`. That is runtime UI code, not a
+  `shared/markdown/`. That is runtime UI code, not a
   contract: 26 modules under `shared/` import `lit`. Reusable webview UI belongs
   here, not in a host package.
 - **`common/`** — cross-cutting logic with domain meaning that is not a wire

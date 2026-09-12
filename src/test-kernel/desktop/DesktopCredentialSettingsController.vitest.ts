@@ -111,15 +111,20 @@ async function createFixture({
   const onModelOptionsChanged = vi.fn(async () => {
     events.push('modelOptions');
   });
+  const unavailable = (provider: string) => ({
+    state: 'unavailable' as const,
+    provider: provider as 'chatgpt',
+    providerName: provider,
+    planName: provider,
+    fetchedAt: 0,
+    windows: [] as [],
+    reason: 'missing_credentials' as const,
+  });
   const subscriptionUsage = {
-    getUsage: vi.fn(async (provider: string) => ({
-      state: 'unavailable' as const,
-      provider: provider as 'chatgpt',
-      providerName: provider,
-      planName: provider,
-      fetchedAt: 0,
-      windows: [] as [],
-      reason: 'missing_credentials' as const,
+    getAllUsage: vi.fn(async () => ({
+      chatgpt: unavailable('chatgpt'),
+      kimiCode: unavailable('kimiCode'),
+      glmCodingPlan: unavailable('glmCodingPlan'),
     })),
     invalidate: vi.fn(),
   };
@@ -311,7 +316,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
         usageProvider,
       );
-      expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
+      expect(fixture.subscriptionUsage.getAllUsage).toHaveBeenCalledOnce();
       expect(fixture.posted).toContainEqual(
         expect.objectContaining({
           command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,

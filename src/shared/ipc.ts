@@ -4,49 +4,24 @@ export const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
 } as const;
 
-export const PROFILE_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  UPDATE_PROFILE: 'updateProfile',
-  SIGN_IN: 'signIn',
-  SIGN_OUT: 'signOut',
-} as const;
-
-export const MEMORY_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  GET_MEMORY_DATA: 'getMemoryData',
-  GET_MEMORY_PREVIEW: 'getMemoryPreview',
-  UPDATE_MEMORY: 'updateMemory',
-  UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
-  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  PIN_MEMORY: 'pinMemory',
-  UNPIN_MEMORY: 'unpinMemory',
-} as const;
-
 /**
- * Command string literals for settings view schema definitions.
- * Defined here (not in settingsViewMessages.ts) to avoid the cycle
- * `ipc.ts → settingsViewMessages.ts → memoryViewMessages.ts → ipc.ts`.
- *
- * Memory and Profile inbound commands reference their own view's
- * command map (the single source of truth for those literals) instead of
- * repeating the string values, so the two can't drift.
+ * Inbound settings-view command literals (webview → host); outbound-only
+ * commands are added in `SETTINGS_VIEW_COMMANDS`.
  */
 export const SETTINGS_VIEW_CMD = {
   // Navigation commands
   SET_TAB: 'setTab',
   // Memory commands
-  GET_MEMORY_DATA: MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
-  GET_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
-  OPEN_MEMORY_FILE: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE,
-  OPEN_MEMORY_FOLDER: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
-  DELETE_MEMORY: MEMORY_VIEW_COMMANDS.DELETE_MEMORY,
-  PIN_MEMORY: MEMORY_VIEW_COMMANDS.PIN_MEMORY,
-  UNPIN_MEMORY: MEMORY_VIEW_COMMANDS.UNPIN_MEMORY,
+  GET_MEMORY_DATA: 'getMemoryData',
+  GET_MEMORY_PREVIEW: 'getMemoryPreview',
+  OPEN_MEMORY_FILE: 'openMemoryFile',
+  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+  PIN_MEMORY: 'pinMemory',
+  UNPIN_MEMORY: 'unpinMemory',
   // Profile commands
-  SIGN_IN: PROFILE_VIEW_COMMANDS.SIGN_IN,
-  SIGN_OUT: PROFILE_VIEW_COMMANDS.SIGN_OUT,
+  SIGN_IN: 'signIn',
+  SIGN_OUT: 'signOut',
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
@@ -115,15 +90,15 @@ export const SETTINGS_VIEW_CMD = {
   REVEAL_GOAL_RUN: 'revealGoalRun',
 } as const;
 
-// Settings view specific commands (combines Memory and Profile views)
+// Settings view specific commands
 // SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
 export const SETTINGS_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   ...SETTINGS_VIEW_CMD,
   // Outbound-only commands (backend → frontend, not schema-validated)
-  UPDATE_MEMORY: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY,
-  UPDATE_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-  UPDATE_PROFILE: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+  UPDATE_MEMORY: 'updateMemory',
+  UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
+  UPDATE_PROFILE: 'updateProfile',
   UPDATE_MODEL_SELECTION: 'updateModelSelection',
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',

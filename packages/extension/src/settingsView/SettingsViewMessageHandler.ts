@@ -29,7 +29,6 @@ import {
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
-import { SecretManager } from '@frontend/secretManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
@@ -44,6 +43,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import {
+  API_PROVIDERS,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
@@ -97,10 +97,6 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
-import {
-  sendSubscriptionUsage,
-  type SubscriptionUsageReader,
-} from './handlers/subscriptionUsageHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
@@ -119,7 +115,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
-  private readonly subscriptionUsage: SubscriptionUsageReader;
+  private readonly subscriptionUsage: SubscriptionUsageService;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -141,7 +137,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       host: 'vscode',
       globalState,
       loadProviderKeyStatuses: () =>
-        loadApiKeyStatusMap(secrets, SecretManager.API_PROVIDERS),
+        loadApiKeyStatusMap(secrets, API_PROVIDERS),
       getConfig,
     });
     this.subscriptionUsage = new SubscriptionUsageService({ secrets });
@@ -295,17 +291,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.agentHandlers.handleSetAgentEnabled(message),
       setAllAgentsEnabled: (message) =>
         this.agentHandlers.handleSetAllAgentsEnabled(message),
-      openAgentYaml: (message) =>
-        this.agentHandlers.handleOpenAgentYaml(message),
+      openAgentYaml: this.agentHandlers.agentActions.openAgentYaml,
       openAgentFolder: (message) =>
         this.agentHandlers.handleOpenAgentFolder(message),
       createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
-      customizeAgent: (message) =>
-        this.agentHandlers.handleCustomizeAgent(message),
+      customizeAgent: this.agentHandlers.agentActions.customizeAgent,
       deleteCustomAgent: (message) =>
         this.agentHandlers.handleDeleteCustomAgent(message),
-      revealAgentFile: (message) =>
-        this.agentHandlers.handleRevealAgentFile(message),
+      revealAgentFile: this.agentHandlers.agentActions.revealAgentFile,
       viewRemoteAgentPrompt: (message) =>
         this.agentHandlers.handleViewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
@@ -340,11 +333,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.grokHandlers.handleSetPreferSubscription(message.enabled),
       getSubscriptionUsage: (message) =>
         this.withActiveWebview((webview) =>
-          sendSubscriptionUsage(
-            webview,
-            this.subscriptionUsage,
-            message.forceRefresh ?? false,
-          ),
+          this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
         ),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
@@ -601,10 +590,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
     if (codingPlanForUsageSetting(key) !== undefined) {
-      await this.withActiveWebview((w) =>
-        sendSubscriptionUsage(w, this.subscriptionUsage),
-      );
+      await this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
     }
+  }
+
+  /** Fetch and post one sanitized snapshot for every subscription provider. */
+  private async sendSubscriptionUsage(
+    webview: vscode.Webview,
+    forceRefresh = false,
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
+    });
   }
 
   private async postStateSettingSnapshot(
@@ -653,11 +651,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => options.refreshProfileData(w)),
       ...(options.usageProvider
-        ? [
-            this.withActiveWebview((w) =>
-              sendSubscriptionUsage(w, this.subscriptionUsage),
-            ),
-          ]
+        ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
         : []),
     ]);
   }

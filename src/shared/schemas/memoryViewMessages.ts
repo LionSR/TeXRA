@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { MEMORY_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
 // ============================================================
@@ -41,12 +41,12 @@ export type MemoryPreview = z.infer<typeof MemoryPreviewSchema>;
 // ============================================================
 
 export const UpdateMemoryMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY),
   items: z.array(MemoryViewItemSchema),
 });
 
 export const UpdateMemoryPreviewMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW),
   preview: MemoryPreviewSchema,
 });
 
@@ -61,31 +61,31 @@ const MemoryPathMessageSchema = z.object({
 
 // Inbound messages with command literals
 export const GetMemoryDataMessageSchema = commandOnly(
-  MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
+  SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
 );
 
 export const GetMemoryPreviewMessageSchema = MemoryPathMessageSchema.extend({
-  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW),
 });
 
 export const OpenMemoryFileMessageSchema = MemoryPathMessageSchema.extend({
-  command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE),
 });
 
 export const OpenMemoryFolderMessageSchema = commandOnly(
-  MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+  SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
 );
 
 /** Carries the display path so the host can confirm before deleting. */
 export const DeleteMemoryMessageSchema = MemoryPathMessageSchema.extend({
-  command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY),
   displayPath: z.string().min(1),
 });
 
 export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({
-  command: z.literal(MEMORY_VIEW_COMMANDS.PIN_MEMORY),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.PIN_MEMORY),
 });
 
 export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
-  command: z.literal(MEMORY_VIEW_COMMANDS.UNPIN_MEMORY),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY),
 });
