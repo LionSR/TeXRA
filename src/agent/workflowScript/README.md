@@ -117,25 +117,23 @@ structured, cost }`), `null` on failure, or the truthy
   live calls are checkpointed before their results return to the script;
   parallel writes and overlapping resumes are serialized, malformed state
   fails loudly, and completed child manifests close the final crash-recovery
-  gap without repeating model work. Each stable child attempt records a
-  reservation before registration and a launch marker before model work, so a
-  failed registration can advance safely while an uncertain launched child is
-  never repeated. A completed child is recovered only through its
-  committed marker, written after the artifact drain and before lease release;
-  lease absence alone never attests durable completion. The parent records the
-  complete attempt sequence, so deleting an earlier child cannot hide a later
-  completed result. A parent execution has one active runtime owner; the
-  execution KV store is durable state, not a cross-process lock. Stable-attempt
-  state is one-way compatible at a fixed schema version: every legacy v1 phase
-  stays readable, but readers predating the committed phase reject newer
-  markers outright, downgrade or mixed-version recovery is unsupported, and
-  unknown present values fail closed rather than being defaulted or coerced.
-  Checkpoints use the strict version-4 schema; malformed or
+  gap without repeating model work. The journal replay is checked first: a
+  call whose entry already carries a value never reaches a child at all.
+  Past it, the child's own run aggregate is the only record of an attempt.
+  `run.start` is the launch edge, and a COMPLETED `run.end` carrying a
+  `producer: 'subagent'` `run.result` manifest is durable completion, because
+  any row a reader can read back has already been through that child's
+  artifact drain. The attempt number is no one's counter: it is discovered by
+  probing a call's derived run ids in order, so an attempt that never reached
+  `run.start` simply launches, and an attempt no live owner holds that can no
+  longer record an outcome frees the next id. A parent execution has one
+  active runtime owner; the execution KV store is durable state, not a
+  cross-process lock. Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.
   Deliberately NOT an append-only started/result journal (the shape Claude
   Code's Workflow tool uses): such a log cannot distinguish "never
   finished" from a `null` result, and beside the checkpoint, the commit
-  fence, and the child attempt ledger it would be a second owner of the
+  fence, and the child run aggregate it would be a second owner of the
   same fact. Ruled 2026-08-28 (.agents/docs/archived/feature/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result

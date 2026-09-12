@@ -243,6 +243,27 @@ function livenessClause(liveness: RunLiveness): string {
   }
 }
 
+/**
+ * A storage fault while inspecting a child is not this call's own failure: the
+ * engine turns a failed call into a `null` the script can swallow, so an
+ * unreadable child aggregate has to abort the run rather than read as a child
+ * that answered nothing.
+ */
+function probeChild<A>(
+  runId: RunId,
+  read: Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> {
+  return read.pipe(
+    Effect.mapError(
+      (cause) =>
+        new WorkflowRunAbortError(
+          `Workflow child ${runId} could not be inspected.`,
+          { cause },
+        ),
+    ),
+  );
+}
+
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
 
@@ -263,11 +284,17 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
 /**
  * Resolve one `agent()` call against the child runs it already has, then
  * launch only if none of them answered it. The child's own aggregate is the
- * fact: `run.start` is the launch edge, a `run.result` manifest under a
+ * fact: `run.start` is the launch edge, and a `run.result` manifest under a
  * COMPLETED `run.end` is durable completion (any row a reader can read back
  * has been through the child's artifact drain, which is the ordered
- * publisher), and a started run with no settled `child.turn` and no live lease
- * never reached side-effectful work, so the next attempt id is free.
+ * publisher).
+ *
+ * A run with no `run.end` for the lifecycle in flight, whose lease no live
+ * owner still holds, frees the next attempt id in either of two shapes: it
+ * settled no `child.turn`, so it never reached side-effectful work; or it
+ * committed its `run.result` manifest and died in the one transaction before
+ * `run.end`, so nothing will ever record that outcome. A settled turn without
+ * a manifest is the one irreconcilable shape, and a live owner always refuses.
  *
  * A journal hit never reaches here: the engine consumes it before calling.
  */
@@ -288,7 +315,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         attempt,
       });
       const records = getRunRecords(session, runId);
-      if (!(yield* records.exists())) {
+      if (!(yield* probeChild(runId, records.exists()))) {
         // Publish the attempt id before resolving mutable launch state: a host
         // targets the in-flight child by this id.
         call.onLaunch(runId);
@@ -303,7 +330,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       }
       // Terminal for the lifecycle in flight, not for the aggregate: a
       // `run.activate` after a `run.end` means the run started again.
-      const end = yield* records.readRunEnd();
+      const end = yield* probeChild(runId, records.readRunEnd());
       if (end === null) {
         // The claim is the liveness authority: only a run nobody alive owns
         // may have its attempt number advanced. An unreadable claim reports
@@ -316,19 +343,30 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             ),
           );
         }
-        const turns = yield* readChildTurnState(session, runId);
+        const turns = yield* probeChild(
+          runId,
+          readChildTurnState(session, runId),
+        );
         if (turns.lastCompleted !== null) {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it.`,
-            ),
-          );
+          // A settled turn under a `producer: 'subagent'` manifest is the one
+          // transaction between `run.result` and `run.end`: the child got as
+          // far as committing its result and died, and nothing will ever write
+          // that `run.end`, so this attempt is closed like any other terminal
+          // one. Without a manifest the child settled work nothing recorded.
+          const meta = yield* probeChild(runId, records.readResultMeta());
+          if (meta?.producer !== 'subagent') {
+            return yield* Effect.fail(
+              new WorkflowRunAbortError(
+                `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it.`,
+              ),
+            );
+          }
         }
-        // Dead owner, no settled work: this attempt did nothing observable.
+        // Dead owner, and nothing left that could still record an outcome.
         continue;
       }
       if (end.outcome === RUN_OUTCOME.COMPLETED) {
-        const meta = yield* records.readResultMeta();
+        const meta = yield* probeChild(runId, records.readResultMeta());
         if (meta?.producer !== 'subagent') {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
