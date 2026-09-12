@@ -714,11 +714,12 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
     return;
   }
   const run = runViewOf(currentView(), runId);
+  const category = run?.category ?? AgentCategory.ToolUse;
   if (run?.status !== RUN_PHASE.RUNNING) {
     publish({
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
-      category: run?.category ?? AgentCategory.ToolUse,
+      category,
       isRemote: false,
     });
   }
@@ -727,6 +728,12 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
       type: 'flow.step',
       aggregateId: qualifyAggregateId('run', runId),
       payload: { family: 'toolUse', step: 'waiting' },
+    });
+  } else if (category === AgentCategory.ToolUse) {
+    publish({
+      type: 'flow.step',
+      aggregateId: qualifyAggregateId('run', runId),
+      payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
     });
   }
 }

@@ -1180,13 +1180,13 @@ const SCENARIOS = [
   },
   {
     // The status bar is the single owner of active-run liveness. The harness
-    // starts 42s in the past; frame settlement may advance the displayed
-    // second.
+    // publishes a real activation and executing flow step; frame settlement
+    // advances the displayed duration beyond zero.
     name: 'single-run-liveness',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
     expectPatterns: [
-      /◆ [-|\/\\] Running (?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
+      /◆ [-|\/\\] Running (?:[1-9]\d*s|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
     ],
     unexpect: ['✻ Working', '✻ Thinking'],
   },
