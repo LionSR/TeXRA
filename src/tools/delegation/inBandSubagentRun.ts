@@ -77,18 +77,22 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
-interface StableInBandSubagentRunOptions {
+/** One child launched under a run id the caller has already derived. */
+export interface InBandSubagentLaunchOptions {
   readonly session: SessionHandle;
-  /** Cryptographic identity of the prompt/options call, stable across restart. */
+  /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly parentRunId: RunId;
   readonly signal?: AbortSignal;
-  /** Resolve mutable launch prerequisites only when no result can be recovered. */
+  /** Resolve mutable launch prerequisites only when a launch actually happens. */
   readonly prepare: () => Effect.Effect<
     Omit<InBandSubagentRunBaseOptions, 'signal'>,
     Error,
     AgentRunServices
   >;
+}
+
+interface StableInBandSubagentRunOptions extends InBandSubagentLaunchOptions {
   /**
    * Fires once, just before a live attempt runs, with the run id that
    * attempt actually uses; the logical id on attempt 0, an attempt-specific
@@ -500,6 +504,45 @@ export const executeStableSubagentInBand = Effect.fn(
         );
       }),
     );
+  },
+  Effect.uninterruptible,
+  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+);
+
+/**
+ * Launch one child under the run id its caller derived and read the typed
+ * result back from the durable record. Recovering an earlier attempt belongs
+ * to the caller that owns the call identity; this only ever starts a new run.
+ */
+export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
+  function* (
+    options: InBandSubagentLaunchOptions,
+  ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
+    const prepared = yield* options.prepare();
+    const launch = { ...prepared, signal: options.signal };
+    const definition = yield* prepareInBandDefinition(launch);
+    // Validate the current definition, not metadata left by an earlier
+    // catalog load.
+    if (
+      definition.config.agentCategory === AgentCategory.Workflow &&
+      definition.config.inputFiles.length === 0 &&
+      definition.setting.defaultOutputFiles.length === 0
+    ) {
+      return yield* Effect.fail(
+        new WorkflowRunAbortError(
+          `Workflow agent '${launch.agentName}' edits files: pass options.inputFiles ` +
+            `with files that still exist (its result carries output files and ` +
+            `diffs, not response text).`,
+        ),
+      );
+    }
+    const completed = yield* executeInBand(
+      launch,
+      definition,
+      'required-result',
+      options.runId,
+    );
+    return { runId: completed.runId, result: completed.result };
   },
   Effect.uninterruptible,
   Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),

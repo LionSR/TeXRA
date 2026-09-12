@@ -2,6 +2,8 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -11,14 +13,21 @@ import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { AppState } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import {
+  resolveRunLiveness,
+  type RunLiveness,
+} from '@tools/executions/runLiveness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
 // Local file imports
-import { executeStableSubagentInBand } from './inBandSubagentRun';
+import {
+  executeSubagentInBand,
+  type InBandSubagentLaunchOptions,
+} from './inBandSubagentRun';
 import { SubagentDurabilityError } from './stableSubagentAttempt';
 import {
   resolveInvocationFileList,
@@ -192,6 +201,161 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   },
 );
 
+/**
+ * The run one workflow `agent()` attempt executes under.
+ *
+ * Uniform across attempts: attempt 0 has no special case, so the logical call
+ * identity stays a journal key and is never itself a run id. `checkpointId` is
+ * in the preimage for more than uniqueness: the whole invocation runs under
+ * that checkpoint's own lane, which is what serializes two dispatches of one
+ * call. A caller that keys a call on anything but the checkpoint loses that
+ * serialization silently.
+ */
+function workflowCallRunId(call: {
+  /** The workflow-script run that owns the call. */
+  readonly parentRunId: RunId;
+  /** The durable journal identity. */
+  readonly checkpointId: string;
+  /** The engine's prompt + options + dependency hash. */
+  readonly key: string;
+  /** 0-based physical attempt. */
+  readonly attempt: number;
+}): RunId {
+  return deriveRunId({
+    attempt: call.attempt,
+    checkpointId: call.checkpointId,
+    key: call.key,
+    parentRunId: call.parentRunId,
+  });
+}
+
+/** Why a started child may not have its attempt number advanced. */
+function livenessClause(liveness: RunLiveness): string {
+  switch (liveness.kind) {
+    case 'unsettled':
+      return liveness.reason;
+    case 'live':
+      return 'still running in this process';
+    case 'settled':
+      return `recorded as ${liveness.outcome}`;
+    case 'interrupted':
+      return 'interrupted';
+  }
+}
+
+/** Runaway backstop on the attempt probe, not a retry policy. */
+const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
+
+interface WorkflowChildOutcome {
+  readonly runId: RunId;
+  readonly result: RunEnd;
+  /** The result came from a child that had already run; nothing ran now. */
+  readonly recovered: boolean;
+}
+
+type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
+  readonly checkpointId: string;
+  readonly key: string;
+  /** Fires with the run id of the attempt about to run; recovery never fires. */
+  readonly onLaunch: (runId: RunId) => void;
+};
+
+/**
+ * Resolve one `agent()` call against the child runs it already has, then
+ * launch only if none of them answered it. The child's own aggregate is the
+ * fact: `run.start` is the launch edge, a `run.result` manifest under a
+ * COMPLETED `run.end` is durable completion (any row a reader can read back
+ * has been through the child's artifact drain, which is the ordered
+ * publisher), and a started run with no settled `child.turn` and no live lease
+ * never reached side-effectful work, so the next attempt id is free.
+ *
+ * A journal hit never reaches here: the engine consumes it before calling.
+ */
+const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
+  function* (
+    call: WorkflowChildCall,
+  ): Effect.fn.Return<WorkflowChildOutcome, Error, AgentRunServices> {
+    const { session } = call;
+    yield* Effect.try({
+      try: () => call.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    for (let attempt = 0; attempt < MAX_WORKFLOW_CALL_ATTEMPTS; attempt += 1) {
+      const runId = workflowCallRunId({
+        parentRunId: call.parentRunId,
+        checkpointId: call.checkpointId,
+        key: call.key,
+        attempt,
+      });
+      const records = getRunRecords(session, runId);
+      if (!(yield* records.exists())) {
+        // Publish the attempt id before resolving mutable launch state: a host
+        // targets the in-flight child by this id.
+        call.onLaunch(runId);
+        const { result } = yield* executeSubagentInBand({
+          session,
+          runId,
+          parentRunId: call.parentRunId,
+          signal: call.signal,
+          prepare: call.prepare,
+        });
+        return { runId, result, recovered: false };
+      }
+      // Terminal for the lifecycle in flight, not for the aggregate: a
+      // `run.activate` after a `run.end` means the run started again.
+      const end = yield* records.readRunEnd();
+      if (end === null) {
+        // The claim is the liveness authority: only a run nobody alive owns
+        // may have its attempt number advanced. An unreadable claim reports
+        // unsettled, so this refuses rather than repeating the work.
+        const liveness = yield* resolveRunLiveness(runId, session, null);
+        if (liveness.kind !== 'interrupted') {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
+            ),
+          );
+        }
+        const turns = yield* readChildTurnState(session, runId);
+        if (turns.lastCompleted !== null) {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it.`,
+            ),
+          );
+        }
+        // Dead owner, no settled work: this attempt did nothing observable.
+        continue;
+      }
+      if (end.outcome === RUN_OUTCOME.COMPLETED) {
+        const meta = yield* records.readResultMeta();
+        if (meta?.producer !== 'subagent') {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
+            ),
+          );
+        }
+        yield* Effect.try({
+          try: () => call.signal?.throwIfAborted(),
+          catch: ensureError,
+        });
+        return {
+          runId,
+          result: { ...end, output: meta.output },
+          recovered: true,
+        };
+      }
+      // Failed or cancelled: this attempt is closed and repeating is safe.
+    }
+    return yield* Effect.fail(
+      new WorkflowRunAbortError(
+        `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
+      ),
+    );
+  },
+);
+
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,
@@ -214,25 +378,14 @@ export function createWorkflowScriptAgentRunner(
     function* (
       invocation: WorkflowAgentInvocation,
     ): Effect.fn.Return<RunEnd, Error, AgentRunServices> {
-      const logicalRunId = deriveRunId({
+      const child = yield* recoverOrLaunchWorkflowChild({
+        session,
+        parentRunId: run.runId,
         checkpointId,
         key: invocation.key,
-        parentRunId: run.runId,
-      });
-      // The id this attempt actually runs (and registers its child stream)
-      // under: the logical id on attempt 0, an attempt-specific id after a
-      // durable retry. A host targets the in-flight attempt by THIS id, so it is
-      // the one reported to the engine; it also marks the attempt as live, which
-      // durable recovery (which never fires the callback) is distinguished by.
-      let activeRunId: RunId | undefined;
-      const completed = yield* executeStableSubagentInBand({
-        session,
-        runId: logicalRunId,
-        parentRunId: run.runId,
         signal: invocation.signal,
-        onActiveRunId: (runId) => {
-          activeRunId = runId;
-          invocation.report({ childRunId: runId });
+        onLaunch: (childRunId) => {
+          invocation.report({ childRunId });
         },
         prepare: () =>
           Effect.gen(function* () {
@@ -288,19 +441,18 @@ export function createWorkflowScriptAgentRunner(
             };
           }),
       });
-      const recovered = activeRunId === undefined;
+      const { recovered, result } = child;
       if (recovered) {
-        // Durable recovery never fires onActiveRunId; re-attach the
-        // known child id so /executions/{id} can navigate to the child that
-        // supplied the result. The recovered marker keeps the id out of the
-        // engine's skip/retry map; the recovered result is authoritative and
-        // must stay uncontrollable.
+        // Recovery never launched, so the id was never reported; attach it now
+        // so /executions/{id} can navigate to the child that supplied the
+        // result. The recovered marker keeps the id out of the engine's
+        // skip/retry map; a recovered result is authoritative and must stay
+        // uncontrollable.
         invocation.report({
-          childRunId: completed.runId,
+          childRunId: child.runId,
           recovered: true,
         });
       }
-      const { result } = completed;
       // Live physical attempts always charge the terminal result cost (covers
       // failed/cancelled outcomes and empty-output validation throws that
       // never reach a success-only callback). Recovered durable results must

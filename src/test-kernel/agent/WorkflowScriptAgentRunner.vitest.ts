@@ -51,7 +51,9 @@ function fingerprintWorkflowAgentDependencies(
 }
 
 const mocks = vi.hoisted(() => ({
-  executeStableSubagentInBand: vi.fn(),
+  executeSubagentInBand: vi.fn(),
+  getRunRecords: vi.fn(),
+  probedRunIds: [] as string[],
   preparedOptions: [] as unknown[],
   requireVisibleAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
@@ -71,7 +73,7 @@ vi.mock('@tools/approval', () => ({
 
 vi.mock('@tools/delegation/inBandSubagentRun', async () => {
   return {
-    executeStableSubagentInBand: mocks.executeStableSubagentInBand,
+    executeSubagentInBand: mocks.executeSubagentInBand,
   };
 });
 
@@ -85,6 +87,7 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
 
 vi.mock('@agent/storage', () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
+  getRunRecords: mocks.getRunRecords,
 }));
 
 vi.mock('@utils/files/runStorageFs', () => ({
@@ -218,8 +221,27 @@ function invocation(
 
 interface InBandRunOptions {
   runId: string;
-  onActiveRunId?: (runId: string) => void;
   prepare: () => Effect.Effect<unknown, Error>;
+}
+
+/** The child aggregate a probed attempt id reads back, in probe order. */
+interface ProbedChild {
+  readonly exists: boolean;
+  readonly runEnd?: RunEnd;
+  readonly resultMeta?: { readonly producer: string; readonly output: unknown };
+}
+
+/** Answer the attempt probe with one child aggregate per attempt, in order. */
+function probeAnswers(...children: ProbedChild[]): void {
+  mocks.getRunRecords.mockImplementation((_session: unknown, id: string) => {
+    const child = children[mocks.probedRunIds.length] ?? { exists: false };
+    mocks.probedRunIds.push(id);
+    return {
+      exists: () => Effect.succeed(child.exists),
+      readRunEnd: () => Effect.succeed(child.runEnd ?? null),
+      readResultMeta: () => Effect.succeed(child.resultMeta ?? null),
+    };
+  });
 }
 
 /** The merged attempt-facts channel the runner reports every fact through. */
@@ -239,14 +261,13 @@ function reported<Field extends keyof AttemptFacts>(
   );
 }
 
-// Stable in-band run that runs the child's prepare step and records the
-// options it produced, as the real executor does.
+// In-band launch that runs the child's prepare step and records the options it
+// produced, under the run id the caller derived, as the real executor does.
 function inBandRunReturning(finalResult: RunEnd) {
   return (options: InBandRunOptions) =>
     Effect.gen(function* () {
-      options.onActiveRunId?.(options.runId);
       mocks.preparedOptions.push(yield* options.prepare());
-      return { runId: 'bbbbbb222222', result: finalResult };
+      return { runId: options.runId, result: finalResult };
     });
 }
 
@@ -263,6 +284,8 @@ describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.preparedOptions.length = 0;
+    mocks.probedRunIds.length = 0;
+    probeAnswers();
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
       source: 'builtInWorkflow',
@@ -280,9 +303,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
-    mocks.executeStableSubagentInBand.mockImplementation(
-      inBandRunReturning(result),
-    );
+    mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
   });
 
   it.effect('fingerprints file bytes rather than only their paths', () =>
@@ -451,14 +472,13 @@ describe('createWorkflowScriptAgentRunner', () => {
       });
       const report = reportSpy();
       call.report = report;
-      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+      mocks.executeSubagentInBand.mockImplementationOnce((options) =>
         Effect.gen(function* () {
-          options.onActiveRunId?.(options.runId);
           const prepared = yield* options.prepare();
           mocks.preparedOptions.push(prepared);
           expect(reported(report, 'childRunId')).toEqual([options.runId]);
           prepared.onRunResolved?.(options.runId);
-          return { runId: 'bbbbbb222222', result };
+          return { runId: options.runId, result };
         }),
       );
       const runner = defaultRunner();
@@ -481,7 +501,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         parentModel: 'parent-model',
         withScope: expect.any(Function),
       });
-      expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
+      expect(mocks.executeSubagentInBand).toHaveBeenCalledWith(
         expect.objectContaining({
           runId: expect.stringMatching(/^[a-f0-9]{24}$/),
           parentRunId: runId,
@@ -841,12 +861,11 @@ describe('createWorkflowScriptAgentRunner', () => {
       Effect.gen(function* () {
         const onCost = vi.fn();
         const report = reportSpy();
-        mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+        mocks.executeSubagentInBand.mockImplementationOnce((options) =>
           Effect.gen(function* () {
-            options.onActiveRunId?.(options.runId);
             const prepared = yield* options.prepare();
             prepared.onCost?.(0.25);
-            return { runId: 'bbbbbb222222', result };
+            return { runId: options.runId, result };
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -864,12 +883,11 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect('stamps terminal cost on failed outcomes before throwing', () =>
     Effect.gen(function* () {
       const report = reportSpy();
-      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+      mocks.executeSubagentInBand.mockImplementationOnce((options) =>
         Effect.gen(function* () {
-          options.onActiveRunId?.(options.runId);
           yield* options.prepare();
           return {
-            runId: 'bbbbbb222222',
+            runId: options.runId,
             result: {
               ...result,
               outcome: 'failed',
@@ -886,26 +904,29 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('does not report recovered stable child cost as live run', () =>
-    Effect.gen(function* () {
-      const onCost = vi.fn();
-      const report = reportSpy();
-      mocks.executeStableSubagentInBand.mockReturnValueOnce(
-        Effect.succeed({
-          runId: 'bbbbbb222222',
-          result: { ...result, usage: spent(0.25) },
-        }),
-      );
-      const runner = defaultRunner({ onCost });
+  it.effect(
+    'recovers a completed child without charging it as a live run',
+    () =>
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        const report = reportSpy();
+        probeAnswers({
+          exists: true,
+          runEnd: { ...result, usage: spent(0.25) },
+          resultMeta: { producer: 'subagent', output: result.output },
+        });
+        const runner = defaultRunner({ onCost });
 
-      yield* runner({ ...invocation(), index: 3, report });
+        yield* runner({ ...invocation(), index: 3, report });
 
-      expect(onCost).not.toHaveBeenCalled();
-      // Recovered durable children never fire onActiveRunId — re-attach the
-      // known child id, but do not charge the synthetic resume attempt.
-      expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
-      expect(reported(report, 'costUsd')).toEqual([]);
-    }),
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+        expect(onCost).not.toHaveBeenCalled();
+        // Recovery never launched, so re-attach the recovered child's own id,
+        // but do not charge the synthetic resume attempt.
+        expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[0]]);
+        expect(reported(report, 'recovered')).toEqual([true]);
+        expect(reported(report, 'costUsd')).toEqual([]);
+      }),
   );
 
   it.effect('rejects a tool-use default agent used as a workflow agent', () =>
@@ -936,7 +957,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       yield* runner({ ...invocation(), index: 1 });
       yield* runner({ ...invocation(), key: 'fedcba9876543210' });
 
-      const runIds = mocks.executeStableSubagentInBand.mock.calls.map(
+      const runIds = mocks.executeSubagentInBand.mock.calls.map(
         ([options]) => options.runId,
       );
       expect(runIds[0]).toBe(runIds[1]);
@@ -949,7 +970,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a cancelled child so the workflow journal can retry it',
     () =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        mocks.executeSubagentInBand.mockReturnValueOnce(
           Effect.succeed({
             runId: 'bbbbbb222222',
             result: {
@@ -971,7 +992,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     'rejects a completed workflow child that produced no output files',
     () =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        mocks.executeSubagentInBand.mockReturnValueOnce(
           Effect.succeed({
             runId: 'bbbbbb222222',
             result: { ...result, output: { ...result.output, outputs: [] } },
@@ -992,7 +1013,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         'result manifest unavailable',
         { cause: new Error('storage offline') },
       );
-      mocks.executeStableSubagentInBand.mockReturnValueOnce(
+      mocks.executeSubagentInBand.mockReturnValueOnce(
         Effect.fail(durabilityError),
       );
       const runner = defaultRunner();
@@ -1026,7 +1047,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     'preserves $name from the in-band child',
     ({ cause, hasDurabilityError }) =>
       Effect.gen(function* () {
-        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        mocks.executeSubagentInBand.mockReturnValueOnce(
           Effect.failCause(cause),
         );
 
@@ -1049,30 +1070,24 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
   );
 
-  it.effect('reports the active-attempt run id, not the logical id', () =>
+  it.effect('launches the next attempt id after a failed child', () =>
     Effect.gen(function* () {
-      // After a durable retry advances the attempt sequence, the live run uses an
-      // attempt-specific run id — the id its child stream / roster expose.
-      // The runner must report THAT id, not the logical id it hands stable
-      // run, so a host's skip/retry finds the row.
-      const attemptRunId = 'cccccc333333' as RunId;
-      let logicalRunId: string | undefined;
-      mocks.executeStableSubagentInBand.mockImplementation((options) =>
-        Effect.gen(function* () {
-          logicalRunId = options.runId;
-          options.onActiveRunId?.(attemptRunId);
-          mocks.preparedOptions.push(yield* options.prepare());
-          return { runId: attemptRunId, result };
-        }),
+      // The logical call identity is a journal key, never a run id: each
+      // attempt derives its own, and the one the runner launches is the id its
+      // child stream and roster expose, so a host's skip/retry finds the row.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'failed' } },
+        { exists: false },
       );
       const report = reportSpy();
       const runner = defaultRunner();
 
       expect(yield* runner({ ...invocation(), report })).toBe(result);
 
-      expect(logicalRunId).toMatch(/^[a-f0-9]{24}$/);
-      expect(logicalRunId).not.toBe(attemptRunId);
-      expect(reported(report, 'childRunId')).toEqual([attemptRunId]);
+      expect(mocks.probedRunIds).toHaveLength(2);
+      expect(mocks.probedRunIds[0]).toMatch(/^[a-f0-9]{24}$/);
+      expect(mocks.probedRunIds[1]).not.toBe(mocks.probedRunIds[0]);
+      expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
     }),
   );
 
@@ -1081,7 +1096,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     () =>
       Effect.gen(function* () {
         useToolUseAgentEntries();
-        mocks.executeStableSubagentInBand.mockImplementationOnce(
+        mocks.executeSubagentInBand.mockImplementationOnce(
           inBandRunReturning(structuredResult),
         );
         const schema = {
@@ -1124,7 +1139,7 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect('exempts a schema call from the workflow empty-files guard', () =>
     Effect.gen(function* () {
       useToolUseAgentEntries();
-      mocks.executeStableSubagentInBand.mockImplementationOnce(
+      mocks.executeSubagentInBand.mockImplementationOnce(
         inBandRunReturning(structuredResult),
       );
       const schema = { type: 'object', additionalProperties: false };
