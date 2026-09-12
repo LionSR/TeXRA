@@ -69,7 +69,6 @@ import { generateShortId } from '@utils/core';
 import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import type { ModelCredentialSelection } from './HostInteractions';
 import { AgentRun } from './run/AgentRun';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
@@ -81,6 +80,7 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { ModelCredentialSelection } from './HostInteractions';
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;

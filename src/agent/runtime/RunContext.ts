@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 

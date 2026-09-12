@@ -1,6 +1,5 @@
-import type { Effect } from 'effect';
-
 import replacementEngine from '@replacement/engine';
+import type { Effect } from 'effect';
 
 type ResponseTextPostProcessor = (text: string) => string;
 

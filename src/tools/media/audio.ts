@@ -7,8 +7,8 @@ import OpenAI from 'openai';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import type { PlatformSecrets } from '@platform/secrets';
 import { createLog } from '@logger/logUtils';
+import type { PlatformSecrets } from '@platform/secrets';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
