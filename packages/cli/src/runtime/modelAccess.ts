@@ -12,7 +12,10 @@ import {
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import type { ModelOptionData } from '@shared/schemas';
-import { isModelOptionAvailable } from '@shared/schemas';
+import {
+  isModelOptionAvailable,
+  MODEL_AVAILABILITY_STATUS,
+} from '@shared/schemas';
 import { assertNever, unique } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -129,14 +132,11 @@ export function formatCliNoRunnableModelsMessage(
   return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${formatCliNoAvailableModelsRecovery(options)}`;
 }
 
+/** The kind's label, lower-cased for the terminal's sentence-case rows. */
 function formatModelAccessStatus(model: ModelOptionData): string {
-  if (model.availabilityLabel) return model.availabilityLabel.toLowerCase();
-  if (isModelOptionAvailable(model)) return 'available';
-  if (model.requiresKey) {
-    const provider = model.provider ? `${model.provider} ` : '';
-    return `missing ${provider}key`;
-  }
-  return 'unavailable';
+  return model.availability === undefined
+    ? 'available'
+    : MODEL_AVAILABILITY_STATUS[model.availability].label.toLowerCase();
 }
 
 export function formatModelStatusForCli(model: CliModelAccess): string {
@@ -223,6 +223,11 @@ export function findCliModelAccessEntry(
  * Output projection for JSON/NDJSON: the model id is addressable under the
  * same key (`.id`) as every other CLI resource (`agents`, `multi-agent`,
  * `history`).
+ *
+ * The record is the whole of `ModelOptionData`, so it follows that schema: at
+ * 1.0 the fanned-out `availabilityLabel`, `requiresKey` and `disabled` keys are
+ * gone and `availability` (the machine-readable kind) is what a consumer reads;
+ * the human label for a kind lives in `MODEL_AVAILABILITY_STATUS`.
  */
 export function cliModelRecord(
   model: ModelOptionData,
@@ -269,6 +274,7 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'provider-unavailable':
       return 'Choose a supported provider route or another model.';
     case 'subscription-access':
+    case 'xai-subscription-access':
     case 'copilot-access':
     case undefined:
       return undefined;
@@ -289,8 +295,10 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   lines.push(`label: ${model.label}`);
   if (model.provider) lines.push(`provider: ${model.provider}`);
   lines.push(`status: ${status}`);
-  if (model.availabilityLabel)
-    lines.push(`availability: ${model.availabilityLabel}`);
+  if (model.availability)
+    lines.push(
+      `availability: ${MODEL_AVAILABILITY_STATUS[model.availability].label}`,
+    );
   const recovery = formatCliModelRecovery(entry);
   if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);

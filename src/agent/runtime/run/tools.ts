@@ -8,7 +8,7 @@
  */
 import { Result } from 'effect';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
-import { partitionDuplicateCalls } from '@agent/core/flows/toolCallParsing';
+import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonObjectSchema, type TurnRequest, type TurnResult } from '@llm/turn';

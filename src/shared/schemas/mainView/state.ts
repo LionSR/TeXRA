@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
@@ -58,6 +59,8 @@ const ModelAvailabilityKindSchema = z.enum([
   'retired',
   // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
+  // The same, on the user's Grok (xAI) subscription.
+  'xai-subscription-access',
   // Editor-hosted Copilot access is keyless but distinct from ChatGPT.
   // Permission state is reported by the VS Code host.
   'copilot-access',
@@ -71,17 +74,85 @@ const ModelAvailabilityKindSchema = z.enum([
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
 /**
+ * What a kind means: the label a surface shows for it, whether a run can use
+ * the model, and whether the block is a missing key. Declared once here, next
+ * to the kind, so the answer is carried on the wire as the kind alone and
+ * every host reads the same table instead of four pre-fanned fields.
+ *
+ * Written with `as const satisfies` so each `available` literal survives for
+ * `computeModelOptions`'s derivation of the unavailable kinds, while a missing
+ * or misshapen kind is still a compile error.
+ */
+export const MODEL_AVAILABILITY_STATUS = {
+  'openrouter-key': {
+    label: 'OpenRouter key',
+    available: true,
+    requiresKey: false,
+  },
+  'provider-key': { label: 'API key set', available: true, requiresKey: false },
+  'missing-key': {
+    label: 'Missing API key',
+    available: false,
+    requiresKey: true,
+  },
+  'subscription-access': {
+    label: CHATGPT_AUTH.subscriptionLabel,
+    available: true,
+    requiresKey: false,
+  },
+  'xai-subscription-access': {
+    label: GROK_AUTH.subscriptionLabel,
+    available: true,
+    requiresKey: false,
+  },
+  'copilot-access': {
+    label: 'Copilot subscription',
+    available: true,
+    requiresKey: false,
+  },
+  'copilot-consent-required': {
+    label: 'Copilot approval required',
+    available: false,
+    requiresKey: false,
+  },
+  'copilot-unavailable': {
+    label: 'Copilot unavailable',
+    available: false,
+    requiresKey: false,
+  },
+  // Only the OpenRouter route produces this kind (`computeModelOptions`
+  // resolves it from `isOpenRouterRoutingUnsupported`), so the one label the
+  // kind carries names that route.
+  'provider-unavailable': {
+    label: 'Unavailable through OpenRouter',
+    available: false,
+    requiresKey: false,
+  },
+  retired: { label: 'Retired', available: false, requiresKey: false },
+  'unknown-model': {
+    label: 'Unknown model',
+    available: false,
+    requiresKey: false,
+  },
+} as const satisfies Record<
+  ModelAvailabilityKind,
+  {
+    readonly label: string;
+    readonly available: boolean;
+    readonly requiresKey: boolean;
+  }
+>;
+
+/**
  * Resolved per-model access. Computed once by `computeModelOptionsData` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
- * availability and routing are never re-derived at render time.
+ * availability and routing are never re-derived at render time: the kind is
+ * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
  */
 export const ModelAvailabilityFieldsSchema = z.object({
   availability: ModelAvailabilityKindSchema.optional(),
-  availabilityLabel: z.string().optional(),
   /** Effective request route for a model that can use multiple backends. */
   routeLabel: z.string().optional(),
-  requiresKey: z.boolean().optional(),
-  disabled: z.boolean().optional(),
 });
 export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
@@ -101,7 +172,10 @@ export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
  * picker can never drift apart on what "available" means.
  */
 export function isModelOptionAvailable(model: ModelOptionData): boolean {
-  return model.disabled !== true && model.requiresKey !== true;
+  return (
+    model.availability === undefined ||
+    MODEL_AVAILABILITY_STATUS[model.availability].available
+  );
 }
 
 export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
@@ -149,7 +223,6 @@ export type BannerState = z.infer<typeof BannerStateSchema>;
 
 export const ApiKeyBannerDataSchema = z.object({
   provider: z.string().nullish(),
-  requiresKey: z.boolean().nullish(),
 });
 const ApiKeyBannerStateSchema = BannerStateSchema.extend(
   ApiKeyBannerDataSchema.shape,

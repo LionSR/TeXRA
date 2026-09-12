@@ -23,7 +23,7 @@
 import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { normalizeToolCallError } from '@agent/core/flows/toolCallParsing';
+import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';

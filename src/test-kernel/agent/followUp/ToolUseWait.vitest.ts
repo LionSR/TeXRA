@@ -108,7 +108,6 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision,

@@ -10,12 +10,13 @@ interface QueueMap<Key> {
 /**
  * Return the queue for a key, creating it with the requested concurrency.
  *
- * The Promise-shaped half of this module, kept for the two transcript call
- * sites whose contracts are still synchronous or Promise-returning and whose
- * layer may not import `@platform/processRuntime` to run an Effect. The
- * transcript lane converts them and deletes both functions with the last
- * caller; until then, code that already has a runtime at hand should reach
- * for {@link withPerKeyLane} instead.
+ * The Promise-shaped half of this module. One Promise-shaped caller is
+ * left — `runLease.ts`'s turn-taking between unleased writers. That file
+ * does not import `effect`, and it is not a boundary kind the migration
+ * ratchet lets open an `Effect.run*` in, so both functions die when it
+ * becomes an Effect up to its own callers — not before, and not by a
+ * hand-rolled promise chain in their place. Code that already runs as an
+ * Effect reaches for {@link withPerKeyLane} instead.
  */
 function getOrCreatePQueue<Key>(
   queues: QueueMap<Key>,
