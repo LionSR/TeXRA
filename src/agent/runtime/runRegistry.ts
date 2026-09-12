@@ -600,10 +600,34 @@ export class RunRegistry {
    * Fails when the run's terminal row could not be written: the run is still
    * in flight, and a caller that reported the stop done would be lying about
    * it.
+   *
+   * A stop of a run no handle here owns writes that row from outside the
+   * run, so the run's claim fences the whole gesture — the descendant sweep
+   * included. Taken first, a refusal leaves the descendants running instead
+   * of detaching or killing them and then reporting the stop unavailable. A
+   * locally owned run is already this process's to stop and takes the direct
+   * path.
    */
   stopAgentRun(
     runId: RunId,
     options: RunStopOptions = {},
+  ): Effect.Effect<void, Error> {
+    if (this.handles.has(runId)) return this.applyStop(runId, options);
+    return Effect.acquireUseRelease(
+      this.acquireRunClaim(runId),
+      () => this.applyStop(runId, options),
+      (release) => release.pipe(Effect.orDie),
+    );
+  }
+
+  /**
+   * Apply one stop: the descendant policy the caller declared, the root
+   * handle's own termination, and — when no live handle took it — the
+   * terminal row an ownerless stop must write itself.
+   */
+  private applyStop(
+    runId: RunId,
+    options: RunStopOptions,
   ): Effect.Effect<void, Error> {
     const rootHandle = this.handles.get(runId);
     // Shared across the child sweep and the root cascade so each run in
@@ -774,33 +798,28 @@ export class RunRegistry {
    * cancelled run is exactly the one a user resumes.
    *
    * The row is an append on the run aggregate, which takes one only from its
-   * claim holder: the write is fenced by the same acquire/release a decision
-   * over a dead owner takes, and the claim goes back so a later resume can
-   * still take the run. A refusal — a live foreign owner, a rolled-back
-   * transaction — fails the stop rather than being logged behind a caller
-   * that already reported it done.
+   * claim holder: {@link stopAgentRun} holds that claim around the whole
+   * ownerless stop, and a run this process still tracks is its own writer
+   * already. A refusal — a live foreign owner, a rolled-back transaction —
+   * fails the stop rather than being logged behind a caller that already
+   * reported it done.
    */
   private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
-    return Effect.acquireUseRelease(
-      this.acquireRunClaim(runId),
-      () =>
-        this.finalizeRun({
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          keepExistingOutcome: true,
-        }).pipe(
-          Effect.flatMap((finalization) =>
-            finalization.ok
-              ? Effect.void
-              : Effect.fail(
-                  new Error(
-                    `Failed to finalize a stop with no live run handle for run ${runId}`,
-                    { cause: finalization.error },
-                  ),
-                ),
-          ),
-        ),
-      (release) => release.pipe(Effect.orDie),
+    return this.finalizeRun({
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      keepExistingOutcome: true,
+    }).pipe(
+      Effect.flatMap((finalization) =>
+        finalization.ok
+          ? Effect.void
+          : Effect.fail(
+              new Error(
+                `Failed to finalize a stop with no live run handle for run ${runId}`,
+                { cause: finalization.error },
+              ),
+            ),
+      ),
     );
   }
 

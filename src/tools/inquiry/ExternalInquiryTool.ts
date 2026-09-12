@@ -16,7 +16,7 @@
  *   - `list` → enumerate threads by status / scope
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import {
   currentSession,
@@ -337,11 +337,18 @@ export class ExternalInquiryTool extends defineTool({
                       }),
                     ),
               ),
-              Effect.catch((error) =>
+              // `catchCause`, not `catch`: the aggregate read is exposed as
+              // a defect-only effect (`sessionLayer` reads it through
+              // `Effect.orDie`), so a database failure here arrives as a
+              // defect and a typed catch would let it replace the commit
+              // failure this compensation runs under. Either way the thread
+              // stays open, which the warning says, and the original failure
+              // is what the tool reports.
+              Effect.catchCause((cause) =>
                 Effect.sync(() => {
                   logger.warn(
                     `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-                    { data: error },
+                    { data: Cause.squash(cause) },
                   );
                 }),
               ),
