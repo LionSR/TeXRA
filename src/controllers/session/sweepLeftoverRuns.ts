@@ -36,7 +36,7 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   for (const row of rows) {
     if (
       row.type !== 'run.start' ||
-      row.identity?.kind !== 'process' ||
+      row.identity.kind !== 'process' ||
       removed.has(row.aggregateId)
     )
       continue;

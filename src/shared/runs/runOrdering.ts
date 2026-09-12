@@ -41,7 +41,7 @@ export function compareBySeqNo<T>(
 }
 
 /** A `seqNo` only orders rows when it is a positive safe integer. */
-export function usableSequence(seqNo: number | undefined): number | undefined {
+function usableSequence(seqNo: number | undefined): number | undefined {
   return seqNo !== undefined && Number.isSafeInteger(seqNo) && seqNo > 0
     ? seqNo
     : undefined;

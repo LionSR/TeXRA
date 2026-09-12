@@ -6,18 +6,13 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
-import {
-  isPlainAgentIdentity,
-  RUN_LIFECYCLE_UNAVAILABLE,
-  RUN_PHASE,
-  RUN_SUBSTATE,
-} from '@shared/schemas';
+import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
-  progressHeaderStatus,
+  runStatusDisplayKey,
   type RunStatusDisplayKey,
 } from '@shared/runs/runStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
@@ -96,7 +91,6 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   ),
   [RUN_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [RUN_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
-  [RUN_LIFECYCLE_UNAVAILABLE]: new Set(READ_ONLY_BUTTONS),
 };
 
 const NATIVE_AGENT_ONLY_BUTTONS = new Set([
@@ -117,11 +111,11 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
 /** Which toolbar buttons a run's state licenses. */
 function enabledToolbarButtons(
   run: RunView,
-  displayKey: RunStatusDisplayKey | undefined,
+  displayKey: RunStatusDisplayKey,
 ): ReadonlySet<string> | undefined {
   if (run.readOnly) return READ_ONLY_BUTTONS;
   if (run.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
-  return displayKey ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey] : undefined;
+  return ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey];
 }
 
 @customElement('run-header')
@@ -460,7 +454,7 @@ export class RunHeader extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
-    const { displayKey } = progressHeaderStatus(
+    const displayKey = runStatusDisplayKey(
       run.status,
       run.substate ?? undefined,
     );

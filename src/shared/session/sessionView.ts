@@ -88,7 +88,7 @@ const RunViewCommonSchema = z.object({
   isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
-  /** Agent name, or the id-prefix fallback for an identity-less run. */
+  /** The run identity's display name: agent, tool, or workflow name. */
   label: z.string(),
   /** The AI one-liner; title when present. */
   description: z.string().nullable(),
