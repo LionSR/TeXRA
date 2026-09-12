@@ -49,6 +49,8 @@ All notable changes to this project will be documented in this file.
   `--instruction` is still required for a tool-use agent; using one on the wrong
   category is a usage error that names the flag and the agent's category.
   `--input` is no longer a required flag, because a tool-use run may take none.
+  A name carried by both categories is refused rather than resolved to one of
+  them: the error names both candidates and their source-qualified spellings.
 
 ## [0.40.10] - 2026-09-06
 

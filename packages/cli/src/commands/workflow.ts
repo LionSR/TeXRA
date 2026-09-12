@@ -114,6 +114,15 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     try: () => resolveFileBackedInstruction(init, context.cwd),
     catch: ensureError,
   });
+  // Neither category can run this: a workflow agent needs at least one input
+  // file, a tool-use agent needs an instruction. Rejecting it before the
+  // platform init keeps a plain usage error off the agent-catalog fetch a
+  // signed-in session would otherwise pay for.
+  if (!instruction && init.inputFiles.length === 0) {
+    throw new CliUsageError(
+      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+    );
+  }
 
   const services = yield* Effect.tryPromise({
     try: () => initLocalCliPlatform(context),
@@ -198,7 +207,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         };
 
         return yield* executeCliWorkflowConfig(config, runContext, {
-          categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
       }),
@@ -264,7 +272,6 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
-          categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
         });
         if (!run.ok) return run.exitCode;
 
@@ -292,7 +299,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      readonly categoryMismatchMessage: string;
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
@@ -362,7 +368,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      categoryMismatchMessage: options.categoryMismatchMessage,
       openWorkflowOutput: (result, tryCommitPublication) =>
         Effect.gen(function* () {
           const outputResult = yield* Effect.result(

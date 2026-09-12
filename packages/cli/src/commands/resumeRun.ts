@@ -192,7 +192,6 @@ export async function runResumeCommand(
                       workflowConfig,
                       context.cwd,
                     ),
-                  categoryMismatchMessage: `Run ${id} resolved to a non workflow run.`,
                 },
               ),
             );

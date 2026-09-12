@@ -11,6 +11,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
+  agentKeyOf,
   agentName,
   AgentCategory,
 } from '@shared/schemas';
@@ -183,18 +184,39 @@ function lookupCliAgent(
 
 /**
  * Resolve the agent `texra run <agent>` launches. One headless command serves
- * both categories, so resolution tries workflow first and falls back to
- * tool-use: a name carried by both keeps resolving to its workflow entry, which
- * is what `texra run` already meant.
+ * both categories, so a bare name can land in either — and a name carried by
+ * both is refused, never silently resolved: the two categories run different
+ * shapes, and preferring one would change what an existing invocation does
+ * without saying so.
+ *
+ * The refusal is always escapable. The registry is a flat cache keyed by
+ * `source:name`, so two entries sharing a name necessarily differ in source,
+ * and a source-qualified identifier hits exactly one cache key — a same-source
+ * collision is unrepresentable, not merely unhandled.
  */
 export async function resolveCliRunAgent(name: string): Promise<AgentEntry> {
-  const agent =
-    (await resolveCliAgent(name, AgentCategory.Workflow)) ??
-    // A workflow miss above already forced the remote-inclusive reload, so this
-    // second pass reads the full catalog.
-    resolveCliAgentInCategory(name, AgentCategory.ToolUse);
+  const workflow = await resolveCliAgent(name, AgentCategory.Workflow);
+  // The pass above already loaded the catalog this lookup reads: it returns
+  // before the remote-inclusive reload only for a source-qualified name (which
+  // pins one cache key, so it cannot also hit here) or a signed-out session
+  // (which has no remote catalog to add).
+  const toolUse = resolveCliAgentInCategory(name, AgentCategory.ToolUse);
+  if (workflow && toolUse) {
+    throw new CliUsageError(ambiguousRunAgentMessage(name, workflow, toolUse));
+  }
+  const agent = workflow ?? toolUse;
   if (!agent) throw new CliUsageError(missingAgentMessage(name));
   return agent;
+}
+
+function ambiguousRunAgentMessage(
+  name: string,
+  workflow: AgentEntry,
+  toolUse: AgentEntry,
+): string {
+  const workflowKey = agentKeyOf(workflow);
+  const toolUseKey = agentKeyOf(toolUse);
+  return `Agent name "${name}" is ambiguous: it matches the ${AgentCategory.Workflow} agent ${workflowKey} and the ${AgentCategory.ToolUse} agent ${toolUseKey}. Re-run with the source-qualified name to pick one: \`texra run ${workflowKey}\` or \`texra run ${toolUseKey}\`.`;
 }
 
 /**

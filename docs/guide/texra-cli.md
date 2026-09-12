@@ -236,7 +236,9 @@ Chat requires an interactive terminal. For scripted, non-TTY runs use
 command serves both agent categories: with a tool-use agent it accepts
 workspace `--input` and `--context` files plus a required `--instruction`
 prompt; with a workflow agent it takes input files and `--output`/`--output-dir`
-and produces document-oriented outputs.
+and produces document-oriented outputs. If one name exists in both categories,
+`texra run` refuses it and names both candidates — pass the source-qualified
+form it prints (for example `texra run custom:assistant`) to pick one.
 
 ## Multi-agent teams
 

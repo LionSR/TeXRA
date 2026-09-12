@@ -478,7 +478,6 @@ describe('CLI run command, workflow agents', () => {
     expect(exitCode).toBe(0);
     expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
       expectedCategory: AgentCategory.Workflow,
-      categoryMismatchMessage: 'Agent "polish" resolved to a non workflow run.',
     });
   });
 
@@ -1163,7 +1162,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { categoryMismatchMessage: 'unexpected category' },
+      {},
     );
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
@@ -1202,7 +1201,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { categoryMismatchMessage: 'unexpected category' },
+      {},
     );
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();

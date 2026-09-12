@@ -258,7 +258,7 @@ describe('CLI run command, tool-use agents', () => {
     await expect(
       runToolUseAgent(createRunCommandCliContext(), {
         agent: 'chat',
-        inputFiles: [],
+        inputFiles: ['problem.md'],
         contextFiles: [],
         model: 'gpt54',
         instruction: '',
@@ -267,6 +267,25 @@ describe('CLI run command, tool-use agents', () => {
 
     expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+  });
+
+  // Neither category can run an invocation with no instruction and no input,
+  // so it is refused before the platform init and the agent-catalog fetch a
+  // signed-in session would otherwise pay for on a plain usage error.
+  it('refuses an invocation no category can run without resolving the agent', async () => {
+    await expect(
+      runToolUseAgent(createRunCommandCliContext(), {
+        agent: 'chat',
+        inputFiles: [],
+        contextFiles: ['notes.md'],
+        instruction: '',
+      }),
+    ).rejects.toThrow(
+      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+    );
+
+    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
   });
 
   // The one headless `run` command carries both categories' flags, so the
