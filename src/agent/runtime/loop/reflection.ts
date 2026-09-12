@@ -68,7 +68,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -367,7 +366,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       reflectionSnapshotRow(runId, fresh(bound), {

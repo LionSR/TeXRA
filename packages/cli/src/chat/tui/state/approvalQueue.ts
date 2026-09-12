@@ -50,8 +50,9 @@ interface TuiApprovalAdornments {
 /**
  * The kinds this surface presents: the wire vocabulary without the external
  * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
- * declares `unavailableHosts: ['cli']`), so no inquiry request is opened on
- * this host.
+ * declares `unavailableHosts: ['cli']`), and an inquiry another host opened
+ * in a shared session is answered from its thread rather than from a modal
+ * here, so {@link pendingApprovalFacts} leaves that kind out of this queue.
  */
 export type PendingApprovalKind = Exclude<
   ProgressPermissionKind,
@@ -90,15 +91,18 @@ type PendingApprovalFact = SessionView['requests'][number] & {
 };
 
 /**
- * The fold's pending requests under {@link PendingApprovalKind}. The
- * narrowing holds by the construction that type names; a fact outside it
- * reaches the `assertNever` payload switches, but not every reader (the row
- * label lookup would render an undefined label).
+ * The fold's pending requests under {@link PendingApprovalKind}: the fold
+ * lists every kind, including an `externalInquiry` a persisted session
+ * carries from another host, and this surface renders none of those, so the
+ * narrowing is a filter rather than an assertion.
  */
 function pendingApprovalFacts(
   view: SessionView,
 ): readonly PendingApprovalFact[] {
-  return view.requests as readonly PendingApprovalFact[];
+  return view.requests.filter(
+    (request): request is PendingApprovalFact =>
+      request.payload.kind !== 'externalInquiry',
+  );
 }
 
 /** Each run's pending request kinds in commit order: the badge the session
@@ -323,15 +327,28 @@ export function stagePresentation(payload: ApprovalPayload): void {
   );
 }
 
-/** Issue runtime requests in order; a refusal reads in the conversation. */
-function issue(runId: RunId, ...requests: RuntimeRequest[]): void {
+/**
+ * Issue the runtime requests one decision names, in order; a refusal reads
+ * in the conversation and puts `requestId` back on this surface, since the
+ * durable request it answered is still pending and nobody else will re-ask.
+ */
+function issue(
+  runId: RunId,
+  requestId: string,
+  ...requests: RuntimeRequest[]
+): void {
   const session = currentSession();
   void effectRuntime().runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
-        onFailure: (error) => appendLocalRequestRefusal(error, runId),
+        onFailure: (error) => {
+          const next = new Set(decided.get());
+          next.delete(requestId);
+          decided.set(next);
+          appendLocalRequestRefusal(error, runId);
+        },
         onSuccess: () => undefined,
       }),
     ),
@@ -356,7 +373,7 @@ function decideRequest(
   const runtimeArms = arms.flatMap((arm) =>
     'runtime' in arm ? [arm.runtime] : [],
   );
-  if (runtimeArms.length > 0) issue(runId, ...runtimeArms);
+  if (runtimeArms.length > 0) issue(runId, request.requestId, ...runtimeArms);
   for (const arm of arms) {
     if (!('host' in arm)) continue;
     if (!hostCapability) {
@@ -434,7 +451,12 @@ export function landRequestDecision(
   decision: RequestDecision,
 ): void {
   markDecided(requestId);
-  issue(runId, { kind: 'request.decide', runId, requestId, decision });
+  issue(runId, requestId, {
+    kind: 'request.decide',
+    runId,
+    requestId,
+    decision,
+  });
 }
 
 /** Forget every staged presentation and local decision: the Surface reset

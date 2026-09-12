@@ -237,12 +237,6 @@ export function recordRunRefusal(
       );
       return 'not_resumable';
     case 'finished':
-      if (classification.notice !== undefined) {
-        // R10: a run recorded before the run ledger is refused with the
-        // fact, never as a quietly finished run.
-        session.markUnreadable(runId, classification.notice);
-        return 'not_resumable';
-      }
       session.clearUnreadable(runId);
       return 'finished';
     case 'resumable':

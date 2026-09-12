@@ -188,10 +188,18 @@ function listingBodies(
  * finished one as durably final.
  *
  * `cut` is the scrubber's position: the index of the `flow.step` the view
- * is read at. The transcript is cut at that step's publish clock, the
- * listing replays that step; `null` is the whole document, read at its last
- * step. "State at step k" and the live fold at step k are one reading
- * (runtime on Effect, 2.3).
+ * is read at; `null` is the whole document, read at its last step. What the
+ * cut governs is the listing: it replays that step, so the phase, the
+ * progress counters and the pending requests are the ones at step k, the
+ * live fold's own reading (runtime on Effect, 2.3). The transcript is only
+ * bounded by it: a row is kept when it was appended at or before that
+ * step's publish clock (a row appended within the same millisecond is
+ * kept), and a kept row carries the text it was finally folded to, not the
+ * text it held at step k. A row that was still streaming across the cut
+ * therefore reads ahead of the step. `trace.entries` is the folded
+ * transcript with no
+ * per-row commit provenance, so a row-by-row historical read would need the
+ * document to carry one.
  */
 function traceEvents(
   trace: TraceDocument,

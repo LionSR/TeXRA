@@ -27,7 +27,6 @@ import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage } from '@agent/trace';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
@@ -316,7 +315,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     RunState,
     Error
   > {
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
     const promptVars = {

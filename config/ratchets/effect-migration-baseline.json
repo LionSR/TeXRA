@@ -180,7 +180,6 @@
       "src/agent/runtime/runClassification.ts": 1,
       "src/agent/runtime/sessionGraph.ts": 2,
       "src/agent/storage/childRunOutput.ts": 1,
-      "src/agent/storage/resumability.ts": 2,
       "src/agent/storage/runLease.ts": 1,
       "src/agent/storage/runLifecycle.ts": 5,
       "src/controllers/mainView/teamCatalogPorts.ts": 1,

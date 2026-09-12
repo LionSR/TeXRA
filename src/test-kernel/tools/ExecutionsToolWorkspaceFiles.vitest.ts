@@ -498,22 +498,13 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Exercises the real listing: a run's records are rows, so the only files
-  // the model-facing view hides are the retired checkpoints of either kind,
-  // before and after the rename the first ledger append gives them.
-  it('filters retired checkpoints out of /executions/{id}/files', async () => {
+  // Exercises the real listing: a run's records are rows, so nothing left in
+  // its directory is internal and the model-facing view lists all of it.
+  it('lists every file under /executions/{id}/files', async () => {
     await withTempStorage(async () => {
       const runId = 'abc123' as RunId;
       const runDir = resolveRunStoragePath(runId);
       await StorageFS.ensureDir(runDir);
-      const internalFiles = [
-        'workflow-script-call-1.json',
-        `flow_${runId}.json`,
-        `flow_${runId}.json.superseded`,
-      ];
-      for (const name of internalFiles) {
-        await StorageFS.write(path.join(runDir, name), '{}');
-      }
       const listedFiles = [
         'conversation.json',
         'todos.json',
@@ -538,9 +529,6 @@ describe('ExecutionsTool', () => {
       expect(result.output).toContain('output.tex');
       for (const name of listedFiles) {
         expect(result.output).toContain(name);
-      }
-      for (const name of internalFiles) {
-        expect(result.output).not.toContain(name);
       }
     });
   });

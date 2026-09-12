@@ -15,7 +15,6 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { supersedeLegacyWorkflowCheckpoint } from '@agent/storage/resumability';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,
@@ -117,8 +116,6 @@ export interface WorkflowScriptStrategyParams {
   readonly runId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */
   readonly logger: AgentTrace;
-  /** The orchestrating run: the checkpoint's owner and the parent edge. */
-  readonly parentRunId: RunId;
   readonly checkpointId: string;
   readonly script: string;
   /** Canonical editable path to this submitted script in the workspace. */
@@ -281,14 +278,6 @@ export function createWorkflowScriptStrategy(
         // only source the failure path has for phase and task tallies, and by
         // construction never newer than the durable run record.
         let lastSnapshot: WorkflowRunSnapshot | undefined;
-        // A journal file from before the run ledger is announced and renamed
-        // before the aggregate is read (R10): its calls run again, out loud.
-        yield* supersedeLegacyWorkflowCheckpoint(
-          params.parentRunId,
-          params.checkpointId,
-          params.session,
-          params.logger,
-        );
         const projection = projectWorkflowScriptProgress(params.logger, {
           session: params.session,
           checkpointId: params.checkpointId,
