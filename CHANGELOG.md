@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
-- Node.js 22.16.0 or later in 22.x, or Node.js 24 or later is required.
+- Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
 
 ## [0.40.10] - 2026-09-06
 

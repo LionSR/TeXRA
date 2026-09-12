@@ -61,10 +61,11 @@ import { getProcessSettingHost } from '@utils/config/platformSettings';
  * and npm never disagree about what runs.
  *
  * The official Effect SQLite client requires the `node:sqlite` backup,
- * columns and setReturnArrays APIs. Node 22.16.0 and Node 24 provide all
- * three; Node 23 lacks setReturnArrays.
+ * columns and setReturnArrays APIs, and the bundled undici 8.x requires
+ * `>=22.19.0`. Node 22.19.0 and Node 24 satisfy both; Node 23 lacks
+ * setReturnArrays.
  */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.16.0 || >=24.0.0';
+export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.19.0 || >=24.0.0';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
