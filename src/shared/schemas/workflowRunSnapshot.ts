@@ -226,10 +226,12 @@ export function stageTitleFor(
  * How one stage is doing, derived from the calls it owns rather than stored
  * beside them, so a stage state can never disagree with its calls.
  *
- * A stage is `started` once the script has entered it or one of its calls has
- * actually been issued. A call the terminal sweep skipped was never issued, so
- * a stage the run never reached stays unstarted and carries no outcome at all
- * rather than reading completed for work that never ran.
+ * A stage is `started` once this attempt entered it: `phase()` stamped its
+ * `startedAt`, or the cursor is on it. Entry is the gate because a call cannot
+ * be issued into a stage the script has not entered, while a resumed run
+ * hydrates the previous attempt's completed and cached calls into stages this
+ * attempt may never reach — counting those as activity would show a phase as
+ * opened, and settled, before the script arrived.
  *
  * A started stage settles once it is no longer current and every call it owns
  * is terminal, and its `outcome` is then the worst of those calls: failed
@@ -237,6 +239,10 @@ export function stageTitleFor(
  * skipped settled on the run's own end, so the run's outcome is its outcome;
  * one that issued no call at all had nothing the run could cut short and
  * simply completed.
+ *
+ * A settled stage ends when its last call did. A stage that owned no call has
+ * no end of its own to read, so it ended when the script entered the next
+ * stage, or — for the stage the run ended in — when the run itself ended.
  */
 export interface WorkflowStageState {
   readonly current: boolean;
@@ -246,8 +252,14 @@ export interface WorkflowStageState {
 }
 
 export function deriveWorkflowStageState(
-  snapshot: Pick<WorkflowRunSnapshot, 'calls' | 'currentStageId' | 'outcome'>,
-  stage: Pick<WorkflowRunSnapshot['stages'][number], 'id' | 'startedAt'>,
+  snapshot: Pick<
+    WorkflowRunSnapshot,
+    'calls' | 'currentStageId' | 'outcome' | 'stages' | 'timestamps'
+  >,
+  stage: Pick<
+    WorkflowRunSnapshot['stages'][number],
+    'id' | 'order' | 'startedAt'
+  >,
 ): WorkflowStageState {
   const current = stage.id === snapshot.currentStageId;
   const calls = snapshot.calls.filter((call) => call.stageId === stage.id);
@@ -259,7 +271,7 @@ export function deriveWorkflowStageState(
       (call.status !== WORKFLOW_CALL_STATUS.SKIPPED ||
         call.settledBySweep !== true),
   );
-  const started = current || stage.startedAt !== undefined || issued.length > 0;
+  const started = current || stage.startedAt !== undefined;
   const settled =
     !current &&
     started &&
@@ -281,18 +293,27 @@ export function deriveWorkflowStageState(
   if (issued.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED)) {
     outcome = RUN_OUTCOME.FAILED;
   }
+  const lastCallEnd = calls.reduce<string | undefined>(
+    (latest, call) =>
+      call.timestamps.completedAt !== undefined &&
+      (latest === undefined || call.timestamps.completedAt > latest)
+        ? call.timestamps.completedAt
+        : latest,
+    undefined,
+  );
+  // The first stage the script entered after this one; a jumped-over stage is
+  // never entered, so the earliest later entry is the successor that ended it.
+  const nextStageStart = snapshot.stages
+    .filter((other) => other.order > stage.order)
+    .map((other) => other.startedAt)
+    .filter((startedAt) => startedAt !== undefined)
+    .toSorted()[0];
   return {
     current,
     started,
     outcome,
-    completedAt: calls.reduce<string | undefined>(
-      (latest, call) =>
-        call.timestamps.completedAt !== undefined &&
-        (latest === undefined || call.timestamps.completedAt > latest)
-          ? call.timestamps.completedAt
-          : latest,
-      undefined,
-    ),
+    completedAt:
+      lastCallEnd ?? nextStageStart ?? snapshot.timestamps.completedAt,
   };
 }
 
@@ -388,6 +409,15 @@ export const WorkflowRunSnapshotSchema = z
           path: ['calls'],
           message: 'A terminal workflow snapshot cannot contain live calls.',
         });
+    } else if (snapshot.timestamps.completedAt !== undefined) {
+      // `finish()` is the one writer of either fact and writes both at once,
+      // so a completion stamp without an outcome is a corrupt row, not a run
+      // still in flight — and it would otherwise render as unfinished forever.
+      context.addIssue({
+        code: 'custom',
+        path: ['outcome'],
+        message: 'A completed workflow snapshot requires an outcome.',
+      });
     }
   });
 export type WorkflowRunSnapshot = z.infer<typeof WorkflowRunSnapshotSchema>;
