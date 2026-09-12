@@ -91,9 +91,15 @@ export const TikzPictureManager = {
   /**
    * Extract and compile TikZ pictures from a LaTeX file
    * @param latexFile Location of the LaTeX file
+   * @param signal Aborts the in-flight pdflatex subprocess. Effect callers
+   * pass the signal their `Effect.tryPromise` thunk receives, so interrupting
+   * the fiber tears the compile down.
    * @returns Array of FileLocations for compiled PDF files
    */
-  async compile(latexFile: FileLocation): Promise<FileLocation[]> {
+  async compile(
+    latexFile: FileLocation,
+    signal?: AbortSignal,
+  ): Promise<FileLocation[]> {
     const inputName = path.parse(latexFile.absolutePath).name;
     const buildDir = path.join(
       path.dirname(latexFile.absolutePath),
@@ -122,10 +128,14 @@ export const TikzPictureManager = {
           buildDir,
           suffix,
         );
-        const compiled = await compileLatex2Pdf(texLocation, {
-          channel: CHANNEL,
-          compiler: 'pdflatex',
-        });
+        const compiled = await compileLatex2Pdf(
+          texLocation,
+          {
+            channel: CHANNEL,
+            compiler: 'pdflatex',
+          },
+          signal,
+        );
         if (!compiled.ok) {
           log.warn(
             `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,

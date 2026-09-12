@@ -124,6 +124,7 @@ describe('CLI Overleaf clone command', () => {
       ],
       {
         cwd: workspacePath,
+        cancelSignal: expect.any(AbortSignal),
         env: makeMachineGitEnv(),
         extendEnv: false,
       },
@@ -160,6 +161,7 @@ describe('CLI Overleaf clone command', () => {
       ],
       {
         cwd: destination,
+        cancelSignal: expect.any(AbortSignal),
         env: makeMachineGitEnv(),
         extendEnv: false,
       },

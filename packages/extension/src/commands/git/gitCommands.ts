@@ -229,7 +229,7 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, workspacePath) =>
       Effect.tryPromise({
-        try: () =>
+        try: (signal) =>
           vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
@@ -238,6 +238,10 @@ function buildOverleafClonePorts(
             () =>
               execa('git', ['clone', remoteUrl, '.'], {
                 cwd: workspacePath,
+                // Interrupting the fiber aborts `signal`, and execa's
+                // cancelSignal kills the git subprocess instead of letting the
+                // clone keep writing into the workspace.
+                cancelSignal: signal,
                 // Same extended PATH as the executeCommandSync preflight
                 // above, so the probe can't pass while the clone misses git
                 // (bot review). extendEnv: false is required —

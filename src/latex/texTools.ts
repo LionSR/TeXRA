@@ -143,12 +143,16 @@ export type CompileLatex2PdfResult =
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
+ * @param signal Aborts the in-flight compiler subprocess. Effect callers pass
+ * the signal their `Effect.tryPromise` thunk receives, so interrupting the
+ * fiber tears the compile down.
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path the engine wrote to; `logTail` is always populated on failure.
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
   options: LaTeXCompileOptions = {},
+  signal?: AbortSignal,
 ): Promise<CompileLatex2PdfResult> {
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
@@ -210,6 +214,7 @@ export async function compileLatex2Pdf(
         channel,
         env,
         timeout,
+        signal,
         showError: true, // Show error if pdflatex fails
       });
     }
@@ -220,6 +225,7 @@ export async function compileLatex2Pdf(
         channel,
         env,
         timeout,
+        signal,
         showError: false, // Suppress error for latexmk to try pdflatex as fallback
       });
       if (!result) {

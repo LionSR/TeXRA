@@ -104,11 +104,15 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, cloneInto) =>
       Effect.tryPromise({
-        try: async () => {
+        try: async (signal) => {
           await mkdir(cloneInto, { recursive: true });
           canonicalWorkspacePath = await realpath(cloneInto);
           await execa('git', ['clone', remoteUrl, '.'], {
             cwd: canonicalWorkspacePath,
+            // Interrupting the fiber aborts `signal`, and execa's
+            // cancelSignal kills the git subprocess instead of letting the
+            // clone keep writing into the destination.
+            cancelSignal: signal,
             // extendEnv: false is required — makeMachineGitEnv omits the
             // helper-invoking keys, and execa's default merge re-adds them.
             env: makeMachineGitEnv(),

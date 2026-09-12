@@ -23,7 +23,12 @@ consequences worth knowing before you touch a file here:
   and the latexdiff executors spawn their subprocess inside
   `Effect.tryPromise`, whose thunk receives the signal that aborts when the
   running fiber is interrupted. Do not add a `signal` parameter to a function
-  here so a caller can pass one down.
+  here so a caller can pass one down. The two Promise-shaped subprocess
+  helpers that remain (`compileLatex2Pdf`, and `TikzPictureManager.compile`
+  through it) are the exception: their `signal` parameter exists only so the
+  `tryPromise` thunk at the Effect boundary can hand the fiber's own signal
+  to the spawn — the signal always originates at the boundary, never from a
+  caller's own `AbortController`.
 
 - **Diagnostics are `Effect.log*`, not `createLog`.** A program names its
   channel once with `withLogChannel` from `@logger/effectLog` and every entry

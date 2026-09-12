@@ -65,7 +65,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
       const compiledPaths = yield* Effect.tryPromise({
-        try: () => TikzPictureManager.compile(location),
+        try: (signal) => TikzPictureManager.compile(location, signal),
         catch: ensureError,
       });
       if (compiledPaths.length > 0) {

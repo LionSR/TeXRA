@@ -169,6 +169,34 @@ describe('compileLatex2Pdf logger seam', () => {
   });
 });
 
+// #12193: cancelling the calling fiber must kill the compiler subprocess.
+// `compileLatex2Pdf` used to accept no signal at all, so the `AbortSignal`
+// `Effect.tryPromise` hands its thunk was dropped and latexmk/pdflatex kept
+// running after the tool call was reported cancelled.
+describe('compileLatex2Pdf cancellation', () => {
+  beforeEach(async () => {
+    mocks.runToolWithCheck.mockReset();
+    await installPlatform({ workspacePath });
+  });
+
+  it('hands its AbortSignal to the compiler subprocess spawn', async () => {
+    mocks.runToolWithCheck.mockResolvedValue(execResult(true));
+    const controller = new AbortController();
+
+    await compileLatex2Pdf(
+      pathToLocation(path.join(workspacePath, 'main.tex')),
+      { outputDirectory: path.join(workspacePath, 'build') },
+      controller.signal,
+    );
+
+    expect(mocks.runToolWithCheck).toHaveBeenCalledWith(
+      'latexmk',
+      expect.any(Array),
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+});
+
 const D = path.delimiter;
 
 describe('buildKpathseaSearchPath', () => {

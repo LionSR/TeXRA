@@ -66,8 +66,16 @@ export interface LatexTrace {
   error(message: string, options?: LatexLogOptions): void;
 }
 
-/** Run `effect`, reading a filesystem promise as a typed failure. */
-const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
+/**
+ * Run `effect`, reading a filesystem promise as a typed failure. A thunk that
+ * declares the `signal` parameter receives the fiber's interruption signal
+ * (Effect allocates no AbortController for a zero-argument thunk), which the
+ * subprocess-spawning calls below pass to the compiler so cancellation kills
+ * it; the plain filesystem reads ignore it.
+ */
+const fsCall = <A>(
+  thunk: (signal: AbortSignal) => Promise<A>,
+): Effect.Effect<A, Error> =>
   Effect.tryPromise({ try: thunk, catch: ensureError });
 
 /**
@@ -164,8 +172,8 @@ export class LatexMediaManager {
     return Effect.gen({ self: this }, function* () {
       const buildDir = path.join(path.dirname(file.absolutePath), 'build');
       yield* fsCall(() => AbsoluteFS.ensureDir(buildDir));
-      const compiled = yield* fsCall(() =>
-        compileLatex2Pdf(file, { outputDirectory: buildDir }),
+      const compiled = yield* fsCall((signal) =>
+        compileLatex2Pdf(file, { outputDirectory: buildDir }, signal),
       );
       if (!compiled.ok) {
         this.logger.warn(
@@ -577,7 +585,7 @@ export class LatexMediaManager {
       const tikzResults = yield* Effect.forEach(
         files,
         (file) =>
-          fsCall(() => TikzPictureManager.compile(file)).pipe(
+          fsCall((signal) => TikzPictureManager.compile(file, signal)).pipe(
             // Silent skip: TikZ compilation failures are reported by the
             // TikzPictureManager itself; the fan-out must continue past
             // individual failures.
