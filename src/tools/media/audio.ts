@@ -3,8 +3,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import OpenAI from 'openai';
 
+import { resolveRouteCredential } from '@agent/runtime/ModelFactory';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import type { PlatformSecrets } from '@platform/secrets';
 import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
@@ -144,8 +147,13 @@ export function killActiveRecording(): void {
   }
 }
 
-/** Stop the current recording and transcribe it using OpenAI. */
-export async function stopRecordingAndTranscribe(): Promise<{
+/**
+ * Stop the current recording and transcribe it using OpenAI. `secrets` is the
+ * process secret store the OpenAI key is read from.
+ */
+export async function stopRecordingAndTranscribe(
+  secrets: PlatformSecrets,
+): Promise<{
   success: boolean;
   text: string;
   error?: string;
@@ -179,10 +187,18 @@ export async function stopRecordingAndTranscribe(): Promise<{
       return { success: false, text: '', error: 'Recording file is empty' };
     }
 
-    const { ModelHandlerOpenAI } =
-      await import('@agent/modelHandlers/openai/modelHandlerOpenAI');
-    const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
-    const client = await handler.getClient();
+    // The transcription endpoint is an OpenAI SDK operation the llm package
+    // does not model, so the client is built here under the same OpenAI
+    // route and credential the run loop binds gpt-4o under.
+    const credential = await resolveRouteCredential(
+      MODEL_CONFIGS['gpt4o'],
+      false,
+      secrets,
+    );
+    const client = new OpenAI({
+      apiKey: credential.apiKey,
+      baseURL: credential.endpoint,
+    });
     const result = await client.audio.transcriptions.create({
       file: AbsoluteFS.createReadStream(recordingPath),
       model: 'gpt-4o-transcribe',

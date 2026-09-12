@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 
 /**
@@ -14,14 +16,14 @@ function preserveResponseText(text: string): string {
   return text;
 }
 
-async function connectResponseText(
+function connectResponseText(
   previous: string,
   next: string,
-): Promise<string> {
+): Effect.Effect<string> {
   if (!previous || !next || /\s$/.test(previous) || /^\s/.test(next)) {
-    return '';
+    return Effect.succeed('');
   }
-  return ' ';
+  return Effect.succeed(' ');
 }
 
 /** Create neutral package defaults when a host supplies no text policy. */

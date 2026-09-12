@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Cause, Deferred, Effect, Exit, Layer } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -537,14 +537,17 @@ export function executeAgent(
             // Start description generation concurrently with the run, but join it
             // before the owner can release its run lease. This prevents the
             // metadata write from recreating a run deleted by another host.
-            const sessionDescription = runInScope(() =>
-              generateSessionDescription(
-                runId,
-                config,
-                ctx.resolvedAgentDescription,
-                runSession,
-                ctx.stores,
-                ctx.runScope.signal,
+            // The run's stop interrupts it, as it interrupts the run.
+            const sessionDescription = yield* Effect.forkChild(
+              Effect.raceFirst(
+                generateSessionDescription(
+                  runId,
+                  config,
+                  ctx.resolvedAgentDescription,
+                  runSession,
+                  ctx.stores,
+                ),
+                Deferred.await(ctx.stopped),
               ),
             );
             try {
@@ -611,10 +614,7 @@ export function executeAgent(
               }
               return result;
             } finally {
-              yield* Effect.tryPromise({
-                try: () => sessionDescription,
-                catch: ensureError,
-              });
+              yield* Fiber.join(sessionDescription);
             }
           });
         },

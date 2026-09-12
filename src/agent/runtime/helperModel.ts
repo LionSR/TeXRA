@@ -1,112 +1,111 @@
 /**
- * Shared helper model resolution and handler creation.
+ * The helper model: one configured "helper model" setting behind session
+ * descriptions, instruction polishing, AI-assisted agent creation and the
+ * LaTeX text connector. Every use is one non-streaming turn, text in, text
+ * out; the model is bound through the same route the run loop binds under.
  *
- * Used by session description generation, instruction polishing, and
- * AI-assisted agent creation — all lightweight, non-streaming one-shot
- * LLM calls that share the same configured "helper model" setting.
+ * Helper turns are unmetered: no ledger row and no usage log, as before.
  */
+import { Data, Effect, Schedule, type Scope } from 'effect';
 
-import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { auxiliaryRetry } from '@agent/modelHandlers/support/auxiliaryRetry';
-import { createModelHandler } from '@agent/runtime/ModelFactory';
 import {
   getModelUnavailableReason,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { AgentCategory } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { getHelperModelName } from './helperModelName';
+import { turnText } from './ModelInvoker';
+import { bindModel, type BoundModel } from './run/modelBinding';
+import { classifyModelFailure } from './run/modelFailure';
+
+/** The configured helper model cannot serve right now (no key, disabled). */
+export class HelperModelUnavailable extends Data.TaggedError(
+  'HelperModelUnavailable',
+)<{ readonly reason: string }> {}
 
 /**
- * A ready-to-use helper model handler + client pair.
- */
-export interface HelperModelKit {
-  handler: ModelHandler;
-  client: unknown;
-}
-
-type HelperModelResult =
-  { kit: HelperModelKit } | { kit: undefined; reason: string };
-
-/**
- * Resolve the configured helper model, create a non-streaming handler, and
- * obtain a client.
+ * Bind the configured helper model into the caller's scope.
  *
  * `stores` are the process secret store and global state the caller already
  * holds (the `Secrets` / `AppState` services, or the stores a host root
  * threaded down), so helper resolution reads the same stores as the run that
- * asked for it.
+ * asked for it. A helper has no persisted conversation format and no launch
+ * async-local frame; it never takes the tool-use output haircut.
  */
-export async function createHelperModelKit(
+export const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
-): Promise<HelperModelResult> {
+): Effect.fn.Return<
+  BoundModel,
+  HelperModelUnavailable | Error,
+  Scope.Scope
+> {
   const modelName = getHelperModelName(stores.globalState);
-
-  const reason = await getModelUnavailableReason(modelName, stores);
-  if (reason) {
-    return { kit: undefined, reason };
-  }
-
-  const modelConfig = await resolveRuntimeModelConfig(modelName);
-  if (!modelConfig) {
-    return {
-      kit: undefined,
+  const reason = yield* Effect.tryPromise({
+    try: () => getModelUnavailableReason(modelName, stores),
+    catch: ensureError,
+  });
+  if (reason) return yield* new HelperModelUnavailable({ reason });
+  const config = yield* Effect.tryPromise({
+    try: () => resolveRuntimeModelConfig(modelName),
+    catch: ensureError,
+  });
+  if (!config) {
+    return yield* new HelperModelUnavailable({
       reason: `Model "${modelName}" is not recognized.`,
-    };
+    });
   }
-
-  // Helper output is interpreted by its caller, not rewritten as document text.
-  const handler = await createModelHandler(modelConfig, stores);
-  handler.setOutputStreaming(false);
-  handler.setProgressViewEnabled(false);
-
-  const client = await handler.getClient();
-  return { kit: { handler, client } };
-}
+  return yield* bindModel({
+    config,
+    stores,
+    compatibilityKey: null,
+    agentCategory: AgentCategory.Workflow,
+    // Helper calls are deterministic one-shots, never sampled.
+    temperature: 0,
+    inScope: (operation) => operation(),
+  });
+});
 
 /** A single non-streaming helper-model text completion. */
-interface HelperModelCompletion {
+export interface HelperPrompt {
   /** User message content. */
-  userPrompt: string;
+  readonly userPrompt: string;
   /** Optional system prompt. */
-  systemPrompt?: string;
-  /** Cancel this auxiliary request and its bounded retries. */
-  signal?: AbortSignal;
+  readonly systemPrompt?: string;
 }
 
 /**
- * Run one non-streaming completion against a helper-model kit and return the
- * extracted response text.
- *
- * Encapsulates the `initializeMessages → createResponse → extractResponse`
- * handler protocol so callers (session descriptions, instruction polishing,
- * agent creation, LaTeX text connection) share one call path instead of each
- * reaching into the {@link ModelHandler} internals.
+ * The bounded retry helper turns run under: they execute outside the run's
+ * `ModelInvoker`, so they keep their own two attempts over provider errors
+ * the runtime classifies as automatically retryable.
  */
-export async function runHelperModelCompletion(
-  kit: HelperModelKit,
-  { userPrompt, systemPrompt, signal }: HelperModelCompletion,
-): Promise<string> {
-  signal?.throwIfAborted();
-  const messages = await kit.handler.initializeMessages(
-    '',
-    userPrompt,
-    undefined,
-    systemPrompt,
+const HELPER_RETRY = Schedule.exponential('500 millis', 2).pipe(
+  Schedule.jittered,
+);
+const HELPER_RETRIES = 2;
+
+/** One non-streaming completion on a bound helper model: its text. */
+export const helperCompletion = Effect.fn('helperCompletion')(function* (
+  bound: BoundModel,
+  { userPrompt, systemPrompt }: HelperPrompt,
+): Effect.fn.Return<string, Error> {
+  const resolved = yield* bound.model.prepareTurn({
+    ...(systemPrompt === undefined ? {} : { system: systemPrompt }),
+    messages: [{ role: 'user', content: [{ kind: 'text', text: userPrompt }] }],
+  });
+  if (resolved.mode !== 'foreground') {
+    return yield* Effect.fail(
+      new Error('A helper turn prepared as background work.'),
+    );
+  }
+  const turn = yield* bound.model.generateTurn(resolved).pipe(
+    Effect.retry({
+      schedule: HELPER_RETRY,
+      times: HELPER_RETRIES,
+      while: (error) => classifyModelFailure(error).autoRetryable,
+    }),
   );
-  // Helper calls execute outside the run's ModelInvoker, so they need their own
-  // bounded retry policy now that generation clients disable SDK retries.
-  const result = await auxiliaryRetry(
-    () =>
-      kit.handler.createResponse({
-        client: kit.client,
-        messages,
-        // Helper calls are deterministic one-shots, never sampled.
-        temperature: 0,
-        systemPrompt,
-        signal,
-      }),
-    signal,
-  );
-  return kit.handler.extractResponse(result.response, '').text;
-}
+  return turnText(turn);
+});

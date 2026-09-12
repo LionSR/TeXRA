@@ -6,12 +6,11 @@
  * history view, and future agents can quickly understand each session.
  */
 
+import { Cause, Effect } from 'effect';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  createHelperModelKit,
-  runHelperModelCompletion,
-} from '@agent/runtime/helperModel';
+import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -22,14 +21,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 const log = createLog('SessionDescription');
 const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
-
-function warnWithoutRejecting(message: string): void {
-  try {
-    log.warn(message);
-  } catch {
-    // Best-effort diagnostics must not make description generation reject.
-  }
-}
 
 /**
  * Normalize a model-generated session description: collapse newlines,
@@ -86,7 +77,9 @@ export function getDisplayedInstruction(
  * Generate and persist a session description from the user's instruction.
  *
  * Started concurrently at the beginning of a run and joined before run
- * ownership is released. Never throws.
+ * ownership is released. Never fails: an unavailable or failing helper is
+ * warned about and the run keeps its agent-name label. Stopping the run
+ * interrupts it.
  *
  * Every category qualifies. Workflow runs were excluded while "session" meant
  * a tool-use conversation, which left the whole workflow-subagent population —
@@ -100,37 +93,23 @@ export function getDisplayedInstruction(
  * holds (the `Secrets` / `AppState` services), which the helper model is
  * resolved against.
  */
-export async function generateSessionDescription(
+export const generateSessionDescription = Effect.fn(
+  'generateSessionDescription',
+)(function* (
   runId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-  signal?: AbortSignal,
-): Promise<void> {
-  try {
-    signal?.throwIfAborted();
-    const instruction = getDisplayedInstruction(config);
-    if (!instruction) return;
-
-    const helperResult = await createHelperModelKit(stores);
-    signal?.throwIfAborted();
-    if (!helperResult.kit) {
-      warnWithoutRejecting(helperResult.reason);
-      return;
-    }
-
-    const userPrompt = buildUserPrompt(
-      config.agent,
-      agentDescription,
-      instruction,
-    );
-    const text = await runHelperModelCompletion(helperResult.kit, {
-      userPrompt,
+): Effect.fn.Return<void> {
+  const instruction = getDisplayedInstruction(config);
+  if (!instruction) return;
+  yield* Effect.gen(function* () {
+    const bound = yield* helperModel(stores);
+    const text = yield* helperCompletion(bound, {
+      userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
       systemPrompt: SYSTEM_PROMPT,
-      signal,
     });
-
     if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);
     if (!description) return;
@@ -142,11 +121,21 @@ export async function generateSessionDescription(
         description,
       },
     ]);
-    await session.settlePublications();
+    yield* Effect.promise(() => session.settlePublications());
     log.info(`Generated session description for ${runId}`);
-  } catch (err) {
-    warnWithoutRejecting(
-      `Failed to generate session description: ${getSdkErrorMessage(err)}`,
-    );
-  }
-}
+  }).pipe(
+    Effect.scoped,
+    Effect.catchTag('HelperModelUnavailable', ({ reason }) =>
+      Effect.sync(() => log.warn(reason)),
+    ),
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : Effect.sync(() =>
+            log.warn(
+              `Failed to generate session description: ${getSdkErrorMessage(Cause.squash(cause))}`,
+            ),
+          ),
+    ),
+  );
+});

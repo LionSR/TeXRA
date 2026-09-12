@@ -84,8 +84,8 @@ type LoadedFileEntry = FileListEntry & {
 };
 
 /**
- * Minimal provider info needed for prompt variable rendering.
- * Eliminates the need to pass a full IModelHandler reference.
+ * Minimal provider info needed for prompt variable rendering: the provider
+ * family of the run's model config, not the bound model itself.
  */
 interface ModelProviderFlags {
   isOpenai: boolean;

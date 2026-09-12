@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import nunjucks from 'nunjucks';
-import pRetry from 'p-retry';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
@@ -10,12 +10,10 @@ import {
   AgentToolUseSettingSchema,
   AgentPromptSchema,
 } from '@agent/core/definition/AgentDataclass';
-import {
-  createHelperModelKit,
-  runHelperModelCompletion,
-} from '@agent/runtime/helperModel';
+import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { buildUserVarPassthrough } from '@agent/prompt/userVars';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentCategory } from '@shared/schemas';
@@ -353,120 +351,123 @@ async function buildAgentBlueprint(
   };
 }
 
-async function generateAgentYaml(
+/**
+ * Draft the agent YAML with the helper model: one initial attempt and one
+ * validation retry that carries the validation error back, then the
+ * deterministic template. Each attempt binds the helper model afresh.
+ */
+const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   config: CreatorConfig,
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Promise<string> {
+): Effect.fn.Return<string, unknown> {
   let lastValidationError: string | undefined;
 
-  try {
-    return await pRetry(
-      async () => {
-        const helperResult = await createHelperModelKit(stores);
-        if (!helperResult.kit) {
-          throw new Error(helperResult.reason);
-        }
+  const attempt = Effect.gen(function* () {
+    const bound = yield* helperModel(stores);
 
-        const prompts = config[blueprint.category];
-        const schemaRef = getSchemaReference(blueprint.category);
-        const renderVars = {
-          ...PASSTHROUGH,
-          ...blueprint.aiVars,
-        };
-        const systemPrompt =
-          nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
-          '\n' +
-          schemaRef;
+    const prompts = config[blueprint.category];
+    const schemaRef = getSchemaReference(blueprint.category);
+    const renderVars = {
+      ...PASSTHROUGH,
+      ...blueprint.aiVars,
+    };
+    const systemPrompt =
+      nunjucksEnv.renderString(prompts.systemPrompt, renderVars) +
+      '\n' +
+      schemaRef;
 
-        let userMessage = nunjucksEnv.renderString(
-          prompts.userRequest,
-          renderVars,
-        );
-        if (lastValidationError) {
-          userMessage +=
-            '\n' +
-            nunjucksEnv.renderString(config.retryPrompts[blueprint.category], {
-              VALIDATION_ERROR: lastValidationError,
-            });
-        }
-
-        const text = await runHelperModelCompletion(helperResult.kit, {
-          userPrompt: userMessage,
-          systemPrompt,
+    let userMessage = nunjucksEnv.renderString(
+      prompts.userRequest,
+      renderVars,
+    );
+    if (lastValidationError) {
+      userMessage +=
+        '\n' +
+        nunjucksEnv.renderString(config.retryPrompts[blueprint.category], {
+          VALIDATION_ERROR: lastValidationError,
         });
-        if (!isNonEmptyString(text)) {
-          throw new Error('Model returned no text');
-        }
+    }
 
-        const extracted = extractTextFromTag(text, 'yaml');
-        const candidate = (extracted || text).trim();
-        try {
-          validateAgentYamlContent(candidate);
-        } catch (error) {
-          lastValidationError = toErrorMessage(error);
-          throw new Error(`Generated YAML was invalid: ${lastValidationError}`);
-        }
+    const text = yield* helperCompletion(bound, {
+      userPrompt: userMessage,
+      systemPrompt,
+    });
+    if (!isNonEmptyString(text)) {
+      return yield* Effect.fail(new Error('Model returned no text'));
+    }
 
-        log.info(`AI generation succeeded for ${blueprint.category} agent`);
-        return candidate;
+    const extracted = extractTextFromTag(text, 'yaml');
+    const candidate = (extracted || text).trim();
+    yield* Effect.try({
+      try: () => validateAgentYamlContent(candidate),
+      catch: (error) => {
+        lastValidationError = toErrorMessage(error);
+        return new Error(`Generated YAML was invalid: ${lastValidationError}`);
       },
-      {
-        retries: AI_GENERATION_ATTEMPTS - 1,
-        minTimeout: 0,
-        factor: 1,
-        randomize: false,
-      },
-    );
-  } catch (error) {
-    log.warn(`AI generation failed, using template: ${toErrorMessage(error)}`);
-    // Route through the shared renderer so both the Settings "new from
-    // template" flow and this fallback produce byte-identical output for
-    // matching inputs.
-    return ui.renderTemplate(
-      blueprint.fallbackTemplate,
-      blueprint.fallbackVars,
-    );
-  }
-}
+    });
+
+    log.info(`AI generation succeeded for ${blueprint.category} agent`);
+    return candidate;
+  }).pipe(
+    Effect.scoped,
+    Effect.catchTag('HelperModelUnavailable', ({ reason }) =>
+      Effect.fail(new Error(reason)),
+    ),
+  );
+
+  return yield* attempt.pipe(
+    Effect.retry({ times: AI_GENERATION_ATTEMPTS - 1 }),
+    Effect.catch((error) => {
+      log.warn(
+        `AI generation failed, using template: ${toErrorMessage(error)}`,
+      );
+      // Route through the shared renderer so both the Settings "new from
+      // template" flow and this fallback produce byte-identical output for
+      // matching inputs.
+      return hostPort(() =>
+        ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars),
+      );
+    }),
+  );
+});
 
 /**
  * Run the complete agent-creation wizard, stopping without side effects when
- * cancelled.
+ * cancelled. The host's UI calls are its ports; their failures are the
+ * host's own errors.
  *
  * `stores` are the process secret store and global state (`Secrets` /
  * `AppState`) the host command already holds; the helper model that drafts the
  * YAML is resolved against them.
  */
-export async function runAgentCreator(
+export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   config: CreatorConfig,
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Promise<void> {
+): Effect.fn.Return<void, unknown> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
-  const agentName = await ui.promptAgentName(categoryLabel);
+  const agentName = yield* hostPort(() => ui.promptAgentName(categoryLabel));
   if (!agentName) return;
 
-  const description = await ui.promptDescription(
-    `New ${categoryLabel} Agent: ${agentName}`,
-    DESCRIPTION_PROMPTS[category],
+  const description = yield* hostPort(() =>
+    ui.promptDescription(
+      `New ${categoryLabel} Agent: ${agentName}`,
+      DESCRIPTION_PROMPTS[category],
+    ),
   );
   if (!description) return;
 
-  const blueprint = await buildAgentBlueprint(
-    config,
-    category,
-    agentName,
-    description,
-    ui,
+  const blueprint = yield* hostPort(() =>
+    buildAgentBlueprint(config, category, agentName, description, ui),
   );
   if (!blueprint) return;
 
-  const yamlContent = await generateAgentYaml(config, blueprint, ui, stores);
-  await AbsoluteFS.write(blueprint.filePath, yamlContent);
+  const yamlContent = yield* generateAgentYaml(config, blueprint, ui, stores);
+  yield* hostPort(() => AbsoluteFS.write(blueprint.filePath, yamlContent));
   ui.showCreatedInfo(blueprint.filePath);
-  await ui.promptAddToConfig(agentName, category);
-  await ui.openCreatedFile(blueprint.filePath);
-}
+  yield* hostPort(() => ui.promptAddToConfig(agentName, category));
+  yield* hostPort(() => ui.openCreatedFile(blueprint.filePath));
+});
