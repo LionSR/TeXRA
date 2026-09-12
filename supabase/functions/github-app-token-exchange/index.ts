@@ -8,6 +8,7 @@
 import { handleCors } from '../_shared/cors.ts';
 import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 import {
+  bearerToken,
   parseRepositoryClaim,
   validateWorkflowIdentity,
   verifyGitHubActionsToken,
@@ -45,11 +46,6 @@ function productionDependencies(): ExchangeDependencies {
     appId: Deno.env.get('GITHUB_APP_ID'),
     privateKey: Deno.env.get('GITHUB_APP_PRIVATE_KEY'),
   };
-}
-
-function bearerToken(req: Request): string | null {
-  const header = req.headers.get('Authorization');
-  return header?.startsWith('Bearer ') ? header.slice(7) : null;
 }
 
 export async function handleExchangeRequest(
