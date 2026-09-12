@@ -14,6 +14,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import { resolveSelectedId } from '@shared/session/surface';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
 import { sessionView } from './sessionView';
@@ -91,21 +92,20 @@ function defaultSessionMeta(): SessionMeta {
 export const activeRunId = signal<RunId | undefined>(undefined);
 
 /**
- * The run the transcript and status bar show: the Surface's selection
- * resolved against the view (PRD 9). The selected run while the view
- * holds it; the first top-level run once it has left; the selection
- * itself while the view holds no run at all (the pre-run local
- * conversation is a Surface-only id). A computed rather than an effect that
- * clears a stale selection, and a signal rather than a per-render derivation
- * so every component reads one answer.
+ * The run the transcript and status bar show: `resolveSelectedId` (PRD 9,
+ * shared with the extension and desktop `Surface`), with `keepWhenViewEmpty`
+ * for the pre-run local conversation (a Surface-only id the view has never
+ * heard of). `undefined`/`null` are reconciled here, the one call site,
+ * since the TUI spells "no selection" as `undefined` rather than `Surface`'s
+ * `null`. A computed rather than an effect that clears a stale selection,
+ * and a signal rather than a per-render derivation so every component reads
+ * one answer.
  */
 export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
-  () => {
-    const selected = activeRunId.get();
-    const view = sessionView().get();
-    if (selected === undefined || view.runs.has(selected)) return selected;
-    return view.runs.size === 0 ? selected : view.order.at(0);
-  },
+  () =>
+    resolveSelectedId(sessionView().get(), activeRunId.get() ?? null, {
+      keepWhenViewEmpty: true,
+    }) ?? undefined,
 );
 
 /**
