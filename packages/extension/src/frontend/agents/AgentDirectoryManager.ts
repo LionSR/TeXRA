@@ -56,11 +56,14 @@ class AgentDirectoryManager {
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
-  initialize(globalState: vscode.Memento): void {
+  initialize(globalState: vscode.Memento, resourcesPath: string): void {
     this.host = {
       globalState,
       directories: createPlatformAgentDirectories({
         channel: CHANNEL,
+        // Built-in agents are read straight out of the installed extension's
+        // `resources`, never copied into global storage.
+        resourcesPath,
         customDirectoryStore: {
           get: () =>
             globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),

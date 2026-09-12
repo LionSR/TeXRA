@@ -29,7 +29,6 @@ import {
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import {
-  bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -154,8 +153,12 @@ export async function initializeElectronPlatform(
     );
 
   repairLaunchPath();
+  const resourcesPath = resolveResourcesPath(mainDirname);
   const agentDirectories = createPlatformAgentDirectories({
     channel: 'desktop',
+    // Built-in agents are read straight out of the packaged app bundle;
+    // `resolveResourcesPath` has already asserted both directories exist.
+    resourcesPath,
     customDirectoryStore: {
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
@@ -203,32 +206,15 @@ export async function initializeElectronPlatform(
     effectRuntime().runPromise(UsageLogService.dispose()),
   );
 
-  // Seed first-install defaults (e.g. disabled tools) before anything writes
-  // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the
-  // extension's ordering (extension.ts) — same key, same seeding function.
-  await effectRuntime().runPromise(
-    seedDisabledToolDefaults(
-      globalStateStore,
-      GlobalStateKey.LAST_KNOWN_VERSION,
-    ),
-  );
-
-  const resourcesPath = resolveResourcesPath(mainDirname);
+  // Seed first-install defaults (e.g. disabled tools). No-ops once
+  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
+  await effectRuntime().runPromise(seedDisabledToolDefaults(globalStateStore));
 
   // Register the shared Node-host agent runtime: the direct Lean language
   // services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
   // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
-
-  await effectRuntime().runPromise(
-    bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: app.getVersion(),
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    }),
-  );
 
   return {
     processRoots,
