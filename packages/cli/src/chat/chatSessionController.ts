@@ -443,7 +443,6 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const interruptActiveRun = (): void => {
-    runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     // The run id is known from the mint, but a stop can only land on a run
     // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
     // asked in the launch gap.
@@ -996,10 +995,6 @@ export function createChatSessionController(
   };
 
   const stopRun = (runId: RunId): void => {
-    runtimeSession.interactions.cancel({
-      runId,
-      cause: 'Run interrupted.',
-    });
     if (runId === session.runId) {
       requestStop();
       session.interruptedRunId = runId;

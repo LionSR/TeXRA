@@ -28,10 +28,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { withToolEnvironment } from '@test/support/toolEnvironment';
-import {
-  clearRunStatusForTest,
-  seedRunStatusForTest,
-} from '@test/support/runStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
@@ -98,12 +94,28 @@ function holdCommand(): (result: ExecResult) => void {
 function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
   parentRunId: RunId,
-  runToClear?: RunId,
 ): void {
-  if (runToClear) {
-    clearRunStatusForTest(defaultSession().status, runToClear);
-  }
   defaultSession().followUps.terminalize(parentRunId);
+}
+
+/**
+ * Park a run WAITING the way its loop does: the `waiting` flow step is the
+ * fact the fold reads the phase from, so the delivery path sees the same
+ * parked parent a real run would.
+ */
+async function parkRunWaiting(runId: RunId): Promise<void> {
+  const session = defaultSession();
+  publishTestRunStart(session, runId);
+  session.publish([
+    {
+      type: 'flow.step',
+      aggregateId: aggregateId('run', runId),
+      payload: { family: 'toolUse', step: 'waiting' },
+    },
+  ]);
+  await vi.waitFor(() => {
+    assert.equal(defaultSession().runView(runId)?.status, RUN_PHASE.WAITING);
+  });
 }
 
 // Unit tests exercise the tool directly — no approval host is wired.
@@ -426,9 +438,7 @@ describe('BashTool', () => {
     await installPlatform(BASH_PLATFORM_OPTIONS, {
       agentResume: { tryResumeRun },
     });
-    seedRunStatusForTest(defaultSession().status, parentRunId, {
-      phase: RUN_PHASE.WAITING,
-    });
+    await parkRunWaiting(parentRunId);
 
     const recorded = recordSessionEvents(defaultSession());
 
@@ -447,7 +457,7 @@ describe('BashTool', () => {
       });
       assert.equal(tryResumeRun.mock.calls[0]?.[0], parentRunId);
     } finally {
-      detachBackgroundRun(recorded, parentRunId, parentRunId);
+      detachBackgroundRun(recorded, parentRunId);
     }
   });
 
@@ -477,9 +487,7 @@ describe('BashTool', () => {
     await installPlatform(BASH_PLATFORM_OPTIONS, {
       agentResume: { tryResumeRun },
     });
-    seedRunStatusForTest(defaultSession().status, parentRunId, {
-      phase: RUN_PHASE.WAITING,
-    });
+    await parkRunWaiting(parentRunId);
 
     const recorded = recordSessionEvents(defaultSession());
 
@@ -503,7 +511,7 @@ describe('BashTool', () => {
       assert.equal(defaultSession().runs.getHandle(runId), undefined);
     } finally {
       releaseResume?.();
-      detachBackgroundRun(recorded, parentRunId, parentRunId);
+      detachBackgroundRun(recorded, parentRunId);
     }
   });
 
@@ -569,7 +577,7 @@ describe('BashTool', () => {
     });
     assert.equal(defaultSession().runs.getHandle(runId), undefined);
 
-    detachBackgroundRun(recorded, parentRunId, runId);
+    detachBackgroundRun(recorded, parentRunId);
   });
 
   it('persists a killed background command as interrupted, not failed', async () => {
@@ -587,7 +595,6 @@ describe('BashTool', () => {
     const stopped = defaultSession().runs.kill(runId);
     assert.equal(stopped.accepted, true);
     const stopSettlement = Effect.runPromise(stopped.settlement);
-    assert.equal(defaultSession().status.get(runId), RUN_PHASE.CANCELLED);
     resolveCommand({
       success: false,
       stdout: '',
@@ -604,7 +611,7 @@ describe('BashTool', () => {
         RUN_OUTCOME.CANCELLED,
       );
     });
-    detachBackgroundRun(recorded, parentRunId, runId);
+    detachBackgroundRun(recorded, parentRunId);
   });
 
   it('keeps bounded streamed stdout and stderr in timeout feedback', async () => {

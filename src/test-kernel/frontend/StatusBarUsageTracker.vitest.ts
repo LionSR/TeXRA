@@ -1,65 +1,81 @@
 // Third-party imports
+import { Effect, SubscriptionRef } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - run state
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { RUN_PHASE, type RunId, type TokenUsageStats } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
-import type { RunView } from '@shared/session/sessionView';
+import {
+  RUN_PHASE,
+  type RunId,
+  type RunPhase,
+  type TokenUsageStats,
+} from '@shared/schemas';
+import {
+  emptySessionView,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { CHILD, fanOutView } from '@test/shared/session/fanOutScenario';
 
 const runA = 'aaaaaa' as RunId;
 const runB = 'bbbbbb' as RunId;
 const FAN_OUT_VIEW = fanOutView();
+const NO_USAGE: TokenUsageStats = {
+  cost: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+};
 
 /** A folded run, borrowed from the recorded fan-out so the stub states a
- *  real `RunView`; only the metered total matters to the tracker. */
-function runViewWithUsage(runId: RunId, usage: TokenUsageStats): RunView {
+ *  real `RunView`; only its phase and metered total matter to the tracker. */
+function runViewWith(
+  runId: RunId,
+  status: RunPhase,
+  usage: TokenUsageStats,
+): RunView {
   const folded = FAN_OUT_VIEW.runs.get(CHILD);
   if (!folded) throw new Error('fan-out fixture has no child run');
-  return { ...folded, id: runId, usage };
+  return { ...folded, id: runId, status, usage };
 }
 
 /**
- * The tracker holds no state: it projects from the session status plane and
- * the metered total the session view carries for each run
- * (`RunView.usage`), stubbed here as the `runView` read the real session
- * serves.
+ * The tracker holds no state: it projects from the session's fold, the one
+ * authority on which runs are in flight (`RunView.status`) and on each run's
+ * metered total (`RunView.usage`).
  */
-function trackerOverStatusPlane(): {
-  status: RunStatusMachine;
-  runViews: Map<RunId, RunView>;
+function trackerOverSessionView(): {
+  setRun(runId: RunId, status: RunPhase, usage?: TokenUsageStats): void;
+  dropRun(runId: RunId): void;
   tracker: StatusBarUsageTracker;
 } {
-  const status = new RunStatusMachine(
-    () => {},
-    () => {},
+  const view = Effect.runSync(
+    SubscriptionRef.make<SessionView>(emptySessionView('usage')),
   );
-  const runViews = new Map<RunId, RunView>();
-  const tracker = new StatusBarUsageTracker(status, {
-    runView: (runId) => runViews.get(runId),
-  });
-  return { status, runViews, tracker };
-}
-
-function startRun(status: RunStatusMachine, runId: RunId): void {
-  status.transition(runId, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.LIFECYCLE);
-}
-
-function setRunUsage(
-  runViews: Map<RunId, RunView>,
-  runId: RunId,
-  usage: TokenUsageStats,
-): void {
-  runViews.set(runId, runViewWithUsage(runId, usage));
+  const updateRuns = (change: (runs: Map<RunId, RunView>) => void): void => {
+    Effect.runSync(
+      SubscriptionRef.update(view, (current) => {
+        const runs = new Map(current.runs);
+        change(runs);
+        return { ...current, runs };
+      }),
+    );
+  };
+  return {
+    tracker: new StatusBarUsageTracker({ view }),
+    setRun(runId, status, usage = NO_USAGE) {
+      updateRuns((runs) => runs.set(runId, runViewWith(runId, status, usage)));
+    },
+    dropRun(runId) {
+      updateRuns((runs) => runs.delete(runId));
+    },
+  };
 }
 
 describe('StatusBarUsageTracker', () => {
-  it('reports zero usage for runs without a known in-flight status', () => {
-    const { runViews, tracker } = trackerOverStatusPlane();
+  it('reports zero usage for runs that are not in flight', () => {
+    const { setRun, tracker } = trackerOverSessionView();
 
-    setRunUsage(runViews, runA, {
+    setRun(runA, RUN_PHASE.COMPLETED, {
       cost: 0.01,
       inputTokens: 10,
       outputTokens: 20,
@@ -71,15 +87,13 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('sums the metered total of every in-flight run', () => {
-    const { status, runViews, tracker } = trackerOverStatusPlane();
-    startRun(status, runA);
-    startRun(status, runB);
-    setRunUsage(runViews, runA, {
+    const { setRun, tracker } = trackerOverSessionView();
+    setRun(runA, RUN_PHASE.RUNNING, {
       cost: 0.03,
       inputTokens: 40,
       outputTokens: 60,
     });
-    setRunUsage(runViews, runB, {
+    setRun(runB, RUN_PHASE.RUNNING, {
       cost: 0.04,
       inputTokens: 5,
       outputTokens: 6,
@@ -92,15 +106,15 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('keeps counting a run that waits for follow-up input', () => {
-    const { status, runViews, tracker } = trackerOverStatusPlane();
-    startRun(status, runA);
-    setRunUsage(runViews, runA, {
+    const { setRun, tracker } = trackerOverSessionView();
+    const usage: TokenUsageStats = {
       cost: 0.01,
       inputTokens: 10,
       outputTokens: 20,
-    });
+    };
+    setRun(runA, RUN_PHASE.RUNNING, usage);
 
-    status.transition(runA, RUN_PHASE.WAITING, RUN_TRANSITION_CAUSE.WAIT);
+    setRun(runA, RUN_PHASE.WAITING, usage);
 
     // Waiting is in flight but not active: the spend stays in the tooltip
     // total while the spinner count drops to zero.
@@ -109,44 +123,40 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.inputTokens).toBe(10);
   });
 
-  it('drops a run from the total once it reaches a final status', () => {
-    const { status, runViews, tracker } = trackerOverStatusPlane();
-    startRun(status, runA);
-    setRunUsage(runViews, runA, {
+  it('drops a run from the total once it reaches a final phase', () => {
+    const { setRun, tracker } = trackerOverSessionView();
+    const usage: TokenUsageStats = {
       cost: 0.01,
       inputTokens: 10,
       outputTokens: 20,
-    });
+    };
+    setRun(runA, RUN_PHASE.RUNNING, usage);
 
-    status.transition(
-      runA,
-      RUN_PHASE.COMPLETED,
-      RUN_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    setRun(runA, RUN_PHASE.COMPLETED, usage);
 
     expect(tracker.activeRunCount).toBe(0);
     expect(tracker.totalUsage.cost).toBe(0);
 
     // Resuming re-enters flight, and the view's accumulated total is
     // projected again.
-    status.transition(runA, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.RESUME);
+    setRun(runA, RUN_PHASE.RUNNING, usage);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
     expect(tracker.totalUsage.outputTokens).toBe(20);
   });
 
-  it('counts only the runs the session status plane reports as active', () => {
-    const { status, tracker } = trackerOverStatusPlane();
+  it('counts only the runs the fold reports as active', () => {
+    const { setRun, dropRun, tracker } = trackerOverSessionView();
 
     expect(tracker.activeRunCount).toBe(0);
 
-    startRun(status, runA);
-    startRun(status, runB);
+    setRun(runA, RUN_PHASE.RUNNING);
+    setRun(runB, RUN_PHASE.RUNNING);
     expect(tracker.activeRunCount).toBe(2);
 
-    // A run cleared out of the status plane without a published phase
-    // change stops being counted; there is no second copy to go stale.
-    status.clearRun(runB);
+    // A run the fold dropped stops being counted; there is no second copy
+    // to go stale.
+    dropRun(runB);
     expect(tracker.activeRunCount).toBe(1);
   });
 });

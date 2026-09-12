@@ -199,23 +199,6 @@ export class Sessions extends Context.Service<
   }
 >()('@texra-ai/agent/Sessions') {}
 
-/**
- * The session's one host, for its whole life, like every TeXRA host
- * attaches one per session: the interaction hub keeps a single active host
- * and tells runs apart by the stream its requests and cancellations name.
- * Attaching per run instead would make each new run displace the previous
- * run's host. The package has no interactive prompts, so there is nothing
- * for a cancellation to settle; a retry prompt is denied so that it never
- * parks the run waiting for a host.
- */
-const HEADLESS_HOST = {
-  cancel: () => {},
-  requestRetry: async () => ({
-    action: 'deny' as const,
-    reason: 'Interactive retries are unavailable in the agent package.',
-  }),
-};
-
 /** A run that returned without ever publishing its stream: the launcher's
  *  contract broke, and a caller waiting on admission must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
@@ -544,7 +527,6 @@ export function makeSessions(
             kind: 'ephemeral',
             reason: 'npm package consumer',
           },
-          interactions: HEADLESS_HOST,
         }),
         (handle) => sessionOf(handle, services),
       ),

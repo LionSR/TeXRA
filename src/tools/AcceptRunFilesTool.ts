@@ -27,7 +27,7 @@ import {
   type EditRecord,
   type ToolResult,
 } from '@shared/schemas';
-import type { RunId, FileLocation } from '@shared/schemas';
+import type { RequestRefusal, RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {
@@ -35,7 +35,6 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -50,19 +49,61 @@ import {
 // Rejection bookkeeping
 // ============================================================================
 
-/**
- * The `RejectionProvenance` channels, in the order a summary considers them
- * when naming the file it blames. One settlement populates exactly one, but
- * accepting a whole run can produce a mix, so each is recorded per rejection.
- */
-const REJECTION_CHANNELS = ['feedback', 'reason', 'cause'] as const;
-
-type RejectionChannel = (typeof REJECTION_CHANNELS)[number];
-
+/** One declined file: the refusal a person or a policy gave it. */
 interface RecordedRejection {
-  readonly channel: RejectionChannel;
   readonly path: string;
-  readonly message: string | undefined;
+  readonly refusal: RequestRefusal;
+}
+
+/**
+ * The one refusal a whole-run rejection reports: a cancellation outranks a
+ * denial, which outranks a person's rejection, and the feedback every
+ * rejected file collected rides the person's arm.
+ */
+function summarizeRefusals(rejections: readonly RecordedRejection[]): {
+  readonly path: string;
+  readonly refusal: RequestRefusal;
+} {
+  const of = <A extends RequestRefusal['action']>(action: A) =>
+    rejections.filter(
+      (
+        r,
+      ): r is RecordedRejection & {
+        refusal: Extract<RequestRefusal, { action: A }>;
+      } => r.refusal.action === action,
+    );
+  const cancelled = of('cancel');
+  const denied = of('deny');
+  const rejected = of('reject');
+  const pathOf = (group: readonly RecordedRejection[]) =>
+    group.length > 1 ? 'multiple files' : group[0]!.path;
+  const lines = (values: readonly (string | null | undefined)[]) =>
+    values.filter((v): v is string => !!v).join('\n');
+  if (cancelled.length > 0) {
+    return {
+      path: pathOf(cancelled),
+      refusal: {
+        action: 'cancel',
+        cause: lines(cancelled.map((r) => r.refusal.cause)) || null,
+      },
+    };
+  }
+  if (denied.length > 0) {
+    return {
+      path: pathOf(denied),
+      refusal: {
+        action: 'deny',
+        reason: lines(denied.map((r) => r.refusal.reason)),
+      },
+    };
+  }
+  return {
+    path: pathOf(rejected),
+    refusal: {
+      action: 'reject',
+      feedback: lines(rejected.map((r) => r.refusal.feedback)) || null,
+    },
+  };
 }
 
 // ============================================================================
@@ -132,11 +173,14 @@ Parameters map directly to subagent-result delivery attributes:
 }) {
   protected execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const session = currentSession();
-    const prepareFiles = AsyncLocalStorage.bind(() => this.acceptFiles(input));
+    const runtime = effectRuntime();
+    const prepareFiles = AsyncLocalStorage.bind(() =>
+      this.acceptFiles(input, runtime),
+    );
     const findRunDirectory = AsyncLocalStorage.bind(() =>
       findExistingRunStoragePath(input.execution_id),
     );
-    return effectRuntime().runPromise(
+    return runtime.runPromise(
       Effect.gen(function* () {
         const directory = yield* Effect.tryPromise({
           try: findRunDirectory,
@@ -159,7 +203,10 @@ Parameters map directly to subagent-result delivery attributes:
     );
   }
 
-  private async acceptFiles(input: AcceptRunFilesInput): Promise<ToolResult> {
+  private async acceptFiles(
+    input: AcceptRunFilesInput,
+    runtime: ReturnType<typeof effectRuntime>,
+  ): Promise<ToolResult> {
     const { execution_id: runId, files, strip_criticize } = input;
 
     // Phase 1: Validate all source paths and read content before any approvals
@@ -244,32 +291,18 @@ Parameters map directly to subagent-result delivery attributes:
         continue;
       }
 
-      const approval = await requestToolEditApproval({
-        path: entry.original,
-        originalContent: entry.originalContent,
-        proposedContent: entry.proposedContent,
-        sourceTool: 'accept_run_files',
-      });
+      const approval = await runtime.runPromise(
+        requestToolEditApproval({
+          path: entry.original,
+          originalContent: entry.originalContent,
+          proposedContent: entry.proposedContent,
+          sourceTool: 'accept_run_files',
+        }),
+      );
 
       if (approval.action !== 'apply') {
         rejected++;
-        // Narrow the declined approval to the single channel it arrived on.
-        const path = entry.original;
-        if ('cause' in approval) {
-          rejections.push({ channel: 'cause', path, message: approval.cause });
-        } else if ('reason' in approval) {
-          rejections.push({
-            channel: 'reason',
-            path,
-            message: approval.reason,
-          });
-        } else {
-          rejections.push({
-            channel: 'feedback',
-            path,
-            message: approval.feedback,
-          });
-        }
+        rejections.push({ path: entry.original, refusal: approval });
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
@@ -320,35 +353,11 @@ Parameters map directly to subagent-result delivery attributes:
       };
     }
 
-    // All changed files rejected → return rejection result. The spread
-    // conditions hinge on path presence rather than message length: an empty
-    // `reason`/`cause` still selects the denial/cancellation wording in
-    // buildApprovalRejectedResult.
+    // All changed files rejected: one rejection result, worded by the
+    // refusal that outranks the others.
     if (rejected === changed && acceptedEntries.length === 0) {
-      const firstPathOn = (channel: RejectionChannel): string | undefined =>
-        rejections.find((rejection) => rejection.channel === channel)?.path;
-      const messagesOn = (channel: RejectionChannel): string[] =>
-        rejections
-          .filter((rejection) => rejection.channel === channel)
-          .map((rejection) => rejection.message)
-          .filter((message): message is string => !!message);
-
-      const presentFirstPaths =
-        REJECTION_CHANNELS.map(firstPathOn).filter(filterNotNullish);
-      const summaryPath =
-        presentFirstPaths.length > 1
-          ? 'multiple files'
-          : (presentFirstPaths[0] ?? prepared[0].original);
-      const feedback = messagesOn('feedback');
-      return buildApprovalRejectedResult(summaryPath, 'accept_run_files', {
-        ...(feedback.length > 0 ? { feedback: feedback.join('\n') } : {}),
-        ...(firstPathOn('reason') !== undefined
-          ? { reason: messagesOn('reason').join('\n') }
-          : {}),
-        ...(firstPathOn('cause') !== undefined
-          ? { cause: messagesOn('cause').join('\n') || undefined }
-          : {}),
-      });
+      const { path, refusal } = summarizeRefusals(rejections);
+      return buildApprovalRejectedResult(path, 'accept_run_files', refusal);
     }
 
     // Phase 3: Clean up diff files from workspace for accepted files

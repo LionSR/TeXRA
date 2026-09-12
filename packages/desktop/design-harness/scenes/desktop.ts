@@ -42,13 +42,13 @@ import {
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 
-/** The fan-out with nothing waiting: the same replay minus the approval. */
+/** The fan-out with nothing waiting: the same replay minus the request. */
 function runningOnlyView(): SessionView {
   const scenario = buildScenario();
   return foldAll([
     ...scenario.pending.filter(
       (input) =>
-        !(input._tag === 'event' && input.event.type === 'approval.requested'),
+        !(input._tag === 'event' && input.event.type === 'request.opened'),
     ),
     local({ self: [OWNER] }),
   ]);

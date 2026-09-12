@@ -21,7 +21,10 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import {
+  ToolEditApprovalController,
+  type ToolEditApprovalHost,
+} from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
@@ -141,15 +144,26 @@ export function createDesktopAgentRun(
 
   // The tool-edit preview: staged copies of the original and proposed
   // content the review pane diffs. The request itself is the session's
-  // (`approval.requested` folds into the view), and a surface's decision
+  // (`request.opened` folds into the view), and a surface's `request.decide`
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
+  const decideRequest: ToolEditApprovalHost['decide'] = (
+    runId,
+    requestId,
+    decision,
+  ) =>
+    effectRuntime().runPromise(
+      session.requests
+        .request({ kind: 'request.decide', runId, requestId, decision })
+        .pipe(Effect.asVoid),
+    );
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
         ...options.toolEditPreview,
         showErrorMessage: host.showErrorMessage,
       },
+      decide: decideRequest,
     }),
   });
   const sessionEvents = effectRuntime().runFork(
@@ -158,14 +172,17 @@ export function createDesktopAgentRun(
     ),
   );
   // Attached for the window's life, before the first run of this window
-  // asks anything. Requests this host does not present (bash, plan,
-  // proposal, retry, question) stay parked in the runtime until a surface's
-  // approval row decides them.
+  // asks anything. This host presents only the tool-edit preview; every
+  // other request (bash, plan, proposal, retry, question) is listed by the
+  // fold and answered by a surface's `request.decide`.
   const detachHostInteractions = session.interactions.use({
     emit: handlePresentationEvent,
-    requestToolEditApproval: (request) =>
-      toolEditApprovals.requestApproval(request),
-    cancel: (selector) => toolEditApprovals.cancel(selector),
+    presentToolEdit: (request) => {
+      void settleHostDialog(
+        toolEditApprovals.present(request),
+        'Failed to stage the tool-edit preview',
+      );
+    },
   });
 
   function runValidated(

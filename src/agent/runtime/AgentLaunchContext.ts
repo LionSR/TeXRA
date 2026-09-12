@@ -49,7 +49,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
 } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { isObject, linkAbortSignals, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -641,7 +640,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     yield* failIfAborted(input.signal);
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
-    const runStatus = launchSession.status;
 
     // The runtime takes these resources only after assembly succeeds. Failure
     // unwinds them in reverse order while preserving the original cause.
@@ -660,11 +658,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
             });
-          runStatus.transitionToTerminal(
-            runId,
-            RUN_PHASE.FAILED,
-            RUN_TRANSITION_CAUSE.LIFECYCLE,
-          );
           const publication = yield* Effect.exit(
             Effect.tryPromise({
               try: () => launchSession.settlePublications(),

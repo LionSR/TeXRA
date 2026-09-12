@@ -157,11 +157,11 @@ export const createHostRunActions = (
     );
 
     const isRetryPending = (runId: RunId, requestId: string) =>
-      view().approvals.some(
-        (approval) =>
-          approval.runId === runId &&
-          approval.requestId === requestId &&
-          approval.payload.kind === 'retry',
+      view().requests.some(
+        (request) =>
+          request.runId === runId &&
+          request.requestId === requestId &&
+          request.payload.kind === 'retry',
       );
 
     const settleRetry = (
@@ -176,9 +176,9 @@ export const createHostRunActions = (
       // Interruption is not caught: it belongs to the caller's fiber.
       session.requests
         .request({
-          kind: 'decision.retry',
+          kind: 'request.decide',
           runId,
-          approvalId: requestId,
+          requestId,
           decision,
         })
         .pipe(

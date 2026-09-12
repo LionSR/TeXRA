@@ -272,19 +272,20 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private formatLine(now: number): string {
     const root = this.root();
     if (!root) return '';
-    const roundStage = root.stage?.kind === 'round' ? root.stage : undefined;
+    // The loop's own coordinate off the fold's `flow`; a run that has not
+    // stepped yet carries none.
+    const round = root.flow?.round ?? undefined;
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
-    const declaredRounds =
+    const plannedRounds =
       root.category === AgentCategory.Workflow && agentName !== undefined
         ? getAgent(agentName, AgentCategory.Workflow)?.rounds
         : undefined;
-    const plannedRounds = roundStage?.total ?? declaredRounds;
     const parts: string[] = [];
-    if (roundStage) {
+    if (round !== undefined) {
       parts.push(
         `[${formatRoundStageLabel({
-          index: roundStage.index,
+          index: round,
           ...(isMultiRound(plannedRounds) ? { total: plannedRounds } : {}),
         })}]`,
       );
@@ -295,7 +296,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const phase = livePhaseText(root);
     parts.push(subject || phase || 'Running');
     if (subject && phase && phase !== 'Running') parts.push(phase);
-    if (!roundStage && isMultiRound(plannedRounds)) {
+    if (round === undefined && isMultiRound(plannedRounds)) {
       parts.push(`${plannedRounds} rounds`);
     }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;

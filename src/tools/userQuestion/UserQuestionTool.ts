@@ -1,24 +1,24 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
   getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import {
+  ToolError,
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
 import type { ToolResult, UserQuestionPermission } from '@shared/schemas';
+import { refusalOf } from '@shared/session/approvalDecision';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { assertNever, generateShortId } from '@utils/core';
+import { generateShortId } from '@utils/core';
 
 const logger = createLog('UserQuestionTool');
 
@@ -49,6 +49,11 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   const context = tryUseRunContext();
   requireInteractions('ask_user_question', context);
   const runId = getRunContextRunId(context);
+  if (!runId) {
+    return yield* Effect.fail(
+      new ToolError('ask_user_question requires an active run context.'),
+    );
+  }
   const requestId = `user-question-${generateShortId()}`;
 
   logger.info('User question requested', {
@@ -60,37 +65,44 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     questions: input.questions,
     context: input.context ?? undefined,
     allowBypass: false,
-    runId: runId ?? '',
+    runId,
   };
   const session = currentSession();
-  const result = yield* hostPort(() =>
-    session.interactions.askUserQuestion(permission),
-  );
+  const decision = yield* session.openRequest(runId, {
+    kind: 'userQuestion',
+    data: permission,
+  });
 
-  if (result.action !== 'submit') {
-    const classification = classifyRejection(result);
-    switch (classification.kind) {
-      case 'cancelled':
+  if (decision.action === 'skip') {
+    return executed(
+      withDetail('The user declined to answer', decision.feedback ?? undefined),
+    );
+  }
+  if (decision.action !== 'submit') {
+    const refusal = refusalOf('userQuestion', decision);
+    switch (refusal.action) {
+      case 'cancel':
         return executed(
-          withDetail('The user question was cancelled', classification.cause),
+          withDetail(
+            'The user question was cancelled',
+            refusal.cause ?? undefined,
+          ),
         );
-      case 'policy':
+      case 'deny':
         return executed(
-          withDetail('The user question was denied', classification.reason),
+          withDetail('The user question was denied', refusal.reason),
         );
-      case 'feedback':
+      case 'reject':
         return executed(
-          withDetail('The user declined to answer', classification.feedback),
-        );
-      default:
-        return assertNever(
-          classification,
-          'Unhandled rejection classification',
+          withDetail(
+            'The user declined to answer',
+            refusal.feedback ?? undefined,
+          ),
         );
     }
   }
 
-  const answers = UserQuestionAnswersSchema.parse(result.answers);
+  const answers = UserQuestionAnswersSchema.parse(decision.answers);
   const answerCount = Object.keys(answers).length;
   if (answerCount === 0) {
     return executed('The user submitted no answers.');

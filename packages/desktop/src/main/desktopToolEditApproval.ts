@@ -29,6 +29,8 @@ type DesktopToolEditApprovalUi = Pick<
 
 interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
+  /** The window's `request.decide`: where a staged request's decision goes. */
+  decide: ToolEditApprovalHost['decide'];
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -36,6 +38,10 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
 
   get openBuildDisplay(): BuildDisplayFn {
     return this.options.ui.openBuildDisplay;
+  }
+
+  get decide(): ToolEditApprovalHost['decide'] {
+    return this.options.decide;
   }
 
   async stagePreview(

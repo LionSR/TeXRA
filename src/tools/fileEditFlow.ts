@@ -247,14 +247,12 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     sourceTool,
     present,
   }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown> {
-    const approval = yield* hostPort(() =>
-      requestToolEditApproval({
-        path,
-        originalContent,
-        proposedContent,
-        sourceTool,
-      }),
-    );
+    const approval = yield* requestToolEditApproval({
+      path,
+      originalContent,
+      proposedContent,
+      sourceTool,
+    });
     if (approval.action !== 'apply') {
       return buildApprovalRejectedResult(displayPath, sourceTool, approval);
     }

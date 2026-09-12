@@ -5,13 +5,17 @@ import '@test/support/defaultSessionTestSetup';
 import * as assert from 'node:assert';
 
 // Third-party imports
-import pDefer from 'p-defer';
+import { Effect } from 'effect';
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { effectRuntime } from '@platform/processRuntime';
+import type { RequestDecision, RunId } from '@shared/schemas';
+import { waitForCondition } from '@test/support/asyncTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
   requestToolEditApproval,
@@ -21,18 +25,24 @@ import {
 import { generateRunId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-// Test run id for the per-run approval-bypass cases
-const TEST_RUN_ID = generateRunId();
+// Local file imports
+import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
 
-// Host interactions are attached once per platform install, so each case swaps
-// this reference and the attached port delegates to whatever it holds.
-let testApprovalHandler:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
+const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> =>
+  effectRuntime().runPromise(effect);
+
+// A tool edit opens its request on a run, so every case owns a freshly
+// started one; the file's default session outlives the individual tests.
+let runId: RunId;
+
+// The decision a surface sends for each request the run opens; a case that
+// must park one returns null and decides it later with `decideRequest`.
+let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
+let decisions: ReturnType<typeof autoDecideRequests> | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
-// Requests the default auto-approve handler saw; tests override the handler
-// when they need to deny or adjust, and assert on this list otherwise.
+// The previews the host staged; tests override the decision when they need to
+// reject or adjust, and assert on this list otherwise.
 let approvalRequests: ToolEditApprovalRequest[] = [];
 
 async function installPlatform(
@@ -40,23 +50,13 @@ async function installPlatform(
   files: Record<string, string | Uint8Array> = {},
 ) {
   approvalRequests = [];
-  testApprovalHandler = async (request) => {
-    approvalRequests.push(request);
-    return { action: 'apply', appliedContent: request.proposedContent };
-  };
+  nextDecision = () => ({ action: 'approve' });
   await installFakePlatform({ workspacePath: '/workspace', config, files });
   detachHostInteractions();
   detachHostInteractions = defaultSession().interactions.use({
-    requestToolEditApproval: (request) => {
-      const handler = testApprovalHandler;
-      if (!handler) {
-        throw new Error(
-          'No test approval handler configured. Set `testApprovalHandler` first.',
-        );
-      }
-      return handler(request);
+    presentToolEdit: (request) => {
+      approvalRequests.push(request);
     },
-    cancel: () => undefined,
   });
 }
 
@@ -68,29 +68,38 @@ function stubWorkspaceFile(options: { exists: boolean; content: string }) {
   return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
 }
 
+/** Run a tool call on the case's run, the way a dispatched tool does. */
+function inRun<T>(call: () => Promise<T>): Promise<T> {
+  return withRunContext(createRunContext({ runId }), call);
+}
+
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
     defaultSession().setApprovalPolicy('ask');
     policyDenials = 0;
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
+    runId = publishTestRunStart(defaultSession(), generateRunId());
+    await defaultSession().settlePublications();
+    decisions = autoDecideRequests(defaultSession(), () => nextDecision());
   });
 
   afterEach(() => {
+    decisions?.detach();
+    decisions = undefined;
     vi.restoreAllMocks();
-    testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
   it('write_file applies changes after approval', async () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'old content' });
 
-    const result = await tool.call({ path: 'doc.txt', content: 'new content' });
+    const result = await inRun(() =>
+      tool.call({ path: 'doc.txt', content: 'new content' }),
+    );
 
     const [request] = approvalRequests;
     assert.strictEqual(request?.path, 'doc.txt');
@@ -108,12 +117,11 @@ describe('Tool edit approval gating', () => {
   it('write_file reports the content adjusted during approval', async () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'old content' });
-    testApprovalHandler = async () => ({
-      action: 'apply',
-      appliedContent: 'reviewed content',
-    });
+    nextDecision = () => ({ action: 'approve', content: 'reviewed content' });
 
-    const result = await tool.call({ path: 'doc.txt', content: 'new content' });
+    const result = await inRun(() =>
+      tool.call({ path: 'doc.txt', content: 'new content' }),
+    );
 
     assert.strictEqual(write.mock.lastCall?.[1], 'reviewed content');
     assert.match(result.output ?? '', /User adjustments to doc\.txt/);
@@ -126,15 +134,11 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
 
-    testApprovalHandler = async () => ({
-      action: 'reject',
-      feedback: 'Rejected by user',
-    });
+    nextDecision = () => ({ action: 'reject', feedback: 'Rejected by user' });
 
-    const result = await tool.call({
-      path: 'summary.txt',
-      content: 'new content',
-    });
+    const result = await inRun(() =>
+      tool.call({ path: 'summary.txt', content: 'new content' }),
+    );
 
     assert.strictEqual(write.mock.calls.length, 0);
     assert.strictEqual(result.status, 'error');
@@ -148,18 +152,14 @@ describe('Tool edit approval gating', () => {
   it('does not present an automatic cancellation as user feedback', async () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
-    testApprovalHandler = async () => ({
-      action: 'reject',
-      cause: 'Session disposed.',
-    });
+    nextDecision = () => ({ action: 'cancel', cause: 'Session disposed.' });
 
-    const result = await tool.call({
-      path: 'summary.txt',
-      content: 'new content',
-    });
+    const result = await inRun(() =>
+      tool.call({ path: 'summary.txt', content: 'new content' }),
+    );
 
     assert.strictEqual(write.mock.calls.length, 0);
-    assert.match(result.error ?? '', /Tool edit approval cancelled/);
+    assert.match(result.error ?? '', /Tool edit cancelled/);
     assert.match(result.error ?? '', /Session disposed\./);
     assert.strictEqual(result.userInstruction, undefined);
   });
@@ -167,18 +167,14 @@ describe('Tool edit approval gating', () => {
   it('preserves an automatic cancellation without a cause', async () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: true, content: 'base' });
-    testApprovalHandler = async () => ({
-      action: 'reject',
-      cause: undefined,
-    });
+    nextDecision = () => ({ action: 'cancel', cause: undefined });
 
-    const result = await tool.call({
-      path: 'summary.txt',
-      content: 'new content',
-    });
+    const result = await inRun(() =>
+      tool.call({ path: 'summary.txt', content: 'new content' }),
+    );
 
     assert.strictEqual(write.mock.calls.length, 0);
-    assert.match(result.error ?? '', /Tool edit approval cancelled/);
+    assert.match(result.error ?? '', /Tool edit cancelled/);
     assert.doesNotMatch(result.error ?? '', /User rejected/);
     assert.strictEqual(result.userInstruction, undefined);
   });
@@ -188,7 +184,9 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    const result = await tool.call({ path: 'doc.txt', content: 'new content' });
+    const result = await inRun(() =>
+      tool.call({ path: 'doc.txt', content: 'new content' }),
+    );
 
     assert.strictEqual(approvalRequests.length, 0);
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
@@ -223,17 +221,14 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_RUN_ID, true, {
+    defaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
       silent: true,
     });
 
     // The bypass check requires a runId on the request; the approval layer
     // picks it up from the active run context.
-    const result = await withRunContext(
-      createRunContext({
-        runId: TEST_RUN_ID,
-      }),
-      () => tool.call({ path: 'doc.txt', content: 'auto' }),
+    const result = await inRun(() =>
+      tool.call({ path: 'doc.txt', content: 'auto' }),
     );
 
     assert.strictEqual(approvalRequests.length, 0);
@@ -242,45 +237,42 @@ describe('Tool edit approval gating', () => {
   });
 
   it('rechecks session bypass between concurrent approval requests', async () => {
-    const firstApproval = pDefer<ToolEditApprovalResult>();
-    const firstPrompted = pDefer<void>();
-    let handlerCalls = 0;
+    // The first request stays parked so the second is enqueued behind it.
+    nextDecision = () => null;
 
-    testApprovalHandler = async () => {
-      handlerCalls += 1;
-      firstPrompted.resolve();
-      return firstApproval.promise;
-    };
-
-    const requestInRun = (path: string) =>
-      withRunContext(
-        createRunContext({
-          runId: TEST_RUN_ID,
-        }),
-        () =>
+    const requestInRun = (path: string): Promise<ToolEditApprovalResult> =>
+      withRunContext(createRunContext({ runId }), () =>
+        run(
           requestToolEditApproval({
             path,
             originalContent: '',
             proposedContent: path,
             sourceTool: 'write_file',
           }),
+        ),
       );
 
     const firstRequest = requestInRun('first.txt');
     const secondRequest = requestInRun('second.txt');
-    await firstPrompted.promise;
+    await waitForCondition(() => approvalRequests.length === 1, {
+      timeoutMessage: 'Timed out waiting for the first edit to be staged',
+    });
 
-    assert.strictEqual(handlerCalls, 1);
-    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_RUN_ID, true, {
+    defaultSession().approvals.toolEdit.bypass.setBypass(runId, true, {
       silent: true,
     });
-    firstApproval.resolve({ action: 'apply', appliedContent: 'first.txt' });
+    decideRequest(
+      defaultSession(),
+      { runId, requestId: approvalRequests[0]!.permission.requestId },
+      { action: 'approve', content: 'first.txt' },
+    );
 
     const results = await Promise.all([firstRequest, secondRequest]);
     assert.deepStrictEqual(
       results.map((result) => result.action),
       ['apply', 'apply'],
     );
-    assert.strictEqual(handlerCalls, 1);
+    // The bypassed second request never reaches a surface.
+    assert.strictEqual(approvalRequests.length, 1);
   });
 });

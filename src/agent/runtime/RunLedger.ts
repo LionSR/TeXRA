@@ -37,16 +37,18 @@ import { SessionEvents } from '@shared/session/sessionEvents';
 import type { z } from 'zod';
 
 /**
- * Rows that may follow a `flow.snapshot` in its batch. `approval.requested` is
+ * Rows that may follow a `flow.snapshot` in its batch. `request.opened` is
  * deliberately absent: the snapshot is the request's recovery binding and the
- * fold resolves that binding against the approvals folded below it, so a
+ * fold resolves that binding against the requests folded below it, so a
  * request committed after the snapshot that binds it is `dangling-binding`.
- * The batch is `[approval.requested, flow.snapshot]`, one order, checked here.
+ * The batch is `[request.opened, flow.snapshot]`, one order, checked here.
+ * A `stream.end` closes a streaming row the `waiting` step parks beside.
  */
 const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
   'flow.step',
   'tool.end',
-  'approval.resolved',
+  'request.decided',
+  'stream.end',
 ]);
 
 const isResponse = (row: RunLedgerDraft): boolean =>

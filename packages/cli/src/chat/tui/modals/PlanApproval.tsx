@@ -18,13 +18,13 @@ import {
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
-import type { ApprovalDecision } from '../state/approvalQueue';
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 
 interface PlanApprovalProps {
   readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly payload: PlanApprovalPermission;
-  readonly onDecide: (decision: ApprovalDecision) => void;
+  readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
 const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
@@ -155,9 +155,8 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
                 key: PLAN_APPROVAL_GOAL_ACTION.key,
                 label: PLAN_APPROVAL_GOAL_ACTION.action,
                 decision: {
-                  accepted: true,
-                  ...(autoApproveAll ? { goalAutoApproveAll: true } : {}),
-                  planAction: 'approve_and_goal',
+                  action: 'approve_and_goal',
+                  autoApproveAll: autoApproveAll ? true : null,
                 },
               },
             ]

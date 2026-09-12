@@ -10,14 +10,12 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
-  RUN_SUBSTATE,
   AgentCategory,
   type ActiveChildInfo,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import {
   createTestSession,
   publishTestRunStart,
@@ -73,21 +71,15 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
   {
     source: {
       draft: {
-        type: 'status',
+        type: 'flow.step',
         aggregateId: runAggregate,
-        phase: RUN_PHASE.RUNNING,
-        cause: RUN_TRANSITION_CAUSE.RESUME,
-        previousPhase: RUN_PHASE.WAITING,
-        substate: RUN_SUBSTATE.RESUMING,
+        payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 2 },
       },
     },
-    event: 'status',
+    event: 'flow.step',
     payload: {
       aggregateId: runAggregate,
-      phase: RUN_PHASE.RUNNING,
-      cause: RUN_TRANSITION_CAUSE.RESUME,
-      previousPhase: RUN_PHASE.WAITING,
-      substate: RUN_SUBSTATE.RESUMING,
+      payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 2 },
     },
   },
   {
@@ -414,28 +406,25 @@ describe('attachCliSessionProgressProjection', () => {
     expect(writeRecord).toHaveBeenCalledTimes(1);
   });
 
-  it('writes one record per published status fact without renderer dedup', async () => {
+  it('writes one record per published flow step without renderer dedup', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     await session.settlePublications();
     const { records, publish, detach } = projectionOver(session);
     try {
-      for (const substate of [RUN_SUBSTATE.RESUMING, RUN_SUBSTATE.STARTING]) {
+      for (const turn of [1, 2]) {
         await publish({
           draft: {
-            type: 'status',
+            type: 'flow.step',
             aggregateId: runAggregate,
-            phase: RUN_PHASE.RUNNING,
-            cause: RUN_TRANSITION_CAUSE.RESUME,
-            previousPhase: RUN_PHASE.WAITING,
-            substate,
+            payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn },
           },
         });
       }
 
-      expect(
-        records().map((record) => rowFields(record).fields.substate),
-      ).toEqual([RUN_SUBSTATE.RESUMING, RUN_SUBSTATE.STARTING]);
+      expect(records().map((record) => rowFields(record).fields)).toMatchObject(
+        [{ payload: { turn: 1 } }, { payload: { turn: 2 } }],
+      );
     } finally {
       detach();
     }

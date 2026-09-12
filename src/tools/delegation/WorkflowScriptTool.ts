@@ -416,16 +416,12 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             tasks: [...(meta.tasks ?? [])],
           },
         };
-        const proposalDecision = yield* Effect.tryPromise({
-          try: () =>
-            requestDelegationProposal(
-              proposal,
-              runScope.runId,
-              runScope.session,
-              parent,
-            ),
-          catch: ensureError,
-        });
+        const proposalDecision = yield* requestDelegationProposal(
+          proposal,
+          runScope.runId,
+          runScope.session,
+          parent,
+        );
         const declined = proposalResultToToolResult(
           proposalDecision.result,
           defaultAgent.name,

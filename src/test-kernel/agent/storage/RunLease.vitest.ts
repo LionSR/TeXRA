@@ -20,7 +20,6 @@ import {
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -511,10 +510,7 @@ describe('cross-process run leases', () => {
   it('starts a resume only after the previous generation has released its lease', async () => {
     const runId = 'd8645a' as RunId;
     const registry = new RunRegistry({
-      runStatus: new RunStatusMachine(
-        () => {},
-        () => {},
-      ),
+      runView: () => undefined,
       publish: () => {},
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       releaseRootRunLease: () => Effect.void,

@@ -84,10 +84,10 @@ describe('canonical run records', () => {
         });
         yield* session.commit([
           {
-            type: 'status',
+            type: 'run.end',
             aggregateId: aggregateId('run', runId),
-            phase: 'completed',
-            cause: 'lifecycle',
+            outcome: 'completed',
+            output: { category: 'toolUse', response: '', files: [] },
           },
         ]);
         expect(yield* records.readReport()).toBe('retained report bytes');

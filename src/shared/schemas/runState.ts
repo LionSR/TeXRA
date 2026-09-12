@@ -81,20 +81,6 @@ const PhaseStageSchema = z.object({
 
 export type PhaseStage = z.infer<typeof PhaseStageSchema>;
 
-/**
- * The one discriminated run-progress slot: a reflection workflow advances
- * through numbered rounds, a workflow-script run through named phases — never
- * both — so state and wire carry one `stage` field rather than two
- * independently-optional ones every reader has to fall back between. The arms
- * extend the payload schemas above, so projecting to either is a `kind` strip.
- */
-export const RunStageSchema = z.discriminatedUnion('kind', [
-  RoundStageSchema.extend({ kind: z.literal('round') }),
-  PhaseStageSchema.extend({ kind: z.literal('phase') }),
-]);
-
-export type RunStage = z.infer<typeof RunStageSchema>;
-
 // Conversation Progress (tool-call counters updated during run)
 
 export const ConversationProgressSchema = z.object({

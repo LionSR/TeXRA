@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,10 +13,6 @@ import {
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import type {
-  HostInteractions,
-  ProposalResult,
-} from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunLeaseLostError } from '@agent/storage/runLease';
 import {
@@ -24,9 +20,12 @@ import {
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import type { RequestDecision, RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
@@ -193,16 +192,48 @@ async function waitForChildren(session: SessionHandle): Promise<void> {
   }
 }
 
-/** The same delegation routed through the host's proposal port, with the host
- *  fake answering `decision`. The session owns the fake port, so it is created
- *  and disposed per case. */
-async function delegateWithProposalDecision(decision: ProposalResult) {
+/**
+ * Answer every request the session opens the way a surface's `request.decide`
+ * does — one `request.decided` row on the same run — and record the kinds
+ * asked for, so a case can assert that nothing was asked at all.
+ */
+function answerOpenedRequests(
+  session: SessionHandle,
+  decision: RequestDecision,
+) {
+  const openedKinds: string[] = [];
+  const fiber = Effect.runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type !== 'request.opened') return;
+        openedKinds.push(event.payload.kind);
+        session.publish([
+          {
+            type: 'request.decided',
+            aggregateId: event.aggregateId,
+            requestId: event.requestId,
+            decision,
+          },
+        ]);
+      }),
+    ),
+  );
+  return {
+    openedKinds,
+    stop: () => Effect.runPromise(Fiber.interrupt(fiber)),
+  };
+}
+
+/** The same delegation routed through the request protocol, with `decision`
+ *  answering the proposal the run opens. The session owns the decider, so it
+ *  is created and disposed per case. */
+async function delegateWithProposalDecision(decision: RequestDecision) {
   mocks.isProposalBypassed.mockReturnValue(false);
   const session = createTestSession();
-  session.interactions.use({
-    cancel: vi.fn(),
-    requestAgentProposal: vi.fn().mockResolvedValue(decision),
-  } satisfies HostInteractions);
+  // A request is a row on its run, so the parent run must exist first.
+  publishTestRunStart(session, PARENT_RUN_ID);
+  await session.settlePublications();
+  const decider = answerOpenedRequests(session, decision);
   try {
     const result = await withRunContext(parentRunContext({ session }), () =>
       callDelegateReview(),
@@ -210,6 +241,7 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
     await waitForChildren(session);
     return result;
   } finally {
+    await decider.stop();
     session.dispose();
   }
 }
@@ -1383,7 +1415,7 @@ describe('headless delegation', () => {
 
   it('does not attribute proposal cancellation to the user', async () => {
     const result = await delegateWithProposalDecision({
-      action: 'reject',
+      action: 'cancel',
       cause: 'CLI approval prompt failed.',
     });
 
@@ -1400,11 +1432,7 @@ describe('headless delegation', () => {
     // guaranteed denial; the child stays on inherited approval state.
     mocks.isProposalBypassed.mockReturnValue(false);
     const session = createTestSession();
-    const requestAgentProposal = vi.fn();
-    session.interactions.use({
-      cancel: vi.fn(),
-      requestAgentProposal,
-    } satisfies HostInteractions);
+    const decider = answerOpenedRequests(session, { action: 'approve' });
     try {
       const result = await withRunContext(
         parentRunContext({ session, approvalPromptsUnavailable: true }),
@@ -1412,7 +1440,7 @@ describe('headless delegation', () => {
       );
 
       await waitForChildren(session);
-      expect(requestAgentProposal).not.toHaveBeenCalled();
+      expect(decider.openedKinds).toEqual([]);
       expect(result.status).toBe('executed');
       expect(result.summary).toBe("Launched 'review' (async)");
       expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -1423,6 +1451,7 @@ describe('headless delegation', () => {
         expect.anything(),
       );
     } finally {
+      await decider.stop();
       session.dispose();
     }
   });

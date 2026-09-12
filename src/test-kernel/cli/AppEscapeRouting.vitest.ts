@@ -100,26 +100,27 @@ const CHORD_WINDOW_EXPIRED_MS = ESC_META_CHORD_INTERRUPT_DELAY_MS + 100;
 /** The runs a case names, as the fold states them; every seed rewrites
  *  the whole view the App reads. */
 const seeded = new Map<RunId, RunView>();
-/** The approvals the fold lists: `approval.requested` facts not yet resolved. */
-let seededApprovals: SessionView['approvals'] = [];
+/** The requests the fold lists: `request.opened` facts not yet decided. */
+let seededRequests: SessionView['requests'] = [];
 function syncSeededView(): void {
-  seedView(viewWith([...seeded.values()], { approvals: seededApprovals }));
+  seedView(viewWith([...seeded.values()], { requests: seededRequests }));
 }
-/** One pending request as its `approval.requested` fact folds. */
-function seedApproval(payload: ApprovalPayload): void {
-  seededApprovals = [
-    ...seededApprovals,
+/** One pending request as its `request.opened` fact folds. */
+function seedRequest(payload: ApprovalPayload): void {
+  seededRequests = [
+    ...seededRequests,
     {
       runId: payload.data.runId as RunId,
       requestId: payload.data.requestId,
       payload,
+      thread: null,
     },
   ];
   syncSeededView();
 }
-/** Every pending request resolved: the runtime's `approval.resolved` folded. */
-function clearSeededApprovals(): void {
-  seededApprovals = [];
+/** Every pending request decided: the runtime's `request.decided` folded. */
+function clearSeededRequests(): void {
+  seededRequests = [];
   syncSeededView();
 }
 function seedRun(
@@ -323,11 +324,11 @@ beforeAll(bindTestSessionView);
 beforeEach(() => {
   resetCliState();
   seeded.clear();
-  seededApprovals = [];
+  seededRequests = [];
   syncSeededView();
 });
 afterEach(() => {
-  clearSeededApprovals();
+  clearSeededRequests();
   resetCliState();
 });
 
@@ -407,7 +408,7 @@ describe('App foreground Escape ownership', () => {
     seedChildRoster(WORKFLOW, [runningChild(CHILD, 'inspect')]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
-    seedApproval({
+    seedRequest({
       kind: 'planApproval',
       data: {
         requestId: 'plan-unrelated',
@@ -416,7 +417,7 @@ describe('App foreground Escape ownership', () => {
         goalEnabled: false,
       },
     });
-    seedApproval({
+    seedRequest({
       kind: 'planApproval',
       data: {
         requestId: 'plan-queued-workflow-child',
@@ -444,7 +445,7 @@ describe('App foreground Escape ownership', () => {
       expect(stdout.output).not.toContain(
         'Keep this unrelated request queued.',
       );
-      clearSeededApprovals();
+      clearSeededRequests();
       await waitFor(() => currentApproval.get() === undefined);
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       expect(activeRunId.get()).toBe(ROOT);
@@ -454,7 +455,7 @@ describe('App foreground Escape ownership', () => {
 
       // An approval bound to the workflow stream surfaces over the popup,
       // and the popup comes back once it is answered.
-      seedApproval({
+      seedRequest({
         kind: 'planApproval',
         data: {
           requestId: 'plan-workflow-popup',
@@ -464,13 +465,13 @@ describe('App foreground Escape ownership', () => {
         },
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));
-      clearSeededApprovals();
+      clearSeededRequests();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
 
       // A real announcement from one of the workflow's own agent calls takes
       // the same foreground modal without moving the viewport underneath it.
-      seedApproval({
+      seedRequest({
         kind: 'planApproval',
         data: {
           requestId: 'plan-workflow-child',
@@ -482,7 +483,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('Verify the child result.'));
       expect(activeRunId.get()).toBe(ROOT);
       expect(emit).not.toHaveBeenCalled();
-      clearSeededApprovals();
+      clearSeededRequests();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
       closeForegroundReader();

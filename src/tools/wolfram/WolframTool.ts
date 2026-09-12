@@ -73,7 +73,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   input: WolframInput,
 ) {
   const command = wolframApprovalCommand(input.code);
-  const approval = yield* hostPort(() => ports.requestApproval({ command }));
+  const approval = yield* ports.requestApproval({ command });
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(command, approval);
   }

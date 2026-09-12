@@ -7,20 +7,21 @@ import { classMap } from 'lit/directives/class-map.js';
 // Side-effect imports - register the approve-split component
 import './ApproveSplitButton';
 
-// Local imports - approval decision vocabulary
-import type {
-  ApprovalPermissionKind,
-  ApproveDecision,
-} from '@shared/session/approvalDecision';
+// Local imports - the one decision vocabulary
+import type { PermissionPayload, RequestDecision } from '@shared/schemas';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
+/** The approve arm of the one decision union: the whole vocabulary a panel's
+ *  primary action can send. */
+type ApproveDecision = Extract<RequestDecision, { action: 'approve' }>;
+
 export abstract class BaseApprovalPanel<
-  K extends ApprovalPermissionKind,
+  K extends PermissionPayload['kind'],
 > extends BaseFeedbackPanel<K> {
   /** The panel declares its approval; the base owns dispatch and shortcuts. */
-  protected abstract readonly approvalDecision: ApproveDecision<K>;
+  protected abstract readonly approvalDecision: ApproveDecision;
 
   // -------------------------------------------------------------------------
   // Run-scoped approve-menu affordances. The ApproveSplitButton accepts them

@@ -71,19 +71,18 @@ const runStart: SessionEventDraft = {
   parent: null,
 };
 
+/** The loop parked on a request: the fold reads the phase off this row. */
 const waiting: SessionEventDraft = {
-  type: 'status',
+  type: 'flow.step',
   aggregateId: qualifyAggregateId('run', RUN),
-  phase: RUN_PHASE.WAITING,
-  cause: 'wait',
+  payload: { family: 'toolUse', step: 'waiting' },
 };
 
+/** The loop moving again, which is what makes the run running. */
 const running: SessionEventDraft = {
-  type: 'status',
+  type: 'flow.step',
   aggregateId: qualifyAggregateId('run', RUN),
-  phase: RUN_PHASE.RUNNING,
-  previousPhase: RUN_PHASE.WAITING,
-  cause: 'resume',
+  payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
 };
 
 /** A running model reply with no text of its own: the row the live text for
@@ -168,7 +167,7 @@ function drawn(view: SessionView) {
     order: view.order,
     status: run?.status ?? null,
     group: run?.group ?? null,
-    approvals: view.approvals.map((a) => a.requestId),
+    requests: view.requests.map((request) => request.requestId),
     rows:
       run?.transcript.rows.map((row) => [row.id, rowText(view, RUN, row.id)]) ??
       [],
@@ -281,9 +280,9 @@ describe('session framer', () => {
           ),
         ).toEqual([
           ['listing', 'run.start'],
-          ['listing', 'status'],
+          ['listing', 'flow.step'],
           ['aggregate', 'run.start'],
-          ['aggregate', 'status'],
+          ['aggregate', 'flow.step'],
         ]);
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and

@@ -3,11 +3,10 @@ import { Effect } from 'effect';
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { getExhaustionReason } from '@shared/schemas';
-import type { RetryPermission, ApprovalDecision, RunId } from '@shared/schemas';
+import type { RequestDecision, RetryPermission, RunId } from '@shared/schemas';
 import {
   quotaFallbackRouteForExhaustion,
   type QuotaFallbackRoute,
-  type QuotaFallbackRouteId,
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -20,11 +19,6 @@ import { safeTerminalText } from '../terminalText';
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
-
-/** CLI-local extension that keeps host failures separate from user text. */
-export type CliApprovalDecision = ApprovalDecision & {
-  readonly rejectionCause?: string;
-};
 
 export interface CliApprovalContent {
   readonly summary: string;
@@ -106,34 +100,6 @@ export function cliRetryActionHint(
 /** Whether a retry could be re-run against a personal API key. */
 export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
   return cliRetryQuotaRoute(payload) !== undefined;
-}
-
-/**
- * The decision the retry modal's "use your own API key" action settles with.
- * Structurally the CLI's TUI `ApprovalDecision` (approvalQueue.ts) narrowed to
- * this action; declared here so the runtime approval layer does not import the
- * TUI state module. Not exported: consumers use the structural type through
- * {@link cliRetryApiSwitchDecision}'s return.
- */
-interface CliRetryApiSwitchDecision {
-  readonly accepted: true;
-  readonly disableQuotaRoute?: QuotaFallbackRouteId;
-}
-
-/**
- * Map a failed retry to the quota-fallback route it disables: a catalogued
- * route turns off the preference that routed onto the exhausted credential
- * so the retry rebuilds onto the stored fallback key. Drives off
- * {@link cliRetryQuotaRoute} so the modal cannot drift from the classifier.
- */
-export function cliRetryApiSwitchDecision(
-  payload: RetryPermission,
-): CliRetryApiSwitchDecision {
-  const route = cliRetryQuotaRoute(payload);
-  return {
-    accepted: true,
-    ...(route ? { disableQuotaRoute: route.id } : {}),
-  };
 }
 
 const askCliApprovalQuestion = Effect.fn(
@@ -257,10 +223,9 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         feedback = feedbackAnswer.trim() || undefined;
       }
 
-      const decision: CliApprovalDecision = {
-        accepted: parsed.accepted,
-        userMessage: parsed.accepted ? undefined : feedback,
-      };
+      const decision: RequestDecision = parsed.accepted
+        ? { action: 'approve' }
+        : { action: 'reject', feedback: feedback ?? null };
       return decision;
     }),
   ).pipe(
@@ -270,9 +235,11 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
           'cli.approval',
           `The CLI approval prompt failed: ${toErrorMessage(error)}`,
         );
-        const failed: CliApprovalDecision = {
-          accepted: false,
-          rejectionCause: 'CLI approval prompt failed.',
+        // A prompt that never reached a person closes the request rather
+        // than speaking for one: the cause says so.
+        const failed: RequestDecision = {
+          action: 'cancel',
+          cause: 'CLI approval prompt failed.',
         };
         return failed;
       }),

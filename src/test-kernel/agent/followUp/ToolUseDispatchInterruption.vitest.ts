@@ -15,10 +15,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
-import type {
-  HostUserQuestionRequest,
-  UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
 import { ModelInvoker, turnText } from '@agent/runtime/ModelInvoker';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -31,7 +27,12 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { Model, TurnResult } from '@llm/turn';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type RequestDecision,
+  type RunId,
+  type UserQuestionPermission,
+} from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { hostStores } from '@test/support/setupPlatform';
@@ -40,7 +41,10 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { generateRunId, generateShortId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-import { sessionWithInteractions } from '../progressTestUtils';
+import {
+  autoDecideRequests,
+  sessionWithInteractions,
+} from '../progressTestUtils';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with
@@ -288,6 +292,24 @@ function executedTool(name: string) {
   return { call, tool: { call, definition: { name } } as ITool };
 }
 
+/**
+ * The outcome-unknown barrier is a `request.opened` on the run and its answer
+ * is the `request.decided` row a surface lands: record every question the
+ * dispatch asks and answer it, or return null to leave it standing.
+ */
+function askedQuestions(
+  session: SessionHandle,
+  answer: (question: UserQuestionPermission) => RequestDecision,
+): { readonly questions: UserQuestionPermission[] } {
+  const questions: UserQuestionPermission[] = [];
+  autoDecideRequests(session, (opened) => {
+    if (opened.payload.kind !== 'userQuestion') return null;
+    questions.push(opened.payload.data);
+    return answer(opened.payload.data);
+  });
+  return { questions };
+}
+
 const CALLS = [
   { id: 'call-a', name: 'toolA' },
   { id: 'call-b', name: 'toolB' },
@@ -312,22 +334,15 @@ describe('tool dispatch interrupted mid-turn', () => {
     'leaves no half-delivered tool turn in history, and resume pairs every call',
     () =>
       Effect.gen(function* () {
-        const asked: HostUserQuestionRequest[] = [];
-        const session = sessionWithInteractions({
-          emit: () => {},
-          cancel: () => {},
-          askUserQuestion: async (request: HostUserQuestionRequest) => {
-            asked.push(request);
-            // The person answers "Skip": the model is told the call was
-            // skipped rather than being handed a blind second run.
-            return {
-              action: 'submit' as const,
-              answers: { [request.questions[0].question]: 'Skip' },
-            };
-          },
-        });
+        const session = sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
+        // The person answers "Skip": the model is told the call was skipped
+        // rather than being handed a blind second run.
+        const asked = askedQuestions(session, (question) => ({
+          action: 'submit',
+          answers: { [question.questions[0].question]: 'Skip' },
+        }));
 
         const toolA = executedTool('toolA');
         const toolB = blockingTool('toolB');
@@ -387,8 +402,8 @@ describe('tool dispatch interrupted mid-turn', () => {
 
         // The outcome-unknown barrier asked before anything re-ran, and was
         // not re-run when the answer was "skip".
-        expect(asked).toHaveLength(1);
-        expect(asked[0].questions[0].question).toContain('toolB');
+        expect(asked.questions).toHaveLength(1);
+        expect(asked.questions[0].questions[0].question).toContain('toolB');
         expect(toolB.call).toHaveBeenCalledTimes(1);
         // The call that never started runs normally on resume.
         expect(toolC.call).toHaveBeenCalledTimes(1);
@@ -405,33 +420,27 @@ describe('tool dispatch interrupted mid-turn', () => {
 
   /**
    * The barrier prompt is a question for a person, and only a person's answer
-   * retires it. A host Stop settles the pending question as a cancellation
-   * (`session.interactions.cancel` -> `{ action: 'reject', cause }`), which
-   * decides nothing: no `approval.resolved` is written, the request stays
-   * open under the intent's binding, and the next resume presents the same
-   * request id rather than telling the model a person skipped the call.
+   * retires it. An automatic close (a stop, a disposed session) lands
+   * `{ action: 'cancel' }`, which decides nothing about the call: no
+   * `tool.intent` is admitted and no skip is reported to the model. The
+   * dispatch interrupts, and the next resume asks the barrier again under a
+   * replacement request rather than telling the model a person skipped it.
    */
   it.effect(
-    'records no decision when the outcome-unknown prompt is cancelled, and re-presents it on the next resume',
+    'records no call decision when the outcome-unknown prompt is cancelled, and asks again on the next resume',
     () =>
       Effect.gen(function* () {
-        const asked: HostUserQuestionRequest[] = [];
+        // The first ask is closed automatically, not answered by a person.
         let answer: (
-          request: HostUserQuestionRequest,
-        ) => UserQuestionSettlement = () => ({
-          action: 'reject',
+          question: UserQuestionPermission,
+        ) => RequestDecision = () => ({
+          action: 'cancel',
           cause: 'Run interrupted.',
         });
-        const session = sessionWithInteractions({
-          emit: () => {},
-          cancel: () => {},
-          askUserQuestion: async (request: HostUserQuestionRequest) => {
-            asked.push(request);
-            return answer(request);
-          },
-        });
+        const session = sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
+        const asked = askedQuestions(session, (question) => answer(question));
 
         const toolA = executedTool('toolA');
         const toolB = blockingTool('toolB');
@@ -458,7 +467,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         yield* Effect.promise(() => toolB.startedPromise);
         yield* Fiber.interrupt(fiber);
 
-        // The first resume asks, and the prompt is cancelled under it.
+        // The first resume asks, and the prompt is closed under it.
         const cancelled = yield* Effect.exit(
           runToolUse({ resume: true }).pipe(
             Effect.provide(
@@ -475,23 +484,23 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(
           Exit.isFailure(cancelled) && Cause.hasInterrupts(cancelled.cause),
         ).toBe(true);
-        expect(asked).toHaveLength(1);
+        expect(asked.questions).toHaveLength(1);
 
         const open = yield* session.ledger.load(runId).pipe(Effect.orDie);
-        const request = open?.approvals[asked[0].requestId];
-        // The request stands undecided, and the call is still outcome-unknown.
-        expect(request?.resolved).toBe(false);
-        expect(request?.decision).toBeNull();
+        const request = open?.approvals[asked.questions[0].requestId];
+        // The close is on the request, and it decides nothing about the call:
+        // no rerun was admitted and no skip was reported.
+        expect(request?.decision).toMatchObject({ action: 'cancel' });
         expect(Object.keys(open?.pendingResponse?.settled ?? {})).toEqual([
           'call-a',
         ]);
         expect(toolB.call).toHaveBeenCalledTimes(1);
         expect(toolC.call).not.toHaveBeenCalled();
 
-        // The next resume presents the same request, and the answer decides.
-        answer = (request) => ({
+        // The next resume asks again, and the answer decides.
+        answer = (question) => ({
           action: 'submit',
-          answers: { [request.questions[0].question]: 'Skip' },
+          answers: { [question.questions[0].question]: 'Skip' },
         });
         const resumed = yield* runToolUse({ resume: true }).pipe(
           Effect.provide(
@@ -505,13 +514,17 @@ describe('tool dispatch interrupted mid-turn', () => {
           ),
         );
         expect(resumed.outcome).toBe('completed');
-        expect(asked).toHaveLength(2);
-        expect(asked[1].requestId).toBe(asked[0].requestId);
+        expect(asked.questions).toHaveLength(2);
+        // A request retired without a person's answer is replaced, never
+        // reopened.
+        expect(asked.questions[1].requestId).not.toBe(
+          asked.questions[0].requestId,
+        );
 
         const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
-        expect(delivered?.approvals[asked[0].requestId]?.decision).toBe(
-          'skipped',
-        );
+        expect(
+          delivered?.approvals[asked.questions[1].requestId]?.decision,
+        ).toMatchObject({ action: 'submit' });
         const group = delivered?.messages.find(
           (message) => message.role === 'tool',
         );

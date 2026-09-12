@@ -26,10 +26,6 @@
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type {
-  PlanApprovalResult,
-  ProposalResult,
-} from '@agent/runtime/HostInteractions';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
@@ -50,7 +46,7 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
+import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 
 const done: Outcome = { kind: 'done' };
 
@@ -134,45 +130,59 @@ function admit(
   );
 }
 
-/** A decision for a request no longer pending: settled already, or never made. */
-function settled(runId: RunId, what: string): Unavailable {
+/** A decision for a request no longer pending: decided already, or never opened. */
+function settled(runId: RunId): Unavailable {
   return new Unavailable({
     runId,
-    reason: `No pending ${what} request under that id.`,
+    reason: 'No pending request under that id.',
   });
 }
 
-function planDecision(
-  decision: Extract<RuntimeRequest, { kind: 'decision.plan' }>['decision'],
-): PlanApprovalResult {
-  switch (decision.action) {
-    case 'approve':
-      return { action: 'approve' };
-    case 'approve_and_goal':
-      return {
-        action: 'approve_and_goal',
-        ...(decision.autoApproveAll ? { autoApproveAll: true } : {}),
-      };
-    case 'reject':
-      return { action: 'reject', feedback: decision.feedback ?? undefined };
-  }
-}
-
-function proposalDecision(
-  decision: Extract<RuntimeRequest, { kind: 'decision.proposal' }>['decision'],
-): ProposalResult {
-  switch (decision.action) {
-    case 'approve':
-      return {
-        action: 'approve',
-        ...(decision.model == null ? {} : { model: decision.model }),
-        ...(decision.agent == null ? {} : { agent: decision.agent }),
-      };
-    case 'setup':
-      return { action: 'setup' };
-    case 'reject':
-      return { action: 'reject', feedback: decision.feedback ?? undefined };
-  }
+/**
+ * The one way in for a decision (one run model, 3.7): the request must be
+ * pending in the fold (opened, not decided), the decision lands as the run's
+ * `request.decided` row, and the waiting run reads it from the tail. An
+ * inquiry's answer is also recorded on its thread and delivered as a
+ * follow-up, since an inquiry never parks its run.
+ */
+function decide(
+  session: SessionHandle,
+  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+): Effect.Effect<Outcome, RequestError, InquiryRecords> {
+  return Effect.gen(function* () {
+    const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
+      (request) =>
+        request.runId === req.runId && request.requestId === req.requestId,
+    );
+    if (pending === undefined) return yield* Effect.fail(settled(req.runId));
+    yield* session
+      .commit([
+        {
+          type: 'request.decided',
+          aggregateId: qualifyAggregateId('run', req.runId),
+          requestId: req.requestId,
+          decision: req.decision,
+        },
+      ])
+      .pipe(
+        Effect.mapError((error): RequestError =>
+          error instanceof DatabaseWriteFailed
+            ? new Unavailable({
+                runId: req.runId,
+                reason: 'The decision could not be recorded.',
+              })
+            : new NotOwner({ runId: req.runId }),
+        ),
+      );
+    if (pending.payload.kind === 'externalInquiry') {
+      yield* recordInquiryDecision(
+        pending.payload.data,
+        req.decision,
+        session,
+      ).pipe(Effect.orDie);
+    }
+    return done;
+  });
 }
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
@@ -291,114 +301,8 @@ function handle(
               }),
         ),
       );
-    case 'decision.bash':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'bash',
-          req.approvalId,
-          req.decision.action === 'approve'
-            ? { action: 'approve' }
-            : {
-                action: 'reject',
-                feedback: req.decision.feedback ?? undefined,
-              },
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'bash approval')),
-      );
-    case 'decision.plan':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'planApproval',
-          req.approvalId,
-          planDecision(req.decision),
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'plan approval')),
-      );
-    case 'decision.proposal':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'proposal',
-          req.approvalId,
-          proposalDecision(req.decision),
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'proposal')),
-      );
-    case 'decision.userQuestion':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'userQuestion',
-          req.approvalId,
-          req.decision.action === 'submit'
-            ? { action: 'submit', answers: req.decision.answers }
-            : {
-                action: req.decision.action,
-                feedback: req.decision.feedback ?? undefined,
-              },
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'user question')),
-      );
-    case 'decision.retry':
-      // A rejection from the run's client preparation is a handler defect,
-      // per the module contract above, not a `RequestError` to word.
-      return Effect.promise(() =>
-        session.interactions.settleRetry(
-          req.approvalId,
-          req.decision.action === 'retry'
-            ? {
-                action: 'retry',
-                ...(req.decision.feedback == null
-                  ? {}
-                  : { feedback: req.decision.feedback }),
-              }
-            : { action: 'cancel' },
-          req.decision.action === 'retry'
-            ? (req.decision.credentials ?? 'configured')
-            : 'configured',
-        ),
-      ).pipe(
-        Effect.flatMap((accepted) =>
-          accepted
-            ? Effect.succeed(done)
-            : Effect.fail(settled(req.runId, 'retry')),
-        ),
-      );
-    case 'externalInquiry.submit':
-    case 'externalInquiry.drop':
-      return handleExternalInquiryAction(
-        req.kind === 'externalInquiry.submit'
-          ? {
-              action: 'submit',
-              threadId: req.threadId,
-              turnIndex: req.turnIndex,
-              answer: req.answer,
-              ...(req.sessionLinks == null
-                ? {}
-                : { sessionLinks: req.sessionLinks }),
-            }
-          : {
-              action: 'drop',
-              threadId: req.threadId,
-              turnIndex: req.turnIndex,
-              ...(req.feedback == null ? {} : { feedback: req.feedback }),
-            },
-        { session },
-      ).pipe(
-        Effect.orDie,
-        Effect.flatMap((accepted) =>
-          accepted
-            ? Effect.succeed(done)
-            : Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: 'This inquiry turn is no longer open.',
-                }),
-              ),
-        ),
-      );
+    case 'request.decide':
+      return decide(session, req);
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;

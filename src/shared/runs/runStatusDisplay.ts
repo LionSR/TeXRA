@@ -6,7 +6,6 @@ import {
   type PhaseStage,
   type RoundStage,
   type RunLifecycleStatus,
-  type RunStage,
   type RunSubstate,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
@@ -211,17 +210,6 @@ export function formatPhaseStageLabel(
     phaseIndex: stage.index,
     phaseTotal: stage.total,
   });
-}
-
-/** Label for the one stage slot a run fills: a workflow-script run advances
- *  through named phases, a tool-use run through numbered rounds, never both,
- *  so every surface that shows the slot dispatches on the same discriminant. */
-export function formatStageLabel(
-  stage: Readonly<RunStage> | undefined,
-): string | undefined {
-  if (stage === undefined) return undefined;
-  if (stage.kind === 'round') return formatRoundStageLabel(stage);
-  return formatPhaseStageLabel(stage);
 }
 
 /**

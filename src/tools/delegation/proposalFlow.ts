@@ -13,23 +13,25 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withRunContext, type RunContext } from '@agent/runtime/RunContext';
 import type { ToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import {
-  classifyRejection,
-  type ProposalResult,
-} from '@agent/runtime/HostInteractions';
 import type {
   AgentDelegationScope,
+  RequestDecision,
   RunId,
   ToolResult,
   ToolUseAgentProposal,
   WorkflowAgentProposal,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import type {
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import { refusalOf } from '@shared/session/approvalDecision';
 import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import { assertNever, generateShortId } from '@utils/core';
+import { generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getDelegationAgent,
   getDelegationAgents,
@@ -111,7 +113,7 @@ function summarizeProposal(
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
 export function proposalResultToToolResult(
-  result: ProposalResult,
+  result: RequestDecision,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): ToolResult | null {
@@ -125,26 +127,26 @@ export function proposalResultToToolResult(
     );
   }
 
-  const classification = classifyRejection(result);
-  switch (classification.kind) {
-    case 'cancelled': {
-      const cause = classification.cause?.trim();
+  const refusal = refusalOf('proposal', result);
+  switch (refusal.action) {
+    case 'cancel': {
+      const cause = refusal.cause?.trim();
       const detail = cause ? `\n${cause}` : '';
       return errorResult(
         `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
         { summary: `Delegation approval cancelled for '${agentName}'` },
       );
     }
-    case 'policy': {
-      const reason = classification.reason.trim();
+    case 'deny': {
+      const reason = refusal.reason.trim();
       const detail = reason ? `\n${reason}` : '';
       return errorResult(
         `Delegation to '${agentName}' was denied.\nYour delegation was: ${echo}${detail}`,
         { summary: `Delegation denied for '${agentName}'` },
       );
     }
-    case 'feedback': {
-      const feedback = classification.feedback?.trim();
+    case 'reject': {
+      const feedback = refusal.feedback?.trim();
       const feedbackLine = feedback
         ? `\nUser feedback: ${feedback}`
         : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
@@ -153,50 +155,49 @@ export function proposalResultToToolResult(
         { summary: `User rejected delegation to '${agentName}'` },
       );
     }
-    default:
-      return assertNever(classification, 'Unhandled rejection classification');
   }
 }
 
 interface DelegationProposalDecision {
-  readonly result: ProposalResult;
-  /** True only when the stream's proposal-bypass policy supplied approval. */
+  readonly result: RequestDecision;
+  /** True only when the run's proposal-bypass policy supplied approval. */
   readonly autoApproved: boolean;
 }
 
-/** Request the shared proposal decision, honoring the stream's bypass policy. */
-export async function requestDelegationProposal(
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-  runId: RunId,
-  session: SessionHandle,
-  parentContext: RunContext | undefined,
-): Promise<DelegationProposalDecision> {
-  if (proposalApprovals(session).isBypassed(runId)) {
-    return { result: { action: 'approve' }, autoApproved: true };
-  }
+/** Request the shared proposal decision, honoring the run's bypass policy. */
+export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
+  function* (
+    proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+    runId: RunId,
+    session: SessionHandle,
+    parentContext: RunContext | undefined,
+  ): Effect.fn.Return<
+    DelegationProposalDecision,
+    DatabaseNotOwner | DatabaseWriteFailed
+  > {
+    if (proposalApprovals(session).isBypassed(runId)) {
+      return { result: { action: 'approve' }, autoApproved: true };
+    }
 
-  // A run that can never present approval prompts withholds `requiresApproval`
-  // tools from the model up front (resolveAgentTools), so a delegation tool
-  // that still executes here was deliberately offered for unattended use —
-  // delegate_multi_agents in a headless CLI run. The proposal is the
-  // interactive review surface, not the security gate: proceed without one.
-  // `autoApproved: false` keeps the child on inherited per-kind approval
-  // state, so `--approval-policy never` still denies bash and edits
-  // downstream.
-  if (parentContext?.approvalPromptsUnavailable === true) {
-    return { result: { action: 'approve' }, autoApproved: false };
-  }
+    // A run that can never present approval prompts withholds
+    // `requiresApproval` tools from the model up front (resolveAgentTools),
+    // so a delegation tool that still executes here was deliberately offered
+    // for unattended use: delegate_multi_agents in a headless CLI run. The
+    // proposal is the interactive review surface, not the security gate:
+    // proceed without one. `autoApproved: false` keeps the child on
+    // inherited per-kind approval state, so `--approval-policy never` still
+    // denies bash and edits downstream.
+    if (parentContext?.approvalPromptsUnavailable === true) {
+      return { result: { action: 'approve' }, autoApproved: false };
+    }
 
-  const interaction = session.interactions.requestAgentProposal({
-    requestId: generateShortId(),
-    runId,
-    ...proposal,
-  });
-  if (!interaction) {
-    throw new Error('HostInteractions.requestAgentProposal is required');
-  }
-  return { result: await interaction, autoApproved: false };
-}
+    const result = yield* session.openRequest(runId, {
+      kind: 'proposal',
+      data: { requestId: generateShortId(), runId, ...proposal },
+    });
+    return { result, autoApproved: false };
+  },
+);
 
 /**
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
@@ -212,11 +213,12 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   agentName: string,
   runId: RunId,
 ) {
-  const decision = yield* Effect.tryPromise({
-    try: () =>
-      requestDelegationProposal(proposal, runId, session, parentContext),
-    catch: ensureError,
-  });
+  const decision = yield* requestDelegationProposal(
+    proposal,
+    runId,
+    session,
+    parentContext,
+  );
   if (decision.autoApproved) {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
@@ -240,6 +242,11 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
     proposal,
   );
   if (nonApproveResult) return nonApproveResult;
+  if (result.action !== 'approve') {
+    return yield* Effect.die(
+      new Error('A proposal decision that is not an approve was not declined.'),
+    );
+  }
 
   // Every non-approve action returned above, so this is the approved path.
   // Route an approved model override through the same availability gate the

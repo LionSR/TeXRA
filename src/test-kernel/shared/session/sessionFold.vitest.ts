@@ -281,7 +281,7 @@ describe('sessionFold', () => {
             (e) =>
               e.aggregateId === qualifyAggregateId('run', ROOT) &&
               (e.type === 'transcript.entry' ||
-                e.type === 'status' ||
+                e.type === 'run.activate' ||
                 e.type === 'run.end' ||
                 isTranscriptEvent(e)),
           )
@@ -319,18 +319,12 @@ describe('sessionFold', () => {
     );
   });
 
-  it('settles status copy, rollups, groups, and the durable outcome from status and result', () => {
+  it('settles status copy, rollups, groups, and the durable outcome from the activation and the end', () => {
     const pending = foldAll([...scenario.pending, alive]);
     const rootPending = runView(pending, ROOT);
     expect(rootPending.status).toBe(RUN_PHASE.RUNNING);
     expect(rootPending.statusLabel).toBe('Running');
     expect(rootPending.tone).toBe('running');
-    expect(rootPending.stage).toStrictEqual({
-      kind: 'phase',
-      label: 'Map',
-      index: 0,
-      total: 1,
-    });
     expect(rootPending.rollup).toStrictEqual({
       total: 2,
       running: 1,
@@ -356,7 +350,7 @@ describe('sessionFold', () => {
     expect(root.forceExpanded).toBe(false);
     expect(root.rollup).toStrictEqual({ total: 2, running: 0, finished: 2 });
     expect(runView(settled, CHILD).runStartedAt).toBeNull();
-    expect(settled.approvals).toStrictEqual([]);
+    expect(settled.requests).toStrictEqual([]);
     // No liveness verdict: the current process-run claimant is unprovable.
     expect(settled.rollup).toStrictEqual({
       running: 0,
@@ -401,9 +395,7 @@ describe('sessionFold', () => {
     expect(runView(withOwner, ROOT).group).toBe('running');
     // The path to the decision is forced open.
     expect(runView(withOwner, ROOT).forceExpanded).toBe(true);
-    expect(withOwner.approvals.map((a) => a.requestId)).toStrictEqual([
-      'req-1',
-    ]);
+    expect(withOwner.requests.map((r) => r.requestId)).toStrictEqual(['req-1']);
 
     // The same log with nobody holding the owner: every in-flight run is
     // interrupted, never waiting. The phase stays running and the request
@@ -422,9 +414,9 @@ describe('sessionFold', () => {
     expect(runView(interrupted, ROOT).group).toBe('interrupted');
     expect(runView(interrupted, ROOT).approval).toBe('none');
     expect(runView(interrupted, ROOT).forceExpanded).toBe(true);
-    expect(interrupted.approvals).toHaveLength(1);
+    expect(interrupted.requests).toHaveLength(1);
     // A run with only its run.start (its process died before the first
-    // status) is non-terminal and ownerless: interrupted, and resumable.
+    // activation) is non-terminal and ownerless: interrupted, and resumable.
     expect(runView(interrupted, PROCESS).status).toBe('ready');
     expect(runView(interrupted, PROCESS).group).toBe('interrupted');
     expect(runView(withOwner, PROCESS).group).toBe('recent');
@@ -578,10 +570,10 @@ describe('sessionFold', () => {
 
   it('keeps listing facts in commit order and transcript rows in seq order, whichever read delivers them', () => {
     const settled = foldAll(scenario.events);
-    const rootStatus = scenario.log.events.find(
+    const rootActivate = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
-        e.type === 'status',
+        e.type === 'run.activate',
     )!;
     const rootStart = scenario.log.events.find(
       (e) =>
@@ -593,11 +585,11 @@ describe('sessionFold', () => {
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'transcript.entry',
     )!;
-    // An aggregate read replaying an older status, start, or row after the
-    // tail folded the current one changes nothing, and the cursor stays.
+    // An aggregate read replaying an older activation, start, or row after
+    // the tail folded the current one changes nothing, and the cursor stays.
     const replayed = foldAll(
       [
-        { _tag: 'event', read: 'aggregate', event: rootStatus },
+        { _tag: 'event', read: 'aggregate', event: rootActivate },
         { _tag: 'event', read: 'aggregate', event: rootStart },
         { _tag: 'event', read: 'aggregate', event: rootEntry },
       ],
@@ -871,7 +863,7 @@ describe('sessionFold', () => {
     );
     expect([...pruned.runs.keys()]).toStrictEqual([PROCESS]);
     expect(pruned.order).toStrictEqual([PROCESS]);
-    expect(pruned.approvals).toStrictEqual([]);
+    expect(pruned.requests).toStrictEqual([]);
     expect(pruned.policy.size).toBe(0);
   });
 
@@ -1304,7 +1296,7 @@ describe('foldRunState', () => {
           through(
             6,
             {
-              type: 'approval.requested',
+              type: 'request.opened',
               requestId: 'req-1',
               payload: {
                 kind: 'bash',
@@ -1503,9 +1495,9 @@ describe('foldRunState', () => {
                 parent: null,
               }),
               ledgerRow(2, {
-                type: 'status',
-                phase: RUN_PHASE.WAITING,
-                cause: 'wait',
+                type: 'run.activate',
+                category: AgentCategory.ToolUse,
+                isRemote: false,
               }),
             ]),
           ),
@@ -1594,9 +1586,8 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
-  it('keeps the six ledger types out of the listing and the five private ones off the transport', () => {
+  it('keeps the five private ledger types out of the listing and off the transport, and lists flow.step', () => {
     const ledgerTypes = [
-      'flow.step',
       'model.message',
       'model.compaction',
       'tool.intent',
@@ -1604,6 +1595,9 @@ describe('foldRunState', () => {
       'flow.snapshot',
     ] as const;
     for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();
+    // The one ledger row the listing keys: a cold hydrate that dropped it
+    // would paint every parked run as ready (ruling A9-5).
+    expect(listingTypeOf({ type: 'flow.step' })).toBe('flow.step');
     for (const row of TURN_ROWS) {
       expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
     }

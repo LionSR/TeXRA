@@ -1,23 +1,32 @@
-import { Effect, Result } from 'effect';
+/**
+ * Headless CLI side of the request protocol (one run model, 3.7).
+ *
+ * A run asks a person with `request.opened`; the fold lists it in
+ * `view.requests` until a `request.decided` answers it. This host watches
+ * that list and answers each request from the terminal — the policy's own
+ * decision when there is nobody to ask, otherwise the prompt the operator
+ * sees — and stages nothing else: the port it attaches presents events,
+ * mirrors bypass state, and holds a tool edit's preview so the diff can be
+ * printed.
+ */
+import { Effect, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
 import {
   defaultSession,
-  type BashSettlement,
-  type HostAgentProposalRequest,
   type HostApprovalBypassStateUpdate,
   type HostInteractions,
-  type HostRetryRequest,
-  type HostUserQuestionRequest,
-  type RetryResult,
-  type UserQuestionSettlement,
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import {
-  type ApprovalDecision,
-  type UserQuestionAnswers,
+import type {
+  PermissionPayload,
+  RequestDecision,
+  RunId,
+  UserQuestionAnswers,
+  UserQuestionPermission,
 } from '@shared/schemas';
-import { type ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
+import type { SessionView } from '@shared/session/sessionView';
+import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
@@ -26,7 +35,6 @@ import {
 } from './approval/settleApprovals';
 import {
   type CliApprovalContent,
-  type CliApprovalDecision,
   type CliApprovalPromptHooks,
   askApproval,
   queueCliApprovalQuestion,
@@ -52,116 +60,13 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   ) => void;
 }
 
-export function toToolEditResult(
-  decision: CliApprovalDecision,
-  proposedContent: string,
-): ToolEditApprovalResult {
-  const settled = toApprovalSettlement(decision);
-  return settled.action === 'approve'
-    ? { action: 'apply', appliedContent: proposedContent }
-    : settled;
-}
-
-/**
- * Settle a policy-gated approval: take the caller's already-computed policy
- * settlement when there is one, otherwise prompt with the caller's content.
- * `prompted` distinguishes a human answer from an automatic settlement.
- */
-const decideGated = Effect.fn('approvalAdapter.decideGated')(function* (
-  context: CliContext,
-  hooks: CliApprovalPromptHooks,
-  immediate: ApprovalDecision | undefined,
-  content: CliApprovalContent,
-  options: { writeRejectionToStderr?: boolean } = {},
-) {
-  if (immediate) {
-    return { decision: immediate, prompted: false };
-  }
-
-  const decision = yield* askApproval(context, content, hooks);
-  if (!decision.accepted && options.writeRejectionToStderr) {
-    writeTextStderr(
-      decision.userMessage
-        ? `${content.summary}\n${decision.userMessage}`
-        : content.summary,
-    );
-  }
-  return { decision, prompted: true };
-});
-
-/** Approve/reject settlement shared by the bash, plan, proposal, and tool-edit
- *  ports of both CLI hosts — none of them offers the extra actions their result
- *  unions allow, except the TUI's plan `approve_and_goal`, which the TUI
- *  overlays on the approve branch. `BashSettlement` is the narrowest of those
- *  unions (`approve` plus a `RejectionProvenance` reject), so it is assignable
- *  to every one of them and the CLI does not re-declare the provenance channels
- *  that `RejectionProvenance` already owns. A rejection without a user message
- *  omits `feedback` rather than sending an explicit `undefined`. */
-export function toApprovalSettlement(
-  decision: ApprovalDecision & {
-    readonly rejectionCause?: string;
-    readonly rejectionReason?: string;
-  },
-): BashSettlement {
-  if (decision.accepted) return { action: 'approve' };
-  if (decision.rejectionCause !== undefined) {
-    return { action: 'reject', cause: decision.rejectionCause };
-  }
-  if (decision.rejectionReason !== undefined) {
-    return { action: 'reject', reason: decision.rejectionReason };
-  }
-  return {
-    action: 'reject',
-    ...(decision.userMessage && { feedback: decision.userMessage }),
-  };
-}
-
-function toPromptedApprovalSettlement(
-  decision: CliApprovalDecision,
-  prompted: boolean,
-): BashSettlement {
-  if (prompted || decision.accepted) return toApprovalSettlement(decision);
-  return toApprovalSettlement({
-    ...decision,
-    rejectionReason: decision.userMessage ?? '',
-    userMessage: undefined,
-  });
-}
-
-function toRetryResult(
-  decision: ApprovalDecision,
-  humanInputAvailable: boolean,
-): RetryResult {
-  if (decision.accepted) {
-    return { action: 'retry', feedback: decision.userMessage };
-  }
-  // A non-accepted retry with no human available is a policy/headless
-  // auto-denial (e.g. `--approval-policy never --no-input`), not a user
-  // cancel — surface it as a distinct `deny` so a run that produces zero
-  // output across all retries reports FAILED, not COMPLETED. See #7331.
-  return humanInputAvailable
-    ? { action: 'cancel' }
-    : {
-        action: 'deny',
-        ...(decision.userMessage ? { reason: decision.userMessage } : {}),
-      };
-}
-
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
 )(function* (
-  payload: HostUserQuestionRequest,
+  payload: UserQuestionPermission,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ) {
-  const denial = settleHumanInputDenial(context);
-  if (denial != null) {
-    return {
-      action: 'reject',
-      reason: denial.reason,
-    } as UserQuestionSettlement;
-  }
-
   const answers: UserQuestionAnswers = {};
   const asked = yield* Effect.result(
     Effect.forEach(payload.questions, (question) =>
@@ -203,18 +108,18 @@ const askHeadlessUserQuestion = Effect.fn(
       `The CLI user-question prompt failed: ${toErrorMessage(asked.failure)}`,
     );
     return {
-      action: 'reject',
+      action: 'cancel',
       cause: 'CLI user question prompt failed.',
-    } as UserQuestionSettlement;
+    } satisfies RequestDecision;
   }
 
   if (Object.keys(answers).length === 0) {
     return {
       action: 'skip',
       feedback: USER_QUESTION_SKIPPED_FEEDBACK,
-    } as UserQuestionSettlement;
+    } satisfies RequestDecision;
   }
-  return { action: 'submit', answers } as UserQuestionSettlement;
+  return { action: 'submit', answers } satisfies RequestDecision;
 });
 
 export function createHeadlessCliHostInteractions(
@@ -224,76 +129,172 @@ export function createHeadlessCliHostInteractions(
   // Headless composition seeds the session before attaching; tests often attach
   // without that step, so mirror the seed here. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
-  defaultSession().setApprovalPolicy(context.approvalPolicy);
+  const session = defaultSession();
+  session.setApprovalPolicy(context.approvalPolicy);
+  /** Requests this host has taken on, pruned as the fold drops them. */
+  const acted = new Set<string>();
+  /** The preview a tool edit's durable payload cannot carry. */
+  const previews = new Map<string, ToolEditApprovalRequest>();
+
+  const decide = (
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+  ): Effect.Effect<void> =>
+    session.requests
+      .request({ kind: 'request.decide', runId, requestId, decision })
+      .pipe(
+        Effect.match({
+          onFailure: (error) =>
+            logWarning(
+              'cli.approval',
+              `The ${decision.action} decision for request ${requestId} was refused: ${toErrorMessage(error)}`,
+            ),
+          onSuccess: () => undefined,
+        }),
+      );
+
+  /** The prompt content for a tool edit: the staged preview when the tool
+   *  boundary reached this host, else the payload's own summary. */
+  const toolEditContent = (
+    payload: Extract<PermissionPayload, { kind: 'toolEdit' }>,
+  ): CliApprovalContent => {
+    const preview = previews.get(payload.data.requestId);
+    if (preview) return buildToolEditApprovalContent(preview);
+    logWarning(
+      'cli.approval',
+      `No preview was staged for tool edit ${payload.data.requestId}: prompting without the diff.`,
+    );
+    const { data } = payload;
+    return {
+      summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (+${data.addedLines} / -${data.removedLines})`,
+    };
+  };
+
+  /** One pending request, answered: policy first, then the prompt. */
+  const answer = Effect.fn('approvalAdapter.answer')(function* (
+    runId: RunId,
+    payload: PermissionPayload,
+  ) {
+    const requestId = payload.data.requestId;
+    const ask = (content: CliApprovalContent) =>
+      askApproval(context, content, hooks);
+    switch (payload.kind) {
+      case 'bash':
+        return yield* decide(
+          runId,
+          requestId,
+          yield* ask({ summary: formatBashApprovalSummary(payload.data) }),
+        );
+      case 'toolEdit':
+        return yield* decide(
+          runId,
+          requestId,
+          yield* ask(toolEditContent(payload)),
+        );
+      case 'planApproval': {
+        const settled = settleExecutable(context, runId);
+        return yield* decide(
+          runId,
+          requestId,
+          settled ??
+            (yield* ask({
+              summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+            })),
+        );
+      }
+      case 'proposal': {
+        const settled = settleExecutable(context, runId);
+        return yield* decide(
+          runId,
+          requestId,
+          settled ??
+            (yield* ask(buildAgentProposalApprovalContent(payload.data))),
+        );
+      }
+      case 'retry': {
+        const settled = settleRetry(payload.data, context);
+        if (settled) return yield* decide(runId, requestId, settled);
+        // The pre-prompt hook fires here and again inside `askApproval`; that
+        // double call is pre-existing retry behavior, not a bug to "fix".
+        hooks.beforePrompt?.();
+        // The prompt surface owns the retry hint: the operator must see the
+        // `/api personal` / coding-plan switch guidance in the prompt they
+        // actually answer, not only in the pre-prompt stderr line.
+        // `formatRetryRequestMessage` is the single retry formatter.
+        const summary = formatRetryRequestMessage(payload.data);
+        writeTextStderr(summary);
+        const decision = yield* ask({ summary });
+        if (decision.action === 'approve') {
+          return yield* decide(runId, requestId, { action: 'retry' });
+        }
+        // A dismissed retry is the operator cancelling this call, not a
+        // policy refusal; the note they left goes to stderr beside it.
+        const note =
+          decision.action === 'reject' ? decision.feedback : decision.cause;
+        writeTextStderr(note ? `${summary}\n${note}` : summary);
+        return yield* decide(runId, requestId, {
+          action: 'cancel',
+          cause: note ?? null,
+        });
+      }
+      case 'userQuestion': {
+        const denial = settleHumanInputDenial(context, runId);
+        return yield* decide(
+          runId,
+          requestId,
+          denial
+            ? { action: 'deny', reason: denial.reason }
+            : yield* askHeadlessUserQuestion(payload.data, context, hooks),
+        );
+      }
+      case 'externalInquiry':
+        // The inquiry tool is unavailable on this host, so no operator can
+        // answer one here; denying it loudly beats parking the run forever.
+        return yield* decide(runId, requestId, {
+          action: 'deny',
+          reason: 'The CLI cannot answer an external inquiry.',
+        });
+    }
+  });
+
+  const take = (view: SessionView) =>
+    Effect.forEach(
+      view.requests.filter((pending) => !acted.has(pending.requestId)),
+      (pending) => {
+        acted.add(pending.requestId);
+        // Forked so one prompt does not hold the fold's tail: the context's
+        // prompt lane still serializes the reads from stdin.
+        return Effect.forkChild(answer(pending.runId, pending.payload));
+      },
+      { discard: true },
+    ).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          // A preview is staged before its `request.opened` commits, so only
+          // a request this host has already seen listed counts as settled.
+          const live = new Set(view.requests.map((r) => r.requestId));
+          for (const id of acted) {
+            if (live.has(id)) continue;
+            acted.delete(id);
+            previews.delete(id);
+          }
+        }),
+      ),
+    );
+
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(SubscriptionRef.changes(session.view), take),
+  );
+
   return {
     emit: hooks.emit,
     setApprovalBypassState: hooks.setApprovalBypassState,
-    async requestToolEditApproval(request) {
-      // `HostInteractions` is the Promise-shaped host port; the CLI's prompt
-      // programs run here, on the process runtime.
-      const decision = await effectRuntime().runPromise(
-        askApproval(context, buildToolEditApprovalContent(request), hooks),
-      );
-      return toToolEditResult(decision, request.proposedContent);
+    presentToolEdit(request) {
+      previews.set(request.permission.requestId, request);
     },
-    async requestBashApproval(request) {
-      const decision = await effectRuntime().runPromise(
-        askApproval(
-          context,
-          { summary: formatBashApprovalSummary(request) },
-          hooks,
-        ),
-      );
-      return toApprovalSettlement(decision);
+    dispose() {
+      effectRuntime().runFork(Fiber.interrupt(fiber));
     },
-    async requestPlanApproval(request) {
-      const { decision, prompted } = await effectRuntime().runPromise(
-        decideGated(context, hooks, settleExecutable(context), {
-          summary: `Plan approval requested:\n${JSON.stringify(request.plan, null, 2)}`,
-        }),
-      );
-      return toPromptedApprovalSettlement(decision, prompted);
-    },
-    async requestAgentProposal(request: HostAgentProposalRequest) {
-      const { decision, prompted } = await effectRuntime().runPromise(
-        decideGated(
-          context,
-          hooks,
-          settleExecutable(context),
-          buildAgentProposalApprovalContent(request),
-        ),
-      );
-      return toPromptedApprovalSettlement(decision, prompted);
-    },
-    async requestRetry(request: HostRetryRequest) {
-      const immediate = settleRetry(request, context);
-      // The pre-prompt hook fires here and again inside `askApproval`; that
-      // double call is pre-existing retry behavior, not a bug to "fix".
-      if (!immediate) hooks.beforePrompt?.();
-      // The prompt surface owns the retry hint: the operator must see the
-      // `/api personal` / coding-plan switch guidance in the prompt they
-      // actually answer, not only in the pre-prompt stderr line.
-      // `formatRetryRequestMessage` is the single retry formatter.
-      const summary = formatRetryRequestMessage(request);
-      writeTextStderr(summary);
-      const { decision, prompted } = await effectRuntime().runPromise(
-        decideGated(
-          context,
-          hooks,
-          immediate,
-          { summary },
-          { writeRejectionToStderr: true },
-        ),
-      );
-      return toRetryResult(decision, prompted);
-    },
-    askUserQuestion(request) {
-      return effectRuntime().runPromise(
-        askHeadlessUserQuestion(request, context, hooks),
-      );
-    },
-    // Headless requests decide inline (policy or prompt hooks) — there is no
-    // pending registry to cancel into.
-    cancel: () => {},
   };
 }

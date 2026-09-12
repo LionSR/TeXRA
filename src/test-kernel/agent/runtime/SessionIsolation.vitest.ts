@@ -30,7 +30,6 @@ import {
   fakeProcessServices,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -246,7 +245,6 @@ describe('session isolation', () => {
       expect(sessionB.runs.getHandle(runId)).toBeUndefined();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      clearRunStatusForTest(sessionB.status, runId);
       sessionB.dispose();
     }
   });

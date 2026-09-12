@@ -138,14 +138,14 @@ CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.par
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-/** Listing arms of the present vocabulary; approval requests are a set. */
+/** Listing arms of the present vocabulary; pending requests are a set. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
   .filter(
     (type) =>
       listingTypeOf({ type }) !== null &&
-      type !== 'approval.requested' &&
-      type !== 'approval.resolved',
+      type !== 'request.opened' &&
+      type !== 'request.decided',
   )
   .map((type) => `${type}.1`);
 const READ_LISTING = `
@@ -159,11 +159,11 @@ WITH latest AS (
     AND e.type = latest.type AND e.seq = latest.seq
   UNION ALL
   SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'approval.requested.1' AND NOT EXISTS (
-    SELECT 1 FROM event resolved
-    WHERE resolved.aggregate_id = e.aggregate_id
-      AND resolved.type = 'approval.resolved.1'
-      AND json_extract(resolved.data, '$.requestId') = json_extract(e.data, '$.requestId')
+  WHERE e.type = 'request.opened.1' AND NOT EXISTS (
+    SELECT 1 FROM event decided
+    WHERE decided.aggregate_id = e.aggregate_id
+      AND decided.type = 'request.decided.1'
+      AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
   )
 )
 SELECT * FROM selected
@@ -334,8 +334,8 @@ export const databaseLayer = (
         ORDER BY e.seq DESC LIMIT 1`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
-        'approval.requested.1',
-        'approval.resolved.1',
+        'request.opened.1',
+        'request.decided.1',
       ]);
       const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e

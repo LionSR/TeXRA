@@ -67,6 +67,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
+  RUN_SUBSTATE,
   STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
@@ -109,7 +110,6 @@ import {
   type CompactionActivityProjection,
 } from '@shared/runs/compactionActivityProjection';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import { runStageFromStageStart } from '@shared/runs/stage';
 import {
   compareByNewestCreationTime,
   compareBySeqNo,
@@ -502,7 +502,7 @@ function createRun(
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
-    stage: null,
+    flow: null,
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
@@ -703,7 +703,7 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
  * Somebody holds it when its owner is this process or a process whose lease
  * this one may not touch. Waiting needs a held owner: without one the same
  * pending request reads as interrupted, never waiting, because nothing is
- * listening for the answer; the durable phase and the listed approval stay,
+ * listening for the answer; the durable phase and the listed request stay,
  * so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
@@ -714,7 +714,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
-  const pendingOwn = view.approvals.some((a) => a.runId === run.id);
+  const pendingOwn = view.requests.some((r) => r.runId === run.id);
   const interrupted = !isTerminalOutcomePhase(run.status) && !held;
   const waiting = pendingOwn && held;
   const durableOutcome =
@@ -1355,6 +1355,7 @@ function applyOwnArm(
 ): RunView {
   switch (event.type) {
     case 'log':
+    case 'stage.start':
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
@@ -1370,10 +1371,28 @@ function applyOwnArm(
       // Existence cannot become more true (5.2, "Duplicates"): a second
       // start for a run the view holds is a no-op.
       return run;
-    case 'run.activate':
-      // Ownership moves with the envelope the caller stamps; the activation
-      // metadata repeats the launch facts the run already carries.
-      return run;
+    case 'run.activate': {
+      // Every activation, the launch and each resume, opens a running window
+      // (one run model, 3.3): the phase, the run window, and a fresh
+      // incarnation's progress are folded from it. A first activation is
+      // starting and a later one resuming (ruling A9-1), for a run whose
+      // loop steps; the first `flow.step` clears it.
+      let substate: RunView['substate'] = null;
+      if (isPlainAgentIdentity(run.identity)) {
+        substate =
+          run.status === RUN_LIFECYCLE_READY
+            ? RUN_SUBSTATE.STARTING
+            : RUN_SUBSTATE.RESUMING;
+      }
+      return {
+        ...run,
+        status: RUN_PHASE.RUNNING,
+        substate,
+        runStartedAt: event.at,
+        flow: null,
+        conversationProgress: { toolCallCount: 0 },
+      };
+    }
     case 'run.config': {
       const model = run.identity.kind === 'agent' ? event.config.model : null;
       return {
@@ -1384,32 +1403,6 @@ function applyOwnArm(
           run.identity.kind === 'process' ? event.config.instruction : null,
         inputFiles: event.config.inputFiles,
       };
-    }
-    case 'status': {
-      const freshRun =
-        event.phase === RUN_PHASE.RUNNING &&
-        event.previousPhase !== RUN_PHASE.RUNNING;
-      return withSettledTranscript(
-        {
-          ...run,
-          status: event.phase,
-          substate: event.substate ?? null,
-          runStartedAt: event.runStartedAt ?? null,
-          ...(freshRun
-            ? { stage: null, conversationProgress: { toolCallCount: 0 } }
-            : {}),
-        },
-        event.at,
-      );
-    }
-    case 'stage.start': {
-      const stage = runStageFromStageStart({
-        kind: event.kind ?? undefined,
-        label: event.label,
-        index: event.index ?? undefined,
-        total: event.total ?? undefined,
-      });
-      return stage ? { ...run, stage } : run;
     }
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
@@ -1484,17 +1477,40 @@ function applyOwnArm(
         },
         event.at,
       );
-    case 'approval.requested':
-    case 'approval.resolved':
+    case 'request.opened':
+    case 'request.decided':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'updateQueuedFollowUps':
     case 'run.removed':
       return run;
-    case 'flow.step':
-      // Inert in PR 1: `listingTypeOf` returns null, so `foldDurable`
-      // returns before this switch. PR 3 gives it real handling.
-      return run;
+    case 'flow.step': {
+      // The loop's position (one run model, 3.3): `waiting` parks the run
+      // and closes its run window, any other step is running with the
+      // window kept open from the activation; `halted` is the loop's own
+      // word and moves nothing, the terminal phase is `run.end`'s alone.
+      const { outcome: _outcome, ...flow } = event.payload;
+      if (flow.step === 'halted') return { ...run, flow };
+      if (flow.step === 'waiting') {
+        return withSettledTranscript(
+          {
+            ...run,
+            flow,
+            status: RUN_PHASE.WAITING,
+            substate: null,
+            runStartedAt: null,
+          },
+          event.at,
+        );
+      }
+      return {
+        ...run,
+        flow,
+        status: RUN_PHASE.RUNNING,
+        substate: null,
+        runStartedAt: run.runStartedAt ?? event.at,
+      };
+    }
   }
 }
 
@@ -1513,22 +1529,23 @@ function applySessionSlices(
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
       return;
-    case 'approval.requested':
+    case 'request.opened':
       // A set keyed by request id (5.2); a replayed request is below the
       // pair's `latest` entry and never reaches here.
       if (runId === null) return;
-      view.approvals = [
-        ...view.approvals,
+      view.requests = [
+        ...view.requests,
         {
           runId,
           requestId: event.requestId,
           payload: event.payload,
+          thread: event.thread ?? null,
         },
       ];
       return;
-    case 'approval.resolved':
-      view.approvals = view.approvals.filter(
-        (a) => a.requestId !== event.requestId,
+    case 'request.decided':
+      view.requests = view.requests.filter(
+        (r) => r.requestId !== event.requestId,
       );
       return;
     case 'approval.policy':
@@ -1626,7 +1643,8 @@ function foldDurable(
   const traceChanged =
     read !== 'listing' &&
     (isTranscriptEvent(event) ||
-      event.type === 'status' ||
+      event.type === 'run.activate' ||
+      event.type === 'flow.step' ||
       event.type === 'run.end')
       ? foldTraceEvent(view, event, deferred)
       : false;
@@ -1664,12 +1682,8 @@ function foldDurable(
     sessionIndexesOf(view).ended.add(runId);
     clearInflight(view, own);
   }
-  // A fresh run can end again.
-  if (
-    event.type === 'status' &&
-    own.status === RUN_PHASE.RUNNING &&
-    before.status !== own.status
-  ) {
+  // A fresh incarnation can end again.
+  if (event.type === 'run.activate') {
     sessionIndexesOf(view).ended.delete(runId);
   }
   let next: RunView = {
@@ -1723,8 +1737,14 @@ function foldTraceEvent(
   let run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
   const indexes = indexesOf(run.transcript);
-  if (event.type === 'status') indexes.trace.status(event.phase);
-  else if (event.type === 'run.end') indexes.trace.status(event.outcome);
+  if (event.type === 'run.activate') indexes.trace.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') {
+      indexes.trace.status(RUN_PHASE.WAITING);
+    } else if (event.payload.step !== 'halted') {
+      indexes.trace.status(RUN_PHASE.RUNNING);
+    }
+  } else if (event.type === 'run.end') indexes.trace.status(event.outcome);
   else if (isTranscriptEvent(event))
     indexes.trace.record(event, {
       at: event.at,
@@ -1802,8 +1822,8 @@ function foldRunRemoved(
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
-  if (view.approvals.some((a) => a.runId === run.id)) {
-    view.approvals = view.approvals.filter((a) => a.runId !== run.id);
+  if (view.requests.some((r) => r.runId === run.id)) {
+    view.requests = view.requests.filter((r) => r.runId !== run.id);
   }
   if (view.inquiries.some((i) => i.parentRunId === run.id)) {
     view.inquiries = view.inquiries.filter((i) => i.parentRunId !== run.id);

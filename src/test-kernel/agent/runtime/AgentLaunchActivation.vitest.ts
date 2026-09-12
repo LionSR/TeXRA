@@ -202,9 +202,9 @@ function expectActivatedThenFailed(launch: StartedLaunch): void {
     outcome: RUN_OUTCOME.FAILED,
     aggregateId: launch.activate.aggregateId,
   });
-  expect(launch.session.status.get(runOf(launch.activate.aggregateId))).toBe(
-    RUN_PHASE.FAILED,
-  );
+  expect(
+    launch.session.runView(runOf(launch.activate.aggregateId))?.status,
+  ).toBe(RUN_PHASE.FAILED);
 }
 
 describe('native agent launch activation', () => {

@@ -26,10 +26,6 @@ import {
   loadAgents,
 } from '@agent/index';
 import { createAgentResponseTextConnector } from '@agent/runtime';
-import type {
-  PlanApprovalResult,
-  RetryResult,
-} from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   initializeDefaultSession,
@@ -62,7 +58,9 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
   type NormalizedToolUse,
+  type PermissionPayload,
   type PlanApprovalPermission,
+  type RequestDecision,
   type RetryPermission,
   type RunOutcome,
   type RunPhase,
@@ -75,7 +73,10 @@ import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
 import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { isInFlightPhase } from '@shared/runs/runStatus';
+import {
+  isInFlightPhase,
+  isTerminalOutcomePhase,
+} from '@shared/runs/runStatus';
 import {
   StreamLog,
   type StreamLogAppendInput,
@@ -697,17 +698,37 @@ function seedRun(
   }
 }
 
-/** Place a run in an in-flight phase: the status fact every renderer folds.
- *  A terminal state is `seedRunEnd`: production writes no terminal `status`. */
-function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
+/**
+ * Place a run in a phase the way production does: `run.activate` opens the
+ * running window and a `flow.step` parks it (one run model, 3.3). A terminal
+ * phase is `run.end`, so a fixture that names one lands there instead.
+ *
+ * The run window opens at the activation row's publish clock, which the
+ * publisher stamps, so a fixture cannot backdate the elapsed time the status
+ * bar shows.
+ */
+function seedPhase(runId: RunId, phase: RunPhase): void {
   seedRun(runId);
-  publish({
-    type: 'status',
-    aggregateId: qualifyAggregateId('run', runId),
-    phase,
-    cause: 'harness',
-    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-  });
+  if (isTerminalOutcomePhase(phase)) {
+    seedRunEnd(runId, phase);
+    return;
+  }
+  const run = runViewOf(currentView(), runId);
+  if (run?.status !== RUN_PHASE.RUNNING) {
+    publish({
+      type: 'run.activate',
+      aggregateId: qualifyAggregateId('run', runId),
+      category: run?.category ?? AgentCategory.ToolUse,
+      isRemote: false,
+    });
+  }
+  if (phase === RUN_PHASE.WAITING) {
+    publish({
+      type: 'flow.step',
+      aggregateId: qualifyAggregateId('run', runId),
+      payload: { family: 'toolUse', step: 'waiting' },
+    });
+  }
 }
 
 /** End a run the way a real session does: the terminal `run.end` fact the
@@ -1179,36 +1200,51 @@ function makeUserQuestionPayload(): UserQuestionPermission {
   };
 }
 
-/** One request through the session's port: the runtime publishes its
- *  `approval.requested`, the modal reads the fold, the decision settles it. */
-function requestHarnessApproval<T>(
-  request: () => Promise<T> | undefined,
-  onSettled: (result: T) => void | Promise<void>,
+/** One request the way a run asks: `request.opened` on the run, the modal
+ *  reads it off the fold, and the surface's `request.decided` answers it. */
+function requestHarnessApproval(
+  runId: RunId,
+  payload: PermissionPayload,
+  onSettled: (decision: RequestDecision) => void | Promise<void>,
 ): void {
-  const result = request();
-  if (!result) return;
-  void result.then(onSettled).catch((error: unknown) => {
-    appendLocalErrorTranscript(
-      `Harness approval failed: ${toErrorMessage(error)}`,
-    );
-  });
+  void effectRuntime()
+    .runPromise(session().openRequest(runId, payload))
+    .then(onSettled)
+    .catch((error: unknown) => {
+      appendLocalErrorTranscript(
+        `Harness approval failed: ${toErrorMessage(error)}`,
+      );
+    });
 }
 
-function appendHarnessRetryResult(
-  result: RetryResult,
-  credentialSelection: 'configured' | 'personal' | undefined,
-): void {
-  if (result.action === 'retry' && credentialSelection === 'personal') {
-    appendHarnessAssistantTranscript('RETRY-PERSONAL-CREDENTIALS');
+/** Close every request the fold still lists, for one run or the session: the
+ *  cancellation a stopped run's pending prompts settle with. */
+function cancelHarnessRequests(cause: string, runId?: RunId): void {
+  for (const request of currentView().requests) {
+    if (runId !== undefined && request.runId !== runId) continue;
+    publish({
+      type: 'request.decided',
+      aggregateId: qualifyAggregateId('run', request.runId),
+      requestId: request.requestId,
+      decision: { action: 'cancel', cause },
+    });
+  }
+}
+
+function appendHarnessRetryResult(decision: RequestDecision): void {
+  if (decision.action !== 'retry') {
+    appendHarnessAssistantTranscript('RETRY-REJECTED');
     return;
   }
   appendHarnessAssistantTranscript(
-    result.action === 'retry' ? 'RETRY-APPROVED' : 'RETRY-REJECTED',
+    decision.credentials === 'personal'
+      ? 'RETRY-PERSONAL-CREDENTIALS'
+      : 'RETRY-APPROVED',
   );
 }
 
 async function appendHarnessPlanDecision(
-  result: PlanApprovalResult,
+  result: RequestDecision,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
     await GoalStore.start(HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE);
@@ -1264,12 +1300,7 @@ if (QUEUED_FOLLOW_UPS.length > 0) {
 }
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialRunStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
-  seedPhase(
-    HARNESS_RUN_ID,
-    HARNESS_INITIAL_STREAM_STATUS,
-    // Backdated so the status bar shows a plausible elapsed time.
-    HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : undefined,
-  );
+  seedPhase(HARNESS_RUN_ID, HARNESS_INITIAL_STREAM_STATUS);
 }
 
 if (SHOW_LIVE_TOOL_ONLY) {
@@ -1367,14 +1398,11 @@ function seedRunningProcessChild(): void {
 }
 
 if (SHOW_CHILDREN) {
-  const startedAt = Date.now() - 74_000;
-  const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
     runId: RunIdSchema.parse('aaaa0004f10e'),
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     status: RUN_PHASE.RUNNING,
-    startedAt: nestedStartedAt,
   };
   const childRuns = [
     {
@@ -1382,38 +1410,27 @@ if (SHOW_CHILDREN) {
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       status: RUN_PHASE.RUNNING,
-      startedAt,
     },
     {
       runId: RunIdSchema.parse('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       status: RUN_PHASE.WAITING,
-      startedAt: startedAt - 123_000,
     },
     {
       runId: RunIdSchema.parse('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       status: RUN_PHASE.RUNNING,
-      startedAt: startedAt + 12_000,
     },
   ].map((child) =>
     child.agentName === FAILED_CHILD_AGENT
-      ? {
-          ...child,
-          status: RUN_PHASE.FAILED,
-          startedAt: undefined,
-        }
+      ? { ...child, status: RUN_PHASE.FAILED }
       : child,
   );
-  seedPhase(
-    HARNESS_RUN_ID,
-    RUN_PHASE.RUNNING,
-    // One run window across every later active phase: a scenario that
-    // already seeded an initial RUNNING keeps that backdated start.
-    runViewOf(currentView(), HARNESS_RUN_ID)?.runStartedAt ?? startedAt,
-  );
+  // One run window across every later active phase: an activation on a run
+  // already running would re-open it, so `seedPhase` keeps the first one.
+  seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
   for (const child of childRuns) {
     const runId = child.runId;
     seedRun(runId, {
@@ -1432,13 +1449,7 @@ if (SHOW_CHILDREN) {
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
-    if (child.status !== undefined) {
-      seedPhase(
-        runId,
-        child.status,
-        child.status === RUN_PHASE.RUNNING ? child.startedAt : undefined,
-      );
-    }
+    seedPhase(runId, child.status);
   }
   if (SHOW_NESTED_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
@@ -1451,7 +1462,7 @@ if (SHOW_CHILDREN) {
       nestedRunId,
       makeChildEntries('localChecker', 'nested proof check'),
     );
-    seedPhase(nestedRunId, RUN_PHASE.RUNNING, nestedStartedAt);
+    seedPhase(nestedRunId, RUN_PHASE.RUNNING);
   }
 }
 
@@ -1503,16 +1514,17 @@ if (SHOW_TODOS) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
+    const permission = prepareToolEditApprovalPrompt(session(), {
+      requestId: 'harness-edit-approval',
+      request,
+      relativePath: request.path,
+    });
+    // The preview the durable payload cannot carry is staged on the host,
+    // exactly as `requestToolEditApproval` stages it.
+    session().interactions.presentToolEdit({ ...request, permission });
     requestHarnessApproval(
-      () =>
-        session().interactions.requestToolEditApproval({
-          ...request,
-          permission: prepareToolEditApprovalPrompt(session(), {
-            requestId: 'harness-edit-approval',
-            request,
-            relativePath: request.path,
-          }),
-        }),
+      request.runId,
+      { kind: 'toolEdit', data: permission },
       () => undefined,
     );
   };
@@ -1529,12 +1541,12 @@ if (SHOW_WORKFLOW_RUNNING) {
 if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
-    const runId = permission.runId;
-    return session().interactions.requestBashApproval({
-      runId,
-      command: permission.command,
-      permission,
-    });
+    return effectRuntime().runPromise(
+      session().openRequest(permission.runId, {
+        kind: 'bash',
+        data: permission,
+      }),
+    );
   };
   const showRepeatedApprovals = async (): Promise<void> => {
     const decision = await showApproval(1);
@@ -1578,34 +1590,33 @@ if (SHOW_RETRY_APPROVAL) {
     'openai',
     'sk-harness-openai-key',
   );
-  let credentialSelection: 'configured' | 'personal' | undefined;
+  // The credential the retry lands on is the decision's own field: the TUI
+  // host prepares the card and performs the switch off the pending fact.
   requestHarnessApproval(
-    () =>
-      session().interactions.requestRetry(makeRetryApprovalPayload(), {
-        prepareRetry: async (selection) => {
-          credentialSelection = selection;
-        },
-      }),
-    (result) => appendHarnessRetryResult(result, credentialSelection),
+    HARNESS_RUN_ID,
+    { kind: 'retry', data: makeRetryApprovalPayload() },
+    appendHarnessRetryResult,
   );
 }
 if (SHOW_USER_QUESTION) {
   requestHarnessApproval(
-    () => session().interactions.askUserQuestion(makeUserQuestionPayload()),
+    HARNESS_RUN_ID,
+    { kind: 'userQuestion', data: makeUserQuestionPayload() },
     () => undefined,
   );
 }
 if (SHOW_PLAN_APPROVAL) {
   requestHarnessApproval(
-    () => session().interactions.requestPlanApproval(makePlanApprovalPayload()),
+    HARNESS_RUN_ID,
+    { kind: 'planApproval', data: makePlanApprovalPayload() },
     appendHarnessPlanDecision,
   );
 }
 
 if (SHOW_AGENT_PROPOSAL) {
   requestHarnessApproval(
-    () =>
-      session().interactions.requestAgentProposal(makeAgentProposalPayload()),
+    HARNESS_RUN_ID,
+    { kind: 'proposal', data: makeAgentProposalPayload() },
     () => undefined,
   );
 }
@@ -1613,7 +1624,7 @@ if (SHOW_AGENT_PROPOSAL) {
 function markHarnessInterrupted(): void {
   canInterrupt = false;
   rootRunPending.set(false);
-  session().interactions.cancel({ cause: 'Session interrupted.' });
+  cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',
     HARNESS_RUN_ID,
@@ -1627,7 +1638,7 @@ function markHarnessInterrupted(): void {
 }
 
 function markHarnessRunInterrupted(runId: RunId): void {
-  session().interactions.cancel({ runId, cause: 'Run interrupted.' });
+  cancelHarnessRequests('Run interrupted.', runId);
   if (runId === HARNESS_RUN_ID) {
     canInterrupt = false;
     rootRunPending.set(false);
@@ -1758,7 +1769,7 @@ function appendHarnessStatus(): void {
 
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
-  session().interactions.cancel({ cause: 'Session interrupted.' });
+  cancelHarnessRequests('Session interrupted.');
   harnessFollowUpQueue.drainItems();
   void GoalStore.forget(HARNESS_RUN_ID);
   for (const runId of [...currentView().runs.keys()]) {
@@ -1929,9 +1940,9 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const interrupted = RunIdSchema.parse('ffffffffffff');
   const nested = RunIdSchema.parse('111111111111');
   log.emit(PROCESS, 10_000_000, {
-    type: 'status',
-    phase: RUN_PHASE.RUNNING,
-    cause: 'harness',
+    type: 'run.activate',
+    category: AgentCategory.ToolUse,
+    isRemote: false,
   });
   for (const [id, agent, owner, parent] of [
     [waiting, 'waiting', OWNER, null],
@@ -1954,12 +1965,16 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     log.emit(
       id,
       10_000_000,
-      { type: 'status', phase: RUN_PHASE.RUNNING, cause: 'harness' },
+      {
+        type: 'run.activate',
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+      },
       owner,
     );
   }
   log.emit(waiting, 10_000_000, {
-    type: 'approval.requested',
+    type: 'request.opened',
     requestId: 'tree-approval',
     payload: {
       kind: 'bash',

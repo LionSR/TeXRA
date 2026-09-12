@@ -1,8 +1,5 @@
-import {
-  classifyRejection,
-  type BashSettlement,
-  type HostBashApprovalRequest,
-} from '@agent/runtime/HostInteractions';
+import { Effect } from 'effect';
+
 import {
   currentSession,
   type SessionHandle,
@@ -14,6 +11,8 @@ import {
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
+  type RequestDecision,
+  type RequestRefusal,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -22,6 +21,7 @@ import {
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
+import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
@@ -32,23 +32,31 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
+export interface BashApprovalRequest {
+  readonly command: string;
+  readonly cwd?: string | null;
+  readonly runId?: RunId | null;
+}
+
+/** What a bash approval settles to: the approval, or one of the refusals. */
+export type BashDecision =
+  Extract<RequestDecision, { action: 'approve' }> | RequestRefusal;
+
 /**
- * Build the bash permission payload every host publishes to its approval
- * surface, the bash counterpart of `prepareToolEditApprovalPrompt`.
+ * Build the bash permission payload every host lists from the fold, the bash
+ * counterpart of `prepareToolEditApprovalPrompt`.
  *
  * Owning it here keeps one request-id scheme, derives the bypass affordance
- * from the stream's current bypass state, and drops a blank working directory
- * so no renderer has to decide what an empty `cwd` means. Pass `session` when
- * the host owns one (extension, desktop); the CLI hosts run on the default
- * session.
+ * from the run's current bypass state, and drops a blank working directory
+ * so no renderer has to decide what an empty `cwd` means.
  */
 function prepareBashApprovalPrompt(
-  request: Omit<HostBashApprovalRequest, 'permission'>,
-  session?: SessionHandle,
+  request: BashApprovalRequest,
+  session: SessionHandle,
 ): BashPermission {
   const runId = request.runId ?? undefined;
   const isBypassed = runId
-    ? (session ?? currentSession()).approvals.bash.bypass.isBypassed(runId)
+    ? session.approvals.bash.bypass.isBypassed(runId)
     : false;
   const cwd = request.cwd?.trim();
   return {
@@ -60,9 +68,14 @@ function prepareBashApprovalPrompt(
   };
 }
 
-export async function requestBashApproval(
-  request: Omit<HostBashApprovalRequest, 'permission'>,
-): Promise<BashSettlement> {
+/**
+ * Ask the person for a command: policy first (allow, deny), else a
+ * `request.opened` on the run, serialized behind the run's other prompts,
+ * answered by a surface's `request.decide`.
+ */
+export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
+  request: BashApprovalRequest,
+): Effect.fn.Return<BashDecision, Error> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
@@ -81,53 +94,42 @@ export async function requestBashApproval(
   if (decision === 'allow') return { action: 'approve' };
   if (isTexraApprovalDenied(decision)) {
     context?.onApprovalPolicyDenial?.();
-    return {
-      action: 'reject',
-      reason: texraApprovalDenialMessage(decision),
-    };
+    return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 
   requireInteractions('bash approval', context);
+  if (!runId) {
+    return yield* Effect.fail(
+      new Error('A bash approval needs a run to open its request on.'),
+    );
+  }
 
-  const hostRequest: Omit<HostBashApprovalRequest, 'permission'> = {
-    command: request.command,
-    ...(request.cwd && { cwd: request.cwd }),
-    runId,
-  };
-  return session.approvals.bash.enqueue(runId, {
-    prompt: () =>
-      session.interactions.requestBashApproval({
-        ...hostRequest,
-        permission: prepareBashApprovalPrompt(hostRequest, session),
-      }),
-    bypassed: () => ({ action: 'approve' }),
+  const permission = prepareBashApprovalPrompt({ ...request, runId }, session);
+  return yield* session.approvals.bash.enqueue(runId, {
+    prompt: session
+      .openRequest(runId, { kind: 'bash', data: permission })
+      .pipe(
+        Effect.map((decided): BashDecision =>
+          decided.action === 'approve' ? decided : refusalOf('bash', decided),
+        ),
+      ),
+    bypassed: Effect.succeed<BashDecision>({ action: 'approve' }),
   });
-}
+});
 
 export function buildBashApprovalRejectedResult(
   command: string,
-  rejection: Extract<BashSettlement, { action: 'reject' }>,
+  refusal: RequestRefusal,
 ): ToolResult {
   const preview = previewLabel(command);
-  const classification = classifyRejection(rejection);
-  let message: string;
-  let guidance: string | undefined;
-  let feedback: string | undefined;
-  switch (classification.kind) {
-    case 'policy':
-      message = `Command denied: ${preview}`;
-      guidance = classification.reason.trim();
-      break;
-    case 'cancelled':
-      message = `Command approval cancelled: ${preview}`;
-      guidance = classification.cause?.trim();
-      break;
-    case 'feedback':
-      message = `User rejected command: ${preview}`;
-      guidance = DEFAULT_BASH_REJECTION_GUIDANCE;
-      feedback = classification.feedback?.trim();
-      break;
-  }
+  const copy = refusalCopy('Command', refusal);
+  const message =
+    refusal.action === 'reject'
+      ? `User rejected command: ${preview}`
+      : `${copy.summary}: ${preview}`;
+  const guidance =
+    refusal.action === 'reject' ? DEFAULT_BASH_REJECTION_GUIDANCE : copy.detail;
+  const feedback = copy.feedback;
   const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {
     summary: message,
