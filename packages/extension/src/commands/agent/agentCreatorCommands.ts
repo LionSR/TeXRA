@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { renderAgentTemplateString } from '@agent/templates';
@@ -12,6 +12,7 @@ import {
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { hostPort } from '@common/hostPort';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -175,20 +176,28 @@ function buildVSCodeUI(): AgentCreatorUI {
  * session, so there is no `AgentConfig` to hand it and no resume state to
  * keep coherent.
  */
-export async function handleCreateAgentWithAI(
+export function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
   secrets: PlatformSecrets,
 ): Promise<void> {
-  try {
-    const config = await loadCreatorConfig(context);
-    await Effect.runPromise(
-      runAgentCreator(config, category, buildVSCodeUI(), {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const config = yield* hostPort(() => loadCreatorConfig(context));
+      yield* runAgentCreator(config, category, buildVSCodeUI(), {
         secrets,
         globalState: context.globalState,
-      }),
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
-  }
+      });
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.promise(async () => {
+          await showLoggedErrorMessage(
+            CHANNEL,
+            'Failed to create agent',
+            Cause.squash(cause),
+          );
+        }),
+      ),
+    ),
+  );
 }

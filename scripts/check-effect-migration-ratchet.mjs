@@ -54,8 +54,6 @@ const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
 const SUPERSEDED_PACKAGES = [
   'p-queue',
-  'p-map',
-  'p-retry',
   'p-timeout',
   'p-defer',
   'async-mutex',
@@ -863,12 +861,11 @@ function selfTestSurvey() {
       // ImportKeyword branch of moduleSpecifier, so it must always name a
       // live row: without it, a dynamic `import('p-queue')` would dodge its
       // row undetected, in a ratchet whose whole subject is import rows.
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-timeout';\nimport pd from 'p-timeout-plus';\nimport local from './p-timeout';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
+      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-timeout';\nimport pd from 'p-timeout-plus';\nimport local from './p-timeout';\nconst defer = require('p-defer');\nexport { default as deferred } from 'p-defer';\nawait import('async-mutex');\n",
       expected: {
         [importRow('p-queue')]: 1,
         [importRow('p-timeout')]: 1,
-        [importRow('p-map')]: 1,
-        [importRow('p-retry')]: 1,
+        [importRow('p-defer')]: 2,
         [importRow('async-mutex')]: 1,
       },
     },

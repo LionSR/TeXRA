@@ -11,7 +11,6 @@
       "src/agent/index/platformAgentDirectories.ts": 2,
       "src/agent/modelHandlers/ModelHandler.ts": 1,
       "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
-      "src/agent/runtime/ModelFactory.ts": 1,
       "src/auth/oauth/sessionAccess.ts": 2,
       "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/workspaceFileOptions.ts": 1,
@@ -174,7 +173,7 @@
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "src/agent/followUp/ToolFileInteractionContext.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 6,
+      "src/agent/runtime/AgentLaunchContext.ts": 5,
       "src/agent/runtime/RunContext.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 6,
       "src/agent/runtime/childRunBudget.ts": 1,
@@ -282,13 +281,6 @@
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
-    "import:p-map": {
-      "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1
-    },
-    "import:p-retry": {
-      "src/agent/implementations/agentCreator/agentCreatorFlow.ts": 1,
-      "src/agent/modelHandlers/support/auxiliaryRetry.ts": 1
-    },
     "import:p-timeout": {
       "src/agent/workflowScript/runWorkflowScript.ts": 1
     },
@@ -320,10 +312,7 @@
       "src/utils/files/relativeFS.ts": 2
     },
     "dep:@agent/modelHandlers": {
-      "src/agent/runtime/ModelFactory.ts": 18,
-      "src/agent/runtime/helperModel.ts": 2,
-      "src/agent/types/IModelHandler.ts": 1,
-      "src/tools/media/audio.ts": 1
+      "src/agent/runtime/ModelFactory.ts": 13
     }
   }
 }
