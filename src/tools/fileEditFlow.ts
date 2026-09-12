@@ -119,17 +119,18 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     // stay a failure rather than becoming a defect.
     const call = yield* ToolCall;
     const { path, displayPath } = yield* Effect.try({
-      try: () => {
-        const { path: resolved, display } = resolveAndFormat(
-          inputPath,
-          call.workingDirectory,
-        );
-        assertWritable(resolved, display);
+      try: () =>
+        call.inScope(() => {
+          const { path: resolved, display } = resolveAndFormat(
+            inputPath,
+            call.workingDirectory,
+          );
+          assertWritable(resolved, display);
 
-        const fsPath = resolved.fsPath;
-        options.validate?.({ path: fsPath, displayPath: display });
-        return { path: fsPath, displayPath: display };
-      },
+          const fsPath = resolved.fsPath;
+          options.validate?.({ path: fsPath, displayPath: display });
+          return { path: fsPath, displayPath: display };
+        }),
       catch: (error) => error,
     });
 

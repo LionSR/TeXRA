@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -948,6 +948,49 @@ describe('createWorkflowScriptAgentRunner', () => {
         cause: durabilityError,
       });
     }),
+  );
+
+  it.effect.each([
+    {
+      cause: Cause.interrupt(),
+      name: 'an interrupt',
+      hasDurabilityError: false,
+    },
+    {
+      cause: Cause.fromReasons([
+        Cause.makeInterruptReason(),
+        Cause.makeFailReason(
+          new SubagentDurabilityError('result manifest unavailable'),
+        ),
+      ]),
+      name: 'an interrupt with a durability failure',
+      hasDurabilityError: true,
+    },
+  ])(
+    'preserves $name from the in-band child',
+    ({ cause, hasDurabilityError }) =>
+      Effect.gen(function* () {
+        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+          Effect.failCause(cause),
+        );
+
+        const exit = yield* Effect.exit(defaultRunner()(invocation()));
+
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+          const failure = exit.cause.reasons.find(Cause.isFailReason)?.error;
+          if (hasDurabilityError) {
+            expect(failure).toMatchObject({
+              name: 'WorkflowRunAbortError',
+              message: 'result manifest unavailable',
+              cause: { name: 'SubagentDurabilityError' },
+            });
+          } else {
+            expect(failure).toBeUndefined();
+          }
+        }
+      }),
   );
 
   it.effect('reports the active-attempt run id, not the logical id', () =>

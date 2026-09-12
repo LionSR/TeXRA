@@ -29,6 +29,12 @@ import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
 
 const log = createLog('workflowScriptAgentRunner');
 
+function workflowRunnerError(error: unknown): Error {
+  return error instanceof SubagentDurabilityError
+    ? new WorkflowRunAbortError(error.message, { cause: error })
+    : ensureError(error);
+}
+
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: DelegationParent,
@@ -322,12 +328,10 @@ export function createWorkflowScriptAgentRunner(
       return result;
     },
     Effect.catchCause((cause) => {
-      const error = Cause.squash(cause);
-      return Effect.fail(
-        error instanceof SubagentDurabilityError
-          ? new WorkflowRunAbortError(error.message, { cause: error })
-          : ensureError(error),
-      );
+      if (Cause.hasInterrupts(cause)) {
+        return Effect.failCause(Cause.map(cause, workflowRunnerError));
+      }
+      return Effect.fail(workflowRunnerError(Cause.squash(cause)));
     }),
   );
 }

@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Node imports
 import * as assert from 'node:assert';
+import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -13,10 +14,14 @@ import { describe, beforeEach, afterEach, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import {
+  createFakeHost,
+  installPlatform as installFakePlatform,
+} from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
@@ -132,6 +137,39 @@ describe('Tool edit approval gating', () => {
         'written\n\nReplaced 1 lines with 1 lines.',
       );
       assert.strictEqual(result.userInstruction, undefined);
+    }),
+  );
+
+  it.effect('write_file resolves paths in the invoking project scope', () =>
+    Effect.gen(function* () {
+      const tool = new WriteFileTool();
+      const project = createFakeHost({
+        workspacePath: path.resolve(path.sep, 'project'),
+        config: { 'texra.toolUse.requireEditApproval': true },
+      });
+      const projectPath = project.roots.workspace!;
+      const filePath = path.join(projectPath, 'scoped.txt');
+      tracker.recordRead('scoped.txt');
+      vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
+      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue('old content');
+      const write = vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+
+      const result = yield* tool
+        .call({ path: filePath, content: 'new content' })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              tracker,
+              run: { runId, session: defaultSession(), toolPolicy: {} },
+              inScope: (operation) =>
+                runWithWorkspaceRoots(project.roots, operation),
+            }),
+          ),
+        );
+
+      assert.strictEqual(result.status, 'executed');
+      assert.strictEqual(approvalRequests[0]?.path, 'scoped.txt');
+      assert.strictEqual(write.mock.lastCall?.[0], 'scoped.txt');
     }),
   );
 

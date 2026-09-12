@@ -1,6 +1,6 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import '@test/support/defaultSessionTestSetup';
 
@@ -744,6 +744,30 @@ return null`;
         ),
       });
       expect(result.output?.split(scriptReference)).toHaveLength(2);
+    }),
+  );
+
+  it.effect.each([
+    { cause: Cause.interrupt(), name: 'an interrupt', hasDefect: false },
+    {
+      cause: Cause.fromReasons([
+        Cause.makeInterruptReason(),
+        Cause.makeDieReason(new Error('launch cleanup failed')),
+      ]),
+      name: 'an interrupted cleanup defect',
+      hasDefect: true,
+    },
+  ])('preserves $name from workflow launch', ({ cause, hasDefect }) =>
+    Effect.gen(function* () {
+      mocks.startChildRunLoop.mockReturnValueOnce(Effect.failCause(cause));
+
+      const exit = yield* Effect.exit(callTool());
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        expect(Cause.hasDies(exit.cause)).toBe(hasDefect);
+      }
     }),
   );
 

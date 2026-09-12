@@ -659,7 +659,11 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       });
       return yield* runResult.pipe(
         Effect.catchCause((cause) =>
-          Effect.fail(workflowScriptToolError(Cause.squash(cause), scriptPath)),
+          Cause.hasInterrupts(cause)
+            ? Effect.failCause(cause)
+            : Effect.fail(
+                workflowScriptToolError(Cause.squash(cause), scriptPath),
+              ),
         ),
       );
     });
