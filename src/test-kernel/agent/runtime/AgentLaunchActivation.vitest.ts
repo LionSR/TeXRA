@@ -117,9 +117,7 @@ async function captureStartedLaunch(
   const recordedSession = recordSessionEvents(session);
   const trace = new TraceEmitter();
 
-  mocks.resolve.mockReturnValueOnce({
-    entry: { path: '/agents/chat.yaml' },
-  });
+  mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
   mocks.load.mockResolvedValueOnce([
     { agentCategory: AgentCategory.ToolUse },
     {},

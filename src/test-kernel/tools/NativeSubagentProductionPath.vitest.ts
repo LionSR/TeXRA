@@ -1,3 +1,6 @@
+import { writeFile } from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { Effect, Stream } from 'effect';
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -22,11 +25,10 @@ vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
 }));
 
 // Local imports - agent runtime
-import { registerInlineAgents } from '@agent/index';
+import { refresh } from '@agent/index';
 import { getRunRecords, registerRun } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
   assertOwnedRunLease,
   ownsRunLease,
@@ -71,6 +73,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
+  makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
@@ -284,28 +287,41 @@ async function resumePersistedRun(
 
 async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
+  const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
+  await Promise.all(
+    [PARENT_AGENT, CHILD_AGENT].map((name) =>
+      writeFile(path.join(agentsDir, `${name}.yaml`), agentYaml(name)),
+    ),
+  );
   return {
     ...host,
     platform: {
       ...host.platform,
       agentResume: { tryResumeRun: resumePersistedRun },
+      agentDirectories: {
+        custom: async () => agentsDir,
+        builtIn: async () => agentsDir,
+        builtInToolUse: async () => agentsDir,
+      },
     },
   };
 }
 
-function inlineAgent(name: string) {
-  return {
-    name,
-    description: `Integration fixture ${name}.`,
-    settings: { agentCategory: AgentCategory.ToolUse, tools: [] },
+function agentYaml(name: string): string {
+  return [
+    `name: ${name}`,
+    `description: Integration fixture ${name}.`,
+    'settings:',
+    '  agentCategory: toolUse',
+    '  tools: []',
     // The loop builds the opening user message from the agent's prompts, so
     // the fixture carries a real request template rather than a transport
     // override that skipped prompt construction.
-    prompts: {
-      systemPrompt: `You are ${name}.`,
-      userRequest: '{{ INSTRUCTION }}',
-    },
-  };
+    'prompts:',
+    `  systemPrompt: You are ${name}.`,
+    "  userRequest: '{{ INSTRUCTION }}'",
+    '',
+  ].join('\n');
 }
 
 async function waitForPersistedResult(
@@ -452,7 +468,7 @@ async function launchWaitingChild(options: {
 
   const parentConfig = AgentConfigSchema.parse({
     agent: PARENT_AGENT,
-    agentSource: 'inline',
+    agentSource: 'custom',
     agentCategory: AgentCategory.ToolUse,
     model: PARENT_MODEL,
     instruction: 'Coordinate the child proof review.',
@@ -510,7 +526,7 @@ async function launchWaitingChild(options: {
         parentCall,
         {
           agent: CHILD_AGENT,
-          agentSource: 'inline',
+          agentSource: 'custom',
           agentCategory: AgentCategory.ToolUse,
           model: CHILD_MODEL,
           instruction: 'Prove the first assertion.',
@@ -532,8 +548,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
-    clearInlineAgents();
-    registerInlineAgents([inlineAgent(PARENT_AGENT), inlineAgent(CHILD_AGENT)]);
+    await Effect.runPromise(refresh({ includeRemote: false }));
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     teardownDefaultSession();
@@ -550,7 +565,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedRunLease(PARENT_RUN_ID);
     teardownDefaultSession();
-    clearInlineAgents();
     vi.restoreAllMocks();
   });
 

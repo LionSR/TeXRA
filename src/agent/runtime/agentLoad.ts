@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 
 import { Result } from 'effect';
-import { resolveAgent } from '@agent/index';
-import type { ResolvedAgent } from '@agent/index/agentEntry';
+import { getAgent } from '@agent/index';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   AgentPromptSchema,
   AgentDefinitionSchema,
@@ -13,7 +13,6 @@ import {
   type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
-import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import { agentKey, AgentCategory } from '@shared/schemas';
@@ -63,34 +62,9 @@ async function loadYaml(absolutePath: string): Promise<object> {
 }
 
 export async function loadAgentSettingAndPrompts(
-  resolution: ResolvedAgent,
+  entry: AgentEntry,
   seen: ReadonlySet<string> = new Set(),
 ): Promise<[AgentSetting, AgentPrompt]> {
-  const { entry } = resolution;
-
-  // Handle inline agents: the definition was supplied as a value and validated
-  // at registration, so there is nothing to read from disk. Tools and defaults
-  // still go through the same resolution the YAML path uses below.
-  if (entry.source === 'inline') {
-    // Prefer the definition carried in the resolution — it's the exact one
-    // the resolver selected, not whatever a concurrent re-registration may
-    // have replaced (Fix #9). Fall back to the live lookup for callers that
-    // construct a ResolvedAgent without the field.
-    const definition =
-      resolution.inlineDefinition ?? inlineAgentDefinition(entry.name);
-    const settings =
-      entry.category === AgentCategory.ToolUse
-        ? toToolUseSettings(definition.settings)
-        : {
-            ...definition.settings,
-            agentCategory: AgentCategory.Workflow,
-          };
-    return [
-      AgentSettingSchema.parse(normalizeAgentSettingTools(settings, CHANNEL)),
-      AgentPromptSchema.parse(definition.prompts),
-    ];
-  }
-
   // Handle remote agents
   if (entry.source === 'remote') {
     const remoteConfig = await loadRemoteAgent(entry.name);
@@ -120,16 +94,14 @@ export async function loadAgentSettingAndPrompts(
 
   // Merge with parent if inheritance is specified
   if (config.inherits) {
-    const parentResolution = resolveAgent(
-      agentKey(entry.source, config.inherits),
-    );
-    if (!parentResolution) {
+    const parentEntry = getAgent(agentKey(entry.source, config.inherits));
+    if (!parentEntry) {
       throw new Error(
         `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
       );
     }
     const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
-      parentResolution,
+      parentEntry,
       nextSeen,
     );
 
@@ -157,16 +129,4 @@ export async function loadAgentSettingAndPrompts(
     AgentSettingSchema.parse(normalizedSettings),
     AgentPromptSchema.parse(prompts),
   ];
-}
-
-function toToolUseSettings(settings: AgentSettingInput): AgentSettingInput {
-  const {
-    rounds: _rounds,
-    isRewrite: _isRewrite,
-    ...sharedSettings
-  } = settings;
-  return {
-    ...sharedSettings,
-    agentCategory: AgentCategory.ToolUse,
-  };
 }

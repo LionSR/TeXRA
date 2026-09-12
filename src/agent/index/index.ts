@@ -28,9 +28,7 @@ export type { AgentEntry } from './agentEntry';
 
 export {
   loadAgents,
-  registerInlineAgents,
   getAgent,
-  resolveAgent,
   resolveAgentForLaunch,
   getAgentsByCategory,
   getCustomAgentScanIssues,

@@ -90,26 +90,6 @@ const AgentSettingInputSchema = z.strictObject({
 
 export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
 
-/**
- * Complete root settings before tool-name resolution. Unlike inherited partial
- * settings, the category is known here, so category-specific fields can be
- * checked without importing the tool registry.
- */
-export const AgentRootSettingInputSchema = z.discriminatedUnion(
-  'agentCategory',
-  [
-    z.strictObject({
-      ...rawAgentSettingBaseFields,
-      ...rawWorkflowSettingFields,
-      agentCategory: z.literal(AgentCategory.Workflow),
-    }),
-    z.strictObject({
-      ...rawAgentSettingBaseFields,
-      agentCategory: z.literal(AgentCategory.ToolUse),
-    }),
-  ],
-);
-
 export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),

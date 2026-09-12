@@ -1019,10 +1019,8 @@ function createWindow(options: {
               return options.agentDirectories.builtIn();
             case 'builtInToolUse':
               return options.agentDirectories.builtInToolUse();
-            // No local directory: remote agents live in Supabase, inline ones
-            // were supplied as values and were never written to disk.
+            // No local directory: remote agents live in Supabase.
             case 'remote':
-            case 'inline':
               return Promise.resolve(undefined);
           }
         },

@@ -779,12 +779,6 @@
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "clearInlineAgents"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "getCategoryAgent"
     },
     {
@@ -792,18 +786,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "getVisibleAgent"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "registerInlineAgents"
-    },
-    {
-      "file": "src/agent/index/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "registerInlineAgents"
     },
     {
       "file": "src/agent/prompt/userVars.ts",

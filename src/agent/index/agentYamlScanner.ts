@@ -245,11 +245,7 @@ function inheritedDefinitionBlock<B extends InheritedBlockName>(
   };
 }
 
-/**
- * Round floor for a workflow agent: one round per `userRequest` template.
- * Shared with `inlineAgents` so a definition supplied as a value derives the
- * same round count as the identical definition read from a YAML file.
- */
+/** Round floor for a workflow agent: one round per `userRequest` template. */
 export function userRequestTemplateCount(userRequest: unknown): number {
   if (Array.isArray(userRequest)) return userRequest.length;
   return typeof userRequest === 'string' && userRequest ? 1 : 0;

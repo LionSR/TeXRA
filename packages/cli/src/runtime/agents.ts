@@ -123,7 +123,7 @@ export function resolveCliAgentInCategory(
     category,
     identifier,
     pinned.success ? pinned.data : undefined,
-  )?.entry;
+  );
   return entry?.category === category ? entry : undefined;
 }
 

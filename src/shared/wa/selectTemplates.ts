@@ -66,13 +66,6 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
             >`
           : nothing
       }
-      ${
-        opt.source === 'inline'
-          ? html`<span class="agent-icon">
-              ${waIcon(AGENT_DECORATORS.properties.inline.icon)}</span
-            >`
-          : nothing
-      }
     </wa-option>
   `;
 }
