@@ -47,7 +47,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
-import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
+import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, RunHalted } from '../run/AgentRun';
@@ -676,14 +676,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
-    const goal = run.inScope(() => GoalStore.getForRun(runId));
-    if (goal?.status !== 'active') return;
+    if (goalOf(session, runId)?.status !== 'active') return;
+    pauseGoal(session, runId);
     yield* Effect.tryPromise({
-      try: () =>
-        run.inScope(async () => {
-          await GoalStore.setStatus(runId, 'paused');
-          await setGoalSessionAutoApproval(runId, false, { session });
-        }),
+      try: () => setGoalSessionAutoApproval(runId, false, { session }),
       catch: ensureError,
     });
   });
@@ -761,7 +757,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             if (!afterError && !followUps.hasQueued()) {
               const continuation = yield* Effect.tryPromise({
-                try: () => run.inScope(() => maybeBuildGoalContinuation(runId)),
+                try: () =>
+                  run.inScope(() => maybeBuildGoalContinuation(session, runId)),
                 catch: ensureError,
               });
               if (continuation && !followUps.hasQueued()) {

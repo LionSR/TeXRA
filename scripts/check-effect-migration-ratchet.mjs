@@ -913,7 +913,7 @@ function selfTestBoundary() {
     ['packages/agent/src/index.ts', true],
     ['src/tools/EditTool.ts', true],
     ['src/tools/arxiv/SearchTool.ts', true],
-    ['src/tools/goal/goalStore.ts', false],
+    ['src/tools/goal/goalRows.ts', false],
     ['src/tools/bash.ts', false],
     // A tool class whose file is not named *Tool.ts is still boundary (b):
     // the survey reports that it declares an execute() method.

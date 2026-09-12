@@ -80,6 +80,7 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
+import { releaseRunResources } from '@tools/approval';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -88,7 +89,6 @@ import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
-import { applyCommittedRunRemoval } from './applyCommittedRunRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -413,8 +413,14 @@ const sessionHandleLayer = (
           session.receiveCommittedEvent(event).pipe(
             Effect.andThen(() => {
               const target = aggregateTarget(event.aggregateId);
+              // The local half of a committed removal. The run's goal needs
+              // nothing: `run.removed` drops the run from the view, and its
+              // `goalStateChanged` row goes with it.
               return event.type === 'run.removed' && target.kind === 'run'
-                ? applyCommittedRunRemoval(session, target.id)
+                ? Effect.sync(() => {
+                    session.runs.detachChildren(target.id);
+                    releaseRunResources(target.id, session);
+                  })
                 : Effect.void;
             }),
             Effect.andThen(

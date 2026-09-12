@@ -23,12 +23,16 @@ import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
-import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
+import { goalElapsedMs, ToolError } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import {
-  GoalStore,
+  clearGoal,
+  goalOf,
   isGoalEnabled,
+  pauseGoal,
+  retargetGoal,
   setGoalSessionAutoApproval,
+  startGoal,
   type GoalAutoApprovalScope,
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
@@ -100,9 +104,10 @@ function buildApprovedResult(): ToolResult {
 /**
  * Everything this tool's program needs from its invocation capability.
  *
- * `GoalStore` and the goal feature flag both resolve `workspaceRoots()` —
- * per-session state whose fallback is the process (no-workspace) roots — so
- * they are reached through the call's narrow legacy host frame.
+ * The goal feature flag resolves `workspaceRoots()` — per-session config
+ * whose fallback is the process (no-workspace) roots — so it is read through
+ * the call's narrow legacy host frame. The goal itself is the session's own
+ * `goalStateChanged` row, read and written through `ports.session`.
  */
 interface PlanPorts {
   /** One native tool-call capability, scoped by the dispatcher. */
@@ -164,18 +169,12 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   // If a goal is already in flight on this run, retarget it at the
   // newly approved objective instead of silently leaving the loop driving
   // the stale one.
-  const existing = ports.call.inScope(() => GoalStore.getForRun(runId));
-  if (isGoalInFlight(existing)) {
+  if (goalOf(ports.session, runId)) {
     return yield* Effect.gen(function* () {
-      const retargeted = yield* hostPort(() =>
-        ports.call.inScope(() => GoalStore.editObjective(runId, objective)),
-      );
-      const active =
-        retargeted.status === 'paused'
-          ? ((yield* hostPort(() =>
-              ports.call.inScope(() => GoalStore.setStatus(runId, 'active')),
-            )) ?? retargeted)
-          : retargeted;
+      const active = yield* Effect.try({
+        try: () => retargetGoal(ports.session, runId, objective),
+        catch: (error) => error,
+      });
       yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
@@ -215,9 +214,10 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   }
 
   return yield* Effect.gen(function* () {
-    const goal = yield* hostPort(() =>
-      ports.call.inScope(() => GoalStore.start(runId, objective)),
-    );
+    const goal = yield* Effect.try({
+      try: () => startGoal(ports.session, runId, objective),
+      catch: (error) => error,
+    });
     yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
     return executed(
       `The user approved this plan and started an autonomous goal ` +
@@ -362,7 +362,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   runId: RunId,
   reason: string,
 ) {
-  const goal = ports.call.inScope(() => GoalStore.getForRun(runId));
+  const goal = goalOf(ports.session, runId);
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to pause. ' +
@@ -376,10 +376,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
       `Goal already ${goal.status}: pause is a no-op.`,
     );
   }
-  const updated =
-    (yield* hostPort(() =>
-      ports.call.inScope(() => GoalStore.setStatus(runId, 'paused')),
-    )) ?? goal;
+  const updated = pauseGoal(ports.session, runId) ?? goal;
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
@@ -392,7 +389,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   runId: RunId,
   reason: string,
 ) {
-  const goal = ports.call.inScope(() => GoalStore.getForRun(runId));
+  const goal = goalOf(ports.session, runId);
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to mark complete. ' +
@@ -400,10 +397,10 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
       'Plan-only work complete: summarize the result.',
     );
   }
-  // Completing forgets the record — a goal is a live pursuit, not an
-  // archived one. The autonomous loop stops because no `active` record
-  // remains for the next wait-node continuation check.
-  yield* hostPort(() => ports.call.inScope(() => GoalStore.forget(runId)));
+  // Completing ends the pursuit — a goal is a live one, not an archived one.
+  // The autonomous loop stops because the run's next row states that no goal
+  // is in flight for the wait-node continuation check.
+  clearGoal(ports.session, runId);
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +

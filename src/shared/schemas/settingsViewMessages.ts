@@ -70,7 +70,7 @@ import { WebviewReadyMessageSchema } from './commonViewMessages';
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
 // Re-export the Goal type from its shared leaf module so this file (consumed by
-// webview frontends) does not pull in GoalTool/GoalStore runtime modules. The
+// webview frontends) does not pull in the goal-row runtime modules. The
 // goal helpers are imported from '@shared/schemas/goal' directly.
 export { type Goal } from './goal';
 

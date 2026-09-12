@@ -15,7 +15,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runInSession } from '@agent/runtime/RunContext';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { aggregateId, type RunId } from '@shared/schemas';
 import {
@@ -23,7 +22,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { GoalStore } from '@tools/goal';
+import { goalOf, startGoal } from '@tools/goal';
 
 // One restore after each test covers every vi.spyOn in this file.
 afterEach(() => {
@@ -59,11 +58,8 @@ describe('committed run removal', () => {
           });
           session.runs.track(handle);
           yield* Effect.promise(() => session.settlePublications());
-          yield* Effect.promise(async () =>
-            runInSession(session, () =>
-              GoalStore.start(parent, 'Determine the boundary conditions.'),
-            ),
-          );
+          startGoal(session, parent, 'Determine the boundary conditions.');
+          yield* Effect.promise(() => session.settlePublications());
           session.publish([
             {
               type: 'request.opened',
@@ -106,11 +102,7 @@ describe('committed run removal', () => {
           expect(SubscriptionRef.getUnsafe(session.view).requests).toEqual([]);
           expect(handle.isOwnedBy(parent)).toBe(false);
           expect(session.now()).toBe(before + 1);
-          expect(
-            yield* Effect.sync(() =>
-              runInSession(session, () => GoalStore.getForRun(parent)),
-            ),
-          ).toBeNull();
+          expect(goalOf(session, parent)).toBeNull();
         }),
       ),
   );

@@ -34,7 +34,7 @@ import {
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { GoalStore } from '@tools/goal';
+import { goalList } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
@@ -233,7 +233,7 @@ export function createDesktopSettingsIpc(
     try {
       options.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: GoalStore.list(),
+        items: goalList(options.session),
       });
     } catch (error) {
       options.ui.onError(error);

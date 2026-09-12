@@ -1,7 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { runInSession } from '@agent/runtime';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
@@ -23,7 +22,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { GoalStore } from '@tools/goal';
+import { startGoal } from '@tools/goal';
 
 import { disposeAfterTest } from './desktopAgentRunTestHarness.ts';
 import {
@@ -441,66 +440,6 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  describe('goal-list failures', () => {
-    setupPlatform();
-
-    const runId = 'd5e77105' as RunId;
-    const goalKey = `goals:byRun:${runId}`;
-    const malformed = { goalId: 'not-valid' };
-
-    async function seedMalformedGoal(): Promise<void> {
-      await workspaceRoots().workspaceState.update('goals:index', [runId]);
-      await workspaceRoots().workspaceState.update(goalKey, malformed);
-    }
-
-    it('reports a malformed goal without throwing or posting a fallback list', async () => {
-      await seedMalformedGoal();
-      const showErrorMessage = vi.fn(async () => undefined);
-      const onError = vi.fn();
-      const { settings, posted } = createCapturedSettingsFixture({
-        ui: { showErrorMessage, onError },
-      });
-
-      expect(
-        settings.handleMessage({
-          command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-        }),
-      ).toBe(true);
-      await flushAsyncWork();
-
-      expect(onError).toHaveBeenCalledOnce();
-      expect(showErrorMessage).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `Failed to load goals: Failed to parse persisted goal for run "${runId}"`,
-        ),
-      );
-      expect(posted).not.toContainEqual(
-        expect.objectContaining({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        }),
-      );
-      expect(workspaceRoots().workspaceState.get(goalKey)).toEqual(malformed);
-    });
-
-    it('continues initial settings delivery after a malformed goal', async () => {
-      await seedMalformedGoal();
-      const showErrorMessage = vi.fn(async () => undefined);
-      const { settings } = createSettingsFixture({
-        ui: { showErrorMessage },
-      });
-
-      expect(
-        settings.handleMessage({
-          command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-          view: 'settings',
-        }),
-      ).toBe(false);
-      await flushAsyncWork();
-
-      expect(showErrorMessage).toHaveBeenCalledOnce();
-    });
-  });
-
   describe('goal-state pushes', () => {
     setupPlatform();
 
@@ -509,10 +448,9 @@ describe('desktop settings IPC', () => {
       const { posted, session } = createCapturedSettingsFixture();
       publishTestRunStart(session, runId);
 
-      // A run mutates goals inside its paper's session, as the desktop does.
-      await runInSession(session, () =>
-        GoalStore.start(runId, 'Finish the proof'),
-      );
+      // A run mutates goals on its paper's session, as the desktop does.
+      startGoal(session, runId, 'Finish the proof');
+      await session.settlePublications();
       await flushAsyncWork();
 
       expect(posted.at(-1)).toMatchObject({
