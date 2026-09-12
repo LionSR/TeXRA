@@ -82,6 +82,8 @@ export function createDesktopAgentRun(
 ): DesktopAgentRun {
   const { session, host } = options;
   const logger = options.logger ?? createChannelTrace('DesktopAgentRun');
+  // The process runtime, held once for this window's session work.
+  const runtime = effectRuntime();
   let disposed = false;
 
   /**
@@ -93,7 +95,7 @@ export function createDesktopAgentRun(
     dialog: Promise<unknown> | void,
     logMessage: string,
   ): Promise<void> {
-    const presented = await effectRuntime().runPromiseExit(
+    const presented = await runtime.runPromiseExit(
       Effect.tryPromise({
         try: async () => dialog,
         catch: (error) => error,
@@ -152,7 +154,7 @@ export function createDesktopAgentRun(
     requestId,
     decision,
   ) =>
-    effectRuntime().runPromise(
+    runtime.runPromise(
       session.requests
         .request({ kind: 'request.decide', runId, requestId, decision })
         .pipe(Effect.asVoid),
@@ -166,7 +168,7 @@ export function createDesktopAgentRun(
       decide: decideRequest,
     }),
   });
-  const sessionEvents = effectRuntime().runFork(
+  const sessionEvents = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
     ),
@@ -216,7 +218,7 @@ export function createDesktopAgentRun(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
-      effectRuntime().runFork(Fiber.interrupt(sessionEvents));
+      runtime.runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },
   };

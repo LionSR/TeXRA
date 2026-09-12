@@ -79,6 +79,7 @@ function traceDocument(
       ...meta,
     },
     entries: [],
+    steps: [],
   };
 }
 
