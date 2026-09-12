@@ -263,10 +263,12 @@ export class UsageMonitor {
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usage.usageRoute,
-        // The relay's request column is still named `streamId`; this is the
-        // last production spelling of the word outside the token-stream
-        // sense, and it stays until the relay column is renamed (a
-        // server-side change, not part of this release).
+        // An external wire key of the usage-log edge function, the same
+        // class as the CLI's NDJSON projection keys: the relay's request
+        // column is still named `streamId`, so the key stays until that
+        // column is renamed to `run_id` (a server-side change, not part of
+        // this release). It carries the run id and no stream vocabulary
+        // survives behind it.
         streamId: this.context.runId,
       });
     } catch (error) {

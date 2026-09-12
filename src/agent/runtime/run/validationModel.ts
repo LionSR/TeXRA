@@ -33,7 +33,7 @@ import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 
-This document was produced by the internal TeXRA CLI validation model handler.
+This document was produced by the internal TeXRA CLI validation model.
 `;
 
 const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {

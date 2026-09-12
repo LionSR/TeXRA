@@ -134,7 +134,7 @@ export interface StatusBarDisplayInput {
   /** Latest usage snapshot — read for `usageRoute` (which subscription quota
    *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
-  /** Model-handler-authoritative context occupancy for the displayed stream
+  /** Run-authoritative context occupancy for the displayed stream
    *  (`RunView.context`). */
   readonly contextState: ContextStateData | undefined;
   readonly stage: RunStage | undefined;
@@ -267,12 +267,12 @@ function subscriptionQuotaSegment(
   };
 }
 
-// The gauge renders `RunView.context` — the model handler's
-// own reading of the window it served the last response under, which is the
-// only value that stays right across subscription caps and compaction. The
-// `usage` fallback covers the pre-first-response window, where the handler has
-// reported no occupancy yet: show the input-token count bare rather than
-// substituting a registry window the run may never have used.
+// The gauge renders `RunView.context` — the run's own reading of the window it
+// served the last response under, which is the only value that stays right
+// across subscription caps and compaction. The `usage` fallback covers the
+// pre-first-response window, where the run has reported no occupancy yet: show
+// the input-token count bare rather than substituting a registry window the run
+// may never have used.
 function formatUsage(
   contextState: ContextStateData | undefined,
   usage: TokenUsageStats | undefined,
@@ -286,11 +286,11 @@ function formatUsage(
 
   // Occupancy is input tokens only — the prompt that fills the window. Output
   // tokens are the generated response, not part of the context, which is why
-  // the handler reports `inputTokens` here.
+  // the run reports `inputTokens` here.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
   const percent = Math.max(1, Math.round(utilizationPercent));
   // Bands match the progress view's context gauge (`fillColor` in UsagePanel),
-  // and read the handler's own `utilizationPercent` rather than re-dividing
+  // and read the run's own `utilizationPercent` rather than re-dividing
   // used/contextWindow — the same number told two ways drifts.
   let color: StatusBarColor;
   if (utilizationPercent > 80) color = COLOR_ERROR;

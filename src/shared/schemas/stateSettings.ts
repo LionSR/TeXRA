@@ -442,7 +442,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Use the Responses API',
     description:
       "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
+    honoredBy: everyHost('src/agent/runtime/modelRoutes.ts'),
     model: {
       provider: 'openai',
       label: 'Use the Responses API',
@@ -1441,7 +1441,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Show compact model names in pickers.',
     category: 'model',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
+    honoredBy: everyHost('src/agent/runtime/modelRoutes.ts'),
     surfaces: { settingsView: 'models' },
   }),
 

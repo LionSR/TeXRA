@@ -1,6 +1,6 @@
 /**
- * The run's model binding: one runtime `ModelConfig` plus the route the
- * factory already decides, resolved to the llm package `Model` the loop
+ * The run's model binding: one runtime `ModelConfig` plus the route
+ * `modelRoutes` resolves, bound to the llm package `Model` the loop
  * calls, the durable `ModelOrigin` every ledger row names, and the runtime
  * facts the package deliberately does not own (price, context window, the
  * credential route keys the retry gate coordinates on).
@@ -35,11 +35,16 @@ import {
 } from '@llm/turn';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import {
+  reasoningEffortOverrides,
+  supportsReasoningLevel,
+} from '@model/reasoningLevel';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import {
   kimiCodeEffectiveConfig,
   resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
+import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
   type ModelCompatibilityKey,
@@ -57,7 +62,7 @@ import type { z } from 'zod';
 
 type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
-/** Tool-use runs keep output headroom for context growth, as the handler did. */
+/** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
 
 /**
@@ -699,9 +704,29 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
 });
 
 /**
- * Bind one model for a run. The route is the factory's decision, read
- * through the same resolver every other route reader uses; the persisted
- * compatibility key of a resumed conversation wins over today's default.
+ * The user's per-model reasoning level, applied to the config the run binds
+ * so the request default, the reported range and the accounting all read one
+ * effort. Only models whose level is user-selectable honor it; every other
+ * model keeps the catalog's effort.
+ */
+function withReasoningLevelOverride(
+  config: ModelConfig,
+  globalState: StateStore,
+): ModelConfig {
+  if (!supportsReasoningLevel(config)) return config;
+  const effort = reasoningEffortOverrides(globalState)[config.name];
+  if (effort === undefined) return config;
+  return {
+    ...config,
+    capabilities: { ...config.capabilities, reasoningEffort: effort },
+  };
+}
+
+/**
+ * Bind one model for a run. The route is `resolveRouteCredential`'s
+ * decision, read through the same resolver every other route reader uses;
+ * the persisted compatibility key of a resumed conversation wins over
+ * today's default.
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
@@ -774,13 +799,17 @@ export const bindModel = Effect.fn('bindModel')(function* (
   // The ChatGPT session serves the Responses protocol and the Grok session
   // the xAI Chat protocol, so the subscription route is asked only there;
   // `constructModel` can then hand a subscription token to no other
-  // protocol's constructor.
+  // protocol's constructor. Eligibility is decided by the route this binding
+  // resolved, not by the live OpenRouter preference: a resumed conversation
+  // whose persisted format is a direct one binds direct, and must keep its
+  // subscription instead of silently billing the provider key because the
+  // preference was turned on since.
   const subscription =
     protocol === 'openai-responses' || protocol === 'xai-chat'
       ? yield* Effect.tryPromise({
           try: () =>
             input.inScope(() =>
-              resolveSubscriptionCredential(config, useOpenRouter),
+              resolveSubscriptionCredential(config, onOpenRouter),
             ),
           catch: ensureError,
         })
@@ -798,6 +827,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       catch: ensureError,
     });
   }
+  config = withReasoningLevelOverride(config, input.stores.globalState);
   const built = yield* Effect.try({
     try: () => {
       const configuration = configurationFor(

@@ -296,8 +296,10 @@ export const modelInvokerLayer: Layer.Layer<
       );
     };
 
-    const failAttempt = (cause: unknown, at: RunState) =>
-      Effect.fail(new AttemptFailed(classifyModelFailure(cause), at));
+    const failAttempt = (cause: unknown, at: RunState, bound: BoundModel) =>
+      Effect.fail(
+        new AttemptFailed(classifyModelFailure(cause, bound.usageRoute), at),
+      );
 
     interface AttemptTrace {
       readonly thinking: StreamHandle;
@@ -394,7 +396,7 @@ export const modelInvokerLayer: Layer.Layer<
         logRetryLifecycle(operationId, 'attempt_failed', bound, {
           attempt: invocation.attempt,
         });
-        return yield* failAttempt(cause, state);
+        return yield* failAttempt(cause, state, bound);
       }
       const responseTimeMs = Date.now() - started;
       const turn = completed.value;
@@ -407,6 +409,7 @@ export const modelInvokerLayer: Layer.Layer<
             message: EMPTY_RESPONSE_ERROR_MESSAGE,
           }),
           state,
+          bound,
         );
       }
       const text = turnText(turn);
@@ -555,7 +558,7 @@ export const modelInvokerLayer: Layer.Layer<
       const prepared = yield* Effect.exit(bound.model.prepareTurn(turnRequest));
       if (Exit.isFailure(prepared)) {
         if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
-        return yield* failAttempt(Cause.squash(prepared.cause), state);
+        return yield* failAttempt(Cause.squash(prepared.cause), state, bound);
       }
       let resolved = prepared.value;
       yield* saveDebug(
@@ -591,6 +594,7 @@ export const modelInvokerLayer: Layer.Layer<
               message: `Input is ${estimate.value.inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
             }),
             state,
+            bound,
           );
         } else {
           const inputTokens = estimate.value.inputTokens;
@@ -636,7 +640,11 @@ export const modelInvokerLayer: Layer.Layer<
               if (Cause.hasInterrupts(clamped.cause)) {
                 return yield* Effect.interrupt;
               }
-              return yield* failAttempt(Cause.squash(clamped.cause), state);
+              return yield* failAttempt(
+                Cause.squash(clamped.cause),
+                state,
+                bound,
+              );
             }
             resolved = clamped.value;
           }
@@ -717,6 +725,7 @@ export const modelInvokerLayer: Layer.Layer<
                 'The run resumed onto a model that cannot observe its accepted background operation.',
             }),
             initial,
+            bound,
           );
         }
         logRetryLifecycle(operationId, 'attempt_started', bound, {

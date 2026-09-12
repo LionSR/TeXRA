@@ -1,12 +1,12 @@
 import {
   ProviderErrorSchema,
+  UsageRouteSchema,
   type ProviderError,
-  type StreamDiagnostics,
+  type UsageRoute,
 } from '@shared/schemas';
-import { isObject, isString } from '@utils/core';
+import { isObject } from '@utils/core';
 
 import { causeChain } from '../errorPredicates';
-import { type SdkErrorMetadata, isSdkErrorMetadata } from './sdkErrorKinds';
 
 /** Factory for symbol-keyed error metadata. Creates matched attach/detect
  *  accessors that share a single Symbol.for key. The optional typeGuard
@@ -36,29 +36,24 @@ function createErrorMetadata<T>(
   };
 }
 
-const sdkErrorMetadata = createErrorMetadata<SdkErrorMetadata>(
-  'sdkError',
-  isSdkErrorMetadata,
+const sdkUsageRoute = createErrorMetadata<UsageRoute>(
+  'sdkUsageRoute',
+  (value): value is UsageRoute => UsageRouteSchema.safeParse(value).success,
 );
 
-/** Reads the SDK error metadata a provider boundary tagged, so common error
- *  formatting does not import SDK classes or inspect SDK-specific prototypes. */
-export const detectSdkErrorMetadata = sdkErrorMetadata.detect;
+/**
+ * Records which credential route served the request a provider SDK error came
+ * back from. SuperGrok and ChatGPT share `api.x.ai` / `api.openai.com` with the
+ * API-key path and the OpenAI SDK's `APIError` carries no request config, so
+ * endpoint inspection cannot tell a subscription quota failure from a key rate
+ * limit — the bound route can. Written once, on the one model path, by
+ * `classifyModelFailure` in `src/agent/runtime/run/modelFailure.ts`, alongside
+ * {@link attachContextWindowError}.
+ */
+export const attachSdkUsageRoute = sdkUsageRoute.attach;
 
-const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
-  'streamDiagnostics',
-  (v): v is StreamDiagnostics => isObject(v) && 'eventsProcessed' in v,
-);
-
-export const detectStreamDiagnostics = streamDiagnosticsMetadata.detect;
-
-const partialTextMetadata = createErrorMetadata<string>(
-  'partialText',
-  (v): v is string => isString(v) && v.length > 0,
-);
-
-/** Partial text generated before a stream failure, when the thrower kept it. */
-export const detectPartialText = partialTextMetadata.detect;
+/** The credential route recorded for `err`. */
+export const detectSdkUsageRoute = sdkUsageRoute.detect;
 
 /** Presence-only marker: attached at a throw site, detected anywhere in the
  *  rethrow chain so a wrapper that preserves `{ cause }` stays classifiable. */
@@ -97,11 +92,6 @@ const missingApiKeyErrorMarker = createErrorMarker('missingApiKeyError');
  *  lookup keeps it reachable through any later rethrow. */
 export const attachMissingApiKeyError = missingApiKeyErrorMarker.attach;
 export const hasMissingApiKeyErrorMarker = missingApiKeyErrorMarker.has;
-
-const manualRetryOnlyErrorMarker = createErrorMarker('manualRetryOnlyError');
-
-/** A user-retryable failure that must not repeat automatically. */
-export const hasManualRetryOnlyErrorMarker = manualRetryOnlyErrorMarker.has;
 
 const errorPresentationClaimedMarker = createErrorMarker(
   'errorPresentationClaimed',

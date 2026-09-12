@@ -97,8 +97,8 @@ function shouldUseResponsesAPI(
 
 /**
  * Single owner for the "prefer short model names" preference read. Read live
- * (no caching) so a mid-session settings change is honored on the next handler
- * creation, matching the other `globalState` reads in this module.
+ * (no caching) so a mid-session settings change is honored on the next
+ * binding, matching the other `globalState` reads in this module.
  */
 function getPreferShortModelNames(globalState: StateStore): boolean {
   return globalState.get<boolean>(
@@ -309,7 +309,7 @@ function applyShortModelNamePreference(
   return { ...config, fullName: short };
 }
 
-/** Returns the conversation-history format used by the handler for this model. */
+/** Returns the conversation-history format this model binds under. */
 export function resolveModelCompatibilityKey(
   originalConfig: ModelConfig,
   globalState: StateStore,

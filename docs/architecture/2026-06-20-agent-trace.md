@@ -8,7 +8,7 @@ there is a single runtime implementation behind both.
 ```
                           ┌────────────────────────────────────────┐
                           │              call sites                │
-                          │  (model handlers, tools, output mgrs,  │
+                          │  (run loop, tools, output mgrs,        │
                           │   commands, tests, …)                  │
                           └────────────────────┬───────────────────┘
                                                │

@@ -1,6 +1,6 @@
 /**
  * The agent flow state a `flow.snapshot` row restores: the run-state and
- * workspace snapshots, the user-variable channels, the handler compatibility
+ * workspace snapshots, the user-variable channels, the model compatibility
  * key, and the message-free core of each flow family. Host-neutral so the run
  * ledger (`runLedgerEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back, and the two family modules
@@ -29,8 +29,8 @@ import { WorkPlanSnapshotSchema } from './workPlan';
 
 /**
  * Normalized usage statistics from any model provider: the ONLY usage type
- * after API response extraction. Every model handler normalizes its
- * provider-specific usage to this shape.
+ * after API response extraction. The package's `TurnResult.usage` is priced
+ * into this shape by `run/pricing.ts`.
  *
  * Reuses only the required base fields via `.pick()` — the optional cache
  * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
@@ -89,7 +89,7 @@ export type AgentRunStateSnapshot = z.output<
 
 // ------------------------------------------------------------ workspace
 
-/** Schema for thinking blocks (used by model handlers). */
+/** Schema for thinking blocks (carried in persisted messages). */
 const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
@@ -291,7 +291,7 @@ export const UserVariableChannelsSchema = UserVariableChannelRecordSchema;
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 
-// ------------------------------------------------- handler compatibility
+// --------------------------------------------------- model compatibility
 
 const MODEL_COMPATIBILITY_KEYS = [
   'Validation',

@@ -13,27 +13,17 @@
  * next cycle" phrasing is unique to the Kimi Code membership backend, so
  * matching it reliably identifies a subscription request whose quota ran out —
  * the signal that lets the retry UI offer "switch to your own API key"
- * (parallel to the Codex `usage_limit_reached` affordance). The endpoint guard
- * (`api.kimi.com/coding/v1`) keeps the Moonshot open platform from being
- * misread as a subscription limit.
+ * (parallel to the Codex `usage_limit_reached` affordance). The bound
+ * credential route the run stamped on the failure keeps the Moonshot open
+ * platform from being misread as a subscription limit.
  */
 
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-
 import { matchUsageLimitMessage, type QuotaLimitInfo } from './errorInspection';
-import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
+import { detectSdkUsageRoute } from './errorMetadata';
 
 /** The distinctive Kimi Code membership-exhaustion phrase. */
 const USAGE_LIMIT_PATTERN =
   /usage limit for this billing cycle|quota will be refreshed in the next cycle/i;
-
-/** Whether the error's request targeted the Kimi Code coding endpoint. The
- *  endpoint comes from the request-config side channel
- *  ({@link detectSdkRequestBaseURL}): the OpenAI SDK's `APIError` carries no
- *  request config of its own, so the handler boundary records it there. */
-function isKimiCodeEndpointError(err: unknown): boolean {
-  return detectSdkRequestBaseURL(err)?.includes(KIMI_CODE_BASE_URL) === true;
-}
 
 /**
  * Parse a Kimi Code usage-limit error, returning the reset details or `null`
@@ -44,6 +34,6 @@ export function parseKimiCodeSubscriptionLimit(
   err: unknown,
   rawErrorBody: unknown,
 ): QuotaLimitInfo | null {
-  if (!isKimiCodeEndpointError(err)) return null;
+  if (detectSdkUsageRoute(err) !== 'kimi-code-subscription') return null;
   return matchUsageLimitMessage(err, rawErrorBody, USAGE_LIMIT_PATTERN);
 }

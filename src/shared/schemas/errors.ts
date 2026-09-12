@@ -21,8 +21,6 @@ const StreamDiagnosticsSchema = z.object({
   anthropicMessageId: z.string().nullable().prefault(null),
 });
 
-export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
-
 /** Reason a credential/quota is exhausted, requiring user action before an
  *  identical retry can succeed. The reasons are mutually exclusive — a single
  *  error is classified as exactly one — which is why this is a discriminant
