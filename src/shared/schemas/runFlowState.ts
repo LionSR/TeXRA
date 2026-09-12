@@ -9,6 +9,8 @@
  */
 import { z } from 'zod';
 
+import { TurnProtocolSchema } from '@llm/turn';
+
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import {
@@ -20,7 +22,6 @@ import {
   RunUsageTotalsSchema,
   TokenCountSchema,
   TokenUsageStatsSchema,
-  UsageProviderSchema,
   UsageRouteSchema,
 } from './usage';
 import { WorkPlanSnapshotSchema } from './workPlan';
@@ -46,8 +47,8 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
 }).extend({
   /** Response time in milliseconds */
   responseTimeMs: z.number().nonnegative(),
-  /** Provider that generated this usage data */
-  provider: UsageProviderSchema,
+  /** Wire surface that produced this usage; usage is billed per surface. */
+  provider: TurnProtocolSchema,
 
   // Optional metrics (when supported by provider)
   /** Tokens served from cache (reduces cost) */
@@ -68,20 +69,20 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
 
 /**
- * Schema for RunUsageAccumulator JSON serialization. Only the most-recent
- * round's usage is needed at runtime, so `latestUsage` is the one carrier and
- * strict parsing rejects a blob carrying anything else: a snapshot that does
- * not match this shape fails loudly through the existing resume-parse failure
- * path instead of silently dropping usage.
+ * Persisted shape of the snapshot's `usageAccumulator` field. Only the
+ * most-recent round's usage is needed at runtime, so `latestUsage` is the one
+ * carrier and strict parsing rejects a blob carrying anything else: a snapshot
+ * that does not match this shape fails loudly through the existing
+ * resume-parse failure path instead of silently dropping usage.
  */
-const RunUsageAccumulatorJSONSchema = z.strictObject({
+const PersistedUsageAccumulatorSchema = z.strictObject({
   totals: RunUsageTotalsSchema.prefault({}),
   latestUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),
-  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({}),
+  usageAccumulator: PersistedUsageAccumulatorSchema.prefault({}),
 });
 export type AgentRunStateSnapshot = z.output<
   typeof AgentRunStateSnapshotSchema

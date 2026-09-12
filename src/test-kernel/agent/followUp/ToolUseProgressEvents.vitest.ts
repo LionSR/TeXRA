@@ -91,7 +91,6 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,

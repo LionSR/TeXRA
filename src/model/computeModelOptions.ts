@@ -8,11 +8,11 @@ import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
+  MODEL_AVAILABILITY_STATUS,
   REASONING_LEVEL_LABELS,
   type ModelAvailabilityKind,
   type ModelOptionData,
 } from '@shared/schemas';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
   DEFAULT_HELPER_MODEL,
   providerDisplayName,
@@ -87,93 +87,32 @@ export interface ModelOptionStores {
  */
 type UnavailableReason = 'openrouter-missing-key';
 
+/**
+ * A resolved verdict: the kind the row ships, plus the two refinements this
+ * module's later steps read. What the kind *means* is
+ * {@link MODEL_AVAILABILITY_STATUS}, not a field copied onto every row.
+ */
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
-  label: string;
-  available: boolean;
-  requiresKey: boolean;
   providerCapabilities?: ProviderCapabilityProfile;
   reason?: UnavailableReason;
 }
 
-/**
- * Per-kind status fields. `kind` is intentionally omitted here: the record key
- * is the single source of truth and `availabilityStatus()` reattaches it.
- *
- * Declared with `satisfies` rather than a `Record<...>` type annotation so
- * each entry's `available` literal (`true`/`false`) survives into
- * {@link UnavailableAvailabilityKind} below — an annotation would widen it to
- * `boolean` and break that derivation — while `satisfies` still rejects a
- * missing or misshapen kind exactly like the annotation did.
- */
-const AVAILABILITY_STATUS_FIELDS = {
-  'openrouter-key': {
-    label: 'OpenRouter key',
-    available: true,
-    requiresKey: false,
-  },
-  'provider-key': { label: 'API key set', available: true, requiresKey: false },
-  'missing-key': {
-    label: 'Missing API key',
-    available: false,
-    requiresKey: true,
-  },
-  'subscription-access': {
-    label: CHATGPT_AUTH.subscriptionLabel,
-    available: true,
-    requiresKey: false,
-  },
-  'copilot-access': {
-    label: 'Copilot subscription',
-    available: true,
-    requiresKey: false,
-  },
-  'copilot-consent-required': {
-    label: 'Copilot approval required',
-    available: false,
-    requiresKey: false,
-  },
-  'copilot-unavailable': {
-    label: 'Copilot unavailable',
-    available: false,
-    requiresKey: false,
-  },
-  'provider-unavailable': {
-    label: 'Unavailable through selected provider',
-    available: false,
-    requiresKey: false,
-  },
-  retired: {
-    label: 'Retired',
-    available: false,
-    requiresKey: false,
-  },
-  'unknown-model': {
-    label: 'Unknown model',
-    available: false,
-    requiresKey: false,
-  },
-} satisfies Record<
-  ModelAvailabilityKind,
-  Omit<ModelAvailabilityStatus, 'kind'>
->;
-
-/** Resolve a full availability status from its kind. */
 function availabilityStatus(
   kind: ModelAvailabilityKind,
 ): ModelAvailabilityStatus {
-  return { kind, ...AVAILABILITY_STATUS_FIELDS[kind] };
+  return { kind };
 }
 
 /**
- * Every kind whose {@link AVAILABILITY_STATUS_FIELDS} entry is
+ * Every kind whose {@link MODEL_AVAILABILITY_STATUS} entry is
  * `available: false` — derived, not hand-listed, so a kind can't be added to
  * one table (or have its `available` flip) without the other noticing.
  */
 type UnavailableAvailabilityKind = {
   [
     K in ModelAvailabilityKind
-  ]: (typeof AVAILABILITY_STATUS_FIELDS)[K]['available'] extends true
+  ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
     ? never
     : K;
 }[ModelAvailabilityKind];
@@ -203,7 +142,7 @@ function copilotUnavailableReason({
 
 /**
  * Per-kind unavailable-reason prose, compiler-checked the same way
- * {@link AVAILABILITY_STATUS_FIELDS} is: omitting a kind here — including a
+ * {@link MODEL_AVAILABILITY_STATUS} is: omitting a kind here — including a
  * newly added `ModelAvailabilityKind` whose status is `available: false` —
  * is a type error instead of a silent fall-through to a generic message.
  */
@@ -239,21 +178,14 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
 };
 
 /**
- * Ship the resolved verdict on the option row. Every option leaves this
- * module with all four fields set, so no renderer ever has to guess a label
- * for a row that only carries `value` and `label`.
+ * Ship the resolved verdict on the option row: the kind alone, which
+ * `MODEL_AVAILABILITY_STATUS` words for whichever surface renders it.
  */
 function withAvailabilityFields(
   option: ModelOptionData,
   availability: ModelAvailabilityStatus,
 ): ModelOptionData {
-  return {
-    ...option,
-    availability: availability.kind,
-    availabilityLabel: availability.label,
-    requiresKey: availability.requiresKey,
-    disabled: !availability.available,
-  };
+  return { ...option, availability: availability.kind };
 }
 
 interface ModelAvailabilityContext {
@@ -306,10 +238,7 @@ async function resolveModelAvailability(
   }
 
   if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
-    return {
-      ...availabilityStatus('provider-unavailable'),
-      label: 'Unavailable through OpenRouter',
-    };
+    return availabilityStatus('provider-unavailable');
   }
 
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
@@ -328,9 +257,9 @@ async function resolveModelAvailability(
     }
   }
 
-  // Grok (xAI) subscription — same preference pattern as ChatGPT. Reuse the
-  // subscription-access kind, but label it Grok so pickers/status rows do not
-  // say "ChatGPT subscription" for an xAI model.
+  // Grok (xAI) subscription — same preference pattern as ChatGPT, and its own
+  // kind so pickers and status rows do not say "ChatGPT subscription" for an
+  // xAI model.
   if (ctx.xaiSignedIn) {
     const subscriptionCapabilities = resolveXaiSubscriptionCapabilities(
       config,
@@ -338,8 +267,7 @@ async function resolveModelAvailability(
     );
     if (subscriptionCapabilities) {
       return {
-        ...availabilityStatus('subscription-access'),
-        label: GROK_AUTH.subscriptionLabel,
+        ...availabilityStatus('xai-subscription-access'),
         providerCapabilities: subscriptionCapabilities,
       };
     }
@@ -551,7 +479,7 @@ export async function getModelUnavailableReason(
   const ctx = await buildAvailabilityContext(stores);
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
   const availability = await resolveModelAvailability(model, config, ctx);
-  if (availability.available) return null;
+  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
 
   // `availability.kind` is guaranteed `available: false` here, so it's a
   // valid `UnavailableAvailabilityKind` and every case is covered by

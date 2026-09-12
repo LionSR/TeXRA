@@ -1,48 +1,38 @@
 # Agent core domain modules
 
 `agent/core` holds the host-agnostic domain model for the agent system (no
-`vscode`, no `packages/*` imports). It is organized by bounded concern so the
-ubiquitous language is visible in the directory layout rather than buried in a
-flat folder.
+`vscode`, no `packages/*` imports). Three modules remain, named after the
+concern they carry:
 
-| Module        | Concern                          | Contents                                                                                                                                                                                                                                                                              |
-| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable tokens; the user-variable record now lives in `@shared/schemas` `runFlowState.ts`)                         |
-| `state/`      | Run-state snapshots              | `AgentWorkspaceState` and `runRequests` (request validation); the run snapshot lives in `@shared/schemas` `runFlowState.ts` — **not** a live state model: `AgentConfig` is the one run-config vocabulary, and no boundary projects a second shape of it                               |
-| `usage/`      | Usage value objects              | `RunUsageAccumulator` — accumulates already-normalized `NormalizedUsage` (`@shared/schemas`). There is no raw per-provider usage shape any more: `TurnResult.usage` from `packages/llm` and `priceTurnUsage` (`src/agent/runtime/run/pricing.ts`) produce `NormalizedUsage` directly. |
-| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                                                                                                                             |
-| `flows/`      | Shared loop helpers              | Only what both run programs use: `toolCallParsing`. The programs themselves live in `@agent/runtime/loop/` (`toolUse.ts`, `reflection.ts`), their per-run services in `@agent/runtime/run/`, and the model call in `@agent/runtime/ModelInvoker.ts`                                   |
+| Module        | Concern                          | Contents                                                                                                                                                                                                                      |
+| ------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable tokens), `agentDefinitionInheritance`, `RunRecord` |
+| `state/`      | Run-state snapshots              | `AgentWorkspaceState` (file, media and work-plan state) and `runRequests` (request validation)                                                                                                                                |
+| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ToolHost`, `ITool`, `IToolRegistry`, `MapToolRegistry`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by both run programs)               |
+
+What is **not** here, and where it lives instead:
+
+- The run snapshot and the run usage totals are schemas, not classes:
+  `runFlowState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
+  accumulator type in `core`.
+- The run programs are `@agent/runtime/loop/` (`toolUse.ts`, `reflection.ts`),
+  their per-run services `@agent/runtime/run/`, the model call
+  `@agent/runtime/ModelInvoker.ts`. `core` holds none of the loop.
+- The process's global state store is the `AppState` service from
+  `@platform/interfaces` (`yield* AppState` in Effect code, or thread the store
+  in from the host's composition root). Workspace-scoped state comes from
+  `workspaceRoots().workspaceState`.
 
 ## Dependency direction
 
-Dependencies point **inward**, never the reverse:
+The only edge inside `core` is `state` → `definition` (`runRequests` validates
+an `AgentConfig`). `definition` and `tools` depend on nothing else in `core`;
+don't introduce an edge that points back outward.
 
-```
-flows ──▶ state ──▶ definition
-              └────▶ usage
-```
-
-`state` may depend on `definition` and `usage`; `definition` and `usage`
-depend on neither. Don't introduce imports that point back outward (e.g.
-`definition` importing from `state`).
-
-This diagram covers dependencies _within_ `core`. A `flows/` helper may still
-call a canonical host-agnostic collaborator outside `core` directly instead of
-taking a second reference to the same run-owned service; this is not a
-`core`-specific exception.
-None of this pulls in `vscode` or `packages/*`; it's still host-agnostic, just
-not self-contained within `core`'s own module boundaries. Don't read the
-diagram above as "`flows/` files never import outside `core`."
-
-Files kept at the `core/` root are limited infrastructure helpers or shared
-constants, not domain types:
-
-- `constants.ts` — shared preview/threshold constants.
-
-For the process's global state store, take the `AppState` service from
-`@platform/interfaces` (`yield* AppState` in Effect code, or thread the store
-in from the host's composition root). Workspace-scoped state comes from
-`workspaceRoots().workspaceState`.
+That covers dependencies _within_ `core`. Any module here may still call a
+canonical host-agnostic collaborator outside `core` directly rather than take a
+second reference to the same run-owned service; that is not a `core`-specific
+exception, and it is still host-agnostic.
 
 ## Importing
 

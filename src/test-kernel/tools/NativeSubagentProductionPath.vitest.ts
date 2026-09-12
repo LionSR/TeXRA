@@ -243,7 +243,6 @@ function scriptedBoundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: config.contextWindow,
     supportsVision: false,

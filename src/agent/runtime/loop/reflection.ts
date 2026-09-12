@@ -30,8 +30,6 @@
 import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { K_SLICE } from '@agent/core/constants';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import {
   compileFailuresOf,
@@ -92,6 +90,7 @@ import {
   type RoundOutput,
   type RunOutcome,
   type RunStorageFileLocation,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
@@ -119,6 +118,8 @@ import {
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
+/** Length for preview slices of tool output and responses. */
+const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;

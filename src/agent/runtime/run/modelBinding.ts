@@ -12,7 +12,12 @@
 import { createHash } from 'node:crypto';
 
 import { Context, Effect, Option, type Scope } from 'effect';
-import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  ReasoningEffort,
+  type ModelConfig,
+} from 'llm-zoo';
 
 import {
   resolveModelCompatibilityKey,
@@ -54,7 +59,6 @@ import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
   type ModelCompatibilityKey,
-  type UsageProviderSchema,
   type UsageRoute,
 } from '@shared/schemas';
 import {
@@ -66,9 +70,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
-import type { z } from 'zod';
-
-type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
 /** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
@@ -90,29 +91,22 @@ export class EditorModel extends Context.Service<
   }
 >()('@texra/agent/EditorModel') {}
 
-const LLM_EFFORTS = new Set([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const);
-type LlmEffort = typeof LLM_EFFORTS extends Set<infer E> ? E : never;
-type RouteEffort = Exclude<LlmEffort, 'none' | 'minimal'>;
+/**
+ * The efforts a wire route can be asked for: llm-zoo's vocabulary minus the
+ * two that mean "ask for none". The catalog's effort is already llm-zoo's
+ * enum, so no re-parse stands between the catalog and the request.
+ */
+type RouteEffort = Exclude<
+  ReasoningEffort,
+  ReasoningEffort.NONE | ReasoningEffort.MINIMAL
+>;
 
-function llmEffort(effort: string | undefined): LlmEffort | null {
-  return effort !== undefined && (LLM_EFFORTS as Set<string>).has(effort)
-    ? (effort as LlmEffort)
-    : null;
-}
-
-function routeEffort(effort: string | undefined): RouteEffort | null {
-  const value = llmEffort(effort);
-  return value === null || value === 'none' || value === 'minimal'
+function routeEffort(effort: ReasoningEffort | undefined): RouteEffort | null {
+  return effort === undefined ||
+    effort === ReasoningEffort.NONE ||
+    effort === ReasoningEffort.MINIMAL
     ? null
-    : value;
+    : effort;
 }
 
 function supportedRouteEfforts(config: ModelConfig): readonly RouteEffort[] {
@@ -135,7 +129,6 @@ export interface BoundModel {
   readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
-  readonly usageProvider: UsageProvider;
   readonly usageRoute: UsageRoute;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
@@ -189,30 +182,6 @@ const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
     GLM: 'glm-chat',
     Meta: 'openai-responses',
   };
-
-const USAGE_PROVIDER_BY_MODEL_PROVIDER: Record<ModelProvider, UsageProvider> = {
-  [ModelProvider.ANTHROPIC]: 'anthropic',
-  [ModelProvider.OPENAI]: 'openai',
-  [ModelProvider.GOOGLE]: 'google',
-  [ModelProvider.DEEPSEEK]: 'deepseek',
-  [ModelProvider.XAI]: 'xai',
-  [ModelProvider.MOONSHOT]: 'moonshot',
-  [ModelProvider.DASHSCOPE]: 'dashscope',
-  [ModelProvider.MINIMAX]: 'minimax',
-  [ModelProvider.GLM]: 'glm',
-  [ModelProvider.META]: 'meta',
-  [ModelProvider.OTHERS]: 'openrouter',
-  [ModelProvider.COPILOT]: 'unknown',
-};
-
-function usageProviderFor(
-  protocol: Protocol | 'validation',
-  config: ModelConfig,
-): UsageProvider {
-  if (protocol === 'openrouter-chat') return 'openrouter';
-  if (protocol === 'openai-responses') return 'openai-response';
-  return USAGE_PROVIDER_BY_MODEL_PROVIDER[config.provider];
-}
 
 function credentialFingerprint(route: string, secret: string): string {
   return createHash('sha256')
@@ -324,7 +293,10 @@ const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
  * The Codex backend runs every turn synchronously on one connection, so an
  * effort above medium risks the client timing out before it answers.
  */
-const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = ['low', 'medium'];
+const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+];
 
 function configurationFor(
   protocol: HttpProtocol,
@@ -374,7 +346,7 @@ function configurationFor(
           temperature: supportsTemperature ? input.temperature : null,
           parallelToolCalls: true,
           effort: capabilities.supportsReasoningEffort
-            ? llmEffort(capabilities.reasoningEffort)
+            ? capabilities.reasoningEffort
             : null,
         },
       };
@@ -382,7 +354,7 @@ function configurationFor(
       if (credential.route === 'chatgpt-subscription') {
         let codexEffort: RouteEffort | null = effort;
         if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
-          codexEffort = 'medium';
+          codexEffort = ReasoningEffort.MEDIUM;
         }
         return {
           ...base,
@@ -517,13 +489,14 @@ function configurationFor(
         },
       };
     case 'xai-chat': {
-      const xaiEffort = effort === 'max' ? null : effort;
+      const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
       return {
         ...base,
         protocol,
         supportsImageInput: capabilities.supportsVision,
         supportedEfforts: supportedEfforts.filter(
-          (value): value is Exclude<RouteEffort, 'max'> => value !== 'max',
+          (value): value is Exclude<RouteEffort, ReasoningEffort.MAX> =>
+            value !== ReasoningEffort.MAX,
         ),
         defaults: {
           maxOutputTokens,
@@ -572,7 +545,7 @@ function configurationFor(
           maxOutputTokens,
           temperature: supportsTemperature ? input.temperature : null,
           effort: capabilities.supportsReasoningEffort
-            ? llmEffort(capabilities.reasoningEffort)
+            ? capabilities.reasoningEffort
             : null,
           stopSequences: [],
         },
@@ -741,7 +714,6 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
       requestedModel,
       deployment,
     },
-    usageProvider: usageProviderFor('vscode-lm', routed),
     usageRoute: 'api-key',
     contextWindow: routed.contextWindow,
     supportsVision: routed.capabilities.supportsVision,
@@ -862,7 +834,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
       compatibilityKey,
       model: bound.model,
       origin: bound.origin,
-      usageProvider: usageProviderFor(protocol, config),
       usageRoute: 'api-key',
       contextWindow: config.contextWindow,
       supportsVision: false,
@@ -956,7 +927,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     compatibilityKey,
     model,
     origin,
-    usageProvider: usageProviderFor(protocol, config),
     usageRoute: credential.usageRoute,
     contextWindow: config.contextWindow,
     supportsVision: config.capabilities.supportsVision,

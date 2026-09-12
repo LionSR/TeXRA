@@ -96,7 +96,7 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0,
         responseTimeMs: 50,
-        provider: 'openai-response',
+        provider: 'openai-responses',
         usageRoute: 'chatgpt-subscription',
       });
 
@@ -121,7 +121,7 @@ describe('UsageMonitor', () => {
         outputTokens: 10,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       };
       recordRound(state, 50, round);
       await monitor.recordUsage(state, testModelInfo);
@@ -153,7 +153,7 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       };
       recordRound(state, 50, usage);
       await monitor.recordUsage(state, testModelInfo);
@@ -185,7 +185,7 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai' as const,
+        provider: 'openai-chat' as const,
       });
       await monitor.recordUsage(state, switched);
 
@@ -210,13 +210,13 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openrouter' as const,
+        provider: 'openrouter-chat' as const,
       });
 
       await monitor.recordUsage(state, other);
 
       expect(log).toHaveBeenCalledWith(
-        expect.objectContaining({ provider: 'openrouter' }),
+        expect.objectContaining({ provider: 'openrouter-chat' }),
       );
       expect(warn).not.toHaveBeenCalled();
     });
