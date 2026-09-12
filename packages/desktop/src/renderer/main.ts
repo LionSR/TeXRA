@@ -553,21 +553,37 @@ function recordLayoutMeasurement(next: DesktopTaskShellState): void {
   projectWorkbenches.get(shell.active)?.updateState(next);
 }
 
+/**
+ * Read the split handle's measured size from a `wa-reposition` event.
+ *
+ * A panel that has not been laid out yet has `size === 0`, so the component's
+ * pixels↔percent conversion produces NaN/Infinity and the first reposition
+ * event can carry a non-finite `positionInPixels`. Skip that emission; the
+ * panel's resize observer re-fires with the real measurement after layout.
+ */
+function measuredSplitPosition(event: Event): number | undefined {
+  const value = (event.currentTarget as SplitPanelElement).positionInPixels;
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function rememberSidebarWidth(event: Event): void {
   if (shellState().sidebarCollapsed) return;
-  const width = (event.currentTarget as SplitPanelElement).positionInPixels;
+  const width = measuredSplitPosition(event);
+  if (width == null) return;
   recordLayoutMeasurement(setSidebarWidth(shellState(), width));
 }
 
 function rememberBottomPanelHeight(event: Event): void {
   if (!activeWorkbenchTab(shellState(), 'bottom')) return;
-  const height = (event.currentTarget as SplitPanelElement).positionInPixels;
+  const height = measuredSplitPosition(event);
+  if (height == null) return;
   recordLayoutMeasurement(setBottomPanelHeight(shellState(), height));
 }
 
 function rememberWorkbenchWidth(event: Event): void {
   if (!activeWorkbenchTab(shellState(), 'right')) return;
-  const width = (event.currentTarget as SplitPanelElement).positionInPixels;
+  const width = measuredSplitPosition(event);
+  if (width == null) return;
   recordLayoutMeasurement(setWorkbenchWidth(shellState(), width));
 }
 
