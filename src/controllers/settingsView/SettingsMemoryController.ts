@@ -6,12 +6,11 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
+  deleteMemoryPath,
   loadMemoryItems,
   loadMemoryPreview,
-  MemoryFileUnwritable,
   setMemoryPinned,
 } from '@tools/memory/memoryFileSystem';
-import { StorageFS } from '@utils/files/storageFS';
 
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
@@ -82,10 +81,7 @@ export class SettingsMemoryController {
       if (!confirmed) return null;
 
       const storagePath = resolveMemoryStoragePath(input.storagePath);
-      yield* Effect.tryPromise({
-        try: () => StorageFS.delete(storagePath, { recursive: true }),
-        catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
-      });
+      yield* deleteMemoryPath(storagePath);
       return yield* this.getMemoryDataMessage();
     },
   );

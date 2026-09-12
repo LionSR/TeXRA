@@ -121,7 +121,8 @@ export const memoryPathExists = Effect.fn('memoryFileSystem.memoryPathExists')(
     }),
 );
 
-const statEntry = Effect.fn('memoryFileSystem.statEntry')(
+/** Stat one memory path. The one `StorageFS.stat` wrap the tree shares. */
+export const statMemoryEntry = Effect.fn('memoryFileSystem.statMemoryEntry')(
   (storagePath: string) =>
     Effect.tryPromise({
       try: () => StorageFS.stat(storagePath),
@@ -129,10 +130,40 @@ const statEntry = Effect.fn('memoryFileSystem.statEntry')(
     }),
 );
 
+/** Read one memory file whole and split its frontmatter from its content. */
+export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
+  (storagePath: string) =>
+    Effect.map(
+      Effect.tryPromise({
+        try: () => StorageFS.read(storagePath),
+        catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+      }),
+      (raw) => parseFrontmatter(raw),
+    ),
+);
+
+/** Write one memory file atomically, frontmatter first. */
+export const writeMemoryFile = Effect.fn('memoryFileSystem.writeMemoryFile')(
+  (storagePath: string, content: string, meta: MemoryFileMeta | null) =>
+    Effect.tryPromise({
+      try: () => StorageFS.writeAtomic(storagePath, buildFile(content, meta)),
+      catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
+    }),
+);
+
+/** Delete one memory path and everything under it. */
+export const deleteMemoryPath = Effect.fn('memoryFileSystem.deleteMemoryPath')(
+  (storagePath: string) =>
+    Effect.tryPromise({
+      try: () => StorageFS.delete(storagePath, { recursive: true }),
+      catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
+    }),
+);
+
 /** Read at most `maxBytes` from the head of a memory file. */
 const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
   function* (storagePath: string, maxBytes: number, stats?: { size: number }) {
-    const fileStats = stats ?? (yield* statEntry(storagePath));
+    const fileStats = stats ?? (yield* statMemoryEntry(storagePath));
     if (fileStats.size === 0) {
       return { text: '', truncated: false };
     }
@@ -214,7 +245,7 @@ const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
   relativePath: string,
   type: number,
 ) {
-  const stats = yield* statEntry(storagePath);
+  const stats = yield* statMemoryEntry(storagePath);
   const entry = {
     relativePath,
     storagePath,
@@ -378,11 +409,7 @@ type SetMemoryPinnedResult =
  */
 export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
   function* (storagePath: string, pinned: boolean) {
-    const raw = yield* Effect.tryPromise({
-      try: () => StorageFS.read(storagePath),
-      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
-    });
-    const { meta, content } = parseFrontmatter(raw);
+    const { meta, content } = yield* readMemoryFile(storagePath);
 
     const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
     if (alreadyInState) {
@@ -398,12 +425,7 @@ export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
       pinnedCount = priorPinned + 1;
     }
 
-    const updatedMeta = setPinnedMeta(meta, pinned);
-    yield* Effect.tryPromise({
-      try: () =>
-        StorageFS.writeAtomic(storagePath, buildFile(content, updatedMeta)),
-      catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
-    });
+    yield* writeMemoryFile(storagePath, content, setPinnedMeta(meta, pinned));
     return { status: 'changed', pinnedCount } satisfies SetMemoryPinnedResult;
   },
 );

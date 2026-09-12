@@ -17,11 +17,14 @@ import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
-  MemoryEntryUnreadable,
+  deleteMemoryPath,
   MemoryFileUnwritable,
   memoryPathExists,
+  readMemoryFile,
   setMemoryPinned,
+  statMemoryEntry,
   walkMemoryDirectory,
+  writeMemoryFile,
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,21 +57,10 @@ import {
 } from './constants';
 import { displayToStoragePath, toDisplayPath } from './memoryUtils';
 import {
-  parseFrontmatter,
-  buildFile,
   createMeta,
   formatAttribution,
   type MemoryFileMeta,
 } from './memoryMeta';
-
-/** Stat one memory path; the two callers share the one wrap of `StorageFS`. */
-const statMemoryStorage = Effect.fn('MemoryTool.statMemoryStorage')(
-  (storagePath: string) =>
-    Effect.tryPromise({
-      try: () => StorageFS.stat(storagePath),
-      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
-    }),
-);
 
 /** Create a memory directory and its parents. */
 const ensureMemoryDir = Effect.fn('MemoryTool.ensureMemoryDir')(
@@ -272,21 +264,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     }
   });
 
-  /** Read a memory file, stripping frontmatter. Returns user-visible content and optional metadata. */
-  private readonly readMemoryFile = Effect.fn('MemoryTool.readMemoryFile')(
-    (resolvedPath: string) =>
-      Effect.map(
-        Effect.tryPromise({
-          try: () => StorageFS.read(resolvedPath),
-          catch: (cause) =>
-            new MemoryEntryUnreadable({ storagePath: resolvedPath, cause }),
-        }),
-        (raw) => parseFrontmatter(raw),
-      ),
-  );
-
   /** Write a memory file with fresh attribution frontmatter, preserving pinned status from existing file. */
-  private readonly writeMemoryFile = Effect.fn('MemoryTool.writeMemoryFile')(
+  private readonly writeAttributed = Effect.fn('MemoryTool.writeAttributed')(
     (
       resolvedPath: string,
       content: string,
@@ -301,13 +280,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           runId === undefined
             ? undefined
             : getRunContextSession(ctx)?.runs.getHandle(runId)?.agentName;
-        const meta = createMeta(agentName, runId, existingMeta);
-        return Effect.tryPromise({
-          try: () =>
-            StorageFS.writeAtomic(resolvedPath, buildFile(content, meta)),
-          catch: (cause) =>
-            new MemoryFileUnwritable({ storagePath: resolvedPath, cause }),
-        });
+        return writeMemoryFile(
+          resolvedPath,
+          content,
+          createMeta(agentName, runId, existingMeta),
+        );
       }),
   );
 
@@ -333,7 +310,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     'MemoryTool.requireEditableFile',
   )(function* (resolvedPath: string, inputPath: string) {
     const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
-    const stats = yield* statMemoryStorage(resolvedPath).pipe(
+    const stats = yield* statMemoryEntry(resolvedPath).pipe(
       Effect.catchTag('MemoryEntryUnreadable', () =>
         Effect.fail(new ToolError(errorMsg)),
       ),
@@ -369,7 +346,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const stats = yield* statMemoryStorage(resolvedPath);
+    const stats = yield* statMemoryEntry(resolvedPath);
     if (isDirectory(stats.type)) {
       const allEntries = yield* this.buildDirectoryListing(resolvedPath, stats);
       recordToolFileRead(inputPath);
@@ -387,7 +364,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       );
     }
 
-    const { meta, content } = yield* this.readMemoryFile(resolvedPath);
+    const { meta, content } = yield* readMemoryFile(resolvedPath);
     recordToolFileRead(inputPath);
     const lines = splitContentLines(content);
     if (lines.length > MAX_VIEW_LINES) {
@@ -430,7 +407,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     yield* ensureMemoryDir(MEMORY_STORAGE_DIR);
     yield* ensureMemoryDir(path.dirname(resolvedPath));
-    yield* this.writeMemoryFile(resolvedPath, fileText);
+    yield* this.writeAttributed(resolvedPath, fileText);
     recordToolFileRead(inputPath);
 
     return executed(
@@ -459,7 +436,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content, meta } = yield* this.readMemoryFile(resolvedPath);
+    const { content, meta } = yield* readMemoryFile(resolvedPath);
     const replacement = replaceLiteralMatches({
       content,
       search: oldStr,
@@ -472,7 +449,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     });
 
     const updated = replacement.content;
-    yield* this.writeMemoryFile(resolvedPath, updated, meta);
+    yield* this.writeAttributed(resolvedPath, updated, meta);
     recordToolFileRead(inputPath);
 
     const updatedLines = updated.split('\n');
@@ -496,7 +473,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = this.requireViewBeforeModify(inputPath);
     if (readGate) return readGate;
 
-    const { content, meta } = yield* this.readMemoryFile(resolvedPath);
+    const { content, meta } = yield* readMemoryFile(resolvedPath);
     const lines = content.split('\n');
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
@@ -514,7 +491,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       ...lines.slice(insertLine),
     ];
 
-    yield* this.writeMemoryFile(resolvedPath, updatedLines.join('\n'), meta);
+    yield* this.writeAttributed(resolvedPath, updatedLines.join('\n'), meta);
     recordToolFileRead(inputPath);
 
     return executed(
@@ -538,11 +515,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const readGate = this.requireViewBeforeModify(inputPath, 'deleting');
     if (readGate) return readGate;
 
-    yield* Effect.tryPromise({
-      try: () => StorageFS.delete(resolvedPath, { recursive: true }),
-      catch: (cause) =>
-        new MemoryFileUnwritable({ storagePath: resolvedPath, cause }),
-    });
+    yield* deleteMemoryPath(resolvedPath);
     return executed(
       `Successfully deleted ${inputPath}`,
       `Deleted: ${inputPath}`,
