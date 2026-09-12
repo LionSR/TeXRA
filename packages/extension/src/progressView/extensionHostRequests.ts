@@ -348,7 +348,7 @@ export function createExtensionHostRequests(
         await workflowFileActions.acceptFile(editedFile, baseFile);
         return;
       case 'merge':
-        await runCommand('texra.merge', baseFile, undefined, editedFile);
+        await runCommand('texra.merge', baseFile, editedFile);
         return;
       case 'latexdiff':
         await runCommand('texra.latexdiff', undefined, baseFile, editedFile);
