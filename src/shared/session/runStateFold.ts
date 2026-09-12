@@ -228,7 +228,6 @@ const IGNORED_ROW_TYPES: Readonly<
   inquiryThreadUpdated: true,
   updateQueuedFollowUps: true,
   'approval.policy': true,
-  'transcript.entry': true,
   log: true,
   'stage.start': true,
   'stage.end': true,

@@ -57,7 +57,6 @@ import {
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { StreamLogEntrySchema } from './streamLogEntry';
 import {
   ApprovalBypassesSchema,
   ConversationProgressSchema,
@@ -382,14 +381,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * carries its coordinates; its five siblings below are ledger-private.
    */
   durable('flow.step', { payload: FlowStepPayloadSchema }),
-  /**
-   * One transcript row, in the recorder's persisted row format: the only
-   * transcript-tier arm before the cutover. The trace's flow rows replace it
-   * when the event table lands (`2026-09-04-agent-runtime-on-effect.md`,
-   * section 2.1). Subject to the residency rule: folded for subscribed
-   * aggregates only (PRD 5.2).
-   */
-  durable('transcript.entry', { entry: StreamLogEntrySchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
       /** Stamped at publication (`SessionHandle.publish`), so a draft does
@@ -604,7 +595,6 @@ export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
 ): string | null {
   switch (event.type) {
-    case 'transcript.entry':
     case 'log':
     case 'stage.start':
     case 'stage.end':

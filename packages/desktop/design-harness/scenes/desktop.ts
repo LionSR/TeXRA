@@ -13,11 +13,7 @@ import {
   type RailProject,
 } from '@desktop/renderer/taskShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopTaskShell.js';
-import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  type RunId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import {
   emptySessionView,
@@ -64,20 +60,19 @@ function withConversation(): SessionView {
   const scenario = buildScenario();
   const { log } = scenario;
   const before = log.events.length;
-  const LOG = STREAM_LOG_ENTRY_TYPES.LOG;
   // The chat lands three minutes ago, after the child started (BOARD_NOW).
   const CHAT = BOARD_NOW - 3 * 60_000;
-  log.entry(CHILD, CHAT, {
-    id: 'chat-user',
-    type: LOG,
+  log.emit(CHILD, CHAT, {
+    type: 'log',
+    level: 'info',
     messageType: MESSAGE_TYPES.USER_MESSAGE,
-    text: 'what should we do next',
+    message: 'what should we do next',
   });
-  log.entry(CHILD, CHAT + 10, {
-    id: 'chat-bash',
-    type: LOG,
+  log.emit(CHILD, CHAT + 10, {
+    type: 'log',
+    level: 'info',
     messageType: MESSAGE_TYPES.TOOL_USE,
-    text: 'bash',
+    message: 'bash',
     data: {
       toolName: 'bash',
       input: { command: 'git status && echo "--- LOG ---" && git log -n 5' },
@@ -85,11 +80,11 @@ function withConversation(): SessionView {
       status: 'completed',
     },
   });
-  log.entry(CHILD, CHAT + 20, {
-    id: 'chat-glob',
-    type: LOG,
+  log.emit(CHILD, CHAT + 20, {
+    type: 'log',
+    level: 'info',
     messageType: MESSAGE_TYPES.TOOL_USE,
-    text: 'glob',
+    message: 'glob',
     data: {
       toolName: 'glob',
       input: { pattern: '*' },
@@ -97,11 +92,11 @@ function withConversation(): SessionView {
       status: 'completed',
     },
   });
-  log.entry(CHILD, CHAT + 30, {
-    id: 'chat-reply',
-    type: LOG,
+  log.emit(CHILD, CHAT + 30, {
+    type: 'log',
+    level: 'info',
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    text:
+    message:
       'Two candidates for the next step. Section 2 still cites the retracted ' +
       'Palomar registry, and the soundness proof in Appendix B has an ' +
       "unproven lemma the reviewer flagged. I'd start with the citation fix " +

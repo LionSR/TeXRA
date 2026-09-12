@@ -77,10 +77,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import {
-  StreamLog,
-  type StreamLogAppendInput,
-} from '@shared/session/traceEntries';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
   foldAll,
@@ -647,7 +644,6 @@ HARNESS_DISPOSERS.push(
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
 const harnessRuns = new Set<RunId>();
-const harnessLogs = new Map<RunId, StreamLog>();
 
 /** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -769,22 +765,26 @@ function removeRun(runId: RunId): void {
   harnessRuns.delete(runId);
 }
 
-/** Publish complete fixture rows on the event plane. */
+/**
+ * Publish complete fixture rows on the event plane. Every fixture builder
+ * below emits a `LOG` entry, so each maps onto one `log` trace row; the
+ * transcript fold mints the row's id and timestamp from the published fact.
+ */
 function seedRows(
   runId: RunId,
   entries: readonly StreamLogAppendInput[],
 ): void {
   seedRun(runId);
-  let log = harnessLogs.get(runId);
-  if (!log) {
-    log = new StreamLog();
-    harnessLogs.set(runId, log);
-  }
   publish(
     ...entries.map((entry) => ({
-      type: 'transcript.entry' as const,
+      type: 'log' as const,
       aggregateId: qualifyAggregateId('run', runId),
-      entry: log.appendSettled(entry),
+      level: entry.level,
+      message: entry.text ?? '',
+      messageType: entry.messageType,
+      data: entry.data,
+      stageId: entry.groupId,
+      verbose: entry.verbose,
     })),
   );
 }
