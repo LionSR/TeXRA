@@ -306,10 +306,7 @@ const sessionHandleLayer = (
             Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
             Effect.orDie,
           ),
-        releaseRunClaims: (runId) =>
-          eventLog
-            .releaseClaims([qualifyAggregateId('run', runId)])
-            .pipe(Effect.orDie),
+        releaseClaims: (id) => eventLog.releaseClaims([id]).pipe(Effect.orDie),
         runRecords: (id) =>
           eventLog
             .readRunRecords(qualifyAggregateId('run', id))

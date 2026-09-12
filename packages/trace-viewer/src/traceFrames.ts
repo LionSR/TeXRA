@@ -165,7 +165,11 @@ function listingBodies(
       },
     );
   }
-  if (outcome !== null) {
+  // The terminal row belongs to the read at the run's last step (the
+  // whole document, and the slider's final position). At an earlier cut the
+  // run had not ended, so folding it would paint the final outcome over the
+  // state at that step.
+  if (outcome !== null && step === trace.steps.at(-1)) {
     bodies.push({
       type: 'run.end',
       aggregateId: qualifyAggregateId('run', runId),

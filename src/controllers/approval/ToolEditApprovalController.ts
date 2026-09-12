@@ -85,12 +85,14 @@ interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
 }
 
-/** A request whose preview is still being staged, so it cannot act yet. */
+/**
+ * A request with no preview: staging is still running, or it failed and none
+ * will open. Either way the request is open in the fold with its panel on
+ * screen, so a decision on it is answered from the payload it carries.
+ */
 interface InitializingToolEditApproval {
   readonly phase: 'initializing';
   readonly request: ToolEditApprovalRequest;
-  /** The decision an approve or discard produced while staging was still running. */
-  resolution?: RequestDecision;
 }
 
 /** A staged request awaiting the user. Membership in the map is what "unsettled" means. */
@@ -107,9 +109,10 @@ type ToolEditApprovalState =
 
 export class ToolEditApprovalController {
   /**
-   * Every request this controller stages, in either phase. The request's
-   * `request.decided` removes the entry, so no separate settled flag can
-   * disagree with the map.
+   * Every request this controller stages, in either phase. Membership ends
+   * when the request is decided, so no separate settled flag can disagree
+   * with the map: a staged request leaves on its `request.decided`, one with
+   * no preview the moment its decision is sent.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
   private disposed = false;
@@ -141,33 +144,24 @@ export class ToolEditApprovalController {
     };
     this.requests.set(requestId, initialization);
 
-    let preview: ToolEditPreview;
-    try {
-      preview = await this.options.host.stagePreview(request, {
-        requestId,
-        relativePath,
-        isSettled: () => this.isSettled(requestId),
-        discard: () => this.discard(requestId),
-      });
-    } catch (error) {
-      this.requests.delete(requestId);
-      throw error;
-    }
+    // A staging failure leaves the entry in place: the request is still open
+    // in the fold with its panel on screen, and an approve or reject on it
+    // decides from the payload. The failure itself propagates to the caller,
+    // which is where each host reports it.
+    const preview = await this.options.host.stagePreview(request, {
+      requestId,
+      relativePath,
+      isSettled: () => this.isSettled(requestId),
+      discard: () => this.discard(requestId),
+    });
 
-    // A dispose that landed while the host was staging: `release` already
-    // dropped this entry, and an initializing entry has no preview to
-    // dispose, so the preview that just finished staging is this call's to
-    // clean up. Presenting it would open a diff view for a disposed session
-    // and leave the staged files behind.
-    if (this.disposed) {
+    // The entry this call installed is gone when the request was decided or
+    // the controller disposed while the host was staging: an entry with no
+    // preview holds nothing to release, so the preview that just finished
+    // staging is this call's to clean up. Promoting it would open a diff view
+    // for a settled request and leave the staged files behind.
+    if (this.requests.get(requestId) !== initialization) {
       await preview.dispose();
-      return;
-    }
-
-    if (initialization.resolution) {
-      this.requests.delete(requestId);
-      await preview.dispose();
-      await this.send(request, initialization.resolution);
       return;
     }
 
@@ -202,7 +196,23 @@ export class ToolEditApprovalController {
     feedback?: string;
   }): void {
     const entry = this.requests.get(payload.requestId);
-    if (entry?.phase !== 'pending') return;
+    if (!entry) return;
+    if (entry.phase === 'initializing') {
+      // No preview to read the edited file back from or to open, so the
+      // proposal the request carries is the whole answer.
+      if (payload.action === 'approve') {
+        this.decideFromPayload(entry.request, {
+          action: 'approve',
+          content: entry.request.proposedContent,
+        });
+      } else if (payload.action === 'reject') {
+        this.decideFromPayload(entry.request, {
+          action: 'reject',
+          feedback: payload.feedback?.trim() || null,
+        });
+      }
+      return;
+    }
 
     switch (payload.action) {
       case 'approve':
@@ -241,10 +251,10 @@ export class ToolEditApprovalController {
     for (const state of this.requests.values()) {
       if (state.request.runId !== runId) continue;
       if (state.phase === 'initializing') {
-        state.resolution ??= {
+        this.decideFromPayload(state.request, {
           action: 'approve',
           content: state.request.proposedContent,
-        };
+        });
         continue;
       }
       staged.push(state);
@@ -264,15 +274,13 @@ export class ToolEditApprovalController {
   }
 
   private isSettled(requestId: string): boolean {
-    const state = this.requests.get(requestId);
-    if (!state) return true;
-    return state.phase === 'initializing' && state.resolution !== undefined;
+    return !this.requests.has(requestId);
   }
 
   private discard(requestId: string): void {
     const state = this.requests.get(requestId);
     if (state?.phase === 'initializing') {
-      state.resolution ??= { action: 'reject' };
+      this.decideFromPayload(state.request, { action: 'reject' });
       return;
     }
     if (state?.phase === 'pending') {
@@ -280,6 +288,21 @@ export class ToolEditApprovalController {
         this.send(state.request, { action: 'reject' }),
       );
     }
+  }
+
+  /**
+   * Decide a request that has no preview: the entry goes now, because there
+   * is nothing to hold until the fold answers, and a preview still staging
+   * is disposed by the {@link present} call that finishes it.
+   */
+  private decideFromPayload(
+    request: ToolEditApprovalRequest,
+    decision: RequestDecision,
+  ): void {
+    this.requests.delete(request.permission.requestId);
+    void this.send(request, decision).then(undefined, (error: unknown) => {
+      this.options.host.reportError(toErrorMessage(error));
+    });
   }
 
   /** Send one decision for a staged request; the fold's `request.decided`

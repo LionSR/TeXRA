@@ -57,7 +57,9 @@ export interface SessionGraph {
   readonly acquireClaims: (
     id: AggregateId,
   ) => Effect.Effect<Effect.Effect<void>>;
-  readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
+  /** Drop this process's claim on one aggregate: a run's when its lease
+   *  ends, a workflow checkpoint's when its invocation does. */
+  readonly releaseClaims: (id: AggregateId) => Effect.Effect<void>;
   readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   /** Every committed row of one aggregate, ledger-private rows included:
    *  the read behind the keyed private records and the checkpoint journal,

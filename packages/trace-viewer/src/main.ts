@@ -36,13 +36,15 @@ function renderLoadError(err: unknown): void {
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
-/** One step's coordinates, as the slider's readout spells them. */
+/** One step's coordinates, as the slider's readout spells them. The
+ *  persisted coordinates are zero-based; the run progress formatters print
+ *  them one-based (`Round ${round + 1}`), and the scrubber reads the same. */
 function stepLabel(step: TraceDocument['steps'][number]): string {
   const { family, step: name, round, turn, continuationIndex } = step.payload;
   const where = [
-    round == null ? null : `round ${round}`,
-    turn == null ? null : `turn ${turn}`,
-    continuationIndex == null ? null : `cycle ${continuationIndex}`,
+    round == null ? null : `round ${round + 1}`,
+    turn == null ? null : `turn ${turn + 1}`,
+    continuationIndex == null ? null : `cycle ${continuationIndex + 1}`,
   ].filter((part) => part !== null);
   return `${family} ${name}${where.length ? ` (${where.join(', ')})` : ''}`;
 }

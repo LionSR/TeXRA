@@ -24,6 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
+import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import type {
   FollowUpQueue,
@@ -522,6 +523,35 @@ function commitChildTurn(
         turnIndex: turn.turnIndex,
         phase,
       },
+    ])
+    .pipe(Effect.asVoid);
+}
+
+/**
+ * Move an agent-CLI child's phase across its park (one run model, 3.3):
+ * `waiting` before the loop blocks on its queue, `turn.begin` when the drained
+ * batch starts the next turn. Written with the loops' own step-row
+ * constructor, so the child protocol carries no second phase vocabulary. A run
+ * this loop is the only driver of has no `flow.snapshot` and no rounds: its
+ * family is the interactive one its turns are, and the turn index is its one
+ * moving coordinate. Without the park row the run stays RUNNING while idle and
+ * `getToolUseFollowUpTarget` classifies the next turn's submission as
+ * `no_session`; native children park through their own loop's `waiting` row
+ * and are never written here, so each park keeps one writer.
+ */
+function commitFlowStep(
+  session: SessionHandle,
+  runId: RunId,
+  turn: number,
+  step: 'waiting' | 'turn.begin',
+): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
+  return session
+    .commit([
+      stepRow(
+        runId,
+        { family: 'toolUse', round: 0, turn, continuationIndex: 0 },
+        step,
+      ),
     ])
     .pipe(Effect.asVoid);
 }
@@ -1033,11 +1063,25 @@ export function startChildRunLoop<TTurn, R = never>(
               yield* submitPendingDelivery(delivery, runSession, runId, logger);
               if (loop.isInterrupted()) break;
 
+              // The park is durable before the block, so a follow-up arriving
+              // while this loop sleeps is admitted onto its queue instead of
+              // being refused against a run that only looks busy.
+              if (childRun)
+                yield* commitFlowStep(runSession, runId, turnIndex, 'waiting');
               const batch = yield* Effect.tryPromise({
                 try: () => queue.waitAndDrainAll(loop.signal),
                 catch: ensureError,
               });
               if (!batch || loop.isInterrupted()) break;
+              // The batch leaves the park: the next turn's index is the one
+              // the top of the loop is about to accept.
+              if (childRun)
+                yield* commitFlowStep(
+                  runSession,
+                  runId,
+                  turnIndex + 1,
+                  'turn.begin',
+                );
 
               const nextRunTurn = strategy.runTurn;
               runner = (signal) => nextRunTurn(batch.items, ports, signal);

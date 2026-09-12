@@ -66,7 +66,7 @@ export function sessionRequests(
     req: RuntimeRequest,
   ) {
     const admitted = yield* admit(log, local, req);
-    return yield* handle(session, req, log, admitted).pipe(
+    return yield* handle(session, req, log, admitted, local).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
     );
   });
@@ -140,30 +140,41 @@ function settled(runId: RunId): Unavailable {
 
 /**
  * The one way in for a decision (one run model, 3.7): the request must be
- * pending in the fold (opened, not decided), the decision lands as the run's
- * `request.decided` row, and the waiting run reads it from the tail. An
- * inquiry's answer is also recorded on its thread and delivered as a
- * follow-up, since an inquiry never parks its run.
+ * pending (opened, not decided), the decision lands as the run's
+ * `request.decided` row, and the waiting run reads it from the tail. The
+ * fold routes the arm; `SessionHandle.decideRequest` re-reads the committed
+ * rows under the session's publication permit and is the authority, so two
+ * surfaces deciding at once record one decision and the loser hears that the
+ * request was settled rather than overwriting it.
+ *
+ * An inquiry's answer is also recorded on its thread and delivered as a
+ * follow-up, since an inquiry never parks its run. That record lives in the
+ * cross-project inquiry database, so it cannot share the run's transaction;
+ * it is written first, because a process that exits in the gap then leaves
+ * the request pending and answerable, rather than settled with nothing
+ * recorded on the thread and no way to ask again.
  */
 function decide(
   session: SessionHandle,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  admitted: AggregateState,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
-  return Effect.gen(function* () {
+  const answer = Effect.gen(function* () {
     const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
       (request) =>
         request.runId === req.runId && request.requestId === req.requestId,
     );
     if (pending === undefined) return yield* Effect.fail(settled(req.runId));
-    yield* session
-      .commit([
-        {
-          type: 'request.decided',
-          aggregateId: qualifyAggregateId('run', req.runId),
-          requestId: req.requestId,
-          decision: req.decision,
-        },
-      ])
+    if (pending.payload.kind === 'externalInquiry') {
+      yield* recordInquiryDecision(
+        pending.payload.data,
+        req.decision,
+        session,
+      ).pipe(Effect.orDie);
+    }
+    const recorded = yield* session
+      .decideRequest(req.runId, req.requestId, req.decision)
       .pipe(
         Effect.mapError((error): RequestError =>
           error instanceof DatabaseWriteFailed
@@ -174,15 +185,29 @@ function decide(
             : new NotOwner({ runId: req.runId }),
         ),
       );
-    if (pending.payload.kind === 'externalInquiry') {
-      yield* recordInquiryDecision(
-        pending.payload.data,
-        req.decision,
-        session,
-      ).pipe(Effect.orDie);
-    }
+    if (!recorded) return yield* Effect.fail(settled(req.runId));
     return done;
   });
+  // A run whose owner is gone (proved dead, or a claim already released)
+  // takes no append until this process holds its claim: the decision
+  // acquires it with the fencing resume uses and gives it back, so a later
+  // resume can still take the run.
+  const heldHere =
+    admitted.ownerId !== null &&
+    SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
+  return heldHere
+    ? answer
+    : Effect.acquireUseRelease(
+        session
+          .acquireClaims(qualifyAggregateId('run', req.runId))
+          .pipe(
+            Effect.mapError(
+              (): RequestError => new NotOwner({ runId: req.runId }),
+            ),
+          ),
+        () => answer,
+        (release) => release.pipe(Effect.orDie),
+      );
 }
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
@@ -248,6 +273,7 @@ function handle(
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   switch (req.kind) {
     case 'run.stop':
@@ -302,7 +328,7 @@ function handle(
         ),
       );
     case 'request.decide':
-      return decide(session, req);
+      return decide(session, req, admitted, local);
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;

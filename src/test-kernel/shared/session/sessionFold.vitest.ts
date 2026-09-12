@@ -1328,6 +1328,76 @@ describe('foldRunState', () => {
       },
     ],
     [
+      'an inquiry stands unbound across the snapshots of its run',
+      () => {
+        const opened = (payload: Record<string, unknown>) => ({
+          type: 'request.opened',
+          requestId: 'req-2',
+          payload,
+        });
+        // The inquiry tool returns at once and the answer arrives as a
+        // follow-up, so no binding recovers it and a snapshot still folds.
+        const state = stateOf(
+          through(
+            6,
+            opened({
+              kind: 'externalInquiry',
+              data: {
+                requestId: 'req-2',
+                question: 'which branch?',
+                threadId: 'ei_0123456789ab',
+                allowBypass: false,
+                runId: LEDGER_RUN,
+                transcript: [],
+              },
+            }),
+            toolUseSnapshot({
+              pendingIntents: [
+                {
+                  callId: 'call-a',
+                  attempt: 1,
+                  responseId: RESPONSE_ID,
+                  approvalRequestId: null,
+                },
+              ],
+              pendingResponse: { responseId: RESPONSE_ID, settled: [] },
+            }),
+          ),
+        );
+        expect(state?.requests['req-2']?.resolved).toBe(false);
+        // A request that parks a tool is not that case: nothing in a later
+        // process could answer it, so the snapshot refuses to be authored
+        // over it and a resume retires it first.
+        expect(
+          reasonOf(
+            through(
+              6,
+              opened({
+                kind: 'bash',
+                data: {
+                  requestId: 'req-2',
+                  command: 'ls',
+                  allowBypass: true,
+                  runId: LEDGER_RUN,
+                },
+              }),
+              toolUseSnapshot({
+                pendingIntents: [
+                  {
+                    callId: 'call-a',
+                    attempt: 1,
+                    responseId: RESPONSE_ID,
+                    approvalRequestId: null,
+                  },
+                ],
+                pendingResponse: { responseId: RESPONSE_ID, settled: [] },
+              }),
+            ),
+          ),
+        ).toBe('dangling-binding');
+      },
+    ],
+    [
       'compaction that replaced history mid-run: keepPrefix plus the row',
       () => {
         const state = stateOf(

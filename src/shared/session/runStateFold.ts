@@ -297,6 +297,42 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   flow: null,
 });
 
+/** The recovery bindings a snapshot carries (R5): the retry permit's request
+ *  and the approval request of every pending intent. */
+function requestBindings(state: RunState): ReadonlySet<string> {
+  const bindings = new Set<string>();
+  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
+  for (const intent of Object.values(state.pendingIntents)) {
+    if (intent.approvalRequestId !== null) {
+      bindings.add(intent.approvalRequestId);
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The undecided requests nothing can recover: no binding names them, and
+ * they are not the one kind that outlives the process that asked. A request
+ * the session opened for a tool (a command, an edit, a plan, a delegation,
+ * a question) parks that tool, so a new owner can neither answer it nor
+ * re-ask it — the snapshot arm below refuses to be authored over one, and a
+ * resume retires them as cancelled before it authors a snapshot
+ * (`RunLedger.acquire`). An `externalInquiry` is the exception by contract:
+ * its tool returns at once and its answer arrives as a follow-up, whichever
+ * process is running the run by then, so it stands unbound across every
+ * snapshot its run writes.
+ */
+export function unboundRequests(state: RunState): readonly string[] {
+  const bindings = requestBindings(state);
+  return Object.entries(state.requests).flatMap(([requestId, request]) =>
+    request.resolved ||
+    bindings.has(requestId) ||
+    request.payload.kind === 'externalInquiry'
+      ? []
+      : [requestId],
+  );
+}
+
 type Fold = Result.Result<RunState, RunLedgerInconsistent>;
 
 const refuse = (
@@ -581,16 +617,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         flow: flowOf(p),
       };
       // Every binding names an opened request, and every undecided request
-      // is bound: a request with nothing to recover it by can only be
-      // retired as interrupted, which is forbidden for these purposes.
-      const bindings = new Set<string>();
-      if (next.pendingRetry !== null) bindings.add(next.pendingRetry.requestId);
-      for (const intent of Object.values(next.pendingIntents)) {
-        if (intent.approvalRequestId !== null) {
-          bindings.add(intent.approvalRequestId);
-        }
-      }
-      for (const requestId of bindings) {
+      // a new owner would have to recover is bound: one with nothing to
+      // recover it by can only be retired as interrupted, which is forbidden
+      // for these purposes. The inquiry {@link unboundRequests} exempts is
+      // not that case: it is answered from the thread, not from the run.
+      for (const requestId of requestBindings(next)) {
         if (!Object.hasOwn(next.requests, requestId)) {
           return refuse(
             'dangling-binding',
@@ -599,14 +630,13 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           );
         }
       }
-      for (const [requestId, request] of Object.entries(next.requests)) {
-        if (!request.resolved && !bindings.has(requestId)) {
-          return refuse(
-            'dangling-binding',
-            `request ${requestId} has no recovery binding`,
-            commit,
-          );
-        }
+      const [unbound] = unboundRequests(next);
+      if (unbound !== undefined) {
+        return refuse(
+          'dangling-binding',
+          `request ${unbound} has no recovery binding`,
+          commit,
+        );
       }
       return Result.succeed(next);
     }
