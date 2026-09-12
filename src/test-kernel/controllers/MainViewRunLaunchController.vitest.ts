@@ -3,12 +3,12 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { MainViewExecuteMessage } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 
 const mocks = vi.hoisted(() => ({
   createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
-  prepareMainViewRunRequest: vi.fn(),
-  prepareMainViewTeamRunRequest: vi.fn(),
   resolveTeamLaunch: vi.fn(),
 }));
 
@@ -26,12 +26,8 @@ vi.mock('@common/teams/TeamPlan', () => ({
 vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
   createTeamCatalogPorts: mocks.createTeamCatalogPorts,
 }));
-vi.mock('@controllers/mainView/MainViewRunController', () => ({
-  prepareMainViewRunRequest: mocks.prepareMainViewRunRequest,
-  prepareMainViewTeamRunRequest: mocks.prepareMainViewTeamRunRequest,
-}));
 
-const { prepareMainViewRunLaunch } =
+const { prepareSurfaceLaunch } =
   await import('@controllers/mainView/backend/MainViewRunLaunchController');
 
 function createHost() {
@@ -42,14 +38,23 @@ function createHost() {
   };
 }
 
-function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
+function launchRequest(
+  patch: Record<string, unknown> = {},
+): Extract<HostRequest, { kind: 'launch' }> {
   return {
-    session: { launchTarget: 'team', teamId },
+    kind: 'launch',
+    launch: LaunchSurfaceSchema.parse(patch),
+    instruction: 'Improve the draft.',
   };
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return Effect.runPromise(prepareMainViewRunLaunch(teamMessage(teamId), host));
+  return Effect.runPromise(
+    prepareSurfaceLaunch(
+      launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
+      host,
+    ),
+  );
 }
 
 describe('main-view run launch controller', () => {
@@ -58,17 +63,46 @@ describe('main-view run launch controller', () => {
   });
 
   it('prepares ordinary launches without loading the team catalog', async () => {
-    const message: MainViewExecuteMessage = {};
-    const request = { agentName: 'ordinary' };
-    mocks.prepareMainViewRunRequest.mockReturnValue({
-      valid: true,
-      request,
-    });
+    const { config } = await Effect.runPromise(
+      prepareSurfaceLaunch(
+        launchRequest({ agent: { toolUse: 'orchestrator' } }),
+        createHost(),
+      ),
+    );
 
-    await expect(
-      Effect.runPromise(prepareMainViewRunLaunch(message, createHost())),
-    ).resolves.toEqual(request);
+    expect(config).toMatchObject({
+      agent: 'orchestrator',
+      agentCategory: AgentCategory.ToolUse,
+      instruction: 'Improve the draft.',
+      outputFiles: [],
+    });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
+  });
+
+  it('keeps missing selections explicit before schema prefaults apply', async () => {
+    await expect(
+      Effect.runPromise(
+        prepareSurfaceLaunch(launchRequest({ model: '' }), createHost()),
+      ),
+    ).rejects.toMatchObject({
+      _tag: 'Rejected',
+      reason: 'Choose an agent, a model, and a run type first.',
+    });
+  });
+
+  it('requires an input file for workflow runs', async () => {
+    await expect(
+      Effect.runPromise(
+        prepareSurfaceLaunch(
+          launchRequest({ sessionType: 'workflow' }),
+          createHost(),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      _tag: 'Rejected',
+      reason: 'Choose an input file first.',
+      docsCommand: 'file-management',
+    });
   });
 
   it('rejects a team launch without a selected team', async () => {
@@ -107,7 +141,6 @@ describe('main-view run launch controller', () => {
         _tag: 'Rejected',
         reason: expected,
       });
-      expect(mocks.prepareMainViewTeamRunRequest).not.toHaveBeenCalled();
     },
   );
 
@@ -120,39 +153,46 @@ describe('main-view run launch controller', () => {
     await expect(launchTeam(host)).rejects.toMatchObject({ _tag: 'Cancelled' });
   });
 
-  it('returns partial membership and prepares the resolved team fields', async () => {
+  it('returns partial membership and builds the resolved team fields', async () => {
     const host = createHost();
-    const fields = {
-      agent: 'team-root',
-      delegationAgentScope: {
-        workflowAgentKeys: ['workflow:critic'],
-        toolUseAgentKeys: ['toolUse:team-root'],
-      },
-      cli: { multiAgentPresetId: 'physicist' },
-    };
-    const request = { agentName: 'team-root' };
     mocks.resolveTeamLaunch.mockReturnValue(
       Effect.succeed({
         status: 'ready',
-        fields,
+        fields: {
+          agent: 'builtInToolUse:lead',
+          delegationAgentScope: {
+            workflow: ['builtInWorkflow:writer'],
+            toolUse: ['builtInToolUse:lead'],
+          },
+          cli: { multiAgentPresetId: 'custom-team' },
+        },
         partial: true,
         missingNames: ['writer'],
       }),
     );
-    mocks.prepareMainViewTeamRunRequest.mockReturnValue({
-      valid: true,
-      request,
-    });
-    const message = teamMessage();
 
-    await expect(
-      Effect.runPromise(prepareMainViewRunLaunch(message, host)),
-    ).resolves.toEqual(request);
-    expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
-    expect(mocks.prepareMainViewTeamRunRequest).toHaveBeenCalledWith(
-      message,
-      fields,
+    // The renderer's selected agent is ignored in favour of the team plan.
+    const { config } = await Effect.runPromise(
+      prepareSurfaceLaunch(
+        launchRequest({
+          launchTarget: 'team',
+          selectedTeamId: 'physicist',
+          agent: { toolUse: 'stale-renderer-agent' },
+        }),
+        host,
+      ),
     );
+
+    expect(config).toMatchObject({
+      agent: 'builtInToolUse:lead',
+      agentCategory: AgentCategory.ToolUse,
+      delegationAgentScope: {
+        workflow: ['builtInWorkflow:writer'],
+        toolUse: ['builtInToolUse:lead'],
+      },
+      cli: { multiAgentPresetId: 'custom-team' },
+    });
+    expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
     expect(mocks.resolveTeamLaunch).toHaveBeenCalledWith(
       expect.objectContaining({
         teamId: 'physicist',

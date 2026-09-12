@@ -78,7 +78,7 @@
       "packages/desktop/src/main/desktopSupabaseAuth.ts": 10,
       "packages/desktop/src/main/desktopToolEditApproval.ts": 1,
       "packages/desktop/src/main/desktopWindowTitle.ts": 2,
-      "packages/desktop/src/main/index.ts": 27,
+      "packages/desktop/src/main/index.ts": 26,
       "packages/desktop/src/main/platform/electronSecrets.ts": 2,
       "packages/desktop/src/main/platform/index.ts": 6,
       "packages/extension/src/commands/agent/executeCommand.ts": 1,

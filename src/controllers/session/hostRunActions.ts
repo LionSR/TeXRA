@@ -8,6 +8,7 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
+import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { RunRequest } from '@agent/core/state/runRequests';
@@ -30,6 +31,7 @@ import type { AppState } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { Secrets } from '@platform/secrets';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   ExhaustionReasonSchema,
   isPlainAgentIdentity,
@@ -40,9 +42,8 @@ import { Rejected, Unavailable } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { submitProgressFollowUp } from '../progressView/progressFollowUpSubmit';
 import { ProgressApiKeyRetryController } from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
@@ -337,14 +338,54 @@ export const createHostRunActions = (
         return parsed.data;
       },
       sendFollowUp(runId, text) {
-        return submitProgressFollowUp({
-          session,
-          runId,
-          input: { text },
-          // Programmatic file feedback has no composer to acknowledge.
-          acknowledge: () => {},
-          showInfo: ports.showWarning,
-        }).pipe(Effect.asVoid);
+        const present = (message: string) =>
+          Effect.tryPromise({
+            try: async () => {
+              await ports.showWarning(message);
+            },
+            catch: ensureError,
+          });
+        const deliver = Effect.gen(function* () {
+          const result = yield* submitFollowUp(
+            runId,
+            { text },
+            { session },
+          ).pipe(
+            Effect.catch((error) =>
+              Effect.gen(function* () {
+                const message = toErrorMessage(error);
+                log.warn(
+                  `Failed to submit follow-up for stream ${runId}: ${message}`,
+                  { data: { runId, error: message } },
+                );
+                yield* present(`Could not send the follow-up: ${message}`);
+                return undefined;
+              }),
+            ),
+          );
+          if (!result) return;
+          session.publish([
+            {
+              type: 'updateQueuedFollowUps',
+              aggregateId: qualifyAggregateId('run', runId),
+              messages: session.followUps.getAll(runId),
+            },
+          ]);
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none')
+            yield* present(presentation.message);
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              log.warn(
+                `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
+              );
+            }),
+          ),
+        );
+        // Detached: a recovery resume can run a whole model turn, so no host
+        // request waits on the outcome.
+        return Effect.forkDetach(deliver).pipe(Effect.asVoid);
       },
       /**
        * Resume a settled run: a workflow relaunches through the
