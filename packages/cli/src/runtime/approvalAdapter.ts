@@ -9,7 +9,7 @@
  * mirrors bypass state, and holds a tool edit's preview so the diff can be
  * printed.
  */
-import { Effect, Fiber, Result, Stream, SubscriptionRef } from 'effect';
+import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
 import {
   defaultSession,
@@ -18,6 +18,7 @@ import {
 } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
+import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
   RequestDecision,
@@ -59,6 +60,25 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
     update: HostApprovalBypassStateUpdate,
   ) => void;
 }
+
+/**
+ * The kinds this host answers: every request that parks the tool which
+ * opened it. An external inquiry parks nothing — the inquiry tool is
+ * unavailable on the CLI, so one listed in the fold was opened by another
+ * host in a shared session and is answered from its own thread. Deciding it
+ * here because a headless CLI happened to observe the session would drop
+ * that thread, so {@link createHeadlessCliHostInteractions} filters the kind
+ * out on the same predicate the TUI queue and both folds read.
+ */
+type AnswerablePayload = Exclude<
+  PermissionPayload,
+  { kind: 'externalInquiry' }
+>;
+
+/** A pending request under {@link AnswerablePayload}. */
+type AnswerableRequest = SessionView['requests'][number] & {
+  readonly payload: AnswerablePayload;
+};
 
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
@@ -181,7 +201,7 @@ export function createHeadlessCliHostInteractions(
    *  whether the decision reached the ledger. */
   const answer = Effect.fn('approvalAdapter.answer')(function* (
     runId: RunId,
-    payload: PermissionPayload,
+    payload: AnswerablePayload,
   ) {
     const requestId = payload.data.requestId;
     const ask = (content: CliApprovalContent) =>
@@ -255,31 +275,31 @@ export function createHeadlessCliHostInteractions(
             : yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
       }
-      case 'externalInquiry':
-        // The inquiry tool is unavailable on this host, so no operator can
-        // answer one here; denying it loudly beats parking the run forever.
-        return yield* decide(runId, requestId, {
-          action: 'deny',
-          reason: 'The CLI cannot answer an external inquiry.',
-        });
     }
   });
 
   const take = (view: SessionView) =>
     Effect.forEach(
-      view.requests.filter((pending) => !acted.has(pending.requestId)),
+      view.requests.filter(
+        (pending): pending is AnswerableRequest =>
+          requestParksItsCaller(pending.payload) &&
+          !acted.has(pending.requestId),
+      ),
       (pending) => {
         acted.add(pending.requestId);
         // Forked so one prompt does not hold the fold's tail: the context's
         // prompt lane still serializes the reads from stdin.
         return Effect.forkChild(
           answer(pending.runId, pending.payload).pipe(
-            // A refused write answered nobody: release the claim so the next
-            // view update prompts for the request again instead of filtering
-            // it out for the life of the process.
-            Effect.tap((landed) =>
+            // A refused write answered nobody, and a prompt that died or was
+            // interrupted never wrote at all: release the claim on every
+            // exit but a landed decision, so the next view update prompts
+            // for the request again instead of filtering it out for the life
+            // of the process.
+            Effect.onExit((exit) =>
               Effect.sync(() => {
-                if (!landed) acted.delete(pending.requestId);
+                if (Exit.isSuccess(exit) && exit.value) return;
+                acted.delete(pending.requestId);
               }),
             ),
           ),
