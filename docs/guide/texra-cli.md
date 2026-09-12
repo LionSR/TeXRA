@@ -49,7 +49,7 @@ Working from an Overleaf or ShareLaTeX project? Clone it into a directory
 first, by URL, git URL, or 24-character project id:
 
 ```bash
-texra clone <project> --cwd ./paper
+texra clone <project> --cwd ./project
 ```
 
 ## Running agents
@@ -95,7 +95,7 @@ paths are preserved under that directory:
 
 ```bash
 texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
-texra run correct --input 'paper/**/*.tex' --output-dir corrected
+texra run correct --input 'sections/**/*.tex' --output-dir corrected
 ```
 
 Workflow agents always write generated files into the run's run-storage

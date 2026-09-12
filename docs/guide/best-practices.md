@@ -55,8 +55,7 @@ project/
 ├── chapters/
 ├── figures/
 ├── build/
-├── History/
-└── Diffs/
+└── .texra/
 ```
 
 ### Best practices

@@ -6,7 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # Quick start guide
 
-You have a problem to work on, and probably a draft alongside it. This page gets TeXRA working for you in under five minutes. On a fresh install, the **setup assistant** offers to run this whole loop for you in one conversation; this page is the reference for the Launcher you'll use every day after.
+Whether tackling open theoretical problems or refining an existing manuscript, you can get TeXRA running in under five minutes. On a fresh install, the **setup assistant** guides you through this initial loop in a single conversational session; this page serves as the ongoing reference for the Launcher.
 
 The shortest path is: choose a credential, run setup once, then let the orchestrator handle the daily research work.
 
@@ -16,7 +16,7 @@ The shortest path is: choose a credential, run setup once, then let the orchestr
 
 ## Overview
 
-TeXRA sits inside your editor and terminal to help you do good work: deriving and checking mathematical results in Wolfram, formalizing proofs in Lean 4, searching grounded literature, and, along the way, polishing writing, fixing errors, and creating figures without leaving your workspace. The short version:
+TeXRA integrates into your editor and terminal to help you do good work: deriving and validating mathematical expressions in Wolfram, formalizing proofs in Lean 4, querying grounded literature, and polishing prose, correcting errors, and producing figures directly in your workspace. The five core steps:
 
 1. Select your file
 2. Pick an agent and model
@@ -112,7 +112,7 @@ Ensure consistent terminology throughout.
 ```
 
 ::: tip Effective Instructions
-Be specific about what you want. Include what should change and what should stay the same.
+Be specific about your objectives: state both what the agent should improve and what constraints (notation, theorem numbering, environment structures) it must preserve.
 :::
 
 ### Configure tools
@@ -146,8 +146,8 @@ Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The Progres
 
 ### Review results
 
-1. When the agent completes, VS Code opens the generated output file from the run's task storage folder (e.g., `r0/draft.tex`, preserving the input filename).
-2. Review the changes the agent made. It is capable, but it still needs your judgment.
+1. Upon completion, VS Code opens the generated output file from the run's task storage directory (e.g., `r0/draft.tex`, preserving your input filename).
+2. Inspect the proposed edits carefully. While the agent automates tedious verification and editing steps, final scientific evaluation remains yours.
 3. Compare the original and modified versions with either of these:
    - **ProgressBoard Diff**: Select the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
 

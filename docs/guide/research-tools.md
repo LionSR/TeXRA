@@ -6,7 +6,7 @@ import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
-You want to verify an integral in your appendix against a computer algebra system. Or you need to cite "that attention paper from 2017" but cannot remember the title. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor, in VS Code or the `texra` CLI.
+Whether checking an intricate integral against a computer algebra system, tracking down a half-remembered reference from 2017, or importing twenty curated BibTeX entries directly from your Zotero collection, TeXRA's research agents conduct grounded verification and literature search without leaving your workspace.
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>

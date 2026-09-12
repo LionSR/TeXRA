@@ -4,7 +4,7 @@
 import CliRemoteHero from '../.vitepress/components/CliRemoteHero.vue';
 </script>
 
-Remote agents are cloud-hosted agents maintained by the TeXRA team. They add specialized capabilities to TeXRA and receive updates without an extension update.
+Remote agents are curated, cloud-hosted agent definitions maintained by the TeXRA team. They provide specialized research capabilities and domain expertise, receiving continuous prompt and configuration updates without requiring a local extension update.
 
 ## What are remote agents?
 
@@ -50,7 +50,7 @@ Remote agents work like built-in agents:
 1. Open the TeXRA view (select the TeXRA icon in the Secondary Side Bar)
 2. Select your remote agent from the agent dropdown
 3. Choose your input file and model
-4. Select **Run** to start the agent
+4. Select **Execute** to start the agent
 
 ::: info
 Remote agents carry a cloud icon (☁️) in the agent selector to set them apart from local agents.

@@ -7,7 +7,7 @@ import MergePanelHero from '../.vitepress/components/MergePanelHero.vue';
 
 ## The problem: partial agent outputs
 
-When you run agents like `correct` or `polish`, the AI may focus its changes on specific sections, so the round output (e.g. `r0/draft.tex` or `r1/draft.tex` for a `draft.tex` input) may contain only the modified parts, not the entire document. This saves processing time and tokens, but comparing this partial output directly against your full original document with `latexdiff` would not produce a meaningful result.
+When running targeted agents like `correct` or `polish`, the model may focus its modifications on specific sections, emitting an output round (such as `r0/draft.tex` or `r1/draft.tex`) containing only the modified fragments rather than the entire document. While this conserves processing time and token budget, attempting to compare this excerpt directly against your complete original source using `latexdiff` yields syntactically broken or unreadable diffs.
 
 ## The solution: Intelligent Merge button
 
@@ -29,7 +29,7 @@ Open the merge action from the "LaTeXDiffs" section (<wa-icon library="texra" na
 
 1.  **Select the base file**: Merge uses the primary **Input** file selected in the agent panel (the first input file) as the document to merge changes _into_. The LaTeXDiffs "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base) is used by Diff, Compare, and Accept, not by Merge. If no input file is selected, TeXRA says "Choose both the input and edited files to merge."
 2.  **Select the edited file**: Choose the document containing the suggested changes from the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
-3.  **Select Merge**: Select the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) in the "Edited File" row. The merge runs on TeXRA's **helper model**, set from the Dashboard → Providers & Models tab. Models with strong reasoning (such as Claude Opus 5, GPT-5.5, or Gemini 3.1 Pro) are recommended for complex merges.
+3.  **Select Merge**: Select the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) in the "Edited File" row. The merge runs on TeXRA's **helper model**, set from the Dashboard → Providers & Models tab. Models with strong reasoning (such as Claude Opus 5, GPT-6 / GPT-5.6, or Gemini 3.1 Pro) are recommended for complex merges.
 
 There is a second entry point. In the [ProgressBoard](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` agent against the corresponding workspace file, with no dropdowns to fill in.
 
