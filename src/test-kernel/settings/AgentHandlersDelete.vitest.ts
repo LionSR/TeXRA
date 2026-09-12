@@ -231,7 +231,7 @@ describe('AgentHandlers custom-agent file actions', () => {
       path.join(path.sep, 'bundled'),
     );
 
-    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
+    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.copyFile).toHaveBeenCalledWith(
       path.join(path.sep, 'bundled', 'writing', 'my-agent.yaml'),
@@ -245,7 +245,7 @@ describe('AgentHandlers custom-agent file actions', () => {
     mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
     mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
 
-    await createHandlers().handleCustomizeAgent(CUSTOMIZE_MY_AGENT);
+    await createHandlers().agentActions.customizeAgent(CUSTOMIZE_MY_AGENT);
 
     expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
       'test',

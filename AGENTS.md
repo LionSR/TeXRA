@@ -621,8 +621,8 @@ default to reach for, it's `settingsView`'s pattern specifically:
   `settingsView/handlers/` (`AgentHandlers`, `LatexSettingsHandlers`,
   `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_CMD`, `PROFILE_VIEW_COMMANDS`, `MEMORY_VIEW_COMMANDS`) — use
-  those, not string literals. Frontend state lives in module-level reactive
+  `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
+  literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/slices/` holds the domain-grouped
   outbound message-handler registries (`agentSelectionSlice.ts`,

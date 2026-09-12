@@ -32,7 +32,6 @@ import {
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
-import { SecretManager } from '@frontend/secretManager';
 import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
@@ -105,7 +104,10 @@ import {
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  gitHubTokenRejectedMessage,
+} from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -692,7 +694,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
+      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
       void effectRuntime()
