@@ -70,6 +70,7 @@ import {
   aggregateId as qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
+  RUN_PHASE,
   type RunId,
   AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -788,6 +789,46 @@ describe('childRunLoop E2E fixtures', () => {
       );
     });
     await waitForLoopEnd(runId);
+  });
+
+  it('parks a child-stream loop on a waiting row, so the next turn is admitted onto its queue', async () => {
+    const runId = loopRunId();
+    const { strategy, resolveTurn, callCount } = createFakeStrategy();
+    const childRun = await Effect.runPromise(
+      createChildRun(session, runId, PARENT_RUN_ID, {
+        run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+        userFollowUpSupport: 'terminalBacked',
+        description: 'Keep an agent-CLI child running',
+        config: childRunConfig,
+      }),
+    );
+    trackedRunIds.add(runId);
+    const completion = startLoop(runId, strategy, { childRun });
+
+    await waitForLiveOwner(runId);
+    await resolveTurn(1, { kind: 'interim', value: 'first' });
+
+    // Blocked between turns the run is idle, and the phase row says so: a
+    // run that only looked busy is refused as `no_session` and its session
+    // can never take another turn.
+    await vi.waitFor(() =>
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING),
+    );
+    expect(session.runs.getToolUseFollowUpTarget(runId)).toEqual({
+      kind: 'queue',
+    });
+
+    session.followUps.submit(
+      runId,
+      { text: 'keep going', origin: 'user' },
+      'live_owner',
+    );
+    await vi.waitFor(() => expect(callCount()).toBe(2));
+    await vi.waitFor(() =>
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING),
+    );
+    await resolveTurn(2, { kind: 'terminal', value: 'final' });
+    await completion;
   });
 
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {

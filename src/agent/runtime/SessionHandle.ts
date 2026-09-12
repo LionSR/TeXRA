@@ -395,7 +395,7 @@ export class SessionHandle {
         }),
       );
       const claimRelease = yield* Effect.exit(
-        this.graph.releaseRunClaims(runId),
+        this.releaseClaims(qualifyAggregateId('run', runId)),
       );
       const fileRelease = yield* Effect.exit(
         Effect.tryPromise({
@@ -434,6 +434,20 @@ export class SessionHandle {
         Effect.fail(ensureError(Cause.squash(cause))),
       ),
     );
+  }
+
+  /** Drop this process's claim on one aggregate, so the next process resumes
+   *  it instead of reading a live owner: a run's when its lease ends, a
+   *  workflow checkpoint's when its invocation does. The claim belongs to the
+   *  invocation, not to the process, and this is its one release. */
+  releaseClaims(id: AggregateId): Effect.Effect<void, Error> {
+    return this.graph
+      .releaseClaims(id)
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      );
   }
 
   /**
@@ -609,18 +623,66 @@ export class SessionHandle {
         ),
         Effect.onInterrupt(() =>
           Effect.sync(() => {
-            this.publish([
-              {
-                type: 'request.decided',
-                aggregateId,
-                requestId,
-                decision: { action: 'cancel', cause: 'Run interrupted.' },
-              },
-            ]);
+            if (this.disposed) return;
+            this.schedulePublication(
+              this.decisionRow(runId, requestId, {
+                action: 'cancel',
+                cause: 'Run interrupted.',
+              }),
+            );
           }),
         ),
       );
       return decided;
+    });
+  }
+
+  /**
+   * Answer a request, if it is still open: the one writer of a decision (one
+   * run model, 3.7). The check reads the committed rows and the
+   * `request.decided` row lands under the same publication permit, so two
+   * surfaces answering at once record exactly one decision — a run
+   * aggregate takes appends from its claim holder alone, and inside this
+   * process the permit orders them. `false` is that lost race, or an id
+   * never opened: nothing was written and the live waiter keeps the
+   * decision that was.
+   */
+  decideRequest(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+    return this.publicationGate.withPermit(
+      this.decisionRow(runId, requestId, decision),
+    );
+  }
+
+  /** {@link decideRequest} without the permit: the body the session's one
+   *  publisher runs, whether a surface awaits it or an interrupted
+   *  {@link openRequest} schedules it. */
+  private decisionRow(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+  ): Effect.Effect<boolean, DatabaseNotOwner | DatabaseWriteFailed> {
+    const aggregateId = qualifyAggregateId('run', runId);
+    return Effect.gen({ self: this }, function* () {
+      let open = false;
+      for (const row of yield* this.graph.aggregateRows(aggregateId)) {
+        if (row.type === 'request.opened' && row.requestId === requestId) {
+          open = true;
+        } else if (
+          row.type === 'request.decided' &&
+          row.requestId === requestId
+        ) {
+          open = false;
+        }
+      }
+      if (!open) return false;
+      yield* this.graph.publish([
+        { type: 'request.decided', aggregateId, requestId, decision },
+      ]);
+      return true;
     });
   }
 

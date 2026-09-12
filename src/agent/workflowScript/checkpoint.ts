@@ -10,6 +10,7 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import {
   aggregateId,
   JsonValueSchema,
@@ -55,6 +56,8 @@ export function deriveWorkflowScriptCheckpointId(identity: {
     32,
   );
 }
+
+const log = createLog('workflowCheckpoint');
 
 const checkpointAggregate = (checkpointId: string) =>
   aggregateId('workflow-checkpoint', checkpointId);
@@ -205,62 +208,88 @@ export const runPersistedWorkflowScript = Effect.fn(
   // The process that first journals into a checkpoint claims its aggregate
   // (C5); a relaunch from another process takes the claim over after proving
   // that owner dead, and a live owner refuses it, so two processes never
-  // journal one checkpoint at once.
-  if (prior !== null) yield* session.acquireClaims(target);
-  // The script row lands before the run, so the journal always has the
-  // source it replays against.
-  yield* session
-    .commit([
-      {
-        type: 'workflow.script',
-        aggregateId: target,
-        script,
-        args: encodeJsonValue(args),
-        files,
-      },
-    ])
-    .pipe(
-      Effect.mapError(
-        (cause) =>
-          new Error(
-            `Workflow checkpoint ${checkpointId} cannot be persisted.`,
+  // journal one checkpoint at once. The claim belongs to the invocation, not
+  // to the process: it is released on success, failure and interruption, so a
+  // finished workflow leaves the journal free for the next process to resume
+  // instead of holding it until this one exits.
+  return yield* Effect.acquireUseRelease(
+    // An existing checkpoint's claim is taken over here; one that does not
+    // exist yet is claimed by the script row below, which creates its
+    // aggregate under this process.
+    prior === null ? Effect.void : Effect.asVoid(session.acquireClaims(target)),
+    () =>
+      Effect.gen(function* () {
+        // The script row lands before the run, so the journal always has the
+        // source it replays against.
+        yield* session
+          .commit([
             {
-              cause,
-            },
-          ),
-      ),
-    );
-  // The engine's callbacks each carry their session explicitly (the agent
-  // runner frames its own run context; snapshots and journal rows publish
-  // through the handle), so no ambient session frame wraps this call.
-  return yield* Effect.tryPromise({
-    try: () =>
-      runWorkflowScript({
-        ...runOptions,
-        script,
-        args,
-        files,
-        journal: prior?.journal,
-        // `...runOptions` carries the caller's own `onSnapshot`: snapshots
-        // belong to the detached run that owns their writes, while this
-        // checkpoint belongs to its orchestrator.
-        onJournalEntry: async (entry) => {
-          // The session's ordered publisher, awaited to durability: a
-          // refused or failed append rejects here and the engine fails the
-          // run with a checkpoint fault rather than exposing the result to
-          // the script.
-          session.publish([
-            {
-              type: 'workflow.journal',
+              type: 'workflow.script',
               aggregateId: target,
-              key: entry.key,
-              index: entry.index,
-              result: encodeJsonValue(entry.result),
+              script,
+              args: encodeJsonValue(args),
+              files,
             },
-          ]);
-          await session.settlePublications();
-        },
+          ])
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new Error(
+                  `Workflow checkpoint ${checkpointId} cannot be persisted.`,
+                  {
+                    cause,
+                  },
+                ),
+            ),
+          );
+        // The engine's callbacks each carry their session explicitly (the agent
+        // runner frames its own run context; snapshots and journal rows publish
+        // through the handle), so no ambient session frame wraps this call.
+        return yield* Effect.tryPromise({
+          try: () =>
+            runWorkflowScript({
+              ...runOptions,
+              script,
+              args,
+              files,
+              journal: prior?.journal,
+              // `...runOptions` carries the caller's own `onSnapshot`: snapshots
+              // belong to the detached run that owns their writes, while this
+              // checkpoint belongs to its orchestrator.
+              onJournalEntry: async (entry) => {
+                // The session's ordered publisher, awaited to durability: a
+                // refused or failed append rejects here and the engine fails the
+                // run with a checkpoint fault rather than exposing the result to
+                // the script.
+                session.publish([
+                  {
+                    type: 'workflow.journal',
+                    aggregateId: target,
+                    key: entry.key,
+                    index: entry.index,
+                    result: encodeJsonValue(entry.result),
+                  },
+                ]);
+                await session.settlePublications();
+              },
+            }),
+          catch: ensureError,
+        });
       }),
-    catch: ensureError,
-  });
+    // A release that fails leaves the claim standing: the next process reads
+    // it as a live owner and refuses, so say why rather than let the journal
+    // look permanently taken.
+    () =>
+      session.releaseClaims(target).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Workflow checkpoint ${checkpointId} claim was not released.`,
+              { data: error },
+            );
+          }),
+        ),
+        Effect.ignore,
+      ),
+  );
 });

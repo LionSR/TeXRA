@@ -111,7 +111,8 @@ const SESSION = {
   },
   flushArtifacts,
   acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseRunClaims: () => Effect.void },
+  graph: { releaseClaims: () => Effect.void },
+  releaseClaims: SessionHandle.prototype.releaseClaims,
   settlePublications: vi.fn(async () => {}),
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;

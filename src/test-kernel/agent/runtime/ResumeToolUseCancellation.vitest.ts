@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
     async (_runId: RunId, operation: () => Promise<unknown>) => operation(),
   ),
   releaseOwnedRunLease: vi.fn(),
-  releaseRunClaims: vi.fn(),
+  releaseClaims: vi.fn(),
 }));
 
 vi.mock('@agent/storage/runLease', () => ({
@@ -96,7 +96,12 @@ import {
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  AgentCategory,
+} from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -147,7 +152,8 @@ const LANE_SESSION = {
       operation,
   },
   acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseRunClaims: mocks.releaseRunClaims },
+  graph: { releaseClaims: mocks.releaseClaims },
+  releaseClaims: SessionHandle.prototype.releaseClaims,
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   // The resumed run reads its parent edge off the session's cold fold, so the
   // lineage fixture is that read.
@@ -220,7 +226,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         createToolUseResumeData({ runId, agentConfig }),
     );
     mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
-    mocks.releaseRunClaims.mockReturnValue(Effect.void);
+    mocks.releaseClaims.mockReturnValue(Effect.void);
     mocks.readView.mockReset().mockResolvedValue(emptySessionView('resume'));
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
@@ -244,8 +250,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
     expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(snapshot.runId);
-    expect(mocks.releaseRunClaims).toHaveBeenCalledWith(snapshot.runId);
-    expect(mocks.releaseRunClaims).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseClaims).toHaveBeenCalledWith(
+      qualifyAggregateId('run', snapshot.runId),
+    );
+    expect(mocks.releaseClaims).toHaveBeenCalledTimes(1);
   });
 
   it('reports a reloaded session that is no longer resumable distinctly', async () => {
