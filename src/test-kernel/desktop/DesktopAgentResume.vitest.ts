@@ -388,10 +388,9 @@ describe('desktop process resume owner', () => {
   it('rejects a stale process store after another process deletes the run', async () => {
     await mockWorkflowResume();
     const harness = await createResumeHarness();
-    vi.spyOn(
-      harness.session.transcripts,
-      'hasAuthoritativeRun',
-    ).mockReturnValue(Effect.succeed(false));
+    vi.spyOn(harness.session.transcripts, 'readEvents').mockReturnValue(
+      Effect.succeed([]),
+    );
 
     await expect(harness.owner.tryResumeRun(runId)).resolves.toBe(false);
     expect(runAgent).not.toHaveBeenCalled();

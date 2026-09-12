@@ -141,10 +141,6 @@ import { StreamLog } from './traceEntries';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
-type TranscriptEntryEvent = Extract<
-  DisplaySessionEvent,
-  { type: 'transcript.entry' }
->;
 
 /** Workflow-script run ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<RunId> | null;
@@ -826,16 +822,6 @@ function childProgressChanged(prev: RunView, next: RunView): boolean {
   );
 }
 
-/** Whether a transcript entry is one the run model reads: a group boundary
- *  (phases), a workflow card, or a plan marker. */
-function entryAffectsRunModel(entry: StreamLogEntry): boolean {
-  return (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-    entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK ||
-    workflowMarkerOf(entry) !== undefined
-  );
-}
-
 /**
  * The run model's residency (PRD 5.2, section 4 of the build note): the
  * newest dashboard rows up to the cap, and the phase groups those rows still
@@ -1355,10 +1341,7 @@ function wrongArm(run: RunView, event: DisplaySessionEvent): never {
 
 /** The event's own arm applied to its run (topology, session slices, and
  *  the transcript tier are handled by the caller). */
-function applyOwnArm(
-  run: RunView,
-  event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
-): RunView {
+function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
   switch (event.type) {
     case 'log':
     case 'stage.start':
@@ -1645,9 +1628,6 @@ function foldDurable(
   deferred: DeferredRunModels,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
-  if (event.type === 'transcript.entry') {
-    return foldTranscriptRow(view, event, deferred);
-  }
   const traceChanged =
     read !== 'listing' &&
     (isTranscriptEvent(event) ||
@@ -1775,35 +1755,6 @@ function foldTraceEvent(
       deferred,
     ),
   );
-  return true;
-}
-
-/**
- * The transcript tier (5.2, "Residency"): a row folds only for an aggregate
- * in the subscription set and only above the seq the view has retained for
- * it, which it then advances. A dropped row never touches `folded`.
- */
-function foldTranscriptRow(
-  view: SessionView,
-  event: TranscriptEntryEvent,
-  deferred: DeferredRunModels,
-): boolean {
-  const retained = view.folded.get(event.aggregateId);
-  if (retained === undefined || event.seq <= retained) return false;
-  const runId = runIdOf(event.aggregateId);
-  const run = runId === null ? undefined : view.runs.get(runId);
-  if (!run) return false;
-  writableMap(view, 'folded').set(event.aggregateId, event.seq);
-  const withEntry: RunView = {
-    ...run,
-    lastTimestamp: event.at,
-    transcript: applyEntry(view, run, event.entry),
-  };
-  const next = withTranscriptFacts(withEntry);
-  setRun(view, next);
-  if (entryAffectsRunModel(event.entry)) {
-    setRun(view, runModelAt(view, next, deferred));
-  }
   return true;
 }
 

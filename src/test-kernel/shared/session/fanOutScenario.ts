@@ -11,8 +11,6 @@ import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,
-  RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
   RunIdSchema,
   ToolConfigSchema,
   type ApprovalPolicySnapshot,
@@ -20,7 +18,6 @@ import {
   type LocalRuntimeState,
   type RunIdentity,
   type DisplaySessionEvent,
-  type StreamLogEntry,
   type RunId,
   type RunParent,
   type WorkflowCallProgress,
@@ -47,7 +44,7 @@ const sec = (n: number): number => n * 1000;
 /** The fan-out's beats: the root started 12m ago, the child 4m ago, the
  *  grandchild finished 1m ago, the process leads the order at 30s ago; the
  *  tail that closes the run lands in the last 20s. */
-const T = {
+export const T = {
   root: BOARD_NOW - min(12),
   child: BOARD_NOW - min(4),
   childProgress: BOARD_NOW - min(3),
@@ -79,13 +76,6 @@ export const ROOT_POLICY: ApprovalPolicySnapshot = {
   bypasses: { bash: false, toolEdit: true, superYolo: false },
 };
 
-/** `Omit` over each member of a union, so a fixture keeps its arm. */
-type EntryFixture = StreamLogEntry extends infer E
-  ? E extends unknown
-    ? Omit<E, 'seqNo' | 'timestamp' | 'level'>
-    : never
-  : never;
-
 /** A durable arm without its envelope: what a publisher builds before the
  *  aggregate, seq, commit, owner, and clock are stamped on. */
 type DisplaySessionEventBody = DisplaySessionEvent extends infer E
@@ -99,7 +89,6 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
 export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
-  private readonly entrySeq = new Map<RunId, number>();
   /** Each run's creation commit: what the database stamps on a child's
    *  `run.start.parent` (one run model, section 3.2). */
   private readonly startCommit = new Map<RunId, number>();
@@ -170,19 +159,6 @@ export class Log {
       },
     };
   }
-
-  entry(runId: RunId, at: number, entry: EntryFixture): StreamLogEntry {
-    const seqNo = (this.entrySeq.get(runId) ?? 0) + 1;
-    this.entrySeq.set(runId, seqNo);
-    const full: StreamLogEntry = {
-      ...entry,
-      seqNo,
-      timestamp: at,
-      level: 'info',
-    };
-    this.emit(runId, at, { type: 'transcript.entry', entry: full });
-    return full;
-  }
 }
 
 function call(
@@ -230,7 +206,6 @@ export function foldAll(
  */
 export function buildScenario({ proposal = false } = {}) {
   const log = new Log();
-  const rootEntries: StreamLogEntry[] = [];
 
   log.emit(ROOT, T.root, {
     type: 'run.start',
@@ -264,21 +239,6 @@ export function buildScenario({ proposal = false } = {}) {
     phases: [{ title: 'Map' }],
     tasks: [{ id: 'inspect', label: 'inspect', phase: 'Map' }],
   });
-  rootEntries.push(
-    log.entry(ROOT, T.root + 1, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: 'Map',
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: {
-        status: RUN_PHASE.RUNNING,
-        kind: 'phase',
-        index: 0,
-        total: 1,
-        attemptId: 'attempt-1',
-      },
-    }),
-  );
   log.emit(ROOT, T.root + 1, {
     type: 'stage.start',
     id: 'phase-Map',
@@ -287,15 +247,12 @@ export function buildScenario({ proposal = false } = {}) {
     index: 0,
     total: 1,
   });
-  rootEntries.push(
-    log.entry(ROOT, T.root + 2, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('queued'),
-    }),
-  );
+  log.emit(ROOT, T.root + 2, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('queued'),
+  });
 
   // The child agent run: its run.start carries the whole parent edge.
   log.emit(CHILD, T.child, {
@@ -319,15 +276,12 @@ export function buildScenario({ proposal = false } = {}) {
     category: AgentCategory.ToolUse,
     isRemote: false,
   });
-  rootEntries.push(
-    log.entry(ROOT, T.child + 1, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('running', CHILD),
-    }),
-  );
+  log.emit(ROOT, T.child + 1, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('running', CHILD),
+  });
   // The loop's position: an agent run reads as initializing until its first
   // step, so a mid-flight fixture carries one (one run model, 3.3).
   log.emit(CHILD, T.childProgress, {
@@ -359,12 +313,11 @@ export function buildScenario({ proposal = false } = {}) {
     toolName: 'delegate_agent',
     input: { agent: 'lint', instruction: 'lint appendix B' },
   };
-  const dispatched = log.entry(CHILD, T.grandchild - 1, {
-    id: 'dispatch-lint',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    messageType: MESSAGE_TYPES.TOOL_USE,
-    text: 'delegate_agent',
-    data: { ...dispatchData, status: 'in_progress' },
+  log.emit(CHILD, T.grandchild - 1, {
+    type: 'tool.start',
+    logId: 'dispatch-lint',
+    toolName: dispatchData.toolName,
+    input: dispatchData.input,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
@@ -392,25 +345,14 @@ export function buildScenario({ proposal = false } = {}) {
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  // The tool's result lands the way the recorder's `update` lands it: the
-  // patch merged over the stored entry, so the row keeps its id, seqNo, and
+  // The tool's result lands the way the recorder settles it: the outcome
+  // merged over the stored row, so the row keeps its id, seqNo, and
   // timestamp under a later commit.
   log.emit(CHILD, T.grandchildDone + 1, {
-    type: 'transcript.entry',
-    entry: {
-      id: 'dispatch-lint',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: 'delegate_agent',
-      seqNo: dispatched.seqNo,
-      timestamp: dispatched.timestamp,
-      level: dispatched.level,
-      data: {
-        ...dispatchData,
-        output: 'Appendix B: no findings.',
-        status: 'completed',
-      },
-    },
+    type: 'tool.end',
+    logId: 'dispatch-lint',
+    status: 'completed',
+    result: { ...dispatchData, output: 'Appendix B: no findings.' },
   });
 
   // A top-level process run, newer than the root: leads the order.
@@ -438,11 +380,11 @@ export function buildScenario({ proposal = false } = {}) {
     ' ✓ src/test-kernel/latex/Compile.vitest.ts (12 tests) 340ms\n',
     ' ✓ src/test-kernel/shared/session/sessionFold.vitest.ts (31 tests) 1.2s\n',
   ].entries()) {
-    log.entry(PROCESS, T.process + sec(1 + offset), {
-      id: `out-${offset}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
+    log.emit(PROCESS, T.process + sec(1 + offset), {
+      type: 'log',
+      level: 'info',
       messageType: MESSAGE_TYPES.DEFAULT,
-      text,
+      message: text,
     });
   }
 
@@ -501,24 +443,17 @@ export function buildScenario({ proposal = false } = {}) {
     outcome: 'completed',
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
-  rootEntries.push(
-    log.entry(ROOT, T.childDone + 1, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('completed', CHILD),
-    }),
-  );
-  rootEntries.push(
-    log.entry(ROOT, T.childDone + 2, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: 'Map',
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: { kind: 'phase', status: 'completed', endTime: T.childDone + 2 },
-    }),
-  );
+  log.emit(ROOT, T.childDone + 1, {
+    type: 'workflow.call',
+    logId: 'call-1',
+    stageId: 'phase-Map',
+    call: call('completed', CHILD),
+  });
+  log.emit(ROOT, T.childDone + 2, {
+    type: 'stage.end',
+    id: 'phase-Map',
+    status: 'completed',
+  });
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',
     outcome: 'completed',
@@ -528,7 +463,6 @@ export function buildScenario({ proposal = false } = {}) {
   const events = log.events.map(tail);
   return {
     log,
-    rootEntries,
     /** The replay a subscriber of every transcript folds. */
     events: [
       subscribe(ROOT, CHILD, GRANDCHILD, PROCESS),
@@ -907,68 +841,45 @@ function boardView({
     usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
   });
   const phases = ['Scout', 'Review', 'Verify', 'Report'];
-  log.entry(ROOT, startedAt + 1, {
-    id: 'plan',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    messageType: MESSAGE_TYPES.INTERNAL,
-    text: '',
-    data: {
-      kind: 'workflowPlan',
-      attemptId: 'attempt-1',
-      phases: phases.map((title) => ({ title })),
-      tasks: [
-        ...calls.map((entry) => ({
-          id: entry.id,
-          label: entry.id,
-          phase: entry.phase,
-        })),
-        { id: 'review:release', label: 'review:release', phase: 'Review' },
-        { id: 'verify', label: 'verify', phase: 'Verify' },
-        { id: 'report', label: 'report', phase: 'Report' },
-      ],
-    },
+  log.emit(ROOT, startedAt + 1, {
+    type: 'workflow.plan',
+    attemptId: 'attempt-1',
+    phases: phases.map((title) => ({ title })),
+    tasks: [
+      ...calls.map((entry) => ({
+        id: entry.id,
+        label: entry.id,
+        phase: entry.phase,
+      })),
+      { id: 'review:release', label: 'review:release', phase: 'Review' },
+      { id: 'verify', label: 'verify', phase: 'Verify' },
+      { id: 'report', label: 'report', phase: 'Report' },
+    ],
   });
 
   const openPhase = (title: string, at: number): void => {
-    const index = phases.indexOf(title);
-    log.entry(ROOT, at, {
-      id: `phase-${title}`,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: title,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: {
-        status: RUN_PHASE.RUNNING,
-        kind: 'phase',
-        index,
-        total: phases.length,
-        attemptId: 'attempt-1',
-      },
-    });
     log.emit(ROOT, at, {
       type: 'stage.start',
       id: `phase-${title}`,
       label: title,
       kind: 'phase',
-      index,
+      index: phases.indexOf(title),
       total: phases.length,
     });
   };
   const closePhase = (title: string, at: number): void => {
-    log.entry(ROOT, at, {
+    log.emit(ROOT, at, {
+      type: 'stage.end',
       id: `phase-${title}`,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: title,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: { kind: 'phase', status: 'completed', endTime: at },
+      status: 'completed',
     });
   };
   const card = (entry: BoardCall, at: number): void => {
-    log.entry(ROOT, at, {
-      id: `call-${entry.id}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: `phase-${entry.phase}`,
-      data: boardProgress(entry),
+    log.emit(ROOT, at, {
+      type: 'workflow.call',
+      logId: `call-${entry.id}`,
+      stageId: `phase-${entry.phase}`,
+      call: boardProgress(entry),
     });
   };
 
@@ -1009,11 +920,11 @@ function boardView({
         payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
       });
       if (kid.latest) {
-        log.entry(kid.id, kid.startedAt + 1, {
-          id: `${entry.id}-instruction`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
+        log.emit(kid.id, kid.startedAt + 1, {
+          type: 'log',
+          level: 'info',
           messageType: MESSAGE_TYPES.USER_MESSAGE,
-          text: kid.latest,
+          message: kid.latest,
         });
       }
       if (kid.toolCalls !== undefined) {
@@ -1095,12 +1006,10 @@ function boardView({
       }
     }
     const outcome = failed ? 'failed' : 'completed';
-    log.entry(ROOT, closedAt + 1, {
+    log.emit(ROOT, closedAt + 1, {
+      type: 'stage.end',
       id: 'phase-Review',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: 'Review',
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
+      status: outcome,
     });
     log.emit(ROOT, closedAt + 2, {
       type: 'run.end',

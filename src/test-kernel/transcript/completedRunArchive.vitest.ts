@@ -59,7 +59,6 @@ import {
   FlowSnapshotPayloadSchema,
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   createTempDirPlatform,
@@ -157,20 +156,21 @@ function logRow(
   };
 }
 
-/** Seed recorded transcript entries through the canonical historical-entry event. */
+/** Seed recorded transcript rows through the durable log fact. */
 async function appendRows(
   runId: RunId,
   rows: readonly LogRow[],
 ): Promise<void> {
   if (!taskSession.transcripts.has(runId))
     publishTestRunStart(taskSession, runId);
-  const entries = new StreamLog();
-  for (const row of rows) entries.appendSettled(row);
   taskSession.publish(
-    entries.toJSON().map((entry) => ({
-      type: 'transcript.entry',
+    rows.map((row) => ({
+      type: 'log' as const,
       aggregateId: aggregateId('run', runId),
-      entry,
+      level: row.level,
+      message: row.text ?? '',
+      messageType: row.messageType,
+      data: row.data,
     })),
   );
   await taskSession.settlePublications();

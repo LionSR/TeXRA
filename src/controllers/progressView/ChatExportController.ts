@@ -175,7 +175,7 @@ export class ChatExportController {
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
-      const { trace } = traceResult;
+      const { trace, record } = traceResult;
 
       if (
         !(yield* Effect.tryPromise({
@@ -198,8 +198,17 @@ export class ChatExportController {
 
       const filename = generateExportFilename(
         {
-          timestamp: new Date(trace.meta.launchedAt).toISOString(),
-          config: trace.config,
+          // The creation row's publish clock is the run's launch time. Found
+          // by type rather than by position: an aggregate always opens with
+          // `run.start`, but that ordering is another file's invariant, and
+          // the assembler only guarantees the document is non-empty.
+          timestamp: new Date(
+            (
+              trace.events.find((event) => event.type === 'run.start') ??
+              trace.events[0]!
+            ).at,
+          ).toISOString(),
+          config: record,
         },
         'html',
       );

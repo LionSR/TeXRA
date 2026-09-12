@@ -764,12 +764,6 @@
       "name": "resolveCommonRootFromGitdir"
     },
     {
-      "file": "packages/trace-viewer/src/traceDataSchema.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TraceDataSchema"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1128,6 +1122,12 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "STATE_SETTINGS"
+    },
+    {
+      "file": "src/shared/schemas/streamLogEntry.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "StreamLogEntrySchema"
     },
     {
       "file": "src/shared/schemas/subscriptionUsage.ts",

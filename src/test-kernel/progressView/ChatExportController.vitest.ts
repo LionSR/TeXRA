@@ -140,7 +140,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const written = await nodeFilesystem.readFile(outcome.result.absolutePath);
     const html = new TextDecoder().decode(written);
     expect(html).toContain('<script>window.__TEXRA_TRACE__');
-    expect(html).toContain('"text":"hello"');
+    expect(html).toContain('"message":"hello"');
     expect(html).toContain(
       '<script type="module" crossorigin src="./index.js">',
     );

@@ -20,7 +20,6 @@ import {
   aggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
   RunIdSchema,
   type RunId,
@@ -373,36 +372,24 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     Effect.gen(function* () {
       const runId = yield* registerProcessRun('legacy command');
       const session = defaultSession();
-      let seqNo = 0;
       const append = (
-        id: string,
         text: string,
         level:
           typeof LOG_LEVELS.INFO | typeof LOG_LEVELS.WARN = LOG_LEVELS.INFO,
       ): void => {
         session.publish([
           {
-            type: 'transcript.entry',
+            type: 'log',
             aggregateId: aggregateId('run', runId),
-            entry: {
-              seqNo: ++seqNo,
-              id,
-              type: STREAM_LOG_ENTRY_TYPES.LOG,
-              level,
-              messageType: MESSAGE_TYPES.DEFAULT,
-              timestamp: Date.now(),
-              text,
-            },
+            level,
+            messageType: MESSAGE_TYPES.DEFAULT,
+            message: text,
           },
         ]);
       };
-      append('legacy-one', 'legacy one');
-      append('legacy-two', 'legacy two');
-      append(
-        'legacy-warning',
-        'legacy warning\r\n\rlegacy tail\r',
-        LOG_LEVELS.WARN,
-      );
+      append('legacy one');
+      append('legacy two');
+      append('legacy warning\r\n\rlegacy tail\r', LOG_LEVELS.WARN);
 
       const result = yield* readOutput(runId);
       const output = result.output ?? '';

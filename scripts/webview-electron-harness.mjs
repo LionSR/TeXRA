@@ -103,7 +103,7 @@ export function renderSessionHarnessBridge({
     function harnessFrame(subscribe) {
       const named = new Set(subscribe.aggregates.map((aggregate) => aggregate.id));
       const events = harnessSession.events.flatMap((event) => {
-        if (event.type !== 'transcript.entry') {
+        if (event.type !== 'log') {
           return [{ _tag: 'event', read: 'listing', event }];
         }
         return named.has(event.aggregateId)

@@ -104,24 +104,6 @@ export class StreamLog {
     return resolved;
   }
 
-  /** Fold a canonical recorded entry without allocating new entry coordinates. */
-  record(entry: StreamLogEntry): void {
-    const index = this.indexById.get(entry.id);
-    if (index === undefined) {
-      this.indexById.set(entry.id, this.entries.length);
-      this.entries.push(entry);
-      this.pendingAppendedIds.push(entry.id);
-    } else {
-      this.entries[index] = entry;
-      this.pendingDirtiedIds.add(entry.id);
-    }
-    this.settlementSeqCounter = Math.max(
-      this.settlementSeqCounter,
-      entry.settlementSeqNo ?? 0,
-      this.entries.length,
-    );
-  }
-
   append(entry: StreamLogAppendInput): StreamLogEntry {
     return this.appendWithSettlement(entry, false);
   }
