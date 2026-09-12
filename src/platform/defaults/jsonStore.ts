@@ -13,27 +13,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { StateStore } from '../interfaces';
-import type { FileLockTuning } from './fileLocks';
-
-/**
- * Cross-process lock policy for the read-modify-write flush below, tuned
- * for this store's short, frequent flushes rather than long-running work.
- * `fileLocks` itself is loaded on the first flush so importing `JsonStore`
- * doesn't pull in `proper-lockfile` before any write actually happens.
- */
-const FLUSH_LOCK_TUNING: FileLockTuning = {
-  staleMs: 10_000,
-  retries: {
-    retries: 120,
-    factor: 1.2,
-    minTimeout: 10,
-    maxTimeout: 100,
-  },
-};
-// Deferred so a store that never contends stays off the locking path. The
-// import settles unless the bundle itself is broken, which is not a failure
-// this module can act on.
-const fileLocks = Effect.promise(() => import('./fileLocks.js'));
 
 type JsonRecord = Record<string, unknown>;
 
@@ -118,15 +97,14 @@ const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
 /**
  * One-at-a-time flush lane per resolved store path. Module-wide (not per
  * instance) so writers holding separate `JsonStore` instances on the same
- * file preserve call order before entering the cross-process lock.
+ * file preserve call order.
  */
 const writeLanes = new Map<string, PerKeyLane>();
 
 /**
- * Persist one mutation as a read-modify-write under the file's cross-process
- * lock: prepare the directory, re-read the file (falling back to
- * `missingFallback` when it is gone), apply the mutation, and write the
- * result atomically.
+ * Persist one mutation as a read-modify-write: prepare the directory, re-read
+ * the file (falling back to `missingFallback` when it is gone), apply the
+ * mutation, and write the result atomically.
  */
 const flush = Effect.fn('JsonStore.flush')(function* (
   filePath: string,
@@ -137,29 +115,21 @@ const flush = Effect.fn('JsonStore.flush')(function* (
 ) {
   const path = yield* Path.Path;
   yield* ensureDir(path.dirname(filePath), mode);
-  const { withFileLock } = yield* fileLocks;
-  yield* withFileLock(
-    filePath,
-    FLUSH_LOCK_TUNING,
-  )(
-    Effect.gen(function* () {
-      const record = yield* readJsonRecord(filePath, missingFallback);
-      if (value === undefined) {
-        delete record[key];
-      } else {
-        record[key] = value;
-      }
-      yield* Effect.tryPromise({
-        try: () =>
-          writeFileAtomic(
-            filePath,
-            `${JSON.stringify(record, null, 2)}\n`,
-            mode === undefined ? undefined : { mode },
-          ),
-        catch: (cause) => cause as NodeJS.ErrnoException,
-      });
-    }),
-  );
+  const record = yield* readJsonRecord(filePath, missingFallback);
+  if (value === undefined) {
+    delete record[key];
+  } else {
+    record[key] = value;
+  }
+  yield* Effect.tryPromise({
+    try: () =>
+      writeFileAtomic(
+        filePath,
+        `${JSON.stringify(record, null, 2)}\n`,
+        mode === undefined ? undefined : { mode },
+      ),
+    catch: (cause) => cause as NodeJS.ErrnoException,
+  });
 });
 
 /**
@@ -176,10 +146,11 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * operation (e.g. a network fetch) can't clobber keys a concurrent writer —
  * another process, or another instance on the same file — persisted in the
  * meantime. Flushes for a given file path are serialized through
- * {@link writeLanes} for in-process ordering, then guarded by a filesystem
- * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`, `keys`)
- * still serve this instance's view: open-time contents plus its own
- * mutations; they don't observe other writers' changes.
+ * {@link writeLanes}, which orders this process's writers; across processes
+ * the atomic rename is the only guarantee, so two hosts flushing the same file
+ * in the same instant can still lose one of the two mutations. Reads (`get`,
+ * `has`, `snapshot`, `keys`) still serve this instance's view: open-time
+ * contents plus its own mutations; they don't observe other writers' changes.
  *
  * `set` is the store's own write and is an `Effect`. `update` exists only
  * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose

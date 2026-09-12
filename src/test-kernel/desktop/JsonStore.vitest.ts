@@ -1,9 +1,6 @@
 // Node imports
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { chmod, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -15,8 +12,6 @@ import { describe, expect } from 'vitest';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
-
-const require = createRequire(import.meta.url);
 
 const JSON_STORE_SOURCE = repoPath(
   'src',
@@ -246,95 +241,6 @@ describe('shared JsonStore', () => {
 
     expect(await readStoredJson(filePath)).toEqual({
       persisted: true,
-    });
-  });
-
-  it('waits for a cross-process lock before merging its mutation', async () => {
-    const filePath = await createTempFile('state.json', '{"initial": 1}\n');
-    const bundlePath = join(tempDir!, 'jsonStore.cjs');
-    const lockAttemptPath = join(tempDir!, 'lock-attempted');
-    const lockShimPath = join(tempDir!, 'proper-lockfile.cjs');
-    await writeFile(
-      lockShimPath,
-      `
-        const fs = require('node:fs');
-        const actual = require(${JSON.stringify(require.resolve('proper-lockfile'))});
-        const lockFs = Object.create(fs);
-        lockFs.mkdir = (path, callback) => fs.mkdir(path, (error) => {
-          fs.writeFileSync(${JSON.stringify(lockAttemptPath)}, '');
-          callback(error);
-        });
-        exports.lock = (file, options) => actual.lock(file, {
-          ...options,
-          fs: lockFs,
-        });
-      `,
-    );
-    await build({
-      entryPoints: [await writeBundleEntry(tempDir!)],
-      bundle: true,
-      format: 'cjs',
-      platform: 'node',
-      outfile: bundlePath,
-      logLevel: 'silent',
-      tsconfig: repoPath('tsconfig.json'),
-      nodePaths: [repoPath('node_modules')],
-      plugins: [
-        {
-          name: 'signal-lock-attempt',
-          setup(context) {
-            context.onResolve({ filter: /^proper-lockfile$/ }, () => ({
-              path: lockShimPath,
-            }));
-          },
-        },
-      ],
-    });
-    await mkdir(`${filePath}.lock`);
-
-    const script = `
-      (async () => {
-        const { JsonStore, Effect } = require(${JSON.stringify(bundlePath)});
-        const store = await Effect.runPromise(JsonStore.open(${JSON.stringify(filePath)}));
-        console.log('ready');
-        await Effect.runPromise(store.set('child', 2));
-      })().catch((error) => {
-        console.error(error);
-        process.exitCode = 1;
-      });
-    `;
-    const child = spawn(process.execPath, ['--eval', script], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const exited = once(child, 'exit');
-    const stderr: Buffer[] = [];
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-    await Promise.race([
-      once(child.stdout, 'data'),
-      exited.then(() => {
-        throw new Error(Buffer.concat(stderr).toString());
-      }),
-    ]);
-    await expect
-      .poll(() =>
-        stat(lockAttemptPath).then(
-          () => true,
-          () => false,
-        ),
-      )
-      .toBe(true);
-    const whileLocked = await readStoredJson(filePath);
-
-    await writeFile(filePath, '{"initial": 1, "foreign": 2}\n');
-    await rm(`${filePath}.lock`, { recursive: true });
-    const [exitCode] = await exited;
-    if (exitCode !== 0) throw new Error(Buffer.concat(stderr).toString());
-
-    expect(whileLocked).toEqual({ initial: 1 });
-    expect(await readStoredJson(filePath)).toEqual({
-      initial: 1,
-      foreign: 2,
-      child: 2,
     });
   });
 

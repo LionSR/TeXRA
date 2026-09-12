@@ -17,7 +17,6 @@ import type {
   StorageProvider,
   LifecycleHost,
   ToolAvailabilityHost,
-  FileLockProvider,
 } from './interfaces';
 import type { LanguageModelPort } from './languageModel';
 import type { PlatformSecrets } from './secrets';
@@ -39,7 +38,6 @@ export interface Platform {
   readonly globalState: StateStore;
   readonly fs: FileSystemProvider;
   readonly storage: StorageProvider;
-  readonly fileLocks: FileLockProvider;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
