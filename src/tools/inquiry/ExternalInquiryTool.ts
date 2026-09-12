@@ -16,7 +16,7 @@
  *   - `list` → enumerate threads by status / scope
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import {
   currentSession,
@@ -315,23 +315,44 @@ export class ExternalInquiryTool extends defineTool({
           ),
           // The turn is committed in the global inquiry database before the
           // request that renders it, and the two stores cannot share a
-          // transaction. A publication that fails or is interrupted takes
-          // the turn back down with it: left open, no surface would list it
-          // and no later `ask` could re-dispatch on the thread.
+          // transaction. A publication that never landed takes the turn back
+          // down with it: left open, no surface would list it and no later
+          // `ask` could re-dispatch on the thread. `commit` appends before it
+          // waits for the fold to settle, so failing is not proof of a
+          // rolled-back append: the committed rows decide, and a turn whose
+          // request is durably open stays open with it.
           Effect.onError(() =>
-            records
-              .markDropped({ threadId: manifest.threadId, turnIndex })
-              .pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    logger.warn(
-                      `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-                      { data: error },
-                    );
-                  }),
-                ),
-                Effect.asVoid,
+            session.readAggregate(qualifyAggregateId('run', runId)).pipe(
+              Effect.flatMap((rows) =>
+                rows.some(
+                  (row) =>
+                    row.type === 'request.opened' &&
+                    row.requestId === requestId,
+                )
+                  ? Effect.void
+                  : Effect.asVoid(
+                      records.markDropped({
+                        threadId: manifest.threadId,
+                        turnIndex,
+                      }),
+                    ),
               ),
+              // `catchCause`, not `catch`: the aggregate read is exposed as
+              // a defect-only effect (`sessionLayer` reads it through
+              // `Effect.orDie`), so a database failure here arrives as a
+              // defect and a typed catch would let it replace the commit
+              // failure this compensation runs under. Either way the thread
+              // stays open, which the warning says, and the original failure
+              // is what the tool reports.
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  logger.warn(
+                    `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+                    { data: Cause.squash(cause) },
+                  );
+                }),
+              ),
+            ),
           ),
         );
 

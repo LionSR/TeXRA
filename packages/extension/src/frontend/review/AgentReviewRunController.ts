@@ -6,6 +6,10 @@ import {
   type AgentRunHandle,
   type SessionHandle,
 } from '@agent/runtime';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+
+/** Log channel of the Agent Review surface this controller stops runs for. */
+const CHANNEL = 'AgentReview';
 
 /**
  * What one reviewer session is collecting findings against. Reported issues
@@ -121,12 +125,31 @@ export class AgentReviewRunController {
     return true;
   }
 
+  /**
+   * Stop the run, and report a stop the run refused: the review is still in
+   * flight, which the user has to hear. Reported here, at the one place
+   * every stop path funnels through, so the command, the commit watcher and
+   * the launch binding each observe a settlement that cannot fail.
+   */
   private stop(run: AgentReviewRunToken): Effect.Effect<void> {
     const handle = run.handle;
     if (!handle) return Effect.void;
     if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
-    return run.session.runs.stopAgentRun(handle.runId, {
-      detachActiveChildren: detachSubagentsOnStop(),
-    });
+    return run.session.runs
+      .stopAgentRun(handle.runId, {
+        detachActiveChildren: detachSubagentsOnStop(),
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.promise(() =>
+            showLoggedErrorMessage(
+              CHANNEL,
+              'The agent review run could not be stopped',
+              error,
+            ),
+          ),
+        ),
+        Effect.asVoid,
+      );
   }
 }

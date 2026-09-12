@@ -5,9 +5,8 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
@@ -33,8 +32,6 @@ import {
   WaitingTermination,
   type WaitingTerminationContext,
 } from './waitingTermination';
-
-const logger = createChannelTrace('runRegistry');
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
@@ -116,6 +113,16 @@ interface RunRegistryInit {
    */
   readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  /**
+   * Admit one run's claim (`SessionHandle.acquireClaims`) and hand back its
+   * release. A run aggregate takes an append from its claim holder alone, so
+   * a stop that reached no live handle takes the claim the same fenced way a
+   * decision over a dead owner does (`SessionRequests.decide`) before it
+   * writes the run's terminal row.
+   */
+  readonly acquireRunClaim: (
+    runId: RunId,
+  ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
 }
 
 /**
@@ -137,6 +144,7 @@ export class RunRegistry {
   private readonly approvals: SessionApprovals;
   private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   private readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  private readonly acquireRunClaim: RunRegistryInit['acquireRunClaim'];
   private readonly listeners = new Map<
     string,
     Set<(handle: RunHandle | undefined) => void>
@@ -151,6 +159,7 @@ export class RunRegistry {
     this.approvals = options.approvals;
     this.releaseRootRunLease = options.releaseRootRunLease;
     this.finalizeRun = options.finalizeRun;
+    this.acquireRunClaim = options.acquireRunClaim;
     this.waitingTermination = new WaitingTermination({
       releaseRootRunLease: this.releaseRootRunLease,
       finalizeRun: this.finalizeRun,
@@ -587,11 +596,39 @@ export class RunRegistry {
    *
    * Hosts should call this instead of reconstructing stop behavior from
    * child-interrupts, root interrupts, and run-status writes.
+   *
+   * Fails when the run's terminal row could not be written: the run is still
+   * in flight, and a caller that reported the stop done would be lying about
+   * it.
+   *
+   * A stop of a run no handle here owns writes that row from outside the
+   * run, so the run's claim fences the whole gesture — the descendant sweep
+   * included. Taken first, a refusal leaves the descendants running instead
+   * of detaching or killing them and then reporting the stop unavailable. A
+   * locally owned run is already this process's to stop and takes the direct
+   * path.
    */
   stopAgentRun(
     runId: RunId,
     options: RunStopOptions = {},
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, Error> {
+    if (this.handles.has(runId)) return this.applyStop(runId, options);
+    return Effect.acquireUseRelease(
+      this.acquireRunClaim(runId),
+      () => this.applyStop(runId, options),
+      (release) => release.pipe(Effect.orDie),
+    );
+  }
+
+  /**
+   * Apply one stop: the descendant policy the caller declared, the root
+   * handle's own termination, and — when no live handle took it — the
+   * terminal row an ownerless stop must write itself.
+   */
+  private applyStop(
+    runId: RunId,
+    options: RunStopOptions,
+  ): Effect.Effect<void, Error> {
     const rootHandle = this.handles.get(runId);
     // Shared across the child sweep and the root cascade so each run in
     // the chain is interrupted exactly once.
@@ -616,10 +653,10 @@ export class RunRegistry {
     // already-untracked) run still needs the `run.end` row, which is the
     // run's terminal fact: without the finalize below the fold, history and
     // every other host would keep the stopped run in flight.
-    if (!stopped) {
-      settlements.push(this.finalizeOwnerlessStop(runId));
-    }
-    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
+    const all: Effect.Effect<void, Error>[] = stopped
+      ? settlements
+      : [...settlements, this.finalizeOwnerlessStop(runId)];
+    return Effect.all(all, { concurrency: 'unbounded', discard: true });
   }
 
   /**
@@ -759,31 +796,31 @@ export class RunRegistry {
    * ended with its own verdict, which is what the status machine's refusal to
    * leave a terminal phase used to express. The checkpoint is preserved: a
    * cancelled run is exactly the one a user resumes.
+   *
+   * The row is an append on the run aggregate, which takes one only from its
+   * claim holder: {@link stopAgentRun} holds that claim around the whole
+   * ownerless stop, and a run this process still tracks is its own writer
+   * already. A refusal — a live foreign owner, a rolled-back transaction —
+   * fails the stop rather than being logged behind a caller that already
+   * reported it done.
    */
-  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const finalization = yield* Effect.exit(
-        this.finalizeRun({
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          keepExistingOutcome: true,
-        }),
-      );
-      if (Exit.isFailure(finalization)) {
-        logger.warn('Failed to finalize a stop with no live run handle', {
-          data: { runId, error: Cause.squash(finalization.cause) },
-        });
-        return;
-      }
-      if (!finalization.value.ok)
-        logger.warn('Failed to finalize a stop with no live run handle', {
-          data: {
-            runId,
-            outcomePersisted: finalization.value.outcomePersisted,
-            error: finalization.value.error,
-          },
-        });
-    });
+  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
+    return this.finalizeRun({
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      keepExistingOutcome: true,
+    }).pipe(
+      Effect.flatMap((finalization) =>
+        finalization.ok
+          ? Effect.void
+          : Effect.fail(
+              new Error(
+                `Failed to finalize a stop with no live run handle for run ${runId}`,
+                { cause: finalization.error },
+              ),
+            ),
+      ),
+    );
   }
 
   private notifyWaiters(runId: RunId): void {

@@ -51,6 +51,7 @@ import {
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const done: Outcome = { kind: 'done' };
 
@@ -318,7 +319,20 @@ function handle(
         session.runs.stopAgentRun(req.runId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
         }),
-      ).pipe(Effect.as(done), Effect.uninterruptible);
+      ).pipe(
+        // The stop fails when the run's terminal row was refused (a live
+        // foreign owner, a rolled-back transaction): the run is still in
+        // flight, so the requester hears that rather than `done`.
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({
+              runId: req.runId,
+              reason: `The run could not be stopped: ${toErrorMessage(error)}`,
+            }),
+        ),
+        Effect.as(done),
+        Effect.uninterruptible,
+      );
     case 'run.delete':
       return deleteAdmittedRun(session, log, req.runId, admitted, 'single');
     case 'run.compact':
