@@ -126,9 +126,9 @@ function main() {
       console.error(`  - ${formatFinding(finding)}`);
     }
     console.error(
-      '\nRun `npm run check:dead-code-ratchet` as the authoritative dead-code check, then either ' +
-        'remove the finding or, if the addition is intentional, add it to config/ratchets/knip-baseline.json in this PR ' +
-        '(keep the "findings" array sorted by file, category, kind, then name).',
+      '\nRun `npm run check:dead-code-ratchet` as the authoritative dead-code check, then remove the finding. ' +
+        'The baseline is shrink-only (owner ruling 2026-09-06): scripts/check-ratchet-baselines.mjs fails CI ' +
+        'on any config/ratchets/knip-baseline.json entry the base branch does not already carry.',
     );
     process.exit(1);
   }

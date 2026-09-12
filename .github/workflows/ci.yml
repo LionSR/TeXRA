@@ -167,6 +167,18 @@ jobs:
       - name: Check Effect migration ratchet
         run: pnpm run check:effect-migration-ratchet
 
+      # Every ratchet baseline under config/ratchets/ is a file a PR can
+      # hand-edit; the ratchets themselves trust the working-tree copy. This
+      # gate compares each baseline against the PR base branch instead, where
+      # the rule is shrink-only (#11961). PR-only: on push/merge_group the PR
+      # run already gated the merge, and there is no base ref to compare.
+      - name: Check ratchet baselines against the base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          RATCHET_BASE_REF="${{ github.event.pull_request.base.sha }}" \
+            node scripts/check-ratchet-baselines.mjs
+
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
