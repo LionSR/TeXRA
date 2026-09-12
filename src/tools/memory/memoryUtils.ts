@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 
-import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { normalizeFilePath } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import { MEMORY_DISPLAY_ROOT } from './constants';
 
@@ -32,11 +32,9 @@ export function displayToStoragePath(displayPath: string): string {
       ? ''
       : displayPath.slice(`${MEMORY_DISPLAY_ROOT}/`.length);
   const resolved = path.resolve(MEMORY_STORAGE_DIR, suffix);
-  // `relativeToRoot` is the shared symlink-aware containment helper (see
-  // `src/tools/pathResolution.ts`): a lexical pass, then a realpath
-  // comparison, so a storage dir reached through a symlink still resolves.
-  const relative = relativeToRoot(MEMORY_STORAGE_DIR, resolved);
-  if (relative === undefined) {
+  const base = path.resolve(MEMORY_STORAGE_DIR);
+  const relative = path.relative(base, resolved);
+  if (!isPathWithin(base, resolved)) {
     throw new Error(`Invalid memory path: ${displayPath}`);
   }
   // Memory paths use a forward-slash display convention regardless of host
