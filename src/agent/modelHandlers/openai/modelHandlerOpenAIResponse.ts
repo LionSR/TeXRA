@@ -30,6 +30,10 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@agent/runtime/run/toolResultText';
+import {
   isContextWindowError,
   isPreviousResponseIdError,
   takeTail,
@@ -71,11 +75,7 @@ import {
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-  uploadAndRecordToolAttachments,
-} from '../utils/toolAttachmentUtils';
+import { uploadAndRecordToolAttachments } from '../utils/toolAttachmentUtils';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import {

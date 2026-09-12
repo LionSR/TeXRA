@@ -10,6 +10,11 @@ import type {
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import {
+  mathematicalValidationOutput,
+  VALIDATION_OUTPUT,
+  WORKFLOW_SCRIPT_VALIDATION_SOURCE,
+} from '@agent/runtime/run/validationModel';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type {
   FileLocation,
@@ -34,39 +39,6 @@ interface ValidationResponse {
   toolCalls?: SdkToolCall[];
 }
 
-const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
-
-This document was produced by the internal TeXRA CLI validation model handler.
-`;
-
-const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
-  name: 'cli-workflow-script-validation-v2',
-  description: 'Solve three mathematical problems through the CLI',
-  phases: [{ title: 'Solve' }],
-  tasks: [
-    { id: 'number-theory', label: 'Solve the Diophantine equation', phase: 'Solve' },
-    { id: 'linear-algebra', label: 'Classify the matrix', phase: 'Solve' },
-    { id: 'probability', label: 'Compute the stopping probability', phase: 'Solve' },
-  ],
-}
-const schema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['answer', 'derivation', 'check'],
-  properties: {
-    answer: { type: 'string' },
-    derivation: { type: 'string' },
-    check: { type: 'string' },
-  },
-}
-phase('Solve')
-const results = await parallel([
-  () => agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', schema }),
-  () => agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', schema }),
-  () => agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema }),
-])
-return { solutions: results.map((result) => result?.structured ?? null) }`;
-
 function validationToolCall(name: string, input: unknown): SdkToolCall {
   const callId = `validation-${name}`;
   const argumentsJson = JSON.stringify(input);
@@ -83,47 +55,6 @@ function validationToolCall(name: string, input: unknown): SdkToolCall {
   };
 }
 
-function mathematicalValidationOutput(messages: unknown[]): {
-  answer: string;
-  derivation: string;
-  check: string;
-} {
-  const prompt = JSON.stringify(messages);
-  if (prompt.includes('x^2 - y^2')) {
-    return {
-      answer:
-        '(x,y) = (±23,±22), (±9,±6), and (±7,±2), with independent signs.',
-      derivation:
-        'Factor (x-y)(x+y)=45. The integer factor pairs of 45 with equal parity are (±1,±45), (±3,±15), and (±5,±9), including reversed signs. Solving x=(a+b)/2 and y=(b-a)/2 gives exactly the listed solutions.',
-      check:
-        'The factorization is bijective because x-y and x+y are odd divisors of 45; direct substitution gives differences of squares 45.',
-    };
-  }
-  if (prompt.includes('A^2 = A')) {
-    return {
-      answer: 'A is similar over R to diag(1,1,0), and det(I+A)=4.',
-      derivation:
-        'The minimal polynomial divides t(t-1), whose roots are distinct, so A is diagonalizable with eigenvalues 0 and 1. The trace is the multiplicity of 1, hence it is 2.',
-      check: 'I+A is similar to diag(2,2,1), whose determinant is 4.',
-    };
-  }
-  return {
-    answer: 'The probability that HHT appears before THH is 1/4.',
-    derivation:
-      'Track the longest suffix that is a prefix of either target: empty, H, HH, T, and TH. First-step recursion gives p_empty=(p_H+p_T)/2, p_H=(p_HH+p_T)/2, p_HH=(p_HH+1)/2, p_T=(p_TH+p_T)/2, and p_TH=p_T/2. Hence p_HH=1, p_T=p_TH=0, p_H=1/2, and p_empty=1/4.',
-    check:
-      'Substitution satisfies every state equation and uses absorbing values 1 after HHT and 0 after THH.',
-  };
-}
-
-/**
- * Internal model handler used only by the CLI packaged-runtime validation gate.
- *
- * This handler is intentionally below `executeAgent()`: the CLI still parses
- * arguments, initializes the platform, calls the real shared runtime, and lets
- * the workflow flow write and extract output files. It is not a user-visible
- * model provider and must only be enabled by the package validation script.
- */
 export class ModelHandlerValidation extends ModelHandler<
   ChatCompletionMessageParam,
   ValidationResponse['usage'],
@@ -160,7 +91,7 @@ export class ModelHandlerValidation extends ModelHandler<
         toolCalls = [
           validationToolCall(
             'submit_output',
-            mathematicalValidationOutput(options.messages),
+            mathematicalValidationOutput(JSON.stringify(options.messages)),
           ),
         ];
       } else if (!hasToolResult && toolNames.has('delegate_multi_agents')) {

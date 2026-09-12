@@ -9,7 +9,7 @@ import { registerRun } from '@agent/storage/runLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-} from '@agent/modelHandlers/contextManagementConstants';
+} from '@agent/runtime/run/toolResultText';
 import {
   getCurrentToolContexts,
   type ToolCallContext,

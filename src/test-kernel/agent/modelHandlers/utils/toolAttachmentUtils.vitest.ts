@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatToolResultAsText,
   formatToolResultTextWithAttachments,
-} from '@agent/modelHandlers/utils/toolAttachmentUtils';
+} from '@agent/runtime/run/toolResultText';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/runtime/run/toolResultText';
 import type { ToolFileAttachment } from '@shared/schemas';
 
 /** Head and tail well over their truncation budgets, with an elidable middle. */

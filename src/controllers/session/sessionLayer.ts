@@ -61,6 +61,7 @@ import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -223,6 +224,7 @@ const sessionHandleLayer = (
     Effect.gen(function* () {
       const { publish, ...reads } = yield* SessionEvents;
       const eventLog = yield* Database;
+      const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
@@ -273,6 +275,7 @@ const sessionHandleLayer = (
         });
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
+        ledger,
         publishText: (runId, id, text) =>
           SubscriptionRef.update(chunks.ref, (held) => {
             const next = new Map(held);

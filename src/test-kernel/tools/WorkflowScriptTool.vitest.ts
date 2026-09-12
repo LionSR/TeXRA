@@ -25,7 +25,7 @@ import {
 } from '@shared/constants/delegationTools';
 import { deriveRunId } from '@utils/core/idHash';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
+import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 

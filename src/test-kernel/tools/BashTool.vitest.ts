@@ -36,8 +36,8 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
-import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/runtime/run/toolResultText';
+import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
   aggregateId,

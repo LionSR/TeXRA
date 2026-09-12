@@ -19,12 +19,14 @@ export function createToolUseResumeShared(
   };
 }
 
+/**
+ * The identity a host resumes a tool-use run under: the config, the run id
+ * and the conversation format its rows are in. The run's state is not part
+ * of it — the loop folds that from the ledger.
+ */
 export function createToolUseResumeData(
-  overrides: Partial<Omit<ToolUseResumeData, 'shared'>> & {
-    readonly shared?: Partial<PreparedShared>;
-  } = {},
+  overrides: Partial<ToolUseResumeData> = {},
 ): ToolUseResumeData {
-  const shared = createToolUseResumeShared(overrides.shared);
   return {
     type: 'toolUse',
     runId: 'test-run' as RunId,
@@ -33,7 +35,7 @@ export function createToolUseResumeData(
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
+    modelHandlerCompatibilityKey: null,
     ...overrides,
-    shared,
   };
 }

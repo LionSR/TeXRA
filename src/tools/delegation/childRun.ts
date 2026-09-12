@@ -4,10 +4,7 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  finalizeRunTerminal,
-  type FlowRecordRetention,
-} from '@agent/runtime/AgentRunLifecycle';
+import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -46,9 +43,6 @@ interface FinalizeChildRunOptions {
   error?: unknown;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /** The flow-record policy applied beside the `run.end` row; a child with
-   *  no flow record preserves nothing and passes none. */
-  flowRecord?: FlowRecordRetention;
   /** Release completed transcript residency while preserving command history. */
   autoClose?: boolean;
 }
@@ -173,7 +167,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
                 kind: classifyAgentError(error),
                 message: `Child run setup failed: ${toErrorMessage(error)}`,
               },
-              flowRecord: 'preserve',
             }).pipe(
               Effect.flatMap((finalization) =>
                 finalization.ok
@@ -281,7 +274,6 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     outcome,
     error,
     stage: options.stage,
-    flowRecord: options.flowRecord ?? 'preserve',
   });
   disposeTrace();
 

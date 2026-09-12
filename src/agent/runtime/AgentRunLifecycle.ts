@@ -1,12 +1,8 @@
 import { Cause, Effect } from 'effect';
 
-import type { FinalizeRunInput } from '@agent/storage';
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  finalizeRun,
-  retainFlowRecordUnlessCompleted,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -82,24 +78,6 @@ export interface RunFlowLifecycleOptions {
   onRunEnd?: (runId: RunId) => void | Promise<void>;
 }
 
-type FlowRecordDisposition = FinalizeRunInput['flowRecord'];
-
-/**
- * Flow-record retention: a fixed disposition, or the caller's policy keyed on
- * the terminal outcome {@link finalizeRunTerminal} resolves. Keying it on the
- * caller's own report instead would derive the record's fate from a different
- * owner than the outcome it is persisted beside — a genuinely failed run kept
- * resumable, or a cancelled one stripped of the record every other cancel path
- * preserves.
- */
-export type FlowRecordRetention =
-  FlowRecordDisposition | ((outcome: RunOutcome) => FlowRecordDisposition);
-
-/** Private control channel through which a flow reports its retention policy. */
-export interface FlowLifecycleControl {
-  setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
-}
-
 interface FinalizeRunTerminalParams {
   /**
    * Owns the registry tracking the handle (untracked after the delivery
@@ -134,8 +112,6 @@ interface FinalizeRunTerminalParams {
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
-  /** The flow-record policy the storage finalizer applies beside the row. */
-  readonly flowRecord: FlowRecordRetention;
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
@@ -225,15 +201,12 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     ...(params.usage ? { usage: params.usage } : {}),
     output,
   };
-  const { flowRecord } = params;
   const finalization = yield* finalizeRun(session, {
     runId: handle.runId,
     outcome,
     error,
     usage: params.usage,
     output,
-    flowRecord:
-      typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
   });
   if (!finalization.ok) {
     logger.warn('Failed to finalize durable run state', {
@@ -452,10 +425,7 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
 export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
   function* (
     ctx: AgentLaunchContext,
-    runner: (
-      handle: RunHandle,
-      lifecycle: FlowLifecycleControl,
-    ) => Promise<AgentRuntimeFlowResult>,
+    runner: (handle: RunHandle) => Effect.Effect<AgentRuntimeFlowResult, Error>,
     options?: RunFlowLifecycleOptions,
   ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
     const { runId, session } = ctx.runScope;
@@ -490,12 +460,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     // A lease record removed out from under this run is not watched: the next
     // fenced write throws `RunLeaseLostError` and the run aborts dirty.
     let suspended = false;
-    let flowRecordDisposition: FlowRecordDisposition | undefined;
-    const lifecycleControl: FlowLifecycleControl = {
-      setFlowRecordDisposition(disposition): void {
-        flowRecordDisposition = disposition;
-      },
-    };
     // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
     // throw nor an async rejection from a consumer callback may abort the run.
     if (options?.onRun) {
@@ -530,11 +494,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         handle,
         usage: ctx.usageMonitor.lastTotals(),
         stage: ctx.parentStage,
-        // Tool-use flows report the exact recovery decision through the
-        // private lifecycle control. Other flows retain the historical
-        // policy, read against the outcome finalization resolves rather
-        // than this arm's report.
-        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
         ...arm,
       });
     /**
@@ -680,26 +639,13 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       } else {
         transitionRunStart(ctx);
       }
-      const flow = yield* Effect.try({
-        try: () => runner(handle, lifecycleControl),
-        catch: ensureError,
-      });
-      const result = yield* Effect.tryPromise({
-        try: () => flow,
-        catch: ensureError,
-      }).pipe(
+      // The flow is an Effect: a fiber interruption reaches its provider work
+      // directly, and its own finalizers settle before the model and trace
+      // resources below are disposed. The run signal is aborted alongside so
+      // Promise-tier work the flow still retains observes the same stop.
+      const result = yield* Effect.suspend(() => runner(handle)).pipe(
         Effect.onInterrupt(() =>
-          Effect.gen(function* () {
-            // The retained Promise flow owns provider work. Signal its real abort
-            // path, then join it before disposing its model and trace resources.
-            runInterruptHandler.interrupt();
-            yield* Effect.promise(() =>
-              flow.then(
-                () => undefined,
-                () => undefined,
-              ),
-            );
-          }),
+          Effect.sync(() => runInterruptHandler.interrupt()),
         ),
         Effect.ensuring(Effect.sync(detachRunInterrupt)),
       );

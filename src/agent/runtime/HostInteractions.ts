@@ -78,7 +78,7 @@ type ReportReviewIssueSink = (report: ReviewIssueReport) => {
   readonly reason?: string;
 };
 
-export interface HostRetryInteractionOptions {
+export interface HostRetryInteractionOptions extends RequestRowOptions {
   /**
    * Rebuild the caller's model client after a host-side credential change.
    * A host that calls this successfully has prepared the next attempt; a
@@ -88,6 +88,17 @@ export interface HostRetryInteractionOptions {
     selection: ModelCredentialSelection,
     signal?: AbortSignal,
   ) => Promise<void>;
+}
+
+export interface RequestRowOptions {
+  /**
+   * The caller already committed this request's `approval.requested` row
+   * through the run ledger, bound by the `flow.snapshot` that makes it
+   * recoverable (a `model-retry` or `tool-outcome` request). The plane must
+   * not publish a second row for the same request id; its `approval.resolved`
+   * still closes the request when it settles.
+   */
+  readonly requestRowCommitted?: boolean;
 }
 
 /**
@@ -404,6 +415,13 @@ interface PendingSessionInteraction {
   readonly fact?: {
     readonly runId: RunId;
     readonly requestId: string;
+    /**
+     * The run loop committed the request row with its recovery binding and
+     * commits its own `approval.resolved` carrying the decision (R5); the
+     * plane's generic close on cancellation or disposal must not retire it,
+     * or a resumed run would read consent off a request nobody decided.
+     */
+    readonly loopOwned: boolean;
   };
   readonly dispatch: (
     interactions: HostInteractions,
@@ -615,17 +633,21 @@ export class SessionHostInteractions implements HostInteractions {
       (interactions) => interactions.requestRetry?.(request, options),
       { kind: 'retry', data: request },
       options?.prepareRetry,
+      options?.requestRowCommitted === true,
     );
   }
 
   askUserQuestion(
     request: HostUserQuestionRequest,
+    options?: RequestRowOptions,
   ): Promise<UserQuestionSettlement> {
     return this.enqueue(
       'userQuestion',
       request.runId || undefined,
       (interactions) => interactions.askUserQuestion?.(request),
       { kind: 'userQuestion', data: request },
+      undefined,
+      options?.requestRowCommitted === true,
     );
   }
 
@@ -789,6 +811,7 @@ export class SessionHostInteractions implements HostInteractions {
     ) => Promise<HostInteractionResultByKind[K]> | undefined,
     permission: PermissionPayloadFor<K>,
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'],
+    requestRowCommitted = false,
   ): Promise<HostInteractionResultByKind[K]> {
     type TResult = HostInteractionResultByKind[K];
     if (this.disposed) {
@@ -796,7 +819,14 @@ export class SessionHostInteractions implements HostInteractions {
     }
 
     return new Promise<TResult>((resolve, reject) => {
-      const fact = this.publishRequested(runId ?? undefined, permission);
+      // A request the run ledger already committed (with its recovery
+      // binding) is not published a second time; the fact still names it so
+      // its settlement closes the same request.
+      const payload: PermissionPayload = permission;
+      const fact =
+        requestRowCommitted && runId
+          ? { runId, requestId: payload.data.requestId, loopOwned: true }
+          : this.publishRequested(runId ?? undefined, payload);
       const pending: PendingSessionInteraction = {
         kind,
         runId: runId ?? undefined,
@@ -829,7 +859,7 @@ export class SessionHostInteractions implements HostInteractions {
         payload: redactedForFact(payload),
       },
     ]);
-    return { runId, requestId };
+    return { runId, requestId, loopOwned: false };
   }
 
   private activateCurrentAttachment(
@@ -971,7 +1001,7 @@ export class SessionHostInteractions implements HostInteractions {
 
   private deletePending(pending: PendingSessionInteraction): boolean {
     if (!this.pending.delete(pending)) return false;
-    if (pending.fact) {
+    if (pending.fact && !pending.fact.loopOwned) {
       this.session.publish([
         {
           type: 'approval.resolved',

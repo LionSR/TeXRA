@@ -3,7 +3,7 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import type { ReflectionFlowState } from '@agent/runtime/loop/rows';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
   matchesCancelSelector,
@@ -193,20 +193,22 @@ export function toolUseRunShared(
 }
 
 /**
- * The `ReflectionFlowShared` baseline reflection-node tests start from: round
- * zero of a two-round run, an empty workspace and no resolved output location.
+ * The reflection family state a `flow.snapshot` carries, as the baseline
+ * reflection tests start from it: round zero of a two-round run, an empty
+ * workspace and no resolved output location. A snapshot never carries
+ * messages or the usage accumulator, so neither appears here.
  */
 export function reflectionFlowShared(
-  overrides: Partial<ReflectionFlowShared> = {},
-): ReflectionFlowShared {
-  const currentRound = overrides.currentRound ?? 0;
+  overrides: Partial<ReflectionFlowState> = {},
+): ReflectionFlowState {
+  const { usageAccumulator, ...runStateSnapshot } =
+    AgentRunStateSnapshotSchema.parse({});
   return {
-    currentRound,
+    currentRound: 0,
     totalRounds: 2,
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    context: [],
     outputLocation: null,
-    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+    runStateSnapshot,
     roundOutputs: [],
     continueRounds: true,
     endTurn: false,

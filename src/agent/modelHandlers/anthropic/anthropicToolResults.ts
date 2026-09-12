@@ -5,16 +5,16 @@ import { basename } from 'node:path';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
-import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
-
-// Local file imports
-import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
-  uploadAndRecordToolAttachments,
-} from '../utils/toolAttachmentUtils';
+} from '@agent/runtime/run/toolResultText';
+import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
+
+// Local file imports
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
+import { uploadAndRecordToolAttachments } from '../utils/toolAttachmentUtils';
 import {
   uploadToolAttachments,
   type UploadedAnthropicAttachment,

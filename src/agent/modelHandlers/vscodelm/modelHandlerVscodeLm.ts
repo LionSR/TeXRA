@@ -12,6 +12,7 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
+import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
 import { AgentError } from '@common/errors';
 import type { SdkErrorKind } from '@common/errors/sdkError/sdkErrorKinds';
 import {
@@ -49,7 +50,6 @@ import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 // Local file imports
 import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
-import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 
 type VscodeLmUsage = undefined;
 type VscodeLmMediaPart = LanguageModelTextPart | LanguageModelDataPart;

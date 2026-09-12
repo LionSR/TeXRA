@@ -34,7 +34,9 @@ interface FollowUpDisplay {
   readonly workflowSummary?: WorkflowScriptDeliverySummary;
 }
 
-function followUpDisplay(followUp: FollowUpQueueBatchItem): FollowUpDisplay {
+export function followUpDisplay(
+  followUp: FollowUpQueueBatchItem,
+): FollowUpDisplay {
   if (followUp.displayText !== undefined) {
     return { text: followUp.displayText };
   }

@@ -11,41 +11,28 @@ import { Effect } from 'effect';
  *
  * 1. a handle in this process — the registry's phase is the live truth;
  * 2. the `run.end` row's outcome — the run recorded how it ended, which is its
- *    own durable fact and outranks a lease this process is merely slow to
+ *    own durable fact and outranks a claim this process is merely slow to
  *    release (#8093);
- * 3. a lease a live foreign owner holds, or one this process holds with no run
- *    behind it — nothing terminal may be claimed, and the reason is shown;
- * 4. no checkpoint on disk — nothing is left to continue and nothing recorded
- *    an outcome, so the reading is settled with none ("unknown");
- * 5. a checkpoint nobody holds — the run was interrupted (a crash, or a host
- *    that quit).
+ * 3. the run claim — held by a live foreign owner, or by this process with no
+ *    run behind it: nothing terminal may be claimed, and the reason is shown;
+ * 4. no owner and no recorded outcome — the run stopped without recording how
+ *    it ended: interrupted (a crash, or a host that quit).
  *
- * Ownership is asked before the checkpoint because a checkpoint is an agent
- * run's artifact. A background shell and a workflow-script container hold an
- * run lease for their whole lifetime and never write `flow_<id>.json`,
- * so statting first would read a live run another TeXRA process owns as
- * settled with no outcome.
+ * The claim alone is the liveness authority (R6): single-owner sessions make
+ * ownership the fact that says whether anything is still running, and the
+ * existence of a `flow.snapshot` says only whether there is something to
+ * continue, which is the resume path's question, not this one.
  *
  * The cost is the point: the /executions listing walks this once per row, so
  * it must stay at one metadata read (skipped entirely when the caller already
- * holds the row) and, for a row with no recorded outcome, one lease read plus
- * — only when that lease is free — one `exists` stat. A row that recorded its
- * outcome pays neither.
- *
- * Checkpoint *validity* is therefore deliberately not re-derived here.
- * `deriveResumability` parses the record and is stricter than a stat (a spent
- * cursor, a malformed record, or one written by a newer TeXRA is not a
- * checkpoint to promise anyone), but parsing 200 flow records to fill a status
- * column is exactly the cost this surface must not pay. A malformed checkpoint
- * consequently reads as interrupted here; the single-run resume path that
- * would act on one parses it and refuses loudly.
+ * holds the row) and, for a row with no recorded outcome, one claim read. A
+ * row that recorded its outcome pays neither.
  */
 
-import { flowKey } from '@agent/node/persistedFlow';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
-import { getRunStore, getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/RunKVStore';
 import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
@@ -64,7 +51,7 @@ export type RunLiveness =
   | { readonly kind: 'live'; readonly info: LiveRunStatusInfo }
   | { readonly kind: 'unsettled'; readonly reason: string }
   | { readonly kind: 'interrupted' }
-  | { readonly kind: 'settled'; readonly outcome?: RunOutcome };
+  | { readonly kind: 'settled'; readonly outcome: RunOutcome };
 
 /**
  * A tracked run's status line. Its phase is a real one — the registry answers
@@ -90,8 +77,8 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
 }
 
 /**
- * This process holds the lease, tracks no run for it, and no outcome was ever
- * written: the registry and the lease disagree with nothing durable to fall
+ * This process holds the claim, tracks no run for it, and no outcome was ever
+ * written: the registry and the claim disagree with nothing durable to fall
  * back on, which is a leak to report, never a run to call settled.
  */
 const OWNED_HERE_REASON = "held by this process's lease with no live run";
@@ -105,7 +92,6 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   const handle = runs.getHandle(runId);
   if (handle) return { kind: 'live', info: runs.getStatus(handle) };
 
-  const store = getRunStore(runId);
   return yield* Effect.gen(function* (): Effect.fn.Return<
     RunLiveness,
     unknown
@@ -114,9 +100,9 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
       knownOutcome === undefined
         ? ((yield* getRunRecords(session, runId).readRunEnd())?.outcome ?? null)
         : knownOutcome;
-    // A recorded outcome is the run's own fact, not the lease's: a finished
+    // A recorded outcome is the run's own fact, not the claim's: a finished
     // child untracks its handle and writes the outcome long before its loop
-    // releases the run lease, and the parent reads the run inside
+    // releases the run claim, and the parent reads the run inside
     // exactly that window (#8093).
     if (outcome !== null) {
       return { kind: 'settled', outcome };
@@ -134,14 +120,9 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
-    // Nobody owns the run: a checkpoint left behind is one that stopped
-    // without finishing, and none at all leaves nothing to continue.
-    return (yield* Effect.tryPromise({
-      try: () => runInSession(session, () => store.exists(flowKey(runId))),
-      catch: (error) => error,
-    }))
-      ? { kind: 'interrupted' }
-      : { kind: 'settled' };
+    // Nobody owns the run and nothing recorded how it ended: it stopped
+    // without finishing.
+    return { kind: 'interrupted' };
   }).pipe(
     Effect.catch((error) =>
       Effect.sync((): RunLiveness => {

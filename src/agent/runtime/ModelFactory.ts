@@ -6,12 +6,14 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
+import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
+import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -29,9 +31,11 @@ import {
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
+  resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
+import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
 import {
   copilotRouteForModel,
   resolveRuntimeModelConfig,
@@ -43,7 +47,7 @@ import {
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { ModelHandlerCompatibilityKey } from '@shared/schemas';
+import type { ModelHandlerCompatibilityKey, UsageRoute } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -213,6 +217,60 @@ function getPreferShortModelNames(globalState: StateStore): boolean {
     GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     false,
   );
+}
+
+/** The credential and endpoint of one model route, resolved together. */
+export interface RouteCredential {
+  readonly apiKey: string;
+  readonly endpoint: string;
+  readonly provider: ApiProvider;
+  readonly route: 'api-key' | 'openrouter';
+  readonly usageRoute: UsageRoute;
+}
+
+/**
+ * Resolve the credential and endpoint the run loop binds a model under: the
+ * direct API key of the model's provider, or the OpenRouter key when the
+ * route goes through OpenRouter. The one producer of the missing-credential
+ * fact the run lifecycle classifies for the loop, so the thrown error carries
+ * the typed marker rather than a message pattern. Lives beside the route
+ * resolver above so route and credential are decided in one place. `secrets`
+ * is the process secret store the caller already holds.
+ */
+export async function resolveRouteCredential(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+  secrets: PlatformSecrets,
+): Promise<RouteCredential> {
+  const provider = useOpenRouter
+    ? 'openRouter'
+    : resolveDirectModelApiKeyProvider(config);
+  if (!provider) {
+    throw new Error(`Model "${config.name}" has no direct API-key provider.`);
+  }
+  let apiKey: string;
+  try {
+    apiKey = exposeApiKey(await getApiKey(secrets, provider));
+  } catch (cause) {
+    const error = new Error(
+      useOpenRouter
+        ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
+        : `Missing API key for ${provider}. Set a provider API key in settings.`,
+      { cause },
+    );
+    attachMissingApiKeyError(error);
+    throw error;
+  }
+  const endpoint = resolveRouteEndpoint(config, useOpenRouter);
+  return {
+    apiKey,
+    endpoint: endpoint.baseUrl,
+    provider,
+    route: useOpenRouter ? 'openrouter' : 'api-key',
+    usageRoute:
+      endpoint.usageRoute ??
+      (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
+  };
 }
 
 function applyShortModelNamePreference(

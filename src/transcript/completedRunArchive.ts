@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
 import {

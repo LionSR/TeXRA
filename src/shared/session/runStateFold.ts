@@ -141,6 +141,9 @@ type PendingIntent = {
 type Approval = {
   readonly payload: PermissionPayload;
   readonly resolved: boolean;
+  /** The recorded decision, when the resolving row carried one (R5). */
+  readonly decision:
+    'approved' | 'denied' | 'skipped' | 'cancelled' | 'interrupted' | null;
 };
 
 /**
@@ -173,6 +176,9 @@ export type RunState = {
   readonly messages: readonly Message[];
   readonly continuation: Continuation | null;
   readonly openAttempt: OpenAttempt | null;
+  /** The last completed turn, from its `response` row: the finish reason a
+   *  loop reads when it processes a response it did not just receive. */
+  readonly lastTurn: TurnResult | null;
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
@@ -271,6 +277,7 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   messages: [],
   continuation: null,
   openAttempt: null,
+  lastTurn: null,
   pendingResponse: null,
   pendingIntents: byId([]),
   approvals: byId([]),
@@ -686,6 +693,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             continuation:
               p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
             openAttempt: null,
+            lastTurn: p.turn,
             pendingRetry: null,
             usage: addTurnUsage(state.usage, p.usage),
           };
@@ -917,7 +925,10 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
         approvals: byId([
           ...Object.entries(current.approvals),
-          [row.requestId, { payload: row.payload, resolved: false }],
+          [
+            row.requestId,
+            { payload: row.payload, resolved: false, decision: null },
+          ],
         ]),
       });
     }
@@ -936,7 +947,14 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
         approvals: byId([
           ...Object.entries(current.approvals),
-          [row.requestId, { ...approval, resolved: true }],
+          [
+            row.requestId,
+            {
+              ...approval,
+              resolved: true,
+              decision: row.decision ?? approval.decision,
+            },
+          ],
         ]),
       });
     }

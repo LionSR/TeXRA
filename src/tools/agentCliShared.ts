@@ -325,7 +325,6 @@ export const launchAgentCliSession = Effect.fn(
               stream.finalize({
                 outcome: RUN_OUTCOME.FAILED,
                 error: startError,
-                flowRecord: 'delete',
               }),
             );
             if (Exit.isFailure(finalized)) {

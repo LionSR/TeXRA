@@ -4,11 +4,11 @@
  * behind both the agent-facing `/executions/{id}/files` listing and the CLI's
  * history file listing, so the two agree on what counts as internal metadata.
  *
- * The reserved turn-state key is
- * owned by `RunKVStore`; the `flow_*` prefix is owned by
- * `persistedFlow`; workflow checkpoint keys are owned by `multiAgentWorkflow`.
- * This module only strips the on-disk `.json` suffix and defers to those
- * owners rather than re-deriving the vocabulary.
+ * The reserved turn-state key is owned by `RunKVStore`; the retired
+ * engine's `flow_*` checkpoint (renamed `.superseded` on first ledger append)
+ * is owned by `resumability`; workflow checkpoint keys are owned by
+ * `multiAgentWorkflow`. This module only strips the on-disk `.json` suffix
+ * and defers to those owners rather than re-deriving the vocabulary.
  *
  * Every real KV entry is written through `KVStore.keyToPath`, which always
  * appends `.json`, so a name without that suffix can never be an internal
@@ -18,17 +18,17 @@
  */
 
 import { isReservedKvKeyName } from '@agent/storage';
-import { FLOW_KEY_PREFIX } from '@agent/node/persistedFlow';
+import { isLegacyFlowRecordFile } from '@agent/storage/resumability';
 import { isWorkflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import { isStableSubagentStateKvKey } from '@tools/delegation/stableSubagentAttempt';
 
 export function isKVFile(name: string): boolean {
+  if (isLegacyFlowRecordFile(name)) return true;
   const match = /^(.+)\.json$/.exec(name);
   if (!match) return false;
   const key = match[1];
   return (
     isReservedKvKeyName(key) ||
-    key.startsWith(FLOW_KEY_PREFIX) ||
     isWorkflowScriptCheckpointKvKey(key) ||
     isStableSubagentStateKvKey(key)
   );

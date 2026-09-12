@@ -26,7 +26,6 @@ import {
 } from '@agent/runtime/ModelFactory';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError, classifyAgentError } from '@common/errors';
@@ -218,24 +217,17 @@ async function validateModelExists(
   );
 }
 
+/**
+ * The conversation format a resumed run's rows are in, read off its latest
+ * `flow.snapshot` (the one indexed read); a run with no snapshot has no
+ * persisted format and binds today's default route.
+ */
 const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
   'inferLaunchModelHandlerCompatibilityKey',
 )(function* (runId: RunId, session: SessionHandle) {
-  const flowRecord = yield* Effect.tryPromise({
-    try: async () =>
-      runInSession(session, () =>
-        getRunStore(runId).read<FlowRecord>(flowKey(runId)),
-      ),
-    catch: ensureError,
-  });
-  const shared = flowRecord?.shared;
-  if (!isObject(shared)) return undefined;
-  // Records are stamped at write time, so a record without a key is malformed
-  // rather than old.
-  const parsed = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
-    shared.modelHandlerCompatibilityKey,
-  );
-  return parsed.success ? (parsed.data ?? undefined) : undefined;
+  const snapshot = yield* session.ledger.latestSnapshot(runId);
+  if (snapshot === null) return undefined;
+  return snapshot.payload.runtime.modelHandlerCompatibilityKey ?? undefined;
 });
 
 /**
@@ -605,7 +597,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             runId,
             outcome: RUN_OUTCOME.FAILED,
             error: { kind: classifyAgentError(err), message },
-            flowRecord: 'preserve',
           });
           if (!finalization.ok)
             logger.warn('Failed to persist the launch failure', {

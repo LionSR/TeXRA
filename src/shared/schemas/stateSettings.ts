@@ -882,7 +882,7 @@ const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts -> src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/loop/reflection.ts',
 } satisfies CliRuntimeReachability;
 const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
@@ -1296,14 +1296,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: {
-        reader:
-          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-      },
-      desktop: {
-        reader:
-          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-      },
+      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1318,7 +1312,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/runtime/loop/reflection.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'latex', cliConfig: true },

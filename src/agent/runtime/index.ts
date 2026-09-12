@@ -98,12 +98,6 @@ export type {
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 
-// persistedCompileRejection
-export {
-  hasTerminalPersistedCompileRejection,
-  isTerminalPersistedCompileRejection,
-} from './persistedCompileRejection';
-
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 

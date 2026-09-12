@@ -598,7 +598,6 @@ describe('cross-process run leases', () => {
       finalizeRun(session, {
         runId,
         outcome: RUN_OUTCOME.COMPLETED,
-        flowRecord: 'preserve',
       }),
     );
     await releaseOwnedRunLease(runId);

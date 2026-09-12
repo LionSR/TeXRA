@@ -162,7 +162,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
             childRun.finalize({
               outcome: RUN_OUTCOME.FAILED,
               error,
-              flowRecord: 'delete',
               autoClose: autoCloseOnLaunchFailure,
             }),
           );

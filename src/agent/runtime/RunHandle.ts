@@ -7,7 +7,7 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import type { ToolUseFlowContext } from '@agent/runtime/loop/toolUse';
 import type {
   AgentCategory,
   RunId,

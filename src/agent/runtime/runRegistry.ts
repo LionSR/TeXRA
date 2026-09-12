@@ -8,7 +8,6 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { createChannelTrace } from '@agent/trace';
-import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
@@ -815,7 +814,6 @@ export class RunRegistry {
         this.finalizeRun({
           runId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
           keepExistingOutcome: true,
         }),
       );

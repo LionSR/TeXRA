@@ -16,6 +16,7 @@ import type {
   ModelCredentialSelection,
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
 import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -58,7 +59,6 @@ import {
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
-import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { extractTextFromReasoningDetails } from './openRouterReasoning';
 import {
   OpenRouterStreamAggregator,

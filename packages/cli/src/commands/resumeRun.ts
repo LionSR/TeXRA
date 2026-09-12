@@ -94,19 +94,23 @@ export async function runResumeCommand(
           writeTextStderr(`Run ${id} is already running in this process.`);
           return CliExitCode.Usage;
         case 'unclassified':
-          // A history row is advertised from its checkpoint file alone, so a run
-          // whose checkpoint is corrupt lands here and gets the same words the
-          // chat's open path gives that cohort, with the fact that decided it.
-          // A lease or metadata read that failed says nothing about the
-          // checkpoint, so it stays the operational fact it is.
+          // `unclassified` names a durable fact that could not be read — the
+          // lease, the run metadata, the latest snapshot — and nothing else.
+          // Rows that do not fold are refused by the ledger's own load at the
+          // open below, and come back from `resumeRun` worded
+          // `unusable_checkpoint`; this arm never guesses at content it did
+          // not read.
           writeTextStderr(
-            classification.fault === 'checkpoint-malformed'
-              ? `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`
-              : `Could not read the state of run ${id}: ${classification.cause}`,
+            `Could not read the state of run ${id}: ${classification.cause}`,
           );
           return CliExitCode.AgentError;
         case 'finished':
-          writeTextStderr(describeFollowUpFailure('finished'));
+          // A run whose only durable state is a retired `flow_<id>.json` says
+          // so in its own words (R10) rather than being reported as an
+          // ordinary finished run.
+          writeTextStderr(
+            classification.notice ?? describeFollowUpFailure('finished'),
+          );
           return CliExitCode.Usage;
         case 'resumable':
           break;

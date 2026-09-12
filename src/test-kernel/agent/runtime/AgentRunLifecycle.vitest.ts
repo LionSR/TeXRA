@@ -238,7 +238,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
           onRunEnd: stopSessionsForRun,
         }),
       );
@@ -276,7 +276,9 @@ describe('runFlowWithLifecycle', () => {
 
       try {
         await Effect.runPromise(
-          runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+          runFlow(ctx, () =>
+            Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+          ),
         );
 
         expect(
@@ -301,7 +303,9 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+        runFlow(ctx, () =>
+          Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+        ),
       );
 
       const runConfigIndex = (await recorded.read()).findIndex(
@@ -332,10 +336,12 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlow(ctx, async () => {
-          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-        }),
+        runFlow(ctx, () =>
+          Effect.sync(() => {
+            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+          }),
+        ),
       );
 
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
@@ -354,11 +360,13 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlow(ctx, async () => {
-          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-          expect(runStatus.getSubstate(runId)).toBeUndefined();
-          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-        }),
+        runFlow(ctx, () =>
+          Effect.sync(() => {
+            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+            expect(runStatus.getSubstate(runId)).toBeUndefined();
+            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+          }),
+        ),
       );
 
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
@@ -377,12 +385,15 @@ describe('runFlowWithLifecycle', () => {
       });
 
       await Effect.runPromise(
-        runFlow(ctx, async () => {
-          expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-          expect(runStatus.getSubstate(runId)).toBeUndefined();
-          expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
-          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-        }),
+        runFlow(ctx, () =>
+          Effect.gen(function* () {
+            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+            expect(runStatus.getSubstate(runId)).toBeUndefined();
+            const published = yield* Effect.promise(() => recorded.read());
+            expect(eventsOfType(published, 'status')).toEqual([]);
+            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+          }),
+        ),
       );
 
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
@@ -402,9 +413,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async () => {
-            throw new DOMException('Request aborted', 'AbortError');
-          },
+          () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
           { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
@@ -429,9 +438,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async () => {
-            throw new Error('subagent failed');
-          },
+          () => Effect.fail(new Error('subagent failed')),
           { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
@@ -455,13 +462,14 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async () => {
-            expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
-              true,
-            );
-            return waitingResult(runId);
-          },
+          () =>
+            Effect.sync(() => {
+              expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+              expect(
+                runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
+              ).toBe(true);
+              return waitingResult(runId);
+            }),
           { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
@@ -492,9 +500,11 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const running = Effect.runPromise(
-        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED), {
-          parentRunId: PARENT_RUN_ID,
-        }),
+        runFlow(
+          ctx,
+          () => Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+          { parentRunId: PARENT_RUN_ID },
+        ),
       );
       await vi.waitFor(() => expect(parked.started()).toBe(true));
 
@@ -525,11 +535,15 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED), {
-          parentRunId,
-          workflowPhase: 'Reduce',
-          onRun: async () => {
-            rosterEmissionsBeforeOnRun = rosters.rosters.length;
+        runFlow(
+          ctx,
+          () => Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
+          {
+            parentRunId,
+            workflowPhase: 'Reduce',
+            onRun: async () => {
+              rosterEmissionsBeforeOnRun = rosters.rosters.length;
+            },
           },
         }),
       );
@@ -554,13 +568,16 @@ describe('runFlowWithLifecycle', () => {
     const result = await Effect.runPromise(
       runFlow(
         ctx,
-        async () => {
-          expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
-          // linkAbortSignals has separate pre-aborted replay coverage; this
-          // lifecycle test proves the signal already carries the early stop.
-          expect(ctx.runScope.signal.aborted).toBe(true);
-          return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
-        },
+        () =>
+          Effect.sync(() => {
+            expect(defaultSession().status.get(runId)).toBe(
+              RUN_PHASE.CANCELLED,
+            );
+            // linkAbortSignals has separate pre-aborted replay coverage; this
+            // lifecycle test proves the signal already carries the early stop.
+            expect(ctx.runScope.signal.aborted).toBe(true);
+            return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
+          }),
         {
           onRun: async () => {
             const stop = defaultSession().runs.kill(runId);
@@ -590,10 +607,13 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async (handle) => {
-            expect(ctx.runScope.signal.aborted).toBe(true);
-            throw new DOMException('Request aborted', 'AbortError');
-          },
+          () =>
+            Effect.gen(function* () {
+              expect(ctx.runScope.signal.aborted).toBe(true);
+              return yield* Effect.fail(
+                new DOMException('Request aborted', 'AbortError'),
+              );
+            }),
           {
             onRun: async () => {
               const stop = defaultSession().runs.kill(runId);
@@ -611,7 +631,6 @@ describe('runFlowWithLifecycle', () => {
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
           error: expect.objectContaining({ kind: 'abort' }),
-          flowRecord: 'preserve',
         }),
       );
     } finally {
@@ -633,9 +652,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async () => {
-            throw new DOMException('Request aborted', 'AbortError');
-          },
+          () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
           {
             onRun: async () => {
               const stop = defaultSession().runs.kill(runId);
@@ -661,28 +678,28 @@ describe('runFlowWithLifecycle', () => {
         },
         usage: undefined,
         output: EMPTY_TOOL_USE_OUTPUT,
-        flowRecord: 'preserve',
       });
     } finally {
       clearRunStatusForTest(runStatus, runId);
     }
   });
 
-  // Outcome and flow-record disposition are one decision: a run the phase says
-  // was interrupted keeps the record that makes it resumable, even when its own
-  // report reached completion first.
-  it('keeps the flow record of a stopped run whose report says completed', async () => {
+  // The phase owns the outcome: a run the phase says was interrupted ends
+  // cancelled, even when its own report reached completion first.
+  it('relabels a stopped run whose report says completed', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => {
-          const stop = defaultSession().runs.kill(runId);
-          expect(stop.accepted).toBe(true);
-          await Effect.runPromise(stop.settlement);
-          expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
-        }),
+        runFlow(ctx, () =>
+          Effect.gen(function* () {
+            const stop = defaultSession().runs.kill(runId);
+            expect(stop.accepted).toBe(true);
+            yield* stop.settlement;
+            expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
+            return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
+          }),
+        ),
       );
 
       // The caller receives the same verdict persistence carries: the stop
@@ -692,7 +709,6 @@ describe('runFlowWithLifecycle', () => {
         defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
         }),
       );
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -711,12 +727,15 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlow(
           ctx,
-          async () => {
-            const stop = defaultSession().runs.kill(runId);
-            expect(stop.accepted).toBe(true);
-            await Effect.runPromise(stop.settlement);
-            throw new Error('child exited with code 143');
-          },
+          () =>
+            Effect.gen(function* () {
+              const stop = defaultSession().runs.kill(runId);
+              expect(stop.accepted).toBe(true);
+              yield* stop.settlement;
+              return yield* Effect.fail(
+                new Error('child exited with code 143'),
+              );
+            }),
           { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
@@ -749,7 +768,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
           parentRunId: PARENT_RUN_ID,
         }),
       );
@@ -785,9 +804,6 @@ describe('runFlowWithLifecycle', () => {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
             output: EMPTY_TOOL_USE_OUTPUT,
-            // Killing a WAITING subagent leaves the checkpoint that makes it
-            // resumable (#11315).
-            flowRecord: 'preserve',
           },
         ),
       );
@@ -817,7 +833,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => waitingResult(runId), {
+        runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
           onRunEnd: stopSessionsForRun,
         }),
       );
@@ -859,7 +875,9 @@ describe('runFlowWithLifecycle', () => {
 
       try {
         const result = await Effect.runPromise(
-          runFlow(ctx, async () => toolUseResult(runId, expected.outcome)),
+          runFlow(ctx, () =>
+            Effect.succeed(toolUseResult(runId, expected.outcome)),
+          ),
         );
 
         expect(result.outcome).toBe(expected.outcome);
@@ -869,10 +887,6 @@ describe('runFlowWithLifecycle', () => {
             runId,
             outcome: expected.outcome,
             output: EMPTY_TOOL_USE_OUTPUT,
-            flowRecord:
-              expected.outcome === RUN_OUTCOME.COMPLETED
-                ? 'delete'
-                : 'preserve',
           },
         );
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
@@ -891,7 +905,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => carriedResult, {
+        runFlow(ctx, () => Effect.succeed(carriedResult), {
           parentRunId: PARENT_RUN_ID,
           onError,
         }),
@@ -906,7 +920,6 @@ describe('runFlowWithLifecycle', () => {
         error: undefined,
         usage: undefined,
         output: carriedResult.output,
-        flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
@@ -923,9 +936,9 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => {
-          throw new DOMException('Request aborted', 'AbortError');
-        }),
+        runFlow(ctx, () =>
+          Effect.fail(new DOMException('Request aborted', 'AbortError')),
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -939,7 +952,6 @@ describe('runFlowWithLifecycle', () => {
         },
         usage: undefined,
         output: EMPTY_TOOL_USE_OUTPUT,
-        flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
@@ -955,9 +967,9 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => {
-            throw new Error('model exploded');
-          }),
+          runFlow(ctx, () =>
+            Effect.fail(new Error('model exploded')),
+          ),
         ),
       ).rejects.toThrow('model exploded');
 
@@ -971,7 +983,6 @@ describe('runFlowWithLifecycle', () => {
         },
         usage: undefined,
         output: EMPTY_TOOL_USE_OUTPUT,
-        flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
@@ -986,12 +997,14 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => {
-            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
-              true,
-            );
-            throw new Error('wait node failed');
-          }),
+          runFlow(ctx, () =>
+            Effect.gen(function* () {
+              expect(
+                runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
+              ).toBe(true);
+              return yield* Effect.fail(new Error('wait node failed'));
+            }),
+          ),
         ),
       ).rejects.toThrow('wait node failed');
 
@@ -1017,7 +1030,7 @@ describe('runFlowWithLifecycle', () => {
       });
 
       const result = await Effect.runPromise(
-        runFlow(ctx, async () => carriedResult, {
+        runFlow(ctx, () => Effect.succeed(carriedResult), {
           parentRunId: PARENT_RUN_ID,
           onError,
         }),
@@ -1041,20 +1054,22 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => ({
-            outcome: RUN_OUTCOME.FAILED,
-            runId,
-            output: {
-              category: 'toolUse' as const,
-              response: 'partial answer',
-              files: [],
-            },
-            error: {
-              message: 'provider exploded',
-              userRetryable: true,
-              statusCode: 503,
-            },
-          })),
+          runFlow(ctx, () =>
+            Effect.succeed({
+              outcome: RUN_OUTCOME.FAILED,
+              runId,
+              output: {
+                category: 'toolUse' as const,
+                response: 'partial answer',
+                files: [],
+              },
+              error: {
+                message: 'provider exploded',
+                userRetryable: true,
+                statusCode: 503,
+              },
+            }),
+          ),
         ),
       ).rejects.toThrow('provider exploded');
 
@@ -1066,7 +1081,6 @@ describe('runFlowWithLifecycle', () => {
         expect.objectContaining({
           runId,
           outcome: RUN_OUTCOME.FAILED,
-          flowRecord: 'preserve',
           error: expect.objectContaining({
             kind: 'unexpected',
             statusCode: 503,
@@ -1088,18 +1102,20 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => ({
-            outcome: RUN_OUTCOME.FAILED,
-            runId,
-            output: { category: 'toolUse' as const, response: '', files: [] },
-            // The retry-state flatten drops the Error and its Symbol marker;
-            // the canonical classification keeps the kind reachable here.
-            error: {
-              message: 'Missing OpenRouter API key.',
-              userRetryable: false,
-              classification: { kind: 'missing-api-key' as const },
-            },
-          })),
+          runFlow(ctx, () =>
+            Effect.succeed({
+              outcome: RUN_OUTCOME.FAILED,
+              runId,
+              output: { category: 'toolUse' as const, response: '', files: [] },
+              // The retry-state flatten drops the Error and its Symbol marker;
+              // the canonical classification keeps the kind reachable here.
+              error: {
+                message: 'Missing OpenRouter API key.',
+                userRetryable: false,
+                classification: { kind: 'missing-api-key' as const },
+              },
+            }),
+          ),
         ),
       ).rejects.toThrow('Missing OpenRouter API key.');
 
@@ -1174,7 +1190,6 @@ describe('finalizeRunTerminal', () => {
         session,
         handle,
         outcome: RUN_OUTCOME.COMPLETED,
-        flowRecord: 'delete',
       } as const;
 
       const first = Effect.runPromise(finalizeRunTerminal(params));
@@ -1222,7 +1237,6 @@ describe('finalizeRunTerminal', () => {
           session,
           handle,
           outcome: RUN_OUTCOME.COMPLETED,
-          flowRecord: 'preserve',
         }),
       );
 
@@ -1262,7 +1276,6 @@ describe('finalizeRunTerminal', () => {
           session,
           handle,
           outcome: RUN_OUTCOME.FAILED,
-          flowRecord: 'preserve',
         }),
       );
 
@@ -1311,7 +1324,6 @@ describe('finalizeRunTerminal', () => {
           outcome: RUN_OUTCOME.FAILED,
           error: { kind: 'unexpected', message: 'exited with code 143' },
           stage,
-          flowRecord: 'delete',
         }),
       );
 
@@ -1355,7 +1367,6 @@ describe('finalizeRunTerminal', () => {
           session,
           handle,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
         }),
       );
 

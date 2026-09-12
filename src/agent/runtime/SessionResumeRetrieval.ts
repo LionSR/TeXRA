@@ -1,120 +1,51 @@
 /**
- * Session resume data retrieval for auto-resume functionality.
- *
- * This module provides functions to retrieve resume data from persisted state,
- * enabling automatic resumption of WAITING sessions for both workflow and tool-use agents.
- *
- * Resume strategies differ by agent type:
- * - Tool-use: Canonical shared state plus resume identity
- * - Workflow: agentConfig + runId + transcript-format key
+ * Session resume data retrieval: the identity a host needs to launch a
+ * resumed run, read from the durable run facts. Both families resume from
+ * the same fact: the run aggregate's latest `flow.snapshot`, one indexed
+ * read. The run's state is `RunLedger.load`, folded by the loop that
+ * continues it; nothing here parses a checkpoint.
  */
 
 import { Effect } from 'effect';
 
-import { deriveResumability } from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  PersistedFlowStateError,
-  type FlowRecord,
-} from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
-import {
-  parseToolUseShared,
-  type PreparedShared,
-} from '@agent/implementations/flows/tooluse/nodes/types';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { deriveResumability } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ModelHandlerCompatibilityKey, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
 const logger = createLog('SessionResumeRetrieval');
 
-/** Canonical tool-use shared state plus the identity needed to resume it. */
-export interface ToolUseResumeData {
-  readonly type: 'toolUse';
-  readonly shared: PreparedShared;
+interface ResumeIdentity {
+  /** The run's configuration, its model being the one the snapshot names. */
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
+  /** The conversation format the run's rows are in. */
+  readonly modelHandlerCompatibilityKey: ModelHandlerCompatibilityKey | null;
 }
 
-/** Workflow session resume data: flow reads full state via runId. */
-interface WorkflowResumeData {
-  readonly type: 'workflow';
-  readonly agentConfig: AgentConfig;
-  readonly runId: RunId;
-  readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-}
+export type ToolUseResumeData = ResumeIdentity & { readonly type: 'toolUse' };
+
+type WorkflowResumeData = ResumeIdentity & { readonly type: 'workflow' };
 
 type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-/** Agent-type label used in resume-retrieval warnings and error messages. */
-type ResumeAgentLabel = 'tool-use' | 'workflow';
+const RESUME_TYPE_BY_CATEGORY: Partial<
+  Record<AgentConfig['agentCategory'], SessionResumeData['type']>
+> = {
+  [AgentCategory.ToolUse]: 'toolUse',
+  [AgentCategory.Workflow]: 'workflow',
+};
 
 /**
- * Probe resumability for a run: returns the persisted flow record when
- * resumable, `null` when there is nothing to resume, and throws when the
- * resume storage itself is unreadable (re-wrapped by the caller's catch).
- */
-const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
-  function* (
-    runId: RunId,
-    agentType: ResumeAgentLabel,
-    session: SessionHandle,
-  ): Effect.fn.Return<FlowRecord | null, Error> {
-    const resumability = yield* deriveResumability(runId, session);
-    if (resumability.kind === 'checkpoint') return resumability.flowRecord;
-    // Unreadable storage is a failure to report, never "nothing to resume":
-    // the caller's catch re-wraps it so hosts can word the difference. A record
-    // that is present but malformed is the one fault that names the checkpoint
-    // itself, so it throws the typed error the resume boundary refuses as
-    // unusable saved state; a metadata or transient read failure stays an
-    // untyped operational error there.
-    if (resumability.kind === 'unreadable') {
-      if (resumability.fault === 'checkpoint-malformed') {
-        return yield* Effect.fail(
-          new PersistedFlowStateError(runId, 'unsupported-record'),
-        );
-      }
-      return yield* Effect.fail(
-        new Error(`Unable to read resume storage: ${resumability.cause}`),
-      );
-    }
-    logger.warn('Run is not resumable', {
-      data: { agentType, runId },
-    });
-    return null;
-  },
-);
-
-/**
- * Wrap an unexpected retrieval failure (KV/IO error) so the resume boundary
- * can distinguish "resume failed" from "no session to resume" instead of
- * silently falling back to starting a new run.
- */
-function resumeRetrievalError(
-  agentType: ResumeAgentLabel,
-  runId: RunId,
-  error: unknown,
-): Error {
-  return new Error(
-    `Failed to retrieve ${agentType} resume data for run: ${runId}`,
-    { cause: error },
-  );
-}
-
-/**
- * Retrieve resume data for a WAITING session.
+ * Retrieve resume data for a run.
  *
- * Returns appropriate resume data based on task type:
- * - Tool-use: Canonical shared state with launch metadata
- * - Workflow: agentConfig, runId, and transcript-format key
- *
- * @param runId - The run id
- * @param agentConfig - The run config for the run
- * @returns The resume data, or `null` when there is no resumable session
- *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
- *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
- *   resume" from "resume failed" instead of silently abandoning the session.
+ * @returns The resume identity, or `null` when there is nothing to resume
+ *   (no `flow.snapshot` on the run aggregate). Fails when the durable facts
+ *   cannot be read, or when the snapshot's family contradicts the config's
+ *   category, so the caller can distinguish "nothing to resume" from
+ *   "resume failed" instead of silently abandoning the session.
  */
 export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
   function* (
@@ -122,132 +53,43 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<SessionResumeData | null, Error> {
-    if (agentConfig.agentCategory === AgentCategory.ToolUse) {
-      return yield* retrieveToolUseResumeData(runId, agentConfig, session);
+    const type = RESUME_TYPE_BY_CATEGORY[agentConfig.agentCategory];
+    if (type === undefined) {
+      logger.warn(`Unknown agent config type for run: ${runId}`);
+      return null;
     }
-
-    if (agentConfig.agentCategory === AgentCategory.Workflow) {
-      return yield* retrieveWorkflowResumeData(runId, agentConfig, session);
+    const resumability = yield* deriveResumability(runId, session);
+    if (resumability.kind === 'unreadable') {
+      return yield* Effect.fail(
+        new Error(
+          `Failed to retrieve ${type} resume data for run: ${runId}: ${resumability.cause}`,
+        ),
+      );
     }
-
-    logger.warn(`Unknown agent config type for run: ${runId}`);
-    return null;
-  },
-);
-
-/**
- * Retrieve resume data for a tool-use session.
- */
-const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
-  function* (
-    runId: RunId,
-    agentConfig: AgentConfig,
-    session: SessionHandle,
-  ): Effect.fn.Return<ToolUseResumeData | null, Error> {
-    const flowRecord = yield* probeResumableFlowRecord(
-      runId,
-      'tool-use',
-      session,
-    ).pipe(
-      Effect.mapError((error) =>
-        resumeRetrievalError('tool-use', runId, error),
-      ),
-    );
-    return yield* Effect.try({
-      try: (): ToolUseResumeData | null => {
-        if (!flowRecord) return null;
-
-        const parsedShared = parseToolUseShared(flowRecord.shared);
-        if (!parsedShared.success) {
-          logger.warn(`Invalid flow record structure for run: ${runId}`, {
-            data: { error: parsedShared.error },
-          });
-          return null;
-        }
-
-        const { stateSlices } = parsedShared.data;
-        if (stateSlices === null) {
-          logger.warn(`Invalid flow record structure for run: ${runId}`);
-          return null;
-        }
-
-        const currentConfig = {
-          ...agentConfig,
-          model: parsedShared.data.modelId ?? agentConfig.model,
-        };
-        const modelHandlerCompatibilityKey =
-          parsedShared.data.modelHandlerCompatibilityKey;
-
-        const shared: PreparedShared = {
-          ...parsedShared.data,
-          stateSlices,
-          ...(modelHandlerCompatibilityKey !== undefined && {
-            modelHandlerCompatibilityKey,
-          }),
-        };
-
-        logger.debug(`Retrieved tool-use resume data for run: ${runId}`);
-        return {
-          type: 'toolUse',
-          shared,
-          runId,
-          agentConfig: currentConfig,
-        };
-      },
-      catch: (error) => resumeRetrievalError('tool-use', runId, error),
+    if (resumability.kind === 'none') {
+      logger.warn('Run is not resumable', {
+        data: { agentType: type, runId, notice: resumability.notice },
+      });
+      return null;
+    }
+    const { snapshot } = resumability;
+    const expectedFamily = type === 'toolUse' ? 'toolUse' : 'reflection';
+    if (snapshot.family !== expectedFamily) {
+      return yield* Effect.fail(
+        new Error(
+          `Run ${runId} is configured as ${type} but its snapshot is a ${snapshot.family} run.`,
+        ),
+      );
+    }
+    logger.debug(`Retrieved ${type} resume data for run: ${runId}`, {
+      data: { round: snapshot.runtime.round, phase: snapshot.runtime.phase },
     });
-  },
-);
-
-/**
- * Retrieve resume data for a workflow session.
- * Verifies flow record exists before returning resume data.
- * Workflow flows read full persisted state via runId during resume.
- */
-const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
-  function* (
-    runId: RunId,
-    agentConfig: AgentConfig,
-    session: SessionHandle,
-  ): Effect.fn.Return<WorkflowResumeData | null, Error> {
-    const flowRecord = yield* probeResumableFlowRecord(
+    return {
+      type,
       runId,
-      'workflow',
-      session,
-    ).pipe(
-      Effect.mapError((error) =>
-        resumeRetrievalError('workflow', runId, error),
-      ),
-    );
-    return yield* Effect.try({
-      try: (): WorkflowResumeData | null => {
-        if (!flowRecord) return null;
-
-        const parseResult = ReflectionFlowStateSchema.safeParse(
-          flowRecord.shared,
-        );
-        if (!parseResult.success) {
-          logger.warn(`Invalid workflow flow record for run: ${runId}`);
-          return null;
-        }
-
-        logger.debug('Retrieved workflow resume data for run', {
-          data: {
-            runId,
-            currentRound: parseResult.data.currentRound,
-            totalRounds: parseResult.data.totalRounds,
-          },
-        });
-        const modelHandlerCompatibilityKey =
-          parseResult.data.modelHandlerCompatibilityKey;
-        return {
-          type: 'workflow',
-          agentConfig,
-          runId,
-          modelHandlerCompatibilityKey,
-        };
-      },
-      catch: (error) => resumeRetrievalError('workflow', runId, error),
-    });
+      agentConfig: { ...agentConfig, model: snapshot.runtime.modelId },
+      modelHandlerCompatibilityKey:
+        snapshot.runtime.modelHandlerCompatibilityKey,
+    };
   },
 );

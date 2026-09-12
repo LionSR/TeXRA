@@ -442,7 +442,6 @@ describe('runRegistry', () => {
           runId,
           outcome: RUN_OUTCOME.CANCELLED,
           output: EMPTY_TOOL_USE_OUTPUT,
-          flowRecord: 'preserve',
         },
       );
     } finally {
@@ -621,9 +620,6 @@ describe('runRegistry', () => {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
             output: EMPTY_TOOL_USE_OUTPUT,
-            // A stopped WAITING run keeps its checkpoint: this is precisely the
-            // run a user resumes (#11315).
-            flowRecord: 'preserve',
           },
         );
       });
@@ -664,9 +660,6 @@ describe('runRegistry', () => {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
             output: EMPTY_TOOL_USE_OUTPUT,
-            // A stopped WAITING run keeps its checkpoint: this is precisely the
-            // run a user resumes (#11315).
-            flowRecord: 'preserve',
           },
         );
       });
@@ -769,7 +762,6 @@ describe('runRegistry', () => {
           session,
           handle,
           outcome: RUN_OUTCOME.COMPLETED,
-          flowRecord: 'delete',
         }),
       );
       await vi.waitFor(() => expect(releasePersist).toBeDefined());
@@ -784,7 +776,6 @@ describe('runRegistry', () => {
         expect.objectContaining({
           runId,
           outcome: RUN_OUTCOME.COMPLETED,
-          flowRecord: 'delete',
         }),
       );
       expect(registry.getHandle(runId)).toBeUndefined();

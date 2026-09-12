@@ -421,4 +421,11 @@ export const ReflectionSnapshotStateSchema = z.object({
 
   /** Rejected compile result awaiting an explicit successful compile. */
   unresolvedCompileRejection: z.boolean().optional(),
+
+  /**
+   * Byte length of the round's raw output file after the last processed
+   * response. A replayed response completes a partial write or skips one
+   * already complete instead of appending its text twice.
+   */
+  rawOutputBytes: z.int().nonnegative().optional(),
 });

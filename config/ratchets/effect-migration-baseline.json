@@ -261,8 +261,6 @@
       "src/utils/files/workspaceFS.ts": 2
     },
     "setServices()": {
-      "src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts": 1,
-      "src/agent/implementations/flows/reflection/runReflectionFlow.ts": 1,
       "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts": 1,
       "src/agent/implementations/flows/tooluse/runToolUseFlow.ts": 1,
       "src/agent/node/index.ts": 1,
@@ -315,8 +313,6 @@
     },
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
-      "src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts": 2,
-      "src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts": 1,
       "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 2,
       "src/controllers/session/SessionBridge.ts": 6,
@@ -336,14 +332,6 @@
     },
     "dep:@agent/node": {
       "src/agent/core/flows/ModelInvocationNode.ts": 1,
-      "src/agent/implementations/flows/reflection/ResponseCycleFlow.ts": 1,
-      "src/agent/implementations/flows/reflection/RoundPersistedFlow.ts": 2,
-      "src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/OutputNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/PrepareContextNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts": 1,
-      "src/agent/implementations/flows/reflection/runReflectionFlow.ts": 1,
       "src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts": 1,
       "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts": 1,
       "src/agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode.ts": 1,
@@ -351,25 +339,14 @@
       "src/agent/implementations/flows/tooluse/runToolUseFlow.ts": 2,
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 1,
-      "src/agent/runtime/SessionResumeRetrieval.ts": 1,
-      "src/agent/runtime/persistedCompileRejection.ts": 1,
-      "src/agent/runtime/resumeRun.ts": 1,
-      "src/agent/storage/resumability.ts": 1,
-      "src/agent/storage/runLifecycle.ts": 1,
-      "src/tools/executions/runKvFiles.ts": 1,
-      "src/tools/executions/runLiveness.ts": 1
+      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode.ts": 1
     },
     "dep:@agent/modelHandlers": {
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts": 1,
       "src/agent/runtime/ModelFactory.ts": 18,
       "src/agent/runtime/helperModel.ts": 2,
       "src/agent/types/IModelHandler.ts": 1,
-      "src/tools/bash.ts": 1,
-      "src/tools/media/audio.ts": 1,
-      "src/tools/structuredOutput.ts": 1,
-      "src/transcript/completedRunArchive.ts": 1
+      "src/tools/media/audio.ts": 1
     }
   }
 }

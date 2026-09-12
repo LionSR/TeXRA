@@ -14,7 +14,6 @@
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type { RunScope } from '@agent/runtime/RunScope';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   type CompileFailure,
@@ -29,21 +28,15 @@ import { formatResultCount } from '@utils/text/stringUtils';
 export interface OutputState {
   rounds: Map<number, RoundOutput>;
   openedOutputs: Set<string>;
-  runPreparation: Promise<void> | null;
 }
 
-/**
- * The structural subset of `ReflectionServices` the output pipeline reads.
- * `OutputNode` and `runReflectionFlow` pass their services object directly —
- * never build a separate literal of this shape.
- */
+/** What the output pipeline reads of the reflection run. */
 export interface OutputDependencies {
   readonly setting: AgentWorkflowSetting;
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;
   readonly fileService: TaskRunFileService;
-  readonly runScope: RunScope;
 }
 
 export function createOutputState(
@@ -52,7 +45,6 @@ export function createOutputState(
   return {
     rounds,
     openedOutputs: new Set(),
-    runPreparation: null,
   };
 }
 

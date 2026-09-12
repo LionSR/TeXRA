@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tool under test
-import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
+import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import { ClaudeAgentTool } from '@tools/claudeAgent';
 
 describe('ClaudeAgentTool schema', () => {

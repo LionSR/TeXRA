@@ -186,6 +186,9 @@ export class SessionHandle {
    * (`effectRuntime()`) and reads the Effect's own result as the response.
    */
   readonly requests: SessionGraph['requests'];
+  /** The run ledger over this session's event plane, provided to each run's
+   *  program at the `executeAgent` boundary. */
+  readonly ledger: SessionGraph['ledger'];
   /**
    * The tail as the view has folded it (PRD 7.2): what a reader that reads
    * {@link view} beside each row reads, from `now()`, so no row reaches it
@@ -260,6 +263,7 @@ export class SessionHandle {
     const graph = init.graph(this);
     this.graph = graph;
     this.events = graph.events;
+    this.ledger = graph.ledger;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
     this.folded = graph.folded;
@@ -872,7 +876,6 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
             const finalization = yield* finalizeRun(session, {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
-              flowRecord: 'preserve',
               keepExistingOutcome: true,
             });
             if (!finalization.ok) {

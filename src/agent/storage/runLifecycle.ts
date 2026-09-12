@@ -15,7 +15,6 @@ import {
 } from '@agent/core/definition/RunRecord';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import { flowKey } from '@agent/node/persistedFlow';
 
 import {
   RUN_OUTCOME,
@@ -259,35 +258,9 @@ export const acquireResumedRunOwnership = Effect.fn(
   });
 });
 
-/**
- * The one rule for whether a run's resume checkpoint (`flow_<id>.json`)
- * survives finalization: **delete only on a genuinely COMPLETED run; keep it
- * otherwise.** A cancelled or failed run is the case a user resumes, so
- * destroying its checkpoint is data loss they cannot undo.
- *
- * Call sites should pass this rather than a literal. A hardcoded `'delete'`
- * is only correct when the caller can show the record is unresumable — see
- * the caveat below — and every such site should say why in a comment.
- *
- * Caveat, learned from #11314: preserving is not free. A record whose cursor
- * was never rewound (`cursor.nextNodeId === null`) fails
- * `ResumableFlowRecordSchema`'s refinement. `deriveResumability` reports it
- * as `unreadable`, which `classifyRun` maps to `unclassified`; only `history
- * delete` can remove it. Keeping such a record is strictly worse than deleting
- * it. So a caller that ends COMPLETED
- * *without* consuming its cursor must still report `'delete'`; this policy
- * covers the ordinary case where the outcome and the cursor agree.
- */
-export function retainFlowRecordUnlessCompleted(
-  resolved: RunOutcome,
-): 'preserve' | 'delete' {
-  return resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve';
-}
-
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
-  readonly flowRecord: 'preserve' | 'delete';
   /**
    * Keep the outcome this lifecycle already wrote instead of replacing it.
    * For a backstop finalizer that does not own the run's result — the
@@ -337,8 +310,9 @@ export type FinalizeRunResult =
 
 /**
  * The one terminal-persistence tail, and the one writer of the `run.end` row
- * (one run model, section 3.3): persist the run's terminal fact, then apply
- * the requested flow-record policy. Read and write share one locked cycle, so
+ * (one run model, section 3.3): persist the run's terminal fact. The run's
+ * rows live until explicit deletion (C9); nothing is removed beside the row.
+ * Read and write share one locked cycle, so
  * a run whose *current* lifecycle already ended with this outcome writes
  * nothing; a resumed run ends again. Never throws — every persistence
  * failure comes back as an `ok: false` result (and through
@@ -348,7 +322,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
-  const { runId, outcome, flowRecord, keepExistingOutcome } = input;
+  const { runId, outcome, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) => {
       const target = aggregateId('run', runId);
@@ -382,39 +356,15 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       };
     }),
   );
-  const deletion = yield* Effect.exit(
-    flowRecord === 'delete'
-      ? Effect.tryPromise({
-          try: () =>
-            runInSession(session, () =>
-              getRunStore(runId).delete(flowKey(runId)),
-            ),
-          catch: ensureError,
-        })
-      : Effect.void,
-  );
-  if (Exit.isFailure(status) || Exit.isFailure(deletion)) {
-    const failures = [
-      ...(Exit.isFailure(status) ? [Cause.squash(status.cause)] : []),
-      ...(Exit.isFailure(deletion) ? [Cause.squash(deletion.cause)] : []),
-    ];
-    const error =
-      failures.length === 1
-        ? failures[0]
-        : new AggregateError(
-            failures,
-            `Terminal status and flow deletion failed for ${runId}`,
-          );
-    const outcomePersisted = Exit.isSuccess(status);
+  if (Exit.isFailure(status)) {
+    const error = Cause.squash(status.cause);
     input.report?.(
       new Error(
-        outcomePersisted
-          ? `Persisted ${outcome} status for run ${runId}, but failed to delete its flow record: ${toErrorMessage(error)}`
-          : `Failed to persist ${outcome} terminal state for run ${runId}: ${toErrorMessage(error)}`,
+        `Failed to persist ${outcome} terminal state for run ${runId}: ${toErrorMessage(error)}`,
         { cause: error },
       ),
     );
-    return { ok: false, error, outcomePersisted };
+    return { ok: false, error, outcomePersisted: false };
   }
   return { ok: true, outcome: status.value };
 });

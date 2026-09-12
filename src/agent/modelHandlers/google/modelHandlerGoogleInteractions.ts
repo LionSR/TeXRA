@@ -41,6 +41,11 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import {
+  DEFAULT_ATTACHMENT_MIME_TYPE,
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@agent/runtime/run/toolResultText';
+import {
   detectRawErrorBody,
   detectStatusCode,
   firstBodyStringField,
@@ -83,12 +88,7 @@ import {
 import { ServerChainState } from '../support/ServerChainState';
 import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
-import {
-  DEFAULT_ATTACHMENT_MIME_TYPE,
-  formatAttachmentSummary,
-  formatToolResultAsText,
-  loadAttachmentBuffer,
-} from '../utils/toolAttachmentUtils';
+import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
 import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
 import type { BackgroundPollStats } from '../support/BackgroundPoller';
 

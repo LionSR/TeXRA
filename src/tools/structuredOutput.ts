@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Internal imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
-import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
+import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
   JsonValueSchema,
   type JsonValue,

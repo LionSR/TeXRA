@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { createResponseCycleFlow } from '@agent/implementations/flows/reflection/ResponseCycleFlow';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import type { MediaAttachmentContext } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
@@ -530,66 +529,12 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(extracted.text).toContain('answer body');
     expect(extracted.text).not.toContain('ignore me');
     expect(extracted.text.endsWith('</doc>')).toBe(true);
-    // The Interactions 'completed' status is normalized to the canonical Google
-    // STOP finish reason so shared stop logic reads it as a natural end-of-turn.
+    // The Interactions 'completed' status is normalized to the canonical
+    // Google STOP finish reason so shared stop logic reads it as a natural
+    // end-of-turn. Regression: the raw 'completed' status is not an end-turn
+    // reason, so a background response that finished cleanly on the document
+    // end tag read as a stop without an end of turn — a spurious
+    // cancellation that discarded output already paid for.
     expect(extracted.stopReason).toBe(GOOGLE_FINISH.STOP);
-  });
-
-  it('maps a completed interaction to endTurn (not a spurious cancellation)', async () => {
-    // Regression: a background/non-streaming Interactions response that finished
-    // cleanly on the document end tag was returning the raw 'completed' status,
-    // which is not a reflection end-turn reason — so the cycle yielded
-    // endTurn=false while encounterDocumentTag forced shouldStop=true. The
-    // ResponseCycle then read `shouldStop && !endTurn` as a user cancellation
-    // and discarded the already-generated output. The status must normalize to
-    // GOOGLE_FINISH.STOP so endTurn=true.
-    const handler = createHandler();
-    const response = {
-      id: 'int',
-      status: 'completed',
-      steps: [
-        {
-          type: 'model_output',
-          content: [{ type: 'text', text: 'body</documents>' }],
-        },
-      ],
-    } as never;
-
-    const { stopReason, text } = handler.extractResponse(
-      response,
-      '</documents>',
-    );
-    const setting = {} as never;
-    const round = { continuationCount: 0 } as never;
-    const global = {
-      usageAccumulator: {
-        totals: {
-          firstInputTokens: 100,
-          totalInputTokens: 100,
-          totalOutputTokens: 50,
-        },
-      },
-    } as never;
-
-    const continuationNode = createResponseCycleFlow()
-      .start.getNextNode()
-      ?.getNextNode()
-      ?.getNextNode();
-    if (!continuationNode) throw new Error('Missing continuation node');
-    continuationNode.setServices({
-      modelCell: { handler },
-      round,
-      run: global,
-      setting,
-      logger: noopTrace,
-    });
-    const result = await continuationNode.exec({
-      kind: 'success',
-      value: { interrupted: false, stopReason, processedResponse: text },
-    });
-    expect(result).toMatchObject({
-      kind: 'success',
-      value: { shouldStop: true, shouldEndTurn: true },
-    });
   });
 });

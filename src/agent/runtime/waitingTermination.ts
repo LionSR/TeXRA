@@ -13,7 +13,6 @@ import { RunLeaseLostError } from '@agent/storage/runLease';
 import {
   type FinalizeRunInput,
   type FinalizeRunResult,
-  retainFlowRecordUnlessCompleted,
 } from '@agent/storage/runLifecycle';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -160,9 +159,6 @@ export class WaitingTermination {
         runId: handle.runId,
         outcome: RUN_OUTCOME.CANCELLED,
         output: emptyRunEndOutput(handle.category),
-        // A stopped WAITING run is exactly what a user resumes. Deleting its
-        // checkpoint here was the #11304 invariant's first violation (#11315).
-        flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
       });
       if (!finalization.ok) {
         logger.warn('Failed to finalize stopped waiting run', {

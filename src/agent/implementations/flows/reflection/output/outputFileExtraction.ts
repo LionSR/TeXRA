@@ -128,12 +128,6 @@ export async function extractFilesFromXml(
     `Process files r${currRound}`,
     undefined,
     async () => {
-      // Wait for run workspace preparation, clearing the promise once settled.
-      if (state.runPreparation) {
-        await state.runPreparation;
-        state.runPreparation = null;
-      }
-
       const data = ensureRoundData(state, currRound);
       data.rawOutput ??= outputLocation;
 
