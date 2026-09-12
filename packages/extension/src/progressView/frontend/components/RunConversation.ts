@@ -80,6 +80,7 @@ export class RunConversation extends LitElement {
           .run=${run}
           .view=${view}
           .surface=${surface}
+          .host=${this.host}
           .nowMs=${this.nowMs}
         ></workflow-run-content>`;
     }

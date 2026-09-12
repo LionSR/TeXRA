@@ -134,10 +134,10 @@ function plainLineText(row: LogRow | PhaseRow | WorkflowTaskRow): string {
  * Format a plain log line as TemplateResult. `PhaseRow` and
  * `WorkflowTaskRow` share the shape and are in the union to keep the row
  * dispatch exhaustive; this host routes every phase heading to its
- * task-group surface (see `logSlice`) and every workflow call to the run
- * board (`workflow-run-board`, painted whenever the fold set
- * `transcript.run`), so both arms are unreachable here today: a call only
- * lands on this line for a legacy import with no run identity.
+ * task-group surface and every workflow call to the run board
+ * (`workflow-run-board`, painted whenever the fold set `transcript.run`),
+ * so a workflowTask row reaches this line only on a run without
+ * `transcript.run`.
  */
 export function formatDefaultLogMessageTemplate(
   row: LogRow | PhaseRow | WorkflowTaskRow,

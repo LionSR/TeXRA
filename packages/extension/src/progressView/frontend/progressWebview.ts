@@ -7,11 +7,12 @@
  * view-title menus can differ between the New-task state and a
  * conversation.
  */
+import { hostBridge } from '@shared/hostBridge';
 import { resolveSelected } from '@shared/session/surface';
+import { createWebviewStorage } from '@shared/state/PersistedState';
 import { createTicker } from '@utils/core';
 
 import { createSessionSurfaces } from './sessionSurfaces';
-import { webviewStorage } from './webviewStorage';
 import type { ProgressApp } from './ProgressApp';
 
 export function mountProgressWebview(app: ProgressApp): void {
@@ -20,7 +21,7 @@ export function mountProgressWebview(app: ProgressApp): void {
     throw new Error('<progress-app> is missing its data-session key');
   }
   const sessions = createSessionSurfaces({
-    storage: webviewStorage,
+    storage: createWebviewStorage(hostBridge),
     hostRequestFailureOwner: 'surface',
   });
   // Every message the extension posts to this window is a session message;
