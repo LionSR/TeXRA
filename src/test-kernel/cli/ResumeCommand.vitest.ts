@@ -9,8 +9,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { flowKey, PersistedFlowStateError } from '@agent/node/persistedFlow';
-import { getRunRecords, getRunStore } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/RunKVStore';
 import {
   acquireFreshRunLease,
   releaseOwnedRunLease,
@@ -18,8 +17,9 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -95,15 +95,30 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.Workflow,
 });
 
-/** Reset and seed the real (fake-platform-backed) run store. */
+/** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
+const OPENING_SNAPSHOT: FlowSnapshotPayload = {
+  family: 'toolUse',
+  runtime: {
+    phase: 'initial',
+    round: 0,
+    turn: 0,
+    continuationIndex: 0,
+    modelId: 'gpt54',
+    modelHandlerCompatibilityKey: null,
+    lastError: null,
+    pendingRetry: null,
+  },
+  references: { pendingIntents: [], pendingResponse: null },
+  state: { shouldSkipCycle: false, stateSlices: null },
+};
+
+/** Seed the real (fake-platform-backed) run records and run aggregate. */
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
 }): Promise<void> {
   const session = createProcessSession();
   mocks.initializeCliTranscriptSession.mockResolvedValue(session);
-  const store = getRunStore(RUN_ID);
-  await store.delete(flowKey(RUN_ID));
   await Effect.runPromise(
     session.commit([
       {
@@ -122,10 +137,16 @@ async function seedRunRecord(seed: {
       getRunRecords(session, RUN_ID).writeRunRecord(seed.config),
     );
   if (seed.checkpoint !== false) {
-    await store.write(flowKey(RUN_ID), {
-      shared: {},
-      cursor: { nextNodeId: 'start' },
-    });
+    await Effect.runPromise(session.ledger.acquire(RUN_ID));
+    await Effect.runPromise(
+      session.ledger.appendBatch(RUN_ID, null, [
+        {
+          type: 'flow.snapshot',
+          aggregateId: aggregateId('run', RUN_ID),
+          payload: OPENING_SNAPSHOT,
+        },
+      ]),
+    );
   }
 }
 
@@ -363,19 +384,18 @@ describe('runResumeCommand', () => {
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
-  // The checkpoint this seeds is readable, so the empty retrieval is the two
-  // readers disagreeing, not a finished run. The lease-aware classification
-  // decides that first and still sees a checkpoint; a history listing
-  // advertises a row from that file alone, so what the user is told is that
-  // the saved state could not be loaded, never that the run finished.
-  it('separates an unusable checkpoint from a run that finished', async () => {
+  // One reader now: the classification and the resume both read the run's
+  // latest snapshot. The guarantee that survives the collapse is the negative
+  // one — a run whose aggregate still carries a snapshot is never reported to
+  // its user as finished.
+  it('never reports a run that still has a snapshot as finished', async () => {
     await seedRunRecord({ config: WORKFLOW_CONFIG });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('This run has finished'),
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
@@ -394,13 +414,17 @@ describe('runResumeCommand', () => {
     );
   });
 
-  // The positive cohort: retrieval named the record itself, which is what a
-  // listing advertised from the file alone, so it earns the unusable-state
-  // refusal instead of an internal retrieval message.
-  it('refuses a checkpoint whose record cannot be resumed as unusable state', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.retrieveSessionResumeData.mockRejectedValue(
-      new PersistedFlowStateError(RUN_ID, 'unsupported-record'),
+  // The positive cohort: the launch folded the run's rows and the ledger
+  // refused them, so the user is told the saved state cannot be continued
+  // instead of being shown the launch's internal wording.
+  it('refuses an aggregate the ledger cannot fold as unusable state', async () => {
+    await stubWorkflowResume(WORKFLOW_CONFIG);
+    mocks.executeCliWorkflowConfig.mockRejectedValue(
+      new RunLedgerRefused({
+        reason: 'inconsistent',
+        runId: RUN_ID,
+        detail: 'unsupported-record',
+      }),
     );
 
     await expect(run(cliContext())).resolves.toBe(2);

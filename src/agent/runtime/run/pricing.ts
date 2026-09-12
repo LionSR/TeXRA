@@ -11,9 +11,33 @@ import type { BoundModel } from './modelBinding';
 
 type TurnUsage = NonNullable<TurnResult['usage']>;
 
+/** The per-million rates one turn bills at, and its cache-read rebate. */
+interface TurnRates {
+  readonly inputPrice: number;
+  readonly outputPrice: number;
+  readonly cacheDiscountFactor: number;
+}
+
 /** Prices are per million tokens. */
 const perMillion = (tokens: number, price: number): number =>
   (tokens * price) / 1e6;
+
+/**
+ * The rates for one turn. A plan route (ChatGPT/Codex, Grok, the GLM coding
+ * plan, Kimi Code) is covered by the subscription, so every rate is zero and
+ * the run records tokens without spend; an API-key route bills the registry's
+ * rates for the bound model.
+ */
+function turnRates(bound: BoundModel, plan: boolean): TurnRates {
+  const { config } = bound;
+  return plan
+    ? { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 }
+    : {
+        inputPrice: config.inputPrice,
+        outputPrice: config.outputPrice,
+        cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
+      };
+}
 
 /**
  * Anthropic bills cache reads and writes as separate token classes on top
@@ -23,9 +47,9 @@ const perMillion = (tokens: number, price: number): number =>
 function anthropicCost(
   usage: TurnUsage,
   provider: Extract<TurnUsage['providerUsage'], { kind: 'anthropic' }>,
-  inputPrice: number,
-  outputPrice: number,
+  rates: TurnRates,
 ): number {
+  const { inputPrice, outputPrice } = rates;
   const uncached = provider.uncachedInputTokens ?? usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
   const write5m =
@@ -51,11 +75,10 @@ function anthropicCost(
  */
 function standardCost(
   usage: TurnUsage,
-  bound: BoundModel,
+  rates: TurnRates,
   reasoningBilledSeparately: boolean,
 ): number {
-  const { inputPrice, outputPrice } = bound.config;
-  const { cacheDiscountFactor } = bound.config.capabilities;
+  const { inputPrice, outputPrice, cacheDiscountFactor } = rates;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
   const reasoning = reasoningBilledSeparately
@@ -71,8 +94,10 @@ function standardCost(
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.
- * An OpenRouter receipt carries its own settled cost, which wins over a
- * price computed from the registry's per-provider rates.
+ * A credit-backed OpenRouter receipt carries its own settled cost, which wins
+ * over a price computed from the registry's per-provider rates. A plan route
+ * bills neither: the subscription already paid for the call, and a receipt the
+ * provider settled bills an API key that this turn did not use.
  */
 export function priceTurnUsage(
   bound: BoundModel,
@@ -85,37 +110,40 @@ export function priceTurnUsage(
   const outputTokens = usage.outputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? undefined;
   const reasoning = usage.reasoningTokens ?? undefined;
+  const plan = bound.usageRoute !== 'api-key';
+  const rates = turnRates(bound, plan);
   let cost: number;
   let cacheCreationTokens: number | undefined;
   let toolUsePromptTokens: number | undefined;
   switch (provider?.kind) {
     case 'anthropic':
-      cost = anthropicCost(
-        usage,
-        provider,
-        bound.config.inputPrice,
-        bound.config.outputPrice,
-      );
+      cost = anthropicCost(usage, provider, rates);
       cacheCreationTokens = provider.cacheCreationTokens ?? undefined;
       break;
     case 'openrouter':
-      cost = provider.cost ?? standardCost(usage, bound, false);
+      // BYOK splits billing across accounts, so the settled figure is not
+      // what this key paid: keep the full-inference estimate. A credit-backed
+      // request bills the reported cost, including a reported zero.
+      cost =
+        !plan && provider.isByok !== true && provider.cost != null
+          ? provider.cost
+          : standardCost(usage, rates, false);
       cacheCreationTokens =
         provider.inputDetails?.cacheWriteTokens ?? undefined;
       break;
     case 'google':
-      cost = standardCost(usage, bound, false);
+      cost = standardCost(usage, rates, false);
       toolUsePromptTokens = provider.toolUsePromptTokens ?? undefined;
       break;
     case 'xai':
       cost =
-        provider.costInUsdTicks !== null
+        !plan && provider.costInUsdTicks !== null
           ? provider.costInUsdTicks / 1e10
-          : standardCost(usage, bound, true);
+          : standardCost(usage, rates, true);
       break;
     case 'minimax':
     case undefined:
-      cost = standardCost(usage, bound, bound.usageProvider === 'openai');
+      cost = standardCost(usage, rates, bound.usageProvider === 'openai');
       break;
   }
   return {

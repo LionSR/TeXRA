@@ -70,12 +70,7 @@ import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
-import {
-  computeOpenAIResponsePrice,
-  normalizeOpenAIResponseUsage,
-} from './openAIUsage';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
-import { uploadAndRecordToolAttachments } from '../utils/toolAttachmentUtils';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import {
@@ -99,12 +94,7 @@ import {
   hasResponseOutputText,
   isMessageItem,
 } from './openAIResponseContent';
-import {
-  buildInlineAttachmentParts,
-  uploadInlineInputFiles,
-  uploadToolAttachments,
-  type UploadedOpenAIResponseAttachment,
-} from './openAIResponseFileUploads';
+import { uploadInlineInputFiles } from './openAIResponseFileUploads';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
 
@@ -294,11 +284,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
 > {
   protected getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
     return null;
-  }
-
-  /** Capabilities captured for post-response pricing and usage attribution. */
-  protected getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
-    return this.getActiveProviderCapabilities();
   }
 
   private getOpenAIResponseCapabilities():
@@ -799,38 +784,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       };
       messages.push(requestMessage);
     }
-
-    return messages;
-  }
-
-  /** Adds user message content for subsequent rounds. */
-  async createRoundMessages(
-    messages: ResponseInputItem[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<ResponseInputItem[]> {
-    const roundContent: ResponseInputMessageContentList = [];
-
-    if (
-      mediaFiles?.length &&
-      (this.capabilities.supportsVision ||
-        this.capabilities.supportsNativeAudio)
-    ) {
-      const formattedMediaContent = await this.createMediaForRound(
-        mediaFiles,
-        'followUp',
-      );
-      roundContent.push(...formattedMediaContent);
-    }
-
-    roundContent.push(createInputText(userMessage));
-
-    const roundUserMessage: ResponseInputItem.Message = {
-      type: 'message',
-      role: 'user',
-      content: roundContent,
-    };
-    messages.push(roundUserMessage);
 
     return messages;
   }
@@ -1742,8 +1695,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * Non-streaming path. Errors propagate to PocketFlow's execFallback which
-   * logs once (log-at-boundary principle). Polls for completion when the
+   * Non-streaming path. Errors propagate to the caller, which logs once
+   * (log-at-boundary principle). Polls for completion when the
    * response is pending — expected under background mode, and a handled edge
    * case under server-side `previous_response_id` latency.
    */
@@ -1952,38 +1905,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       : (this.config.provider as NormalizedUsage['provider']);
   }
 
-  /** Normalizes OpenAI Responses API usage data into a unified format. */
-  normalizeUsage(
-    rawUsage: ResponseUsage,
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    const providerCapabilities = this.getUsageProviderCapabilities();
-    const pricing = providerCapabilities
-      ? {
-          inputPrice: providerCapabilities.inputPrice,
-          outputPrice: providerCapabilities.outputPrice,
-          cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-        }
-      : this.standardPricingConfig();
-    const usage = normalizeOpenAIResponseUsage(
-      rawUsage,
-      responseTimeMs,
-      this.usageProvider,
-      (responseUsage) => computeOpenAIResponsePrice(responseUsage, pricing),
-    );
-    const usageRoute = providerCapabilities?.usageRoute;
-    return usageRoute == null ? usage : { ...usage, usageRoute };
-  }
-
-  protected appendUserText(messages: ResponseInputItem[], text: string): void {
-    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    messages.push({
-      type: 'message',
-      role,
-      content: [createInputText(text)],
-    });
-  }
-
   protected appendTextToLastAssistantMessage(
     messages: ResponseInputItem[],
     text: string,
@@ -2080,252 +2001,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): OpenAIResponseToolCall[] {
-    const items = response?.output;
-    if (!Array.isArray(items)) return [];
-
-    const calls = items.filter(isResponseFunctionToolCallItem);
-    return calls.map((call) => ({
-      provider: 'openai-response',
-      callId: call.call_id,
-      name: call.name,
-      input: parseToolInput(call.arguments, call.call_id, this.logger),
-      raw: call,
-    }));
-  }
-
-  /**
-   * Extract all server tool data in a single pass.
-   * Returns both normalized results for display and raw content blocks for context.
-   * Single source of truth for OpenAI Responses API server tool extraction.
-   *
-   * Note: We include reasoning items ONLY when they immediately precede a
-   * web_search_call item. This satisfies two API requirements:
-   * - "web_search_call was provided without its required 'reasoning' item"
-   * - "reasoning was provided without its required following item"
-   *
-   * Reasoning items followed by function_call are NOT included here because
-   * function_call items are handled separately by the tool use flow.
-   */
-  override extractServerToolData(
-    response: Response,
-  ): ServerToolExtractionResult {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
-    }
-
-    // The two store modes preserve reasoning differently (see each helper);
-    // both keep output order so a reasoning item stays immediately before its
-    // following item when the blocks are replayed.
-    const contentBlocks = this.storesResponsesServerSide
-      ? collectWebSearchPairedBlocks(output)
-      : collectStatelessContentBlocks(output);
-
-    // Extract normalized web search results for display
-    const webSearchResults = extractOpenAIWebSearchResults(output);
-
-    return { webSearchResults, webFetchResults: [], contentBlocks };
-  }
-
-  /**
-   * The Responses surface never batches parallel tool results
-   * (`requiresBatchedParallelToolResults` stays false), so a multi-call turn is
-   * exactly the per-call items concatenated, with the assistant text carried on
-   * the first entry only.
-   */
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: OpenAIResponseToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    workspaceState: AgentWorkspaceState | undefined,
-    text: string | undefined,
-    client: OpenAI | undefined,
-  ): Promise<ResponseInputItem[]> {
-    const messages: ResponseInputItem[] = [];
-    for (const [index, { call, result, attachments }] of entries.entries()) {
-      messages.push(
-        ...(await this.buildSingleToolUseFollowUp(
-          client,
-          call,
-          result,
-          attachments,
-          workspaceState,
-          index === 0 ? text : undefined,
-        )),
-      );
-    }
-    return messages;
-  }
-
-  private async buildSingleToolUseFollowUp(
-    client: OpenAI | undefined,
-    call: OpenAIResponseToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ResponseInputItem[]> {
-    const messages: ResponseInputItem[] = [];
-
-    // When using previous_response_id (response chaining), the previous response's
-    // output items (reasoning, web_search_call, function_call) are already in
-    // OpenAI's server-side history. We should only send NEW items (function_call_output).
-    // Including them again causes "Duplicate item found" errors.
-    const isResponseChaining =
-      this.supportsResponseChaining && this.chainState.hasAnchor();
-
-    if (text && !isResponseChaining) {
-      // Only include assistant text when not chaining (it's in previous response)
-      messages.push(this.createAssistantMessage(text));
-    }
-
-    // Include server tool content blocks (reasoning, web_search_call) from workspace state.
-    // These need to be preserved when both server and local tools are in the same response.
-    // Reasoning items must be included when web_search_call references them.
-    // SKIP when response chaining - these items are already in previous_response_id context.
-    // Always clear after processing to prevent accumulation across cycles.
-    if (workspaceState?.serverToolContent.contentBlocks.length) {
-      if (!isResponseChaining) {
-        const openaiBlocks: ResponseInputItem[] =
-          workspaceState.serverToolContent.contentBlocks.filter(
-            isOpenAIServerToolContent,
-          );
-        messages.push(...openaiBlocks);
-      }
-      workspaceState.resetServerToolContent();
-    }
-
-    // Always include function_call in messages for persistence and resume.
-    // When response chaining is active, the model already has this via previous_response_id,
-    // but we still need it in our local array so resumed sessions have complete history.
-    // The slicing logic (sentMessages) handles avoiding re-sends during chaining.
-    const callMsg: ResponseFunctionToolCall = {
-      type: 'function_call',
-      call_id: call.callId,
-      name: call.name,
-      arguments: call.raw.arguments,
-    };
-
-    const canUploadFiles = this.supportsToolResultFileUpload;
-    const canUpload =
-      canUploadFiles && attachments.length > 0 && client !== undefined;
-
-    // This upload occurs while assembling the next turn, outside the model
-    // invocation gate. Restore the SDK's ordinary two retries for this
-    // auxiliary request; generation requests keep maxRetries: 0.
-    const { finalResult, uploadResult } = await uploadAndRecordToolAttachments(
-      result,
-      canUpload,
-      async () => ({
-        uploaded: await uploadToolAttachments(
-          client!.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
-          attachments,
-          {
-            openRouterRouting: this.isOpenRouterRoutingEnabled(),
-            logger: this.logger,
-          },
-        ),
-      }),
-    );
-    const uploadedAttachments: UploadedOpenAIResponseAttachment[] =
-      uploadResult?.uploaded ?? [];
-
-    if (
-      attachments.length > 0 &&
-      (!canUploadFiles || !client || uploadedAttachments.length === 0)
-    ) {
-      finalResult.attachmentSummary = formatAttachmentSummary(attachments);
-    }
-
-    // Build tool result as plain text - JSON wastes tokens
-    let combinedText = formatToolResultAsText(
-      result,
-      finalResult.attachmentSummary,
-    );
-
-    let outputPayload: string | ResponseFunctionCallOutputItemList;
-
-    if (uploadedAttachments.length > 0) {
-      const parts: ResponseFunctionCallOutputItemList = [
-        { type: 'input_text', text: combinedText },
-      ];
-
-      for (const uploaded of uploadedAttachments) {
-        if (this.canProcessToolResultAttachments && uploaded.isImage) {
-          parts.push({
-            type: 'input_image',
-            detail: 'auto',
-            file_id: uploaded.fileId,
-          });
-          continue;
-        }
-
-        parts.push({ type: 'input_file', file_id: uploaded.fileId });
-      }
-
-      outputPayload = parts;
-    } else if (attachments.length > 0 && this.canProcessToolResultAttachments) {
-      // Inline base64 fallback: when file uploads are unavailable (e.g. OpenRouter)
-      // but the model supports visual content, embed images/PDFs directly.
-      const {
-        parts: inlineParts,
-        inlined,
-        skipped,
-      } = await buildInlineAttachmentParts(attachments, this.logger);
-      if (inlineParts.length > 0) {
-        // Build summary that accurately reflects which attachments were inlined
-        // vs. skipped, so the model only gets a read_file hint for skipped ones.
-        const summaryParts: string[] = [];
-        if (inlined.length > 0) {
-          summaryParts.push(
-            formatAttachmentSummary(inlined, 'included-inline'),
-          );
-        }
-        if (skipped.length > 0) {
-          summaryParts.push(formatAttachmentSummary(skipped, 'metadata-only'));
-        }
-        const inlineSummary = summaryParts.join('\n');
-        finalResult.attachmentSummary = inlineSummary;
-        combinedText = formatToolResultAsText(result, inlineSummary);
-        outputPayload = [
-          { type: 'input_text', text: combinedText },
-          ...inlineParts,
-        ];
-      } else {
-        outputPayload = combinedText;
-      }
-    } else {
-      outputPayload = combinedText;
-    }
-
-    const resultMsg: ResponseInputItem.FunctionCallOutput = {
-      type: 'function_call_output',
-      call_id: call.callId,
-      output: outputPayload,
-    };
-
-    // Always push both function_call and function_call_output for complete history.
-    // The slicing logic (sentMessages) handles avoiding re-sends during response chaining.
-    messages.push(callMsg, resultMsg);
-    return messages;
-  }
-
-  async createUserFollowUpMessages(
-    messages: ResponseInputItem[],
-    userMessage: string,
-  ): Promise<ResponseInputItem[]> {
-    const followUpMessage: ResponseInputItem.Message = {
-      type: 'message',
-      role: 'user',
-      content: [createInputText(userMessage)],
-    };
-    messages.push(followUpMessage);
-    return messages;
-  }
-
   createAssistantMessage(text: string): EasyInputMessage {
     return {
       type: 'message',
@@ -2356,57 +2031,5 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       this.createAssistantMessage(`${existingText}${text}`),
     );
     return true;
-  }
-
-  // =========================================================================
-  // Message modification methods (for post-build enrichment)
-  // =========================================================================
-
-  /** Find the last user message in the conversation, if any. */
-  private findLastUserMessage(
-    messages: ResponseInputItem[],
-  ): EasyInputMessage | ResponseInputItem.Message | undefined {
-    return messages.findLast(
-      (m): m is EasyInputMessage | ResponseInputItem.Message =>
-        isMessageItem(m) && m.role === 'user',
-    );
-  }
-
-  /**
-   * Prepend text to the last user message in the conversation.
-   * Finds the last user message and prepends text to its content.
-   */
-  prependTextToUserMessage(messages: ResponseInputItem[], text: string): void {
-    if (!text.trim()) return;
-
-    const lastUserMsg = this.findLastUserMessage(messages);
-    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
-
-    const content = lastUserMsg.content;
-    const firstTextPart = content.find((part) => part.type === 'input_text');
-    if (firstTextPart?.type === 'input_text') {
-      firstTextPart.text = text + firstTextPart.text;
-    } else {
-      content.unshift(createInputText(text));
-    }
-  }
-
-  /**
-   * Add media files to the last user message in the conversation.
-   * Inserts media content parts at the beginning of the user message.
-   */
-  async addMediaToUserMessage(
-    messages: ResponseInputItem[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
-
-    const lastUserMsg = this.findLastUserMessage(messages);
-    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return [];
-
-    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return [];
-    lastUserMsg.content.unshift(...formattedMedia);
-    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

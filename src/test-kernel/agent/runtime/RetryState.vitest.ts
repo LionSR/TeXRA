@@ -1,124 +1,231 @@
+/**
+ * The invoker's two owners of retry, over the ledger.
+ *
+ * Owner A is automatic and route-scoped: `classifyModelFailure` decides
+ * whether an attempt repeats at all and what the session's recovery gate is
+ * told about the wire route. Owner B is a human and durable: an
+ * `approval.requested` row, a `pendingRetry` gate that walks
+ * `waiting` -> `authorized` -> `started`, and a decision that is a retry, a
+ * denial (failed, never cancelled — #7331) or a cancellation.
+ */
+
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect, Exit, Fiber, Layer, Stream, SynchronizedRef } from 'effect';
+import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
-import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  ModelInvocationNode,
-  handleInvocationResult,
-  type InvocationResult,
-  type InvocationSuccess,
-} from '@agent/core/flows/ModelInvocationNode';
-import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
+import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
 import {
-  SessionHostInteractions,
-  type HostRetryInteractionOptions,
-  type HostRetryRequest,
-  type RetryResult,
-} from '@agent/runtime/HostInteractions';
-import type { ModelCell } from '@agent/runtime/ModelCell';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
+  ModelInvoker,
+  modelInvokerLayer,
+  type InvokeRequest,
+} from '@agent/runtime/ModelInvoker';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
-import type {
-  ModelCredentialRoute,
-  ModelCredentialSelection,
-} from '@agent/types/ModelHandlerContracts';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import {
   attachContextWindowError,
   attachManualRetryOnlyError,
   attachSdkErrorMetadata,
 } from '@common/errors/sdkError/errorMetadata';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ResolvedModelConfig } from '@model/openRouterRouting';
+import {
+  ModelError,
+  ResolvedTurnSchema,
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnResult,
+} from '@llm/turn';
 import {
   AgentCategory,
-  MESSAGE_TYPES,
-  RUN_PHASE,
+  AgentRunStateSnapshotSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  RUN_PHASE,
+  type RunId,
 } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import { StreamLog } from '@shared/session/traceEntries';
-import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import {
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import type { RunState } from '@shared/session/runStateFold';
 import {
   clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { getDefaultToolRegistry } from '@tools/registry';
 import { isObject } from '@utils/core';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
-import {
-  createRecordingHost,
-  sessionWithInteractions,
-  testRunScope,
-} from '../progressTestUtils';
+import { sessionWithInteractions } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
+import { testModelInfo } from './launchContextTestUtils';
 
-/** Mirrors the RETRY_BACKOFF_MS constant in ModelInvocationNode.ts. */
-const RETRY_BACKOFF_SECONDS = 1;
+/** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
+const RETRY_BACKOFF_MS = 1000;
 
-/** The resolved provider attempt scenarios hand back from a stubbed call. */
-const ATTEMPT_SUCCESS: InvocationSuccess = {
-  kind: 'success',
-  response: 'recovered',
-};
+const ORIGIN = {
+  protocol: 'openai-chat',
+  codecVersion: 1,
+  requestedModel: 'gpt-test',
+  deployment: {
+    endpoint: 'https://api.example.test/v1',
+    credentialScope: 'openai',
+  },
+} satisfies ModelOrigin;
 
-/** A resolved attempt the invocation boundary rejects as empty. */
-const EMPTY_ATTEMPT: InvocationSuccess = { kind: 'success', response: '' };
+const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
+  ...ORIGIN,
+  mode: 'foreground',
+  messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+  tools: [],
+  controls: {
+    temperature: null,
+    maxOutputTokens: 1024,
+    parallelToolCalls: false,
+    toolChoice: 'auto',
+    effort: null,
+  },
+});
 
-/** The rebind seam the retry node drives, stubbed per scenario. */
-type TestRebind = (
-  selection?: ModelCredentialSelection,
-  signal?: AbortSignal,
-) => Promise<void>;
+const PROVIDER_RESPONSE_ID = 'resp-1';
 
-interface TestRetryServices {
-  config: { model: string; agentCategory: AgentCategory };
-  runScope: RunScope;
-  runId: RunId;
-  interactions: SessionHostInteractions;
-  logger: AgentTrace;
-  setting: { temperature: number };
-  modelCell: Pick<
-    ModelCell,
-    'getClient' | 'rebind' | 'route' | 'handler' | 'swap' | 'modelId'
-  >;
-  stores: ModelOptionStores;
+/** A completed turn with one assistant message and no tool calls. */
+function completedTurn(text: string): TurnResult {
+  return TurnResultSchema.parse({
+    kind: 'http',
+    providerResponseId: PROVIDER_RESPONSE_ID,
+    requestedOrigin: ORIGIN,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
+    finishReason: 'stop',
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cachedInputTokens: null,
+      reasoningTokens: null,
+    },
+  });
 }
 
-/** The client seam a retry node reads; scenarios stub the parts they drive. */
-function testRetryModelCell(
-  rebind: TestRebind = async () => undefined,
-  route?: ModelCredentialRoute,
-  handlerConfig: object = {},
-  // `createRetryNode`'s config model, so the cell and run config agree.
-  modelId = 'sonnet46',
-): TestRetryServices['modelCell'] {
-  // The handler stub only feeds the Kimi Code fallback probe, which reads
-  // `config` and finds no Kimi fields on it, so a swap never fires here.
+/** What one stubbed attempt does. */
+type AttemptOutcome =
+  | { readonly ok: TurnResult }
+  | { readonly fail: unknown }
+  /** The stream ends without a `completed` event. */
+  | { readonly silent: true };
+
+interface StubModel {
+  readonly model: Model;
+  /** Attempts the stub has served, in order. */
+  readonly attempts: () => number;
+}
+
+/**
+ * A `Model` that serves one outcome per attempt, repeating the last one. The
+ * invoker is the only caller, so this is the whole provider surface it drives.
+ */
+function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
+  let served = 0;
+  const next = (): AttemptOutcome => {
+    const outcome = outcomes[Math.min(served, outcomes.length - 1)];
+    served += 1;
+    if (outcome === undefined) throw new Error('No outcome to serve');
+    return outcome;
+  };
+  const model: Model = {
+    prepareTurn: () => Effect.succeed(PREPARED),
+    streamTurn: () =>
+      Stream.unwrap(
+        Effect.sync(() => {
+          const outcome = next();
+          if ('fail' in outcome) {
+            return Stream.fail(
+              new ModelError({
+                kind: 'transport',
+                message: 'attempt failed',
+                cause: outcome.fail,
+              }),
+            );
+          }
+          if ('silent' in outcome) return Stream.empty;
+          const events: TurnEvent[] = [
+            {
+              kind: 'identified',
+              providerResponseId: PROVIDER_RESPONSE_ID,
+              requestedOrigin: ORIGIN,
+              returnedModel: null,
+            },
+            { kind: 'completed', result: outcome.ok },
+          ];
+          return Stream.fromIterable(events);
+        }),
+      ),
+    generateTurn: () =>
+      Effect.die(new Error('The run loops stream; they never generate.')),
+  };
+  return { model, attempts: () => served };
+}
+
+function boundModel(
+  model: Model,
+  overrides: Partial<BoundModel> = {},
+): BoundModel {
   return {
-    getClient: async () => ({}),
-    rebind,
-    route,
-    modelId,
-    handler: {
-      config: handlerConfig,
-    } as TestRetryServices['modelCell']['handler'],
-    swap: () => {},
+    modelId: 'gpt54',
+    config: MODEL_CONFIGS.gpt54,
+    compatibilityKey: 'ModelHandlerOpenAI',
+    model,
+    origin: ORIGIN,
+    usageProvider: 'openai',
+    usageRoute: 'api-key',
+    contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
+    supportsVision: false,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: false,
+    supportsForcedToolChoice: true,
+    wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
+    modelRetryRouteKey: JSON.stringify([
+      'openai',
+      'api-key',
+      ORIGIN.requestedModel,
+      'gpt54',
+    ]),
+    routedOnKimiCode: false,
+    ...overrides,
   };
 }
+
+const REQUEST: InvokeRequest = {
+  system: undefined,
+  tools: [],
+  toolChoice: 'auto',
+  round: 0,
+  debugName: 'retry',
+};
 
 let retryRunCounter = 0;
 
@@ -127,208 +234,132 @@ function retryRunId(): RunId {
   return `ac${(retryRunCounter++).toString(16).padStart(4, '0')}` as RunId;
 }
 
-/** Every retry-node scenario's services; cases override what they drive. */
-function retryServices(
+const CONFIG = AgentConfigSchema.parse({
+  agent: 'assistant',
+  model: 'gpt54',
+  agentCategory: AgentCategory.ToolUse,
+});
+const SETTING = AgentSettingSchema.parse({
+  agentCategory: AgentCategory.ToolUse,
+});
+
+/** The run service the invoker reads: identity, session, trace, binding. */
+function agentRun(
   runId: RunId,
-  {
-    session,
-    signal,
-    ...overrides
-  }: Partial<TestRetryServices> & {
-    session?: SessionHandle;
-    signal?: AbortSignal;
-  } = {},
-): TestRetryServices {
+  session: SessionHandle,
+  logger: AgentTrace,
+  model: SynchronizedRef.SynchronizedRef<BoundModel>,
+): AgentRunShape {
   return {
-    config: { model: 'openai:test', agentCategory: AgentCategory.Workflow },
-    runScope: testRunScope(runId, { session, signal }),
     runId,
-    interactions: sessionWithInteractions(undefined).interactions,
-    logger: noopTrace,
-    setting: { temperature: 0 },
-    modelCell: testRetryModelCell(),
-    // The run's stores, as the launch threads them: read from the host
-    // installed right now, because scenarios reinstall it per test.
-    stores: {
-      secrets: installedHost().platform.secrets,
-      globalState: installedHost().platform.globalState,
-    },
-    ...overrides,
+    parentRunId: null,
+    session,
+    config: CONFIG,
+    setting: SETTING,
+    prompt: AgentPromptSchema.parse({}),
+    logger,
+    parentStage: logger.openStage('Run: assistant'),
+    // The launch stores a real run carries; no fixture reads through them.
+    stores: hostStores(),
+    toolPolicy: {},
+    userVarChannels: {},
+    initialUserMessageForTranscript: undefined,
+    fileService: new TaskRunFileService(runId),
+    tools: getDefaultToolRegistry(),
+    finalToolName: null,
+    structured: { value: undefined },
+    model,
+    pendingModelSwitch: { value: null },
+    inScope: (operation) => operation(),
+    usageMonitor: new UsageMonitor(
+      testModelCell(testModelInfo, 'gpt54'),
+      { logger, runId, runStageId: undefined },
+      { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
+    ),
+    callbacks: { onModelChanged: () => undefined },
+    interrupt: () => undefined,
   };
 }
 
+/** The opening state of a fresh tool-use run, as the loop authors it. */
+const freshState = (): RunState => ({
+  commit: 0,
+  snapshotCommit: null,
+  rowsBeforeSnapshot: 0,
+  family: 'toolUse',
+  step: null,
+  outcome: null,
+  phase: null,
+  round: 0,
+  turn: 0,
+  continuationIndex: 0,
+  modelId: 'gpt54',
+  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  lastError: null,
+  pendingRetry: null,
+  messages: [],
+  continuation: null,
+  openAttempt: null,
+  lastTurn: null,
+  pendingResponse: null,
+  pendingIntents: {},
+  approvals: {},
+  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  flow: null,
+});
+
+interface InvokerKit {
+  readonly runId: RunId;
+  /** The folded state of the freshly opened run. */
+  readonly state: RunState;
+  /** `ModelInvoker` over this run's ledger, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker>;
+}
+
 /**
- * The retry lifecycle under test never reaches a model handler, so the node's
- * config only supplies the operation name its prompts and diagnostics report.
+ * Open a run aggregate the way the tool-use loop does, and build the invoker
+ * that writes to it.
  */
-class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
-  constructor() {
-    super({
-      operationName: 'Model request',
-      streaming: false,
-      storeResponse: () => {},
-    });
-  }
-
-  promptFor(error: Error): Promise<unknown> {
-    return this.handleManualRetryPrompt(error);
-  }
-
-  runWithRetryLifecycle(
-    op: (signal: AbortSignal) => Promise<InvocationSuccess>,
-  ): Promise<InvocationSuccess> {
-    return this.invokeWithRetryLifecycle(op);
-  }
-
-  fallbackFor(error: Error): InvocationResult {
-    return this.getFallbackResult(error);
-  }
-}
-
-interface RetryNodeKit {
-  node: ExposedRetryNode;
-  session: SessionHandle;
-  runStatus: RunStatusMachine;
-  requestRetry: Mock<
-    (
-      request: HostRetryRequest,
-      options?: HostRetryInteractionOptions,
-    ) => Promise<RetryResult>
-  >;
-}
-
-function createRetryNode(
-  runId: RunId,
-  rebind: TestRebind = async () => undefined,
-  route?: ModelCredentialRoute,
-  // The node reads its session from `services.runScope`, so a test driving a
-  // real session's host interactions must hand that same session in here.
-  sessionOverride?: SessionHandle,
-  handlerConfig?: object,
-): RetryNodeKit {
-  const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
-  const session =
-    sessionOverride ??
-    sessionWithInteractions({ requestRetry, cancel: () => {} });
-  const runStatus = session.status;
-  const node = new ExposedRetryNode().setServices(
-    retryServices(runId, {
-      config: { model: 'sonnet46', agentCategory: AgentCategory.ToolUse },
-      session,
-      modelCell: testRetryModelCell(rebind, route, handlerConfig),
-    }) as never,
-  );
-  return { node, session, runStatus, requestRetry };
-}
-
-async function withRetryRunContext<T>(
-  runId: RunId,
+const openRun = Effect.fn('openRun')(function* (
   session: SessionHandle,
-  fn: () => T | Promise<T>,
-): Promise<T> {
-  const context = createRunContext({
-    runScope: createRunScope({
-      runId,
-      session,
-      signal: new AbortController().signal,
-    }),
-  });
-  return await withRunContext(context, fn);
-}
-
-function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
-  return new ModelInvocationNode<BaseCycleFields>({
-    operationName: 'Model call',
-    streaming: false,
-    storeResponse: vi.fn(),
-  }).setServices({
-    modelCell: testModelCell({
-      isBackgroundModeActive: () => false,
-    }),
-    logger: noopTrace,
-  } as never);
-}
-
-interface CapturedModelRetry {
-  readonly wireRoute: string;
-  readonly modelRetryRoute: string;
-  readonly classifyFailure: (
-    error: Error,
-  ) => { retryAfterMs?: number } | undefined;
-  readonly classifyModelFailure: (
-    error: Error,
-  ) => { retryAfterMs?: number } | undefined;
-  readonly gateCalls: number;
-}
-
-async function captureModelRetry(
-  endpoint = 'https://api.example/v1',
-  credentialRoute: ModelCredentialRoute = 'api-key',
-  model = 'openai:test',
-  clientCredentialIdentity = 'credential-a',
-): Promise<CapturedModelRetry> {
+  model: Model,
+  overrides: Partial<BoundModel> = {},
+  logger: AgentTrace = noopTrace,
+): Effect.fn.Return<
+  InvokerKit,
+  RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
+> {
   const runId = retryRunId();
-  const session = createTestSession();
-  const run = vi.spyOn(session.modelRetries, 'run');
-  const client = {};
-  const node = new ModelInvocationNode<BaseCycleFields>({
-    operationName: 'Model call',
-    streaming: false,
-    storeResponse: vi.fn(),
-  }).setServices({
-    modelCell: testModelCell({
-      config: { provider: 'openai', fullName: model },
-      createResponse: async () => ({ response: 'ok' }),
-      // Mirrors ModelHandler.getWireRouteKey; the node treats it as opaque.
-      getWireRouteKey: () =>
-        JSON.stringify([
-          'openai',
-          credentialRoute,
-          endpoint,
-          clientCredentialIdentity,
-        ]),
-      getModelRetryRouteKey: () =>
-        JSON.stringify([
-          'openai',
-          credentialRoute,
-          endpoint,
-          clientCredentialIdentity,
-          model,
-        ]),
-      isBackgroundModeActive: () => false,
-      setOutputStreaming: () => {},
-      getClient: async () => client,
-      getCredentialRouteForClient: () => credentialRoute,
+  publishTestRunStart(session, runId);
+  yield* Effect.promise(() => session.settlePublications());
+  yield* session.ledger.acquire(runId);
+  const state = yield* session.ledger.appendBatch(runId, null, [
+    appendRow(runId, [
+      { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+    ]),
+    snapshotRow(runId, freshState(), {
+      phase: 'initial',
+      state: { shouldSkipCycle: false, stateSlices: null },
     }),
-    logger: noopTrace,
-    setting: { temperature: 0 },
-    config: { model: 'openai:test' },
-    runScope: testRunScope(runId, { session }),
-  } as never);
+  ]);
+  const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
+  const layer = modelInvokerLayer.pipe(
+    Layer.provide([
+      Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+      Layer.succeed(RunLedger, session.ledger),
+    ]),
+  );
+  return { runId, state, layer };
+});
 
-  try {
-    await withRetryRunContext(runId, session, () =>
-      node.exec({ shouldStop: false, messages: [] }),
-    );
-    // The gate acquires narrowest-first: the model route, then the wire route.
-    const [routes] = run.mock.calls[0]!;
-    const [modelRoute, wire] = routes;
-    if (!modelRoute || !wire) {
-      throw new Error('Expected the model-specific and wire retry routes');
-    }
-    return {
-      wireRoute: wire.key,
-      modelRetryRoute: modelRoute.key,
-      classifyFailure: wire.classifyFailure,
-      classifyModelFailure: modelRoute.classifyFailure,
-      gateCalls: run.mock.calls.length,
-    };
-  } finally {
-    session.dispose();
-  }
-}
+/** One invocation on an opened run. */
+const invokeOn = ({ layer, state }: InvokerKit) =>
+  Effect.gen(function* () {
+    const invoker = yield* ModelInvoker;
+    return yield* invoker.invoke(state, REQUEST);
+  }).pipe(Effect.provide(layer));
 
-/** An Error carrying the HTTP status/body shape the retry classifiers read. */
+/** An Error carrying the HTTP status/body shape the classifiers read. */
 function httpError(
   message: string,
   status: number,
@@ -344,6 +375,28 @@ function statuslessServerError(message: string): OpenAIAPIError {
   tagOpenAISdkError(error, 'openai');
   return error;
 }
+
+/**
+ * The two recovery projections `gatedAttempt` hands the session gate: the
+ * wire route cools on shared-route evidence, the model route only on a limit
+ * the provider scoped to one model.
+ */
+const wireRouteRecovery = (
+  error: Error,
+): { retryAfterMs: number | undefined } | undefined => {
+  const { verdict } = classifyModelFailure(error);
+  return verdict.wireRouteFailure
+    ? { retryAfterMs: verdict.retryAfterMs }
+    : undefined;
+};
+const modelRouteRecovery = (
+  error: Error,
+): { retryAfterMs: number | undefined } | undefined => {
+  const { verdict } = classifyModelFailure(error);
+  return verdict.rateLimitScope === 'model'
+    ? { retryAfterMs: verdict.retryAfterMs }
+    : undefined;
+};
 
 /** Collects the modelRetryLifecycle domain events a TraceEmitter sees. */
 function collectRetryLifecycleEvents(
@@ -362,342 +415,14 @@ function collectRetryLifecycleEvents(
   return events;
 }
 
-describe('ModelInvocationNode retry', () => {
-  afterEach(async () => {
-    vi.unstubAllEnvs();
-    SupabaseClient.resetForTests();
-    await installPlatform();
-  });
-
-  it('records a failed invocation without logging bookkeeping', () => {
-    const state: BaseCycleFields = {
-      messages: [],
-      shouldStop: false,
-      endTurn: true,
-    };
-
-    const result = handleInvocationResult(
-      {
-        kind: 'failed',
-        message: 'HTTP 503 Service Unavailable',
-        userRetryable: true,
-      },
-      state,
-      { logger: noopTrace, operationName: 'Model request' },
-    );
-
-    expect(result).toBeNull();
-    expect(state.lastError).toEqual({
-      message: 'HTTP 503 Service Unavailable',
-      userRetryable: true,
-    });
-  });
-
-  it('logs an empty model response at the invocation boundary', () => {
-    const state: BaseCycleFields = {
-      messages: [],
-      shouldStop: false,
-      endTurn: true,
-    };
-    const error = vi.fn();
-    const logger = { ...noopTrace, error } as AgentTrace;
-
-    const result = handleInvocationResult(
-      { kind: 'success', response: undefined },
-      state,
-      { logger, operationName: 'Model request' },
-    );
-
-    expect(result).toBeNull();
-    expect(state.lastError?.message).toContain('Model response was empty');
-    expect(error).toHaveBeenCalledOnce();
-    expect(error).toHaveBeenCalledWith(
-      'Model request failed',
-      expect.objectContaining({
-        data: expect.objectContaining({
-          message: expect.stringContaining('Model response was empty'),
-        }),
-      }),
-    );
-  });
-
-  // Node.maxRetries counts the initial attempt plus auto-retries, so the
-  // resolved value is 1 + the configured (or default) attempt count.
-  it.each([
-    {
-      name: 'settings are unset',
-      stored: undefined,
-      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-    },
-    {
-      name: 'the stored count is the canonical maximum',
-      stored: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-    },
-    {
-      name: 'the stored count exceeds the canonical maximum',
-      stored: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max + 1,
-      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-    },
-  ])(
-    'resolves the canonical retry count and delay when $name',
-    async ({ stored, expectedAttempts }) => {
-      if (stored !== undefined) {
-        await installPlatform({
-          config: { 'texra.model.retry.maxAttempts': stored },
-        });
-      }
-
-      const node = new ExposedRetryNode();
-
-      expect(node.maxRetries).toBe(1 + expectedAttempts);
-      expect(node.wait).toBe(RETRY_BACKOFF_SECONDS);
-    },
-  );
-
-  it('records cumulative attempt and manual-decision diagnostics', async () => {
-    await installPlatform({
-      config: { 'texra.model.retry.maxAttempts': 0 },
-    });
-    const runId = retryRunId();
-    const logger = new TraceEmitter();
-    const transcript = new StreamLog();
-
-    const recorder = attachTestTranscriptFold(logger, runId, transcript);
-    const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
-    const session = sessionWithInteractions({
-      requestRetry,
-      cancel: () => {},
-    });
-
-    class DiagnosticRetryNode extends ExposedRetryNode {
-      attempts = 0;
-
-      override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRetryLifecycle(async () => {
-          this.attempts += 1;
-          if (this.attempts === 1) {
-            throw new Error('temporary provider failure');
-          }
-          return ATTEMPT_SUCCESS;
-        });
-      }
-    }
-
-    const node = new DiagnosticRetryNode().setServices(
-      retryServices(runId, {
-        session,
-        logger,
-        modelCell: testRetryModelCell(undefined, 'api-key'),
-      }) as never,
-    );
-
-    try {
-      seedRunStatusForTest(session.status, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
-
-      const rows = transcript.getRange(0);
-      const diagnostics = rows
-        .map((row) => row.data)
-        .filter(
-          (data): data is Record<string, unknown> =>
-            isObject(data) && data.kind === 'model_retry_lifecycle',
-        );
-      expect(
-        diagnostics.map((data) => ({
-          event: data.event,
-          attemptOrdinal: data.attemptOrdinal,
-          decisionSource: data.decisionSource,
-        })),
-      ).toEqual([
-        {
-          event: 'attempt_started',
-          attemptOrdinal: 1,
-          decisionSource: 'automatic',
-        },
-        {
-          event: 'attempt_failed',
-          attemptOrdinal: 1,
-          decisionSource: 'automatic',
-        },
-        {
-          event: 'retry_decision_requested',
-          attemptOrdinal: 1,
-          decisionSource: undefined,
-        },
-        {
-          event: 'retry_decided',
-          attemptOrdinal: 1,
-          decisionSource: 'human',
-        },
-        {
-          event: 'attempt_started',
-          attemptOrdinal: 2,
-          decisionSource: 'human',
-        },
-        {
-          event: 'attempt_succeeded',
-          attemptOrdinal: 2,
-          decisionSource: 'human',
-        },
-      ]);
-      expect(diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            runId,
-            automaticAttemptLimit: 1,
-            credentialRoute: 'api-key',
-          }),
-          expect.objectContaining({
-            event: 'retry_decision_requested',
-            afterAttemptSource: 'automatic',
-          }),
-        ]),
-      );
-      expect(
-        rows
-          .filter(
-            (row) =>
-              isObject(row.data) && row.data.kind === 'model_retry_lifecycle',
-          )
-          .every(
-            (row) =>
-              row.verbose === false &&
-              row.messageType === MESSAGE_TYPES.INTERNAL,
-          ),
-      ).toBe(true);
-      expect(new Set(diagnostics.map((data) => data.operationId)).size).toBe(1);
-      expect(
-        diagnostics
-          .map((data) => data.elapsedMs as number)
-          .every((elapsed, index, values) =>
-            index === 0
-              ? elapsed >= 0
-              : elapsed >= (values.at(index - 1) ?? elapsed),
-          ),
-      ).toBe(true);
-    } finally {
-      recorder.unsubscribe();
-      clearRunStatusForTest(session.status, runId);
-    }
-  });
-
-  it('counts client preparation failures and preserves automatic retry provenance', async () => {
-    await installPlatform({
-      config: { 'texra.model.retry.maxAttempts': 0 },
-    });
-    const runId = retryRunId();
-    const logger = new TraceEmitter();
-    const events = collectRetryLifecycleEvents(logger);
-    const getClient = vi
-      .fn<() => Promise<unknown>>()
-      .mockRejectedValueOnce(new Error('client preparation failed'))
-      .mockResolvedValue({});
-    const session = sessionWithInteractions({
-      requestRetry: async () => ({
-        action: 'retry' as const,
-        decisionSource: 'automatic' as const,
-      }),
-      cancel: () => {},
-    });
-
-    class ClientPreparationRetryNode extends ExposedRetryNode {
-      override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRetryLifecycle(async () => ATTEMPT_SUCCESS);
-      }
-    }
-
-    const node = new ClientPreparationRetryNode().setServices(
-      retryServices(runId, {
-        session,
-        logger,
-        modelCell: {
-          ...testRetryModelCell(undefined, 'api-key'),
-          getClient,
-        },
-      }) as never,
-    );
-
-    try {
-      seedRunStatusForTest(session.status, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
-
-      expect(
-        events.map((event) => [event.event, event.attemptOrdinal]),
-      ).toEqual([
-        ['attempt_started', 1],
-        ['attempt_failed', 1],
-        ['retry_decision_requested', 1],
-        ['retry_decided', 1],
-        ['attempt_started', 2],
-        ['attempt_succeeded', 2],
-      ]);
-      expect(
-        events.find((event) => event.event === 'retry_decided'),
-      ).toMatchObject({ decisionSource: 'automatic' });
-      expect(
-        events.find(
-          (event) =>
-            event.event === 'attempt_started' && event.attemptOrdinal === 2,
-        ),
-      ).toMatchObject({ decisionSource: 'automatic' });
-      expect(getClient).toHaveBeenCalledTimes(2);
-    } finally {
-      clearRunStatusForTest(session.status, runId);
-    }
-  });
-
-  it('records a resolved result rejected by the invocation boundary as failed', async () => {
-    const runId = retryRunId();
-    const logger = new TraceEmitter();
-    const events = collectRetryLifecycleEvents(logger);
-    const session = createTestSession();
-
-    class InvalidResultNode extends ExposedRetryNode {
-      override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRetryLifecycle(async () => EMPTY_ATTEMPT);
-      }
-    }
-
-    const node = new InvalidResultNode().setServices(
-      retryServices(runId, {
-        session,
-        logger,
-        modelCell: testRetryModelCell(undefined, 'api-key'),
-      }) as never,
-    );
-
-    try {
-      await expect(node._exec(undefined)).resolves.toBe(EMPTY_ATTEMPT);
-      expect(events.map((event) => event.event)).toEqual([
-        'attempt_started',
-        'attempt_failed',
-      ]);
-      expect(events.at(-1)).toMatchObject({
-        attemptOrdinal: 1,
-        failureKind: 'invalid_result',
-      });
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('treats user aborts as cancellations instead of failed invocations', () => {
-    const { node } = createRetryNode(retryRunId());
+describe('model failure classification', () => {
+  it('treats a user abort as a cancellation, never an automatic retry', () => {
     const abort = new DOMException('Request aborted', 'AbortError');
 
-    expect(node.shouldAutoRetry(abort)).toBe(false);
-    expect(node.fallbackFor(abort)).toEqual({ kind: 'cancelled' });
+    expect(classifyModelFailure(abort).autoRetryable).toBe(false);
   });
 
-  it('does not claim an unprompted retryable fallback was already logged', () => {
-    const { node } = createRetryNode(retryRunId());
+  it('reports a retryable provider failure with its formatted message', () => {
     const error = new OpenAIAPIError(
       503,
       { message: 'transient provider failure' },
@@ -706,261 +431,109 @@ describe('ModelInvocationNode retry', () => {
     );
     tagOpenAISdkError(error, 'openai');
 
-    expect(node.fallbackFor(error)).toMatchObject({
-      kind: 'failed',
+    expect(classifyModelFailure(error).formatted).toMatchObject({
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
       userRetryable: true,
     });
   });
 
-  it('auto-retries a status-less OpenAI server_error response', () => {
-    const node = new ExposedRetryNode();
-    const error = statuslessServerError(
-      'An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID 988f71d8-3453-46f1-a466-529d2a967244 in your message.',
-    );
-
-    expect(node.shouldAutoRetry(error)).toBe(true);
-  });
-
-  it('does not automatically repeat a manual-retry-only failure', () => {
-    const node = new ExposedRetryNode();
-    const error = Object.assign(new Error('retry explicitly'), {
-      provider: 'openai',
-    });
-    attachManualRetryOnlyError(error);
-
-    expect(node.shouldAutoRetry(error)).toBe(false);
-  });
-
-  it('delays an unclassified retryable failure before the next attempt', async () => {
-    class StatuslessServerErrorNode extends ExposedRetryNode {
-      attempts = 0;
-
-      override async exec(): Promise<InvocationSuccess> {
-        this.attempts += 1;
-        if (this.attempts > 1) return ATTEMPT_SUCCESS;
-
-        throw statuslessServerError('temporary provider failure');
-      }
-    }
-
-    vi.useFakeTimers();
-    try {
-      const node = new StatuslessServerErrorNode().setServices(
-        retryServices(retryRunId()) as never,
-      );
-      const retry = node._exec(undefined);
-      const delayMs = RETRY_BACKOFF_SECONDS * 1000;
-
-      await vi.advanceTimersByTimeAsync(delayMs - 1);
-      expect(node.attempts).toBe(1);
-
-      await vi.advanceTimersByTimeAsync(1);
-      await expect(retry).resolves.toBe(ATTEMPT_SUCCESS);
-      expect(node.attempts).toBe(2);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('keeps interruption active throughout the automatic retry delay', async () => {
-    class InterruptibleBackoffNode extends ExposedRetryNode {
-      attempts = 0;
-
-      override async exec(): Promise<never> {
-        this.attempts += 1;
-        throw httpError('temporary provider failure', 503);
-      }
-
-      override async execFallback(
-        _prepRes: unknown,
-        error: Error,
-      ): Promise<InvocationResult> {
-        return this.fallbackFor(error);
-      }
-    }
-
-    vi.useFakeTimers();
-    try {
-      // The run owns one controller for the whole run; interrupting it
-      // mid-backoff must abandon the pending retry instead of waking up to
-      // another attempt.
-      const runController = new AbortController();
-      const node = new InterruptibleBackoffNode().setServices(
-        retryServices(retryRunId(), {
-          signal: runController.signal,
-        }) as never,
-      );
-      const retry = node._exec(undefined);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(node.attempts).toBe(1);
-
-      runController.abort(new DOMException('Run interrupted', 'AbortError'));
-      await expect(retry).resolves.toEqual({ kind: 'cancelled' });
-      expect(node.attempts).toBe(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('auto-retries an HTTP conflict after provider SDK retries are disabled', () => {
-    const node = new ExposedRetryNode();
-
-    expect(
-      node.shouldAutoRetry(httpError('request lock is still held', 409)),
-    ).toBe(true);
-  });
-
-  it('does not prompt for a manual retry after cancellation', async () => {
-    const runId = retryRunId();
-    const { node, requestRetry } = createRetryNode(runId);
-
-    await expect(
-      node.retryPrompt(
-        undefined,
-        new DOMException('Model retry gate disposed', 'AbortError'),
-      ),
-    ).resolves.toBe(false);
-    expect(requestRetry).not.toHaveBeenCalled();
-  });
-
-  it('keeps node-level auto-retry for transient stream failures', () => {
-    const node = createModelInvocationNode();
-    const streamError = new Error('stream closed after response started');
-
-    expect(node.shouldAutoRetry(streamError)).toBe(true);
-  });
-
-  it('does not issue a model request when the run is interrupted after prep', async () => {
-    const runId = retryRunId();
-    const session = createTestSession();
-    const controller = new AbortController();
-    const createResponse = vi.fn(async () => ({ response: 'too late' }));
-    const node = new ModelInvocationNode<BaseCycleFields>({
-      operationName: 'Model call',
-      streaming: false,
-      storeResponse: vi.fn(),
-    }).setServices({
-      modelCell: testModelCell({
-        createResponse,
-        getClient: async () => ({}),
-        isBackgroundModeActive: () => false,
-        setOutputStreaming: () => {},
+  it.each([
+    {
+      name: 'a status-less OpenAI server_error response',
+      error: statuslessServerError('temporary provider failure'),
+      autoRetryable: true,
+    },
+    {
+      name: 'a manual-retry-only failure',
+      error: (() => {
+        const error = Object.assign(new Error('retry explicitly'), {
+          provider: 'openai',
+        });
+        attachManualRetryOnlyError(error);
+        return error;
+      })(),
+      autoRetryable: false,
+    },
+    {
+      name: 'an HTTP conflict after provider SDK retries are disabled',
+      error: httpError('request lock is still held', 409),
+      autoRetryable: true,
+    },
+    {
+      name: 'a transient stream failure',
+      error: new Error('stream closed after response started'),
+      autoRetryable: true,
+    },
+    {
+      name: 'a raw undici fetch failure',
+      error: new TypeError('fetch failed', {
+        cause: Object.assign(
+          new Error('HTTP/2: "stream timeout after 300000"'),
+          { code: 'UND_ERR_INFO', name: 'InformationalError' },
+        ),
       }),
-      logger: noopTrace,
-      setting: { temperature: 0 },
-      config: { model: 'openai:test' },
-      runScope: testRunScope(runId, {
-        session,
-        signal: controller.signal,
+      autoRetryable: true,
+    },
+    {
+      name: 'a wrapped provider fetch failure',
+      error: new Error('Connection error', {
+        cause: new TypeError('fetch failed'),
       }),
-    } as never);
-    try {
-      const prep = await node.prep({
-        shouldStop: false,
-        messages: [],
-        endTurn: false,
-      });
-
-      controller.abort();
-      const result = await node._exec(prep);
-
-      expect(result).toEqual({ kind: 'cancelled' });
-      expect(createResponse).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
+      autoRetryable: true,
+    },
+    {
+      // Regression for the retry storm where a context-window overflow that
+      // slipped past compaction recovery was flattened into a plain,
+      // code-free Error by the transport before classification ran, so it
+      // looked transient and got auto-retried with the same oversized payload
+      // forever.
+      name: 'a context-window overflow',
+      error: (() => {
+        const overflow = new Error(
+          'OpenAI WebSocket response failed: overflow',
+        );
+        attachContextWindowError(overflow);
+        return overflow;
+      })(),
+      autoRetryable: false,
+    },
+  ])('classifies $name', ({ error, autoRetryable }) => {
+    expect(classifyModelFailure(error).autoRetryable).toBe(autoRetryable);
   });
 
-  it('keeps flow-level auto-retry for a raw undici fetch failure', () => {
-    const node = createModelInvocationNode();
-    const transportError = Object.assign(
-      new Error('HTTP/2: "stream timeout after 300000"'),
-      { code: 'UND_ERR_INFO', name: 'InformationalError' },
-    );
-    const fetchError = new TypeError('fetch failed', {
-      cause: transportError,
-    });
+  // The package's own refusals are deterministic: repeating them bills again
+  // for the same answer.
+  it.each(['invalid-request', 'unsupported', 'authentication'] as const)(
+    'never auto-retries a %s refusal from the package',
+    (kind) => {
+      const error = new ModelError({ kind, message: 'refused' });
 
-    expect(node.shouldAutoRetry(fetchError)).toBe(true);
-  });
+      expect(classifyModelFailure(error).autoRetryable).toBe(false);
+    },
+  );
+});
 
-  it('owns retrying a wrapped provider fetch failure', () => {
-    const node = createModelInvocationNode();
-    const fetchError = new TypeError('fetch failed');
-    const sdkError = new Error('Connection error', { cause: fetchError });
-
-    expect(node.shouldAutoRetry(sdkError)).toBe(true);
-  });
-
-  it('uses one recovery gate for a credential and endpoint', async () => {
-    const first = await captureModelRetry(
-      'https://first.example/v1',
-      'chatgpt-subscription',
-    );
-    const second = await captureModelRetry(
-      'https://second.example/v1',
-      'chatgpt-subscription',
-    );
-
-    expect(first.wireRoute).toBe(
-      JSON.stringify([
-        'openai',
-        'chatgpt-subscription',
-        'https://first.example/v1',
-        'credential-a',
-      ]),
-    );
-    expect(first.gateCalls).toBe(1);
-    expect(second.wireRoute).not.toBe(first.wireRoute);
-  });
-
-  it('coordinates unscoped rate-limit recovery on one wire route', async () => {
-    const first = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-    );
-    const second = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-b',
-    );
+describe('recovery-route verdicts', () => {
+  it('cools the wire route on an unscoped rate limit, not the model route', () => {
     const rateLimit = httpError('rate limited', 429, {
       headers: { 'retry-after': '3' },
     });
 
-    expect(first.wireRoute).toBe(second.wireRoute);
-    expect(first.modelRetryRoute).not.toBe(second.modelRetryRoute);
-    expect(first.classifyFailure(rateLimit)).toEqual({
-      retryAfterMs: 3_000,
-    });
-    expect(first.classifyModelFailure(rateLimit)).toBeUndefined();
+    expect(wireRouteRecovery(rateLimit)).toEqual({ retryAfterMs: 3_000 });
+    expect(modelRouteRecovery(rateLimit)).toBeUndefined();
   });
 
-  it('coordinates explicitly model-scoped rate limits per model', async () => {
-    const first = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-    );
+  it('cools only the model route on an explicitly model-scoped limit', () => {
     const rateLimit = httpError('model rate limited', 429, {
       headers: { 'retry-after': '3' },
       error: { type: 'rate_limit_error', scope: 'model' },
     });
 
-    expect(first.classifyFailure(rateLimit)).toBeUndefined();
-    expect(first.classifyModelFailure(rateLimit)).toEqual({
-      retryAfterMs: 3_000,
-    });
+    expect(wireRouteRecovery(rateLimit)).toBeUndefined();
+    expect(modelRouteRecovery(rateLimit)).toEqual({ retryAfterMs: 3_000 });
   });
 
-  it('coordinates credential exhaustion across models on one wire route', async () => {
-    const first = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-    );
+  it('cools the wire route on credential exhaustion across models', () => {
     const exhausted = httpError('quota exhausted', 429, {
       headers: { 'retry-after': '3' },
       error: {
@@ -970,34 +543,8 @@ describe('ModelInvocationNode retry', () => {
       },
     });
 
-    expect(first.classifyFailure(exhausted)).toEqual({
-      retryAfterMs: 3_000,
-    });
-    expect(first.classifyModelFailure(exhausted)).toBeUndefined();
-  });
-
-  it('isolates rate-limit recovery by stable credential identity', async () => {
-    const first = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-      'credential-a',
-    );
-    const sameCredential = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-      'credential-a',
-    );
-    const replacement = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-      'openai:model-a',
-      'credential-b',
-    );
-
-    expect(sameCredential.wireRoute).toBe(first.wireRoute);
-    expect(replacement.wireRoute).not.toBe(first.wireRoute);
+    expect(wireRouteRecovery(exhausted)).toEqual({ retryAfterMs: 3_000 });
+    expect(modelRouteRecovery(exhausted)).toBeUndefined();
   });
 
   it.each([
@@ -1014,7 +561,7 @@ describe('ModelInvocationNode retry', () => {
       expected: { retryAfterMs: undefined },
     },
     {
-      name: 'recognizes handler-tagged connection closures as route failures',
+      name: 'recognizes tagged connection closures as route failures',
       error: (() => {
         const closure = new Error(
           'WebSocket closed unexpectedly (code: 1006, reason: idle timeout)',
@@ -1037,12 +584,12 @@ describe('ModelInvocationNode retry', () => {
       expected: { retryAfterMs: 7_000 },
     },
     {
-      name: 'coordinates a structured status-less server failure from the OpenAI SDK',
+      name: 'coordinates a structured status-less server failure from the SDK',
       error: statuslessServerError('temporary provider failure'),
       expected: { retryAfterMs: undefined },
     },
     {
-      name: 'coordinates a structured status-less server failure from a background response',
+      name: 'coordinates a status-less server failure from a background response',
       error: Object.assign(new Error('background response failed'), {
         provider: 'openai',
         error: {
@@ -1062,7 +609,7 @@ describe('ModelInvocationNode retry', () => {
       expected: undefined,
     },
     {
-      name: 'keeps per-response flow retries local to their invocation',
+      name: 'keeps per-response retries local to their invocation',
       error: new Error('stream ended before the final response event'),
       expected: undefined,
     },
@@ -1071,353 +618,293 @@ describe('ModelInvocationNode retry', () => {
       error: httpError('busy', 503, { headers: { 'retry-after': '12' } }),
       expected: { retryAfterMs: 12_000 },
     },
-  ])('$name', async ({ error, expected }) => {
-    const { classifyFailure } = await captureModelRetry();
+    {
+      name: 'does not gate unrelated calls after a 401 on the api-key route',
+      error: httpError('credential rejected', 401),
+      expected: undefined,
+    },
+    {
+      name: 'does not share model-specific permission failures across calls',
+      error: httpError('model access denied', 403),
+      expected: undefined,
+    },
+    {
+      name: 'retries HTTP conflicts locally without cooling the shared route',
+      error: httpError('conflict', 409),
+      expected: undefined,
+    },
+  ])('$name', ({ error, expected }) => {
+    expect(wireRouteRecovery(error)).toEqual(expected);
+  });
+});
 
-    expect(classifyFailure(error)).toEqual(expected);
+describe('ModelInvoker retry', () => {
+  afterEach(async () => {
+    await installPlatform();
   });
 
-  it('does not gate unrelated calls after a 401 on the api-key route', async () => {
-    const { classifyFailure } = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-    );
-    const unauthorized = httpError('credential rejected', 401);
+  // The backoff is a real delay, so these three scenarios run on the live
+  // clock: the gate's own waiting is Promise-tier and a test clock cannot
+  // move it.
+  it.live('repeats an automatic attempt and returns the response', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions(undefined);
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+        { ok: completedTurn('recovered') },
+      ]);
 
-    expect(classifyFailure(unauthorized)).toBeUndefined();
-  });
+      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
 
-  it('does not share model-specific permission failures across calls', async () => {
-    const { classifyFailure } = await captureModelRetry(
-      'https://api.example/v1',
-      'api-key',
-    );
-
-    expect(
-      classifyFailure(httpError('model access denied', 403)),
-    ).toBeUndefined();
-  });
-
-  it('retries HTTP conflicts locally without cooling the shared route', async () => {
-    const { classifyFailure } = await captureModelRetry();
-    const error = httpError('conflict', 409);
-
-    expect(createModelInvocationNode().shouldAutoRetry(error)).toBe(true);
-    expect(classifyFailure(error)).toBeUndefined();
-  });
-
-  it('never auto-retries a context-window overflow', () => {
-    // Regression for the retry storm where a context-window overflow that
-    // slipped past provider-specific compaction recovery (e.g. no
-    // previous_response_id to chain from) was flattened into a plain,
-    // code-free Error by the WebSocket transport before classification ran,
-    // so it looked identical to a genuinely transient failure and got
-    // auto-retried with the exact same oversized payload forever. The base
-    // shouldAutoRetry gate must refuse a context-window error unconditionally.
-    const node = createModelInvocationNode();
-    const overflow = new Error('OpenAI WebSocket response failed: overflow');
-    attachContextWindowError(overflow);
-
-    expect(node.shouldAutoRetry(overflow)).toBe(false);
-  });
-
-  it('updates the run session status during manual retry', async () => {
-    const runId = retryRunId();
-    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
-
-    requestRetry.mockResolvedValueOnce({ action: 'retry' });
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await withRetryRunContext(runId, session, () =>
-        node.promptFor(new Error('temporary provider failure')),
-      );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-      expect(requestRetry).toHaveBeenCalledWith(
-        expect.objectContaining({
-          runId,
-          operation: 'Model request',
-          model: 'sonnet46',
-        }),
-        // Every run carries a model cell, so the host is always offered the
-        // credential-selecting retry preparation.
-        expect.objectContaining({ prepareRetry: expect.any(Function) }),
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('marks a Kimi Code-routed failed handler on the retry request', async () => {
-    const runId = retryRunId();
-    const { node, session, runStatus, requestRetry } = createRetryNode(
-      runId,
-      undefined,
-      undefined,
-      undefined,
-      {
-        provider: 'moonshot',
-        kimiSubscription: true,
-        baseUrl: KIMI_CODE_BASE_URL,
-      },
-    );
-    requestRetry.mockResolvedValueOnce({ action: 'retry' });
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await withRetryRunContext(runId, session, () =>
-        node.promptFor(new Error('temporary provider failure')),
-      );
-
-      expect(requestRetry).toHaveBeenCalledWith(
-        expect.objectContaining({ kimiCodeRoutedOnFailure: true }),
-        expect.anything(),
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('marks a non-Kimi-Code kimi3 failed handler as not routed', async () => {
-    const runId = retryRunId();
-    const { node, session, runStatus, requestRetry } = createRetryNode(
-      runId,
-      undefined,
-      undefined,
-      undefined,
-      { provider: 'moonshot', kimiSubscription: true },
-    );
-    requestRetry.mockResolvedValueOnce({ action: 'retry' });
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await withRetryRunContext(runId, session, () =>
-        node.promptFor(new Error('temporary provider failure')),
-      );
-
-      expect(requestRetry).toHaveBeenCalledWith(
-        expect.objectContaining({ kimiCodeRoutedOnFailure: false }),
-        expect.anything(),
-      );
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('resolves manual retries through the session host interactions', async () => {
-    const runId = retryRunId();
-    const session = createTestSession();
-    const recording = createRecordingHost();
-    session.interactions.use(recording.interactions);
-    const { node } = createRetryNode(runId, undefined, undefined, session);
-    const runStatus = session.status;
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      const prompt = withRetryRunContext(runId, session, () =>
-        node.promptFor(new Error('temporary provider failure')),
-      );
-
-      expect(
-        recording.decisions.submitRetry(runId, {
-          action: 'retry',
-          feedback: 'try again',
-        }),
-      ).toBe(true);
-
-      await expect(prompt).resolves.toMatchObject({
-        shouldRetry: true,
-        userCancelled: false,
-      });
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-    } finally {
+      expect(outcome.kind).toBe('response');
+      expect(stub.attempts()).toBe(2);
       session.dispose();
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
+    }),
+  );
 
-  it('stops the stream after manual retry cancellation', async () => {
-    const runId = retryRunId();
-    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
-
-    requestRetry.mockResolvedValueOnce({ action: 'cancel' });
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      await withRetryRunContext(runId, session, () =>
-        node.promptFor(new Error('temporary provider failure')),
+  it.effect('reports a stream that produced no completed turn as failed', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
-    const runId = retryRunId();
-    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
-
-    requestRetry.mockResolvedValueOnce({
-      action: 'deny',
-      reason: 'Denied by TeXRA approval policy.',
-    });
-    const error = new Error('stream dropped before first token');
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
+      const session = sessionWithInteractions({
+        requestRetry: async () => ({ action: 'deny' as const }),
+        cancel: () => {},
       });
+      const stub = stubModel([{ silent: true }]);
 
-      const shouldRetry = await withRetryRunContext(runId, session, () =>
-        node.retryPrompt(undefined, error),
-      );
+      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
 
-      // A denial does not retry and — crucially — is NOT a user cancel, so the
-      // stream resumes to RUNNING to let the failure terminalize (a WAITING
-      // stream can't be written to a terminal outcome directly).
-      expect(shouldRetry).toBe(false);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
+      expect(outcome.kind).toBe('failed');
+      if (outcome.kind === 'failed') {
+        expect(outcome.error.message).toContain('Model response was empty');
+      }
+      session.dispose();
+    }),
+  );
 
-      // The fallback classifies this as `failed` (→ RUN_OUTCOME.FAILED),
-      // surfacing the underlying error — rather than `cancelled`, which would
-      // let a zero-output run report COMPLETED.
-      expect(node.fallbackFor(error)).toMatchObject({
-        kind: 'failed',
-        message: 'stream dropped before first token',
-      });
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  describe('Kimi Code fallback for personal retries', () => {
-    /** The synthesized config a dual-backend Kimi handler carries once
-     *  dispatch routes it onto the coding endpoint. */
-    function kimiCodeRoutedConfig(): ResolvedModelConfig {
-      return {
-        ...MODEL_CONFIGS.kimi3,
-        fullName: 'k3',
-        shortName: 'k3',
-        baseUrl: KIMI_CODE_BASE_URL,
-      } as ResolvedModelConfig;
-    }
-
-    function kimiFallbackNode(
-      runId: RunId,
-      model: string,
-      handler: ModelHandlerKimi,
-    ): {
-      node: ExposedRetryNode;
-      modelCell: ModelCell;
-      session: SessionHandle;
-      requestRetry: RetryNodeKit['requestRetry'];
-    } {
-      const modelCell = testModelCell(handler, model);
-      const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
-      // Loose-typed like the other scenarios: the mock drives the node's own
-      // 'personal' preparation and resolves a plain retry.
-      requestRetry.mockImplementationOnce(async (_request, options) => {
-        await options?.prepareRetry?.('personal');
-        return { action: 'retry' };
-      });
+  it.effect('treats a user abort as a cancellation without prompting', () =>
+    Effect.gen(function* () {
+      const requestRetry = vi.fn();
       const session = sessionWithInteractions({
         requestRetry,
         cancel: () => {},
       });
-      const node = new ExposedRetryNode().setServices(
-        retryServices(runId, {
-          config: { model, agentCategory: AgentCategory.ToolUse },
-          session,
-          modelCell,
-        }) as never,
+      const stub = stubModel([
+        { fail: new DOMException('Request aborted', 'AbortError') },
+      ]);
+
+      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
+
+      expect(outcome.kind).toBe('cancelled');
+      expect(requestRetry).not.toHaveBeenCalled();
+      session.dispose();
+    }),
+  );
+
+  it.live('abandons the pending retry when the run is interrupted', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions(undefined);
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+        { ok: completedTurn('too late') },
+      ]);
+
+      const kit = yield* openRun(session, stub.model);
+      const fiber = yield* Effect.forkChild(invokeOn(kit));
+      // The backoff is live, so an interrupt during it must abandon the retry
+      // instead of waking up to another billed attempt.
+      yield* Effect.sleep(RETRY_BACKOFF_MS / 2);
+      yield* Fiber.interrupt(fiber);
+
+      expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
+      expect(stub.attempts()).toBe(1);
+      session.dispose();
+    }),
+  );
+
+  it.effect('admits a manual retry through a durable approval', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      return { node, modelCell, session, requestRetry };
-    }
+      const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
+      const session = sessionWithInteractions({
+        requestRetry,
+        cancel: () => {},
+      });
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+        { ok: completedTurn('recovered') },
+      ]);
 
-    it('swaps a coding-routed dual-backend handler onto its Moonshot config', async () => {
-      await installPlatform();
-      const runId = retryRunId();
-      const retired = new ModelHandlerKimi(kimiCodeRoutedConfig());
-      const retiredDispose = vi.spyOn(retired, 'dispose');
-      const { node, modelCell, session } = kimiFallbackNode(
-        runId,
-        'kimi3',
-        retired,
+      const kit = yield* openRun(session, stub.model);
+      const { runId } = kit;
+      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      const outcome = yield* invokeOn(kit);
+
+      expect(outcome.kind).toBe('response');
+      expect(stub.attempts()).toBe(2);
+      expect(requestRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId,
+          operation: 'Model request',
+          model: 'gpt54',
+          kimiCodeRoutedOnFailure: false,
+        }),
+        // Every run carries a binding, so the host is always offered the
+        // credential-selecting retry preparation.
+        expect.objectContaining({ prepareRetry: expect.any(Function) }),
       );
-
-      try {
-        seedRunStatusForTest(session.status, runId, {
-          phase: RUN_PHASE.RUNNING,
-        });
-
-        await expect(
-          withRetryRunContext(runId, session, () =>
-            node.retryPrompt(undefined, new Error('kimi code quota')),
-          ),
-        ).resolves.toBe(true);
-
-        // A rebind alone would have rebuilt the client against the pinned
-        // coding endpoint with the same exhausted credential; the swap gives
-        // the retry the registry (Moonshot) config instead.
-        expect(modelCell.handler).not.toBe(retired);
-        expect(modelCell.handler).toBeInstanceOf(ModelHandlerKimi);
-        expect(modelCell.handler.config.fullName).toBe('kimi-k3');
-        expect(modelCell.handler.config.baseUrl).toBeUndefined();
-        expect(modelCell.modelId).toBe('kimi3');
-        expect(retiredDispose).toHaveBeenCalledOnce();
-      } finally {
-        clearRunStatusForTest(session.status, runId);
+      // The permit is retired by the response it admitted: a resumed run
+      // cannot spend it a second time.
+      if (outcome.kind === 'response') {
+        expect(outcome.state.pendingRetry).toBeNull();
       }
-    });
+      expect(session.status.get(runId)).toBe(RUN_PHASE.RUNNING);
+      clearRunStatusForTest(session.status, runId);
+      session.dispose();
+    }),
+  );
 
-    it('rebinds instead of swapping for a Kimi Code-exclusive model', async () => {
-      await installPlatform();
-      const runId = retryRunId();
-      const exclusive = new ModelHandlerKimi(
-        MODEL_CONFIGS.kimiCoding as ResolvedModelConfig,
+  // A denial does not retry and — crucially — is NOT a user cancel, so the
+  // run resumes to RUNNING to let the failure terminalize (#7331); a
+  // cancelled zero-output run would report COMPLETED.
+  it.effect('classifies a policy retry denial as failed, not cancelled', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const { node, modelCell, session } = kimiFallbackNode(
-        runId,
-        'kimiCoding',
-        exclusive,
-      );
-      const rebind = vi.spyOn(modelCell, 'rebind').mockResolvedValue(undefined);
+      const session = sessionWithInteractions({
+        requestRetry: async () => ({
+          action: 'deny' as const,
+          reason: 'Denied by TeXRA approval policy.',
+        }),
+        cancel: () => {},
+      });
+      const stub = stubModel([
+        { fail: new Error('stream dropped before first token') },
+      ]);
 
-      try {
-        seedRunStatusForTest(session.status, runId, {
-          phase: RUN_PHASE.RUNNING,
-        });
+      const kit = yield* openRun(session, stub.model);
+      const { runId } = kit;
+      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      const outcome = yield* invokeOn(kit);
 
-        await expect(
-          withRetryRunContext(runId, session, () =>
-            node.retryPrompt(undefined, new Error('kimi code quota')),
-          ),
-        ).resolves.toBe(true);
-
-        // kimi-for-coding has no Moonshot fallback to rebuild onto, so the
-        // cell keeps its handler and only refreshes the client.
-        expect(rebind).toHaveBeenCalledWith('personal', undefined);
-        expect(modelCell.handler).toBe(exclusive);
-      } finally {
-        clearRunStatusForTest(session.status, runId);
+      expect(outcome.kind).toBe('failed');
+      if (outcome.kind === 'failed') {
+        expect(outcome.error.message).toContain(
+          'stream dropped before first token',
+        );
+        expect(outcome.state.pendingRetry).toBeNull();
       }
-    });
-  });
+      expect(session.status.get(runId)).toBe(RUN_PHASE.RUNNING);
+      expect(stub.attempts()).toBe(1);
+      clearRunStatusForTest(session.status, runId);
+      session.dispose();
+    }),
+  );
+
+  it.effect('cancels the run when the user declines the retry', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+      );
+      const session = sessionWithInteractions({
+        requestRetry: async () => ({ action: 'cancel' as const }),
+        cancel: () => {},
+      });
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+      ]);
+
+      const kit = yield* openRun(session, stub.model);
+      const { runId } = kit;
+      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      const outcome = yield* invokeOn(kit);
+
+      expect(outcome.kind).toBe('cancelled');
+      expect(session.status.get(runId)).toBe(RUN_PHASE.CANCELLED);
+      expect(stub.attempts()).toBe(1);
+      clearRunStatusForTest(session.status, runId);
+      session.dispose();
+    }),
+  );
+
+  it.effect('records one operation of attempt and decision diagnostics', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+      );
+      const logger = new TraceEmitter();
+      const events = collectRetryLifecycleEvents(logger);
+      const session = sessionWithInteractions({
+        requestRetry: async () => ({ action: 'retry' as const }),
+        cancel: () => {},
+      });
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+        { ok: completedTurn('recovered') },
+      ]);
+
+      const kit = yield* openRun(session, stub.model, {}, logger);
+      const { runId } = kit;
+      seedRunStatusForTest(session.status, runId, { phase: RUN_PHASE.RUNNING });
+      yield* invokeOn(kit);
+
+      expect(events.map((event) => [event.event, event.attempt])).toEqual([
+        ['attempt_started', 1],
+        ['attempt_failed', 1],
+        ['retry_decision_requested', undefined],
+        ['retry_decided', undefined],
+        ['attempt_started', 2],
+        ['attempt_succeeded', 2],
+      ]);
+      expect(
+        events.find((event) => event.event === 'retry_decided'),
+      ).toMatchObject({ decisionSource: 'human' });
+      expect(new Set(events.map((event) => event.operationId)).size).toBe(1);
+      expect(
+        events.every(
+          (event) => event.runId === runId && event.model === 'gpt54',
+        ),
+      ).toBe(true);
+      clearRunStatusForTest(session.status, runId);
+      session.dispose();
+    }),
+  );
+
+  // The setting bounds the automatic batch; the human gate opens only once it
+  // is spent.
+  it.live('stops automatic attempts at the configured limit', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({
+          config: {
+            'texra.model.retry.maxAttempts':
+              MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+          },
+        }),
+      );
+      const requestRetry = vi.fn(async () => ({ action: 'deny' as const }));
+      const session = sessionWithInteractions({
+        requestRetry,
+        cancel: () => {},
+      });
+      const stub = stubModel([{ fail: httpError('busy', 503) }]);
+
+      const kit = yield* openRun(session, stub.model);
+      seedRunStatusForTest(session.status, kit.runId, {
+        phase: RUN_PHASE.RUNNING,
+      });
+      yield* invokeOn(kit);
+      clearRunStatusForTest(session.status, kit.runId);
+
+      expect(stub.attempts()).toBe(
+        1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+      );
+      expect(requestRetry).toHaveBeenCalledOnce();
+      session.dispose();
+    }),
+  );
 });

@@ -101,7 +101,7 @@ export function analyzeDocumentSources(
 /**
  * Sanitizes a filename for Anthropic's Files API.
  */
-export function sanitizeAnthropicFilename(filename: string): string {
+function sanitizeAnthropicFilename(filename: string): string {
   const baseName = basename(filename) || filename;
   return sanitizePathSegment(baseName.trim(), {
     // eslint-disable-next-line no-control-regex -- control chars are forbidden in filenames
@@ -124,7 +124,7 @@ interface ReplaceDocumentUploadsResult {
  * costs the token estimate / budget check. The warning is surfaced so the
  * degraded estimate is attributable.
  */
-export async function countPdfPagesWithDegrade(
+async function countPdfPagesWithDegrade(
   buffer: Buffer,
   onCountFailure: (err: unknown) => void,
 ): Promise<number> {
@@ -138,11 +138,9 @@ export async function countPdfPagesWithDegrade(
 
 /**
  * Uploads a buffer as a file to the Anthropic Files API, returning the file
- * id. Shared by the message-document replacement and tool-attachment upload
- * pipelines so the upload call (beta header included) lives in exactly one
- * place instead of drifting across two copies.
+ * id, with the beta header the endpoint requires.
  */
-export async function uploadFileToFilesApi(
+async function uploadFileToFilesApi(
   client: Anthropic,
   buffer: Buffer,
   filename: string,

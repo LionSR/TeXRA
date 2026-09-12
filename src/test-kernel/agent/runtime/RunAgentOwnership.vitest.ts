@@ -300,7 +300,6 @@ describe('runAgent run ownership', () => {
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       runId: EXECUTION_ID,
       outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
     });
   });
 
@@ -327,7 +326,6 @@ describe('runAgent run ownership', () => {
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       runId: EXECUTION_ID,
       outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
     });
     expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });

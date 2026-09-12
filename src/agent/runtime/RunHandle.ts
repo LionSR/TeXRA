@@ -73,9 +73,9 @@ type RunSuspension =
  * ToolUseFlowContext}, so a shape change to either surface fails type-checking
  * instead of silently diverging: the nested `modelHandler` view is a `Pick` of
  * the flow context's own type, and the method members are picked through
- * directly. `runToolUseFlow`'s context is deliberately richer (it owns
- * the live `ToolUseSessionLifecycle` and the full `RunModelHandler`); the
- * handle keeps only what a consumer of an attached run needs.
+ * directly. The loop's context is deliberately richer (it owns the run's
+ * `FollowUps` lease and the bound model); the handle keeps only what a
+ * consumer of an attached run needs.
  *
  * {@link RunHandle.interrupt} falls back to this context's
  * `interrupt()` when no explicit {@link RunInterruptHandler} is
@@ -270,7 +270,7 @@ export class RunHandle<
    * Park this handle at WAITING, carrying the teardown a stop must run.
    *
    * The live tool-use session and interrupt context are already gone by the
-   * time a run suspends (`runToolUseFlow`'s `finally` detaches them on return)
+   * time a run suspends (the tool-use loop's scope detaches them on return)
    * while the handle stays tracked so a later resume can find it, so
    * `RunRegistry.terminate()` reaches a suspended run through
    * {@link beginSuspendedTermination} instead of a live interrupt (#7287).

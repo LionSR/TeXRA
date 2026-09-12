@@ -13,12 +13,11 @@ import {
 import { getRunStore } from '@agent/storage';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
-import {
-  createToolPolicy,
-  type AgentCore,
-  type ToolPolicy,
-} from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type {
+  AgentPrompt,
+  AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   createModelHandler,
@@ -61,7 +60,7 @@ import { isObject, linkAbortSignals } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
-import { createRunScope } from './RunScope';
+import { createRunScope, type RunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
@@ -72,13 +71,53 @@ import type {
 
 const logger = createLog('AgentLaunchContext');
 
-export interface AgentLaunchContext extends AgentCore {
+/**
+ * Immutable per-run tool policy, read from the run's `AgentRun` service.
+ *
+ * These are the launch-context tool-policy values that previously rode the
+ * ambient `RunContext` (`approvalPromptsUnavailable`, `runtimeUnavailableTools`,
+ * `stopAfterCycle`). A frozen value the loop takes from context runs without
+ * an `AsyncLocalStorage` frame — the property an SDK embedder wants.
+ */
+export interface ToolPolicy {
+  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  readonly approvalPromptsUnavailable?: boolean;
+  /** Hide tools unavailable because the current host/runtime cannot support them. */
+  readonly runtimeUnavailableTools?: readonly string[];
+  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
+  readonly stopAfterCycle?: boolean;
+}
+
+export interface AgentLaunchContext {
+  /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
+  readonly runScope: RunScope;
+  /**
+   * The run's live model handler and model id. Shared by reference with the
+   * run's `AgentRun` service, so a mid-run switch is visible here without a
+   * mirror.
+   */
+  readonly modelCell: ModelCell;
+  /** Immutable per-run tool policy; the loop reads it instead of the ambient RunContext. */
+  readonly toolPolicy: ToolPolicy;
+  /**
+   * The process secret store and global state the launch read from its
+   * `Secrets` / `AppState` services, so every Promise-tier read below the
+   * launch (routing, credentials, tool availability) uses the same stores.
+   */
+  readonly stores: ModelOptionStores;
+  config: AgentConfig;
+  setting: AgentSetting;
+  prompt: AgentPrompt;
+  logger: AgentTrace;
+  userVarChannels: UserVariableChannels;
+  /** Initial user row to log after the loop has inserted launch media. */
+  initialUserMessageForTranscript?: string;
   /** Description from the exact registry entry selected for this launch. */
   resolvedAgentDescription?: string;
   usageMonitor: UsageMonitor;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
-  /** Abort the sticky signal published on {@link AgentCore.runScope}. */
+  /** Abort the sticky signal published on {@link AgentLaunchContext.runScope}. */
   interrupt: () => void;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
@@ -557,7 +596,15 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       setting,
       prompt,
       modelCell,
-      toolPolicy: createToolPolicy(input.toolPolicy),
+      // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
+      // the nested tool-name array gets its own frozen copy rather than
+      // aliasing the caller's (still mutable) array.
+      toolPolicy: Object.freeze({
+        ...input.toolPolicy,
+        runtimeUnavailableTools: input.toolPolicy?.runtimeUnavailableTools
+          ? Object.freeze([...input.toolPolicy.runtimeUnavailableTools])
+          : undefined,
+      }),
       stores,
       logger: agentLogger,
       parentStage,

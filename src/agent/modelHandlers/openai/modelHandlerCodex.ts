@@ -209,10 +209,6 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.capabilitiesForRoute(this.activeCredentialRoute);
   }
 
-  protected override getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
-    return this.capabilitiesForRoute(this.getLastCredentialUsageRoute());
-  }
-
   private subscriptionCapabilities(): ProviderCapabilityProfile | null {
     return resolveCodexSubscriptionProfile({
       model: this.config,

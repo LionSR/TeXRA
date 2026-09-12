@@ -565,33 +565,6 @@ export abstract class ModelHandler<
       : undefined;
   }
 
-  /**
-   * Stable key for the wire route this client's requests share: provider,
-   * credential route, endpoint, and a non-secret credential identity. Owned
-   * here so the retry gate's key format has a single owner; the flow layer
-   * treats it as opaque.
-   */
-  getWireRouteKey(client: C): string {
-    const wireIdentity = isObject(client)
-      ? this.clientWireIdentities.get(client)
-      : undefined;
-    return JSON.stringify([
-      this.config.provider,
-      wireIdentity?.route ?? 'configured',
-      this.getRetryEndpoint(client),
-      wireIdentity?.credentialIdentity ?? 'unknown-credential',
-    ]);
-  }
-
-  /**
-   * Stable recovery key for limits that apply to one model on a wire route.
-   * Transport health deliberately stays on getWireRouteKey so an outage still
-   * coordinates every model sharing the credential and endpoint.
-   */
-  getModelRetryRouteKey(client: C): string {
-    return JSON.stringify([this.getWireRouteKey(client), this.config.fullName]);
-  }
-
   /** Route currently executing, excluding the last completed attempt. */
   protected get activeCredentialRoute(): ModelCredentialRoute | undefined {
     return this.activeAttemptCredentialRoute;
@@ -641,39 +614,6 @@ export abstract class ModelHandler<
     return this.getBaseUrl() ?? `${this.config.provider}:default`;
   }
 
-  // Provider-identity getters (isAnthropic/isOpenai/isGoogle/…) were removed
-  // (#7101): `config.provider` is already part of the `IModelHandler` port, so
-  // callers compare it against `ModelProvider` directly. The #7101 triage of
-  // every remaining predicate is complete: each carries its own note on why it
-  // stays (runtime combinator, or genuinely per-provider behavior), so there is
-  // nothing left to fold here.
-
-  /**
-   * Whether parallel tool calls in a single turn must be batched into one
-   * follow-up message to preserve provider-side reasoning / thought signatures.
-   * Override in handlers whose APIs require it (Google, DeepSeek, Kimi, MiniMax).
-   *
-   * Not foldable into a single llm-zoo capability read (#7101 triage):
-   * `capabilities.supportsReasoning`/`supportsInterleavedThinking` look like
-   * the natural backing flags, but neither lines up. `ReasoningModelHandlerOpenAI`
-   * (the shared base for DeepSeek/Kimi/MiniMax) overrides this to an
-   * unconditional `true` for every model in those families, including
-   * non-reasoning variants — llm-zoo reports `supportsReasoning: false` for
-   * `dsv3`, `kimi`, and `kimi2`, yet they still batch, because the requirement
-   * is a provider-wire-format fact (there's a reasoning channel to preserve
-   * across the whole family's API), not a per-model reasoning toggle.
-   * `ModelHandlerGLM` overrides it back to `false` even for its
-   * reasoning-capable variants (`glm45`, `glm52`). Grok reasoning models
-   * (`grok43`, `grok3-`) likewise stay at this `false` default through
-   * `ModelHandlerXAI`. Folding this into `supportsReasoning` would wrongly
-   * force batching on non-reasoning DeepSeek/Kimi/MiniMax variants and wrongly
-   * skip it for reasoning Grok models. Stays an overridable getter: genuinely
-   * per-provider behavior, not a foldable predicate.
-   */
-  get requiresBatchedParallelToolResults(): boolean {
-    return false;
-  }
-
   /**
    * Whether a user-set reasoning-level override applies to this handler.
    * True for the model's configurable-effort capability, or for DeepSeek
@@ -713,34 +653,6 @@ export abstract class ModelHandler<
 
   /** Whether this provider can force one named tool on a model request. */
   get supportsForcedToolChoice(): boolean {
-    return false;
-  }
-
-  /**
-   * Whether this handler needs the system prompt resupplied on every call via
-   * `createResponse({ systemPrompt })`, rather than embedded once into
-   * `messages` at session init. True for providers whose `system` parameter
-   * is per-call (Anthropic, Google); false for providers that embed system
-   * text into `messages[0]` in `initializeMessages` (OpenAI, OpenRouter),
-   * where resupplying it per-call would duplicate it alongside the persisted
-   * message.
-   *
-   * Not foldable into a `config.provider` comparison at the call site
-   * (#7101 triage): `ModelHandlerOpenRouterNative` extends this base class
-   * directly rather than `ModelHandlerAnthropic`/`*GoogleGenAI`, but
-   * `ModelFactory` constructs it with `{ ...config }` — an Anthropic- or
-   * Google-provider model routed through OpenRouter keeps
-   * `config.provider === ANTHROPIC/GOOGLE` while embedding the system
-   * prompt into `messages` like OpenAI, not resupplying it per-call. Only
-   * the polymorphic override (which OpenRouterNative doesn't inherit)
-   * distinguishes "this concrete handler resupplies per-call" from
-   * "the underlying model family happens to be Anthropic/Google" — a
-   * `config` field comparison can't reproduce that distinction, since
-   * whether a request routes through OpenRouterNative is decided by
-   * `ModelFactory` from the ambient `useOpenRouter` setting, not persisted
-   * on `config` itself.
-   */
-  get requiresPerCallSystemPrompt(): boolean {
     return false;
   }
 
@@ -885,8 +797,7 @@ export abstract class ModelHandler<
 
   /**
    * Single call-through for building a round's media content (#7465): every
-   * `initializeMessages` / `createRoundMessages` / `addMediaToUserMessage`
-   * override across providers calls this instead of wrapping
+   * provider's `initializeMessages` override calls this instead of wrapping
    * `createMediaMessage` in its own try/catch. The fail-vs-warn decision
    * lives in {@link reportMediaAttachmentFailure} alone, so every provider's
    * initial round fails the same way and every provider's follow-up/insert
@@ -1099,16 +1010,6 @@ export abstract class ModelHandler<
   ): Promise<M[]>;
 
   /**
-   * Creates messages for follow-up conversation rounds with optional images.
-   * @returns Provider-specific message array with new round content
-   */
-  abstract createRoundMessages(
-    messages: M[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<M[]>;
-
-  /**
    * Formats media entries into provider-specific content blocks for the base
    * {@link createMediaMessage} template. Providers that render media through
    * that template override this; providers that override `createMediaMessage`
@@ -1137,33 +1038,6 @@ export abstract class ModelHandler<
   ): ExtractResponseResult;
 
   /**
-   * Normalize raw provider usage before it leaves the model-handler layer.
-   * Core flow code receives only the provider-independent usage contract.
-   */
-  extractNormalizedResponse(
-    responseObject: Resp,
-    endTag: string,
-    responseTimeMs: number,
-    normalizeNullUsage = false,
-  ): ExtractNormalizedResponseResult {
-    const { text, usage, stopReason } = this.extractResponse(
-      responseObject,
-      endTag,
-    );
-    return {
-      text,
-      stopReason,
-      usage:
-        usage != null || normalizeNullUsage
-          ? this.normalizeUsage(usage as U, responseTimeMs)
-          : undefined,
-    };
-  }
-
-  /** Append a provider-shaped continuation prompt as a fresh message. */
-  protected abstract appendUserText(messages: M[], text: string): void;
-
-  /**
    * Append text to the existing assistant/model turn when the provider message
    * shape allows it. Returns false when the base template should create a fresh
    * assistant message instead.
@@ -1173,31 +1047,6 @@ export abstract class ModelHandler<
     text: string,
     options?: AssistantTextAppendOptions,
   ): boolean;
-
-  /**
-   * Manages continuation for truncated responses in multi-turn conversations.
-   * Models with prefill support don't need special handling (the default is a
-   * no-op there); models without it get a continuation prompt appended so the
-   * next turn resumes from where the response was cut off. Override the
-   * with-prefill branch in subclasses only if custom behavior is needed (e.g.
-   * providers without native assistant-prefill continuation).
-   */
-  addContinueMessage(messages: M[], workspaceState: AgentWorkspaceState): void {
-    if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Skipping continuation - assistant prefill is supported',
-      );
-      return;
-    }
-
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
-
-    this.logger.debug('Adding continuation message to conversation', {
-      data: { continuationMessage: continuationPrompt },
-    });
-    this.appendUserText(messages, continuationPrompt);
-  }
 
   /**
    * Configured client-side compaction threshold, as a percentage of the context
@@ -1411,65 +1260,6 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Sets up output file and resumes generation from any existing content.
-   * @returns Promise resolving to [isComplete: generation complete, messages: updated message array]
-   */
-  async initializeOutputAndPrefill(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    outputLocation: FileLocation,
-  ): Promise<[boolean, M[]]> {
-    if (!(await existsAndNonTrivial(outputLocation))) {
-      return [false, messages];
-    }
-
-    const raw = await AbsoluteFS.read(outputLocation.absolutePath);
-    const fileContent = this.postProcessResponse(raw);
-
-    const scratchpad = await extractScratchpad(fileContent, SCRATCHPAD_TAG);
-    if (scratchpad) this.logger.domain({ key: 'scratchpad', text: scratchpad });
-
-    await AbsoluteFS.write(outputLocation.absolutePath, fileContent);
-
-    // Updating workspace state is critical for multi-round agents on resume so
-    // subsequent rounds have the correct context.
-    workspaceState.assembly.accumulatedOutput = fileContent;
-    workspaceState.assembly.lastResponse = fileContent;
-
-    messages.push(this.createAssistantMessage(fileContent));
-
-    if (fileContent.includes(OUTPUT_END_TAG)) {
-      this.logger.debug(
-        'End tag detected - skipping model call (response already added above)',
-      );
-      return [true, messages];
-    }
-
-    this.logger.debug(
-      'Output file exists but no end tag found - continuing from file',
-    );
-
-    this.addContinueMessage(messages, workspaceState);
-
-    return [false, messages];
-  }
-
-  /**
-   * Normalizes provider-specific usage data into a unified format.
-   * This is the single source of truth for usage statistics.
-   *
-   * Cost is computed once here and should never be recomputed elsewhere.
-   *
-   * @param rawUsage - Raw usage data from the provider's API response
-   * @param responseTimeMs - Response time in milliseconds
-   * @returns Normalized usage, or undefined when the provider reports no usage
-   */
-  abstract normalizeUsage(
-    rawUsage: U,
-    responseTimeMs: number,
-  ): NormalizedUsage | undefined;
-
-  /**
    * Updates model message content with the latest response. Handles cache
    * control and content formatting, branching on whether the handler supports
    * assistant prefill.
@@ -1501,23 +1291,6 @@ export abstract class ModelHandler<
     messages.push(
       this.createAssistantMessageForAccumulatedOutput(workspaceState),
     );
-  }
-
-  /**
-   * Determines if model should continue generating based on response state.
-   * @returns Boolean indicating if generation should continue
-   */
-  shouldContinue(stopReason: ProviderStopReason, newResponse: string): boolean {
-    const hasResponseEndTag = newResponse.includes(OUTPUT_END_TAG);
-    const shouldContinue =
-      isTokenLimitStopReason(stopReason) && !hasResponseEndTag;
-
-    this.logger.debug(
-      shouldContinue
-        ? `Should continue: token limit reached and end tag '${OUTPUT_END_TAG}' is missing.`
-        : `Should not continue: StopReason='${stopReason}', HasEndTag='${hasResponseEndTag}'.`,
-    );
-    return shouldContinue;
   }
 
   /** Provider hook for fresh assistant turns after a no-prefill response. */
@@ -1556,51 +1329,6 @@ export abstract class ModelHandler<
     }
   }
 
-  /**
-   * Extracts tool-use information from provider responses.
-   * @param responseObject The raw response object from the model
-   * @returns A normalized tool call or null if not present
-   */
-  abstract extractToolUse(responseObject: Resp): T[];
-
-  /**
-   * Build provider-specific follow-up messages carrying the results of one
-   * model turn's tool calls.
-   *
-   * This is the single follow-up contract: callers pass a single-entry array
-   * for a lone tool call and the multi-entry array for a batch. Providers
-   * that must keep parallel calls in one assistant turn (thought signatures,
-   * DeepSeek-style `reasoning_content`) assemble them here; providers that
-   * never batch concatenate per entry.
-   *
-   * @param entries - One entry per tool call, in original model-response order.
-   *   Each entry bundles the call with its own result and attachments, so
-   *   alignment is structural rather than three positionally-zipped arrays.
-   * @param workspaceState - Optional workspace state (reasoning / server-tool
-   *   content to replay, reset once consumed)
-   * @param text - Assistant text emitted before the tool calls, if any
-   * @param client - Provider client bound to the current run and credential
-   *   route (for tool-result file uploads, where supported)
-   */
-  abstract createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: T;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    workspaceState: AgentWorkspaceState | undefined,
-    text: string | undefined,
-    client: C | undefined,
-  ): Promise<M[]>;
-
-  /**
-   * Append a simple text follow-up from the user.
-   */
-  abstract createUserFollowUpMessages(
-    messages: M[],
-    userMessage: string,
-  ): Promise<M[]>;
-
   /** Build a simple assistant message from text. */
   abstract createAssistantMessage(text: string): M;
 
@@ -1615,23 +1343,6 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Extract all server tool data in a single pass.
-   * Default implementation returns empty results.
-   * Override in handlers that support server tools.
-   */
-  extractServerToolData(_responseObject: Resp): ServerToolExtractionResult {
-    return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
-  }
-
-  /** Check if stop reason signals end-turn. */
-  public isEndTurnStop(reason: ProviderStopReason): boolean {
-    // Covers ANTHROPIC_STOP.END_TURN ('end_turn') and MCP_STOP.END_TURN
-    // ('endTurn') plus any provider casing of the same markers.
-    const lower = String(reason).toLowerCase();
-    return lower === 'end_turn' || lower === 'endturn';
-  }
-
-  /**
    * Extract assistant content blocks from a response, excluding tool_use blocks.
    * Default implementation returns empty array for providers without this concept.
    * Override in handlers that support structured content blocks (e.g., Anthropic).
@@ -1639,31 +1350,6 @@ export abstract class ModelHandler<
   extractAssistantContent(_responseObject: Resp): unknown[] {
     return [];
   }
-
-  // =========================================================================
-  // Message modification methods (for post-build enrichment)
-  // =========================================================================
-
-  /**
-   * Prepend text to the last user message in the conversation.
-   * Used by TeXCountNode to add stats before the user's content.
-   *
-   * @param messages - Existing messages array (mutated in place)
-   * @param text - Text to prepend
-   */
-  abstract prependTextToUserMessage(messages: M[], text: string): void;
-
-  /**
-   * Add media files to the last user message in the conversation.
-   * Used by MediaExtractionNode to add figures/PDFs after message building.
-   *
-   * @param messages - Existing messages array (mutated in place)
-   * @param mediaFiles - Media files to add
-   */
-  abstract addMediaToUserMessage(
-    messages: M[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]>;
 
   // =========================================================================
   // Token counting methods

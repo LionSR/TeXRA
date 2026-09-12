@@ -1,26 +1,14 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
-import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import { describe, expect, it } from 'vitest';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import {
   xaiCacheDiscountFactor,
   xaiLongContextTier,
   xaiLongContextTierGap,
 } from '@agent/modelHandlers/openai/xaiLongContextPricing';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-/** The real llm-zoo catalog entry — the config production handlers run on. */
-function catalogXaiConfig(fullName: string): ModelConfig {
-  const config = Object.values(MODEL_CONFIGS).find(
-    (model) =>
-      model.provider === ModelProvider.XAI && model.fullName === fullName,
-  );
-  if (!config) throw new Error(`llm-zoo has no xAI model ${fullName}`);
-  return config;
-}
 
 describe('xaiLongContextTier', () => {
   it('has no tier for undocumented or OpenRouter-qualified ids', () => {
@@ -93,68 +81,5 @@ describe('xaiLongContextTierGap', () => {
         }),
       ),
     ).toBe(false);
-  });
-});
-
-describe('ModelHandlerXAI cache rebate wiring', () => {
-  it('follows the tier input rate for the rebate past the threshold', () => {
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
-
-    expect(
-      handler.normalizeUsage(
-        {
-          prompt_tokens: 250_000,
-          completion_tokens: 1_000,
-          total_tokens: 251_000,
-          prompt_tokens_details: { cached_tokens: 40_000 },
-        },
-        0,
-      ).cost,
-    ).toBeCloseTo((250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.75) / 1e6, 12);
-  });
-});
-
-describe('ModelHandlerXAI tier-gap warning', () => {
-  it('warns once when a live long-context xAI model has no documented tier', () => {
-    const warn = vi.fn();
-    const handler = new ModelHandlerXAI(
-      buildTestModelConfig({
-        provider: ModelProvider.XAI,
-        fullName: 'grok-9',
-        contextWindow: 1_000_000,
-      }),
-    );
-    handler.setLogger({ warn } as unknown as AgentTrace);
-    const usage = {
-      prompt_tokens: 100,
-      completion_tokens: 10,
-      total_tokens: 110,
-    };
-
-    handler.normalizeUsage(usage, 0);
-    handler.normalizeUsage(usage, 0);
-
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]?.[0]).toContain('grok-9');
-    expect(warn.mock.calls[0]?.[1]).toMatchObject({
-      data: { fullName: 'grok-9', contextWindow: 1_000_000 },
-    });
-  });
-
-  it('stays quiet for models the table covers', () => {
-    const warn = vi.fn();
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
-    handler.setLogger({ warn } as unknown as AgentTrace);
-
-    handler.normalizeUsage(
-      {
-        prompt_tokens: 100,
-        completion_tokens: 10,
-        total_tokens: 110,
-      },
-      0,
-    );
-
-    expect(warn).not.toHaveBeenCalled();
   });
 });

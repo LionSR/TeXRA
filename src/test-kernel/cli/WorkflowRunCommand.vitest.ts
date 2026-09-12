@@ -22,7 +22,13 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import {
+  RUN_OUTCOME,
+  type FlowSnapshotPayload,
+  type RunId,
+  AgentCategory,
+} from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import {
@@ -325,6 +331,42 @@ async function setupCancelledOutput(
   return outputSummary;
 }
 
+type ReflectionState = Extract<
+  FlowSnapshotPayload,
+  { family: 'reflection' }
+>['state'];
+
+/** The reflection snapshot a round writes, minus the fields a case sets. */
+function reflectionSnapshot(
+  state: Partial<ReflectionState> = {},
+): FlowSnapshotPayload {
+  return {
+    family: 'reflection',
+    runtime: {
+      phase: 'initial',
+      round: 0,
+      turn: 0,
+      continuationIndex: 0,
+      modelId: 'deepseekT',
+      modelHandlerCompatibilityKey: null,
+      lastError: null,
+      pendingRetry: null,
+    },
+    references: { pendingIntents: [], pendingResponse: null },
+    state: {
+      currentRound: 0,
+      totalRounds: 4,
+      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+      outputLocation: null,
+      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
+      ...state,
+    },
+  };
+}
+
 function expectNoModelOrInputWork(): void {
   expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
   expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
@@ -353,10 +395,7 @@ describe('CLI workflow run command', () => {
     );
     mocks.deriveResumability.mockResolvedValue({
       kind: 'checkpoint',
-      flowRecord: {
-        shared: {},
-        cursor: { nextNodeId: 'start' },
-      },
+      snapshot: reflectionSnapshot(),
     });
     mocks.withExpandedRunInputs.mockImplementation(
       async (
@@ -1036,7 +1075,7 @@ describe('CLI workflow run command', () => {
     expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledOnce();
   });
 
-  it('rejects recovery advertising for a checkpoint carrying a flow failure', async () => {
+  it('rejects recovery advertising for a snapshot carrying a round failure', async () => {
     await runWorkflow();
     const canAdvertise =
       mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
@@ -1044,10 +1083,9 @@ describe('CLI workflow run command', () => {
     expect(
       canAdvertise?.({
         kind: 'checkpoint',
-        flowRecord: {
-          shared: { lastError: { message: 'provider failed' } },
-          cursor: { nextNodeId: 'start' },
-        },
+        snapshot: reflectionSnapshot({
+          lastError: { message: 'provider failed', userRetryable: true },
+        }),
       }),
     ).toBe(false);
   });
@@ -1060,42 +1098,23 @@ describe('CLI workflow run command', () => {
     expect(
       canAdvertise?.({
         kind: 'checkpoint',
-        flowRecord: {
-          shared: {
-            currentRound: 1,
-            totalRounds: 2,
-            unresolvedCompileRejection: true,
-          },
-          cursor: { nextNodeId: 'start' },
-        },
+        snapshot: reflectionSnapshot({
+          currentRound: 1,
+          totalRounds: 2,
+          unresolvedCompileRejection: true,
+        }),
       }),
     ).toBe(false);
     expect(
       canAdvertise?.({
         kind: 'checkpoint',
-        flowRecord: {
-          shared: {
-            currentRound: 0,
-            totalRounds: 2,
-            unresolvedCompileRejection: true,
-          },
-          cursor: { nextNodeId: 'start' },
-        },
+        snapshot: reflectionSnapshot({
+          currentRound: 0,
+          totalRounds: 2,
+          unresolvedCompileRejection: true,
+        }),
       }),
     ).toBe(true);
-    expect(
-      canAdvertise?.({
-        kind: 'checkpoint',
-        flowRecord: {
-          shared: {
-            currentRound: 1,
-            totalRounds: 2,
-            compileFailureContext: 'legacy compile failure',
-          },
-          cursor: { nextNodeId: 'start' },
-        },
-      }),
-    ).toBe(false);
   });
 
   it('prints the durable shutdown hint once with the persisted workspace', async () => {

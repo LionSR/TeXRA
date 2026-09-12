@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -488,7 +487,10 @@ describe('ExecutionsTool', () => {
         'stable-subagent-attempt.json',
         'stable-subagent-sequence-abc123.json',
         'workflow-script-call-1.json',
-        `${flowKey(runId)}.json`,
+        // The retired engine's checkpoint, before and after the rename the
+        // first ledger append gives it.
+        `flow_${runId}.json`,
+        `flow_${runId}.json.superseded`,
       ];
       for (const name of kvFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');

@@ -183,19 +183,4 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
       false,
     );
   });
-
-  it('reports Codex subscription usage without API-key spend', () => {
-    const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
-
-    assert.equal(
-      handler.normalizeUsage(
-        {
-          input_tokens: 10_000,
-          output_tokens: 10_000,
-        } as any,
-        0,
-      ).cost,
-      0,
-    );
-  });
 });

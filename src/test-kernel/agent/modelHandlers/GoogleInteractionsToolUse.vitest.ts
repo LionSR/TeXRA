@@ -5,8 +5,6 @@ import { z } from 'zod';
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import type { GoogleToolCall } from '@agent/types/ModelHandlerContracts';
-import type { ToolResult } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 
@@ -116,6 +114,21 @@ function completedEvent(
   };
 }
 
+/**
+ * The function_call steps the handler merged out of the stream, in order —
+ * the wire facts the run loop reads off the returned interaction.
+ */
+function functionCalls(
+  response: Interactions.Interaction,
+): Array<{ id: string; name: string; arguments: unknown }> {
+  return (response.steps ?? [])
+    .filter(
+      (step): step is Extract<Step, { type: 'function_call' }> =>
+        step.type === 'function_call',
+    )
+    .map(({ id, name, arguments: args }) => ({ id, name, arguments: args }));
+}
+
 /** Drive a single `createResponse` round from a canned SSE event list, using
  * the single-turn "go" user message every non-store:false test in this file
  * sends. */
@@ -218,157 +231,10 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
     const result = await createGoResponse(handler, events);
 
-    const calls = handler.extractToolUse(result.response);
-    expect(calls).toHaveLength(2);
-    expect(calls[0]).toMatchObject({
-      callId: 'call_1',
-      name: 'search',
-      input: { q: 'x' },
-    });
-    expect(calls[1]).toMatchObject({
-      callId: 'call_2',
-      name: 'fetch',
-      input: { u: 'y' },
-    });
-  });
-
-  it('round-trips the model-generated thought + function_call steps the handler actually produced', async () => {
-    const handler = createHandler();
-
-    // A real streamed turn: a signed thought, then a function call.
-    const events: SSEEvent[] = [
-      ...thoughtEvents(0, 'sig_abc'),
-      ...callEvents(1, 'call_1', 'search', '{"q":"x"}'),
-      completedEvent('int_1', 'requires_action'),
-    ];
-
-    const workspace = fakeWorkspace();
-    const response = (await createGoResponse(handler, events)).response;
-
-    // Mirror the cycle: reasoning is captured into the workspace before dispatch.
-    handler.processThinkingBlock(response, workspace);
-    const [call] = handler.extractToolUse(response);
-    expect(call).toMatchObject({
-      callId: 'call_1',
-      name: 'search',
-      input: { q: 'x' },
-    });
-
-    const result: ToolResult = {
-      status: 'executed',
-      output: 'found it',
-    };
-    const followUp = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call,
-          result,
-          attachments: [
-            {
-              path: 'img.png',
-              mimeType: 'image/png',
-              base64Data: Buffer.from('img-bytes').toString('base64'),
-            } as never,
-          ],
-        },
-      ],
-      workspace,
-      undefined,
-    );
-
-    // The handler must itself rebuild the assistant turn — thought (with its
-    // signature) + function_call — BEFORE the function_result, so the stateless
-    // round-trip is valid and the signature survives for backend validation.
-    expect(followUp.map((s) => s.type)).toEqual([
-      'thought',
-      'function_call',
-      'function_result',
+    expect(functionCalls(result.response)).toEqual([
+      { id: 'call_1', name: 'search', arguments: { q: 'x' } },
+      { id: 'call_2', name: 'fetch', arguments: { u: 'y' } },
     ]);
-
-    const thought = followUp[0] as Extract<Step, { type: 'thought' }>;
-    expect(thought.signature).toBe('sig_abc');
-
-    const fnCall = followUp[1] as Extract<Step, { type: 'function_call' }>;
-    expect(fnCall).toMatchObject({
-      id: 'call_1',
-      name: 'search',
-      arguments: { q: 'x' },
-    });
-
-    const resultStep = followUp[2] as Extract<
-      Step,
-      { type: 'function_result' }
-    >;
-    expect(resultStep.call_id).toBe('call_1');
-    const subcontent = resultStep.result as Array<{ type: string }>;
-    expect(subcontent[0]?.type).toBe('text');
-    expect(subcontent.some((c) => c.type === 'image')).toBe(true);
-
-    // Stateless: reasoning is consumed (reset) so it is not re-emitted next round.
-    expect(workspace.reasoning.thinkingBlocks).toHaveLength(0);
-  });
-
-  it('batches parallel calls: all function_call steps precede all function_result steps', async () => {
-    const handler = createHandler();
-    expect(handler.requiresBatchedParallelToolResults).toBe(true);
-
-    const calls: GoogleToolCall[] = [
-      {
-        provider: 'google',
-        callId: 'call_1',
-        name: 'search',
-        input: { q: 'x' },
-        raw: { id: 'call_1', name: 'search', args: { q: 'x' } },
-      },
-      {
-        provider: 'google',
-        callId: 'call_2',
-        name: 'fetch',
-        input: { u: 'y' },
-        raw: { id: 'call_2', name: 'fetch', args: { u: 'y' } },
-      },
-    ];
-    const results: ToolResult[] = [
-      { status: 'executed', output: 'a' },
-      { status: 'executed', output: 'b' },
-    ];
-
-    // Seed a signed thought + assistant text for this turn so the full
-    // model-emitted ordering is exercised (thought -> text -> calls -> results).
-    const workspace = fakeWorkspace();
-    workspace.reasoning.thinkingBlocks = [
-      { type: 'thinking', thinking: 'plan', signature: 'sig_b' },
-    ];
-
-    const followUp = await handler.createBatchedToolUseFollowUpMessages(
-      calls.map((call, index) => ({
-        call,
-        result: results[index],
-        attachments: [],
-      })),
-      workspace,
-      'thinking done',
-    );
-
-    expect(followUp.map((s) => s.type)).toEqual([
-      'thought',
-      'model_output',
-      'function_call',
-      'function_call',
-      'function_result',
-      'function_result',
-    ]);
-    const thought = followUp[0] as Extract<Step, { type: 'thought' }>;
-    expect(thought.signature).toBe('sig_b');
-    const callIds = followUp
-      .filter(
-        (s): s is Extract<Step, { type: 'function_call' }> =>
-          s.type === 'function_call',
-      )
-      .map((s) => s.id);
-    expect(callIds).toEqual(['call_1', 'call_2']);
-    // Reasoning is consumed (reset) so it is not re-emitted next round.
-    expect(workspace.reasoning.thinkingBlocks).toHaveLength(0);
   });
 
   it('returns empty arguments when streamed tool args are malformed JSON', async () => {
@@ -380,14 +246,10 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
     const result = await createGoResponse(handler, events);
 
-    const calls = handler.extractToolUse(result.response);
-    expect(calls).toHaveLength(1);
     // Malformed args fall back to an empty object rather than throwing.
-    expect(calls[0]).toMatchObject({
-      callId: 'call_x',
-      name: 'bad',
-      input: {},
-    });
+    expect(functionCalls(result.response)).toEqual([
+      { id: 'call_x', name: 'bad', arguments: {} },
+    ]);
   });
 
   it('prefers streamed steps when completed steps omit delta-only fields', async () => {
@@ -415,11 +277,9 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       'sig_streamed',
     );
 
-    expect(handler.extractToolUse(response)[0]).toMatchObject({
-      callId: 'call_1',
-      name: 'search',
-      input: { q: 'streamed' },
-    });
+    expect(functionCalls(response)).toEqual([
+      { id: 'call_1', name: 'search', arguments: { q: 'streamed' } },
+    ]);
   });
 
   it('resends the full prior step history verbatim on the next request (store:false, no previous_interaction_id)', async () => {
@@ -447,17 +307,29 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       })
     ).response;
 
-    // The cycle records the assistant turn ONLY through the follow-up return
-    // value, so it must carry the model-generated steps. Append them as the flow
-    // (ToolUseDispatchNode) does.
+    // The run loop appends the assistant turn it was served — the signed
+    // thought and the call it dispatched — plus the settled result, and that
+    // is the history the next request has to carry verbatim.
     handler.processThinkingBlock(resp1, workspace);
-    const [call] = handler.extractToolUse(resp1);
-    const followUp = await handler.createBatchedToolUseFollowUpMessages(
-      [{ call, result: { status: 'executed', output: 'ok' }, attachments: [] }],
-      workspace,
-      undefined,
+    expect(workspace.reasoning.thinkingBlocks[0]?.signature).toBe('sig_abc');
+    messages.push(
+      {
+        type: 'thought',
+        summary: [{ type: 'text', text: 'plan' }],
+        signature: 'sig_abc',
+      },
+      {
+        type: 'function_call',
+        id: 'call_1',
+        name: 'search',
+        arguments: { q: 'x' },
+      },
+      {
+        type: 'function_result',
+        call_id: 'call_1',
+        result: [{ type: 'text', text: 'ok' }],
+      },
     );
-    messages.push(...followUp);
 
     // --- Turn 2: capture exactly what the handler sends. ---
     const calls: CreateParams[] = [];

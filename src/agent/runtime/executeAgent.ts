@@ -283,7 +283,13 @@ function launchReflectionRun(
     // The reflection family injects no conditional tools (memory and plan are
     // tool-use infrastructure), so its run resolves tools from an empty list.
     Effect.provide(
-      runLayerFor(ctx, options, new ToolInjectionRegistry(), undefined, inScope),
+      runLayerFor(
+        ctx,
+        options,
+        new ToolInjectionRegistry(),
+        undefined,
+        inScope,
+      ),
     ),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
@@ -432,7 +438,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * event, for a consumer that must hear every trace event.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  /** Root-run-only: fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
@@ -443,7 +449,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 // A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
-// minted solely behind `ToolUseWaitNode`'s `parentRunId` check, which is the
+// minted solely behind the tool-use loop's `parentRunId` check, which is the
 // parent edge, so a caller that names a parent admits WAITING and one that
 // names none never sees it. Resume paths need no flag at all — whether a
 // resumed run is a child comes from the persisted `run.start`, so

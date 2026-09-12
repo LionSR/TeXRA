@@ -5,7 +5,7 @@
 //
 // Counts, per production file, the mechanisms the migration retires and
 // freezes them in config/ratchets/effect-migration-baseline.json as counts
-// that may only shrink: `platform()` reads, `setServices()` calls,
+// that may only shrink: `platform()` reads,
 // `new AbortController(` constructions, imports of the superseded
 // concurrency/error packages, `Effect.run*` boundary calls (rule R1), and
 // raw catch clauses in files that already import `effect` at runtime (rule
@@ -176,11 +176,9 @@ const TOOL_DEFINE_MODULES = new Set([
 const ROW_PLATFORM = 'platform()';
 const ROW_EFFECT_RUNTIME = 'effectRuntime()';
 const ROW_AMBIENT = 'ambient:asyncLocalStorage';
-const ROW_SET_SERVICES = 'setServices()';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
 const ROW_RUN_BOUNDARY = 'Effect.run*';
 const ROW_CATCH = 'catch:effect-importer';
-const ROW_NODE_ENGINE = 'dep:@agent/node';
 const ROW_MODEL_HANDLERS = 'dep:@agent/modelHandlers';
 const importRow = (pkg) => `import:${pkg}`;
 
@@ -188,23 +186,14 @@ const importRow = (pkg) => `import:${pkg}`;
  * Directory rows: a subsystem the migration replaces wholesale, measured by
  * the files that import INTO it. Counting consumers rather than class
  * declarations is what makes such a row track the work the migration actually
- * has to do. A heritage row over `src/agent/node/` (classes extending the
- * engine's bases) finds 17 files, two of which are the engine's own
- * `index.ts` and `persistedFlow.ts` — the files the elimination ledger
- * deletes outright, so they measure the thing being removed rather than
- * anything that has to be rewired — and none of which are the
- * flow-checkpoint callers the ledger rewires or deletes one by one:
- * `runReflectionFlow`, `ToolUseRoundFlow`, `AgentLaunchContext`,
- * `SessionResumeRetrieval`, `persistedCompileRejection`, `resumeRun`,
- * `runLifecycle`, `resumability`, `RunKVStore` and
- * `leaseOwnerLiveness`. Over `src/agent/modelHandlers/` the difference is
- * total: every class extending the handler superclass lives inside the
- * directory, so a heritage row would report zero consumers of a
- * 21,000-line subsystem while `ModelFactory.ts` alone reaches into it 18
- * times.
+ * has to do. Over `src/agent/modelHandlers/` the difference is total: every
+ * class extending the handler superclass lives inside the directory, so a
+ * heritage row would report zero consumers of a 21,000-line subsystem while
+ * `ModelFactory.ts` alone reaches into it 18 times. (The `dep:@agent/node`
+ * row that measured the flow engine's consumers reached zero and was deleted
+ * with the engine.)
  */
 const DIRECTORY_ROWS = [
-  { id: ROW_NODE_ENGINE, alias: '@agent/node', root: 'src/agent/node' },
   {
     id: ROW_MODEL_HANDLERS,
     alias: '@agent/modelHandlers',
@@ -232,10 +221,6 @@ const ROWS = [
     rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context, run lease ownership) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
   },
   {
-    id: ROW_SET_SERVICES,
-    rule: `${PRD} Phase 2 / §11: zero production setServices() calls; run services are supplied once at the flow boundary, not copied into nodes`,
-  },
-  {
     id: ROW_ABORT_CONTROLLER,
     rule: `${PRD} R5: interruption replaces internal abort choreography; an AbortController is adapted only where an external SDK or host API requires a signal`,
   },
@@ -252,10 +237,6 @@ const ROWS = [
     rule: `${PRD} R7 and execution rule 2 (one pass per file): a file that imports 'effect' converts its catch sites in the same pass — typed recovery, scope finalizers, or Exit folds; a raw catch remains only inside a named foreign-runtime adapter`,
   },
   {
-    id: ROW_NODE_ENGINE,
-    rule: `${PRD} R4 (amended 2026-09-06): there is no PocketFlow, no node, no graph, no action string and no flow record — each flow family becomes one plain Effect loop over the run ledger, so every file still importing src/agent/node/ is a consumer of an engine that is being deleted, not extended (elimination ledger: .agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md §4)`,
-  },
-  {
     id: ROW_MODEL_HANDLERS,
     rule: `${PRD} R2 and .agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md §2 (Ownership): provider protocol behaviour moves to packages/llm behind the ModelInvoker service, with "no forwarding facade over IModelHandler or the old superclass" — so every file still importing src/agent/modelHandlers/ is a call site that has to move to the service`,
   },
@@ -268,11 +249,10 @@ const SEMANTICS =
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
   "'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; " +
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
-  "'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
-  "'dep:@agent/node' counts, in each file OUTSIDE src/agent/node/, the module specifiers that reach into that directory — the @agent/node alias itself or any deeper path under it, plus relative specifiers that resolve inside it (type-only included, as for the package rows) — so the row measures the PocketFlow engine's consumers, not its class hierarchy, and a file inside the directory importing its own sibling is not a consumer and does not count; " +
   "'dep:@agent/modelHandlers' counts the same reaches into src/agent/modelHandlers/, the model handler hierarchy the ModelInvoker service replaces. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row.';
@@ -482,7 +462,7 @@ function isModuleAt(specifier, fileName, alias, modulePath) {
 
 /**
  * Whether a specifier reaches into `root` from a file outside it: the path
- * alias (`@agent/node`, or any deeper path under it) or a relative specifier
+ * alias (`@agent/modelHandlers`, or any deeper path under it) or a relative specifier
  * that resolves inside the directory, resolved the same way
  * {@link isPlatformModule} resolves one.
  *
@@ -677,7 +657,6 @@ function surveySource(text, fileName) {
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
       if (isAmbientRead(callee)) bump(ROW_AMBIENT);
-      if (name === 'setServices') bump(ROW_SET_SERVICES);
       if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
         bump(ROW_RUN_BOUNDARY);
         if (inExecute) runsInExecute += 1;
@@ -922,30 +901,25 @@ function selfTestSurvey() {
       expected: { [ROW_CATCH]: 3 },
     },
     {
-      text: 'const c = new AbortController();\nflow.setServices(services);\nsetServices(services);\n',
-      expected: { [ROW_ABORT_CONTROLLER]: 1, [ROW_SET_SERVICES]: 2 },
+      text: 'const c = new AbortController();\n',
+      expected: { [ROW_ABORT_CONTROLLER]: 1 },
     },
     {
-      // A consumer of both directories: the alias, a deeper path under it,
-      // the equivalent relative import, and an `export ... from`. The three
+      // A consumer of the directory: the alias, a deeper path under it, the
+      // equivalent relative import, and an `export ... from`. The two
       // near-misses pin the edges a later edit could silently widen: a
       // similarly-named sibling directory under the same alias prefix
-      // (@agent/nodeUtils, @agent/modelHandlersRegistry) and a relative
-      // import that merely starts with the directory's name.
-      text: "import { BaseNode } from '@agent/node';\nimport { PersistedFlow } from '@agent/node/persistedFlow';\nimport type { Action } from '../node';\nimport { pick } from '@agent/nodeUtils';\nimport { helper } from './nodeHelpers';\nimport { registry } from '@agent/modelHandlersRegistry';\nexport { build } from '@agent/modelHandlers/registry';\n",
+      // (@agent/modelHandlersRegistry) and a relative import that merely
+      // starts with the directory's name.
+      text: "import { ModelHandler } from '@agent/modelHandlers';\nimport { base } from '@agent/modelHandlers/ModelHandler';\nimport type { Kit } from '../modelHandlers';\nimport { helper } from './modelHandlersHelpers';\nimport { registry } from '@agent/modelHandlersRegistry';\nexport { build } from '@agent/modelHandlers/registry';\n",
       fileName: 'src/agent/runtime/probe.ts',
-      expected: { [ROW_NODE_ENGINE]: 3, [ROW_MODEL_HANDLERS]: 1 },
+      expected: { [ROW_MODEL_HANDLERS]: 4 },
     },
     {
       // Inside the directory: neither the sibling relative import nor the
       // alias counts, because the row measures consumers. Without this the
-      // engine's own files would sit in their own row and could leave it
+      // subsystem's own files would sit in their own row and could leave it
       // only by deletion.
-      text: "import { BaseNode } from './index';\nimport { Flow } from '@agent/node';\n",
-      fileName: 'src/agent/node/persistedFlow.ts',
-      expected: {},
-    },
-    {
       text: "import { attach } from '../utils/toolAttachmentUtils';\nimport { base } from '@agent/modelHandlers/ModelHandler';\n",
       fileName: 'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
       expected: {},

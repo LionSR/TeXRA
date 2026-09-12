@@ -673,6 +673,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               : null;
           if (batch === null && isChild) {
             if (afterError) return finish(state, RUN_OUTCOME.FAILED);
+            // A one-cycle launch stops here rather than suspending: the
+            // headless in-band child has no orchestrator to resume it, so a
+            // WAITING park would leave the run hanging.
+            if (run.toolPolicy.stopAfterCycle) {
+              return finish(state, RUN_OUTCOME.COMPLETED);
+            }
             batch = yield* followUps.drain;
             if (batch === null) {
               session.status.transitionToWaiting(runId, 'wait');
@@ -775,87 +781,107 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const finish = (state: RunState, outcome: RunOutcome): LoopExit =>
     ({ state, waiting: false, outcome }) as const;
 
-  const exit = yield* Effect.exit(program);
-  // The exit protocol runs masked: the halt row and the lease release happen
-  // whether the loop returned, failed, or was interrupted by a stop.
-  return yield* Effect.uninterruptible(
-    Effect.gen(function* () {
-      const state = yield* Ref.get(latest);
-      const result = (
-        outcome: RunOutcome | typeof RUN_PHASE.WAITING,
-        at: RunState | null,
-      ): ToolUseResult => ({
-        outcome,
-        response,
-        files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
-        usage:
-          at?.usage ??
-          AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-        structured: run.structured.value,
-        ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-          ? { error: lastError }
-          : {}),
-      });
-      // Every exit that ends the run writes its `halted` step; the state a stop
-      // interrupted stays at the phase its rows left, so resume continues it.
-      const halt = (outcome: RunOutcome) =>
-        state === null || state.phase === null
-          ? Effect.void
-          : ledger
-              .appendBatch(runId, state, [haltedStepRow(runId, state, outcome)])
-              .pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() =>
-                    logger.warn('Failed to record the run halt', {
-                      data: error,
-                    }),
+  const result = (
+    outcome: RunOutcome | typeof RUN_PHASE.WAITING,
+    at: RunState | null,
+  ): ToolUseResult => ({
+    outcome,
+    response,
+    files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
+    usage:
+      at?.usage ??
+      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    structured: run.structured.value,
+    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
+      ? { error: lastError }
+      : {}),
+  });
+
+  /**
+   * The exit protocol: the halt row and the lease release happen whether the
+   * loop returned, failed, or was interrupted by a host stop. It hangs off
+   * `onExit` rather than an `Effect.exit` followed by a masked block — an
+   * external interrupt unwinds straight past `Effect.exit`, which left the
+   * `halted` step unwritten and the follow-up lease held, so a same-process
+   * resume refused the run.
+   */
+  const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
+    Effect.uninterruptible(
+      Effect.gen(function* () {
+        const state = yield* Ref.get(latest);
+        // Every exit that ends the run writes its `halted` step; the state a
+        // stop interrupted stays at the phase its rows left, so resume
+        // continues it.
+        const halt = (outcome: RunOutcome) =>
+          state === null || state.phase === null
+            ? Effect.void
+            : ledger
+                .appendBatch(runId, state, [
+                  haltedStepRow(runId, state, outcome),
+                ])
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.sync(() =>
+                      logger.warn('Failed to record the run halt', {
+                        data: error,
+                      }),
+                    ),
                   ),
-                ),
-              );
-      const release = (next: 'recoverable' | 'terminal') =>
-        Effect.sync(() => {
-          detach();
-          followUps.release(
-            next === 'recoverable' || session.runs.hasActiveChildren(runId)
-              ? 'recoverable'
-              : 'terminal',
+                );
+        const release = (next: 'recoverable' | 'terminal') =>
+          Effect.sync(() => {
+            detach();
+            followUps.release(
+              next === 'recoverable' || session.runs.hasActiveChildren(runId)
+                ? 'recoverable'
+                : 'terminal',
+            );
+          });
+        if (Exit.isSuccess(exit)) {
+          if (exit.value.waiting) return yield* release('recoverable');
+          const outcome = exit.value.outcome;
+          yield* halt(outcome);
+          return yield* release(
+            outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
           );
-        });
-      if (Exit.isSuccess(exit)) {
-        if (exit.value.waiting) {
-          yield* release('recoverable');
-          return result(RUN_PHASE.WAITING, exit.value.state);
         }
-        const outcome = exit.value.outcome;
-        yield* halt(outcome);
-        yield* release(
-          outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
-        );
-        return result(outcome, exit.value.state);
-      }
-      if (Cause.hasInterrupts(exit.cause)) {
-        yield* halt(RUN_OUTCOME.CANCELLED);
+        if (Cause.hasInterrupts(exit.cause)) {
+          yield* halt(RUN_OUTCOME.CANCELLED);
+          return yield* release('recoverable');
+        }
+        yield* halt(RUN_OUTCOME.FAILED);
         yield* release('recoverable');
-        return yield* Effect.failCause(exit.cause);
-      }
-      const error = Cause.squash(exit.cause);
-      let failure: Error;
-      if (error instanceof RunLedgerRefused) {
-        failure = new Error(
-          `The run ledger refused a write (${error.reason}): ${error.detail}`,
-          { cause: error },
-        );
-      } else if (error instanceof RunHalted) {
-        failure = new Error(error.error?.message ?? `Run ${error.outcome}`, {
-          cause: error,
-        });
-      } else {
-        failure = ensureError(error);
-      }
-      logger.warn(`Tool-use run ${runId} stopped: ${failure.message}`);
-      yield* halt(RUN_OUTCOME.FAILED);
-      yield* release('recoverable');
-      return yield* Effect.fail(failure);
+      }),
+    );
+
+  /** The caller's error for a run that ended in a failure cause. */
+  const failure = (error: unknown): Error => {
+    if (error instanceof RunLedgerRefused) {
+      return new Error(
+        `The run ledger refused a write (${error.reason}): ${error.detail}`,
+        { cause: error },
+      );
+    }
+    if (error instanceof RunHalted) {
+      return new Error(error.error?.message ?? `Run ${error.outcome}`, {
+        cause: error,
+      });
+    }
+    return ensureError(error);
+  };
+
+  return yield* program.pipe(
+    Effect.onExit(finalize),
+    Effect.map((loop) =>
+      loop.waiting
+        ? result(RUN_PHASE.WAITING, loop.state)
+        : result(loop.outcome, loop.state),
+    ),
+    Effect.catchCause((cause) => {
+      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+      const stopped = failure(Cause.squash(cause));
+      logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
+      return Effect.fail(stopped);
     }),
   );
 });

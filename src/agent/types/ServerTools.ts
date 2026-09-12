@@ -98,7 +98,7 @@ export type WebFetchResult = {
  * block types into different output shapes (a truncated marker string vs. a
  * structured `ExportNode`).
  */
-export const ANTHROPIC_SERVER_TOOL_BLOCK_TYPES = Object.freeze({
+const ANTHROPIC_SERVER_TOOL_BLOCK_TYPES = Object.freeze({
   serverToolUse: 'server_tool_use',
   webSearchToolResult: 'web_search_tool_result',
   webFetchToolResult: 'web_fetch_tool_result',

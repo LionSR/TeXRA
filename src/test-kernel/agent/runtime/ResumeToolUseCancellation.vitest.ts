@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   readView: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
-  runToolUseFlow: vi.fn(),
+  runToolUse: vi.fn(),
+  agentRunLayer: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   acquireResumedRunLease: vi.fn(),
   validateOwnedRunLease: vi.fn(),
@@ -44,20 +45,38 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
   };
 });
 
+// The lifecycle wrapper is the Effect the lane hands its runner to; the
+// suite's subject is what the lane passes, so the wrapper just runs it.
 vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
   runFlowWithLifecycle: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.runFlowWithLifecycle(...args),
-      catch: ensureError,
-    }),
+    mocks.runFlowWithLifecycle(...args),
 }));
 
-vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
-  runReflectionFlow: vi.fn(),
+vi.mock('@agent/runtime/loop/toolUse', () => ({
+  runToolUse: mocks.runToolUse,
 }));
 
-vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
-  runToolUseFlow: mocks.runToolUseFlow,
+// The per-run services the lane provides are built and exercised by the loop
+// suites. Here only the layer's *input* matters: the tools the lane hands the
+// run and the callbacks it wires, so the layer itself is empty and its input
+// is captured.
+vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
+  const { Layer } = await import('effect');
+  return {
+    ...(await importOriginal<typeof import('@agent/runtime/run/AgentRun')>()),
+    agentRunLayer: (...args: unknown[]) => {
+      mocks.agentRunLayer(...args);
+      return Layer.empty;
+    },
+  };
+});
+
+vi.mock('@agent/runtime/ModelInvoker', async () => ({
+  modelInvokerLayer: (await import('effect')).Layer.empty,
+}));
+
+vi.mock('@agent/runtime/FollowUps', async () => ({
+  followUpsLayer: (await import('effect')).Layer.empty,
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -83,20 +102,37 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
-interface InterruptibleFlowInput {
-  readonly runScope: { readonly signal: AbortSignal };
-  interrupt(): void;
+/** The part of `ToolUseStart` this suite drives. */
+interface InterruptibleLoopStart {
   takePendingFollowUps?: () => readonly unknown[];
-  tools?: readonly ITool[];
+  attachment: {
+    attach: (flowContext: TestFlowContext) => void;
+    detach: (flowContext: TestFlowContext) => void;
+  };
 }
 
 interface TestFlowContext {
   interrupt(): void;
 }
 
-interface ModelSwitchingFlowInput {
+/** The callbacks the lane wires into the run's `AgentRun` layer. */
+interface CapturedRunCallbacks {
   onModelChanged: (model: string) => void;
 }
+
+/** Empty totals: this suite never bills a turn. */
+const NO_USAGE = {
+  firstInputTokens: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCost: 0,
+  totalCacheReadInputTokens: 0,
+  totalCacheMissInputTokens: 0,
+  totalCacheCreationInputTokens: 0,
+  totalReasoningTokens: 0,
+  totalToolUsePromptTokens: 0,
+  totalServerToolRequests: 0,
+};
 
 /**
  * The session whose run lane admits the resume. No competing generation
@@ -176,9 +212,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
     mocks.runFlowWithLifecycle.mockImplementation(
-      async (
+      (
         _context: unknown,
-        run: (liveHandle: unknown) => Promise<unknown>,
+        run: (liveHandle: unknown) => Effect.Effect<unknown, unknown>,
       ) => run(noopFlowHandle()),
     );
   });
@@ -214,7 +250,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // stream; the mocked lifecycle only has to run the body.
     mocks.runFlowWithLifecycle.mockImplementationOnce(
       (_context: unknown, runner: (...args: unknown[]) => unknown) =>
-        runner({}, {}),
+        runner({}),
     );
     mocks.buildAgentLaunchContext.mockResolvedValueOnce({
       setting: { agentCategory: AgentCategory.Workflow },
@@ -256,37 +292,32 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
-      async (
+      (
         _context: unknown,
-        run: (liveHandle: typeof handle) => Promise<unknown>,
+        run: (liveHandle: typeof handle) => Effect.Effect<unknown, unknown>,
       ) => run(handle),
     );
-    mocks.runToolUseFlow.mockImplementationOnce(
-      async (
-        input: InterruptibleFlowInput,
-        _registry: unknown,
-        attachment: {
-          attach: (flowContext: TestFlowContext) => void;
-          detach: (flowContext: TestFlowContext) => void;
-        },
-      ) => {
-        expect(input.tools).toBe(tools);
+    mocks.runToolUse.mockImplementationOnce((start: InterruptibleLoopStart) =>
+      Effect.sync(() => {
+        let interrupted = false;
         const flowContext: TestFlowContext = {
           interrupt: () => {
             order.push('interrupt');
-            input.interrupt();
+            interrupted = true;
           },
         };
-        attachment.attach(flowContext);
-        input.takePendingFollowUps?.();
-        if (!input.runScope.signal.aborted) mocks.invokeModelOrTool();
-        attachment.detach(flowContext);
+        start.attachment.attach(flowContext);
+        start.takePendingFollowUps?.();
+        if (!interrupted) mocks.invokeModelOrTool();
+        start.attachment.detach(flowContext);
         return {
-          outcome: input.runScope.signal.aborted
-            ? RUN_OUTCOME.CANCELLED
-            : RUN_OUTCOME.COMPLETED,
+          outcome: interrupted ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.COMPLETED,
+          response: '',
+          files: [],
+          usage: NO_USAGE,
+          structured: undefined,
         };
-      },
+      }),
     );
 
     const snapshot = createToolUseResumeData({ runId });
@@ -306,6 +337,11 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    // The run-scoped tools reach the loop through the run's own layer.
+    expect(mocks.agentRunLayer).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ tools }),
+    );
     expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(runId);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
     expect(order).toEqual([
@@ -322,11 +358,19 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     const runId = 'e9421-model' as RunId;
     const ctx = buildResumeContext(runId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-    mocks.runToolUseFlow.mockImplementationOnce(
-      async (input: ModelSwitchingFlowInput) => {
-        input.onModelChanged('next-model');
-        return { outcome: RUN_OUTCOME.COMPLETED };
-      },
+    mocks.runToolUse.mockImplementationOnce(() =>
+      Effect.sync(() => {
+        const callbacks = mocks.agentRunLayer.mock.calls[0]?.[1]
+          .callbacks as CapturedRunCallbacks;
+        callbacks.onModelChanged('next-model');
+        return {
+          outcome: RUN_OUTCOME.COMPLETED,
+          response: '',
+          files: [],
+          usage: NO_USAGE,
+          structured: undefined,
+        };
+      }),
     );
 
     await resumeToolUseFromResumeData(createToolUseResumeData({ runId }));

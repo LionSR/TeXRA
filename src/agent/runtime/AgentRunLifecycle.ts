@@ -654,7 +654,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         logger.debug(`Task suspended with outcome: ${result.outcome}`);
         // The handle stays tracked (correct for resume) but the live tool-use
         // session and its interrupt handler are already gone by the time
-        // this returns (runToolUseFlow's finally). Parking the handle is the
+        // this returns (the tool-use loop's scope). Parking the handle is the
         // one place this run is recorded as suspended, and carries the teardown
         // a stop/kill runs instead of the absent interrupt target, see
         // AgentRunLifecycle/RunRegistry issue #7287.

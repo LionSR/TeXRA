@@ -34,23 +34,8 @@ async function withMissingFallback<T>(
   }
 }
 
-export interface KVStoreOptions {
-  /**
-   * Write JSON without indentation. Use this for high-churn machine-owned
-   * stores where repeated pretty-printing adds avoidable CPU and disk I/O.
-   */
-  compactJson?: boolean;
-}
-
 export class KVStore {
-  private readonly indent: number | undefined;
-
-  constructor(
-    private readonly dir: string,
-    options: KVStoreOptions = {},
-  ) {
-    this.indent = options.compactJson ? undefined : 2;
-  }
+  constructor(private readonly dir: string) {}
 
   async read<T = unknown>(key: string): Promise<T | undefined> {
     const raw = await withMissingFallback(
@@ -71,7 +56,7 @@ export class KVStore {
     // parse on resume and silently restart from scratch (losing applied edits).
     await StorageFS.writeAtomic(
       keyToPath(this.dir, key),
-      JSON.stringify(value, null, this.indent),
+      JSON.stringify(value, null, 2),
     );
   }
 

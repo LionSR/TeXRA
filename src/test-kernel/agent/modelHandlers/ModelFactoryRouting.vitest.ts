@@ -11,13 +11,8 @@ import {
 
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
-import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
-import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
-import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import {
   activeModelHandlerCompatibilityKey,
   createKimiCodeFallbackHandler,
@@ -942,75 +937,7 @@ describe('Google Interactions API routing', () => {
   });
 });
 
-describe('OpenRouter-proxied provider capabilities', () => {
-  // ModelFactory preserves config.provider when routing through OpenRouter
-  // (new ModelHandlerOpenRouterNative({ ...config })). The capability getters
-  // must therefore reflect the routed-through provider, not the handler class —
-  // otherwise parallel-tool batching and DeepSeek reasoning-level overrides
-  // silently stop applying on the global OpenRouter path. Regression guard.
-  function openRouterHandler(
-    provider: ModelProvider,
-    caps: Partial<ModelConfig['capabilities']> = {},
-  ): ModelHandlerOpenRouterNative {
-    return new ModelHandlerOpenRouterNative({
-      ...modelConfig(provider, caps),
-      openRouterOnly: true,
-    });
-  }
-
-  it('requires batched parallel tool results for proxied Anthropic/Google/DeepSeek/Kimi/MiniMax', () => {
-    for (const provider of [
-      ModelProvider.ANTHROPIC,
-      ModelProvider.GOOGLE,
-      ModelProvider.DEEPSEEK,
-      ModelProvider.MOONSHOT,
-      ModelProvider.MINIMAX,
-    ]) {
-      expect(
-        openRouterHandler(provider).requiresBatchedParallelToolResults,
-      ).toBe(true);
-    }
-  });
-
-  it('does not batch for proxied providers that never carried cross-call reasoning', () => {
-    for (const provider of [ModelProvider.OPENAI, ModelProvider.OTHERS]) {
-      expect(
-        openRouterHandler(provider).requiresBatchedParallelToolResults,
-      ).toBe(false);
-    }
-  });
-});
-
 describe('direct handler capability overrides', () => {
-  // Formal coverage of `requiresBatchedParallelToolResults` behavior that
-  // replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
-  it('flags batching on reasoning-carrying providers except GLM', () => {
-    expect(
-      new ModelHandlerGoogleInteractions(modelConfig(ModelProvider.GOOGLE))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerDeepSeek(modelConfig(ModelProvider.DEEPSEEK))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerKimi(modelConfig(ModelProvider.MOONSHOT))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerMiniMax(modelConfig(ModelProvider.MINIMAX))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerGLM(modelConfig(ModelProvider.GLM))
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
-    expect(
-      new ModelHandlerOpenAI(modelConfig(ModelProvider.OPENAI))
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
-  });
-
   it('grants a reasoning-level override to DeepSeek with reasoning but no granular effort', () => {
     expect(
       new ModelHandlerDeepSeek(

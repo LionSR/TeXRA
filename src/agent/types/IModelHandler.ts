@@ -14,7 +14,10 @@ import type { ProviderMessage } from './ProviderMessage';
  *
  * The member SET is curated, not automatic: adding a member to the base class
  * does not surface it here, by design — only members consumers actually call
- * through this port are picked. Omitted members are reached through the
+ * through this port are picked. The run loop never calls a handler (it calls
+ * the llm `Model` through `ModelInvoker`); the port serves the helper paths
+ * (`helperModel`, `agentCreatorFlow`, `userVars`), `ModelCell`, and the
+ * manual-compaction command. Omitted members are reached through the
  * concrete class instead, including internal-only helpers such as
  * `supportsReasoningLevelOverride` and `extractResponse`, which `helperModel`
  * calls on its concrete handler.
@@ -37,42 +40,14 @@ export type IModelHandler<
   ModelHandler<M, U, T, C, Resp>,
   | 'config'
   | 'capabilities'
-  | 'getStreamingConfig'
-  | 'getWireRouteKey'
-  | 'getModelRetryRouteKey'
   | 'setOutputStreaming'
-  | 'isBackgroundModeActive'
   | 'supportsManualCompaction'
-  | 'supportsForcedToolChoice'
-  | 'requiresPerCallSystemPrompt'
-  | 'requestCompaction'
-  | 'clearCompactionRequest'
-  | 'getEffectiveContextWindow'
-  | 'requiresBatchedParallelToolResults'
   | 'setLogger'
   | 'setAgentCategory'
   | 'getClient'
   | 'refreshClient'
   | 'createResponse'
   | 'initializeMessages'
-  | 'createRoundMessages'
-  | 'extractNormalizedResponse'
-  | 'addContinueMessage'
-  | 'initializeOutputAndPrefill'
-  | 'getLastCredentialUsageRoute'
   | 'getCredentialRouteForClient'
-  | 'updateMessageContent'
-  | 'shouldContinue'
-  | 'processThinkingBlock'
-  | 'extractToolUse'
-  | 'extractServerToolData'
-  | 'createBatchedToolUseFollowUpMessages'
-  | 'createUserFollowUpMessages'
-  | 'createAssistantMessageFromResponse'
-  | 'isEndTurnStop'
-  | 'extractAssistantContent'
-  | 'prependTextToUserMessage'
-  | 'addMediaToUserMessage'
-  | 'consumeInsertedAttachmentKinds'
   | 'dispose'
 >;

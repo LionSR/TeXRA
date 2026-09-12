@@ -54,7 +54,6 @@ import { OUTPUT_END_TAG } from '@shared/schemas';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
-import { normalizeAnthropicUsage } from './anthropicUsage';
 import {
   getAnthropicMaxPdfPages,
   estimateTokensFromText,
@@ -73,15 +72,8 @@ import { wipeBuffer } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
 import {
   appendTextToLastAssistantMessage as appendAnthropicTextToLastAssistantMessage,
-  addMediaToUserMessage as addAnthropicMediaToUserMessage,
-  prependTextToUserMessage as prependAnthropicTextToUserMessage,
   textBlock,
 } from './anthropicMessages';
-import {
-  createBatchedToolUseFollowUpMessages as createAnthropicBatchedToolUseFollowUpMessages,
-  type AnthropicToolResultContext,
-  type AnthropicToolResultEntry,
-} from './anthropicToolResults';
 import {
   FILES_API_BETA,
   CONTEXT_MANAGEMENT_BETA,
@@ -344,15 +336,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Anthropic passes `system` per-call rather than storing it in `messages`
-   * (see `initializeMessages` below) — the round flow must resupply it on
-   * every invocation.
-   */
-  override get requiresPerCallSystemPrompt(): boolean {
-    return true;
-  }
-
-  /**
    * Anthropic supports file uploads via their Files API. Unconditionally
    * true rather than a capability read: this is a provider-wide fact about
    * the Anthropic SDK, not a per-model llm-zoo flag or `ProviderCapabilityProfile`
@@ -360,17 +343,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * stays a per-provider override rather than folding into a capability read).
    */
   protected override get supportsToolResultFileUpload(): boolean {
-    return true;
-  }
-
-  /**
-   * Parallel tool results must land as one assistant message carrying all
-   * tool_use blocks plus one user message of tool_result blocks — the wire
-   * shape the API documents for parallel tool use, and the only one that
-   * replays thinking blocks correctly on adaptive-thinking models. See
-   * `createBatchedToolUseFollowUpMessages`.
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
     return true;
   }
 
@@ -1056,61 +1028,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return [{ role: 'user', content: userMessageContent }];
   }
 
-  /** Creates message array for subsequent rounds, managing cache control and image content. */
-  async createRoundMessages(
-    messages: MessageParam[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<MessageParam[]> {
-    // Create content list for the new round message
-    const roundContent: ContentBlockParam[] = [];
-
-    // Add media if provided (images and native PDFs)
-    if (mediaFiles?.length && this.capabilities.supportsVision) {
-      const formattedMediaContent = await this.createMediaForRound(
-        mediaFiles,
-        'followUp',
-      );
-      roundContent.push(...formattedMediaContent);
-    }
-
-    // Add message text with optional caching
-    const trimmedMessage = userMessage.trim();
-    if (trimmedMessage) {
-      roundContent.push(textBlock(trimmedMessage));
-    }
-
-    if (roundContent.length === 0) {
-      const errMsg =
-        'Anthropic follow-up messages require at least one non-empty content block.';
-      this.logger.error(errMsg);
-      throw new Error(errMsg);
-    }
-
-    messages.push({ role: 'user', content: roundContent });
-
-    return messages;
-  }
-
-  async createUserFollowUpMessages(
-    messages: MessageParam[],
-    userMessage: string,
-  ): Promise<MessageParam[]> {
-    const trimmedMessage = userMessage.trim();
-    if (!trimmedMessage) {
-      const errMsg =
-        'Anthropic follow-up messages require non-empty user text.';
-      this.logger.error(errMsg);
-      throw new Error(errMsg);
-    }
-    messages.push({
-      role: 'user',
-      content: [textBlock(trimmedMessage)],
-    });
-
-    return messages;
-  }
-
   createAssistantMessage(text: string): MessageParam {
     return {
       role: 'assistant',
@@ -1281,10 +1198,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected appendUserText(messages: MessageParam[], text: string): void {
-    messages.push({ role: 'user', content: [textBlock(text)] });
-  }
-
   protected appendTextToLastAssistantMessage(
     messages: MessageParam[],
     text: string,
@@ -1293,14 +1206,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return appendAnthropicTextToLastAssistantMessage(messages, text, options, {
       logger: this.logger,
       containCutOffMessage: (content) => this.containCutOffMessage(content),
-    });
-  }
-
-  /** Normalizes Anthropic usage data into a unified format. */
-  normalizeUsage(rawUsage: BetaUsage, responseTimeMs: number): NormalizedUsage {
-    return normalizeAnthropicUsage(rawUsage, responseTimeMs, {
-      ...this.standardPricingConfig(),
-      supportsPromptCaching: this.capabilities.supportsPromptCaching,
     });
   }
 
@@ -1326,37 +1231,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     content.push(textBlock(workspaceState.assembly.accumulatedOutput));
 
     return { role: 'assistant', content };
-  }
-
-  /** Determines if generation should continue based on stop reason and end tag presence. */
-  override shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-  ): boolean {
-    this.logger.debug(
-      `Checking if should continue - stop reason: "${stopReason}"`,
-    );
-
-    // Handle Claude 4 refusal stop reason - never continue when model refuses
-    if (stopReason === ANTHROPIC_STOP.REFUSAL) {
-      this.logger.warn(
-        'Model refused to generate content - stopping generation',
-      );
-      return false;
-    }
-
-    // Context-window overflow needs the response cycle's bounded compaction
-    // recovery, not an ordinary continuation prompt.
-    const shouldContinue =
-      (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
-        stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
-      !newResponse.includes(OUTPUT_END_TAG);
-
-    if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
-      this.logger.debug('Response complete (end tag found)');
-    }
-
-    return shouldContinue;
   }
 
   /**
@@ -1420,40 +1294,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Return content of the first regular thinking block for logging
     return regularThinkingContent;
-  }
-
-  extractToolUse(responseObject: BetaMessage): AnthropicToolCall[] {
-    if (!Array.isArray(responseObject?.content)) {
-      return [];
-    }
-
-    return responseObject.content
-      .filter(isBetaToolUseBlock)
-      .filter((b) => b.id && b.name)
-      .map(
-        (toolUseBlock) =>
-          ({
-            provider: 'anthropic',
-            callId: toolUseBlock.id,
-            name: toolUseBlock.name,
-            input: toolUseBlock.input,
-            raw: toolUseBlock,
-          }) satisfies AnthropicToolCall,
-      );
-  }
-
-  /**
-   * Extract all server tool data in a single pass.
-   * Returns both normalized results for display and raw content blocks for context.
-   * Single source of truth for Anthropic server tool extraction.
-   *
-   * Strips orphaned server_tool_use blocks (missing result pair) to prevent
-   * 400 errors when these blocks are echoed in follow-up messages.
-   */
-  override extractServerToolData(
-    responseObject: BetaMessage,
-  ): ServerToolExtractionResult {
-    return extractAnthropicServerToolData(responseObject);
   }
 
   /**
@@ -1522,69 +1362,5 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return content;
-  }
-
-  /** Live bundle for the extracted tool-result builders (./anthropicToolResults). */
-  private anthropicToolResultContext(): AnthropicToolResultContext {
-    return {
-      logger: this.logger,
-      supportsToolResultFileUpload: this.supportsToolResultFileUpload,
-      canProcessToolResultAttachments: this.canProcessToolResultAttachments,
-      getTrackedPdfPageCount: () => this.getTrackedPdfPageCount(),
-      recordPdfPageCount: (fileId, pageCount) =>
-        this.uploadedPdfPageCounts.set(fileId, pageCount),
-      getMaxPdfPages: () => this.getMaxPdfPages(),
-      buildToolCallAssistantContent: (workspaceState, text) =>
-        this.buildToolCallAssistantContent(workspaceState, text),
-    };
-  }
-
-  /**
-   * Batched variant for parallel tool calls: one assistant message carrying
-   * the original response content plus ALL tool_use blocks, then ONE user
-   * message with all tool_result blocks. This is the wire shape Anthropic
-   * documents for parallel tool use — splitting results into alternating
-   * per-call message pairs reads as sequential history and trains the model
-   * away from parallel calls (and would replay thinking blocks incorrectly).
-   */
-  async createBatchedToolUseFollowUpMessages(
-    entries: AnthropicToolResultEntry[],
-    workspaceState: AgentWorkspaceState | undefined,
-    text: string | undefined,
-    client: Anthropic,
-  ): Promise<MessageParam[]> {
-    return createAnthropicBatchedToolUseFollowUpMessages(
-      this.anthropicToolResultContext(),
-      entries,
-      workspaceState,
-      text,
-      client,
-    );
-  }
-
-  // =========================================================================
-  // Message modification methods (for post-build enrichment)
-  // =========================================================================
-
-  /**
-   * Prepend text to the last user message in the conversation.
-   */
-  prependTextToUserMessage(messages: MessageParam[], text: string): void {
-    prependAnthropicTextToUserMessage(messages, text);
-  }
-
-  /**
-   * Add media files to the last user message in the conversation.
-   */
-  async addMediaToUserMessage(
-    messages: MessageParam[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    return addAnthropicMediaToUserMessage(messages, mediaFiles, {
-      supportsVision: this.capabilities.supportsVision,
-      createMediaForRound: (files) => this.createMediaForRound(files, 'insert'),
-      consumeInsertedAttachmentKinds: () =>
-        this.consumeInsertedAttachmentKinds('insert'),
-    });
   }
 }

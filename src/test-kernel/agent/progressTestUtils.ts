@@ -2,9 +2,6 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { ReflectionFlowState } from '@agent/runtime/loop/rows';
-import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
   matchesCancelSelector,
   SessionHostInteractions,
@@ -17,14 +14,11 @@ import {
   type RetryResult,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  AgentRunStateSnapshotSchema,
   type ActiveChildInfo,
   type RunId,
   type ProgressPermissionKind,
@@ -175,45 +169,6 @@ export function eventsOfType<
   return events.filter(
     (event): event is Extract<E, { type: T }> => event.type === type,
   );
-}
-
-/**
- * The `ToolUseRunShared` baseline every wait/round node test starts from:
- * no messages, no pending cycle skip, no persisted state slices yet.
- */
-export function toolUseRunShared(
-  overrides: Partial<ToolUseRunShared> = {},
-): ToolUseRunShared {
-  return {
-    messages: [],
-    shouldSkipCycle: false,
-    stateSlices: null,
-    ...overrides,
-  };
-}
-
-/**
- * The reflection family state a `flow.snapshot` carries, as the baseline
- * reflection tests start from it: round zero of a two-round run, an empty
- * workspace and no resolved output location. A snapshot never carries
- * messages or the usage accumulator, so neither appears here.
- */
-export function reflectionFlowShared(
-  overrides: Partial<ReflectionFlowState> = {},
-): ReflectionFlowState {
-  const { usageAccumulator, ...runStateSnapshot } =
-    AgentRunStateSnapshotSchema.parse({});
-  return {
-    currentRound: 0,
-    totalRounds: 2,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    outputLocation: null,
-    runStateSnapshot,
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
-    ...overrides,
-  };
 }
 
 export function createRecordingHost(): {
@@ -476,53 +431,6 @@ export function sessionWithInteractions(
     );
   }
   return session;
-}
-
-/**
- * The `RunScope` a flow-services fixture must carry, since nodes read run
- * identity from `services.runScope`. Pass the same object to
- * {@link withTestRunContext} so the ambient context and the services bag name
- * one scope, as production does.
- */
-export function testRunScope(
-  runId: string,
-  options: {
-    session?: SessionHandle;
-    signal?: AbortSignal;
-    interactions?:
-      SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>;
-  } = {},
-): RunScope {
-  const interactions =
-    options.interactions ?? sessionWithInteractions(undefined).interactions;
-  return createRunScope({
-    runId: runId as RunId,
-    session: options.session ?? sessionWithInteractions(interactions),
-    signal: options.signal ?? new AbortController().signal,
-  });
-}
-
-/**
- * Run `fn` inside a launch `RunContext` built on `runScope`.
- *
- * Flow nodes read run identity from `services.runScope` and read the remaining
- * ambient-only fields (`stopAfterCycle`, tool availability) off this context.
- * Production installs the run's one scope on both, so a test that also builds
- * services must pass `services.runScope` here rather than a second scope.
- */
-export function withTestRunContext<T>(
-  runScope: RunScope,
-  fn: () => Promise<T>,
-  options: {
-    approvalPromptsUnavailable?: boolean;
-    runtimeUnavailableTools?: readonly string[];
-    stopAfterCycle?: boolean;
-  } = {},
-): Promise<T> {
-  return withRunContext(
-    createRunContext({ runScope, ...options }),
-    fn,
-  ) as Promise<T>;
 }
 
 /** A host bash request carrying the prompt the tool boundary prepares. */

@@ -376,7 +376,7 @@ export class XmlOutputManager {
       // Multi-input agents have no name to synthesize a single-document
       // recovery from, but an unlabeled fenced block can still be routed by
       // comparing it against each original input file's content. Only valid
-      // when baseFiles really is the input files: runReflectionFlow.ts
+      // when baseFiles really is the input files: the reflection loop
       // substitutes config.outputFiles for baseFiles whenever the agent
       // declares any (single-artifact-from-many-inputs agents like ocr/
       // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would

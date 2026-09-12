@@ -294,14 +294,10 @@ export class AgentWorkspaceState {
    * Hydration: validates the snapshot, then rebuilds the slices. The one entry
    * point for every caller, because there is one supported persisted format.
    *
-   * A persisted snapshot first hydrates into a session at session-init resume
-   * in `ToolUsePrepareNode`, at a reflection flow's resume read in
-   * `runReflectionFlow`, and at `runToolUseFlow`'s tool-use resume boundary
-   * normalizing the nested `stateSlices.workspaceSnapshot` it self-heals into
-   * the resumed flow record — that last one is needed because a resume whose
-   * persisted cursor is already past `ToolUsePrepareNode` never runs that
-   * node's own hydration. Per-round node prep re-deriving state from
-   * `toSnapshot()` output produced this run runs the same parse.
+   * A persisted snapshot hydrates where a loop reads it off the run's latest
+   * `flow.snapshot` (`@agent/runtime/loop/toolUse`, `@agent/runtime/loop/reflection`);
+   * a loop re-deriving state from `toSnapshot()` output produced this run
+   * runs the same parse.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);

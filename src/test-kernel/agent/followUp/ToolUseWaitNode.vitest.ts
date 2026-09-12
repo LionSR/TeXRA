@@ -1,982 +1,943 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { DEFAULT_MODEL_CAPABILITIES } from 'llm-zoo';
-import { describe, expect, it, vi } from 'vitest';
+// Third-party imports
+import { randomUUID } from 'node:crypto';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import { describe, expect, vi } from 'vitest';
 
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
+// Local imports
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  extractTouchedFiles,
-  type ToolUseRunShared,
-  type WaitExecResult,
-} from '@agent/implementations/flows/tooluse/nodes/types';
-import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { RunModelHandler } from '@agent/runtime/ModelCell';
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
+import type {
+  FollowUpQueueBatchItem,
+  FollowUpQueueInput,
+} from '@agent/followUp/FollowUpQueue';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { followUpsLayer } from '@agent/runtime/FollowUps';
+import {
+  ModelInvoker,
+  turnText,
+  type InvokeRequest,
+} from '@agent/runtime/ModelInvoker';
+import {
+  rowAggregate,
+  runtimeSnapshotRow,
+  stepRow,
+} from '@agent/runtime/loop/rows';
+import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { createRunScope } from '@agent/runtime/RunScope';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { TraceEmitter } from '@agent/trace';
+import type { Model, TurnResult } from '@llm/turn';
 import {
-  AgentRunStateSnapshotSchema,
+  AgentCategory,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   RUN_PHASE,
+  type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { RunLedger } from '@shared/session/runLedger';
+import type { RunState } from '@shared/session/runStateFold';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import { generateRunId } from '@utils/core';
+import { generateRunId, generateShortId } from '@utils/core';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import {
   eventsOfType,
   recordSessionEvents,
   sessionWithInteractions,
-  testRunScope,
-  toolUseRunShared,
-  withTestRunContext,
 } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 
-type WaitNodeModelHandlerOverrides = Omit<
-  Partial<RunModelHandler>,
-  'capabilities'
-> & {
-  capabilities?: Partial<RunModelHandler['capabilities']>;
-};
-
-type WaitNodeServiceOverrides = Partial<
-  Pick<ToolUseServices, 'parentRunId' | 'onFollowUpConsumed' | 'onIdle'>
-> & {
-  fileService?: Partial<ToolUseServices['fileService']>;
-  logger?: AgentTrace;
-  modelHandler?: WaitNodeModelHandlerOverrides;
-  session?: Partial<ToolUseServices['session']>;
-  /** Run identity the node reads off `services.runScope`. */
-  runId?: RunId;
-  /** Session owning this run's status machine and approvals. */
-  ownerSession?: SessionHandle;
-  signal?: AbortSignal;
-  /** Injected tool policy the wait node reads instead of the ambient RunContext. */
-  stopAfterCycle?: boolean;
-};
-
-function createWaitNodeServices(
-  overrides: WaitNodeServiceOverrides = {},
-): ToolUseServices {
-  const {
-    fileService,
-    modelHandler,
-    ownerSession,
-    session,
-    signal,
-    stopAfterCycle,
-    runId = generateRunId(),
-    ...topLevel
-  } = overrides;
-  const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
-  const runScope = testRunScope(runId, { session: ownerSession, signal });
-  publishTestRunStart(runScope.session, runScope.runId);
-  return {
-    runScope,
-    toolPolicy: createToolPolicy({ stopAfterCycle }),
-    fileService: {
-      createLocation: (filePath: string) => ({ absolutePath: filePath }),
-      ...fileService,
-    },
-    logger: new TraceEmitter(),
-    modelCell: testModelCell({
-      capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
-        ...capabilities,
-      },
-      createUserFollowUpMessages: vi.fn(async () => []),
-      ...modelHandlerOverrides,
-    }),
-    session: {
-      hasQueuedFollowUp: () => false,
-      waitForFollowUp: vi.fn(async () => null),
-      noteParkedWaitCancelled: vi.fn(),
-      ...session,
-    },
-    ...topLevel,
-  } as unknown as ToolUseServices;
-}
-
-function waitPrep(afterError = false) {
-  return { afterError, lastResponse: undefined };
-}
-
-/** Follow-up mock that appends each text to the running message list. */
-function appendUserFollowUpMessages() {
-  return vi.fn(
-    async (
-      messages: ProviderMessage[],
-      userMessage: string,
-    ): Promise<ProviderMessage[]> => [
-      ...messages,
-      { role: 'user', content: userMessage },
-    ],
-  );
-}
-
-/** Follow-up mock that returns each text as a standalone user message. */
-function singleUserFollowUpMessage() {
-  return vi.fn(
-    async (
-      _messages: ProviderMessage[],
-      text: string,
-    ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
-  );
-}
-
-/**
- * Starts a goal whose latest cycle failed, with an owner session recording
- * approval bypass-state changes.
- */
-async function startErroredGoal(
-  runId: RunId,
-  goal: string,
-  errorMessage: string,
-): Promise<{
-  shared: ToolUseRunShared;
-  setApprovalBypassState: ReturnType<typeof vi.fn>;
-  ownerSession: SessionHandle;
-}> {
-  await installPlatform();
-  await GoalStore.start(runId, goal);
-  const shared = toolUseRunShared();
-  shared.lastError = { message: errorMessage, userRetryable: false };
-  const setApprovalBypassState = vi.fn();
-  const ownerSession = sessionWithInteractions({
-    setApprovalBypassState,
-    cancel: vi.fn(),
-  });
-  return { shared, setApprovalBypassState, ownerSession };
-}
-
-describe('ToolUseWaitNode', () => {
-  it.each([false, true] as const)(
-    'always suspends a subagent cycle at WAITING (queued follow-up: %s)',
-    async (hasQueuedFollowUp) => {
-      // Subagent mode suspends unconditionally and symmetrically. A follow-up
-      // already queued is the child-run loop's concern (it resumes immediately
-      // instead of genuinely waiting), and the node never blocks on
-      // session.waitForFollowUp — the loop owns the next-turn wait.
-      const shared = toolUseRunShared();
-      const waitForFollowUp = vi.fn();
-
-      const services = createWaitNodeServices({
-        parentRunId: generateRunId(),
-        session: {
-          ...(hasQueuedFollowUp ? { hasQueuedFollowUp: () => true } : {}),
-          waitForFollowUp,
-        },
-      });
-
-      const node = new ToolUseWaitNode().setServices(services);
-      const prep = await node.prep(shared);
-
-      const transition = await withTestRunContext(
-        services.runScope,
-        async () => {
-          const exec = await node.exec(prep);
-          expect(exec.kind).toBe('waiting');
-          return node.post(shared, prep, exec);
-        },
-      );
-
-      expect(transition).toBe(FlowTransition.WAITING);
-      expect(waitForFollowUp).not.toHaveBeenCalled();
-    },
-  );
-
-  it('advances a drained child-loop batch once without reading the session queue', async () => {
-    const shared = toolUseRunShared();
-    const waitForFollowUp = vi.fn();
-    const createUserFollowUpMessages = singleUserFollowUpMessage();
-    const onFollowUpConsumed = vi.fn();
-    const batch = [
-      {
-        text: 'state where finiteness is used',
-        displayText: 'clarify finiteness',
-        origin: 'user' as const,
-      },
-    ];
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      modelHandler: {
-        createUserFollowUpMessages,
-      },
-      onFollowUpConsumed,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode(batch).setServices(services);
-    const prep = await node.prep(shared);
-
-    const first = await withTestRunContext(services.runScope, async () => {
-      const exec = await node.exec(prep);
-      const transition = await node.post(shared, prep, exec);
-      return { exec, transition };
-    });
-    const second = await withTestRunContext(services.runScope, () =>
-      node.exec(prep),
-    );
-
-    expect(first).toEqual({
-      exec: {
-        kind: 'continue',
-        followUps: batch,
-        synthetic: false,
-      },
-      transition: FlowTransition.CONTINUE,
-    });
-    expect(second).toEqual({ kind: 'waiting' });
-    expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
-    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
-      [],
-      'state where finiteness is used',
-    );
-    expect(shared.messages).toEqual([
-      { role: 'user', content: 'state where finiteness is used' },
-    ]);
-    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
-    expect(waitForFollowUp).not.toHaveBeenCalled();
-  });
-
-  it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
-    const shared = toolUseRunShared();
-
-    // `stopAfterCycle` is injected through `services.toolPolicy`; no
-    // AsyncLocalStorage frame is installed for this cycle.
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      stopAfterCycle: true,
-    });
-
-    const node = new ToolUseWaitNode().setServices(services);
-    const prep = await node.prep(shared);
-    const exec = await node.exec(prep);
-    expect(exec.kind).toBe('stop');
-    const transition = await node.post(shared, prep, exec);
-
-    expect(transition).toBe(FlowTransition.COMPLETE);
-  });
-
-  it('stops immediately on interruption instead of suspending a subagent', async () => {
-    const shared = toolUseRunShared();
-
-    const services = createWaitNodeServices({
-      signal: AbortSignal.abort(),
-      parentRunId: generateRunId(),
-    });
-
-    const node = new ToolUseWaitNode().setServices(services);
-
-    const prep = await node.prep(shared);
-    const transition = await withTestRunContext(services.runScope, async () => {
-      const exec = await node.exec(prep);
-      return node.post(shared, prep, exec);
-    });
-
-    expect(transition).toBe(FlowTransition.COMPLETE);
-  });
-
-  it('fires the root-only onIdle notification every cycle without suspending', async () => {
-    const shared = toolUseRunShared({
-      messages: [{ role: 'assistant', content: 'partial response' } as never],
-    });
-    const onIdle = vi.fn();
-    const waitForFollowUp = vi.fn(async () => null);
-
-    const services = createWaitNodeServices({
-      onIdle,
-      session: { waitForFollowUp },
-    });
-
-    const node = new ToolUseWaitNode().setServices(services);
-    const prep = await node.prep(shared);
-    await withTestRunContext(services.runScope, () => node.exec(prep));
-
-    expect(onIdle).toHaveBeenCalledOnce();
-    expect(waitForFollowUp).toHaveBeenCalledOnce();
-  });
-
-  it('warns when follow-up media cannot be attached to a non-vision model', async () => {
-    const shared = toolUseRunShared();
-    const info = vi.fn();
-    const warn = vi.fn();
-    const addMediaToUserMessage = vi.fn(async () => []);
-    const logger = Object.assign(new TraceEmitter(), { info, warn });
-
-    const services = createWaitNodeServices({
-      logger,
-      modelHandler: {
-        addMediaToUserMessage,
-        capabilities: {
-          supportsNativeAudio: true,
-          supportsVision: false,
-        },
-        createUserFollowUpMessages: vi.fn(async () => []),
-      },
-    });
-
-    const node = new ToolUseWaitNode().setServices(services);
-    const transition = await withTestRunContext(services.runScope, () =>
-      node.post(shared, waitPrep(), {
-        followUps: [
-          {
-            text: 'please inspect this figure',
-            mediaFiles: ['/tmp/figure.png'],
-            origin: 'user',
-          },
-        ],
-        kind: 'continue',
-      }),
-    );
-
-    expect(transition).toBe(FlowTransition.CONTINUE);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Model has no vision support'),
-    );
-    expect(addMediaToUserMessage).toHaveBeenCalledOnce();
-    expect(info).toHaveBeenCalledWith(
-      'please inspect this figure',
-      expect.not.objectContaining({
-        data: expect.objectContaining({ attachments: expect.anything() }),
-      }),
-    );
-  });
-
-  it('logs follow-up markers reported by provider insertion', async () => {
-    const shared = toolUseRunShared();
-    const info = vi.fn();
-    const logger = Object.assign(new TraceEmitter(), {
-      info,
-      warn: vi.fn(),
-    });
-
-    const services = createWaitNodeServices({
-      logger,
-      modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => ['image' as const]),
-        capabilities: {
-          supportsNativeAudio: false,
-          supportsVision: true,
-        },
-        createUserFollowUpMessages: vi.fn(async () => []),
-      },
-    });
-
-    const node = new ToolUseWaitNode().setServices(services);
-    await withTestRunContext(services.runScope, () =>
-      node.post(shared, waitPrep(), {
-        followUps: [
-          {
-            text: 'please inspect this figure',
-            mediaFiles: ['/tmp/figure.png', '/tmp/missing.pdf'],
-            origin: 'user',
-          },
-        ],
-        kind: 'continue',
-      }),
-    );
-
-    expect(info).toHaveBeenCalledWith('please inspect this figure', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-      data: { attachments: ['image'] },
-    });
-  });
-
-  it('pauses the goal after a failed parent cycle', async () => {
-    const runId = generateRunId();
-    const { shared, setApprovalBypassState, ownerSession } =
-      await startErroredGoal(runId, 'finish the refactor', 'cycle failed');
-
-    const logger = new TraceEmitter();
-    const waitForFollowUp = vi.fn();
-    const services = createWaitNodeServices({
-      logger,
-      ownerSession,
-      runId,
-      stopAfterCycle: true,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      // No AsyncLocalStorage frame: `pauseActiveGoal` clears every possible
-      // goal bypass through `services.runScope.session` (the owner session),
-      // never through `currentSession()`/`defaultSession()`.
-      const exec = await node.exec(waitPrep(true));
-
-      const goal = GoalStore.getForRun(runId);
-      expect(exec.kind).toBe('stop');
-      expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(goal?.status).toBe('paused');
-      expect(setApprovalBypassState).toHaveBeenCalledWith({
-        runId,
-        kind: 'bash',
-        bypassActive: false,
-      });
-      expect(setApprovalBypassState).toHaveBeenCalledWith({
-        runId,
-        kind: 'toolEdit',
-        bypassActive: false,
-      });
-      expect(setApprovalBypassState).toHaveBeenCalledWith({
-        runId,
-        kind: 'superYolo',
-        bypassActive: false,
-      });
-    } finally {
-      await GoalStore.forget(runId);
-      releaseRunResources(runId);
-    }
-  });
-
-  it('injects an active goal continuation before the blocking wait', async () => {
-    const runId = generateRunId();
-    await installPlatform();
-
-    await GoalStore.start(runId, 'Finish the autonomous proof audit.');
-
-    const shared = toolUseRunShared();
-    const createUserFollowUpMessages = appendUserFollowUpMessages();
-    const onFollowUpConsumed = vi.fn();
-    const waitForFollowUp = vi.fn();
-    const ownerSession = sessionWithInteractions(undefined);
-    const runStatus = ownerSession.status;
-    const services = createWaitNodeServices({
-      modelHandler: {
-        createUserFollowUpMessages,
-      },
-      onFollowUpConsumed,
-      ownerSession,
-      runId,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-      const prep = await node.prep(shared);
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(prep),
-      );
-
-      expect(exec.kind).toBe('continue');
-      if (exec.kind !== 'continue') return;
-      expect(exec.synthetic).toBe(true);
-      expect(exec.followUps).toEqual([
-        {
-          text: expect.stringContaining('Finish the autonomous proof audit.'),
-          origin: 'synthetic',
-        },
-      ]);
-      expect(waitForFollowUp).not.toHaveBeenCalled();
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-
-      const transition = await withTestRunContext(services.runScope, () =>
-        node.post(shared, prep, exec),
-      );
-
-      expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(onFollowUpConsumed).not.toHaveBeenCalled();
-      expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
-      expect(createUserFollowUpMessages).toHaveBeenCalledWith(
-        [],
-        expect.stringContaining('<goal_context>'),
-      );
-      expect(shared.messages).toEqual([
-        {
-          role: 'user',
-          content: expect.stringContaining(
-            'Finish the autonomous proof audit.',
-          ),
-        },
-      ]);
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-    } finally {
-      await GoalStore.forget(runId);
-    }
-  });
-
-  it('lets queued user follow-up win over an active goal continuation', async () => {
-    const runId = generateRunId();
-    await installPlatform();
-
-    await GoalStore.start(runId, 'Keep going autonomously.');
-
-    const waitForFollowUp = vi.fn(async () => ({
-      items: [{ text: 'user correction', origin: 'user' as const }],
-      synthetic: false,
-    }));
-    const services = createWaitNodeServices({
-      runId,
-      session: {
-        hasQueuedFollowUp: () => true,
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(waitPrep()),
-      );
-
-      expect(waitForFollowUp).toHaveBeenCalledOnce();
-      expect(exec).toEqual({
-        kind: 'continue',
-        followUps: [{ text: 'user correction', origin: 'user' }],
-        synthetic: false,
-      });
-    } finally {
-      await GoalStore.forget(runId);
-    }
-  });
-
-  it('updates the run session status while waiting and resuming', async () => {
-    const runId = generateRunId();
-    const ownerSession = sessionWithInteractions(undefined);
-    const runStatus = ownerSession.status;
-    const shared = toolUseRunShared();
-    const createUserFollowUpMessages = vi.fn(async () => []);
-    const services = createWaitNodeServices({
-      ownerSession,
-      runId,
-      modelHandler: {
-        createUserFollowUpMessages,
-      },
-      session: {
-        waitForFollowUp: async () => ({
-          items: [{ text: 'continue', origin: 'synthetic' }],
-          synthetic: true,
-        }),
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.RUNNING,
-      });
-
-      const prep = await node.prep(shared);
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(prep),
-      );
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
-
-      await withTestRunContext(services.runScope, () =>
-        node.post(shared, prep, exec),
-      );
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-      expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
-    const runId = generateRunId();
-    const ownerSession = sessionWithInteractions(undefined);
-    const runStatus = ownerSession.status;
-    // Status is a session fact on the session's plane, the single rail.
-    const recorded = recordSessionEvents(ownerSession);
-    const waitForFollowUp = vi.fn(async () => null);
-    const services = createWaitNodeServices({
-      ownerSession,
-      runId,
-      session: {
-        waitForFollowUp,
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    try {
-      seedRunStatusForTest(runStatus, runId, {
-        phase: RUN_PHASE.CANCELLED,
-      });
-
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(waitPrep(true)),
-      );
-
-      expect(exec.kind).toBe('stop');
-      expect(waitForFollowUp).toHaveBeenCalledOnce();
-      expect(runStatus.get(runId)).toBe(RUN_PHASE.WAITING);
-      expect(eventsOfType(await recorded.read(), 'status')).toEqual([
-        expect.objectContaining({
-          phase: RUN_PHASE.RUNNING,
-          previousPhase: RUN_PHASE.CANCELLED,
-          cause: 'resume',
-        }),
-        expect.objectContaining({
-          phase: RUN_PHASE.WAITING,
-          previousPhase: RUN_PHASE.RUNNING,
-          cause: 'wait',
-        }),
-      ]);
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-  });
-
-  it('appends queued subagent results and user follow-ups as separate turns', async () => {
-    const shared = toolUseRunShared({
-      stateSlices: {
-        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: { INSTRUCTION: 'initial request' },
-      },
-    });
-    const createUserFollowUpMessages = appendUserFollowUpMessages();
-    const info = vi.fn(() => {
-      expect(ownerSession.status.get(runId)).toBe(RUN_PHASE.RUNNING);
-    });
-    const runId = generateRunId();
-    const logger = Object.assign(new TraceEmitter(), {
-      error: vi.fn(),
-      info,
-    });
-    const ownerSession = sessionWithInteractions(undefined);
-    const recorded = recordSessionEvents(ownerSession);
-    const runStatus = ownerSession.status;
-    const services = createWaitNodeServices({
-      logger,
-      modelHandler: {
-        capabilities: { supportsVision: true },
-        createUserFollowUpMessages,
-      },
-      ownerSession,
-      runId,
-      session: {
-        hasQueuedFollowUp: () => true,
-        waitForFollowUp: async () => ({
-          items: [
-            {
-              text: '<subagent-result>done</subagent-result>',
-              origin: 'subagent_result',
-            },
-            {
-              text: 'please revise the theorem',
-              origin: 'user',
-            },
-          ],
-          synthetic: false,
-        }),
-      },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-    seedRunStatusForTest(runStatus, runId, {
-      phase: RUN_PHASE.WAITING,
-    });
-
-    const prep = await node.prep(shared);
-    try {
-      const transition = await withTestRunContext(
-        services.runScope,
-        async () => {
-          const exec = await node.exec(prep);
-          return node.post(shared, prep, exec);
-        },
-      );
-
-      expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(ownerSession.status.get(runId)).toBe(RUN_PHASE.RUNNING);
-      expect(info).toHaveBeenCalled();
-    } finally {
-      clearRunStatusForTest(runStatus, runId);
-    }
-    expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
-      1,
-      [],
-      '<subagent-result>done</subagent-result>',
-    );
-    expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
-      2,
-      [{ role: 'user', content: '<subagent-result>done</subagent-result>' }],
-      'please revise the theorem',
-    );
-    expect(shared.messages).toEqual([
-      { role: 'user', content: '<subagent-result>done</subagent-result>' },
-      { role: 'user', content: 'please revise the theorem' },
-    ]);
-    expect(info).toHaveBeenCalledWith('✓ subagent completed', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    expect(info).toHaveBeenCalledWith('please revise the theorem', {
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-    });
-    expect(shared.stateSlices?.userChannels.INSTRUCTION).toBe(
-      'please revise the theorem',
-    );
-  });
-
-  // Regression #9443: a drained batch is consumed before the subagent
-  // after-error stop, so user input the child-run loop already took off the
-  // queue reaches the model and `post` clears the error. Since consuming the
-  // batch continues immediately, an active goal must not be paused or lose its
-  // unattended bash approval first.
-  it('recovers an errored goal from a drained batch without pausing it', async () => {
-    const runId = generateRunId();
-    const { shared, setApprovalBypassState, ownerSession } =
-      await startErroredGoal(
-        runId,
-        'finish the autonomous proof',
-        'stale failure from the previous cycle',
-      );
-
-    const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      ownerSession,
-      runId,
-      modelHandler: {
-        createUserFollowUpMessages: singleUserFollowUpMessage(),
-      },
-    });
-    const node = new ToolUseWaitNode(batch).setServices(services);
-
-    try {
-      const prep = await node.prep(shared);
-      expect(prep.afterError).toBe(true);
-
-      const { exec, transition } = await withTestRunContext(
-        services.runScope,
-        async () => {
-          const exec = await node.exec(prep);
-          return { exec, transition: await node.post(shared, prep, exec) };
-        },
-      );
-
-      expect(exec).toEqual({
-        kind: 'continue',
-        followUps: batch,
-        synthetic: false,
-      });
-      expect(transition).toBe(FlowTransition.CONTINUE);
-      // Consuming the batch recovers the error rather than stranding it.
-      expect(shared.lastError).toBeUndefined();
-      expect(GoalStore.getForRun(runId)?.status).toBe('active');
-      expect(setApprovalBypassState).not.toHaveBeenCalled();
-    } finally {
-      await GoalStore.forget(runId);
-      releaseRunResources(runId);
-    }
-  });
-
-  it('pauses an errored goal when a drained recovery batch cannot be applied', async () => {
-    const runId = generateRunId();
-    const { shared, setApprovalBypassState, ownerSession } =
-      await startErroredGoal(
-        runId,
-        'finish the autonomous proof',
-        'stale failure from the previous cycle',
-      );
-
-    const applicationError = new Error('follow-up media is unreadable');
-    const batch = [{ text: 'use this diagram', origin: 'user' as const }];
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      ownerSession,
-      runId,
-      modelHandler: {
-        createUserFollowUpMessages: vi.fn(async () => {
-          throw applicationError;
-        }),
-      },
-    });
-    const node = new ToolUseWaitNode(batch).setServices(services);
-
-    try {
-      const prep = await node.prep(shared);
-      const exec = await withTestRunContext(services.runScope, () =>
-        node.exec(prep),
-      );
-
-      await expect(
-        withTestRunContext(services.runScope, () =>
-          node.post(shared, prep, exec),
-        ),
-      ).rejects.toBe(applicationError);
-
-      expect(shared.lastError).toEqual({
-        message: 'stale failure from the previous cycle',
-        userRetryable: false,
-      });
-      expect(GoalStore.getForRun(runId)?.status).toBe('paused');
-      expect(setApprovalBypassState).toHaveBeenCalledWith({
-        runId,
-        kind: 'bash',
-        bypassActive: false,
-      });
-    } finally {
-      await GoalStore.forget(runId);
-      releaseRunResources(runId);
-    }
-  });
-
-  // Companion to the above: with no drained batch in hand, the after-error
-  // stop must still fire, or a subagent would wait for a follow-up its
-  // orchestrator was never told to send.
-  it('still stops a subagent after an error when no batch was drained', async () => {
-    const shared = toolUseRunShared();
-    shared.lastError = { message: 'boom', userRetryable: false };
-    const waitForFollowUp = vi.fn();
-    const services = createWaitNodeServices({
-      parentRunId: generateRunId(),
-      session: { waitForFollowUp },
-    });
-    const node = new ToolUseWaitNode().setServices(services);
-
-    const prep = await node.prep(shared);
-    const exec = await withTestRunContext(services.runScope, () =>
-      node.exec(prep),
-    );
-
-    expect(exec).toEqual({ kind: 'stop' });
-    expect(waitForFollowUp).not.toHaveBeenCalled();
-  });
+// ---------------------------------------------------------------------------
+// The loop harness: the run's own services over a real session ledger and the
+// session's real follow-up queue, with the model faked at the `ModelInvoker`
+// seam. The wait, the drain and the consumption are the production ones, so
+// what a parked run does with input is exercised end to end.
+// ---------------------------------------------------------------------------
+
+const ORIGIN = {
+  protocol: 'deepseek-chat',
+  codecVersion: 1,
+  requestedModel: 'test-model',
+  deployment: {
+    endpoint: 'https://api.example.test/v1',
+    credentialScope: 'deepseek',
+  },
+} as const;
+
+/** A `Model` the harness never reaches: the invoker seam is faked above it. */
+const unusedModel = new Proxy({} as Model, {
+  get(_target, property) {
+    throw new Error(`The harness model has no ${String(property)}.`);
+  },
 });
 
-describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 pattern on resume)', () => {
-  function transcriptLogServices(
-    overrides: WaitNodeServiceOverrides = {},
-  ): ToolUseServices {
-    return createWaitNodeServices({
-      logger: Object.assign(new TraceEmitter(), {
-        info: vi.fn(),
-        warn: vi.fn(),
-      }),
-      modelHandler: {
-        createUserFollowUpMessages: vi.fn(
-          async (messages: ProviderMessage[]) => messages,
+function testBoundModel(supportsVision: boolean): BoundModel {
+  return {
+    modelId: 'test-model',
+    config: buildTestModelConfig({ capabilities: { supportsVision } }),
+    compatibilityKey: 'ModelHandlerDeepSeek',
+    model: unusedModel,
+    origin: ORIGIN,
+    usageProvider: 'openai',
+    usageRoute: 'api-key',
+    contextWindow: 200_000,
+    supportsVision,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: false,
+    supportsForcedToolChoice: true,
+    wireRouteKey: 'test-route',
+    modelRetryRouteKey: 'test-route/test-model',
+    routedOnKimiCode: false,
+  };
+}
+
+function textTurn(text: string): TurnResult {
+  return {
+    kind: 'http',
+    providerResponseId: randomUUID(),
+    requestedOrigin: ORIGIN,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
+    finishReason: 'stop',
+    usage: null,
+  };
+}
+
+/** What the faked invoker reports for one turn, in script order. */
+type ScriptedTurn = TurnResult | { readonly failWith: RetryErrorInfo };
+
+function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
+  return Layer.effect(
+    ModelInvoker,
+    Effect.gen(function* () {
+      const run = yield* AgentRun;
+      const ledger = yield* RunLedger;
+      const aggregateId = rowAggregate(run.runId);
+      return {
+        invoke: (state: RunState, request: InvokeRequest) =>
+          Effect.gen(function* () {
+            const scripted = script[seen.length];
+            seen.push(request);
+            if (scripted === undefined) {
+              return yield* Effect.die(
+                new Error('The scenario ran out of model turns.'),
+              );
+            }
+            if ('failWith' in scripted) {
+              // The runtime snapshot the invoker writes on a failed attempt:
+              // the error a resumed run reads back off the fold.
+              const failed = yield* ledger.appendBatch(run.runId, state, [
+                runtimeSnapshotRow(run.runId, state, {
+                  lastError: scripted.failWith,
+                  pendingRetry: null,
+                }),
+              ]);
+              return {
+                kind: 'failed' as const,
+                state: failed,
+                error: scripted.failWith,
+              };
+            }
+            const bound = yield* SynchronizedRef.get(run.model);
+            const invocation = { invocationId: randomUUID(), attempt: 1 };
+            const responseId = randomUUID();
+            const next = yield* ledger.appendBatch(run.runId, state, [
+              {
+                type: 'model.message',
+                aggregateId,
+                payload: {
+                  kind: 'attempt',
+                  invocation,
+                  origin: bound.origin,
+                  delivery: 'stream',
+                },
+              },
+              {
+                type: 'model.message',
+                aggregateId,
+                payload: {
+                  kind: 'response',
+                  responseId,
+                  invocation,
+                  turn: scripted,
+                  calls: dispatchFactsFor(
+                    scripted,
+                    run.tools,
+                    run.logger,
+                    generateShortId,
+                  ),
+                  usage: null,
+                },
+              },
+              stepRow(run.runId, state, 'response.ready'),
+            ]);
+            return {
+              kind: 'response' as const,
+              state: next,
+              responseId,
+              turn: scripted,
+              text: turnText(scripted),
+              usage: null,
+              responseTimeMs: 1,
+            };
+          }),
+      };
+    }),
+  );
+}
+
+interface LoopInit {
+  readonly runId: RunId;
+  readonly session: SessionHandle;
+  readonly script: readonly ScriptedTurn[];
+  /** A child run: its parent owns continuation across its turns. */
+  readonly parentRunId?: RunId | null;
+  readonly resume?: boolean;
+  readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
+  readonly logger?: TraceEmitter;
+  readonly supportsVision?: boolean;
+  readonly stopAfterCycle?: boolean;
+  readonly onIdle?: () => void;
+  readonly onFollowUpConsumed?: () => void;
+}
+
+function agentRunTestLayer(init: LoopInit) {
+  return Layer.effect(
+    AgentRun,
+    Effect.gen(function* () {
+      const model = yield* SynchronizedRef.make(
+        testBoundModel(init.supportsVision === true),
+      );
+      const logger = init.logger ?? new TraceEmitter();
+      const runScope = createRunScope({
+        runId: init.runId,
+        session: init.session,
+        signal: new AbortController().signal,
+      });
+      return {
+        runId: init.runId,
+        parentRunId: init.parentRunId ?? null,
+        session: init.session,
+        config: AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'test-model',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+        setting: AgentSettingSchema.parse({
+          agentCategory: AgentCategory.ToolUse,
+        }),
+        prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
+        logger,
+        parentStage: logger.openStage('Run: chat'),
+        toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
+        userVarChannels: {},
+        initialUserMessageForTranscript: 'Do the thing.',
+        fileService: new TaskRunFileService(init.runId),
+        tools: new MapToolRegistry({}),
+        finalToolName: null,
+        structured: { value: undefined },
+        model,
+        pendingModelSwitch: { value: null },
+        inScope: <A>(operation: () => A): A =>
+          withRunContext(createRunContext({ runScope }), operation),
+        usageMonitor: new UsageMonitor(
+          testModelCell({ config: buildTestModelConfig() }),
+          { logger, runId: init.runId, runStageId: undefined },
+          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
-      },
-      ...overrides,
-    });
-  }
+        callbacks: {
+          onModelChanged: vi.fn(),
+          ...(init.onIdle ? { onIdle: init.onIdle } : {}),
+          ...(init.onFollowUpConsumed
+            ? { onFollowUpConsumed: init.onFollowUpConsumed }
+            : {}),
+        },
+        interrupt: vi.fn(),
+      } satisfies AgentRunShape;
+    }),
+  );
+}
 
-  function userFollowUp(): WaitExecResult {
-    return {
-      kind: 'continue',
-      followUps: [{ text: 'Do the thing.', origin: 'user' }],
-    };
-  }
+function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
+  return runToolUse({
+    resume: init.resume === true,
+    ...(init.drainedFollowUps
+      ? { drainedFollowUps: init.drainedFollowUps }
+      : {}),
+  }).pipe(
+    Effect.provide(
+      Layer.mergeAll(invokerLayer(init.script, requests), followUpsLayer).pipe(
+        Layer.provideMerge(agentRunTestLayer(init)),
+        Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+      ),
+    ),
+  );
+}
 
-  function failAppend(services: ToolUseServices, message: string): void {
-    (
-      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
-        typeof vi.fn
-      >
-    ).mockRejectedValue(new Error(message));
-  }
+/** Run one scripted run to its own exit. */
+const runLoop = Effect.fn('test.runLoop')(function* (init: LoopInit) {
+  const requests: InvokeRequest[] = [];
+  const result = yield* loopProgram(init, requests);
+  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
+  return { result, requests, state };
+});
 
-  function runPost(
-    services: ToolUseServices,
-    execRes: WaitExecResult,
-  ): Promise<unknown> {
-    const node = new ToolUseWaitNode().setServices(services);
-    const shared = toolUseRunShared();
-    return withTestRunContext(services.runScope, () =>
-      node.post(shared, waitPrep(), execRes),
-    );
-  }
+/**
+ * Drive the loop until its scripted turns are spent: the scenario's script is
+ * the run's whole life, and the loop stops where the script ends rather than
+ * being torn down mid-turn.
+ */
+const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
+  init: LoopInit,
+) {
+  const requests: InvokeRequest[] = [];
+  const exit = yield* Effect.exit(loopProgram(init, requests));
+  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
+  return { exit, requests, state };
+});
 
-  async function runPostWithFailedAppend(
-    services: ToolUseServices,
-    message: string,
-    execRes: WaitExecResult = userFollowUp(),
-  ): Promise<void> {
-    failAppend(services, message);
-    await expect(runPost(services, execRes)).rejects.toThrow(message);
-  }
+/** Start a run that parks, for scenarios that drive it while it waits. */
+const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
+  const requests: InvokeRequest[] = [];
+  const fiber = yield* Effect.forkDetach(loopProgram(init, requests));
+  return { fiber, requests };
+});
 
-  it('logs a follow-up transcript row even when appendFollowUpAsUserMessage throws', async () => {
-    // A failed follow-up append on resume (corrupt/oversized media, provider
-    // validation error, ...) must still leave a record of what the user
-    // asked for — otherwise that turn's transcript row silently vanishes.
-    const services = transcriptLogServices();
-    await runPostWithFailedAppend(services, 'follow-up append failed');
-
-    expect(services.logger.info).toHaveBeenCalledWith(
-      'Do the thing.',
-      expect.objectContaining({ messageType: expect.any(String) }),
-    );
+/** Poll a real-time condition the parked loop settles on its own fiber. */
+const waitFor = (condition: () => boolean, label: string) =>
+  Effect.promise(async () => {
+    for (let attempt = 0; attempt < 1000; attempt += 1) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+    throw new Error(`Timed out waiting for ${label}.`);
   });
 
-  it('does not acknowledge consumption when the append throws', async () => {
-    // The resume wrapper restores an unacknowledged drained batch; firing
-    // onFollowUpConsumed before a failing append would mark the lost input
-    // as consumed and drop it instead of replaying it on the next resume.
-    const onFollowUpConsumed = vi.fn();
-    const services = transcriptLogServices({ onFollowUpConsumed });
-    await runPostWithFailedAppend(services, 'follow-up append failed');
+/**
+ * A session over the process roots: the goal store writes under the roots a
+ * run's own scope installs, so a goal scenario and the loop must share them.
+ */
+function goalSession(overrides: Record<string, unknown> = {}): SessionHandle {
+  const session = createProcessSession();
+  session.interactions.use({ emit: () => {}, cancel: () => {}, ...overrides });
+  return session;
+}
 
-    expect(onFollowUpConsumed).not.toHaveBeenCalled();
+function quietSession(overrides: Record<string, unknown> = {}): SessionHandle {
+  return sessionWithInteractions({
+    emit: () => {},
+    cancel: () => {},
+    ...overrides,
   });
+}
 
-  it('logs a workflow delivery with its typed summary beside the collapsed text', async () => {
-    // The delivery envelope carries the summary typed at the write site; the
-    // transcript row producer parses it once and attaches it structured, so
-    // renderers never re-extract it from the row text.
-    const summary = {
-      name: 'proofread-pipeline',
-      outcome: 'completed',
-      phaseCount: 1,
-      taskDone: 2,
-      taskTotal: 2,
-      costUsd: 0.19,
-      durationMs: 5_000,
-      files: [{ path: 'paper.tex', added: 12, removed: 8 }],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
-      errorCause: null,
-    };
-    const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
-    const text = [
-      '<workflow-script-result id="abc">',
-      '<response>raw run log</response>',
-      `<workflow-summary>${escaped}</workflow-summary>`,
-      '</workflow-script-result>',
-    ].join('\n');
-    const services = transcriptLogServices();
+function startedRun(session: SessionHandle): RunId {
+  const runId = generateRunId();
+  publishTestRunStart(session, runId);
+  return runId;
+}
 
-    await runPost(services, {
-      kind: 'continue',
-      followUps: [{ text, origin: 'subagent_result' }],
-    });
+/** Put input on the run's queue before the loop claims it. */
+function enqueue(
+  session: SessionHandle,
+  runId: RunId,
+  items: readonly FollowUpQueueInput[],
+): void {
+  for (const item of items)
+    session.followUps.submit(runId, item, 'recoverable');
+}
 
-    expect(services.logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('✓ proofread-pipeline completed'),
-      expect.objectContaining({ data: { workflowSummary: summary } }),
-    );
-  });
+/** The plain text of every user message the run recorded. */
+function userTexts(state: RunState | null): string[] {
+  return (state?.messages ?? []).flatMap((message) =>
+    message.role === 'user'
+      ? message.content.flatMap((part) =>
+          part.kind === 'text' ? [part.text] : [],
+        )
+      : [],
+  );
+}
 
-  it('does not log synthetic (idle-continuation) follow-ups', async () => {
-    const services = transcriptLogServices();
+describe('a parked child run', () => {
+  it.effect.each([false, true])(
+    'suspends at WAITING once per invocation (input queued: %s)',
+    (queued) =>
+      Effect.gen(function* () {
+        // A child's continuation belongs to the run that launched it: one
+        // cycle per invocation, whether or not something is already queued.
+        const session = quietSession();
+        const runId = startedRun(session);
+        if (queued) {
+          enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
+        }
 
-    await runPostWithFailedAppend(services, 'boom', {
-      kind: 'continue',
-      followUps: [{ text: 'synthesized', origin: 'user' }],
-      synthetic: true,
-    });
+        const { result, requests } = yield* runLoop({
+          runId,
+          session,
+          parentRunId: generateRunId(),
+          script: [textTurn('one cycle')],
+        });
 
-    expect(services.logger.info).not.toHaveBeenCalled();
-  });
+        expect(result.outcome).toBe(RUN_PHASE.WAITING);
+        expect(requests).toHaveLength(1);
+      }),
+  );
+
+  it.effect(
+    'consumes the batch its parent drained without reading the session queue',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        const parentRunId = generateRunId();
+        const onFollowUpConsumed = vi.fn();
+
+        yield* runLoop({
+          runId,
+          session,
+          parentRunId,
+          script: [textTurn('first cycle')],
+        });
+        // Input the child loop did not hand over stays on the queue.
+        enqueue(session, runId, [{ text: 'from the queue', origin: 'user' }]);
+
+        const { result, state } = yield* runLoop({
+          runId,
+          session,
+          parentRunId,
+          resume: true,
+          drainedFollowUps: [
+            { text: 'state where finiteness is used', origin: 'user' },
+          ],
+          onFollowUpConsumed,
+          script: [textTurn('second cycle')],
+        });
+
+        expect(result.outcome).toBe(RUN_PHASE.WAITING);
+        expect(userTexts(state)).toContain('state where finiteness is used');
+        expect(userTexts(state)).not.toContain('from the queue');
+        expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect('stops after an error when no batch was drained', () =>
+    Effect.gen(function* () {
+      // A subagent that waited here would wait for a follow-up its
+      // orchestrator was never told to send.
+      const session = quietSession();
+      const { result } = yield* runLoop({
+        runId: startedRun(session),
+        session,
+        parentRunId: generateRunId(),
+        script: [{ failWith: { message: 'boom', userRetryable: false } }],
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+    }),
+  );
+});
+
+describe('a parked root run', () => {
+  it.effect(
+    'reports idle at the turn boundary, before it waits for input',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        const onIdle = vi.fn();
+        enqueue(session, runId, [{ text: 'keep going', origin: 'user' }]);
+
+        const { fiber, requests } = yield* forkLoop({
+          runId,
+          session,
+          onIdle,
+          script: [textTurn('first'), textTurn('second')],
+        });
+        yield* waitFor(
+          () =>
+            requests.length >= 2 &&
+            session.status.get(runId) === RUN_PHASE.WAITING,
+          'the second turn and the park after it',
+        );
+        yield* Fiber.interrupt(fiber);
+
+        // Idle is a notification, not a suspension: the queued input still
+        // reached the model in the same invocation.
+        expect(onIdle).toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'stops instead of waiting when the launch asked for one cycle',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const { result, requests } = yield* runLoop({
+          runId: startedRun(session),
+          session,
+          stopAfterCycle: true,
+          script: [textTurn('done')],
+        });
+
+        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+        expect(requests).toHaveLength(1);
+      }),
+  );
+
+  it.effect('waits while parked and runs again once input arrives', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const status = session.status;
+      const recorded = recordSessionEvents(session);
+
+      const { fiber, requests } = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first'), textTurn('second')],
+      });
+      yield* waitFor(
+        () => status.get(runId) === RUN_PHASE.WAITING,
+        'the parked run',
+      );
+      enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
+      yield* waitFor(
+        () => requests.length >= 2 && status.get(runId) === RUN_PHASE.WAITING,
+        'the second turn and the park after it',
+      );
+      yield* Fiber.interrupt(fiber);
+
+      // Status is a session fact on the session's plane, the single rail.
+      const phases = eventsOfType(
+        yield* Effect.promise(() => recorded.read()),
+        'status',
+      ).map((event) => [event.previousPhase, event.phase, event.cause]);
+      expect(phases).toContainEqual([
+        RUN_PHASE.RUNNING,
+        RUN_PHASE.WAITING,
+        'wait',
+      ]);
+      expect(phases).toContainEqual([
+        RUN_PHASE.WAITING,
+        RUN_PHASE.RUNNING,
+        'resume',
+      ]);
+    }),
+  );
+
+  it.effect('repairs a retry-cancelled run to waiting before it blocks', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const status = session.status;
+      const recorded = recordSessionEvents(session);
+      seedRunStatusForTest(status, runId, { phase: RUN_PHASE.CANCELLED });
+
+      try {
+        const { fiber } = yield* forkLoop({
+          runId,
+          session,
+          script: [textTurn('first')],
+        });
+        yield* waitFor(
+          () => status.get(runId) === RUN_PHASE.WAITING,
+          'the parked run',
+        );
+        yield* Fiber.interrupt(fiber);
+
+        // A cancelled run cannot park directly: it is resumed first, so the
+        // phase table sees RUNNING between the two.
+        const phases = eventsOfType(
+          yield* Effect.promise(() => recorded.read()),
+          'status',
+        ).map((event) => [event.previousPhase, event.phase, event.cause]);
+        expect(phases).toContainEqual([
+          RUN_PHASE.CANCELLED,
+          RUN_PHASE.RUNNING,
+          'resume',
+        ]);
+        expect(phases).toContainEqual([
+          RUN_PHASE.RUNNING,
+          RUN_PHASE.WAITING,
+          'wait',
+        ]);
+      } finally {
+        clearRunStatusForTest(status, runId);
+      }
+    }),
+  );
+});
+
+describe('the batch a parked run consumes', () => {
+  it.effect(
+    'enters the conversation as one user turn carrying every queued item',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const info = vi.spyOn(logger, 'info');
+        enqueue(session, runId, [
+          {
+            text: '<subagent-result>done</subagent-result>',
+            origin: 'subagent_result',
+          },
+          { text: 'please revise the theorem', origin: 'user' },
+        ]);
+
+        const { fiber, requests } = yield* forkLoop({
+          runId,
+          session,
+          logger,
+          script: [textTurn('first'), textTurn('second')],
+        });
+        yield* waitFor(
+          () =>
+            requests.length >= 2 &&
+            session.status.get(runId) === RUN_PHASE.WAITING,
+          'the second turn and the park after it',
+        );
+        yield* Fiber.interrupt(fiber);
+        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+
+        // One batch is one user message whose parts are the items in order;
+        // the transcript still shows each of them as its own row.
+        const batchMessage = state?.messages.filter(
+          (message) => message.role === 'user',
+        );
+        expect(
+          batchMessage
+            ?.at(-1)
+            ?.content.flatMap((part) =>
+              part.kind === 'text' ? [part.text] : [],
+            ),
+        ).toEqual([
+          '<subagent-result>done</subagent-result>',
+          'please revise the theorem',
+        ]);
+        expect(info).toHaveBeenCalledWith('✓ subagent completed', {
+          messageType: MESSAGE_TYPES.USER_MESSAGE,
+        });
+        expect(info).toHaveBeenCalledWith('please revise the theorem', {
+          messageType: MESSAGE_TYPES.USER_MESSAGE,
+        });
+      }),
+  );
+
+  it.effect('logs a workflow delivery with its typed summary', () =>
+    Effect.gen(function* () {
+      // The delivery envelope carries the summary typed at the write site;
+      // the transcript row producer parses it once and attaches it
+      // structured, so renderers never re-extract it from the row text.
+      const summary = {
+        name: 'proofread-pipeline',
+        outcome: 'completed',
+        phaseCount: 1,
+        taskDone: 2,
+        taskTotal: 2,
+        costUsd: 0.19,
+        durationMs: 5_000,
+        files: [{ path: 'paper.tex', added: 12, removed: 8 }],
+        scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+        errorCause: null,
+      };
+      const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
+      const session = quietSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const info = vi.spyOn(logger, 'info');
+      enqueue(session, runId, [
+        {
+          text: [
+            '<workflow-script-result id="abc">',
+            '<response>raw run log</response>',
+            `<workflow-summary>${escaped}</workflow-summary>`,
+            '</workflow-script-result>',
+          ].join('\n'),
+          origin: 'subagent_result',
+        },
+      ]);
+
+      const { fiber, requests } = yield* forkLoop({
+        runId,
+        session,
+        logger,
+        script: [textTurn('first'), textTurn('second')],
+      });
+      yield* waitFor(
+        () =>
+          requests.length >= 2 &&
+          session.status.get(runId) === RUN_PHASE.WAITING,
+        'the second turn and the park after it',
+      );
+      yield* Fiber.interrupt(fiber);
+
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining('✓ proofread-pipeline completed'),
+        expect.objectContaining({ data: { workflowSummary: summary } }),
+      );
+    }),
+  );
+
+  it.effect(
+    'warns and drops media the model cannot read, attaching nothing',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const info = vi.spyOn(logger, 'info');
+        const warn = vi.spyOn(logger, 'warn');
+        enqueue(session, runId, [
+          {
+            text: 'please inspect this figure',
+            mediaFiles: ['/tmp/texra-figure.png'],
+            origin: 'user',
+          },
+        ]);
+
+        const { fiber, requests } = yield* forkLoop({
+          runId,
+          session,
+          logger,
+          supportsVision: false,
+          script: [textTurn('first'), textTurn('second')],
+        });
+        yield* waitFor(
+          () =>
+            requests.length >= 2 &&
+            session.status.get(runId) === RUN_PHASE.WAITING,
+          'the second turn and the park after it',
+        );
+        yield* Fiber.interrupt(fiber);
+
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('has no vision support'),
+        );
+        expect(info).toHaveBeenCalledWith(
+          'please inspect this figure',
+          expect.not.objectContaining({
+            data: expect.objectContaining({ attachments: expect.anything() }),
+          }),
+        );
+      }),
+  );
+
+  it.effect(
+    'records what was asked and keeps the batch unconsumed when it cannot be applied',
+    () =>
+      Effect.gen(function* () {
+        // A failed follow-up append (corrupt or oversized media, a provider
+        // validation error) must still leave a record of what the user asked
+        // for, and must not acknowledge input that never reached the model.
+        const session = quietSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const info = vi.spyOn(logger, 'info');
+        const onFollowUpConsumed = vi.fn();
+        enqueue(session, runId, [
+          {
+            text: 'use this diagram',
+            mediaFiles: ['/tmp/texra-unreadable-figure.png'],
+            origin: 'user',
+          },
+        ]);
+
+        const exit = yield* Effect.exit(
+          runLoop({
+            runId,
+            session,
+            logger,
+            supportsVision: true,
+            onFollowUpConsumed,
+            script: [textTurn('first')],
+          }),
+        );
+
+        expect(exit._tag).toBe('Failure');
+        expect(info).toHaveBeenCalledWith(
+          'use this diagram',
+          expect.objectContaining({ messageType: expect.any(String) }),
+        );
+        expect(onFollowUpConsumed).not.toHaveBeenCalled();
+      }),
+  );
+});
+
+describe('an active goal at the wait', () => {
+  it.effect('continues the run with a synthetic turn instead of blocking', () =>
+    Effect.gen(function* () {
+      const session = goalSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const info = vi.spyOn(logger, 'info');
+      const onFollowUpConsumed = vi.fn();
+      yield* Effect.promise(() =>
+        GoalStore.start(runId, 'Finish the autonomous proof audit.'),
+      );
+
+      try {
+        const { state } = yield* runUntilSpent({
+          runId,
+          session,
+          logger,
+          onFollowUpConsumed,
+          script: [textTurn('first'), textTurn('second')],
+        });
+
+        expect(
+          userTexts(state).some((text) =>
+            text.includes('Finish the autonomous proof audit.'),
+          ),
+        ).toBe(true);
+        // The run never parked, and a synthetic turn is not the user's: it
+        // is neither logged nor acknowledged as consumed input.
+        expect(session.status.get(runId)).not.toBe(RUN_PHASE.WAITING);
+        expect(onFollowUpConsumed).not.toHaveBeenCalled();
+        expect(info).not.toHaveBeenCalledWith(
+          expect.stringContaining('<goal_context>'),
+          expect.anything(),
+        );
+      } finally {
+        yield* Effect.promise(() => GoalStore.forget(runId));
+      }
+    }),
+  );
+
+  it.effect('lets queued user input win over the continuation', () =>
+    Effect.gen(function* () {
+      const session = goalSession();
+      const runId = startedRun(session);
+      yield* Effect.promise(() =>
+        GoalStore.start(runId, 'Keep going autonomously.'),
+      );
+      enqueue(session, runId, [{ text: 'user correction', origin: 'user' }]);
+
+      try {
+        const { state } = yield* runUntilSpent({
+          runId,
+          session,
+          script: [textTurn('first'), textTurn('second')],
+        });
+
+        // The first thing the parked run consumed is the user's, not the
+        // goal's; the continuation only speaks for a queue with nothing in it.
+        expect(userTexts(state).at(1)).toBe('user correction');
+      } finally {
+        yield* Effect.promise(() => GoalStore.forget(runId));
+      }
+    }),
+  );
+
+  it.effect(
+    'is paused, with its approval bypasses cleared, after a failure',
+    () =>
+      Effect.gen(function* () {
+        const setApprovalBypassState = vi.fn();
+        const session = goalSession({ setApprovalBypassState });
+        const runId = startedRun(session);
+        yield* Effect.promise(() =>
+          GoalStore.start(runId, 'finish the refactor'),
+        );
+
+        try {
+          const { result } = yield* runLoop({
+            runId,
+            session,
+            stopAfterCycle: true,
+            script: [
+              { failWith: { message: 'cycle failed', userRetryable: false } },
+            ],
+          });
+
+          expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+          expect(GoalStore.getForRun(runId)?.status).toBe('paused');
+          for (const kind of ['bash', 'toolEdit', 'superYolo']) {
+            expect(setApprovalBypassState).toHaveBeenCalledWith({
+              runId,
+              kind,
+              bypassActive: false,
+            });
+          }
+        } finally {
+          yield* Effect.promise(() => GoalStore.forget(runId));
+          releaseRunResources(runId);
+        }
+      }),
+  );
+
+  it.effect(
+    'is recovered, not paused, by a batch the parent already drained',
+    () =>
+      Effect.gen(function* () {
+        // Regression #9443: input the child-run loop already took off the queue
+        // reaches the model, so the error clears without pausing the goal or
+        // dropping its unattended approvals first.
+        const setApprovalBypassState = vi.fn();
+        const session = goalSession({ setApprovalBypassState });
+        const runId = startedRun(session);
+        const parentRunId = generateRunId();
+        yield* Effect.promise(() =>
+          GoalStore.start(runId, 'finish the autonomous proof'),
+        );
+
+        try {
+          yield* runLoop({
+            runId,
+            session,
+            parentRunId,
+            script: [
+              {
+                failWith: {
+                  message: 'stale failure from the previous cycle',
+                  userRetryable: false,
+                },
+              },
+            ],
+          });
+          setApprovalBypassState.mockClear();
+
+          const { result, state } = yield* runLoop({
+            runId,
+            session,
+            parentRunId,
+            resume: true,
+            drainedFollowUps: [{ text: 'try the other lemma', origin: 'user' }],
+            script: [textTurn('recovered')],
+          });
+
+          expect(result.outcome).toBe(RUN_PHASE.WAITING);
+          expect(userTexts(state)).toContain('try the other lemma');
+          expect(GoalStore.getForRun(runId)?.status).toBe('active');
+          expect(setApprovalBypassState).not.toHaveBeenCalled();
+        } finally {
+          yield* Effect.promise(() => GoalStore.forget(runId));
+          releaseRunResources(runId);
+        }
+      }),
+  );
 });

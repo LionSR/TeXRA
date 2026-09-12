@@ -17,7 +17,7 @@ import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
  * log. The autonomous loop runs until the model completes
  * (`plan(command="complete")` → forget) or the user stops it.
  *
- * Called from `ToolUseWaitNode.exec()` BEFORE `session.waitForFollowUp` — the
+ * Called from the tool-use loop BEFORE its follow-up wait — the
  * wait blocks indefinitely on an empty queue, so the continuation cannot run
  * after it.
  */

@@ -14,13 +14,13 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type { ToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
@@ -42,7 +42,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
-import type { AgentLaunchContext } from '../AgentLaunchContext';
+import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
@@ -80,6 +80,9 @@ export interface AgentRunShape {
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
+  /** The process stores the launch read; every route and credential read
+   *  below the loop takes them from here. */
+  readonly stores: ModelOptionStores;
   readonly userVarChannels: UserVariableChannels;
   /** Initial user row to log after the loop has inserted launch media. */
   readonly initialUserMessageForTranscript: string | undefined;
@@ -121,7 +124,8 @@ export interface AgentRunLayerInput {
   readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
-  readonly toolInjections?: ToolInjectionRegistry;
+  /** The conditional tool injections this run resolves its tools with. */
+  readonly toolInjections: ToolInjections['Service'];
   readonly callbacks: RunCallbacks;
   readonly copilotRouteOverride?: CopilotRouteOverride;
   readonly inScope: <A>(operation: () => A) => A;
@@ -156,6 +160,7 @@ export const agentRunLayer = (
                 ctx.toolPolicy.approvalPromptsUnavailable,
               runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
               toolInjections: input.toolInjections,
+              stores: ctx.stores,
             }),
           ),
         catch: ensureError,
@@ -236,6 +241,7 @@ export const agentRunLayer = (
       }
       const bound = yield* bindModel({
         config: modelConfig,
+        stores: ctx.stores,
         compatibilityKey,
         copilotRouteOverride: input.copilotRouteOverride,
         agentCategory: config.agentCategory,
@@ -255,6 +261,7 @@ export const agentRunLayer = (
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,
+        stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new TaskRunFileService(runId),

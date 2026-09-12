@@ -22,7 +22,7 @@ export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
-export function describeAttachments(
+function describeAttachments(
   attachments: readonly ToolFileAttachment[],
 ): string[] {
   return attachments.map((file) => {
@@ -51,7 +51,7 @@ const ATTACHMENT_SUMMARY_TEMPLATES: Record<AttachmentSummaryVariant, string> = {
 
 const READ_FILE_HINT = 'Use the read_file tool to read them.';
 
-export function formatAttachmentSummaryFromNotes(
+function formatAttachmentSummaryFromNotes(
   notes: string,
   variant: AttachmentSummaryVariant = 'metadata-only',
 ): string {

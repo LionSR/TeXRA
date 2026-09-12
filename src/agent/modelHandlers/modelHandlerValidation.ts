@@ -126,13 +126,6 @@ export class ModelHandlerValidation extends ModelHandler<
     return [{ role: 'user', content: `${userPrefix}\n\n${userRequest}` }];
   }
 
-  async createRoundMessages(
-    messages: ChatCompletionMessageParam[],
-    userMessage: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    return [...messages, { role: 'user', content: userMessage }];
-  }
-
   override createMediaContent(_mediaMessage: MediaEntry[]): unknown[] {
     return [];
   }
@@ -145,39 +138,12 @@ export class ModelHandlerValidation extends ModelHandler<
     };
   }
 
-  protected appendUserText(
-    messages: ChatCompletionMessageParam[],
-    text: string,
-  ): void {
-    messages.push({ role: 'user', content: text });
-  }
-
   protected appendTextToLastAssistantMessage(
     _messages: ChatCompletionMessageParam[],
     _text: string,
     _options?: AssistantTextAppendOptions,
   ): boolean {
     return false;
-  }
-
-  override addContinueMessage(
-    _messages: ChatCompletionMessageParam[],
-    _workspaceState: AgentWorkspaceState,
-  ): void {
-    // The validation model always produces a complete response.
-  }
-
-  normalizeUsage(
-    rawUsage: ValidationResponse['usage'],
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    return {
-      inputTokens: rawUsage.prompt_tokens,
-      outputTokens: rawUsage.completion_tokens,
-      cost: 0,
-      responseTimeMs,
-      provider: 'unknown',
-    };
   }
 
   override updateMessageContent(
@@ -189,13 +155,6 @@ export class ModelHandlerValidation extends ModelHandler<
     messages.push(this.createAssistantMessage(newResponse));
   }
 
-  override shouldContinue(
-    _stopReason: ProviderStopReason,
-    _newResponse: string,
-  ): boolean {
-    return false;
-  }
-
   processThinkingBlock(
     _responseObject: ValidationResponse,
     _workspaceState?: AgentWorkspaceState,
@@ -203,57 +162,7 @@ export class ModelHandlerValidation extends ModelHandler<
     return null;
   }
 
-  extractToolUse(responseObject: ValidationResponse): SdkToolCall[] {
-    return responseObject.toolCalls ?? [];
-  }
-
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: SdkToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    _workspaceState: AgentWorkspaceState | undefined,
-    text: string | undefined,
-  ): Promise<ChatCompletionMessageParam[]> {
-    return entries.map(({ result }, index) => ({
-      role: 'tool',
-      tool_call_id: 'validation-tool-call',
-      content:
-        index === 0 && text
-          ? `${text}\n${JSON.stringify(result)}`
-          : JSON.stringify(result),
-    }));
-  }
-
-  async createUserFollowUpMessages(
-    messages: ChatCompletionMessageParam[],
-    userMessage: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    return [...messages, { role: 'user', content: userMessage }];
-  }
-
   createAssistantMessage(text: string): ChatCompletionMessageParam {
     return { role: 'assistant', content: text };
-  }
-
-  prependTextToUserMessage(
-    messages: ChatCompletionMessageParam[],
-    text: string,
-  ): void {
-    const last = messages.at(-1);
-    if (!last || last.role !== 'user' || typeof last.content !== 'string') {
-      messages.push({ role: 'user', content: text });
-      return;
-    }
-    last.content = `${text}\n${last.content}`;
-  }
-
-  async addMediaToUserMessage(
-    _messages: ChatCompletionMessageParam[],
-    _mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    // The validation model is text-only.
-    return [];
   }
 }

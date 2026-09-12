@@ -3,13 +3,10 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import type { OpenAIResponseToolCall } from '@agent/types/ModelHandlerContracts';
+import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
 import { BASH_APPROVAL_CONFIG_KEY, type ToolResult } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
@@ -28,36 +25,6 @@ vi.mock('@tools/approval/bashApproval', async (importActual) => {
   };
 });
 
-class TestOpenAIResponseHandler extends ModelHandlerOpenAIResponse {
-  override async getClient(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  override async createResponse(): Promise<never> {
-    throw new Error('not used');
-  }
-
-  override extractResponse(): never {
-    throw new Error('not used');
-  }
-}
-
-function createHandler(): TestOpenAIResponseHandler {
-  return new TestOpenAIResponseHandler({
-    name: 'test',
-    label: 'Test',
-    fullName: 'test',
-    shortName: 'test',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 10,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 1000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-  });
-}
-
 function stubBashApprovalDisabled(): void {
   vi.spyOn(agentConfig, 'getConfig').mockImplementation(
     <T>(key: string, defaultValue?: T): T =>
@@ -65,33 +32,15 @@ function stubBashApprovalDisabled(): void {
   );
 }
 
-/** Round-trip a tool result through follow-up message construction and return
- * the model-visible `function_call_output` text. */
-async function toolUseOutput(result: ToolResult) {
+/** Lower a tool result the way a settled call reaches the model, and return
+ * the model-visible text. */
+function toolUseOutput(result: ToolResult): string {
   const { attachments, sanitizedResult } = extractToolAttachments(result);
-  const messages = await createHandler().createBatchedToolUseFollowUpMessages(
-    [{ call: createBashCall(), result: sanitizedResult, attachments }],
-    AgentWorkspaceState.create(),
-    undefined,
-    undefined,
+  return formatToolResultTextWithAttachments(
+    sanitizedResult,
+    attachments,
+    true,
   );
-  return messages.find((message) => message.type === 'function_call_output')
-    ?.output;
-}
-
-function createBashCall(): OpenAIResponseToolCall {
-  return {
-    provider: 'openai-response',
-    callId: 'bash-1',
-    name: 'bash',
-    input: { command: 'echo long' },
-    raw: {
-      type: 'function_call',
-      call_id: 'bash-1',
-      name: 'bash',
-      arguments: '{"command":"echo long"}',
-    } as OpenAIResponseToolCall['raw'],
-  };
 }
 
 describe('BashTool error feedback', () => {
@@ -115,7 +64,7 @@ describe('BashTool error feedback', () => {
     expect(result.error).toContain('stderr failure details');
     expect(result.error).toContain('stdout failure guidance');
 
-    const output = await toolUseOutput(result);
+    const output = toolUseOutput(result);
 
     expect(output).toContain('Command failed');
     expect(output).toContain('stderr failure details');
@@ -203,7 +152,7 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).toContain('Do not retry');
     expect(rejected.userInstruction).toBeUndefined();
 
-    const output = await toolUseOutput(rejected);
+    const output = toolUseOutput(rejected);
 
     expect(output).toContain('Do not retry');
     expect(output).not.toContain('User feedback:');
@@ -222,7 +171,7 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.userInstruction).toBeUndefined();
 
-    const output = await toolUseOutput(rejected);
+    const output = toolUseOutput(rejected);
 
     expect(output).toContain('Denied by TeXRA approval policy.');
     expect(output).not.toContain('User feedback:');

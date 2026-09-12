@@ -31,7 +31,6 @@ import { registerRun } from '@agent/storage/runLifecycle';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
@@ -309,11 +308,11 @@ describe('AgentLaunchContext', () => {
       runScope,
       logger: noopTrace,
       modelCell,
-      toolPolicy: createToolPolicy({
+      toolPolicy: {
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['inquiry'],
         stopAfterCycle: true,
-      }),
+      },
       config: {
         agent: 'chat',
         model: 'deepseekT',

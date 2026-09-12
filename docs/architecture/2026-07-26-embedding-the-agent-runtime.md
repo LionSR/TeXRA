@@ -461,8 +461,7 @@ says this is to avoid "parking the agent while no UI is attached".
   `src/agent/runtime/RunHandle.ts`). Retain it and call
   `handle.interrupt()` to abort the run; both workflow and tool-use
   interruption call `runSession.interactions.cancel`
-  (`src/agent/runtime/executeAgent.ts:215-221`;
-  `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:347-349`).
+  (`src/agent/runtime/executeAgent.ts`; `src/agent/runtime/loop/toolUse.ts`).
   This is the supported cancellation path, not a substitute for attaching a
   host to a run that should continue.
 - **Direct `cancel()` / `dispose()` also settle without an attachment.**
@@ -475,7 +474,7 @@ says this is to avoid "parking the agent while no UI is attached".
   it.** That option filters `requiresApproval` tools out of the model-facing
   tool list before invocation
   (`src/agent/runtime/agentToolResolution.ts:150-157`, threaded through
-  `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:199`). It does not
+  the run's `AgentRun` service, `src/agent/runtime/run/AgentRun.ts`). It does not
   touch `requestRetry` or `askUserQuestion`, and it does not change dispatch.
   The CLI sets it for `policy === 'never'` and for headless `ask`
   (`packages/cli/src/runtime/approval/settleApprovals.ts` —
@@ -513,8 +512,8 @@ degradation instead of a hang. Trace the wiring end to end:
 - `executeAgent` threads `options.approvalPromptsUnavailable` into the run
   context on both a fresh launch and a resume
   (`src/agent/runtime/executeAgent.ts:392-396`, `:547-550`).
-- The tool-use flow reads it back off the run context and forwards it to tool
-  resolution (`src/agent/implementations/flows/tooluse/runToolUseFlow.ts:199`).
+- The run layer reads it off the launch context's tool policy and forwards it
+  to tool resolution (`src/agent/runtime/run/AgentRun.ts`).
 - `resolveAgentTools`'s shared gate drops any tool with
   `requiresApproval: true` once the flag is set, before the model ever sees it
   in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).

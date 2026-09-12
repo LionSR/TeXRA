@@ -195,10 +195,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     this.capabilities.supportsTokenCounting = true;
   }
 
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
   protected override get sdkErrorTagger() {
     return tagVscodeLmError;
   }
@@ -331,21 +327,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     );
   }
 
-  async createRoundMessages(
-    messages: LanguageModelMessage[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<LanguageModelMessage[]> {
-    requireSupportedMedia(mediaFiles, this.capabilities.supportsVision);
-    const media = mediaFiles?.length
-      ? await this.createMediaForRound(mediaFiles, 'followUp')
-      : [];
-    return [
-      ...messages,
-      { role: 'user', content: [textPart(userMessage), ...media] },
-    ];
-  }
-
   override createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
     return mediaMessage.flatMap((media): VscodeLmMediaPart[] => {
       if (
@@ -380,13 +361,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     };
   }
 
-  protected appendUserText(
-    messages: LanguageModelMessage[],
-    text: string,
-  ): void {
-    messages.push({ role: 'user', content: [textPart(text)] });
-  }
-
   protected appendTextToLastAssistantMessage(
     messages: LanguageModelMessage[],
     text: string,
@@ -411,13 +385,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return true;
   }
 
-  normalizeUsage(
-    _rawUsage: VscodeLmUsage,
-    _responseTimeMs: number,
-  ): NormalizedUsage | undefined {
-    return undefined;
-  }
-
   processThinkingBlock(
     _response: VscodeLmResponse,
     _workspaceState?: AgentWorkspaceState,
@@ -425,88 +392,8 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return null;
   }
 
-  extractToolUse(response: VscodeLmResponse): VscodeLmToolCall[] {
-    return response.toolCalls.map((call) => ({
-      provider: 'vscode-lm',
-      callId: call.callId,
-      name: call.name,
-      input: call.input,
-      raw: call,
-    }));
-  }
-
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: VscodeLmToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    _workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<LanguageModelMessage[]> {
-    if (entries.length === 0) return [];
-
-    const assistantContent: Array<
-      LanguageModelTextPart | LanguageModelToolCallPart
-    > = [
-      ...(text ? [textPart(text)] : []),
-      ...entries.map(({ call }) => call.raw),
-    ];
-    const resultContent: LanguageModelToolResultPart[] = entries.map(
-      ({ call, result, attachments }) => ({
-        kind: 'toolResult',
-        callId: call.callId,
-        text: formatToolResultTextWithAttachments(result, attachments, true),
-      }),
-    );
-
-    return [
-      { role: 'assistant', content: assistantContent },
-      { role: 'user', content: resultContent },
-    ];
-  }
-
-  async createUserFollowUpMessages(
-    messages: LanguageModelMessage[],
-    userMessage: string,
-  ): Promise<LanguageModelMessage[]> {
-    return [...messages, { role: 'user', content: [textPart(userMessage)] }];
-  }
-
   createAssistantMessage(text: string): LanguageModelMessage {
     return { role: 'assistant', content: [textPart(text)] };
-  }
-
-  prependTextToUserMessage(
-    messages: LanguageModelMessage[],
-    text: string,
-  ): void {
-    if (!text.trim()) return;
-    const index = messages.findLastIndex((message) => message.role === 'user');
-    const message = messages[index];
-    if (message?.role === 'user') {
-      messages[index] = prependUserText(message, text);
-    }
-  }
-
-  async addMediaToUserMessage(
-    messages: LanguageModelMessage[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    requireSupportedMedia(mediaFiles, this.capabilities.supportsVision);
-    if (!mediaFiles.length) return [];
-
-    const index = messages.findLastIndex((message) => message.role === 'user');
-    const message = messages[index];
-    if (message?.role !== 'user') return [];
-
-    const media = await this.createMediaForRound(mediaFiles, 'insert');
-    if (!media.length) return [];
-    messages[index] = {
-      role: 'user',
-      content: [...message.content, ...media],
-    };
-    return this.consumeInsertedAttachmentKinds('insert');
   }
 
   override async estimateTokenCount(

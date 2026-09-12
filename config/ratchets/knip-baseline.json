@@ -776,166 +776,16 @@
       "name": "TraceDataSchema"
     },
     {
-      "file": "src/agent/core/flows/BaseFlowServices.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BaseFlowContextInit"
-    },
-    {
-      "file": "src/agent/core/flows/BaseFlowServices.ts",
-      "category": "unused",
-      "kind": "types",
-      "name": "RoundFinalizedCallback"
-    },
-    {
-      "file": "src/agent/core/flows/CommonCycleTypes.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/CommonCycleTypes.ts"
-    },
-    {
-      "file": "src/agent/core/flows/CommonCycleTypes.ts",
-      "category": "unused",
-      "kind": "types",
-      "name": "SkippableNodeResult"
-    },
-    {
-      "file": "src/agent/core/flows/CycleServices.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/CycleServices.ts"
-    },
-    {
-      "file": "src/agent/core/flows/FlowTransitions.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/FlowTransitions.ts"
-    },
-    {
-      "file": "src/agent/core/flows/IToolUseSession.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/IToolUseSession.ts"
-    },
-    {
-      "file": "src/agent/core/flows/ModelInvocationNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/ModelInvocationNode.ts"
-    },
-    {
-      "file": "src/agent/core/flows/postCompactionContext.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/core/flows/postCompactionContext.ts"
-    },
-    {
       "file": "src/agent/core/state/AgentState.ts",
       "category": "production-dead",
       "kind": "files",
       "name": "src/agent/core/state/AgentState.ts"
     },
     {
-      "file": "src/agent/core/state/AgentState.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "ConversationRoundStateSnapshotSchema"
-    },
-    {
       "file": "src/agent/core/usage/RunUsageAccumulator.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "recordNormalizedUsage"
-    },
-    {
-      "file": "src/agent/followUp/followUpMessages.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "appendFollowUpAsUserMessage"
-    },
-    {
-      "file": "src/agent/followUp/followUpMessages.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "applyFollowUpBatch"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/ToolUseServices.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/ToolUseServices.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/ToolUseSessionLifecycle.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/ToolUseSessionLifecycle.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/nodes/types.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/nodes/types.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/runToolUseFlow.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/runToolUseFlow.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/runToolUseFlow.ts",
-      "category": "unused",
-      "kind": "types",
-      "name": "ToolUseFlowContext"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode.ts"
-    },
-    {
-      "file": "src/agent/implementations/flows/tooluse/toolUseRound/roundShared.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/implementations/flows/tooluse/toolUseRound/roundShared.ts"
     },
     {
       "file": "src/agent/index/agentRegistry.ts",
@@ -1004,30 +854,6 @@
       "name": "rewriteCodexRequestBody"
     },
     {
-      "file": "src/agent/modelHandlers/openai/responsesShapeGuards.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isFunctionCallOutputItem"
-    },
-    {
-      "file": "src/agent/node/index.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/node/index.ts"
-    },
-    {
-      "file": "src/agent/node/persistedFlow.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/node/persistedFlow.ts"
-    },
-    {
-      "file": "src/agent/node/persistedFlow.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "PersistedFlowRecordEnvelopeSchema"
-    },
-    {
       "file": "src/agent/prompt/userVars.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1074,30 +900,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "noopTrace"
-    },
-    {
-      "file": "src/agent/types/ConversationBlockTypes.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/types/ConversationBlockTypes.ts"
-    },
-    {
-      "file": "src/agent/types/ModelHandlerContracts.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "FinalTool"
-    },
-    {
-      "file": "src/agent/types/ProviderMessage.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ProviderMessageArraySchema"
-    },
-    {
-      "file": "src/agent/types/ServerTools.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ANTHROPIC_SERVER_TOOL_BLOCK_TYPES"
     },
     {
       "file": "src/agent/workflowScript/persistence.ts",
@@ -1236,12 +1038,6 @@
       "category": "unused",
       "kind": "exports",
       "name": "DeviceCodeExpired"
-    },
-    {
-      "file": "src/common/errors/sdkError/providerErrorFormat.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildFailedRetryInfo"
     },
     {
       "file": "src/common/teams/TeamPlan.ts",

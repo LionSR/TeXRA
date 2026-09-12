@@ -60,7 +60,7 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   // enabled: any tool-use agent can drive the autonomous loop without opting
   // into the tool in YAML.
   //
-  // The goal continuation itself is not registered here: `ToolUseWaitNode`
+  // The goal continuation itself is not registered here: the tool-use loop
   // calls `maybeBuildGoalContinuation` directly at the pre-wait point. There
   // is no idle-continuation registry — goal was its only consumer.
   {

@@ -81,36 +81,4 @@ export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
     const extracted = extractMiniMaxReasoningText(message?.reasoning_details);
     return extracted ?? super.extractReasoningFromMessage(message);
   }
-
-  /**
-   * MiniMax expects `reasoning_details` (not `reasoning_content`) in pass-back
-   * assistant messages to maintain reasoning chain continuity.
-   */
-  protected override buildAssistantMessageWithToolCalls(
-    toolCalls: ChatCompletionMessageToolCall[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): ChatCompletionAssistantMessageParam {
-    const callMsg: ChatCompletionAssistantMessageParam & {
-      reasoning_details?: Array<{ type: string; text: string }>;
-    } = {
-      role: 'assistant',
-      tool_calls: toolCalls,
-    };
-
-    if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
-      const reasoningText =
-        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
-      if (reasoningText) {
-        callMsg.reasoning_details = [{ type: 'thinking', text: reasoningText }];
-        workspaceState.resetReasoning();
-      }
-    }
-
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
-    }
-
-    return callMsg;
-  }
 }

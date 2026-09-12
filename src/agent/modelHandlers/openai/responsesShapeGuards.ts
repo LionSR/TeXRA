@@ -8,10 +8,7 @@
 // from here, so a Responses-API shape change updates this file and the handler
 // without churning the exporter's import surface.
 
-import type {
-  ResponseFunctionToolCallItem,
-  ResponseInputItem,
-} from 'openai/resources/responses/responses';
+import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 
 /** Type guard for Responses API `function_call` output items. */
 export function isResponseFunctionToolCallItem(
@@ -22,18 +19,6 @@ export function isResponseFunctionToolCallItem(
     item !== null &&
     'type' in item &&
     item.type === 'function_call'
-  );
-}
-
-/** Type guard for Responses API `function_call_output` input items. */
-export function isFunctionCallOutputItem(
-  item: unknown,
-): item is ResponseInputItem.FunctionCallOutput {
-  return (
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    item.type === 'function_call_output'
   );
 }
 

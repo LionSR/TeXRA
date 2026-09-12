@@ -534,11 +534,11 @@ const CORE_SETTING_ROWS: Record<
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts', {
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts', {
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts -> src/agent/core/flows/ModelInvocationNode.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/ModelInvoker.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },

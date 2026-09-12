@@ -40,12 +40,4 @@ export class ReasoningModelHandlerOpenAI<
 > extends ModelHandlerOpenAI<TCall> {
   protected override useReasoningStreamAggregator = true;
   protected override readonly convertContentToStringUnlessVision = true;
-
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
-  }
 }

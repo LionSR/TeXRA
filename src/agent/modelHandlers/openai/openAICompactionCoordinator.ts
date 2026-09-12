@@ -44,8 +44,7 @@ import type {
  *
  * `sourceMessages` is the exact `messages` array reference compaction ran
  * against — it's how {@link createResponseImpl} recognizes a same-turn retry
- * (PocketFlow's `Node._exec` reuses the same `prepRes`, hence the same
- * `messages` reference, across retry attempts) and reuses this result
+ * (a retried attempt reuses the same `messages` reference) and reuses this result
  * instead of re-running compaction. That reuse is what keeps this payload's
  * retry lifetime matched to {@link ServerChainState.clearChainForCompaction}'s
  * anchor clear, which already survives retries permanently — without it, the
@@ -53,8 +52,8 @@ import type {
  * attempt, forcing a redundant re-compaction on each retry.
  *
  * Reference equality alone cannot distinguish a same-turn retry from the
- * next turn, since `ModelInvocationNode.post()` mutates the shared messages
- * array in place (same reference survives across turns too). The field is
+ * next turn, since a caller may mutate the shared messages array in place
+ * (same reference survives across turns too). The field is
  * therefore also cleared unconditionally by {@link applyCompactionState} on
  * every successful call, so it can never outlive the turn it was computed
  * for; the `sourceMessages` check only ever matters while an attempt from
@@ -564,9 +563,8 @@ export class OpenAICompactionCoordinator {
     // a failed attempt that will be retried, so it can't be confused with the
     // same-turn-retry cache check in createResponseImpl(). Clearing here
     // (rather than relying on `sourceMessages !== messages` reference
-    // (in)equality) matters because PocketFlow's ModelInvocationNode.post()
-    // mutates `shared.messages` in place via replaceMessagesInPlace
-    // (length=0 + push), so the array reference is often IDENTICAL across
+    // (in)equality) matters because a caller may mutate the messages array
+    // in place, so the array reference is often IDENTICAL across
     // turns, not just across retries of the same turn. Leaving compactionResult
     // set here would make the next turn's genuinely different input look like
     // a same-turn retry, resend this turn's stale compactedMessages, and
@@ -625,15 +623,15 @@ export class OpenAICompactionCoordinator {
 
   /** Drop a cached compaction result that no longer matches the current input. */
   invalidateStaleCompactionCache(messages: ResponseInputItem[]): void {
-    // A same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
-    // the same `messages` reference, across retry attempts) keeps its cached
+    // A same-turn retry (the same `messages` reference across retry
+    // attempts) keeps its cached
     // result — otherwise the chain anchor that compaction already cleared on
     // chainState (which survives retries permanently) would outlive this
     // payload, forcing a redundant re-compaction on every retry. A retained
     // pending response is handled by the caller before this state can be
     // discarded. This reference check alone is NOT sufficient to distinguish a
-    // same-turn retry from the next turn, because ModelInvocationNode.post()
-    // mutates `shared.messages` in place, so the reference is often identical
+    // same-turn retry from the next turn, because a caller may mutate the
+    // messages array in place, so the reference is often identical
     // across turns too; the primary cross-turn guard is applyCompactionState()
     // clearing compactionResult on every successful call. This only matters
     // while a compaction from a still-in-flight (unsuccessful) attempt is pending.

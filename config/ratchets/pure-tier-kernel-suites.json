@@ -1,11 +1,7 @@
 {
-  "semantics": "Suites under a pure-tier directory (see PURE_DIRS in vitest.config.mjs) whose source shows no mock or host import, but which the pure project cannot run. `hostReadByModuleUnderTest`: the production module under test reads the host itself (platform(), workspace roots, the process runtime, the auth program edge) — each fails alone with no fake host installed, deterministically. `shareTerminalState`: Ink renderer suites that leak process terminal state into each other under a shared module registry. Both lists are shrink-only: a module that takes its host as a layer, or a suite that stops sharing process state, leaves the list and its suite runs in `pure` on its own. A listed file that no longer exists fails config load.",
+  "semantics": "Suites under a pure-tier directory (see PURE_DIRS in vitest.config.mjs) whose source shows no mock or host import, but which the pure project cannot run. `hostReadByModuleUnderTest`: the production module under test reads the host itself (platform(), workspace roots, the process runtime, the auth program edge) \u2014 each fails alone with no fake host installed, deterministically. `shareTerminalState`: Ink renderer suites that leak process terminal state into each other under a shared module registry. Both lists are shrink-only: a module that takes its host as a layer, or a suite that stops sharing process state, leaves the list and its suite runs in `pure` on its own. A listed file that no longer exists fails config load.",
   "hostReadByModuleUnderTest": [
-    "src/test-kernel/agent/PocketFlowNode.vitest.ts",
-    "src/test-kernel/agent/core/FinalToolSynthesis.vitest.ts",
     "src/test-kernel/agent/followUp/ToolUseDispatchInterruption.vitest.ts",
-    "src/test-kernel/agent/followUp/ToolUsePrepareNodeTranscriptLog.vitest.ts",
-    "src/test-kernel/agent/followUp/ToolUseRoundFollowUpMedia.vitest.ts",
     "src/test-kernel/agent/modelHandlers/AnthropicCacheBeta.vitest.ts",
     "src/test-kernel/agent/modelHandlers/GoogleInteractionsChaining.vitest.ts",
     "src/test-kernel/agent/modelHandlers/GoogleInteractionsMessages.vitest.ts",

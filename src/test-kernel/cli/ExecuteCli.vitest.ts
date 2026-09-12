@@ -2,6 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -12,7 +13,7 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import type { RunId, TodoItem } from '@shared/schemas';
+import type { FlowSnapshotPayload, RunId, TodoItem } from '@shared/schemas';
 import {
   createFakeHost,
   fakeProcessServices,
@@ -249,6 +250,38 @@ async function spyOnArtifactFlush() {
   return { store, flushSpy };
 }
 
+/**
+ * The reflection snapshot a resumable run carries on its aggregate. Only its
+ * presence is read here; the workflow command owns the rule that reads its
+ * fields.
+ */
+function reflectionSnapshot(): FlowSnapshotPayload {
+  return {
+    family: 'reflection',
+    runtime: {
+      phase: 'initial',
+      round: 0,
+      turn: 0,
+      continuationIndex: 0,
+      modelId: 'deepseekT',
+      modelHandlerCompatibilityKey: null,
+      lastError: null,
+      pendingRetry: null,
+    },
+    references: { pendingIntents: [], pendingResponse: null },
+    state: {
+      currentRound: 0,
+      totalRounds: 4,
+      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+      outputLocation: null,
+      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
+    },
+  };
+}
+
 async function stubExecuteCliDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
@@ -279,7 +312,7 @@ async function stubExecuteCliDeps(): Promise<void> {
   });
   mocks.deriveResumability.mockResolvedValue({
     kind: 'checkpoint',
-    flowRecord: { shared: {}, cursor: { nextNodeId: 'start' } },
+    snapshot: reflectionSnapshot(),
   });
   mocks.releaseRunLeaseAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
@@ -680,7 +713,6 @@ describe('executeCliRequest', () => {
         expect.objectContaining({
           runId: 'exec-1',
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
         }),
       );
       expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
@@ -852,7 +884,6 @@ describe('executeCliRequest', () => {
       expect.objectContaining({
         runId: 'exec-1',
         outcome: RUN_OUTCOME.CANCELLED,
-        flowRecord: 'preserve',
       }),
     );
   });

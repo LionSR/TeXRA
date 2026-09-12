@@ -1152,60 +1152,72 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
   });
 
-  const exit = yield* Effect.exit(program);
-  // The exit protocol runs masked: the halt row happens whether the loop
-  // returned, failed, or was interrupted by a stop.
-  return yield* Effect.uninterruptible(
-    Effect.gen(function* () {
-      const state = yield* Ref.get(latest);
-      const result = (
-        outcome: RunOutcome,
-        at: RunState | null,
-      ): ReflectionResult => ({
-        outcome,
-        roundOutputs: roundsToPersisted(outputState),
-        usage:
-          at?.usage ??
-          AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-        ...(flow.lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-          ? { error: flow.lastError }
-          : {}),
-      });
-      const halt = (outcome: RunOutcome) =>
-        state === null || state.phase === null
-          ? Effect.void
-          : ledger
-              .appendBatch(runId, state, [
-                haltedStepRow(runId, coordinates(state), outcome),
-              ])
-              .pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() =>
-                    logger.warn('Failed to record the run halt', {
-                      data: error,
-                    }),
+  const result = (
+    outcome: RunOutcome,
+    at: RunState | null,
+  ): ReflectionResult => ({
+    outcome,
+    roundOutputs: roundsToPersisted(outputState),
+    usage:
+      at?.usage ??
+      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    ...(flow.lastError !== undefined && outcome === RUN_OUTCOME.FAILED
+      ? { error: flow.lastError }
+      : {}),
+  });
+
+  /**
+   * The exit protocol: the halt row happens whether the loop returned,
+   * failed, or was interrupted by a host stop. It hangs off `onExit` rather
+   * than an `Effect.exit` followed by a masked block — an external interrupt
+   * unwinds straight past `Effect.exit`, which left the `halted` step
+   * unwritten.
+   */
+  const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
+    Effect.uninterruptible(
+      Effect.gen(function* () {
+        const state = yield* Ref.get(latest);
+        const halt = (outcome: RunOutcome) =>
+          state === null || state.phase === null
+            ? Effect.void
+            : ledger
+                .appendBatch(runId, state, [
+                  haltedStepRow(runId, coordinates(state), outcome),
+                ])
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.sync(() =>
+                      logger.warn('Failed to record the run halt', {
+                        data: error,
+                      }),
+                    ),
                   ),
-                ),
-              );
-      if (Exit.isSuccess(exit)) {
-        yield* halt(exit.value.outcome);
-        return result(exit.value.outcome, exit.value.state);
-      }
-      if (Cause.hasInterrupts(exit.cause)) {
-        yield* halt(RUN_OUTCOME.CANCELLED);
-        return yield* Effect.failCause(exit.cause);
-      }
-      const error = Cause.squash(exit.cause);
-      const failure =
-        error instanceof RunLedgerRefused
-          ? new Error(
-              `The run ledger refused a write (${error.reason}): ${error.detail}`,
-              { cause: error },
-            )
-          : ensureError(error);
-      logger.warn(`Reflection run ${runId} stopped: ${failure.message}`);
-      yield* halt(RUN_OUTCOME.FAILED);
-      return yield* Effect.fail(failure);
+                );
+        if (Exit.isSuccess(exit)) return yield* halt(exit.value.outcome);
+        if (Cause.hasInterrupts(exit.cause)) {
+          return yield* halt(RUN_OUTCOME.CANCELLED);
+        }
+        yield* halt(RUN_OUTCOME.FAILED);
+      }),
+    );
+
+  /** The caller's error for a run that ended in a failure cause. */
+  const failure = (error: unknown): Error =>
+    error instanceof RunLedgerRefused
+      ? new Error(
+          `The run ledger refused a write (${error.reason}): ${error.detail}`,
+          { cause: error },
+        )
+      : ensureError(error);
+
+  return yield* program.pipe(
+    Effect.onExit(finalize),
+    Effect.map((loop) => result(loop.outcome, loop.state)),
+    Effect.catchCause((cause) => {
+      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+      const stopped = failure(Cause.squash(cause));
+      logger.warn(`Reflection run ${runId} stopped: ${stopped.message}`);
+      return Effect.fail(stopped);
     }),
   );
 });

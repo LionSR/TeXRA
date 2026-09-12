@@ -418,7 +418,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // The drained batch must reach the resumed flow through the direct
       // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
       // cursor suspends again before ever reading the stream queue (see
-      // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
+      // the tool-use loop's wait; only its child-run loop's queue wait consumes it),
       // so re-queued items would sit unconsumed until the next wake. A root
       // cursor accepts either route; the handoff works for both.
       return yield* resumeToolUseFromResumeData(resume, {

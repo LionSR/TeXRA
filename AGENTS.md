@@ -569,27 +569,17 @@ For good separation of concerns and platform independence, core business logic s
 - Resume a persisted tool-use session via `resumeToolUseFromResumeData` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
 - Add new model handlers under `src/agent/modelHandlers/<provider>/` (no barrel — import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`), and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
-**PocketFlow architecture**
+**Run loop architecture**
 
-Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
+A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph:
 
-- **Flow types**: `runReflectionFlow` for multi-round reflection agents, `runToolUseFlow` for tool-use agents
-- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowContextInit` with convenience accessors (`logger`, `context`) defined inline.
-- **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
-- **Flow transitions** - use named constants instead of magic values:
-  - `FlowTransition.DEFAULT` - follow next() successor
-  - `FlowTransition.CONTINUE` - loop back to flow entry
-  - `FlowTransition.COMPLETE` - end the flow and return control to caller
-  - `FlowTransition.WAITING` - pause with the cursor kept for resume
-- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
-- **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (`runFlowWithLifecycle` / `executeAgent` catch).
-
-The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`
-and `Flow` — read it for the authoritative semantics. It is a trimmed
-descendant of upstream PocketFlow and does **not** implement the upstream
-`BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
-`params`/`setParams` channel; do not write code against them. State slices that
-travel through the flows are described in `docs/architecture/2026-06-20-pocketflow-state.md`.
+- **Two programs**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`) for tool-use agents and `runReflection` (`loop/reflection.ts`) for multi-round reflection agents. `loop/rows.ts` builds every ledger draft a loop appends. `core/flows/` keeps only what both use (`toolCallParsing`).
+- **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
+- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), `FollowUps` (the run's lease over the follow-up queue), and the session-root `RunLedger`. No services bag, no node fields.
+- **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `flow.step` for every wait and every halt; a `flow.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
+- **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`approval.requested` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled (`auxiliaryRetry`).
+- **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
+- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loops only execute and fail typed (`RunHalted`).
 
 **Webviews and UI**
 

@@ -28,12 +28,12 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **`.prefault` vs `.default` vs `.catch`** misuse: `.prefault` normalizes input _before_ validation (deserialization); `.default` fills in _after_ a missing field; `.catch` recovers from validation throws. Wrong choice silently corrupts state.
 - **Tool parameter required despite having an obvious default** → make it `.nullish()` plus a dispatch-time default; a required param that models routinely omit is a tool bug, not a model error. Also check description strings that enumerate dispatch behavior ("every command except X") against the actual dispatch table whenever either changes. Precedent: the memory tool's required `path` on `view`, and its own fix's `rename` description drifting from the dispatch table.
 
-## 3. PocketFlow / agent runtime
+## 3. Run loop / agent runtime
 
-- **`return 'continue' | 'complete' | 'default' | 'waiting'`** → use `FlowTransition.CONTINUE`/`COMPLETE`/`DEFAULT`/`WAITING` from `@agent/core/flows/FlowTransitions`.
-- **Mutable services**: anything passed to `flow.setServices()` that gets reassigned mid-run belongs in the shared store, not services.
-- **Lifecycle leak**: agent init/finalize logic appearing inside flows or nodes. Agents own lifecycle; flows execute; nodes throw and let `agent.run()` catch.
-- **`prep` / `exec` / `post` boundaries**: state mutations belong in `post`, not `exec`. Retries are not a `BaseNode` feature; only `ModelInvocationNode` retries (AGENTS.md "PocketFlow architecture").
+- **A second copy of the conversation** held by a loop, a service, or a test helper instead of the `RunState` that `RunLedger.appendBatch` returns → the live and resume paths must stay one function (AGENTS.md "Run loop architecture").
+- **A side effect before its row**: a model request before its `attempt` row, a tool dispatched before its `response` row commits, a barrier call without a preceding `tool.intent`, a wait without a `flow.step`, a `flow.snapshot` authored from in-process state.
+- **Lifecycle leak**: agent init/finalize logic appearing inside the loops. `executeAgent` / `AgentRunLifecycle` own lifecycle; the loops execute and fail typed.
+- **Retry outside `ModelInvoker`** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → the two owners live in the invoker only.
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
 - **Commands invoking flow factories directly** → must launch via `runAgent` (`src/agent/runtime/runAgent.ts`) so the run gets an `executionId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `executionId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.

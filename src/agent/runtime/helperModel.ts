@@ -94,7 +94,7 @@ export async function runHelperModelCompletion(
     undefined,
     systemPrompt,
   );
-  // Helper calls execute outside ModelInvocationNode, so they need their own
+  // Helper calls execute outside the run's ModelInvoker, so they need their own
   // bounded retry policy now that generation clients disable SDK retries.
   const result = await auxiliaryRetry(
     () =>

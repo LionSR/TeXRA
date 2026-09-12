@@ -27,13 +27,6 @@ function cellFor(
 }
 
 class CredentialRouteProbe extends ModelHandlerGoogleInteractions {
-  // Pin the endpoint so the key assertions exercise identity semantics
-  // without dragging base-URL resolution (server-side key service) into a
-  // unit test.
-  override getRetryEndpoint(): string {
-    return 'https://google.test/v1';
-  }
-
   tag(
     client: GoogleGenAI,
     route: ModelCredentialRoute,
@@ -133,31 +126,19 @@ describe('model client route publication', () => {
     expect(cell.route).toBe('api-key');
   });
 
-  it('publishes stable wire-route keys without retaining the secret', () => {
+  it('publishes the credential route a client was built on, and nothing for an untagged one', () => {
     const probe = new CredentialRouteProbe(
       buildTestModelConfig({ provider: ModelProvider.GOOGLE }),
     );
     const first = {} as GoogleGenAI;
-    const sameCredential = {} as GoogleGenAI;
     const replacement = {} as GoogleGenAI;
     probe.tag(first, 'api-key', 'secret-a');
-    probe.tag(sameCredential, 'api-key', 'secret-a');
-    probe.tag(replacement, 'api-key', 'secret-b');
+    probe.tag(replacement, 'openrouter', 'secret-b');
 
     expect(probe.getCredentialRouteForClient(first)).toBe('api-key');
-    // Same credential ⇒ same wire route; a replaced key splits the route.
-    expect(probe.getWireRouteKey(first)).toBe(
-      probe.getWireRouteKey(sameCredential),
-    );
-    expect(probe.getWireRouteKey(first)).not.toBe(
-      probe.getWireRouteKey(replacement),
-    );
-    expect(probe.getWireRouteKey(first)).not.toContain('secret-a');
+    expect(probe.getCredentialRouteForClient(replacement)).toBe('openrouter');
     expect(
       probe.getCredentialRouteForClient({} as GoogleGenAI),
     ).toBeUndefined();
-    expect(probe.getWireRouteKey({} as GoogleGenAI)).toContain(
-      'unknown-credential',
-    );
   });
 });

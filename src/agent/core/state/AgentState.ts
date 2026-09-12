@@ -1,23 +1,6 @@
-import { z } from 'zod';
-
-import {
-  NormalizedUsageSchema,
-  type AgentRunStateSnapshot,
-  type NormalizedUsage,
-} from '@shared/schemas';
+import type { AgentRunStateSnapshot, NormalizedUsage } from '@shared/schemas';
 
 import { recordNormalizedUsage } from '../usage/RunUsageAccumulator';
-
-export const ConversationRoundStateSnapshotSchema = z.object({
-  roundIndex: z.int().nonnegative(),
-  continuationCount: z.int().nonnegative().prefault(0),
-  responseTimeMs: z.number().nonnegative().prefault(0),
-  normalizedUsage: NormalizedUsageSchema.nullable().prefault(null),
-});
-
-export type ConversationRoundStateSnapshot = z.output<
-  typeof ConversationRoundStateSnapshotSchema
->;
 
 /**
  * Record cycle metrics into run state. Mutates run in place.

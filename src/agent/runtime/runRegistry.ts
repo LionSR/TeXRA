@@ -767,20 +767,28 @@ export class RunRegistry {
     // stopping it ends the loop too, so the interrupted turn is not delivered
     // to the parent as a completed one.
     const activation = this.childActivations.get(handle.runId);
+    let activationInterrupted = false;
     if (activation && !activation.isDetached()) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
         activation.interrupt();
+        activationInterrupted = true;
       }
     }
     if (handle.interrupt()) {
       this.cancelRunStatus(handle.runId);
       return true;
     }
+    // The loop's own interrupt already carried the stop into the turn: the
+    // native-subagent strategy links the loop signal to this handle, so
+    // aborting the loop spends the handle's interrupt target before we reach
+    // it. The delivered stop is the admission, exactly as the handle-less
+    // branch of `kill` reports an activation-only stop.
+    if (activationInterrupted) return true;
     // No live interrupt context: a native subagent suspended at WAITING has
     // already had its tool-use session disposed and interrupt handler detached
-    // (runToolUseFlow's finally), while the handle stays tracked for resume
+    // (the tool-use loop's scope), while the handle stays tracked for resume
     // (runFlowWithLifecycle). Run the teardown it parked with instead of
     // silently no-oping the kill.
     const settlement = this.waitingTermination.terminateWaitingHandle(handle);
