@@ -24,6 +24,7 @@ import {
   Exit,
   Layer,
   Ref,
+  Scope,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -40,6 +41,7 @@ import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetada
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   ModelError,
+  type BackgroundEvent,
   type ResolvedTurn,
   type TurnEvent,
   type TurnRequest,
@@ -47,6 +49,7 @@ import {
 } from '@llm/turn';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
+  AgentCategory,
   MESSAGE_TYPES,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
@@ -62,7 +65,7 @@ import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
@@ -74,6 +77,13 @@ import { rowAggregate, runtimeSnapshotRow, stepRow } from './loop/rows';
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
+
+/**
+ * How long accepted background work is observed after its submission, as
+ * the retired poller allowed. The deadline is absolute and recorded with the
+ * `accepted` row: a resume observes under the original one, never a fresh one.
+ */
+const BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000;
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
@@ -246,116 +256,62 @@ export const modelInvokerLayer: Layer.Layer<
     ): RunLedgerDraft => runtimeSnapshotRow(runId, state, runtime);
 
     /**
-     * One billed attempt: prepare, commit the `attempt` row, stream, commit
-     * the `response` row. Preparation and the stream run interruptible; the
-     * two appends are masked so a stop cannot split a request from its row.
-     * Fails with `AttemptFailed` carrying the state after the attempt row.
+     * Whether a turn runs as background work: a workflow turn on a binding
+     * that supports it, under the provider's toggle. Tool-use turns stream
+     * (per-step output); the OpenAI toggle applies to GPT models as its
+     * description says, the Google one to any route with server-side state.
      */
-    const attemptOnce = Effect.fn('ModelInvoker.attempt')(function* (
-      initial: RunState,
-      invocation: InvocationRef,
-      request: InvokeRequest,
-      bound: BoundModel,
-      operationId: string,
-    ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
-      let state = initial;
-      const turnRequest: TurnRequest = {
-        mode: 'foreground',
-        ...(request.system !== undefined ? { system: request.system } : {}),
-        messages: state.messages,
-        ...(request.tools !== undefined ? { tools: request.tools } : {}),
-        ...(request.toolChoice !== undefined
-          ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
-          : {}),
-        ...(state.continuation !== null &&
-        state.continuation.origin.protocol === bound.origin.protocol &&
-        state.continuation.origin.requestedModel === bound.origin.requestedModel
-          ? { continuation: state.continuation }
-          : {}),
-      };
-      const fail = (cause: unknown, at: RunState) =>
-        Effect.fail(new AttemptFailed(classifyModelFailure(cause), at));
-      const prepared = yield* Effect.exit(bound.model.prepareTurn(turnRequest));
-      if (Exit.isFailure(prepared)) {
-        if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
-        return yield* fail(Cause.squash(prepared.cause), state);
+    const backgroundRequested = (bound: BoundModel): boolean => {
+      if (!bound.backgroundCapable) return false;
+      if (run.config.agentCategory !== AgentCategory.Workflow) return false;
+      if (bound.origin.protocol === 'google-interactions') {
+        return getConfig<boolean>('texra.model.useGoogleBackgroundResponses');
       }
-      const resolved = prepared.value;
-      if (resolved.mode !== 'foreground') {
-        return yield* fail(
-          new ModelError({
-            kind: 'unsupported',
-            message: 'The run loops issue foreground turns only.',
-          }),
-          state,
-        );
-      }
-      yield* saveDebug(
-        state.messages,
-        'messages',
-        request.round,
-        request.debugName,
+      return (
+        bound.config.name.toLowerCase().startsWith('gpt') &&
+        getConfig<boolean>('texra.model.useBackgroundResponses')
       );
-      // R4: the input estimate where the provider offers one. A count that
-      // fails is logged and the provider enforces its own limit; an input
-      // that alone exceeds the window is refused before it is billed.
-      if (bound.model.estimateInputTokens && bound.contextWindow > 0) {
-        const estimate = yield* Effect.exit(
-          bound.model.estimateInputTokens(resolved),
-        );
-        if (Exit.isFailure(estimate)) {
-          if (Cause.hasInterrupts(estimate.cause))
-            return yield* Effect.interrupt;
-          logger.debug(
-            'Token counting failed. Proceeding without token adjustment.',
-            { data: Cause.squash(estimate.cause) },
-          );
-        } else if (estimate.value.inputTokens > bound.contextWindow) {
-          return yield* fail(
-            new ModelError({
-              kind: 'invalid-request',
-              message: `Input is ${estimate.value.inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
-            }),
-            state,
-          );
-        }
-      }
-      logRetryLifecycle(operationId, 'attempt_started', bound, {
-        attempt: invocation.attempt,
-      });
-      // The durable fact before the billed request (F1).
-      state = yield* Effect.uninterruptible(
-        ledger.appendBatch(runId, state, [
-          {
-            type: 'model.message',
-            aggregateId,
-            payload: {
-              kind: 'attempt',
-              invocation,
-              origin: bound.origin,
-              delivery: 'stream',
-            },
-          },
-        ]),
-      );
-      const thinking: StreamHandle = logger.openRun(MESSAGE_TYPES.THINKING, {
+    };
+
+    const failAttempt = (cause: unknown, at: RunState) =>
+      Effect.fail(new AttemptFailed(classifyModelFailure(cause), at));
+
+    interface AttemptTrace {
+      readonly thinking: StreamHandle;
+      readonly output: StreamHandle;
+    }
+    const openTrace = (): AttemptTrace => ({
+      thinking: logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true }),
+      output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         deferStart: true,
-      });
-      const output: StreamHandle = logger.openRun(
-        MESSAGE_TYPES.MODEL_RESPONSE,
-        { deferStart: true },
-      );
-      const stateRef = yield* Ref.make(state);
-      const started = Date.now();
-      const completed: { value: TurnResult | null } = { value: null };
-      const onEvent = (event: TurnEvent) =>
+      }),
+    });
+
+    /**
+     * The bridge from the model's events into the trace and the ledger: the
+     * provider's identity becomes an `identified` row as soon as it is seen
+     * (once; a background operation may report it twice), deltas stream
+     * into the run's thinking and output handles, and the completed result
+     * is kept for the response row.
+     */
+    const eventSink =
+      (
+        invocation: InvocationRef,
+        stateRef: Ref.Ref<RunState>,
+        trace: AttemptTrace,
+        completed: { value: TurnResult | null },
+      ) =>
+      (event: TurnEvent | BackgroundEvent) =>
         Effect.gen(function* () {
           switch (event.kind) {
             case 'identified': {
               const current = yield* Ref.get(stateRef);
+              if (
+                current.openAttempt?.providerResponseId ===
+                event.providerResponseId
+              ) {
+                return;
+              }
               const next = yield* ledger.appendBatch(runId, current, [
                 {
                   type: 'model.message',
@@ -372,23 +328,38 @@ export const modelInvokerLayer: Layer.Layer<
               return;
             }
             case 'delta':
-              if (event.part === 'reasoning') thinking.append(event.text);
-              else output.append(event.text);
+              if (event.part === 'reasoning') trace.thinking.append(event.text);
+              else trace.output.append(event.text);
               return;
             case 'phase':
+            case 'cursor':
               return;
             case 'completed':
               completed.value = event.result;
               return;
           }
         });
-      const streamed = yield* Effect.exit(
-        Stream.runForEach(bound.model.streamTurn(resolved), onEvent),
-      );
-      state = yield* Ref.get(stateRef);
+
+    /**
+     * The tail every attempt shares once its events have been consumed: the
+     * trace handles close, a failed stream classifies, an empty one is a
+     * malformed output, and a completed turn is priced and committed as the
+     * `response` row before any local tool runs.
+     */
+    const finishAttempt = Effect.fn('ModelInvoker.finish')(function* (
+      state: RunState,
+      invocation: InvocationRef,
+      request: InvokeRequest,
+      bound: BoundModel,
+      operationId: string,
+      trace: AttemptTrace,
+      started: number,
+      streamed: Exit.Exit<void, unknown>,
+      completed: { value: TurnResult | null },
+    ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
       if (Exit.isFailure(streamed)) {
-        thinking.finalize(undefined);
-        output.finalize();
+        trace.thinking.finalize(undefined);
+        trace.output.finalize();
         if (Cause.hasInterrupts(streamed.cause)) return yield* Effect.interrupt;
         const cause = Cause.squash(streamed.cause);
         if (
@@ -400,14 +371,14 @@ export const modelInvokerLayer: Layer.Layer<
         logRetryLifecycle(operationId, 'attempt_failed', bound, {
           attempt: invocation.attempt,
         });
-        return yield* fail(cause, state);
+        return yield* failAttempt(cause, state);
       }
       const responseTimeMs = Date.now() - started;
       const turn = completed.value;
       if (turn === null) {
-        thinking.finalize(undefined);
-        output.finalize();
-        return yield* fail(
+        trace.thinking.finalize(undefined);
+        trace.output.finalize();
+        return yield* failAttempt(
           new ModelError({
             kind: 'malformed-output',
             message: EMPTY_RESPONSE_ERROR_MESSAGE,
@@ -417,8 +388,8 @@ export const modelInvokerLayer: Layer.Layer<
       }
       const text = turnText(turn);
       const reasoning = turnReasoning(turn);
-      thinking.finalize(reasoning === '' ? undefined : reasoning);
-      output.finalize(text);
+      trace.thinking.finalize(reasoning === '' ? undefined : reasoning);
+      trace.output.finalize(text);
       yield* saveDebug(
         turn,
         'response',
@@ -435,7 +406,7 @@ export const modelInvokerLayer: Layer.Layer<
       const responseId = randomUUID();
       const calls = dispatchFactsFor(turn, run.tools, logger, generateShortId);
       // The completed turn, committed once before any local tool runs.
-      state = yield* Effect.uninterruptible(
+      const next = yield* Effect.uninterruptible(
         ledger.appendBatch(runId, state, [
           {
             type: 'model.message',
@@ -457,7 +428,7 @@ export const modelInvokerLayer: Layer.Layer<
       });
       return {
         kind: 'response',
-        state,
+        state: next,
         responseId,
         turn,
         text,
@@ -465,6 +436,245 @@ export const modelInvokerLayer: Layer.Layer<
         responseTimeMs,
       };
     });
+
+    /**
+     * Background work: submit, and if the provider accepted it rather than
+     * completing at once, commit the `accepted` row with its deadline before
+     * `observe` is called (the commit barrier, row 4). A progress callback is
+     * no substitute: nothing observes an operation the ledger does not hold.
+     */
+    const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
+      resolved: Extract<ResolvedTurn, { mode: 'background' }>,
+      invocation: InvocationRef,
+      bound: BoundModel,
+      stateRef: Ref.Ref<RunState>,
+      onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
+      completed: { value: TurnResult | null },
+    ): Effect.fn.Return<void, ModelError | InvokeError> {
+      const background = bound.model.background;
+      if (background === undefined) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'The bound model resolved a background turn it cannot submit.',
+        });
+      }
+      const submission = yield* background.submit(resolved);
+      if (submission.kind === 'completed') {
+        completed.value = submission.result;
+        return;
+      }
+      const deadlineAtMs = Date.now() + BACKGROUND_MAX_DURATION_MS;
+      const current = yield* Ref.get(stateRef);
+      const next = yield* Effect.uninterruptible(
+        ledger.appendBatch(runId, current, [
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'identified',
+              invocation,
+              providerResponseId: submission.operation.providerResponseId,
+              returnedModel: submission.returnedModel,
+            },
+          },
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'accepted',
+              invocation,
+              operation: submission.operation,
+              deadlineAtMs,
+            },
+          },
+        ]),
+      );
+      yield* Ref.set(stateRef, next);
+      yield* Stream.runForEach(
+        background.observe(submission.operation, { deadlineAtMs }),
+        onEvent,
+      );
+    });
+
+    /**
+     * One billed attempt: prepare, commit the `attempt` row, stream or
+     * submit-and-observe, commit the `response` row. Preparation and the
+     * events run interruptible; the appends are masked so a stop cannot
+     * split a request from its row. Fails with `AttemptFailed` carrying the
+     * state after the attempt row.
+     */
+    const attemptOnce = Effect.fn('ModelInvoker.attempt')(function* (
+      initial: RunState,
+      invocation: InvocationRef,
+      request: InvokeRequest,
+      bound: BoundModel,
+      operationId: string,
+    ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+      let state = initial;
+      const turnRequest: TurnRequest = {
+        mode: backgroundRequested(bound) ? 'background' : 'foreground',
+        ...(request.system !== undefined ? { system: request.system } : {}),
+        messages: state.messages,
+        ...(request.tools !== undefined ? { tools: request.tools } : {}),
+        ...(request.toolChoice !== undefined
+          ? { toolChoice: request.toolChoice }
+          : {}),
+        ...(request.stopSequences !== undefined
+          ? { stopSequences: request.stopSequences }
+          : {}),
+        ...(state.continuation !== null &&
+        state.continuation.origin.protocol === bound.origin.protocol &&
+        state.continuation.origin.requestedModel === bound.origin.requestedModel
+          ? { continuation: state.continuation }
+          : {}),
+      };
+      const prepared = yield* Effect.exit(bound.model.prepareTurn(turnRequest));
+      if (Exit.isFailure(prepared)) {
+        if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
+        return yield* failAttempt(Cause.squash(prepared.cause), state);
+      }
+      const resolved = prepared.value;
+      yield* saveDebug(
+        state.messages,
+        'messages',
+        request.round,
+        request.debugName,
+      );
+      // R4: the input estimate where the provider offers one. A count that
+      // fails is logged and the provider enforces its own limit; an input
+      // that alone exceeds the window is refused before it is billed.
+      if (
+        resolved.mode === 'foreground' &&
+        bound.model.estimateInputTokens &&
+        bound.contextWindow > 0
+      ) {
+        const estimate = yield* Effect.exit(
+          bound.model.estimateInputTokens(resolved),
+        );
+        if (Exit.isFailure(estimate)) {
+          if (Cause.hasInterrupts(estimate.cause))
+            return yield* Effect.interrupt;
+          logger.debug(
+            'Token counting failed. Proceeding without token adjustment.',
+            { data: Cause.squash(estimate.cause) },
+          );
+        } else if (estimate.value.inputTokens > bound.contextWindow) {
+          return yield* failAttempt(
+            new ModelError({
+              kind: 'invalid-request',
+              message: `Input is ${estimate.value.inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
+            }),
+            state,
+          );
+        }
+      }
+      logRetryLifecycle(operationId, 'attempt_started', bound, {
+        attempt: invocation.attempt,
+        delivery: resolved.mode,
+      });
+      // The durable fact before the billed request (F1).
+      state = yield* Effect.uninterruptible(
+        ledger.appendBatch(runId, state, [
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'attempt',
+              invocation,
+              origin: bound.origin,
+              delivery: resolved.mode === 'background' ? 'background' : 'stream',
+            },
+          },
+        ]),
+      );
+      const trace = openTrace();
+      const stateRef = yield* Ref.make(state);
+      const started = Date.now();
+      const completed: { value: TurnResult | null } = { value: null };
+      const onEvent = eventSink(invocation, stateRef, trace, completed);
+      const streamed = yield* Effect.exit(
+        resolved.mode === 'foreground'
+          ? Stream.runForEach(bound.model.streamTurn(resolved), onEvent)
+          : submitAndObserve(
+              resolved,
+              invocation,
+              bound,
+              stateRef,
+              onEvent,
+              completed,
+            ),
+      );
+      state = yield* Ref.get(stateRef);
+      return yield* finishAttempt(
+        state,
+        invocation,
+        request,
+        bound,
+        operationId,
+        trace,
+        started,
+        streamed,
+        completed,
+      );
+    });
+
+    /**
+     * A resumed attempt whose background operation the ledger holds: observe
+     * it under the deadline recorded with its `accepted` row, never resubmit,
+     * even if the background settings changed since. Unbilled, so it runs
+     * outside the route gate.
+     */
+    const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
+      function* (
+        initial: RunState,
+        invocation: InvocationRef,
+        request: InvokeRequest,
+        bound: BoundModel,
+        operationId: string,
+        accepted: NonNullable<NonNullable<RunState['openAttempt']>['accepted']>,
+      ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
+        const background = bound.model.background;
+        if (background === undefined) {
+          return yield* failAttempt(
+            new ModelError({
+              kind: 'unsupported',
+              message:
+                'The run resumed onto a model that cannot observe its accepted background operation.',
+            }),
+            initial,
+          );
+        }
+        logRetryLifecycle(operationId, 'attempt_started', bound, {
+          attempt: invocation.attempt,
+          delivery: 'background',
+          resumed: true,
+        });
+        const trace = openTrace();
+        const stateRef = yield* Ref.make(initial);
+        const started = Date.now();
+        const completed: { value: TurnResult | null } = { value: null };
+        const streamed = yield* Effect.exit(
+          Stream.runForEach(
+            background.observe(accepted.operation, {
+              deadlineAtMs: accepted.deadlineAtMs,
+            }),
+            eventSink(invocation, stateRef, trace, completed),
+          ),
+        );
+        const state = yield* Ref.get(stateRef);
+        return yield* finishAttempt(
+          state,
+          invocation,
+          request,
+          bound,
+          operationId,
+          trace,
+          started,
+          streamed,
+          completed,
+        );
+      },
+    );
 
     /**
      * One attempt under the session's route gate. The gate is Promise-tier
@@ -575,7 +785,7 @@ export const modelInvokerLayer: Layer.Layer<
             agentCategory: run.config.agentCategory,
             temperature: run.setting.temperature,
             inScope: run.inScope,
-          });
+          }).pipe(Scope.provide(run.scope));
           logger.debug('Refreshed model binding before manual retry');
           return next;
         }),
@@ -761,6 +971,13 @@ export const modelInvokerLayer: Layer.Layer<
       const open = state.openAttempt;
       const invocationId = open?.invocation.invocationId ?? randomUUID();
       let attempt = open === null ? 1 : open.invocation.attempt + 1;
+      // An open attempt the provider accepted as background work is observed
+      // first, under its recorded deadline; only a failure of that
+      // observation (or a gate a human already holds) leads to a new attempt.
+      let observing =
+        open !== null && open.accepted !== null && state.pendingRetry === null
+          ? { invocation: open.invocation, accepted: open.accepted }
+          : null;
       // The manual gate as resumed. `waiting`: re-present the same request.
       // `authorized`: one unused permit. `started`: the permit was spent by
       // an attempt that never reported, so a new decision is required.
@@ -841,16 +1058,34 @@ export const modelInvokerLayer: Layer.Layer<
           );
           admission = 'automatic';
         }
-        const invocation: InvocationRef = { invocationId, attempt };
-        const exit = yield* Effect.exit(
-          gatedAttempt(
-            state,
-            invocation,
-            request,
-            yield* SynchronizedRef.get(run.model),
-            operationId,
-          ),
-        );
+        let invocation: InvocationRef;
+        let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
+        if (observing !== null) {
+          invocation = observing.invocation;
+          exit = yield* Effect.exit(
+            observeAccepted(
+              state,
+              invocation,
+              request,
+              yield* SynchronizedRef.get(run.model),
+              operationId,
+              observing.accepted,
+            ),
+          );
+          observing = null;
+        } else {
+          invocation = { invocationId, attempt };
+          attempt += 1;
+          exit = yield* Effect.exit(
+            gatedAttempt(
+              state,
+              invocation,
+              request,
+              yield* SynchronizedRef.get(run.model),
+              operationId,
+            ),
+          );
+        }
         if (Exit.isSuccess(exit)) return exit.value;
         if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
         const error = Cause.squash(exit.cause);
@@ -866,7 +1101,6 @@ export const modelInvokerLayer: Layer.Layer<
         state = error.state;
         lastFailure = error.failure.formatted;
         failedAttempt = invocation;
-        attempt += 1;
         automaticAttempts += 1;
         const { failure } = error;
         if (isUserAbort(failure.error)) return { kind: 'cancelled', state };

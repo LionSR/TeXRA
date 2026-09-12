@@ -41,6 +41,7 @@ import {
   AGENT_TOOL_INJECTIONS,
   ToolInjections,
 } from '@agent/runtime/toolInjection';
+import { EditorModel } from '@agent/runtime/run/modelBinding';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
@@ -767,6 +768,12 @@ export interface ProcessRuntimeOptions {
   readonly secrets: () => PlatformSecrets;
   readonly appState: () => StateStore;
   readonly setup: SetupPlatformShape;
+  /**
+   * The editor's language models, for the one host that has an editor: the
+   * run layer binds `vscode-lm` models through it. Absent on a host without
+   * one, where binding such a model fails with that fact.
+   */
+  readonly editorModel?: EditorModel['Service'];
 }
 
 /**
@@ -797,6 +804,7 @@ export function installProcessRuntime({
   secrets,
   appState,
   setup,
+  editorModel,
 }: ProcessRuntimeOptions): void {
   const identity =
     processStart instanceof Promise
@@ -815,6 +823,9 @@ export function installProcessRuntime({
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
     processServicesLayer({ secrets, appState, setup }),
+    editorModel === undefined
+      ? Layer.empty
+      : Layer.succeed(EditorModel)(editorModel),
   ).pipe(Layer.provideMerge(identity));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));

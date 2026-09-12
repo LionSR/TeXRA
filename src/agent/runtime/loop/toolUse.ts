@@ -18,7 +18,7 @@
  * pending response dispatches what is unsettled, and a halted run that is
  * launched again waits for the input that resumes it.
  */
-import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Ref, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -281,7 +281,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         agentCategory: run.config.agentCategory,
         temperature: run.setting.temperature,
         inScope: run.inScope,
-      });
+      }).pipe(Scope.provide(run.scope));
       userChannels[USER_VAR_MODEL] = next.modelId;
       const switched = yield* ledger.appendBatch(runId, state, [
         {

@@ -7,7 +7,14 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { Context, Data, Effect, Layer, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Data,
+  Effect,
+  Layer,
+  SynchronizedRef,
+  type Scope,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
@@ -96,6 +103,12 @@ export interface AgentRunShape {
   /** The run's live model binding; a mid-run switch replaces it. */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
   /**
+   * The run's scope: the layer's, closed when the run's layer is released.
+   * A model bound mid-run (a manual retry's rebind, a host-admitted switch)
+   * is acquired into it, so an editor model it holds retires with the run.
+   */
+  readonly scope: Scope.Scope;
+  /**
    * A switch the host admitted (the registry name of the next model),
    * applied by the loop at its next model boundary so the ledger rows that
    * record it are appended by the one fiber that holds the run's state. A
@@ -147,6 +160,7 @@ export const agentRunLayer = (
       const { runId, session } = ctx.runScope;
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
+      const scope = yield* Effect.scope;
 
       const baseRegistry = getDefaultToolRegistry();
       const resolvedTools = yield* Effect.tryPromise({
@@ -269,6 +283,7 @@ export const agentRunLayer = (
         finalToolName,
         structured,
         model,
+        scope,
         pendingModelSwitch,
         usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,

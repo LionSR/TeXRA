@@ -11,7 +11,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import { Effect } from 'effect';
+import { Context, Effect, Option, type Scope } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
@@ -27,10 +27,13 @@ import { openrouterChatModel } from '@llm/openrouterChat';
 import {
   type Model,
   type ModelConfiguration,
+  type ModelError,
   type ModelOrigin,
+  type VscodeLanguageModelConfiguration,
 } from '@llm/turn';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
+import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import {
   kimiCodeEffectiveConfig,
   resolveKimiCodeRoutingFacts,
@@ -54,6 +57,23 @@ type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
 /** Tool-use runs keep output headroom for context growth, as the handler did. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
+
+/**
+ * The host's editor language models (R2). An extension host that reaches the
+ * editor's language-model API provides one at its process root and the run
+ * layer binds `vscode-lm` models through it; a host without an editor
+ * provides none, and binding such a model there fails with that fact. The
+ * package keeps only the protocol; the acquired model lives in the scope it
+ * is acquired into (the run's).
+ */
+export class EditorModel extends Context.Service<
+  EditorModel,
+  {
+    readonly acquire: (
+      configuration: VscodeLanguageModelConfiguration,
+    ) => Effect.Effect<Model, ModelError, Scope.Scope>;
+  }
+>()('@texra/agent/EditorModel') {}
 
 const LLM_EFFORTS = new Set([
   'none',
@@ -114,6 +134,8 @@ export interface BoundModel {
   readonly modelRetryRouteKey: string;
   /** The failed binding sat on the Kimi Code coding endpoint. */
   readonly routedOnKimiCode: boolean;
+  /** The binding can run a turn as background work (submit + observe). */
+  readonly backgroundCapable: boolean;
 }
 
 export interface BindModelInput {
@@ -131,6 +153,9 @@ export interface BindModelInput {
 }
 
 type Protocol = ModelConfiguration['protocol'];
+/** The protocols the package constructs a model for; the editor's is the host's. */
+type HttpProtocol = Exclude<Protocol, 'vscode-lm'>;
+type HttpConfiguration = Exclude<ModelConfiguration, { protocol: 'vscode-lm' }>;
 
 const PROTOCOL_BY_KEY: Record<
   ModelHandlerCompatibilityKey,
@@ -216,11 +241,11 @@ function anthropicThinking(
 }
 
 function configurationFor(
-  protocol: Protocol,
+  protocol: HttpProtocol,
   config: ModelConfig,
   credential: RouteCredential,
   input: BindModelInput,
-): ModelConfiguration {
+): HttpConfiguration {
   const { capabilities } = config;
   const maxOutputTokens =
     input.agentCategory === AgentCategory.ToolUse
@@ -420,15 +445,11 @@ function configurationFor(
           stopSequences: [],
         },
       };
-    case 'vscode-lm':
-      throw new Error(
-        `Model ${config.name} is served by the editor's language-model API, which the run loop does not bind yet.`,
-      );
   }
 }
 
 function constructModel(
-  configuration: ModelConfiguration,
+  configuration: HttpConfiguration,
   credential: RouteCredential,
 ): Model {
   switch (configuration.protocol) {
@@ -456,10 +477,98 @@ function constructModel(
     case 'dashscope-chat':
     case 'minimax-chat':
       return openaiChatModel(configuration, { apiKey: credential.apiKey });
-    case 'vscode-lm':
-      throw new Error('The editor protocol has no package model.');
   }
 }
+
+/** Whether a binding's configuration admits background work. */
+function backgroundCapable(configuration: HttpConfiguration): boolean {
+  switch (configuration.protocol) {
+    case 'openai-responses':
+      return configuration.background === 'supported';
+    case 'google-interactions':
+      // Google retrieves a background result through server-side state.
+      return (
+        configuration.background === 'supported' &&
+        configuration.defaults.store
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Bind a model the editor serves. The route is the one the registry
+ * discovered for the base model (exact id, vendor and version); the editor
+ * model itself comes from the host's port, into the caller's scope.
+ */
+const bindEditorModel = Effect.fn('bindEditorModel')(function* (
+  config: ModelConfig,
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
+  const editor = yield* Effect.serviceOption(EditorModel);
+  if (Option.isNone(editor)) {
+    return yield* Effect.fail(
+      new Error(
+        `Model ${config.name} is served by the editor's language-model API, which this host does not expose.`,
+      ),
+    );
+  }
+  const route = copilotRouteForModel(config.name);
+  if (route === undefined) {
+    return yield* Effect.fail(
+      new Error(
+        `No editor route is discovered for model ${config.name}; refresh the model list.`,
+      ),
+    );
+  }
+  // The discovered route carries the editor's own context ceiling and the
+  // subscription's pricing: the config the run accounts against.
+  const routed = route.effectiveConfig;
+  const requestedModel = route.reference.id;
+  const deployment = {
+    vendor: route.reference.vendor,
+    version: route.version,
+  } as const;
+  const model = yield* editor.value
+    .acquire({
+      protocol: 'vscode-lm',
+      requestedModel,
+      deployment,
+      supportsImageInput: routed.capabilities.supportsVision,
+      supportsToolCalling: routed.capabilities.supportsFunctionCalling,
+      defaults: { justification: 'Run the selected TeXRA agent.' },
+    })
+    .pipe(Effect.mapError(ensureError));
+  return {
+    modelId: config.name,
+    config: routed,
+    compatibilityKey,
+    model,
+    origin: {
+      protocol: 'vscode-lm',
+      codecVersion: 1,
+      requestedModel,
+      deployment,
+    },
+    usageProvider: usageProviderFor('vscode-lm', routed),
+    usageRoute: 'api-key',
+    contextWindow: routed.contextWindow,
+    supportsVision: routed.capabilities.supportsVision,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: routed.capabilities.supportsReasoning,
+    supportsForcedToolChoice: false,
+    wireRouteKey: JSON.stringify(['vscode-lm', deployment.vendor, deployment.version]),
+    modelRetryRouteKey: JSON.stringify([
+      'vscode-lm',
+      deployment.vendor,
+      deployment.version,
+      requestedModel,
+    ]),
+    routedOnKimiCode: false,
+    backgroundCapable: false,
+  };
+});
 
 /**
  * Bind one model for a run. The route is the factory's decision, read
@@ -468,7 +577,7 @@ function constructModel(
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
-): Effect.fn.Return<BoundModel, Error> {
+): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const useOpenRouter = getUseOpenRouter();
   const compatibilityKey =
     input.compatibilityKey ??
@@ -488,6 +597,9 @@ export const bindModel = Effect.fn('bindModel')(function* (
     );
   }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
+  if (protocol === 'vscode-lm') {
+    return yield* bindEditorModel(input.config, compatibilityKey);
+  }
   const onOpenRouter = compatibilityKey === 'ModelHandlerOpenRouterNative';
   let config = input.config;
   if (
@@ -531,6 +643,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         config.fullName,
       ]),
       routedOnKimiCode: false,
+      backgroundCapable: false,
     };
   }
   const credential = yield* Effect.tryPromise({
@@ -586,5 +699,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     wireRouteKey,
     modelRetryRouteKey: JSON.stringify([wireRouteKey, config.fullName]),
     routedOnKimiCode: isKimiCodeExclusiveModel(config),
+    backgroundCapable: backgroundCapable(built.configuration),
   };
 });
