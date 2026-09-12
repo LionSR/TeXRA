@@ -535,6 +535,28 @@ function createWindow(options: {
     }
   };
   /**
+   * A failure is an 'error' dialog; a refusal that names a docs page
+   * (`docsCommand`, e.g. a launch without an input file) adds a guide button
+   * so the desktop dialog keeps the link the extension's request-error
+   * callout renders. The URL path is host-originated, never network data.
+   */
+  const showErrorDialog = async (
+    message: string,
+    docsCommand?: string,
+  ): Promise<void> => {
+    if (!docsCommand) return showErrorMessage(message);
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'error',
+      message,
+      buttons: ['Read the guide', 'OK'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      openExternalInBackground(`https://texra.ai/guide/${docsCommand}`);
+    }
+  };
+  /**
    * Instructions (e.g. a missing API key) are actionable guidance, not
    * failures, so this stays an 'info' dialog — but each action token now
    * renders as a real button instead of degrading to trailing hint text with
@@ -730,6 +752,8 @@ function createWindow(options: {
     showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
     showWarningMessage,
     showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
+    showErrorDialog: (message, docsCommand) =>
+      awaitOrReport(showErrorDialog(message, docsCommand)),
     showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
@@ -824,6 +848,12 @@ function createWindow(options: {
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
+      // Recompute the onboarding funnel after a run completes so a user's
+      // first successful run leaves the setup card without waiting for a
+      // restart (the run lifecycle has already persisted firstRunDone).
+      onRunCompleted: () => {
+        void onboardingIpcRef.current?.refreshOnboardingFunnel();
+      },
     });
     const hostRequests = createDesktopHostRequests({
       session: project.session,

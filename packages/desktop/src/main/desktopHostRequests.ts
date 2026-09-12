@@ -751,15 +751,19 @@ export function createDesktopHostRequests(
       // Request-scoped operations do not present. Every rejection, including
       // a capability refusal, reaches this one dialog before the response.
       const primaryError = primaryAgentError(error);
+      const refusal =
+        primaryError instanceof Rejected || primaryError instanceof Unavailable
+          ? primaryError
+          : undefined;
       await presentAgentFailure(
         session.interactions,
         {
           kind: classifyAgentError(primaryError),
-          message:
-            primaryError instanceof Rejected ||
-            primaryError instanceof Unavailable
-              ? primaryError.reason
-              : toErrorMessage(primaryError),
+          message: refusal?.reason ?? toErrorMessage(primaryError),
+          // A refused request's guide link (e.g. the launch's file-management
+          // page) must survive into the host-owned dialog (#11959).
+          ...(refusal instanceof Rejected &&
+            refusal.docsCommand && { docsCommand: refusal.docsCommand }),
         },
         { replayWhenAttached: true },
       );
