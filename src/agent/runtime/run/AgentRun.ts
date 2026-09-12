@@ -21,7 +21,10 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry as IToolRegistry,
+} from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -49,6 +52,7 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
 import type { AgentLaunchContext, ToolPolicy } from '../AgentLaunchContext';
+import type { RunScope } from '../RunScope';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
@@ -86,6 +90,9 @@ export interface AgentRunShape {
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
+  readonly workingDirectory?: string;
+  readonly delegationAgentScope?: RunScope['delegationAgentScope'];
+  readonly onApprovalPolicyDenial?: () => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -143,6 +150,7 @@ export interface AgentRunLayerInput {
   /** The conditional tool injections this run resolves its tools with. */
   readonly toolInjections: ToolInjections['Service'];
   readonly callbacks: RunCallbacks;
+  readonly onApprovalPolicyDenial?: () => void;
   readonly copilotRouteOverride?: CopilotRouteOverride;
   readonly inScope: <A>(operation: () => A) => A;
 }
@@ -275,6 +283,9 @@ export const agentRunLayer = (
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,
+        workingDirectory: ctx.runScope.workingDirectory,
+        delegationAgentScope: ctx.runScope.delegationAgentScope,
+        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         userVarChannels: ctx.userVarChannels,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,

@@ -1,11 +1,8 @@
-import * as path from 'node:path';
-
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
 import { openSessionEffect } from '@agent/runtime';
 import { listRuns } from '@agent/storage';
-import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { effectRuntime } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
@@ -27,7 +24,6 @@ import {
   readCliHistoryDetails,
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
-  stageCliHistoryTraceViewerAssets,
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
@@ -105,20 +101,14 @@ async function runHistoryShow(
  * `html` assembles the run's trace (`assembleTrace`, shared with the
  * progress-view "Export transcript" button) and embeds it into the
  * trace-viewer — the same faithful Progress View replay, not a separate
- * hand-written exporter. Default mode writes one self-contained page to stdout (JS/CSS/
+ * hand-written exporter. It writes one self-contained page to stdout (JS/CSS/
  * fonts all inlined, so `> out.html` opens correctly via `file://` with no
- * server). `--assets-dir <dir>` switches to
- * the shared-assets mode for a site publishing many traces: stages the
- * trace-viewer page into `<dir>` (safe to repeat across many
- * exports pointed at the same directory) and writes just the trace data to
- * stdout, to be redirected next to (or referenced by) that shared bundle's
- * `index.html?trace=<path>`.
+ * server).
  */
 export async function runHistoryExport(
   context: CliContext,
   id: RunId,
   format: 'html' | 'md',
-  options: { assetsDir?: string },
 ): Promise<number> {
   const stores = await initLocalCliPlatform(context);
 
@@ -161,35 +151,6 @@ export async function runHistoryExport(
     return CliExitCode.Usage;
   }
   const { trace } = traceResult;
-  const exportTrace = {
-    ...trace,
-    entries: projectWorkflowCallEntries(trace.entries),
-  };
-
-  if (options.assetsDir) {
-    const destDir = path.resolve(context.cwd, options.assetsDir);
-    const staged = await stageCliHistoryTraceViewerAssets({
-      resourcesPath: context.resourcesPath,
-      destDir,
-    });
-    writeRawStdout(JSON.stringify(exportTrace));
-    if (staged === 'missing') {
-      writeTextStderr(
-        'Note: the bundled trace-viewer assets were not found in this CLI ' +
-          'install, so nothing was staged into --assets-dir. Rebuild the ' +
-          'CLI (`npm run texra-local:build`) so packages/trace-viewer builds.',
-      );
-      return CliExitCode.Usage;
-    }
-    const traceFileName = `${id}.json`;
-    const traceFile = path.join(destDir, traceFileName);
-    writeTextStderr(
-      `Wrote trace JSON for ${id} to stdout. Save the output to ` +
-        `${traceFile}, then open ${destDir}/index.html?trace=${traceFileName}.`,
-    );
-    return CliExitCode.Success;
-  }
-
   const template = await readCliHistoryStandaloneTemplate(
     context.resourcesPath,
   );
@@ -197,12 +158,11 @@ export async function runHistoryExport(
     writeTextStderr(
       'The bundled trace-viewer standalone template was not found in this ' +
         'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
-        'packages/trace-viewer builds, or pass --assets-dir to use the ' +
-        'shared-assets export mode instead.',
+        'packages/trace-viewer builds.',
     );
     return CliExitCode.Usage;
   }
-  writeRawStdout(injectStandaloneTrace(template, exportTrace));
+  writeRawStdout(injectStandaloneTrace(template, trace));
   return CliExitCode.Success;
 }
 
@@ -317,13 +277,7 @@ const historyShowCommand = defineCliCommand({
       type: 'string',
       valueHint: 'html|md',
       description:
-        'Export the run to stdout: html is a faithful trace-viewer replay (self-contained by default), md is the conversation as Markdown',
-    },
-    'assets-dir': {
-      type: 'string',
-      valueHint: 'directory',
-      description:
-        'Shared trace-viewer bundle location for --export html (for a site publishing many traces); omit for a single self-contained page',
+        'Export the run to stdout: html is a self-contained trace-viewer replay, md is the conversation as Markdown',
     },
   },
   run: async (context, ctx) => {
@@ -338,9 +292,7 @@ const historyShowCommand = defineCliCommand({
         writeTextStderr(formatInvalidExportFormatText(exportFormat));
         return CliExitCode.Usage;
       }
-      return runHistoryExport(context, id, exportFormat, {
-        assetsDir: optString(ctx.args['assets-dir']),
-      });
+      return runHistoryExport(context, id, exportFormat);
     }
     return runHistoryShow(context, id, { full: ctx.args.full === true });
   },

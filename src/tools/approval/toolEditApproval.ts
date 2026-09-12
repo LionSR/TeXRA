@@ -1,12 +1,7 @@
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import type { RejectionProvenance } from '@agent/runtime/HostInteractions';
+import { Effect } from 'effect';
+
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   decideTexraApproval,
@@ -16,10 +11,12 @@ import {
 import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type LineChanges,
+  type RequestRefusal,
   type RunId,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
+import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
@@ -27,14 +24,18 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
-import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
+import {
+  countLines,
+  isNonEmptyString,
+  normalizeLineEndings,
+} from '@utils/text/stringUtils';
 
 /**
  * Tool-edit approval request / result shapes.
  *
- * Hosts receive these through `SessionHandle.interactions`, not through the
- * process-wide Platform object — this is a session-scoped host-interaction
- * contract, not a `Platform` port.
+ * The request reaches a host through `SessionHandle.interactions.presentToolEdit`
+ * (the preview the durable payload cannot carry); the decision comes back as
+ * the request's `request.decide`.
  */
 export interface ToolEditApprovalRequest {
   readonly path: string;
@@ -44,15 +45,15 @@ export interface ToolEditApprovalRequest {
   readonly runId?: RunId | null;
   /**
    * What the UI shows for this request, prepared once at the tool boundary
-   * (`prepareToolEditApprovalPrompt`): the payload of the `approval.requested`
+   * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
    * fact the session publishes, and what every host surface renders.
    */
   readonly permission: ToolEditPermission;
 }
 
 /**
- * `appliedContent` is required on acceptance — every host implementation
- * always supplies the content the user actually approved, so this is a
+ * `appliedContent` is required on acceptance: the proposed file as the user
+ * left it (the decision's `content`), else the proposal itself, so this is a
  * type-level guarantee rather than a convention callers must null-check.
  */
 export type ToolEditApprovalResult =
@@ -66,13 +67,13 @@ export type ToolEditApprovalResult =
       };
       readonly startLine?: number;
     }
-  | ({ readonly action: 'reject' } & RejectionProvenance);
+  | RequestRefusal;
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
 /**
- * Build the tool-edit permission payload every host publishes to its approval
- * surface, the tool-edit counterpart of `prepareBashApprovalPrompt`.
+ * Build the tool-edit permission payload every host lists from the fold, the
+ * tool-edit counterpart of `prepareBashApprovalPrompt`.
  *
  * Owning it here gives one bypass-affordance derivation and one line-change
  * computation, so the TUI's inline card and the webview panel cannot report
@@ -174,59 +175,99 @@ export function firstChangedLine(
 // Approval queue and request handling
 // ============================================================================
 
-export async function requestToolEditApproval(
-  request: Omit<ToolEditApprovalRequest, 'permission'>,
-): Promise<ToolEditApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
-
-  const context = tryUseRunContext();
-  const session = currentSession();
-  const contextRunId = getRunContextRunId(context);
-  const preparedRequest =
-    request.runId || !contextRunId
-      ? request
-      : { ...request, runId: contextRunId };
-
-  const runId = preparedRequest.runId ?? undefined;
-  const isRunBypassed = Boolean(
-    runId && session.approvals.toolEdit.bypass.isBypassed(runId),
-  );
-  const acceptProposedAsIs = (): ToolEditApprovalResult =>
-    finalizeApprovalResult(
-      { action: 'apply', appliedContent: preparedRequest.proposedContent },
-      preparedRequest,
+/**
+ * Ask the person for an edit: policy first (allow, deny), else a
+ * `request.opened` on the run with the preview staged on the attached host,
+ * serialized behind the run's other prompts, answered by a surface's
+ * `request.decide`. An approve carries the file as the user left it in the
+ * host's diff view, or nothing when the host staged no preview.
+ */
+export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
+  function* (
+    request: Omit<ToolEditApprovalRequest, 'permission'>,
+  ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
+    const call = yield* ToolCall;
+    const approvalsEnabled = call.inScope(() =>
+      getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY),
     );
-  const decision = decideTexraApproval({
-    policy: session.approvalPolicy,
-    promptRequired: approvalsEnabled,
-    scopedBypass: isRunBypassed,
-    canPresent: context?.approvalPromptsUnavailable !== true,
-  });
-  if (decision === 'allow') return acceptProposedAsIs();
-  if (isTexraApprovalDenied(decision)) {
-    context?.onApprovalPolicyDenial?.();
-    return {
-      action: 'reject',
-      reason: texraApprovalDenialMessage(decision),
-    };
-  }
+    const run = call.run;
+    if (!run) {
+      return yield* Effect.fail(
+        new Error('A tool-edit approval needs an active run.'),
+      );
+    }
+    const { session } = run;
+    const contextRunId = run.runId;
+    const preparedRequest =
+      request.runId || !contextRunId
+        ? request
+        : { ...request, runId: contextRunId };
 
-  return session.approvals.toolEdit.enqueue(runId, {
-    prompt: async () =>
+    const runId = preparedRequest.runId ?? undefined;
+    const isRunBypassed = Boolean(
+      runId && session.approvals.toolEdit.bypass.isBypassed(runId),
+    );
+    const acceptProposedAsIs = (): ToolEditApprovalResult =>
       finalizeApprovalResult(
-        await session.interactions.requestToolEditApproval({
-          ...preparedRequest,
-          permission: prepareToolEditApprovalPrompt(session, {
-            requestId: `approval-${generateShortId()}`,
-            request: preparedRequest,
-            relativePath: WorkspaceFS.relativePath(preparedRequest.path),
-          }),
-        }),
+        { action: 'apply', appliedContent: preparedRequest.proposedContent },
         preparedRequest,
+      );
+    const decision = decideTexraApproval({
+      policy: session.approvalPolicy,
+      promptRequired: approvalsEnabled,
+      scopedBypass: isRunBypassed,
+      canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
+    });
+    if (decision === 'allow') return acceptProposedAsIs();
+    if (isTexraApprovalDenied(decision)) {
+      call.onApprovalPolicyDenial?.();
+      return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
+    }
+    if (!runId) {
+      return yield* Effect.fail(
+        new Error('A tool-edit approval needs a run to open its request on.'),
+      );
+    }
+
+    const permission = prepareToolEditApprovalPrompt(session, {
+      requestId: `approval-${generateShortId()}`,
+      request: preparedRequest,
+      relativePath: call.inScope(() =>
+        WorkspaceFS.relativePath(preparedRequest.path),
       ),
-    bypassed: acceptProposedAsIs,
-  });
-}
+    });
+    const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
+    return yield* session.approvals.toolEdit.enqueue(runId, {
+      // The preview is staged before the request opens, and stays staged
+      // until that request's `request.decided` releases it on every host:
+      // a surface reading the committed row must never find the request
+      // listed with nothing to show for it. An interrupted open closes the
+      // request as cancelled, which is the release.
+      prompt: Effect.suspend(() => {
+        call.inScope(() => session.interactions.presentToolEdit(staged));
+        return session
+          .openRequest(runId, { kind: 'toolEdit', data: permission })
+          .pipe(
+            Effect.map((decided): ToolEditApprovalResult => {
+              if (decided.action !== 'approve') {
+                return refusalOf('toolEdit', decided);
+              }
+              return finalizeApprovalResult(
+                {
+                  action: 'apply',
+                  appliedContent: normalizeLineEndings(
+                    decided.content ?? preparedRequest.proposedContent,
+                  ),
+                },
+                preparedRequest,
+              );
+            }),
+          );
+      }),
+      bypassed: Effect.sync(acceptProposedAsIs),
+    });
+  },
+);
 
 function finalizeApprovalResult(
   result: ToolEditApprovalResult,
@@ -271,41 +312,53 @@ interface WriteApprovedContentResult {
  * as read after the operation succeeds, so every approved-write caller keeps
  * the later-edit guard in sync.
  */
-export async function writeApprovedContent(
-  path: string,
-  originalContent: string,
-  finalContent: string,
-): Promise<WriteApprovedContentResult> {
-  const exists = await WorkspaceFS.exists(path);
-  let baseContent = '';
-  let appliedContent = finalContent;
-  let shouldWrite = true;
+export const writeApprovedContent = Effect.fn('writeApprovedContent')(
+  function* (
+    path: string,
+    originalContent: string,
+    finalContent: string,
+  ): Effect.fn.Return<WriteApprovedContentResult, unknown, ToolCall> {
+    const call = yield* ToolCall;
+    const exists = yield* Effect.tryPromise({
+      try: () => call.inScope(() => WorkspaceFS.exists(path)),
+      catch: (cause) => cause,
+    });
+    let baseContent = '';
+    let appliedContent = finalContent;
+    let shouldWrite = true;
 
-  if (exists) {
-    // All content is already LF-normalized at the FS read boundary,
-    // so comparisons work directly without extra normalization.
-    const currentContent = await WorkspaceFS.read(path);
-    baseContent = currentContent;
+    if (exists) {
+      // All content is already LF-normalized at the FS read boundary,
+      // so comparisons work directly without extra normalization.
+      const currentContent = yield* Effect.tryPromise({
+        try: () => call.inScope(() => WorkspaceFS.read(path)),
+        catch: (cause) => cause,
+      });
+      baseContent = currentContent;
 
-    if (currentContent === finalContent || originalContent === finalContent) {
-      appliedContent = currentContent;
-      shouldWrite = false;
-    } else if (currentContent !== originalContent) {
-      const { content: patchedContent, results } = applyPatchToText(
-        originalContent,
-        finalContent,
-        currentContent,
-      );
-      appliedContent = results.every(Boolean) ? patchedContent : finalContent;
+      if (currentContent === finalContent || originalContent === finalContent) {
+        appliedContent = currentContent;
+        shouldWrite = false;
+      } else if (currentContent !== originalContent) {
+        const { content: patchedContent, results } = applyPatchToText(
+          originalContent,
+          finalContent,
+          currentContent,
+        );
+        appliedContent = results.every(Boolean) ? patchedContent : finalContent;
+      }
     }
-  }
 
-  if (shouldWrite) {
-    await WorkspaceFS.write(path, appliedContent);
-  }
-  recordToolFileRead(path);
-  return { appliedContent, baseContent };
-}
+    if (shouldWrite) {
+      yield* Effect.tryPromise({
+        try: () => call.inScope(() => WorkspaceFS.write(path, appliedContent)),
+        catch: (cause) => cause,
+      });
+    }
+    yield* recordToolFileRead(path);
+    return { appliedContent, baseContent };
+  },
+);
 
 /**
  * Append the unified user-adjustment diff note to a base output message, or
@@ -323,41 +376,21 @@ export function appendApprovalDiffNote(
     : baseOutput;
 }
 
-/**
- * Reader-side provenance: deliberately NOT `RejectionProvenance`. A caller
- * summarizing several rejected edits at once (`accept_run_files`) can hold a
- * user rejection, a policy denial, and a cancellation simultaneously, so this
- * shape is the loose aggregate the message builder reads, not the exclusive
- * union a single settlement produces.
- */
-interface ToolEditRejectionProvenance {
-  readonly feedback?: string;
-  readonly reason?: string;
-  readonly cause?: string;
-}
-
 export function buildApprovalRejectedResult(
   path: string,
   sourceTool: string,
-  rejection: ToolEditRejectionProvenance,
+  refusal: RequestRefusal,
 ): ToolResult {
-  const feedback = rejection.feedback?.trim();
-  const reason = rejection.reason?.trim();
-  const cause = rejection.cause?.trim();
-  // Cancellation outranks policy denial in the summary.
-  let summary: string;
-  if ('cause' in rejection) {
-    summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
-  } else if (rejection.reason !== undefined) {
-    summary = `Tool edit denied: ${sourceTool} for ${path}.`;
-  } else {
-    summary = `User rejected ${sourceTool} for ${path}.`;
-  }
-  const details = [reason, cause].filter(isNonEmptyString);
+  const copy = refusalCopy('Tool edit', refusal);
+  const summary =
+    refusal.action === 'reject'
+      ? `User rejected ${sourceTool} for ${path}.`
+      : `${copy.summary}: ${sourceTool} for ${path}.`;
+  const details = [copy.detail].filter(isNonEmptyString);
   const error =
     details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
   return errorResult(error, {
     summary,
-    ...(feedback && { userInstruction: feedback }),
+    ...(copy.feedback && { userInstruction: copy.feedback }),
   });
 }

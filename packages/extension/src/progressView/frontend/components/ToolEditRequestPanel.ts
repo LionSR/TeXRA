@@ -27,6 +27,11 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@shared/wa/splitButton';
+import {
+  approvalDecisionArms,
+  type SurfaceDecision,
+} from '@shared/session/approvalDecision';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -46,6 +51,44 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   ];
 
   protected readonly approvalDecision = { action: 'approve' } as const;
+
+  /**
+   * A windowed host applies the proposed file as the user left it in its
+   * diff view, so this panel's approve and reject are the host's `toolEdit`
+   * verbs: the tool-edit controller reads the edited content back and sends
+   * the `request.decide` itself. The session bypass an approve-for-session
+   * names stays the runtime arm it is; a host without a diff view (the TUI)
+   * decides from the payload alone and never reaches this override.
+   */
+  protected override emitAction(decision: SurfaceDecision): void {
+    if (this.readOnly) return;
+    for (const arm of approvalDecisionArms(this.permission, decision)) {
+      if ('host' in arm) {
+        this.dispatchEvent(SessionUiEvents.host(arm.host));
+        continue;
+      }
+      const { runtime } = arm;
+      if (
+        runtime.kind === 'request.decide' &&
+        (runtime.decision.action === 'approve' ||
+          runtime.decision.action === 'reject')
+      ) {
+        this.dispatchEvent(
+          SessionUiEvents.host({
+            kind: 'toolEdit',
+            requestId: runtime.requestId,
+            action: runtime.decision.action,
+            feedback:
+              runtime.decision.action === 'reject'
+                ? (runtime.decision.feedback ?? null)
+                : null,
+          }),
+        );
+        continue;
+      }
+      this.dispatchEvent(SessionUiEvents.runtime(runtime));
+    }
+  }
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'd') {

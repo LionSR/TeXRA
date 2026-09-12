@@ -7,8 +7,6 @@ import ky from 'ky';
 import { z } from 'zod';
 
 // Local imports - core
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -209,12 +207,10 @@ export class WebFetchTool extends defineTool({
     },
   );
 
-  protected execute(input: WebFetchInput): Promise<ToolResult> {
+  protected execute(input: WebFetchInput): Effect.Effect<ToolResult, unknown> {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out fetches (and their retries)
     // that only observe the internal timeout.
-    return effectRuntime().runPromise(this.fetchAsMarkdown(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+    return this.fetchAsMarkdown(input);
   }
 }

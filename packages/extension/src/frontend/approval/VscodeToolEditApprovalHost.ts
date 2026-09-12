@@ -42,7 +42,11 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     await openBuildDisplayIfTex(location, options);
   };
 
-  constructor(private readonly storageDirectory: string) {}
+  constructor(
+    private readonly storageDirectory: string,
+    /** The window's `request.decide`: where a staged request's decision goes. */
+    readonly decide: ToolEditApprovalHost['decide'],
+  ) {}
 
   async stagePreview(
     request: ToolEditApprovalRequest,

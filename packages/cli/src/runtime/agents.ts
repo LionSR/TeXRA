@@ -11,6 +11,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
+  agentKeyOf,
   agentName,
   AgentCategory,
 } from '@shared/schemas';
@@ -28,7 +29,7 @@ interface CliAgentListResult {
   readonly hiddenCount: number;
 }
 
-type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
+type CliAgentLaunchMode = 'chat' | 'workflowResume';
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';
@@ -42,28 +43,19 @@ const CLI_AGENT_LAUNCH_TARGETS = {
     mismatch: (name: string, actual: AgentEntry['category']) =>
       `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
   },
-  run: {
+  workflowResume: {
     requiredCategory: AgentCategory.Workflow,
     missing: missingAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${name}\`, or run a headless team with \`texra multi-agent run\`.`,
-  },
-  agentsRun: {
-    requiredCategory: AgentCategory.ToolUse,
-    missing: missingToolUseAgentMessage,
-    mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra agents run\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents.`,
+      `Agent "${name}" is a ${actual} agent; this run was recorded as a workflow run and cannot resume against it.`,
   },
 } as const;
 
 export const AGENT_NAME_DESCRIPTION =
   'Agent name from `texra agents list` or `texra agents list --all`';
 
-export const WORKFLOW_AGENT_NAME_DESCRIPTION =
-  'Workflow agent name from `texra agents list --category workflow --all`';
-
-export const TOOL_USE_AGENT_NAME_DESCRIPTION =
-  'Tool-use agent name from `texra agents list --category toolUse --all`';
+export const LAUNCHABLE_AGENT_NAME_DESCRIPTION =
+  'Workflow or tool-use agent name from `texra agents list --all`';
 
 const AGENT_CATEGORY_FILTER_ALIASES = [
   [AgentCategory.Workflow, AgentCategory.Workflow],
@@ -123,7 +115,7 @@ export function resolveCliAgentInCategory(
     category,
     identifier,
     pinned.success ? pinned.data : undefined,
-  )?.entry;
+  );
   return entry?.category === category ? entry : undefined;
 }
 
@@ -191,7 +183,44 @@ function lookupCliAgent(
 }
 
 /**
- * Resolve and validate an agent for a CLI launch command.
+ * Resolve the agent `texra run <agent>` launches. One headless command serves
+ * both categories, so a bare name can land in either — and a name carried by
+ * both is refused, never silently resolved: the two categories run different
+ * shapes, and preferring one would change what an existing invocation does
+ * without saying so.
+ *
+ * The refusal is always escapable. The registry is a flat cache keyed by
+ * `source:name`, so two entries sharing a name necessarily differ in source,
+ * and a source-qualified identifier hits exactly one cache key — a same-source
+ * collision is unrepresentable, not merely unhandled.
+ */
+export async function resolveCliRunAgent(name: string): Promise<AgentEntry> {
+  const workflow = await resolveCliAgent(name, AgentCategory.Workflow);
+  // The pass above already loaded the catalog this lookup reads: it returns
+  // before the remote-inclusive reload only for a source-qualified name (which
+  // pins one cache key, so it cannot also hit here) or a signed-out session
+  // (which has no remote catalog to add).
+  const toolUse = resolveCliAgentInCategory(name, AgentCategory.ToolUse);
+  if (workflow && toolUse) {
+    throw new CliUsageError(ambiguousRunAgentMessage(name, workflow, toolUse));
+  }
+  const agent = workflow ?? toolUse;
+  if (!agent) throw new CliUsageError(missingAgentMessage(name));
+  return agent;
+}
+
+function ambiguousRunAgentMessage(
+  name: string,
+  workflow: AgentEntry,
+  toolUse: AgentEntry,
+): string {
+  const workflowKey = agentKeyOf(workflow);
+  const toolUseKey = agentKeyOf(toolUse);
+  return `Agent name "${name}" is ambiguous: it matches the ${AgentCategory.Workflow} agent ${workflowKey} and the ${AgentCategory.ToolUse} agent ${toolUseKey}. Re-run with the source-qualified name to pick one: \`texra run ${workflowKey}\` or \`texra run ${toolUseKey}\`.`;
+}
+
+/**
+ * Resolve and validate an agent for a category-pinned CLI launch.
  */
 export async function resolveCliLaunchAgent(
   name: string,
@@ -239,9 +268,20 @@ export function formatCliAgentList(
     return `No visible ${qualifier}agents are enabled for this workspace. Use \`texra agents list${categoryArg} --all\` to show ${catalog}.`;
   }
 
+  // Shell completion reads the name column straight back into `texra run`,
+  // `texra agents show` and `--agent`, so every row has to print a spelling
+  // that resolves to that row. A bare name shared by two listed agents does
+  // not — `texra run` refuses it as ambiguous — so those rows print the
+  // source-qualified key instead, which hits exactly one registry entry.
+  const collidingNames = new Set(
+    agents
+      .map((agent) => agent.name)
+      .filter((name, index, names) => names.indexOf(name) !== index),
+  );
   return agents
     .map(
-      (agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+      (agent) =>
+        `${agent.category}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
 }

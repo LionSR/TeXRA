@@ -58,7 +58,7 @@ export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
   private readonly roster: AgentRosterController;
-  private readonly agentActions;
+  readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
 
   constructor(
@@ -120,12 +120,6 @@ export class AgentHandlers {
 
   // ── Agent selection handlers ──
 
-  async handleOpenAgentYaml(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
-  ): Promise<void> {
-    await this.agentActions.openAgentYaml(data);
-  }
-
   async handleSetAgentEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
@@ -186,12 +180,6 @@ export class AgentHandlers {
     );
   }
 
-  async handleRevealAgentFile(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
-  ): Promise<void> {
-    await this.agentActions.revealAgentFile(data);
-  }
-
   async handleViewRemoteAgentPrompt(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
@@ -227,12 +215,6 @@ export class AgentHandlers {
     }
 
     await this.refreshAfterAgentMutation();
-  }
-
-  async handleCustomizeAgent(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
-  ): Promise<void> {
-    await this.agentActions.customizeAgent(data);
   }
 
   async handleDeleteCustomAgent(

@@ -2,12 +2,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  clearStoreCache,
-  deriveResumability,
-  finalizeRun,
-  getRunStore,
-} from '@agent/storage';
+import { deriveResumability, finalizeRun } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -47,7 +42,6 @@ describe('deriveResumability', () => {
 
   let session: SessionHandle;
   beforeEach(() => {
-    clearStoreCache();
     vi.restoreAllMocks();
     session = createProcessSession();
   });
@@ -64,14 +58,6 @@ describe('deriveResumability', () => {
         },
       ]),
     );
-  }
-
-  /** The retired engine's checkpoint, which this release never reads (R10). */
-  async function writeLegacyFlowRecord(runId: RunId): Promise<void> {
-    await getRunStore(runId).write(`flow_${runId}`, {
-      shared: { messages: [] },
-      cursor: { nextNodeId: 'start' },
-    });
   }
 
   async function writeMeta(
@@ -148,22 +134,6 @@ describe('deriveResumability', () => {
     await expect(
       Effect.runPromise(deriveResumability(runId, session)),
     ).resolves.toEqual({ kind: 'none' });
-  });
-
-  // R10: the retired checkpoint is never read and never silently ignored —
-  // the run is not resumable under this release, and says so.
-  it('names a run whose only durable state is a retired checkpoint', async () => {
-    const runId = 'ac0009' as RunId;
-    await writeLegacyFlowRecord(runId);
-
-    const decision = await Effect.runPromise(
-      deriveResumability(runId, session),
-    );
-
-    expect(decision).toMatchObject({ kind: 'none' });
-    expect(decision.kind === 'none' ? decision.notice : undefined).toContain(
-      'not resumable under this release',
-    );
   });
 
   it('reports malformed metadata as unreadable even with a snapshot', async () => {

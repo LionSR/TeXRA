@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
+import { Cause, Effect, Exit, type Fiber } from 'effect';
 
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
 // subagents of either category, workflow-script runs, background shells). Each
@@ -12,10 +12,10 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import { finalizeRun, getRunStore } from '@agent/storage';
+import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import type { ChildTurnRef, ChildTurnState } from '@agent/storage/RunKVStore';
+import type { ChildTurnKey } from '@agent/storage/runRecords';
 import {
   assertOwnedRunLease,
   RunLeaseLostError,
@@ -24,6 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
+import { stepRow } from '@agent/runtime/loop/rows';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import type {
   FollowUpQueue,
@@ -40,11 +41,16 @@ import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
+  aggregateId,
   type ResultMeta,
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import {
+  DatabaseNotOwner,
+  type DatabaseWriteFailed,
+} from '@shared/session/database';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, formatDuration, onAbort } from '@utils/core';
@@ -107,12 +113,6 @@ export interface ChildRunPorts {
  */
 interface ChildRunPort {
   readonly logger: AgentTrace;
-  /** The child loop is idle and waiting for the next follow-up instruction. */
-  waitForInput(): void;
-  /** The child loop has started processing a turn. */
-  beginTurn(): void;
-  /** The active turn failed; preserve explicit user stops. */
-  failTurn(): void;
   /**
    * Complete the child stream lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
@@ -451,32 +451,16 @@ function attemptTurn<TTurn, R>(
 }
 
 /**
- * Mint the logical identity of one accepted child turn (#9531): a stable turn
- * token, from which `turnDeliveryId` derives the delivery id the turn's
- * single parent delivery is admitted under. Stable within one child-run
- * attempt and distinct across attempts, even when a workflow deliberately
- * reuses its run ID. A producer replaying the same accepted turn
- * therefore presents the same id, while a later workflow run cannot collide
- * with its prior delivery.
- */
-function mintChildTurnRef(
-  runId: RunId,
-  attemptId: string,
-  turnIndex: number,
-): ChildTurnRef {
-  // The `:generation:` segment is the persisted spelling of this token and is
-  // frozen: delivery ids minted by an earlier build must keep comparing equal.
-  return { token: `${runId}:generation:${attemptId}:turn:${turnIndex}` };
-}
-
-/**
  * The delivery id one accepted turn's single parent delivery is admitted
- * under. Derived from the turn token rather than persisted beside it, so the
- * two can never disagree; the `:delivery` suffix is frozen for the same reason
- * the token's `:generation:` segment is.
+ * under (#9531): derived from the turn's structural identity, the
+ * `child.turn` row's key (run, attempt, turn index), never persisted beside
+ * it, so the two can never disagree. Stable within one child-run attempt and
+ * distinct across attempts, even when a workflow deliberately reuses its run
+ * id, so a producer replaying the same accepted turn presents the same id
+ * while a later workflow run cannot collide with its prior delivery.
  */
-function turnDeliveryId(turnRef: ChildTurnRef): string {
-  return `${turnRef.token}:delivery`;
+function turnDeliveryId(runId: RunId, turn: ChildTurnKey): string {
+  return `${runId}:${turn.attemptId}:${turn.turnIndex}:delivery`;
 }
 
 /**
@@ -501,16 +485,16 @@ function emitTurnDiagnostic(
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
     runId: RunId;
-    turnRef?: ChildTurnRef;
+    turn?: ChildTurnKey;
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
   },
 ): void {
-  const { runId, turnRef, queueOwner, interruptionCause } = params;
+  const { runId, turn, queueOwner, interruptionCause } = params;
   logger.debug(`childRunLoop ${event}`, {
     data: {
       runId,
-      ...(turnRef ? { turnToken: turnRef.token } : {}),
+      ...(turn ? { attemptId: turn.attemptId, turnIndex: turn.turnIndex } : {}),
       ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
@@ -518,29 +502,58 @@ function emitTurnDiagnostic(
 }
 
 /**
- * Persist turn attribution for the report/result slots, swallowing storage
- * errors. Best-effort: a failure degrades /report//result turn labeling, not
- * the delivered result.
+ * Commit one turn's `child.turn` row (#9531), the fact the report/result
+ * slots are attributed from. Not best-effort: a refused append is the turn's
+ * failure. `not-owner` means this process no longer holds the run and the
+ * loop stops rather than deliver under a claim it lost (R7); a write failure
+ * is a fact the slots cannot be labeled without.
  */
-function persistTurnStateBestEffort(
+function commitChildTurn(
   session: SessionHandle,
   runId: RunId,
-  state: ChildTurnState,
-  logger: AgentTrace,
-): Effect.Effect<void> {
-  return Effect.tryPromise({
-    try: () =>
-      runInSession(session, () => getRunStore(runId).writeTurnState(state)),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        logger.warn(`Failed to persist turn state for ${runId}`, {
-          data: error,
-        });
-      }),
-    ),
-  );
+  turn: ChildTurnKey,
+  phase: 'accepted' | 'settled',
+): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
+  return session
+    .commit([
+      {
+        type: 'child.turn',
+        aggregateId: aggregateId('run', runId),
+        attemptId: turn.attemptId,
+        turnIndex: turn.turnIndex,
+        phase,
+      },
+    ])
+    .pipe(Effect.asVoid);
+}
+
+/**
+ * Move an agent-CLI child's phase across its park (one run model, 3.3):
+ * `waiting` before the loop blocks on its queue, `turn.begin` when the drained
+ * batch starts the next turn. Written with the loops' own step-row
+ * constructor, so the child protocol carries no second phase vocabulary. A run
+ * this loop is the only driver of has no `flow.snapshot` and no rounds: its
+ * family is the interactive one its turns are, and the turn index is its one
+ * moving coordinate. Without the park row the run stays RUNNING while idle and
+ * `getToolUseFollowUpTarget` classifies the next turn's submission as
+ * `no_session`; native children park through their own loop's `waiting` row
+ * and are never written here, so each park keeps one writer.
+ */
+function commitFlowStep(
+  session: SessionHandle,
+  runId: RunId,
+  turn: number,
+  step: 'waiting' | 'turn.begin',
+): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
+  return session
+    .commit([
+      stepRow(
+        runId,
+        { family: 'toolUse', round: 0, turn, continuationIndex: 0 },
+        step,
+      ),
+    ])
+    .pipe(Effect.asVoid);
 }
 
 /**
@@ -602,14 +615,12 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   runId: RunId;
   logger: AgentTrace;
   turn: TTurn | null;
-  turnRef: ChildTurnRef;
+  turnKey: ChildTurnKey;
   err: unknown;
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
   resolveDefaultDeliveryTarget: () => RunId | undefined;
-  /** Serializes turn-state writes against the acceptance write (#9531). */
-  turnStateWrites: Semaphore.Semaphore;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
 }): Effect.fn.Return<PendingChildDelivery | undefined, Error> {
   const {
@@ -617,7 +628,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
     runId,
     logger,
     turn,
-    turnRef,
+    turnKey,
     err,
     wallTimeMs,
     isError,
@@ -642,34 +653,22 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
         err ?? undefined,
       )
     : undefined;
-  // Attribute the envelope to this turn so /result can tell which turn the
-  // latest-value slot reflects (#9531).
-  const stampedMeta =
-    resultMeta?.producer === 'subagent'
-      ? { ...resultMeta, turnToken: turnRef.token }
-      : resultMeta;
-
   // The settled facts reach the caller whether or not they persisted: a
   // durable caller decides from them what a missing manifest means. The
   // persistence failure is then this turn's failure, thrown once the turn
   // is settled, and the delivery never reaches the parent.
   const persisted = yield* Effect.exit(
-    persistChildRunDelivery(params.session, runId, msg, stampedMeta),
+    persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
-  // Completion follows acceptance under the same permit. The body scope also
-  // drains acceptance writes when formatting or provider work fails.
-  yield* params.turnStateWrites.withPermit(
-    persistTurnStateBestEffort(
-      params.session,
-      runId,
-      { lastCompletedTurn: turnRef },
-      logger,
-    ),
-  );
+  // The turn settled whatever the delivery persistence did: its settle path
+  // ran, which is the fact a durable caller's re-execution gate reads
+  // (`stableSubagentAttempt`), so the row lands before that failure is
+  // raised.
+  yield* commitChildTurn(params.session, runId, turnKey, 'settled');
 
   params.onTurnSettled?.({
     message: msg,
-    ...(stampedMeta !== undefined && { resultMeta: stampedMeta }),
+    ...(resultMeta !== undefined && { resultMeta }),
     isError,
     ...(err != null && { error: err }),
   });
@@ -690,7 +689,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
     followUp: {
       text: msg,
       origin: 'subagent_result',
-      deliveryId: turnDeliveryId(turnRef),
+      deliveryId: turnDeliveryId(runId, turnKey),
     },
   };
 });
@@ -966,34 +965,20 @@ export function startChildRunLoop<TTurn, R = never>(
         signal,
       ) => strategy.launch(ports, signal);
       let turnIndex = 0;
-      let lastCompletedTurn: ChildTurnRef | undefined;
-      const turnStateWrites = Semaphore.makeUnsafe(1);
       const body = yield* Effect.exit(
         Effect.scoped(
           Effect.gen(function* () {
             while (!loop.isInterrupted()) {
               turnIndex += 1;
-              const turnRef = mintChildTurnRef(runId, attemptId, turnIndex);
+              const turnKey: ChildTurnKey = { attemptId, turnIndex };
               emitTurnDiagnostic(logger, 'turn.accepted', {
                 runId,
-                turnRef,
+                turn: turnKey,
                 queueOwner: queueLease,
               });
-              // Acceptance starts before dispatch and completes before the turn's
-              // attribution is replaced. Its scope drains even on early failure.
-              yield* Effect.forkScoped(
-                turnStateWrites
-                  .withPermit(
-                    persistTurnStateBestEffort(
-                      runSession,
-                      runId,
-                      { activeTurn: turnRef, lastCompletedTurn },
-                      logger,
-                    ),
-                  )
-                  .pipe(Effect.uninterruptible),
-                { startImmediately: true },
-              );
+              // Acceptance is committed before dispatch: the row is what
+              // attributes the slots while the turn runs.
+              yield* commitChildTurn(runSession, runId, turnKey, 'accepted');
               const startedAt = Date.now();
               const attempt = yield* attemptTurn(
                 strategy,
@@ -1024,11 +1009,10 @@ export function startChildRunLoop<TTurn, R = never>(
                   childRun ? childRunHandle?.deliveryTarget : parentRunId,
                 logger,
                 turn,
-                turnRef,
+                turnKey,
                 err,
                 wallTimeMs,
                 isError: turnFailed,
-                turnStateWrites,
                 onTurnSettled: params.onTurnSettled,
                 prepareParentDelivery: () => {
                   if (activationDetached) return false;
@@ -1044,10 +1028,9 @@ export function startChildRunLoop<TTurn, R = never>(
                   return true;
                 },
               });
-              lastCompletedTurn = turnRef;
               emitTurnDiagnostic(logger, 'turn.delivered', {
                 runId,
-                turnRef,
+                turn: turnKey,
                 queueOwner: queueLease,
               });
 
@@ -1058,7 +1041,6 @@ export function startChildRunLoop<TTurn, R = never>(
                   new Error(
                     `${strategy.stageLabel} reported a failed turn without throwing.`,
                   );
-                childRun?.failTurn();
                 pendingDelivery = delivery;
                 break;
               }
@@ -1079,18 +1061,30 @@ export function startChildRunLoop<TTurn, R = never>(
               // follow-up already raced into the queue resumes immediately instead
               // of genuinely waiting.
               yield* submitPendingDelivery(delivery, runSession, runId, logger);
-              childRun?.waitForInput();
               if (loop.isInterrupted()) break;
 
+              // The park is durable before the block, so a follow-up arriving
+              // while this loop sleeps is admitted onto its queue instead of
+              // being refused against a run that only looks busy.
+              if (childRun)
+                yield* commitFlowStep(runSession, runId, turnIndex, 'waiting');
               const batch = yield* Effect.tryPromise({
                 try: () => queue.waitAndDrainAll(loop.signal),
                 catch: ensureError,
               });
               if (!batch || loop.isInterrupted()) break;
+              // The batch leaves the park: the next turn's index is the one
+              // the top of the loop is about to accept.
+              if (childRun)
+                yield* commitFlowStep(
+                  runSession,
+                  runId,
+                  turnIndex + 1,
+                  'turn.begin',
+                );
 
               const nextRunTurn = strategy.runTurn;
               runner = (signal) => nextRunTurn(batch.items, ports, signal);
-              childRun?.beginTurn();
             }
           }),
         ),
@@ -1099,7 +1093,13 @@ export function startChildRunLoop<TTurn, R = never>(
         const error = Cause.squash(body.cause);
         sawTurnFailure = true;
         lastTurnErr ??= error;
-        if (error instanceof RunLeaseLostError) loop.interrupt();
+        // A lost file lease or a lost aggregate claim: this process no longer
+        // owns the run, so the loop stops rather than continue under it.
+        if (
+          error instanceof RunLeaseLostError ||
+          error instanceof DatabaseNotOwner
+        )
+          loop.interrupt();
       }
 
       const terminal = yield* Effect.exit(

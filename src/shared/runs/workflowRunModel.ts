@@ -29,7 +29,7 @@ import {
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
-import { compareBySeqNo, usableSequence } from '@shared/runs/runOrdering';
+import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { workflowRunSettled } from '@shared/runs/runStatus';
 import {
   TOKENS_GENERATED,
@@ -220,79 +220,6 @@ function workflowCardsInTranscriptOrder(
     );
 }
 
-interface AttemptBoundary {
-  readonly attemptId: string;
-  readonly timestamp: number;
-  readonly stableKey: string;
-  readonly seqNo?: number;
-}
-
-function laterAttemptBoundaryByTime(
-  left: AttemptBoundary | undefined,
-  right: AttemptBoundary,
-): AttemptBoundary {
-  if (!left) return right;
-  if (right.timestamp !== left.timestamp) {
-    return right.timestamp > left.timestamp ? right : left;
-  }
-  return right.stableKey > left.stableKey ? right : left;
-}
-
-/**
- * One run-wide attempt identity, selected before any phase is tallied.
- * Sequenced cards first elect their newest wire fact without consulting wall
- * clocks. Legacy cards and phase boundaries elect by time with a stable key;
- * the two generation winners then use that same fallback chronology. There is
- * no causal key that can order a legacy fact against a sequenced one, so clock
- * skew across that boundary remains inherently ambiguous, but this staged fold
- * is deterministic and cannot form the mixed-comparator cycles a sort can.
- */
-function latestWorkflowAttemptId(
-  cards: readonly WorkflowTaskRow[],
-  taskGroups: readonly TaskGroup[],
-  plan: WorkflowRunModelInput['plan'],
-  markerAttemptId: string | undefined,
-): string | undefined {
-  if (markerAttemptId !== undefined) return markerAttemptId;
-  if (plan && 'attemptId' in plan) return plan.attemptId;
-
-  let sequenced: AttemptBoundary | undefined;
-  let fallback: AttemptBoundary | undefined;
-  for (const row of cards) {
-    const attemptId = row.call.attemptId;
-    if (attemptId === undefined) continue;
-    const seqNo = usableSequence(row.seqNo);
-    if (seqNo === undefined) continue;
-    const boundary: AttemptBoundary = {
-      attemptId,
-      timestamp: row.timestamp,
-      stableKey: `card:${row.id}`,
-      seqNo,
-    };
-    const previousSeqNo = sequenced?.seqNo;
-    if (
-      previousSeqNo === undefined ||
-      seqNo > previousSeqNo ||
-      (seqNo === previousSeqNo &&
-        laterAttemptBoundaryByTime(sequenced, boundary) === boundary)
-    ) {
-      sequenced = boundary;
-    }
-  }
-  for (const group of taskGroups) {
-    if (group.kind !== 'phase' || group.attemptId === undefined) continue;
-    fallback = laterAttemptBoundaryByTime(fallback, {
-      attemptId: group.attemptId,
-      timestamp: group.startTime,
-      stableKey: `phase:${group.id}`,
-    });
-  }
-
-  if (!fallback) return sequenced?.attemptId;
-  if (!sequenced) return fallback.attemptId;
-  return laterAttemptBoundaryByTime(sequenced, fallback).attemptId;
-}
-
 /**
  * Describe an unsettled card after its run has stopped. Host-exit settlement
  * uses the same interruptedWorkflowCall function when publishing a canonical
@@ -435,15 +362,13 @@ export function workflowRunModel(
   // so a resume's live rows and totals never fold a superseded attempt's
   // cards in with the one actually running.
   const cards = workflowCardsInTranscriptOrder(input.rows);
-  // The latest plan marker is definitive even before the attempt issues a
-  // card. Without one, the fallback elects from sequenced cards plus timed
-  // legacy cards and phase openings, including calls issued outside a phase.
-  const latestAttemptId = latestWorkflowAttemptId(
-    cards,
-    input.taskGroups,
-    input.plan,
-    input.workflowAttemptId,
-  );
+  // The latest plan marker is the attempt authority; a run without one is
+  // not scoped, so every phase and card stays open.
+  const latestAttemptId =
+    input.workflowAttemptId ??
+    (input.plan && 'attemptId' in input.plan
+      ? input.plan.attemptId
+      : undefined);
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -626,11 +551,6 @@ function isAttentionStatus(
   return status === 'failed' || status === 'running';
 }
 
-const QUEUED_STATUSES: ReadonlySet<WorkflowCallProgress['status']> = new Set([
-  'planned',
-  'queued',
-]);
-
 function taskRowOf(row: WorkflowTaskRow): WorkflowPhaseRow {
   return { kind: 'task', key: `task:${row.id}`, row };
 }
@@ -694,7 +614,7 @@ export function workflowPhaseRows(
   for (const row of phase.tasks) {
     const status = row.call.status;
     if (isAttentionStatus(status)) attention.push(row);
-    else if (QUEUED_STATUSES.has(status)) queued.push(row);
+    else if (status === 'queued') queued.push(row);
     else done.push(row);
   }
   const rank = (row: WorkflowTaskRow): number =>

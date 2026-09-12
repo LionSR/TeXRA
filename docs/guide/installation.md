@@ -5,7 +5,7 @@ import InstallTroubleshootCards from '../.vitepress/components/InstallTroublesho
 
 # Installation guide
 
-This guide walks you through installing TeXRA and the tools it depends on. The agents themselves need only a model provider; the LaTeX toolchain below is for compiling, diffing, and previewing the documents they work on.
+This guide covers installing TeXRA as a VS Code extension or standalone CLI, along with the optional system dependencies for compiling, diffing, and rendering LaTeX documents. Running agents requires only an API key or connected model provider; local LaTeX tools are used for building previews, generating visual diffs, and formatting equations.
 
 ## System requirements
 

@@ -21,7 +21,6 @@ import {
   type OwnerLiveness,
   proveOwnerLiveness,
 } from './leaseOwnerLiveness';
-import type PQueue from 'p-queue';
 
 const log = createLog('RunLease');
 
@@ -468,41 +467,6 @@ export async function validateOwnedRunLease(runId: RunId): Promise<void> {
     throw new RunLeaseLostError(runId);
   }
 }
-
-/**
- * Fence a run-store mutation when this process claims ownership.
- * Maintenance callers without local ownership already run under
- * `runWithInactiveRunLease` and continue directly. A mutation with
- * neither (no production path has one; test fixtures write metadata this
- * way) claims the run for its own duration, so it is never an
- * unsynchronized check-then-write beside another process.
- */
-export async function runWithRunLeaseWriteFence<T>(
-  runId: RunId,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const root = storageRoot();
-  const key = ownershipKey(root, runId);
-  if (maintenanceRuns.getStore()?.has(key)) return operation();
-  const lease = ownedLeases.get(key);
-  if (lease) {
-    if (lease.releasing) throw new RunLeaseLostError(runId);
-    return runWithValidatedOwnership(lease, operation);
-  }
-  // Unleased writers in this process take turns, so that two of them never
-  // refuse each other over the maintenance claim the first one holds.
-  // `runOnPerKeyQueue` also drops the idle queue when the operation throws,
-  // which the previous inline epilogue skipped (a small leak on failure).
-  const claimed = await runOnPerKeyQueue(unleasedWriteQueues, key, () =>
-    runWithInactiveRunLease(runId, operation),
-  );
-  if (claimed.status === 'active') {
-    throw new RunLeaseLostError(runId);
-  }
-  return claimed.value;
-}
-
-const unleasedWriteQueues = new Map<string, PQueue>();
 
 async function acquireRunLease(
   runId: RunId,

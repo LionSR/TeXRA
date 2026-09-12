@@ -1,26 +1,19 @@
+import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
-import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript/persistence';
-import { WorkflowRunSnapshotSchema } from '@shared/schemas';
-import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
+import { WorkflowRunSnapshotSchema, type RunId } from '@shared/schemas';
+import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
-const mocks = vi.hoisted(() => ({
-  runPersistedWorkflowScript: vi.fn(),
-}));
-
-vi.mock('@agent/workflowScript/persistence', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@agent/workflowScript/persistence')
-  >()),
-  runPersistedWorkflowScript: mocks.runPersistedWorkflowScript,
-}));
+/** Named on the options; these cases drive the projection directly and never
+ *  persist a script row, so the run itself is never read. */
+const parentRunId = '7154decade02' as RunId;
 
 function snapshot(status: 'declared' | 'running') {
   const timestamp = '2026-08-15T20:00:00.000Z';
   const active = status === 'running';
   return WorkflowRunSnapshotSchema.parse({
-    lifecycle: active ? 'active' : 'waiting',
     stages: [],
     calls: [
       {
@@ -41,15 +34,6 @@ describe('workflow-script projection failure recovery', () => {
   it('projects an issued call after a fold fails before projection', async () => {
     const construction = snapshot('declared');
     const running = snapshot('running');
-    mocks.runPersistedWorkflowScript.mockImplementationOnce(
-      async (options: PersistedWorkflowScriptRunOptions) => {
-        options.onTransition?.(construction);
-        options.onTransition?.(running);
-        await options.onSnapshot?.(running);
-        return { snapshot: running } as never;
-      },
-    );
-
     const emit = vi.fn().mockImplementationOnce(() => {
       throw new Error('trace projection unavailable');
     });
@@ -62,12 +46,19 @@ describe('workflow-script projection failure recovery', () => {
       openStage: vi.fn(),
     } as unknown as AgentTrace;
 
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: {} as never,
+    const projection = projectWorkflowScriptProgress(trace, {
+      session: currentSession(),
+      parentRunId,
       checkpointId: 'projection-failure',
       script: 'return await agent("Retry review")',
       runAgent: vi.fn(),
     });
+    // The engine's transitions and its terminal snapshot, driven directly:
+    // the subject is the projection's own recovery, not a script run.
+    projection.options.onTransition?.(construction);
+    projection.options.onTransition?.(running);
+    await projection.options.onSnapshot?.(running);
+    projection.settle(true);
 
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('trace projection unavailable'),
@@ -105,15 +96,6 @@ describe('workflow-script projection failure recovery', () => {
         ];
       }
     }
-    mocks.runPersistedWorkflowScript.mockImplementationOnce(
-      async (options: PersistedWorkflowScriptRunOptions) => {
-        options.onTransition?.(construction);
-        options.onTransition?.(running);
-        await options.onSnapshot?.(running);
-        return { snapshot: running } as never;
-      },
-    );
-
     const emit = vi.fn();
     const trace = {
       activeStageId: vi.fn(),
@@ -126,12 +108,19 @@ describe('workflow-script projection failure recovery', () => {
       }),
     } as unknown as AgentTrace;
 
-    await runPersistedWorkflowScriptWithProgress(trace, {
-      store: {} as never,
+    const projection = projectWorkflowScriptProgress(trace, {
+      session: currentSession(),
+      parentRunId,
       checkpointId: 'attempt-number-backstop',
       script: 'return await agent("Retry review")',
       runAgent: vi.fn(),
     });
+    // The engine's transitions and its terminal snapshot, driven directly:
+    // the subject is the projection's own recovery, not a script run.
+    projection.options.onTransition?.(construction);
+    projection.options.onTransition?.(running);
+    await projection.options.onSnapshot?.(running);
+    projection.settle(true);
 
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({

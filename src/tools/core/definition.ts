@@ -1,0 +1,96 @@
+// Type imports
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import type { ToolDefinition } from '@shared/schemas';
+
+// Local file imports
+import { BaseTool } from './base';
+
+// Third-party type imports
+import type { ZodType } from 'zod';
+
+const EXECUTION_FLAGS = [
+  'parallelSafe',
+  'requiresApproval',
+  'slow',
+  'deferLogUntilApproval',
+  'streamsOutput',
+] as const;
+
+type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
+type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
+type DefinedToolFlags = {
+  readonly [K in ExecutionFlag]: boolean | undefined;
+};
+interface DefinedToolHosts {
+  readonly unavailableHosts: readonly ToolHost[] | undefined;
+}
+
+/**
+ * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
+ * declared execution flags, constructible only through a subclass that
+ * implements `execute`.
+ *
+ * Spelling this out is what keeps `defineTool`'s return type *nameable*.
+ * Without it the return type is an anonymous class expression, and every
+ * `class X extends defineTool(...)` becomes undeclarable — TypeScript emits
+ * `TS4094: Property 'execute' of exported anonymous class type may not be
+ * private or protected` for each one, because a `.d.ts` has no syntax for a
+ * protected member on an anonymous class type. Naming the type sidesteps that
+ * without widening `BaseTool.execute` to public.
+ */
+export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
+  DefinedToolFlags &
+  DefinedToolHosts;
+
+export type DefineToolOptions<T> = {
+  name: string;
+  /** Static description string or function for lazy evaluation */
+  description: string | (() => string);
+  schema: ZodType<T, unknown>;
+  /** Roster namespace a delegation tool's description is annotated from. */
+  availabilityCategory?: ToolDefinition['availabilityCategory'];
+  /** Product hosts this tool definition statically excludes itself from. */
+  unavailableHosts?: readonly ToolHost[];
+} & DefineToolFlags;
+
+/**
+ * Define a tool with type-safe schema and either a static or dynamic description.
+ *
+ * Use a function for description when the content depends on data that's loaded
+ * asynchronously (e.g., agent registry) - the function is called lazily when
+ * the tool definition is accessed.
+ */
+export function defineTool<T, R = never>(
+  def: DefineToolOptions<T>,
+): DefinedToolClass<T, R> {
+  const getDescription = (): string =>
+    typeof def.description === 'function' ? def.description() : def.description;
+
+  abstract class GeneratedTool extends BaseTool<T, R> {
+    // The return annotation checks these fields against EXECUTION_FLAGS.
+    readonly parallelSafe = def.parallelSafe;
+    readonly requiresApproval = def.requiresApproval;
+    readonly slow = def.slow;
+    readonly deferLogUntilApproval = def.deferLogUntilApproval;
+    readonly streamsOutput = def.streamsOutput;
+    readonly unavailableHosts = def.unavailableHosts;
+
+    constructor() {
+      super(
+        {
+          name: def.name,
+          description: getDescription(),
+          // The Zod schema is the tool's only parameter representation; the
+          // provider converters derive JSON Schema from it per request.
+          zodSchema: def.schema,
+          ...(def.availabilityCategory && {
+            availabilityCategory: def.availabilityCategory,
+          }),
+        },
+        def.schema,
+      );
+    }
+  }
+
+  return GeneratedTool;
+}

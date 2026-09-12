@@ -16,7 +16,6 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
-  WORKFLOW_TASK_STATUS_LABEL,
   type RunId,
   type RunPhase,
 } from '@shared/schemas';
@@ -27,7 +26,10 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import {
+  flowPosition,
+  formatFlowPositionLabel,
+} from '@shared/runs/runStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -272,21 +274,22 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private formatLine(now: number): string {
     const root = this.root();
     if (!root) return '';
-    const roundStage = root.stage?.kind === 'round' ? root.stage : undefined;
+    // The loop's own coordinate off the fold's `flow`, in the one its family
+    // counts; a run that has not stepped yet carries none.
+    const position = flowPosition(root.flow);
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
-    const declaredRounds =
+    const plannedRounds =
       root.category === AgentCategory.Workflow && agentName !== undefined
         ? getAgent(agentName, AgentCategory.Workflow)?.rounds
         : undefined;
-    const plannedRounds = roundStage?.total ?? declaredRounds;
     const parts: string[] = [];
-    if (roundStage) {
+    if (position !== undefined) {
       parts.push(
-        `[${formatRoundStageLabel({
-          index: roundStage.index,
-          ...(isMultiRound(plannedRounds) ? { total: plannedRounds } : {}),
-        })}]`,
+        `[${formatFlowPositionLabel(
+          position,
+          isMultiRound(plannedRounds) ? plannedRounds : undefined,
+        )}]`,
       );
     }
     const subject = [agentName, formatInputLabel(root.inputFiles)]
@@ -295,7 +298,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const phase = livePhaseText(root);
     parts.push(subject || phase || 'Running');
     if (subject && phase && phase !== 'Running') parts.push(phase);
-    if (!roundStage && isMultiRound(plannedRounds)) {
+    if (position === undefined && isMultiRound(plannedRounds)) {
       parts.push(`${plannedRounds} rounds`);
     }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;
@@ -437,10 +440,10 @@ function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
     isTerminalOutcomePhase(run.status) &&
     run.identity?.kind === 'multiAgentWorkflow'
   ) {
-    lines.set(
-      'outcome',
-      `${WORKFLOW_TASK_STATUS_LABEL[run.status]}: ${run.identity.workflowName}`,
-    );
+    // `run.status` is a run phase, so the word comes from the fold's own
+    // run-status label, never from the workflow-*call* status table the two
+    // vocabularies happen to share four key names with.
+    lines.set('outcome', `${run.statusLabel}: ${run.identity.workflowName}`);
   }
   return lines;
 }

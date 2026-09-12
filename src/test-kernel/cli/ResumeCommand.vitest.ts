@@ -9,7 +9,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import {
   acquireFreshRunLease,
   releaseOwnedRunLease,
@@ -235,7 +235,10 @@ describe('runResumeCommand', () => {
         modelCompatibilityKey: 'anthropic',
       }),
     );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
+    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+      'correct',
+      'workflowResume',
+    );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 

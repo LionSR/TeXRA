@@ -5,8 +5,7 @@ import { z } from 'zod';
 // Local imports
 import { hostPort } from '@common/hostPort';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
-import { effectRuntime } from '@platform/processRuntime';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -62,7 +61,7 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   }
   const command = input.command.trim();
 
-  const approval = yield* hostPort(() => requestBashApproval({ command }));
+  const approval = yield* requestBashApproval({ command });
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(command, approval);
   }
@@ -95,7 +94,7 @@ export class SendToTerminalTool extends defineTool({
   description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
 }) {
-  protected execute(input: SendToTerminalInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(sendToTerminal(input));
+  protected execute(input: SendToTerminalInput) {
+    return sendToTerminal(input);
   }
 }

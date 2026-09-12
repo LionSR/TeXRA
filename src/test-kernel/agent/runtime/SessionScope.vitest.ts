@@ -5,12 +5,7 @@ import { Effect } from 'effect';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import {
-  MESSAGE_TYPES,
-  RUN_PHASE,
-  type Plan,
-  type RunId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -18,9 +13,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
-import { createRecordingHost } from '../progressTestUtils';
-
-const plan: Plan = { objective: 'Scope session-owned state.' };
 
 describe('session-owned transcripts and follow-up queues', () => {
   it("writes run trace entries to the launching session's transcript store only", async () => {
@@ -45,7 +37,7 @@ describe('session-owned transcripts and follow-up queues', () => {
         expect(
           launching.transcripts
             .get(runId)
-            ?.getRange(0)
+            ?.toJSON()
             .map((entry) => entry.text),
         ).toEqual(['owned by launching session']);
         expect(sibling.transcripts.get(runId)).toBeUndefined();
@@ -60,7 +52,7 @@ describe('session-owned transcripts and follow-up queues', () => {
     }
   });
 
-  it('commits partial streaming text when status closes the run', async () => {
+  it('commits partial streaming text when the run parks', async () => {
     const session = createTestSession();
     const runId = generateRunId();
     publishTestRunStart(session, runId);
@@ -73,12 +65,11 @@ describe('session-owned transcripts and follow-up queues', () => {
     try {
       const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
-      session.publishStatus({
-        type: 'status',
-        runId,
-        phase: RUN_PHASE.WAITING,
-        cause: 'wait',
-      });
+      await session.settlePublications();
+      // The `waiting` step parks the run and the loop commits the closure
+      // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
+      // the row's final text instead of streaming forever.
+      session.publish(session.streamClosureFacts(runId));
       await session.settlePublications();
       const entries = await Effect.runPromise(
         session.transcripts.readEntries(runId),
@@ -108,46 +99,6 @@ describe('session-owned transcripts and follow-up queues', () => {
 
       expect(a.followUps.getAll(runId)).toEqual([]);
       expect(b.followUps.getAll(runId)).toEqual(['from b']);
-    } finally {
-      a.dispose();
-      b.dispose();
-    }
-  });
-});
-
-describe('approval reset scope', () => {
-  it("clears only the given session's pending interactions", async () => {
-    const a = createTestSession();
-    const b = createTestSession();
-    const hostA = createRecordingHost();
-    const hostB = createRecordingHost();
-    const runId = generateRunId();
-    a.interactions.use(hostA.interactions);
-    b.interactions.use(hostB.interactions);
-
-    try {
-      const planA = a.interactions.requestPlanApproval({
-        requestId: 'approval:a',
-        runId,
-        plan,
-        goalEnabled: false,
-      });
-      const planB = b.interactions.requestPlanApproval({
-        requestId: 'approval:b',
-        runId,
-        plan,
-        goalEnabled: false,
-      });
-
-      a.approvals.clearAll();
-      a.interactions.cancel({ cause: 'All approvals cleared.' });
-
-      await expect(planA).resolves.toEqual({ action: 'reject' });
-      // Session B's request is untouched and still resolvable.
-      expect(
-        hostB.decisions.submitPlan('approval:b', { action: 'approve' }),
-      ).toBe(true);
-      await expect(planB).resolves.toEqual({ action: 'approve' });
     } finally {
       a.dispose();
       b.dispose();

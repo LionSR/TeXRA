@@ -12,7 +12,6 @@ import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   runIdentityDisplayName,
-  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type DisplaySessionEvent,
   type DisplaySessionEventDraft,
@@ -30,8 +29,17 @@ export function traceDisplayName(trace: TraceDocument): string {
   return runIdentityDisplayName(trace.meta.identity);
 }
 
-/** The listing facts of the run, in publish order, without envelopes. */
-function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
+/** The step the viewer shows: the scrubber's cut, else the run's last. */
+type TraceStep = TraceDocument['steps'][number];
+
+/**
+ * The listing facts of the run, in publish order, without envelopes; `step`
+ * is the `flow.step` the folded view reads its coordinates from.
+ */
+function listingBodies(
+  trace: TraceDocument,
+  step: TraceStep | undefined,
+): DisplaySessionEventDraft[] {
   const { meta, runId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
@@ -89,6 +97,32 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       description: meta.description,
     });
   }
+  // `meta.outcome` is the one terminal fact the document carries; a trace
+  // with none folds as interrupted: an exported file has no producer that
+  // could still be running it.
+  const { outcome } = meta;
+  if (outcome !== null || step !== undefined) {
+    // `run.end` carries the outcome but no run window; the activation is what
+    // opens it, so the folded view reads its `runStartedAt` from this row's
+    // stamp (the trace's first entry). It leads the facts it activated: an
+    // activation resets the run's progress counters. A run that stepped was
+    // activated whether or not its end was exported.
+    bodies.push({
+      type: 'run.activate',
+      aggregateId: qualifyAggregateId('run', runId),
+      category,
+      isRemote: false,
+    });
+  }
+  if (step !== undefined) {
+    // The loop's position at the cut, through the same arm the live hosts
+    // fold (`RunView.flow`, and `waiting` parks the run).
+    bodies.push({
+      type: 'flow.step',
+      aggregateId: qualifyAggregateId('run', runId),
+      payload: step.payload,
+    });
+  }
   bodies.push(
     {
       type: 'conversation.progress',
@@ -131,31 +165,17 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       },
     );
   }
-  // `meta.outcome` is the one terminal fact the document carries; a trace
-  // with none folds as interrupted: an exported file has no producer that
-  // could still be running it.
-  const { outcome } = meta;
-  if (outcome !== null) {
-    bodies.push(
-      // `run.end` carries the outcome but no run window; the non-terminal
-      // status row is what gives the folded view its `runStartedAt`, so an
-      // exported trace still renders an elapsed time.
-      {
-        type: 'status',
-        aggregateId: qualifyAggregateId('run', runId),
-        phase: RUN_PHASE.RUNNING,
-        previousPhase: null,
-        cause: 'trace',
-        substate: null,
-        runStartedAt: trace.entries[0]?.timestamp ?? null,
-      },
-      {
-        type: 'run.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome,
-        output: emptyRunEndOutput(category),
-      },
-    );
+  // The terminal row belongs to the read at the run's last step (the
+  // whole document, and the slider's final position). At an earlier cut the
+  // run had not ended, so folding it would paint the final outcome over the
+  // state at that step.
+  if (outcome !== null && step === trace.steps.at(-1)) {
+    bodies.push({
+      type: 'run.end',
+      aggregateId: qualifyAggregateId('run', runId),
+      outcome,
+      output: emptyRunEndOutput(category),
+    });
   }
   return bodies;
 }
@@ -166,11 +186,33 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
  * viewer stamps `ownerId: null` (contract C3) because an archived export has
  * no owning process, which folds every unfinished run as interrupted and every
  * finished one as durably final.
+ *
+ * `cut` is the scrubber's position: the index of the `flow.step` the view
+ * is read at; `null` is the whole document, read at its last step. What the
+ * cut governs is the listing: it replays that step, so the phase, the
+ * progress counters and the pending requests are the ones at step k, the
+ * live fold's own reading (runtime on Effect, 2.3). The transcript is only
+ * bounded by it: a row is kept when it was appended at or before that
+ * step's publish clock (a row appended within the same millisecond is
+ * kept), and a kept row carries the text it was finally folded to, not the
+ * text it held at step k. A row that was still streaming across the cut
+ * therefore reads ahead of the step. `trace.entries` is the folded
+ * transcript with no
+ * per-row commit provenance, so a row-by-row historical read would need the
+ * document to carry one.
  */
-function traceEvents(trace: TraceDocument): {
+function traceEvents(
+  trace: TraceDocument,
+  cut: number | null,
+): {
   readonly listing: DisplaySessionEvent[];
   readonly transcript: DisplaySessionEvent[];
 } {
+  const step = cut === null ? trace.steps.at(-1) : trace.steps[cut];
+  const entries =
+    cut === null || step === undefined
+      ? trace.entries
+      : trace.entries.filter((entry) => entry.timestamp <= step.at);
   const at = trace.entries[0]?.timestamp ?? 0;
   let seq = 0;
   // The publisher's stamp (contract C2), as `DisplaySessionEventLog` would have
@@ -183,11 +225,11 @@ function traceEvents(trace: TraceDocument): {
       seq,
       commit: seq,
       ownerId: null,
-      at,
+      at: draft.type === 'flow.step' && step !== undefined ? step.at : at,
     } as DisplaySessionEvent;
   };
-  const listing = listingBodies(trace).map(stamp);
-  const transcript = trace.entries.map((entry) =>
+  const listing = listingBodies(trace, step).map(stamp);
+  const transcript = entries.map((entry) =>
     stamp({
       type: 'transcript.entry',
       aggregateId: qualifyAggregateId('run', trace.runId),
@@ -223,8 +265,9 @@ export function traceFrame(
   trace: TraceDocument,
   session: string,
   subscribe: Subscribe,
+  cut: number | null = null,
 ): EventsFrame {
-  const { listing, transcript } = traceEvents(trace);
+  const { listing, transcript } = traceEvents(trace, cut);
   const named = subscribe.aggregates.some(
     (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
   );

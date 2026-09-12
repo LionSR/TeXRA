@@ -8,6 +8,7 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
+import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { RunRequest } from '@agent/core/state/runRequests';
@@ -30,19 +31,23 @@ import type { AppState } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { Secrets } from '@platform/secrets';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
+  cloneRoundIndexed,
   ExhaustionReasonSchema,
   isPlainAgentIdentity,
+  type OutputFileInfo,
+  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected, Unavailable } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { unique } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { submitProgressFollowUp } from '../progressView/progressFollowUpSubmit';
 import { ProgressApiKeyRetryController } from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
@@ -51,6 +56,27 @@ import {
 } from '../progressView/ProgressFollowUpController';
 
 const log = createLog('HostRunActions');
+
+/** The workflow toolbar's latexdiff over a run's outputs, as each host's
+ *  diff command takes it. */
+export interface WorkflowDiffRequest {
+  agent: string;
+  model: string;
+  inputFile: string;
+  outputFiles: string[];
+  outputFilesActive: boolean;
+  runId: RunId;
+  outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
+}
+
+/** The workflow toolbar's pack and clean over a run's output files. */
+export interface WorkflowFileOperationRequest {
+  agent: string;
+  model: string;
+  inputFile: string;
+  outputFiles: string[];
+  runId: RunId;
+}
 
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
@@ -75,6 +101,15 @@ interface HostRunActions {
   runNew(runId: RunId): Effect.Effect<void, Error>;
   runCompileFixer(runId: RunId): Effect.Effect<void, Error>;
   readConfig(runId: RunId): Effect.Effect<AgentConfig | undefined, Error>;
+  /** The workflow toolbar's latexdiff and pack/clean requests, built from the
+   *  run's saved config and its outputs as the view holds them. `undefined`
+   *  when the run has no config or is not a workflow: the action is a no-op. */
+  workflowDiffRequest(
+    runId: RunId,
+  ): Effect.Effect<WorkflowDiffRequest | undefined, Error>;
+  workflowFileOperationRequest(
+    runId: RunId,
+  ): Effect.Effect<WorkflowFileOperationRequest | undefined, Error>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -124,6 +159,25 @@ export const createHostRunActions = (
       return (yield* getRunRecords(session, runId).readConfig()) ?? undefined;
     });
 
+    /** The saved config of a workflow run, or `undefined` when the toolbar
+     *  action does not apply. */
+    const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(
+      function* (runId: RunId) {
+        const config = yield* readConfig(runId);
+        if (!config) {
+          // No messaging port here, so the refusal is at least recorded
+          // rather than dropped: the toolbar action does nothing.
+          log.warn(
+            `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
+          );
+          return undefined;
+        }
+        return config.agentCategory === AgentCategory.Workflow
+          ? config
+          : undefined;
+      },
+    );
+
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
       function* (runId: RunId, action: string) {
@@ -156,11 +210,11 @@ export const createHostRunActions = (
     );
 
     const isRetryPending = (runId: RunId, requestId: string) =>
-      view().approvals.some(
-        (approval) =>
-          approval.runId === runId &&
-          approval.requestId === requestId &&
-          approval.payload.kind === 'retry',
+      view().requests.some(
+        (request) =>
+          request.runId === runId &&
+          request.requestId === requestId &&
+          request.payload.kind === 'retry',
       );
 
     const settleRetry = (
@@ -175,9 +229,9 @@ export const createHostRunActions = (
       // Interruption is not caught: it belongs to the caller's fiber.
       session.requests
         .request({
-          kind: 'decision.retry',
+          kind: 'request.decide',
           runId,
-          approvalId: requestId,
+          requestId,
           decision,
         })
         .pipe(
@@ -337,14 +391,54 @@ export const createHostRunActions = (
         return parsed.data;
       },
       sendFollowUp(runId, text) {
-        return submitProgressFollowUp({
-          session,
-          runId,
-          input: { text },
-          // Programmatic file feedback has no composer to acknowledge.
-          acknowledge: () => {},
-          showInfo: ports.showWarning,
-        }).pipe(Effect.asVoid);
+        const present = (message: string) =>
+          Effect.tryPromise({
+            try: async () => {
+              await ports.showWarning(message);
+            },
+            catch: ensureError,
+          });
+        const deliver = Effect.gen(function* () {
+          const result = yield* submitFollowUp(
+            runId,
+            { text },
+            { session },
+          ).pipe(
+            Effect.catch((error) =>
+              Effect.gen(function* () {
+                const message = toErrorMessage(error);
+                log.warn(
+                  `Failed to submit follow-up for stream ${runId}: ${message}`,
+                  { data: { runId, error: message } },
+                );
+                yield* present(`Could not send the follow-up: ${message}`);
+                return undefined;
+              }),
+            ),
+          );
+          if (!result) return;
+          session.publish([
+            {
+              type: 'updateQueuedFollowUps',
+              aggregateId: qualifyAggregateId('run', runId),
+              messages: session.followUps.getAll(runId),
+            },
+          ]);
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none')
+            yield* present(presentation.message);
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              log.warn(
+                `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
+              );
+            }),
+          ),
+        );
+        // Detached: a recovery resume can run a whole model turn, so no host
+        // request waits on the outcome.
+        return Effect.forkDetach(deliver).pipe(Effect.asVoid);
       },
       /**
        * Resume a settled run: a workflow relaunches through the
@@ -374,6 +468,53 @@ export const createHostRunActions = (
         });
       }),
       readConfig,
+      workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
+        function* (runId) {
+          const config = yield* workflowConfig(runId);
+          if (!config) return undefined;
+          // Round keys are canonical non-negative integers by construction
+          // (`roundIndexedRecord` in `@shared/schemas/roundIndexed.ts`), so
+          // this record already enumerates ascending per the ES2015+
+          // integer-key spec rule; runLatexdiffForRun consumes
+          // `outputsByRound` in that order without needing a sort here.
+          // Frozen at click time. `getOutputFiles` returns the store's live
+          // record, and this request crosses an interactive quick pick
+          // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
+          // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a
+          // round mid-prompt would otherwise widen the diff scope under the
+          // user.
+          const outputs = getOutputFiles(runId);
+          return {
+            agent: config.agent,
+            model: config.model,
+            inputFile: config.inputFiles[0] ?? '',
+            outputFiles: config.outputFiles,
+            outputFilesActive: config.outputFiles.length > 0,
+            runId,
+            outputsByRound: Object.keys(outputs).length
+              ? cloneRoundIndexed(outputs)
+              : undefined,
+          };
+        },
+      ),
+      workflowFileOperationRequest: Effect.fn(
+        'HostRunActions.workflowFileOperationRequest',
+      )(function* (runId) {
+        const config = yield* workflowConfig(runId);
+        if (!config) return undefined;
+        return {
+          agent: config.agent,
+          model: config.model,
+          inputFile: config.inputFiles[0] ?? '',
+          outputFiles: unique(
+            [
+              ...config.outputFiles,
+              ...runOutputs.getKnownWorkspaceOutputPaths(runId),
+            ].filter(Boolean),
+          ),
+          runId,
+        };
+      }),
       runCompileFixer: Effect.fn(function* (runId) {
         if (!view().runs.has(runId)) {
           return yield* Effect.fail(

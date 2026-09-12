@@ -5,14 +5,19 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe } from 'vitest';
 
 // Local imports
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 
 // Local file imports
@@ -50,7 +55,11 @@ async function setupTool(
     output: 'installed perl 5.38.2\n',
     timedOut: false,
   },
-): Promise<{ tool: SendToTerminalTool; runs: RunRecord[] }> {
+): Promise<{
+  tool: SendToTerminalTool;
+  runs: RunRecord[];
+  runId: ReturnType<typeof publishTestRunStart>;
+}> {
   const runs: RunRecord[] = [];
   await installPlatform(
     {},
@@ -66,118 +75,153 @@ async function setupTool(
       }),
     },
   );
-  return { tool: new SendToTerminalTool(), runs };
+  const runId = publishTestRunStart(defaultSession());
+  await defaultSession().settlePublications();
+  return { tool: new SendToTerminalTool(), runs, runId };
 }
 
+const callTool = (
+  tool: SendToTerminalTool,
+  runId: ReturnType<typeof publishTestRunStart>,
+  input: unknown,
+) =>
+  tool.call(input).pipe(
+    Effect.provide(
+      nativeToolTestLayer({
+        run: { runId, session: defaultSession(), toolPolicy: {} },
+      }),
+    ),
+  );
+
 describe('SendToTerminalTool', () => {
-  it('advertises the host terminal capture limit', async () => {
-    const { tool } = await setupTool();
-    const description = tool.definition.description;
-    assert.ok(description);
-    assert.ok(
-      description.includes(`up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`),
-    );
-  });
-
-  it('runs the command and returns exit code + captured output', async () => {
-    const { tool, runs } = await setupTool();
-
-    const result = await tool.call({
-      command: 'sudo apt-get install -y perl',
-    });
-
-    assert.equal(result.status, 'executed');
-    assert.equal(runs.length, 1);
-    assert.equal(runs[0].command, 'sudo apt-get install -y perl');
-    assert.equal(runs[0].name, 'TeXRA: setup');
-    assert.match(result.summary ?? '', /exited 0/);
-    assert.match(result.output ?? '', /installed perl/);
-  });
-
-  it('always prepends TeXRA: to a caller-supplied label', async () => {
-    const { tool, runs } = await setupTool();
-
-    await tool.call({
-      command: 'sudo apt-get install -y perl',
-      label: 'install LaTeX',
-    });
-
-    assert.equal(runs[0].name, 'TeXRA: install LaTeX');
-  });
-
-  it('reports a non-zero exit code clearly to the agent', async () => {
-    const { tool } = await setupTool({
-      exitCode: 100,
-      output: 'E: Unable to locate package fakepkg\n',
-      timedOut: false,
-    });
-
-    const result = await tool.call({
-      command: 'sudo apt-get install -y fakepkg',
-    });
-
-    assert.equal(result.status, 'executed');
-    assert.match(result.summary ?? '', /exited 100/);
-    assert.match(result.output ?? '', /Unable to locate package/);
-  });
-
-  it('reports a timeout without throwing', async () => {
-    const { tool } = await setupTool({
-      exitCode: undefined,
-      output: 'fetching...\n',
-      timedOut: true,
-    });
-
-    const result = await tool.call({
-      command: 'sudo apt-get install -y perl',
-      timeout: 1000,
-    });
-
-    assert.equal(result.status, 'executed');
-    assert.match(result.summary ?? '', /timed out/);
-  });
-
-  it('rejects commands containing newlines', async () => {
-    const { tool, runs } = await setupTool();
-
-    for (const command of [
-      'sudo apt-get install -y perl\nrm -rf /tmp/leak',
-      'sudo apt-get install -y perl\r\necho pwned',
-      'first\rsecond',
-    ]) {
-      const result = await tool.call({ command });
-      assert.equal(
-        result.status,
-        'error',
-        `must reject ${JSON.stringify(command)}`,
+  it.effect('advertises the host terminal capture limit', () =>
+    Effect.gen(function* () {
+      const { tool } = yield* Effect.tryPromise(() => setupTool());
+      const description = tool.definition.description;
+      assert.ok(description);
+      assert.ok(
+        description.includes(`up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`),
       );
-    }
-    assert.equal(runs.length, 0);
-  });
+    }),
+  );
 
-  it('does not truncate the host-captured terminal tail again', async () => {
-    // The host owns its process-level capture bound; the recorder owns the
-    // display preview and spill. Keep both sentinels inside the host result.
-    const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
-    const end = 'Setting up perl ... done\nEND_MARKER';
-    const { tool } = await setupTool({
-      exitCode: 0,
-      output: head + '\n' + end,
-      timedOut: false,
-    });
+  it.effect('runs the command and returns exit code + captured output', () =>
+    Effect.gen(function* () {
+      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
 
-    const result = await tool.call({
-      command: 'sudo apt-get install -y perl',
-    });
+      const result = yield* callTool(tool, runId, {
+        command: 'sudo apt-get install -y perl',
+      });
 
-    assert.equal(result.status, 'executed');
-    assert.ok(
-      (result.output ?? '').includes('END_MARKER'),
-      'the captured tail must be preserved for the recorder',
-    );
-    assert.ok(
-      (result.output ?? '').includes('BEGIN_MARKER'),
-      'the captured tail must not be truncated again',
-    );
-  });
+      assert.equal(result.status, 'executed');
+      assert.equal(runs.length, 1);
+      assert.equal(runs[0].command, 'sudo apt-get install -y perl');
+      assert.equal(runs[0].name, 'TeXRA: setup');
+      assert.match(result.summary ?? '', /exited 0/);
+      assert.match(result.output ?? '', /installed perl/);
+    }),
+  );
+
+  it.effect('always prepends TeXRA: to a caller-supplied label', () =>
+    Effect.gen(function* () {
+      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
+
+      yield* callTool(tool, runId, {
+        command: 'sudo apt-get install -y perl',
+        label: 'install LaTeX',
+      });
+
+      assert.equal(runs[0].name, 'TeXRA: install LaTeX');
+    }),
+  );
+
+  it.effect('reports a non-zero exit code clearly to the agent', () =>
+    Effect.gen(function* () {
+      const { tool, runId } = yield* Effect.tryPromise(() =>
+        setupTool({
+          exitCode: 100,
+          output: 'E: Unable to locate package fakepkg\n',
+          timedOut: false,
+        }),
+      );
+
+      const result = yield* callTool(tool, runId, {
+        command: 'sudo apt-get install -y fakepkg',
+      });
+
+      assert.equal(result.status, 'executed');
+      assert.match(result.summary ?? '', /exited 100/);
+      assert.match(result.output ?? '', /Unable to locate package/);
+    }),
+  );
+
+  it.effect('reports a timeout without throwing', () =>
+    Effect.gen(function* () {
+      const { tool, runId } = yield* Effect.tryPromise(() =>
+        setupTool({
+          exitCode: undefined,
+          output: 'fetching...\n',
+          timedOut: true,
+        }),
+      );
+
+      const result = yield* callTool(tool, runId, {
+        command: 'sudo apt-get install -y perl',
+        timeout: 1000,
+      });
+
+      assert.equal(result.status, 'executed');
+      assert.match(result.summary ?? '', /timed out/);
+    }),
+  );
+
+  it.effect('rejects commands containing newlines', () =>
+    Effect.gen(function* () {
+      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
+
+      for (const command of [
+        'sudo apt-get install -y perl\nrm -rf /tmp/leak',
+        'sudo apt-get install -y perl\r\necho pwned',
+        'first\rsecond',
+      ]) {
+        const result = yield* callTool(tool, runId, { command });
+        assert.equal(
+          result.status,
+          'error',
+          `must reject ${JSON.stringify(command)}`,
+        );
+      }
+      assert.equal(runs.length, 0);
+    }),
+  );
+
+  it.effect('does not truncate the host-captured terminal tail again', () =>
+    Effect.gen(function* () {
+      // The host owns its process-level capture bound; the recorder owns the
+      // display preview and spill. Keep both sentinels inside the host result.
+      const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
+      const end = 'Setting up perl ... done\nEND_MARKER';
+      const { tool, runId } = yield* Effect.tryPromise(() =>
+        setupTool({
+          exitCode: 0,
+          output: head + '\n' + end,
+          timedOut: false,
+        }),
+      );
+
+      const result = yield* callTool(tool, runId, {
+        command: 'sudo apt-get install -y perl',
+      });
+
+      assert.equal(result.status, 'executed');
+      assert.ok(
+        (result.output ?? '').includes('END_MARKER'),
+        'the captured tail must be preserved for the recorder',
+      );
+      assert.ok(
+        (result.output ?? '').includes('BEGIN_MARKER'),
+        'the captured tail must not be truncated again',
+      );
+    }),
+  );
 });

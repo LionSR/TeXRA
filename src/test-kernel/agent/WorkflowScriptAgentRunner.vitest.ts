@@ -2,30 +2,41 @@ import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit } from 'effect';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
+import type { DelegationParent } from '@tools/delegation/proposalFlow';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
 import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 
-/** Keep Promise assertions at the test entry point. */
+const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+const STORAGE_PATH = path.resolve(path.sep, 'storage');
+const CANONICAL_PATH = path.resolve(path.sep, 'canonical');
+
+const workspacePath = (...segments: string[]) =>
+  path.join(WORKSPACE_PATH, ...segments);
+const storagePath = (...segments: string[]) =>
+  path.join(STORAGE_PATH, ...segments);
+const canonicalPath = (...segments: string[]) =>
+  path.join(CANONICAL_PATH, ...segments);
+
 function createWorkflowScriptAgentRunner(
   ...args: Parameters<typeof createNativeWorkflowScriptAgentRunner>
 ) {
   const runner = createNativeWorkflowScriptAgentRunner(...args);
   return (invocation: WorkflowAgentInvocation) =>
-    Effect.runPromise(
-      Effect.provide(runner(invocation), fakeProcessServices()),
-    );
+    Effect.provide(runner(invocation), fakeProcessServices());
 }
 
 function fingerprintWorkflowAgentDependencies(
@@ -36,9 +47,7 @@ function fingerprintWorkflowAgentDependencies(
     ? Rest
     : never
 ) {
-  return Effect.runPromise(
-    fingerprintInputDependencies(parentContext().runScope.session, ...args),
-  );
+  return fingerprintInputDependencies(parentContext().run.session, ...args);
 }
 
 const mocks = vi.hoisted(() => ({
@@ -61,19 +70,8 @@ vi.mock('@tools/approval', () => ({
 }));
 
 vi.mock('@tools/delegation/inBandSubagentRun', async () => {
-  const { Effect } = await import('effect');
   return {
-    executeStableSubagentInBand: (options: {
-      prepare: () => Effect.Effect<unknown, Error>;
-    }) =>
-      Effect.tryPromise({
-        try: () =>
-          mocks.executeStableSubagentInBand({
-            ...options,
-            prepare: () => Effect.runPromise(options.prepare()),
-          }),
-        catch: ensureError,
-      }),
+    executeStableSubagentInBand: mocks.executeStableSubagentInBand,
   };
 });
 
@@ -133,9 +131,14 @@ const result: RunEnd = {
       {
         round: 0,
         relativePath: 'r0/draft.tex',
-        absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
+        absolutePath: storagePath(
+          'executions',
+          'bbbbbb222222',
+          'r0',
+          'draft.tex',
+        ),
         location: 'runStorage',
-        originalPath: '/workspace/draft.tex',
+        originalPath: workspacePath('draft.tex'),
         added: 1,
         removed: 0,
       },
@@ -161,22 +164,26 @@ const structuredResult: RunEnd = {
   },
 };
 
-function parentContext(): LaunchRunContext {
+function parentContext(): DelegationParent {
+  const session = { id: 'session' } as never;
   return {
-    kind: 'launch',
+    config: new FakeConfigProvider(),
     model: 'parent-model',
-    approvalPromptsUnavailable: true,
-    runtimeUnavailableTools: ['user_question'],
-    runScope: {
-      runId: parentRunId,
-      workingDirectory: '/workspace',
-      delegationAgentScope: {
-        workflow: ['builtInWorkflow:correct'],
-        toolUse: ['builtInToolUse:assistant'],
-      },
-      session: { id: 'session' } as never,
-      signal: new AbortController().signal,
+    tracker: new FileInteractionState(),
+    workingDirectory: WORKSPACE_PATH,
+    delegationAgentScope: {
+      workflow: ['builtInWorkflow:correct'],
+      toolUse: ['builtInToolUse:assistant'],
     },
+    run: {
+      runId: parentRunId,
+      session,
+      toolPolicy: {
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['user_question'],
+      },
+    },
+    inScope: (operation) => operation(),
   };
 }
 
@@ -212,7 +219,7 @@ function invocation(
 interface InBandRunOptions {
   runId: string;
   onActiveRunId?: (runId: string) => void;
-  prepare: () => Promise<unknown>;
+  prepare: () => Effect.Effect<unknown, Error>;
 }
 
 /** The merged attempt-facts channel the runner reports every fact through. */
@@ -235,11 +242,12 @@ function reported<Field extends keyof AttemptFacts>(
 // Stable in-band run that runs the child's prepare step and records the
 // options it produced, as the real executor does.
 function inBandRunReturning(finalResult: RunEnd) {
-  return async (options: InBandRunOptions) => {
-    options.onActiveRunId?.(options.runId);
-    mocks.preparedOptions.push(await options.prepare());
-    return { runId: 'bbbbbb222222', result: finalResult };
-  };
+  return (options: InBandRunOptions) =>
+    Effect.gen(function* () {
+      options.onActiveRunId?.(options.runId);
+      mocks.preparedOptions.push(yield* options.prepare());
+      return { runId: 'bbbbbb222222', result: finalResult };
+    });
 }
 
 function useToolUseAgentEntries(): void {
@@ -268,7 +276,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-      path.resolve('/workspace', file),
+      path.resolve(WORKSPACE_PATH, file),
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
@@ -277,633 +285,861 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
-  it('fingerprints file bytes rather than only their paths', async () => {
-    const options = { inputFiles: ['proof.tex'] };
-    mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
-    const oldFingerprint = await fingerprintWorkflowAgentDependencies(
-      runId,
-      options,
-    );
-    mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
-    const newFingerprint = await fingerprintWorkflowAgentDependencies(
-      runId,
-      options,
-    );
+  it.effect('fingerprints file bytes rather than only their paths', () =>
+    Effect.gen(function* () {
+      const options = { inputFiles: ['proof.tex'] };
+      mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+      const oldFingerprint = yield* fingerprintWorkflowAgentDependencies(
+        runId,
+        options,
+      );
+      mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
+      const newFingerprint = yield* fingerprintWorkflowAgentDependencies(
+        runId,
+        options,
+      );
 
-    expect(oldFingerprint).not.toBe(newFingerprint);
-    expect(mocks.absoluteReadBytes).toHaveBeenCalledWith(
-      '/workspace/proof.tex',
-    );
-  });
-
-  it.each(['absolute', 'relative traversal', 'workspace symlink'] as const)(
-    'rejects a private storage file supplied through %s before reading dependencies',
-    async (spelling) => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
-      const workspace = path.join(root, 'workspace');
-      const storage = path.join(root, 'storage');
-      const privateFile = path.join(storage, 'streamLogs/private.json');
-      const link = path.join(workspace, 'input.json');
-      const storagePath = vi
-        .spyOn(StorageFS, 'fullPath')
-        .mockImplementation((file: string) => path.join(storage, file));
-      try {
-        await fs.mkdir(workspace);
-        await fs.mkdir(path.dirname(privateFile), { recursive: true });
-        await fs.writeFile(privateFile, 'private transcript');
-        await fs.symlink(privateFile, link);
-        mocks.realpath.mockImplementation((file: string) => fs.realpath(file));
-        mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-          path.resolve(workspace, file),
-        );
-        const spellings = {
-          absolute: privateFile,
-          'relative traversal': path.relative(workspace, privateFile),
-          'workspace symlink': 'input.json',
-        };
-        const file = spellings[spelling];
-
-        await expect(
-          fingerprintWorkflowAgentDependencies(runId, {
-            inputFiles: [file],
-          }),
-        ).rejects.toMatchObject({
-          name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(file),
-        });
-        expect(mocks.workspaceExists).not.toHaveBeenCalled();
-        expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
-      } finally {
-        storagePath.mockRestore();
-        await fs.rm(root, { recursive: true, force: true });
-      }
-    },
+      expect(oldFingerprint).not.toBe(newFingerprint);
+      expect(mocks.absoluteReadBytes).toHaveBeenCalledWith(
+        workspacePath('proof.tex'),
+      );
+    }),
   );
 
-  it('keeps the requested workspace symlink name in the launched inputs', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
-    const workspace = path.join(root, 'workspace');
-    const storage = path.join(root, 'storage');
-    const target = path.join(workspace, 'versions/v1.tex');
-    const requested = path.join(workspace, 'chapters/current.tex');
-    const storagePath = vi
-      .spyOn(StorageFS, 'fullPath')
-      .mockImplementation((file: string) => path.join(storage, file));
-    try {
-      await fs.mkdir(storage);
-      await fs.mkdir(path.dirname(target), { recursive: true });
-      await fs.mkdir(path.dirname(requested), { recursive: true });
-      await fs.writeFile(target, 'Current chapter');
-      await fs.symlink(target, requested);
-      mocks.realpath.mockImplementation((file: string) => fs.realpath(file));
-      mocks.workspaceToAbsolute.mockImplementation((file: string) =>
-        path.resolve(workspace, file),
-      );
+  it.effect.each([
+    'absolute',
+    'relative traversal',
+    'workspace symlink',
+  ] as const)(
+    'rejects a private storage file supplied through %s before reading dependencies',
+    (spelling) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const root = yield* Effect.tryPromise({
+            try: () => fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-')),
+            catch: ensureError,
+          });
+          const workspace = path.join(root, 'workspace');
+          const storage = path.join(root, 'storage');
+          const privateFile = path.join(storage, 'streamLogs/private.json');
+          const link = path.join(workspace, 'input.json');
+          const storagePath = vi
+            .spyOn(StorageFS, 'fullPath')
+            .mockImplementation((file: string) => path.join(storage, file));
+          yield* Effect.addFinalizer(() =>
+            Effect.promise(async () => {
+              storagePath.mockRestore();
+              await fs.rm(root, { recursive: true, force: true });
+            }),
+          );
+          yield* Effect.tryPromise({
+            try: () => fs.mkdir(workspace),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.mkdir(path.dirname(privateFile), { recursive: true }),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.writeFile(privateFile, 'private transcript'),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.symlink(privateFile, link),
+            catch: ensureError,
+          });
+          mocks.realpath.mockImplementation((file: string) =>
+            fs.realpath(file),
+          );
+          mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+            path.resolve(workspace, file),
+          );
+          const spellings = {
+            absolute: privateFile,
+            'relative traversal': path.relative(workspace, privateFile),
+            'workspace symlink': 'input.json',
+          };
+          const file = spellings[spelling];
 
-      await defaultRunner()(
-        invocation({ inputFiles: ['chapters/current.tex'] }),
-      );
+          const error = yield* Effect.flip(
+            fingerprintWorkflowAgentDependencies(runId, {
+              inputFiles: [file],
+            }),
+          );
+          expect(error).toMatchObject({
+            name: 'WorkflowRunAbortError',
+            message: expect.stringContaining(file),
+          });
+          expect(mocks.workspaceExists).not.toHaveBeenCalled();
+          expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
+        }),
+      ),
+  );
 
+  it.effect(
+    'keeps the requested workspace symlink name in the launched inputs',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const root = yield* Effect.tryPromise({
+            try: () => fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-')),
+            catch: ensureError,
+          });
+          const workspace = path.join(root, 'workspace');
+          const storage = path.join(root, 'storage');
+          const target = path.join(workspace, 'versions/v1.tex');
+          const requested = path.join(workspace, 'chapters/current.tex');
+          const storagePath = vi
+            .spyOn(StorageFS, 'fullPath')
+            .mockImplementation((file: string) => path.join(storage, file));
+          yield* Effect.addFinalizer(() =>
+            Effect.promise(async () => {
+              storagePath.mockRestore();
+              await fs.rm(root, { recursive: true, force: true });
+            }),
+          );
+          yield* Effect.tryPromise({
+            try: () => fs.mkdir(storage),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.mkdir(path.dirname(target), { recursive: true }),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.mkdir(path.dirname(requested), { recursive: true }),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.writeFile(target, 'Current chapter'),
+            catch: ensureError,
+          });
+          yield* Effect.tryPromise({
+            try: () => fs.symlink(target, requested),
+            catch: ensureError,
+          });
+          mocks.realpath.mockImplementation((file: string) =>
+            fs.realpath(file),
+          );
+          mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+            path.resolve(workspace, file),
+          );
+
+          yield* defaultRunner()(
+            invocation({ inputFiles: ['chapters/current.tex'] }),
+          );
+
+          expect(mocks.preparedOptions[0]).toEqual(
+            expect.objectContaining({
+              configPayload: expect.objectContaining({
+                inputFiles: ['chapters/current.tex'],
+              }),
+            }),
+          );
+          expect(mocks.resolveChildRunOutput).not.toHaveBeenCalled();
+        }),
+      ),
+  );
+
+  it.effect('uses delegation policy and executes a direct in-band child', () =>
+    Effect.gen(function* () {
+      const call = invocation({
+        inputFiles: ['paper.tex'],
+        contextFiles: ['notes.tex'],
+        mediaFiles: ['figure.pdf'],
+        label: 'Draft paper',
+      });
+      const report = reportSpy();
+      call.report = report;
+      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+        Effect.gen(function* () {
+          options.onActiveRunId?.(options.runId);
+          const prepared = yield* options.prepare();
+          mocks.preparedOptions.push(prepared);
+          expect(reported(report, 'childRunId')).toEqual([options.runId]);
+          prepared.onRunResolved?.(options.runId);
+          return { runId: 'bbbbbb222222', result };
+        }),
+      );
+      const runner = defaultRunner();
+
+      expect(yield* runner(call)).toBe(result);
+      expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
+      expect(mocks.workspaceExists).toHaveBeenCalledWith(
+        workspacePath('paper.tex'),
+      );
+      expect(mocks.workspaceExists).toHaveBeenCalledWith(
+        workspacePath('notes.tex'),
+      );
+      expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
+        'notes.tex',
+      ]);
+      expect(mocks.workspaceExists).toHaveBeenCalledWith(
+        workspacePath('figure.pdf'),
+      );
+      expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+        parentModel: 'parent-model',
+        withScope: expect.any(Function),
+      });
+      expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: expect.stringMatching(/^[a-f0-9]{24}$/),
+          parentRunId: runId,
+          signal: call.signal,
+          prepare: expect.any(Function),
+        }),
+      );
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
+          agentName: 'correct',
+          parentRunId: runId,
+          approvalPromptsUnavailable: true,
+          runtimeUnavailableTools: ['user_question'],
           configPayload: expect.objectContaining({
-            inputFiles: ['chapters/current.tex'],
+            agent: 'correct',
+            agentSource: 'builtInWorkflow',
+            agentCategory: 'workflow',
+            model: 'child-model',
+            instruction: 'Draft the section.',
+            inputFiles: ['paper.tex'],
+            contextFiles: ['notes.tex'],
+            mediaFiles: ['figure.pdf'],
+            workingDirectory: WORKSPACE_PATH,
+            delegationAgentScope: {
+              workflow: ['builtInWorkflow:correct'],
+              toolUse: ['builtInToolUse:assistant'],
+            },
           }),
         }),
       );
-      expect(mocks.resolveChildRunOutput).not.toHaveBeenCalled();
-    } finally {
-      storagePath.mockRestore();
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
+      // Model and agent resolve together, so they ride one report.
+      expect(report).toHaveBeenCalledWith({
+        model: 'child-model',
+        agent: 'correct',
+      });
+      expect(reported(report, 'childRunId')).toEqual([
+        expect.stringMatching(/^[a-f0-9]{24}$/),
+      ]);
+      expect(reported(report, 'costUsd')).toEqual([0]);
+    }),
+  );
 
-  it('uses delegation policy and executes a direct in-band child', async () => {
-    const call = invocation({
-      inputFiles: ['paper.tex'],
-      contextFiles: ['notes.tex'],
-      mediaFiles: ['figure.pdf'],
-      label: 'Draft paper',
-    });
-    const report = reportSpy();
-    call.report = report;
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        options.onActiveRunId?.(options.runId);
-        const prepared = await options.prepare();
-        mocks.preparedOptions.push(prepared);
-        expect(reported(report, 'childRunId')).toEqual([options.runId]);
-        prepared.onRunResolved?.(options.runId);
-        return { runId: 'bbbbbb222222', result };
-      },
-    );
-    const runner = defaultRunner();
+  it.effect('treats missing workspace files as run-fatal configuration', () =>
+    Effect.gen(function* () {
+      mocks.workspaceExists.mockResolvedValueOnce(false);
+      const runner = defaultRunner();
 
-    await expect(runner(call)).resolves.toBe(result);
-    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
-    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/paper.tex');
-    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/notes.tex');
-    expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
-      'notes.tex',
-    ]);
-    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/figure.pdf');
-    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
-      parentModel: 'parent-model',
-      withScope: expect.any(Function),
-    });
-    expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runId: expect.stringMatching(/^[a-f0-9]{24}$/),
-        parentRunId: runId,
-        signal: call.signal,
-        prepare: expect.any(Function),
-      }),
-    );
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({
-        agentName: 'correct',
-        parentRunId: runId,
-        approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['user_question'],
-        configPayload: expect.objectContaining({
-          agent: 'correct',
-          agentSource: 'builtInWorkflow',
-          agentCategory: 'workflow',
-          model: 'child-model',
-          instruction: 'Draft the section.',
-          inputFiles: ['paper.tex'],
-          contextFiles: ['notes.tex'],
-          mediaFiles: ['figure.pdf'],
-          workingDirectory: '/workspace',
-          delegationAgentScope: {
-            workflow: ['builtInWorkflow:correct'],
-            toolUse: ['builtInToolUse:assistant'],
-          },
-        }),
-      }),
-    );
-    // Model and agent resolve together, so they ride one report.
-    expect(report).toHaveBeenCalledWith({
-      model: 'child-model',
-      agent: 'correct',
-    });
-    expect(reported(report, 'childRunId')).toEqual([
-      expect.stringMatching(/^[a-f0-9]{24}$/),
-    ]);
-    expect(reported(report, 'costUsd')).toEqual([0]);
-  });
+      const error = yield* Effect.flip(
+        runner(invocation({ inputFiles: ['absent.tex'] })),
+      );
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('absent.tex'),
+      });
+      expect(mocks.preparedOptions).toHaveLength(0);
+    }),
+  );
 
-  it('treats missing workspace files as run-fatal configuration', async () => {
-    mocks.workspaceExists.mockResolvedValueOnce(false);
-    const runner = defaultRunner();
+  it.effect('fails the workflow when a declared model is unavailable', () =>
+    Effect.gen(function* () {
+      mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+        Effect.fail(
+          new Error('Model "missing-model" is not currently available.'),
+        ),
+      );
+      mocks.workspaceExists.mockResolvedValue(false);
+      const runner = defaultRunner();
 
-    await expect(
-      runner(invocation({ inputFiles: ['absent.tex'] })),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining('absent.tex'),
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-  });
+      const error = yield* Effect.flip(
+        runner(
+          invocation({
+            model: 'missing-model',
+            inputFiles: ['paper.tex'],
+          }),
+        ),
+      );
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('missing-model'),
+      });
+      expect(mocks.workspaceExists).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('fails the workflow when a declared model is unavailable', async () => {
-    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
-      Effect.fail(
-        new Error('Model "missing-model" is not currently available.'),
-      ),
-    );
-    mocks.workspaceExists.mockResolvedValue(false);
-    const runner = defaultRunner();
+  it.effect('preserves delegation failures when no model is declared', () =>
+    Effect.gen(function* () {
+      const selectionError = new Error('No delegation models are available.');
+      mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+        Effect.fail(selectionError),
+      );
+      const runner = defaultRunner();
 
-    await expect(
-      runner(
-        invocation({
-          model: 'missing-model',
-          inputFiles: ['paper.tex'],
-        }),
-      ),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining('missing-model'),
-    });
-    expect(mocks.workspaceExists).not.toHaveBeenCalled();
-  });
+      const error = yield* Effect.flip(
+        runner(invocation({ inputFiles: ['paper.tex'] })),
+      );
+      expect(error).toBe(selectionError);
+    }),
+  );
 
-  it('preserves delegation failures when no model is declared', async () => {
-    const selectionError = new Error('No delegation models are available.');
-    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
-      Effect.fail(selectionError),
-    );
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ inputFiles: ['paper.tex'] })),
-    ).rejects.toBe(selectionError);
-  });
-
-  it('honors an explicit agent and binds verified run outputs', async () => {
-    const firstRequested =
-      '/storage/executions/bbbbbb222222/r1/introduction.tex';
-    const firstCanonical =
-      '/canonical/executions/bbbbbb222222/r1/introduction.tex';
-    const secondRequested =
-      '/storage/executions/cccccc333333/r1/conclusion.tex';
-    const secondCanonical =
-      '/canonical/executions/cccccc333333/r1/conclusion.tex';
-    mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
-      file === firstRequested || file === secondRequested
-        ? { kind: 'runStorage' }
-        : undefined,
-    );
-    mocks.resolveChildRunOutput.mockImplementation((_parentRunId, file) =>
-      Effect.succeed({
-        kind: 'runStorage',
-        absolutePath:
-          file === firstRequested ? firstCanonical : secondCanonical,
-        relativePath:
-          file === firstRequested ? 'r1/introduction.tex' : 'r1/conclusion.tex',
-        runId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
-      }),
-    );
-    mocks.realpath.mockImplementation(async (file: string) => {
-      if (file === firstRequested) return firstCanonical;
-      if (file === secondRequested) return secondCanonical;
-      return file;
-    });
-    const runner = defaultRunner();
-
-    await runner(
-      invocation({
-        agentName: 'merge',
-        inputFiles: [firstRequested, 'notes.tex', secondRequested],
-      }),
-    );
-
-    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
-      'workflow',
-      'merge',
-      {
-        workflow: ['builtInWorkflow:correct'],
-        toolUse: ['builtInToolUse:assistant'],
-      },
-    );
-    expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
-      1,
-      runId,
-      firstRequested,
-      parentContext().runScope.session,
-    );
-    expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
-      2,
-      runId,
-      secondRequested,
-      parentContext().runScope.session,
-    );
-    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/notes.tex');
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({
-        agentName: 'merge',
-        configPayload: expect.objectContaining({
-          inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
-        }),
-      }),
-    );
-  });
-
-  it('rejects a run-storage input that no longer resolves', async () => {
-    const placeholder = '/storage/executions/bbbbbb222222/r1/unchanged.tex';
-    mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
-      kind: 'runStorage',
-    });
-    mocks.resolveChildRunOutput.mockReturnValue(Effect.succeed(undefined));
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ inputFiles: [placeholder] })),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining(placeholder),
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-  });
-
-  it('makes oversized bibliography context run-fatal before launch', async () => {
-    const message =
-      'large.bib is over the 100 KiB limit. Extract the needed entries first.';
-    mocks.rejectOversizedBibAttachments.mockResolvedValue({
-      status: 'error',
-      summary: 'Rejected oversized BibTeX attachment',
-      error: message,
-      diagnostics: {
-        type: 'oversized_bib_attachment',
-        path: 'large.bib',
-        sizeBytes: 102_401,
-        limitBytes: 102_400,
-      },
-    });
-    const runner = defaultRunner();
-
-    await expect(
-      runner(
-        invocation({
-          inputFiles: ['draft.tex'],
-          contextFiles: ['large.bib'],
-        }),
-      ),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message,
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-  });
-
-  it('makes storage resolver failures run-fatal', async () => {
-    const placeholder = '/storage/executions/bbbbbb222222/r1/deleted.tex';
-    const storageError = new Error(
-      'Declared output r1/deleted.tex is missing from run bbbbbb222222.',
-    );
-    mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
-      kind: 'runStorage',
-    });
-    mocks.resolveChildRunOutput.mockReturnValue(Effect.fail(storageError));
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ inputFiles: [placeholder] })),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining(storageError.message),
-      cause: storageError,
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-  });
-
-  it('rejects mixed inputs when any run-storage input no longer resolves', async () => {
-    const resolved = '/storage/executions/bbbbbb222222/r1/draft.tex';
-    const stale = '/storage/executions/cccccc333333/r1/review.tex';
-    mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
-      file === resolved || file === stale ? { kind: 'runStorage' } : undefined,
-    );
-    mocks.resolveChildRunOutput.mockImplementation((_parent, file) =>
-      Effect.succeed(
-        file === resolved
-          ? {
-              kind: 'runStorage',
-              absolutePath: '/canonical/executions/bbbbbb222222/r1/draft.tex',
-              relativePath: 'r1/draft.tex',
-              runId: 'bbbbbb222222',
-            }
+  it.effect('honors an explicit agent and binds verified run outputs', () =>
+    Effect.gen(function* () {
+      const firstRequested = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'introduction.tex',
+      );
+      const firstCanonical = canonicalPath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'introduction.tex',
+      );
+      const secondRequested = storagePath(
+        'executions',
+        'cccccc333333',
+        'r1',
+        'conclusion.tex',
+      );
+      const secondCanonical = canonicalPath(
+        'executions',
+        'cccccc333333',
+        'r1',
+        'conclusion.tex',
+      );
+      mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
+        file === firstRequested || file === secondRequested
+          ? { kind: 'runStorage' }
           : undefined,
-      ),
-    );
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ inputFiles: ['notes.tex', resolved, stale] })),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining(stale),
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-  });
-
-  it('links child approval ancestry to the parent stream on resolve', async () => {
-    const runner = defaultRunner();
-
-    await runner(invocation());
-
-    const prepared = mocks.preparedOptions[0] as {
-      onRunResolved?: (runId: RunId) => void;
-    };
-    expect(prepared.onRunResolved).toEqual(expect.any(Function));
-    prepared.onRunResolved?.('stream:child' as RunId);
-    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      'stream:child',
-      runId,
-      'inherit',
-      expect.objectContaining({ id: 'session' }),
-    );
-  });
-
-  it('reports live child cost with its workflow invocation identity', async () => {
-    const onCost = vi.fn();
-    const report = reportSpy();
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        options.onActiveRunId?.(options.runId);
-        const prepared = await options.prepare();
-        await prepared.onCost?.(0.25);
-        return { runId: 'bbbbbb222222', result };
-      },
-    );
-    const runner = defaultRunner({ onCost });
-    const call = { ...invocation(), report };
-
-    await runner(call);
-
-    expect(onCost).toHaveBeenCalledWith(call, 0.25);
-    // Progressive onCost stamps the live snapshot attempt (not only success),
-    // and the terminal result cost is stamped after it (same value here).
-    expect(reported(report, 'costUsd')).toEqual([0.25, 0]);
-  });
-
-  it('stamps terminal cost on failed outcomes before throwing', async () => {
-    const report = reportSpy();
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        options.onActiveRunId?.(options.runId);
-        await options.prepare();
-        return {
-          runId: 'bbbbbb222222',
-          result: {
-            ...result,
-            outcome: 'failed',
-            usage: spent(0.42),
-          },
-        };
-      },
-    );
-    const runner = defaultRunner();
-
-    await expect(runner({ ...invocation(), report })).rejects.toThrow(
-      /ended with failed outcome/,
-    );
-    expect(reported(report, 'costUsd')).toEqual([0.42]);
-  });
-
-  it('does not report recovered stable child cost as live run', async () => {
-    const onCost = vi.fn();
-    const report = reportSpy();
-    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
-      runId: 'bbbbbb222222',
-      result: { ...result, usage: spent(0.25) },
-    });
-    const runner = defaultRunner({ onCost });
-
-    await runner({ ...invocation(), index: 3, report });
-
-    expect(onCost).not.toHaveBeenCalled();
-    // Recovered durable children never fire onActiveRunId — re-attach the
-    // known child id, but do not charge the synthetic resume attempt.
-    expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
-    expect(reported(report, 'costUsd')).toEqual([]);
-  });
-
-  it('rejects a tool-use default agent used as a workflow agent', async () => {
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      { ...defaultAgent, category: 'toolUse', source: 'builtInToolUse' },
-      'tool-call-8',
-      run,
-    );
-
-    await expect(runner(invocation({}))).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringMatching(
-        /is a toolUse agent but was launched as workflow/,
-      ),
-    });
-  });
-
-  it('uses one stable child id per workflow call identity', async () => {
-    const runner = defaultRunner();
-
-    await runner(invocation());
-    await runner(invocation());
-    await runner({ ...invocation(), index: 1 });
-    await runner({ ...invocation(), key: 'fedcba9876543210' });
-
-    const runIds = mocks.executeStableSubagentInBand.mock.calls.map(
-      ([options]) => options.runId,
-    );
-    expect(runIds[0]).toBe(runIds[1]);
-    expect(runIds[2]).toBe(runIds[0]);
-    expect(runIds[3]).not.toBe(runIds[0]);
-  });
-
-  it('rejects a cancelled child so the workflow journal can retry it', async () => {
-    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
-      runId: 'bbbbbb222222',
-      result: {
-        outcome: 'cancelled',
-        output: { category: 'toolUse', response: '', files: [] },
-      },
-    });
-    const runner = defaultRunner();
-
-    await expect(runner(invocation())).rejects.toThrow(
-      'Workflow subagent ended with cancelled outcome.',
-    );
-  });
-
-  it('rejects a completed workflow child that produced no output files', async () => {
-    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
-      runId: 'bbbbbb222222',
-      result: { ...result, output: { ...result.output, outputs: [] } },
-    });
-    const runner = defaultRunner();
-
-    await expect(runner(invocation())).rejects.toThrow(
-      'Workflow subagent completed without producing any output files.',
-    );
-  });
-
-  it('turns manifest-write failures into fatal workflow aborts', async () => {
-    const durabilityError = new SubagentDurabilityError(
-      'result manifest unavailable',
-      { cause: new Error('storage offline') },
-    );
-    mocks.executeStableSubagentInBand.mockRejectedValueOnce(durabilityError);
-    const runner = defaultRunner();
-
-    await expect(runner(invocation())).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: 'result manifest unavailable',
-      cause: durabilityError,
-    });
-  });
-
-  it('reports the active-attempt run id, not the logical id', async () => {
-    // After a durable retry advances the attempt sequence, the live run uses an
-    // attempt-specific run id — the id its child stream / roster expose.
-    // The runner must report THAT id, not the logical id it hands stable
-    // run, so a host's skip/retry finds the row.
-    const attemptRunId = 'cccccc333333' as RunId;
-    let logicalRunId: string | undefined;
-    mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
-      logicalRunId = options.runId;
-      options.onActiveRunId?.(attemptRunId);
-      mocks.preparedOptions.push(await options.prepare());
-      return { runId: attemptRunId, result };
-    });
-    const report = reportSpy();
-    const runner = defaultRunner();
-
-    await expect(runner({ ...invocation(), report })).resolves.toBe(result);
-
-    expect(logicalRunId).toMatch(/^[a-f0-9]{24}$/);
-    expect(logicalRunId).not.toBe(attemptRunId);
-    expect(reported(report, 'childRunId')).toEqual([attemptRunId]);
-  });
-
-  it('routes an agent({ schema }) call to a tool-use agent with an output schema', async () => {
-    useToolUseAgentEntries();
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      inBandRunReturning(structuredResult),
-    );
-    const schema = {
-      type: 'object',
-      properties: { title: { type: 'string' } },
-      required: ['title'],
-      additionalProperties: false,
-    };
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ agentName: 'assistant', schema })),
-    ).resolves.toBe(structuredResult);
-
-    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
-      'toolUse',
-      'assistant',
-      expect.anything(),
-    );
-    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
-      parentModel: 'parent-model',
-      withScope: expect.any(Function),
-    });
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({
-        agentName: 'assistant',
-        configPayload: expect.objectContaining({
-          agentCategory: 'toolUse',
-          outputSchema: schema,
+      );
+      mocks.resolveChildRunOutput.mockImplementation((_parentRunId, file) =>
+        Effect.succeed({
+          kind: 'runStorage',
+          absolutePath:
+            file === firstRequested ? firstCanonical : secondCanonical,
+          relativePath:
+            file === firstRequested
+              ? 'r1/introduction.tex'
+              : 'r1/conclusion.tex',
+          runId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
         }),
-      }),
-    );
-    expect(
-      (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
-    ).not.toHaveProperty('inputFiles');
-    expect(mocks.workspaceExists).not.toHaveBeenCalled();
-  });
+      );
+      mocks.realpath.mockImplementation(async (file: string) => {
+        if (file === firstRequested) return firstCanonical;
+        if (file === secondRequested) return secondCanonical;
+        return file;
+      });
+      const runner = defaultRunner();
 
-  it('exempts a schema call from the workflow empty-files guard', async () => {
-    useToolUseAgentEntries();
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      inBandRunReturning(structuredResult),
-    );
-    const schema = { type: 'object', additionalProperties: false };
-    const runner = defaultRunner();
+      yield* runner(
+        invocation({
+          agentName: 'merge',
+          inputFiles: [firstRequested, 'notes.tex', secondRequested],
+        }),
+      );
 
-    // No input files and no default outputs: the workflow path aborts, but a
-    // schema call runs a tool-use agent whose result is the submitted value.
-    await expect(
-      runner(invocation({ agentName: 'assistant', schema })),
-    ).resolves.toBe(structuredResult);
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({
-        configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
+      expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+        'workflow',
+        'merge',
+        {
+          workflow: ['builtInWorkflow:correct'],
+          toolUse: ['builtInToolUse:assistant'],
+        },
+      );
+      expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
+        1,
+        runId,
+        firstRequested,
+        parentContext().run.session,
+      );
+      expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
+        2,
+        runId,
+        secondRequested,
+        parentContext().run.session,
+      );
+      expect(mocks.workspaceExists).toHaveBeenCalledWith(
+        workspacePath('notes.tex'),
+      );
+      expect(mocks.preparedOptions[0]).toEqual(
+        expect.objectContaining({
+          agentName: 'merge',
+          configPayload: expect.objectContaining({
+            inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
+          }),
+        }),
+      );
+    }),
+  );
+
+  it.effect('rejects a run-storage input that no longer resolves', () =>
+    Effect.gen(function* () {
+      const placeholder = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'unchanged.tex',
+      );
+      mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
+        kind: 'runStorage',
+      });
+      mocks.resolveChildRunOutput.mockReturnValue(Effect.succeed(undefined));
+      const runner = defaultRunner();
+
+      const error = yield* Effect.flip(
+        runner(invocation({ inputFiles: [placeholder] })),
+      );
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(placeholder),
+      });
+      expect(mocks.preparedOptions).toHaveLength(0);
+    }),
+  );
+
+  it.effect(
+    'makes oversized bibliography context run-fatal before launch',
+    () =>
+      Effect.gen(function* () {
+        const message =
+          'large.bib is over the 100 KiB limit. Extract the needed entries first.';
+        mocks.rejectOversizedBibAttachments.mockResolvedValue({
+          status: 'error',
+          summary: 'Rejected oversized BibTeX attachment',
+          error: message,
+          diagnostics: {
+            type: 'oversized_bib_attachment',
+            path: 'large.bib',
+            sizeBytes: 102_401,
+            limitBytes: 102_400,
+          },
+        });
+        const runner = defaultRunner();
+
+        const error = yield* Effect.flip(
+          runner(
+            invocation({
+              inputFiles: ['draft.tex'],
+              contextFiles: ['large.bib'],
+            }),
+          ),
+        );
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message,
+        });
+        expect(mocks.preparedOptions).toHaveLength(0);
       }),
-    );
-  });
+  );
+
+  it.effect('makes storage resolver failures run-fatal', () =>
+    Effect.gen(function* () {
+      const placeholder = storagePath(
+        'executions',
+        'bbbbbb222222',
+        'r1',
+        'deleted.tex',
+      );
+      const storageError = new Error(
+        'Declared output r1/deleted.tex is missing from run bbbbbb222222.',
+      );
+      mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
+        kind: 'runStorage',
+      });
+      mocks.resolveChildRunOutput.mockReturnValue(Effect.fail(storageError));
+      const runner = defaultRunner();
+
+      const error = yield* Effect.flip(
+        runner(invocation({ inputFiles: [placeholder] })),
+      );
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(storageError.message),
+        cause: storageError,
+      });
+      expect(mocks.preparedOptions).toHaveLength(0);
+    }),
+  );
+
+  it.effect(
+    'rejects mixed inputs when any run-storage input no longer resolves',
+    () =>
+      Effect.gen(function* () {
+        const resolved = storagePath(
+          'executions',
+          'bbbbbb222222',
+          'r1',
+          'draft.tex',
+        );
+        const stale = storagePath(
+          'executions',
+          'cccccc333333',
+          'r1',
+          'review.tex',
+        );
+        mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation(
+          (file) =>
+            file === resolved || file === stale
+              ? { kind: 'runStorage' }
+              : undefined,
+        );
+        mocks.resolveChildRunOutput.mockImplementation((_parent, file) =>
+          Effect.succeed(
+            file === resolved
+              ? {
+                  kind: 'runStorage',
+                  absolutePath: canonicalPath(
+                    'executions',
+                    'bbbbbb222222',
+                    'r1',
+                    'draft.tex',
+                  ),
+                  relativePath: 'r1/draft.tex',
+                  runId: 'bbbbbb222222',
+                }
+              : undefined,
+          ),
+        );
+        const runner = defaultRunner();
+
+        const error = yield* Effect.flip(
+          runner(invocation({ inputFiles: ['notes.tex', resolved, stale] })),
+        );
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(stale),
+        });
+        expect(mocks.preparedOptions).toHaveLength(0);
+      }),
+  );
+
+  it.effect(
+    'links child approval ancestry to the parent stream on resolve',
+    () =>
+      Effect.gen(function* () {
+        const runner = defaultRunner();
+
+        yield* runner(invocation());
+
+        const prepared = mocks.preparedOptions[0] as {
+          onRunResolved?: (runId: RunId) => void;
+        };
+        expect(prepared.onRunResolved).toEqual(expect.any(Function));
+        prepared.onRunResolved?.('stream:child' as RunId);
+        expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+          'stream:child',
+          runId,
+          'inherit',
+          expect.objectContaining({ id: 'session' }),
+        );
+      }),
+  );
+
+  it.effect(
+    'reports live child cost with its workflow invocation identity',
+    () =>
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        const report = reportSpy();
+        mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+          Effect.gen(function* () {
+            options.onActiveRunId?.(options.runId);
+            const prepared = yield* options.prepare();
+            prepared.onCost?.(0.25);
+            return { runId: 'bbbbbb222222', result };
+          }),
+        );
+        const runner = defaultRunner({ onCost });
+        const call = { ...invocation(), report };
+
+        yield* runner(call);
+
+        expect(onCost).toHaveBeenCalledWith(call, 0.25);
+        // Progressive onCost stamps the live snapshot attempt (not only success),
+        // and the terminal result cost is stamped after it (same value here).
+        expect(reported(report, 'costUsd')).toEqual([0.25, 0]);
+      }),
+  );
+
+  it.effect('stamps terminal cost on failed outcomes before throwing', () =>
+    Effect.gen(function* () {
+      const report = reportSpy();
+      mocks.executeStableSubagentInBand.mockImplementationOnce((options) =>
+        Effect.gen(function* () {
+          options.onActiveRunId?.(options.runId);
+          yield* options.prepare();
+          return {
+            runId: 'bbbbbb222222',
+            result: {
+              ...result,
+              outcome: 'failed',
+              usage: spent(0.42),
+            },
+          };
+        }),
+      );
+      const runner = defaultRunner();
+
+      const error = yield* Effect.flip(runner({ ...invocation(), report }));
+      expect(error.message).toMatch(/ended with failed outcome/);
+      expect(reported(report, 'costUsd')).toEqual([0.42]);
+    }),
+  );
+
+  it.effect('does not report recovered stable child cost as live run', () =>
+    Effect.gen(function* () {
+      const onCost = vi.fn();
+      const report = reportSpy();
+      mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        Effect.succeed({
+          runId: 'bbbbbb222222',
+          result: { ...result, usage: spent(0.25) },
+        }),
+      );
+      const runner = defaultRunner({ onCost });
+
+      yield* runner({ ...invocation(), index: 3, report });
+
+      expect(onCost).not.toHaveBeenCalled();
+      // Recovered durable children never fire onActiveRunId — re-attach the
+      // known child id, but do not charge the synthetic resume attempt.
+      expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
+      expect(reported(report, 'costUsd')).toEqual([]);
+    }),
+  );
+
+  it.effect('rejects a tool-use default agent used as a workflow agent', () =>
+    Effect.gen(function* () {
+      const runner = createWorkflowScriptAgentRunner(
+        parentContext(),
+        { ...defaultAgent, category: 'toolUse', source: 'builtInToolUse' },
+        'tool-call-8',
+        run,
+      );
+
+      const error = yield* Effect.flip(runner(invocation({})));
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringMatching(
+          /is a toolUse agent but was launched as workflow/,
+        ),
+      });
+    }),
+  );
+
+  it.effect('uses one stable child id per workflow call identity', () =>
+    Effect.gen(function* () {
+      const runner = defaultRunner();
+
+      yield* runner(invocation());
+      yield* runner(invocation());
+      yield* runner({ ...invocation(), index: 1 });
+      yield* runner({ ...invocation(), key: 'fedcba9876543210' });
+
+      const runIds = mocks.executeStableSubagentInBand.mock.calls.map(
+        ([options]) => options.runId,
+      );
+      expect(runIds[0]).toBe(runIds[1]);
+      expect(runIds[2]).toBe(runIds[0]);
+      expect(runIds[3]).not.toBe(runIds[0]);
+    }),
+  );
+
+  it.effect(
+    'rejects a cancelled child so the workflow journal can retry it',
+    () =>
+      Effect.gen(function* () {
+        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+          Effect.succeed({
+            runId: 'bbbbbb222222',
+            result: {
+              outcome: 'cancelled',
+              output: { category: 'toolUse', response: '', files: [] },
+            },
+          }),
+        );
+        const runner = defaultRunner();
+
+        const error = yield* Effect.flip(runner(invocation()));
+        expect(error.message).toContain(
+          'Workflow subagent ended with cancelled outcome.',
+        );
+      }),
+  );
+
+  it.effect(
+    'rejects a completed workflow child that produced no output files',
+    () =>
+      Effect.gen(function* () {
+        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+          Effect.succeed({
+            runId: 'bbbbbb222222',
+            result: { ...result, output: { ...result.output, outputs: [] } },
+          }),
+        );
+        const runner = defaultRunner();
+
+        const error = yield* Effect.flip(runner(invocation()));
+        expect(error.message).toContain(
+          'Workflow subagent completed without producing any output files.',
+        );
+      }),
+  );
+
+  it.effect('turns manifest-write failures into fatal workflow aborts', () =>
+    Effect.gen(function* () {
+      const durabilityError = new SubagentDurabilityError(
+        'result manifest unavailable',
+        { cause: new Error('storage offline') },
+      );
+      mocks.executeStableSubagentInBand.mockReturnValueOnce(
+        Effect.fail(durabilityError),
+      );
+      const runner = defaultRunner();
+
+      const error = yield* Effect.flip(runner(invocation()));
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: 'result manifest unavailable',
+        cause: durabilityError,
+      });
+    }),
+  );
+
+  it.effect.each([
+    {
+      cause: Cause.interrupt(),
+      name: 'an interrupt',
+      hasDurabilityError: false,
+    },
+    {
+      cause: Cause.fromReasons([
+        Cause.makeInterruptReason(),
+        Cause.makeFailReason(
+          new SubagentDurabilityError('result manifest unavailable'),
+        ),
+      ]),
+      name: 'an interrupt with a durability failure',
+      hasDurabilityError: true,
+    },
+  ])(
+    'preserves $name from the in-band child',
+    ({ cause, hasDurabilityError }) =>
+      Effect.gen(function* () {
+        mocks.executeStableSubagentInBand.mockReturnValueOnce(
+          Effect.failCause(cause),
+        );
+
+        const exit = yield* Effect.exit(defaultRunner()(invocation()));
+
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+          const failure = exit.cause.reasons.find(Cause.isFailReason)?.error;
+          if (hasDurabilityError) {
+            expect(failure).toMatchObject({
+              name: 'WorkflowRunAbortError',
+              message: 'result manifest unavailable',
+              cause: { name: 'SubagentDurabilityError' },
+            });
+          } else {
+            expect(failure).toBeUndefined();
+          }
+        }
+      }),
+  );
+
+  it.effect('reports the active-attempt run id, not the logical id', () =>
+    Effect.gen(function* () {
+      // After a durable retry advances the attempt sequence, the live run uses an
+      // attempt-specific run id — the id its child stream / roster expose.
+      // The runner must report THAT id, not the logical id it hands stable
+      // run, so a host's skip/retry finds the row.
+      const attemptRunId = 'cccccc333333' as RunId;
+      let logicalRunId: string | undefined;
+      mocks.executeStableSubagentInBand.mockImplementation((options) =>
+        Effect.gen(function* () {
+          logicalRunId = options.runId;
+          options.onActiveRunId?.(attemptRunId);
+          mocks.preparedOptions.push(yield* options.prepare());
+          return { runId: attemptRunId, result };
+        }),
+      );
+      const report = reportSpy();
+      const runner = defaultRunner();
+
+      expect(yield* runner({ ...invocation(), report })).toBe(result);
+
+      expect(logicalRunId).toMatch(/^[a-f0-9]{24}$/);
+      expect(logicalRunId).not.toBe(attemptRunId);
+      expect(reported(report, 'childRunId')).toEqual([attemptRunId]);
+    }),
+  );
+
+  it.effect(
+    'routes an agent({ schema }) call to a tool-use agent with an output schema',
+    () =>
+      Effect.gen(function* () {
+        useToolUseAgentEntries();
+        mocks.executeStableSubagentInBand.mockImplementationOnce(
+          inBandRunReturning(structuredResult),
+        );
+        const schema = {
+          type: 'object',
+          properties: { title: { type: 'string' } },
+          required: ['title'],
+          additionalProperties: false,
+        };
+        const runner = defaultRunner();
+
+        expect(
+          yield* runner(invocation({ agentName: 'assistant', schema })),
+        ).toBe(structuredResult);
+
+        expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+          'toolUse',
+          'assistant',
+          expect.anything(),
+        );
+        expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+          parentModel: 'parent-model',
+          withScope: expect.any(Function),
+        });
+        expect(mocks.preparedOptions[0]).toEqual(
+          expect.objectContaining({
+            agentName: 'assistant',
+            configPayload: expect.objectContaining({
+              agentCategory: 'toolUse',
+              outputSchema: schema,
+            }),
+          }),
+        );
+        expect(
+          (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
+        ).not.toHaveProperty('inputFiles');
+        expect(mocks.workspaceExists).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('exempts a schema call from the workflow empty-files guard', () =>
+    Effect.gen(function* () {
+      useToolUseAgentEntries();
+      mocks.executeStableSubagentInBand.mockImplementationOnce(
+        inBandRunReturning(structuredResult),
+      );
+      const schema = { type: 'object', additionalProperties: false };
+      const runner = defaultRunner();
+
+      // No input files and no default outputs: the workflow path aborts, but a
+      // schema call runs a tool-use agent whose result is the submitted value.
+      expect(
+        yield* runner(invocation({ agentName: 'assistant', schema })),
+      ).toBe(structuredResult);
+      expect(mocks.preparedOptions[0]).toEqual(
+        expect.objectContaining({
+          configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
+        }),
+      );
+    }),
+  );
 });

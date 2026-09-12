@@ -30,9 +30,8 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  attachedDroppedPaths,
+  attachDroppedPaths,
   normalizeMainViewFileExtension,
-  planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -42,7 +41,6 @@ import {
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -236,16 +234,6 @@ export function createExtensionHostRequests(
       runtime.runPromise(runActions.sendFollowUp(runId, text)),
   });
 
-  const workflowRunActions = new ProgressWorkflowRunActionsController({
-    state: runOutputs,
-    runDiff: async (request) => {
-      await runCommand('texra.runLatexdiff', request);
-    },
-    runFileOperation: async (operation, request) => {
-      await runCommand(`texra.${operation}`, request);
-    },
-  });
-
   let chatExportController: ChatExportController | undefined;
 
   async function openExportPath(
@@ -348,7 +336,7 @@ export function createExtensionHostRequests(
         await workflowFileActions.acceptFile(editedFile, baseFile);
         return;
       case 'merge':
-        await runCommand('texra.merge', baseFile, undefined, editedFile);
+        await runCommand('texra.merge', baseFile, editedFile);
         return;
       case 'latexdiff':
         await runCommand('texra.latexdiff', undefined, baseFile, editedFile);
@@ -457,22 +445,16 @@ export function createExtensionHostRequests(
     const paths = await Promise.all(
       request.paths.map((rawPath) => resolveWorkspaceDropFile(rawPath)),
     );
-    const plan = planMainViewDroppedFileAttachments({
+    const attached = attachDroppedPaths(
       paths,
-      allowedExtensions: {
-        input: getIncludedExtensions('input'),
-        context: getIncludedExtensions('context'),
-        media: getIncludedExtensions('media'),
-      },
-      target: request.category,
-    });
-    const attached = attachedDroppedPaths(plan);
-    if (plan.attachedCount > 0 && plan.rejectedCount > 0) {
+      getIncludedExtensions(request.category),
+    );
+    if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
       void showInfo(
-        `Attached ${formatResultCount(plan.attachedCount, 'dropped file')}; skipped ${formatResultCount(plan.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+        `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
       );
     }
-    return { kind: 'files', paths: attached };
+    return { kind: 'files', paths: attached.paths };
   }
 
   /** The editor's current file into a launcher field. */
@@ -667,22 +649,18 @@ export function createExtensionHostRequests(
         await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const diff = await runtime.runPromise(
+          runActions.workflowDiffRequest(request.runId),
         );
-        await workflowRunActions.diffStream(request.runId, config);
+        if (diff) await runCommand('texra.runLatexdiff', diff);
         return done;
       }
       case 'pack':
       case 'clean': {
-        const config = await runtime.runPromise(
-          runActions.readConfig(request.runId),
+        const operation = await runtime.runPromise(
+          runActions.workflowFileOperationRequest(request.runId),
         );
-        await workflowRunActions.runFileOperation(
-          request.runId,
-          request.kind,
-          config,
-        );
+        if (operation) await runCommand(`texra.${request.kind}`, operation);
         return done;
       }
       case 'latexdiffs':
@@ -749,10 +727,6 @@ export function createExtensionHostRequests(
       case 'launch':
         await launch(request);
         return done;
-      case 'compileInputPdf':
-        throw new Rejected({
-          reason: 'Compiling the input PDF is not available in VS Code yet.',
-        });
       case 'extractFigures':
         await runCommand('texra.extractTikzFigures');
         return done;

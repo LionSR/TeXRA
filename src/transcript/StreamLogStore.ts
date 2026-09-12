@@ -7,6 +7,7 @@ import {
   isTranscriptEvent,
   type SessionEvent,
   type RunId,
+  RUN_PHASE,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -44,8 +45,11 @@ function applyEvent(
   event: SessionEvent,
 ): void {
   if (event.type === 'transcript.entry') log.record(event.entry);
-  else if (event.type === 'status') fold.status(event.phase);
-  else if (event.type === 'run.end') fold.status(event.outcome);
+  else if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
+    else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
+  } else if (event.type === 'run.end') fold.status(event.outcome);
   else if (isTranscriptEvent(event))
     fold.record(event, {
       at: event.at,

@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import { RunRecordSchema } from '@agent/core/definition/RunRecord';
 import {
+  CommitOrdinalSchema,
   ConversationProgressSchema,
+  FlowStepPayloadSchema,
   PlanSchema,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdSchema,
@@ -35,19 +37,31 @@ const TraceRunFactsSchema = z.object({
   compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });
 
+/**
+ * One `flow.step` row of the run, as the ledger committed it: the viewer's
+ * scrubber keys on `commit` (the database-wide ordinal, never the renumbered
+ * `StreamLogEntry.seqNo`), cuts the transcript at `at` (the publish clock
+ * every transcript row of the run is stamped with), and replays `payload`
+ * through the same fold arm the live hosts run, so "state at step k" is the
+ * fold's own reading (runtime on Effect, 2.3).
+ */
+const TraceStepSchema = z.object({
+  commit: CommitOrdinalSchema,
+  at: z.int(),
+  payload: FlowStepPayloadSchema,
+});
+
 /** Everything a static trace viewer needs to replay one finished run. */
 export const TraceDocumentSchema = z.object({
   runId: RunIdSchema,
   /** The run's honest record: AgentConfig for agent runs, minimal otherwise. */
   config: RunRecordSchema,
   meta: TraceRunFactsSchema,
-  /**
-   * Transcript entries. Workflow-call entries have their `data.model` already
-   * projected to the runtime display label (via `projectWorkflowCallEntry`) at
-   * export time, so an exported trace cannot recover the canonical
-   * `WorkflowCallProgress.model` id from that field.
-   */
+  /** Transcript entries, exactly as the run recorded them. */
   entries: z.array(StreamLogEntrySchema),
+  /** The run's `flow.step` rows in commit order; empty for a run whose loop
+   *  never stepped (a process run, a workflow container). */
+  steps: z.array(TraceStepSchema),
 });
 
 export type TraceDocument = Readonly<z.infer<typeof TraceDocumentSchema>>;

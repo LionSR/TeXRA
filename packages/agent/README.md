@@ -256,12 +256,32 @@ are not imported or removed.
 
 ## Custom tools
 
+Custom tools return Effect programs. The SDK supplies the run scope and
+interrupts tool work when the run stops. `defineTool` validates the input and
+normalizes ordinary failures into tool feedback; `execute` implements the work.
+
 ```ts
-import { defineTool, runAgent } from '@texra-ai/agent';
+import { defineTool } from '@texra-ai/agent';
+import { Effect } from 'effect';
+import { z } from 'zod';
+
+class EchoTool extends defineTool({
+  name: 'echo',
+  description: 'Return the supplied text.',
+  schema: z.strictObject({ text: z.string() }),
+}) {
+  protected execute({ text }: { text: string }) {
+    return Effect.succeed({ status: 'executed' as const, output: text });
+  }
+}
+
+const tools = [new EchoTool()];
 ```
 
 Pass `tools` to `runAgent`. Custom tools are accepted for **tool-use** agents
-only; passing them to a workflow agent throws.
+only; passing them to a workflow agent throws. A directly implemented `ITool`
+also returns an Effect from `call`; asynchronous operations compose inside that
+program. Execute programs only at the embedding application's host boundary.
 
 ## Current limits
 
@@ -269,11 +289,11 @@ These are enforced, not undocumented — each throws or degrades loudly rather
 than failing quietly:
 
 - **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. There is no interactive approval channel yet: the package attaches
-  one headless host to each session for its whole life, so concurrent runs on a
-  root never displace each other's host.
+  at launch. There is no interactive approval channel yet.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
-  denial with a reason instead.
+  denial with a reason instead: on each session the package opens it answers
+  every retry request with `request.decide`, the same door a host answers
+  through, for the life of that session.
 - **No resume.** `nodePlatform` reports no resumable runs; resuming a
   persisted tool-use session is host-side functionality today.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a

@@ -20,6 +20,7 @@ import { agentRunLayer } from '@agent/runtime/run/AgentRun';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -77,10 +78,7 @@ describe('run-scoped tool resolution', () => {
     'adds the run-scoped tools and submit_output to the model-facing list',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({
-          emit: () => {},
-          cancel: () => {},
-        });
+        const session = sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();
@@ -101,7 +99,11 @@ describe('run-scoped tool resolution', () => {
 
         yield* runToolUse({ resume: false }).pipe(
           Effect.provide(
-            Layer.mergeAll(observingInvokerLayer(seen), followUpsLayer).pipe(
+            Layer.mergeAll(
+              observingInvokerLayer(seen),
+              followUpsLayer,
+              nativeToolTestLayer(),
+            ).pipe(
               Layer.provideMerge(
                 agentRunLayer(ctx, {
                   setting: ctx.setting,

@@ -1,4 +1,3 @@
-import { Effect } from 'effect';
 /**
  * Tools for delegating agent runs from tool-use agents.
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
@@ -10,26 +9,20 @@ import { Effect } from 'effect';
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
+import type { ToolServices } from '@agent/runtime/ToolServices';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import {
   AgentCategory,
@@ -42,10 +35,9 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
-import { requireLiveRun } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatFollowUpInstruction,
   formatSubagentError,
@@ -53,7 +45,11 @@ import {
 
 // Local file imports
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { proposeAndExecute, requireVisibleAgent } from './proposalFlow';
+import {
+  proposeAndExecute,
+  requireDelegationParent,
+  requireVisibleAgent,
+} from './proposalFlow';
 import {
   assertWorkflowFilesExist,
   memoriesField,
@@ -132,58 +128,69 @@ Optional auto-attach from the input LaTeX:
 - extractTikz=true: compile TikZ figures into standalone PDFs and attach.`,
   schema: WorkflowAgentInputSchema,
 }) {
-  protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    const agent = requireVisibleAgent('workflow', input.agent);
-    const agentName = agent.name;
-    const { runId, context } = requireLiveRun('delegate_workflow');
+  protected execute(
+    input: WorkflowAgentInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    return Effect.gen(function* () {
+      const call = requireDelegationParent(
+        'delegate_workflow',
+        yield* ToolCall,
+      );
+      const agent = call.inScope(() =>
+        requireVisibleAgent(
+          'workflow',
+          input.agent,
+          call.delegationAgentScope ?? undefined,
+        ),
+      );
+      const agentName = agent.name;
 
-    const model = await effectRuntime().runPromise(
-      selectAvailableDelegationModel({
+      const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
-        parentModel: context.model,
-      }),
-    );
+        parentModel: call.model,
+        withScope: call.inScope,
+      });
 
-    await assertWorkflowFilesExist([
-      { label: 'Input file', files: input.inputFiles },
-      { label: 'Context file', files: input.contextFiles },
-      { label: 'Media file', files: input.mediaFiles },
-    ]);
+      yield* Effect.tryPromise({
+        try: () =>
+          call.inScope(() =>
+            assertWorkflowFilesExist([
+              { label: 'Input file', files: input.inputFiles },
+              { label: 'Context file', files: input.contextFiles },
+              { label: 'Media file', files: input.mediaFiles },
+            ]),
+          ),
+        catch: ensureError,
+      });
 
-    const oversizedBibRejection = await rejectOversizedBibAttachments(
-      input.contextFiles,
-    );
-    if (oversizedBibRejection) return oversizedBibRejection;
+      const oversizedBibRejection = yield* Effect.tryPromise({
+        try: () =>
+          call.inScope(() => rejectOversizedBibAttachments(input.contextFiles)),
+        catch: ensureError,
+      });
+      if (oversizedBibRejection) return oversizedBibRejection;
 
-    // Extraction flags map to toolConfig, flowing through the proposal UI and
-    // into MediaExtractionNode → LatexMediaManager at runtime.
-    const proposal = WorkflowAgentProposalSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-      agent: agentName,
-      agentSource: agent.source,
-      model,
-      instruction: input.instruction,
-      inputFiles: input.inputFiles,
-      contextFiles: input.contextFiles,
-      mediaFiles: input.mediaFiles,
-      outputFiles: input.outputFiles,
-      toolConfig: {
-        ...DEFAULT_TOOL_CONFIG,
-        ...extractionShorthandToolConfig(input),
-      },
-      memories: input.memories,
-    } satisfies WorkflowAgentProposal);
+      // Extraction flags map to toolConfig, flowing through the proposal UI and
+      // into MediaExtractionNode → LatexMediaManager at runtime.
+      const proposal = WorkflowAgentProposalSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        agent: agentName,
+        agentSource: agent.source,
+        model,
+        instruction: input.instruction,
+        inputFiles: input.inputFiles,
+        contextFiles: input.contextFiles,
+        mediaFiles: input.mediaFiles,
+        outputFiles: input.outputFiles,
+        toolConfig: {
+          ...DEFAULT_TOOL_CONFIG,
+          ...extractionShorthandToolConfig(input),
+        },
+        memories: input.memories,
+      } satisfies WorkflowAgentProposal);
 
-    return effectRuntime().runPromise(
-      proposeAndExecute(
-        currentSession(),
-        context,
-        getCurrentToolCallContext(),
-        proposal,
-        agentName,
-        runId,
-      ),
-    );
+      return yield* proposeAndExecute(call, proposal, agentName);
+    });
   }
 }
 
@@ -252,60 +259,58 @@ Example (resume): execution_id=3f9a1c7e2b4d, instruction="Also fix the bibliogra
 Git worktree support: resolved from the active workspace at runtime.`,
   schema: DelegateAgentInputSchema,
 }) {
-  protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
-    // Resume path: execution_id is set
-    if (input.execution_id) {
-      return effectRuntime().runPromise(
-        this.resumeAgent(
+  protected execute(
+    input: DelegateAgentInput,
+  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+    const resumeAgent = this.resumeAgent;
+    return Effect.gen(function* () {
+      const call = requireDelegationParent('delegate_agent', yield* ToolCall);
+      // Resume path: execution_id is set
+      if (input.execution_id) {
+        return yield* resumeAgent(
           input.execution_id,
           input.instruction,
-          currentSession(),
-          getRunContextRunId(tryUseRunContext()),
+          call.run.session,
+          call.run.runId,
+        );
+      }
+
+      // New-delegation path: the schema's refine() guarantees exactly one of
+      // agent/execution_id is set, so agent is defined here — refine() doesn't
+      // narrow types, hence the assertion.
+      const agent = call.inScope(() =>
+        requireVisibleAgent(
+          'toolUse',
+          input.agent!,
+          call.delegationAgentScope ?? undefined,
         ),
       );
-    }
+      const agentName = agent.name;
 
-    // New-delegation path: the schema's refine() guarantees exactly one of
-    // agent/execution_id is set, so agent is defined here — refine() doesn't
-    // narrow types, hence the assertion.
-    const agent = requireVisibleAgent('toolUse', input.agent!);
-    const agentName = agent.name;
-
-    const { runId, context } = requireLiveRun('delegate_agent');
-
-    const model = await effectRuntime().runPromise(
-      selectAvailableDelegationModel({
+      const model = yield* selectAvailableDelegationModel({
         requestedModel: input.model,
-        parentModel: context.model,
-      }),
-    );
-    const rootUserInstruction = getCurrentToolCallContext()?.userInstruction;
+        parentModel: call.model,
+        withScope: call.inScope,
+      });
+      const rootUserInstruction = call.userInstruction;
 
-    // Construct tool-use proposal (no file fields)
-    const proposal = ToolUseAgentProposalSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
-      agent: agentName,
-      agentSource: agent.source,
-      model,
-      instruction: withToolUseSubagentHandoffInstruction(
-        input.instruction,
+      // Construct tool-use proposal (no file fields)
+      const proposal = ToolUseAgentProposalSchema.parse({
+        agentCategory: AgentCategory.ToolUse,
+        agent: agentName,
+        agentSource: agent.source,
+        model,
+        instruction: withToolUseSubagentHandoffInstruction(
+          input.instruction,
+          rootUserInstruction,
+        ),
         rootUserInstruction,
-      ),
-      rootUserInstruction,
-      memories: input.memories,
-      workingDirectory: input.working_directory,
-    } satisfies ToolUseAgentProposal);
+        memories: input.memories,
+        workingDirectory: input.working_directory,
+      } satisfies ToolUseAgentProposal);
 
-    return effectRuntime().runPromise(
-      proposeAndExecute(
-        currentSession(),
-        context,
-        getCurrentToolCallContext(),
-        proposal,
-        agentName,
-        runId,
-      ),
-    );
+      return yield* proposeAndExecute(call, proposal, agentName);
+    });
   }
 
   /** Queue follow-up instructions for a tool-use subagent. */

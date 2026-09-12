@@ -9,8 +9,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
@@ -180,10 +178,9 @@ export class CrossrefSearchTool extends defineTool({
     'Search Crossref works or look up detailed metadata for a DOI. Use command="search" with query, or command="doi" with doi.',
   schema: CrossrefSearchInputSchema,
 }) {
-  protected execute(input: CrossrefSearchInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(
-      input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input),
-      { signal: getCurrentToolCallContext()?.signal },
-    );
+  protected execute(
+    input: CrossrefSearchInput,
+  ): Effect.Effect<ToolResult, unknown> {
+    return input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input);
   }
 }

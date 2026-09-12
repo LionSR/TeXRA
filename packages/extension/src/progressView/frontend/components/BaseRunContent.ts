@@ -1,6 +1,6 @@
 /**
  * What every run kind's content shares: the run, the view, the
- * surface, and the host snapshot as properties, the approval dock filtered
+ * surface, and the host snapshot as properties, the request dock filtered
  * to this run, the transcript, and the usage footer.
  */
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
@@ -24,14 +24,14 @@ export abstract class BaseRunContent extends LitElement {
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
-  /** The pending approvals asked by this run, in the fold's request
-   *  order: oldest first, the newest last. */
+  /** The pending requests this run has open, in the fold's request order:
+   *  oldest first, the newest last. */
   protected get runPermissions(): PermissionPayload[] {
     const run = this.run;
     if (!run || !this.view) return [];
-    return this.view.approvals
-      .filter((approval) => approval.runId === run.id)
-      .map((approval) => approval.payload);
+    return this.view.requests
+      .filter((request) => request.runId === run.id)
+      .map((request) => request.payload);
   }
 
   protected renderApprovalDock(): TemplateResult | typeof nothing {

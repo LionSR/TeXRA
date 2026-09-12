@@ -3,43 +3,57 @@ import { Effect, Fiber, Stream } from 'effect';
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
-import { aggregateTarget } from '@shared/schemas';
+import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 interface StatusBarSessionEventOptions {
-  session: Pick<SessionHandle, 'events' | 'now' | 'status'>;
+  session: Pick<SessionHandle, 'viewChanges'>;
+  /** What the two callbacks paint: the subscription refreshes the bar when
+   *  one of these projections moves, and nothing else. */
+  tracker: Pick<StatusBarUsageTracker, 'activeRunCount' | 'totalUsage'>;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
 }
 
 /**
- * Refreshes the extension status bar when the canonical session status and
- * usage facts change. The facts themselves are not mirrored here: the status
- * bar's tracker projects live from the session status plane and the session
- * snapshot store, which the runtime updates before these readers run. Reads
- * the session's event plane from now on (PRD one-fold-three-renderers, 7.1).
+ * Refreshes the extension status bar when the projection it paints moves.
+ *
+ * The one input is the session's view as a level stream
+ * (`SessionHandle.viewChanges`, PRD 7.2): the fold's own state, so it carries
+ * both the durable rows and the local facts no row records — an owner proved
+ * dead reclassifies its runs as interrupted with nothing committed, and the
+ * fold-gated event tail would never wake this listener for it. Nothing is
+ * mirrored here: each view is read back through the tracker, and a view that
+ * leaves both projections where they were paints nothing.
  */
 export function subscribeStatusBarSessionEvents({
   session,
+  tracker,
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
+  // Unseeded on purpose: `viewChanges` replays the current view on subscribe,
+  // and that first emission must paint both projections (a run already
+  // RUNNING when the bar subscribes would otherwise read Idle until the count
+  // next changes).
+  let activeRuns: number | undefined;
+  let usage: StatusBarUsageTracker['totalUsage'] | undefined;
   const fiber = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
+    Stream.runForEach(session.viewChanges, () =>
       Effect.sync(() => {
-        // A run's terminal phase rides `run.end`, not a `status` row (one run
-        // model, section 3.3), so both rows are status changes here exactly as
-        // the session treats them for its own status readers.
-        if (event.type === 'status' || event.type === 'run.end') {
+        const nextActiveRuns = tracker.activeRunCount;
+        if (nextActiveRuns !== activeRuns) {
+          activeRuns = nextActiveRuns;
           onStatusChanged();
         }
-        // The runtime publishes the in-flight status before usage for a
-        // round; usage for a run not in flight cannot change the projected
-        // total, so stale async events skip the refresh.
-        if (event.type === 'usage') {
-          const target = aggregateTarget(event.aggregateId);
-          if (target.kind === 'run' && session.status.isInFlight(target.id)) {
-            onUsageChanged();
-          }
+        const nextUsage = tracker.totalUsage;
+        if (
+          usage === undefined ||
+          nextUsage.cost !== usage.cost ||
+          nextUsage.inputTokens !== usage.inputTokens ||
+          nextUsage.outputTokens !== usage.outputTokens
+        ) {
+          usage = nextUsage;
+          onUsageChanged();
         }
       }),
     ),

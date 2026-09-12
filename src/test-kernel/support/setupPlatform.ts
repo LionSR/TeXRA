@@ -15,6 +15,7 @@ import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { AppState } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import type { Secrets } from '@platform/secrets';
@@ -110,16 +111,15 @@ export const fakeSetupPlatform: SetupPlatformShape = {
   },
 };
 
-/** The four process services a fake host provides to a program. */
-export type FakeProcessServices =
-  Secrets | AppState | SetupPlatform | ToolInjections;
+/** The process services a fake host provides to a program. */
+export type FakeProcessServices = ProcessServices;
 
 type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 
 let processServices: FakeProcessServicesLayer | undefined;
 
 /**
- * The four process services over the installed fake host, as
+ * The process services over the installed fake host, as
  * `installFakeHost` builds them for the bare runtime: for a suite that builds
  * a process runtime of its own, or runs a program that requires them under
  * `it.effect`. Available once the first fake host is installed, which the
@@ -170,11 +170,14 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ]);
   current = host;
   // The process services, over whichever host is installed when a member is
-  // called: hosts change per test, the runtime does not. These four imports
+  // called: hosts change per test, the runtime does not. These imports
   // stay eager: the process runtime is built synchronously by
   // `effectRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    testHttpClientLayer,
+    Layer.mock(UpdateCheckRecords, {}),
+    Layer.mock(InquiryRecords, {}),
     Secrets.layer(() => installedHost().platform.secrets),
     AppState.layer(() => installedHost().platform.globalState),
     SetupPlatform.layer(fakeSetupPlatform),
@@ -193,18 +196,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   try {
     effectRuntime();
   } catch {
-    initProcessRuntime(
-      ManagedRuntime.make(
-        Layer.mergeAll(
-          testHttpClientLayer,
-          Layer.mock(UpdateCheckRecords, {}),
-          // Suites using inquiries install the real service with their session
-          // graph. Any inquiry call on this bare fake host is a test error.
-          Layer.mock(InquiryRecords, {}),
-          processServices,
-        ),
-      ),
-    );
+    initProcessRuntime(ManagedRuntime.make(processServices));
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a
   // fresh `@auth/authProgram` instance, and this install must land on it.

@@ -47,34 +47,6 @@ const hostSnapshot = {
   modelOptions: [{ value: 'deepseekT', label: 'DeepSeek V4 Flash' }],
   teamOptions: [],
   workspaceRoots: [],
-  fileConfigs: [
-    {
-      type: 'input',
-      label: 'Input',
-      icon: 'file-code',
-      addOpenedLabel: 'Add opened files as input',
-      emptyListLabel: 'Clear all input files',
-      selectListLabel: 'Add input files',
-      toolConfig: 'tool',
-    },
-    {
-      type: 'context',
-      label: 'Context',
-      icon: 'book',
-      addOpenedLabel: 'Add opened files as context',
-      emptyListLabel: 'Clear all context files',
-      selectListLabel: 'Add context files',
-    },
-    {
-      type: 'media',
-      label: 'Media',
-      icon: 'video',
-      addOpenedLabel: 'Add opened files as media',
-      emptyListLabel: 'Clear all media files',
-      selectListLabel: 'Add media files',
-      toolConfig: 'autoExtract',
-    },
-  ],
   fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
   isGitRepo: false,
   recording: null,
@@ -148,10 +120,8 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     },
   });
   log.emit(runId, at, {
-    type: 'status',
-    phase: 'running',
-    cause: 'lifecycle',
-    runStartedAt: at,
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.begin' },
   });
 }
 
@@ -188,7 +158,7 @@ function conversationEvents({ approval = false } = {}) {
       parentRunId: RUN,
     });
     log.emit(RUN, NOW + 3000, {
-      type: 'approval.requested',
+      type: 'request.opened',
       requestId: 'smoke-tool-edit-approval',
       payload: {
         kind: 'toolEdit',
@@ -204,6 +174,7 @@ function conversationEvents({ approval = false } = {}) {
           isLatex: true,
         },
       },
+      thread: null,
     });
     log.entry(RUN, NOW + 3000, {
       id: 'msg-3',

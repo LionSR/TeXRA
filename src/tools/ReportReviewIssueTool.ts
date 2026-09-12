@@ -1,5 +1,6 @@
-// Third-party imports
 import { Effect } from 'effect';
+import { ToolCall } from '@agent/runtime/ToolCall';
+// Third-party imports
 
 // Internal imports
 import {
@@ -7,9 +8,7 @@ import {
   type ReviewIssueReport,
 } from '@agent/review/reviewIssues';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -62,11 +61,11 @@ export class ReportReviewIssueTool extends defineTool({
     'Report one finding from an agent review of the current change set. The issue appears in the Agent Review panel and as an editor diagnostic with quick fixes. Only accepted while an agent review session is collecting issues.',
   schema: NormalizedReportReviewIssueSchema.zodSchema,
 }) {
-  protected execute(input: ReviewIssueReport): Promise<ToolResult> {
-    // The sink is read here, in the caller's run context, and handed to the
-    // program: the session is scoped to the calling turn, not to the fiber.
-    return effectRuntime().runPromise(
-      report(currentSession().interactions.reportReviewIssue, input),
-    );
-  }
+  protected readonly execute = Effect.fn('ReportReviewIssueTool.call')(
+    function* (this: ReportReviewIssueTool, input: ReviewIssueReport) {
+      const call = yield* ToolCall;
+      const sink = call.run?.session.interactions.reportReviewIssue;
+      return yield* report(sink, input);
+    },
+  );
 }

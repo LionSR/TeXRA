@@ -15,10 +15,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/schemas';
 
-import {
-  mountComponent,
-  useLitComponentTestDom,
-} from './litComponentTestUtils';
+import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 
@@ -36,16 +33,11 @@ function getSelectedPanel(): SettingsTabPanelName {
   return settingsState.selectedPanel.get();
 }
 
-function declareAllCommandsSupported(): void {
-  settingsState.unsupportedCommands.set(new Set<string>());
-}
-
 async function mountSettingsApp(
   initialTab: SettingsTabPanelName = SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
-  declareAllCommandsSupported();
   setSelectedPanel(initialTab);
   document.body.append(app);
   await app.updateComplete;
@@ -211,25 +203,8 @@ describe('hierarchical settings navigation', () => {
     expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
   });
 
-  it('keeps unsupported Goals out of the Data & Activity pages', async () => {
-    const app = await mountComponent<LitElementLike>('settings-app');
-
-    const dataGroup = navGroups.find(
-      (group) => group.label === 'Data & Activity',
-    )!;
-    categoryButton(app, dataGroup.label).click();
-    await app.updateComplete;
-
-    expect(
-      app.shadowRoot?.querySelector(
-        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.GOAL}"]`,
-      ),
-    ).toBeNull();
-  });
-
   it('keeps desktop-only shortcuts out of the extension navigation', async () => {
     const app = document.createElement('settings-app') as LitElementLike;
-    declareAllCommandsSupported();
     setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS);
     document.body.append(app);
     await app.updateComplete;

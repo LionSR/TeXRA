@@ -11,10 +11,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { warn } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
@@ -168,9 +166,9 @@ export class ArxivSearchTool extends defineTool({
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,
 }) {
-  protected execute(input: ArxivSearchInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(searchArxiv(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(
+    input: ArxivSearchInput,
+  ): Effect.Effect<ToolResult, unknown> {
+    return searchArxiv(input);
   }
 }

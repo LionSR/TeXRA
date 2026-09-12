@@ -1,6 +1,7 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { imageSize } from 'image-size';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
@@ -11,7 +12,7 @@ import {
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toPosixPath } from '@utils/core/pathCore';
 import { formatBytes } from '@utils/text/stringUtils';
 
@@ -119,8 +120,10 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   resolved,
 }: BuildFileAttachmentOptions): Effect.fn.Return<
   ToolFileAttachment,
-  ToolError
+  ToolError,
+  ToolCall
 > {
+  const call = yield* ToolCall;
   if (!isNonEmptyString(filePath)) {
     return yield* Effect.fail(
       new ToolError('Attachment path must be provided.'),
@@ -132,11 +135,12 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   const { path, display } = resolved
     ? { path: resolved, display: toPosixPath(resolved.relative) }
     : yield* Effect.try({
-        try: () => resolveAndFormat(filePath),
+        try: () =>
+          call.inScope(() => resolveAndFormat(filePath, call.workingDirectory)),
         catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
       });
   const present = yield* Effect.tryPromise({
-    try: () => WorkspaceFS.exists(path.fsPath),
+    try: () => AbsoluteFS.exists(path.absolute),
     catch: attachmentFailure(`Failed to inspect attachment ${display}`),
   });
   if (!present) {
@@ -146,7 +150,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   }
 
   const stats = yield* Effect.tryPromise({
-    try: () => WorkspaceFS.stat(path.fsPath),
+    try: () => AbsoluteFS.stat(path.absolute),
     catch: attachmentFailure(`Failed to inspect attachment ${display}`),
   });
 
@@ -159,7 +163,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   }
 
   const buffer = yield* Effect.tryPromise({
-    try: () => WorkspaceFS.readBytes(path.fsPath),
+    try: () => AbsoluteFS.readBytes(path.absolute),
     catch: attachmentFailure(`Failed to read attachment ${display}`),
   });
 

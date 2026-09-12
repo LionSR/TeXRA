@@ -22,6 +22,14 @@ const STDIN_INPUT_TOKEN = '-';
 // job names can be rejected by TeX's file-open policy when it writes `.aux`.
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
 export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
+/**
+ * One wording for "a workflow run has no input", said both by the expansion
+ * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
+ * (no `--input` at all), which has to refuse before it probes an output
+ * destination into existence.
+ */
+export const WORKFLOW_INPUT_REQUIRED_MESSAGE =
+  'At least one workflow input file is required.';
 
 export function workflowInputGlobOptions(
   platform: NodeJS.Platform,
@@ -272,7 +280,7 @@ const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
     const deduped = unique(expanded);
     if (deduped.length === 0 && options.allowEmpty !== true) {
       return yield* Effect.fail(
-        new CliUsageError('At least one workflow input file is required.'),
+        new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE),
       );
     }
     return { files: deduped, stdinPath };

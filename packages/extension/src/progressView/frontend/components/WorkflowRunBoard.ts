@@ -26,11 +26,7 @@ import type {
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import type { WorkflowTaskRow } from '@shared/transcript';
-import type {
-  ApprovalRequest,
-  SessionView,
-  RunView,
-} from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
   resolvePhase,
   type Surface,
@@ -72,6 +68,9 @@ type WorkflowRunView = Extract<
   { readonly category: typeof AgentCategory.Workflow }
 >;
 
+/** One entry of the fold's pending-request set (`SessionView.requests`). */
+type PendingRequest = SessionView['requests'][number];
+
 /** The bucket a task row leads under; quiet rows carry none. */
 type Bucket = 'waiting' | 'failed' | 'running';
 const BUCKET_LABEL: Record<Bucket, string> = {
@@ -102,7 +101,6 @@ function workflowCallStatusIcon(
   switch (status) {
     case 'declared':
       return 'circle';
-    case 'planned':
     case 'queued':
       return 'circle-dot';
     case 'running':
@@ -123,7 +121,7 @@ function workflowCallStatusIcon(
 }
 
 /** What a waiting child asks for, in the words the terminal's rows use. */
-function approvalLine(payload: PermissionPayload): string {
+function requestLine(payload: PermissionPayload): string {
   switch (payload.kind) {
     case 'bash':
       return `Wants bash: ${payload.data.command}`;
@@ -140,7 +138,7 @@ function approvalLine(payload: PermissionPayload): string {
     case 'userQuestion':
       return 'Wants an answer to a question';
     default:
-      return assertNever(payload, 'Unhandled approval kind');
+      return assertNever(payload, 'Unhandled request kind');
   }
 }
 
@@ -208,17 +206,17 @@ export class WorkflowRunBoard extends LitElement {
     return undefined;
   }
 
-  /** The approval a card's child run is waiting on, its own or a
+  /** The request a card's child run is waiting on, its own or a
    *  descendant's: the one fact the buckets, the badge, and the row read. */
-  private approvalOf(rowId: string): ApprovalRequest | undefined {
+  private requestOf(rowId: string): PendingRequest | undefined {
     const child = this.childOf(rowId);
     const asking = child === undefined ? undefined : this.askingRun(child);
     if (!asking) return undefined;
-    return this.view.approvals.find((entry) => entry.runId === asking.id);
+    return this.view.requests.find((entry) => entry.runId === asking.id);
   }
 
   private waiting(rowId: string): boolean {
-    return this.approvalOf(rowId) !== undefined;
+    return this.requestOf(rowId) !== undefined;
   }
 
   private bucketOf(row: WorkflowTaskRow): Bucket | undefined {
@@ -526,16 +524,16 @@ export class WorkflowRunBoard extends LitElement {
   private renderTask(row: WorkflowTaskRow): TemplateResult {
     const { call } = row;
     const child = this.childOf(row.id);
-    const approval = this.approvalOf(row.id);
-    const waiting = approval !== undefined;
+    const request = this.requestOf(row.id);
+    const waiting = request !== undefined;
     // A card opens its child; a waiting card opens the run asking, which
     // is the child or one of its descendants.
-    const target = approval?.runId ?? child?.id;
+    const target = request?.runId ?? child?.id;
     const meta = this.rowMeta(row);
     const last = waiting
-      ? approvalLine(approval.payload)
+      ? requestLine(request.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
-    const actions = this.renderActions(row, child, approval?.runId);
+    const actions = this.renderActions(row, child, request?.runId);
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div

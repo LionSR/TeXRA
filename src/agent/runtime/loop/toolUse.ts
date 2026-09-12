@@ -27,25 +27,26 @@ import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage } from '@agent/trace';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import type { ProcessServices } from '@platform/processRuntime';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   RUN_PHASE,
   type JsonValue,
   type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -55,10 +56,11 @@ import { bindModel, type BoundModel } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
-import { ModelInvoker, turnText } from '../ModelInvoker';
+import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -77,8 +79,6 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
 
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
@@ -118,7 +118,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 ): Effect.fn.Return<
   ToolUseResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker | FollowUps
+  AgentRun | RunLedger | ProcessServices | ModelInvoker | FollowUps
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -196,7 +196,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ownerSession: session,
     interrupt(): void {
       run.interrupt();
-      session.interactions.cancel({ runId, cause: 'Run interrupted.' });
       followUps.interrupt('clear');
     },
     requestImmediateCompaction(): void {
@@ -317,7 +316,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     RunState,
     Error
   > {
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
     const promptVars = {
@@ -395,29 +393,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   /** The state a fresh run's opening snapshot is authored against. */
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'toolUse',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    approvals: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
   });
 
   const restore = (state: RunState): void => {
@@ -461,7 +440,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const runTurn = Effect.fn('toolUse.turn')(function* (
     initial: RunState,
-  ): Effect.fn.Return<TurnExit, Error, AgentRun | RunLedger> {
+  ): Effect.fn.Return<TurnExit, Error, AgentRun | RunLedger | ProcessServices> {
     let state = initial;
     const turnContext: TurnContext = {
       workspace,
@@ -519,7 +498,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ): Effect.fn.Return<
           { readonly state: RunState; readonly done: boolean },
           Error,
-          AgentRun | RunLedger
+          AgentRun | RunLedger | ProcessServices
         > {
           let next = at;
           const previous = next.messages.at(-2);
@@ -761,7 +740,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             batch = yield* followUps.drain;
             if (batch === null) {
-              session.status.transitionToWaiting(runId, 'wait');
               return { state, waiting: true } as const satisfies LoopExit;
             }
           }
@@ -791,9 +769,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            if (!followUps.hasQueued()) {
-              session.status.transitionToWaiting(runId, 'wait');
-            }
             detach();
             batch = yield* followUps.wait;
             if (batch === null) {
@@ -806,7 +781,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             attach();
           }
-          session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
@@ -823,13 +797,27 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
+      // The turn's trace rows publish fire-and-forget while the ledger
+      // appends on this fiber, so the parking row would commit ahead of
+      // them: the transcript boundary closes on `waiting`, and this turn's
+      // `stream.start`/`stream.end`/`response.finalized` are then dropped by
+      // the fold, leaving a parked run whose transcript holds no assistant
+      // answer. Settling the session's publications here is the order
+      // between the two paths.
+      yield* Effect.tryPromise({
+        try: () => session.flushArtifacts(),
+        catch: ensureError,
+      });
       // The turn boundary: the snapshot precedes the steps in one batch, so
       // a viewer cut at either step sees the fields, and a stop between the
-      // turn and its wait cannot leave the turn unended.
+      // turn and its wait cannot leave the turn unended. The `waiting` step
+      // parks the run (one run model, 3.3), so the streaming rows still open
+      // close in its batch: a parked transcript never streams.
       state = yield* commit(
         yield* ledger.appendBatch(runId, state, [
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]),
       );
@@ -859,7 +847,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         // One child cycle per invocation: the child loop delivers this
         // turn's facts and owns the next wait.
-        session.status.transitionToWaiting(runId, 'wait');
         return { state, waiting: true } as const satisfies LoopExit;
       }
     }
@@ -876,9 +863,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     outcome,
     response,
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     structured: run.structured.value,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }

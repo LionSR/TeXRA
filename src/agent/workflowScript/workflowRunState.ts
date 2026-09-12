@@ -1,7 +1,8 @@
 import {
+  RUN_OUTCOME,
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
-  WORKFLOW_RUN_LIFECYCLE,
+  type RunOutcome,
   type WorkflowCallIdentity,
   type WorkflowCallKind,
   type WorkflowRunCall,
@@ -55,12 +56,10 @@ export class WorkflowRunState {
       options.initialSnapshot?.calls ?? [],
     );
     const fresh: WorkflowRunSnapshot = {
-      lifecycle: WORKFLOW_RUN_LIFECYCLE.WAITING,
       stages: options.phases.map((phase, index) => ({
         id: stageIdFor(index),
         title: phase.title,
         order: index,
-        lifecycle: WORKFLOW_RUN_LIFECYCLE.WAITING,
       })),
       calls: options.tasks.map((task) => {
         const timestamp = now();
@@ -113,7 +112,6 @@ export class WorkflowRunState {
         id: stageIdFor(nextIndex),
         title,
         order: nextIndex,
-        lifecycle: WORKFLOW_RUN_LIFECYCLE.WAITING,
       });
     }
     const currentStageIndex = this.currentPhaseIndex;
@@ -124,24 +122,9 @@ export class WorkflowRunState {
     }
     if (nextIndex === currentStageIndex) return;
 
-    const transitionAt = now();
-    const prior = this.#snapshot.stages[currentStageIndex];
-    if (prior) this.#settleStage(prior.id, transitionAt);
-    for (const stage of this.#snapshot.stages) {
-      if (
-        stage.order < nextIndex &&
-        stage.lifecycle === WORKFLOW_RUN_LIFECYCLE.WAITING
-      ) {
-        stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.SKIPPED;
-        stage.completedAt = transitionAt;
-      }
-    }
     const active = this.#snapshot.stages[nextIndex];
-    active.lifecycle = WORKFLOW_RUN_LIFECYCLE.ACTIVE;
-    active.startedAt ??= transitionAt;
-    active.completedAt = undefined;
+    active.startedAt ??= now();
     this.#snapshot.currentStageId = active.id;
-    this.#snapshot.lifecycle = WORKFLOW_RUN_LIFECYCLE.ACTIVE;
     this.#emit();
   }
 
@@ -193,7 +176,7 @@ export class WorkflowRunState {
       id: definition.id,
       ...canonical,
       attempts: [],
-      status: WORKFLOW_CALL_STATUS.PLANNED,
+      status: WORKFLOW_CALL_STATUS.QUEUED,
       timestamps: { createdAt: timestamp, updatedAt: timestamp },
     };
     let prior: WorkflowRunCall | undefined;
@@ -216,7 +199,7 @@ export class WorkflowRunState {
       call,
       canonical,
       (isReusableStatus(call.status) || recoverySource?.journalProven) && {
-        status: WORKFLOW_CALL_STATUS.PLANNED,
+        status: WORKFLOW_CALL_STATUS.QUEUED,
         timestamps: { createdAt: call.timestamps.createdAt },
       },
     );
@@ -241,13 +224,6 @@ export class WorkflowRunState {
     if (this.#sealed) return;
     Object.assign(call, patch);
     call.timestamps.updatedAt = now();
-    if (
-      patch.status === WORKFLOW_CALL_STATUS.QUEUED ||
-      patch.status === WORKFLOW_CALL_STATUS.RUNNING
-    ) {
-      this.#snapshot.lifecycle = WORKFLOW_RUN_LIFECYCLE.ACTIVE;
-    }
-    this.#refreshExitedStage(call.stageId);
     this.#emit();
   }
 
@@ -315,7 +291,6 @@ export class WorkflowRunState {
     call.status = WORKFLOW_CALL_STATUS.RUNNING;
     call.timestamps.startedAt ??= startedAt;
     call.timestamps.updatedAt = startedAt;
-    this.#snapshot.lifecycle = WORKFLOW_RUN_LIFECYCLE.ACTIVE;
     this.#emit();
   }
 
@@ -358,20 +333,13 @@ export class WorkflowRunState {
     return true;
   }
 
-  finish(
-    lifecycle: 'completed' | 'failed' | 'cancelled',
-    error?: string,
-  ): void {
+  finish(outcome: RunOutcome, error?: string): void {
     if (this.#sealed) return;
     const completedAt = now();
-    // Capture before clearing so orchestration failures can terminalize the
-    // stage the script was inside even when no call encodes that failure.
-    const activeStageId = this.#snapshot.currentStageId;
-    this.#snapshot.lifecycle = lifecycle;
+    this.#snapshot.outcome = outcome;
     this.#snapshot.currentStageId = undefined;
     this.#snapshot.timestamps.completedAt = completedAt;
     if (error) this.#snapshot.error = error;
-    const sweepSettledStageIds = new Set<string>();
     for (const [index, call] of this.#snapshot.calls.entries()) {
       const attempts = call.attempts.map((attempt, attemptIndex) =>
         attemptIndex === call.attempts.length - 1 &&
@@ -384,11 +352,7 @@ export class WorkflowRunState {
         updatedAt: completedAt,
         completedAt,
       };
-      if (
-        call.status === WORKFLOW_CALL_STATUS.DECLARED ||
-        call.status === WORKFLOW_CALL_STATUS.PLANNED
-      ) {
-        if (call.stageId) sweepSettledStageIds.add(call.stageId);
+      if (call.status === WORKFLOW_CALL_STATUS.DECLARED) {
         this.#snapshot.calls[index] = {
           ...call,
           attempts,
@@ -400,9 +364,8 @@ export class WorkflowRunState {
         call.status === WORKFLOW_CALL_STATUS.QUEUED ||
         call.status === WORKFLOW_CALL_STATUS.RUNNING
       ) {
-        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         this.#snapshot.calls[index] =
-          lifecycle === WORKFLOW_RUN_LIFECYCLE.CANCELLED
+          outcome === RUN_OUTCOME.CANCELLED
             ? {
                 ...call,
                 attempts,
@@ -415,88 +378,13 @@ export class WorkflowRunState {
                 attempts,
                 status: WORKFLOW_CALL_STATUS.FAILED,
                 settledBySweep: true,
-                error: WORKFLOW_CALL_UNFINISHED_NOTE,
+                error: error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
                 timestamps,
               };
       }
     }
-    for (const stage of this.#snapshot.stages) {
-      if (stage.lifecycle === WORKFLOW_RUN_LIFECYCLE.WAITING) {
-        stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.SKIPPED;
-        stage.completedAt = completedAt;
-      } else {
-        // Re-derive the lifecycle after the call sweep above. A stage whose
-        // call the sweep just terminalized ends now; genuinely settled stages
-        // keep their own end instant rather than taking the run's terminal one.
-        this.#settleStage(
-          stage.id,
-          sweepSettledStageIds.has(stage.id)
-            ? completedAt
-            : (stage.completedAt ?? completedAt),
-        );
-      }
-    }
-    // Call-derived settlement alone can mark the active stage completed or
-    // skipped when the script threw/cancelled after phase() with no live
-    // failed call (e.g. a JS reduction error). Force the active stage to the
-    // workflow terminal lifecycle so /executions/{id} shows where orchestration
-    // failed.
-    if (
-      activeStageId !== undefined &&
-      (lifecycle === WORKFLOW_RUN_LIFECYCLE.FAILED ||
-        lifecycle === WORKFLOW_RUN_LIFECYCLE.CANCELLED)
-    ) {
-      const activeStage = this.#snapshot.stages.find(
-        (stage) => stage.id === activeStageId,
-      );
-      if (activeStage) {
-        // Guarded above to lifecycle === FAILED | CANCELLED, so the lifecycle
-        // is its own mapping.
-        activeStage.lifecycle = lifecycle;
-        activeStage.completedAt = completedAt;
-      }
-    }
     this.#emit();
     this.#sealed = true;
-  }
-
-  #refreshExitedStage(stageId: string | undefined): void {
-    if (!stageId || stageId === this.#snapshot.currentStageId) return;
-    const calls = this.#snapshot.calls.filter(
-      (call) => call.stageId === stageId,
-    );
-    if (
-      calls.every((call) => TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status))
-    ) {
-      this.#settleStage(stageId, now());
-    }
-  }
-
-  #settleStage(stageId: string, completedAt: string): void {
-    const stage = this.#snapshot.stages.find(
-      (candidate) => candidate.id === stageId,
-    );
-    if (!stage) return;
-    const calls = this.#snapshot.calls.filter(
-      (call) => call.stageId === stageId,
-    );
-    if (
-      calls.length === 0 ||
-      calls.every((call) => call.status === WORKFLOW_CALL_STATUS.SKIPPED)
-    ) {
-      stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.SKIPPED;
-    } else if (
-      calls.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED)
-    ) {
-      stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.FAILED;
-    } else if (
-      calls.some((call) => call.status === WORKFLOW_CALL_STATUS.CANCELLED)
-    ) {
-      stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.CANCELLED;
-    } else {
-      stage.lifecycle = WORKFLOW_RUN_LIFECYCLE.COMPLETED;
-    }
-    stage.completedAt = completedAt;
   }
 
   #emit(): void {
@@ -562,7 +450,7 @@ function recoverCall(
   }
   if (
     fresh.status !== WORKFLOW_CALL_STATUS.DECLARED &&
-    fresh.status !== WORKFLOW_CALL_STATUS.PLANNED
+    fresh.status !== WORKFLOW_CALL_STATUS.QUEUED
   ) {
     throw new Error(`Fresh workflow call ${fresh.id} is not a plan stub.`);
   }

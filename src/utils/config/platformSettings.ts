@@ -17,10 +17,10 @@ function requireEntry(key: string) {
 
 /**
  * The host this process is, for the catalog rows whose storage slot differs
- * by host (the git identity and skill availability rows live in workspace
- * state on the extension and desktop and in `.texra/config.json` on the
- * CLI). One process is one host, so the composition root installs it once,
- * beside `initProcessWorkspaceRoots()`.
+ * by host (the git identity rows live in worktree-shared workspace state on
+ * the extension and desktop and in `.texra/config.json` on the CLI). One
+ * process is one host, so the composition root installs it once, beside
+ * `initProcessWorkspaceRoots()`.
  */
 let processSettingHost: SettingHost = 'vscode';
 

@@ -255,7 +255,6 @@ function testBoundModel(): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,
@@ -527,7 +526,7 @@ const setRejectOnCompileFailure = (enabled: boolean) =>
 /** The verdict each round stage closed with, in transcript order. */
 function roundStageOutcomes(store: StreamLog): unknown[] {
   return store
-    .getRange(0)
+    .toJSON()
     .flatMap((entry) =>
       entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
       isObject(entry.data) &&

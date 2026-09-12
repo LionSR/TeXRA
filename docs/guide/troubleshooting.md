@@ -305,7 +305,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Use better models**:
    - Move to more capable models for complex tasks
-   - Try Claude Opus 5 or GPT-5.5 for highest quality
+   - Try Claude Opus 5 or GPT-6 / GPT-5.6 for highest quality
    - Match the model to your specific task
 
 4. **Reference materials**:
@@ -523,13 +523,13 @@ Key points for troubleshooting:
      launcher: select the TeXRA icon, then switch to the Progress view
    - If it is not visible, open it from the Command Palette: "TeXRA: Show Progress"
 
-2. **Interpreting logs**: entries are colour-coded by severity, and nested
+2. **Interpreting logs**: entries are color-coded by severity, and nested
    entries expand to reveal detail: green for information and successful
    operations, yellow for warnings, red for errors that need attention.
 
 <ProgressLogHero />
 
-<p class="hero-caption">ProgressBoard colour-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
+<p class="hero-caption">ProgressBoard color-codes every entry by severity (green info/success, yellow warnings, red errors), with task-id chips and expandable nested detail.</p>
 
 3. **Finding specific information**:
    - Look for task IDs to track specific operations

@@ -47,7 +47,7 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
   readonly description: string;
 }>;
 
-export interface TranscriptExportPorts {
+interface TranscriptExportPorts {
   pickFormat(): Promise<TranscriptExportFormat | undefined>;
   openPath(filePath: string, kind: TranscriptExportOpenKind): Promise<void>;
   showInfo(message: string): Promise<void> | void;

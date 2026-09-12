@@ -21,7 +21,6 @@ import { writeTextStderr } from '../runtime/logSinks';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
 export async function listAgents(
@@ -123,6 +122,5 @@ export const agentsCommand = defineCommand({
   subCommands: {
     list: agentsListCommand,
     show: agentsShowCommand,
-    run: agentsRunCommand,
   },
 });

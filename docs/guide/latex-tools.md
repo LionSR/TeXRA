@@ -7,7 +7,7 @@ import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 
 # LaTeX tools
 
-TeXRA's agents spend most of their effort on the theory; the LaTeX around it should not cost you attention. TeXRA does not send text to a model and hope for the best. It uses established LaTeX tools so formatting, diffing, figure extraction, and citation lookup are handled by the right software, not by a language model guessing at syntax.
+While TeXRA's agents focus primarily on substantive research—deriving theorems, verifying algebra, and formalizing arguments—managing LaTeX syntax and structure should remain effortless. Rather than relying on a language model to guess at formatting or diff boundaries, TeXRA delegates these tasks to proven command-line utilities for formatting, diffing, statistics, and figure extraction.
 
 ## Overview
 
@@ -98,7 +98,7 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 ### TikZ figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterises with Ghostscript plus GraphicsMagick or ImageMagick. The Tools tab does not list these; **Dashboard → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide, and `texra doctor` reports them too:
+The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Tools tab does not list these; **Dashboard → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide, and `texra doctor` reports them too:
 
 <TikzDepsHero />
 

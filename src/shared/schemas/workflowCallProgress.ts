@@ -113,10 +113,6 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal(WORKFLOW_CALL_STATUS.DECLARED),
   }),
-  /** Issued by the script; not yet queued for a concurrency slot. */
-  WorkflowCallProgressBaseSchema.extend({
-    status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
-  }),
   /** Issued and waiting for one of the run's concurrency slots. */
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
@@ -199,7 +195,6 @@ export function interruptedWorkflowCall(
 
 export const WORKFLOW_TASK_STATUS_LABEL = {
   declared: 'Declared',
-  planned: 'Planned',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',

@@ -380,12 +380,6 @@
       "name": "showAgent"
     },
     {
-      "file": "packages/cli/src/commands/agentsRun.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runToolUseAgent"
-    },
-    {
       "file": "packages/cli/src/commands/auth.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -431,7 +425,7 @@
       "file": "packages/cli/src/commands/workflow.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "runWorkflowAgent"
+      "name": "runHeadlessAgent"
     },
     {
       "file": "packages/cli/src/config/runConfigTui.tsx",
@@ -779,12 +773,6 @@
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "clearInlineAgents"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "getCategoryAgent"
     },
     {
@@ -792,18 +780,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "getVisibleAgent"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "registerInlineAgents"
-    },
-    {
-      "file": "src/agent/index/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "registerInlineAgents"
     },
     {
       "file": "src/agent/prompt/userVars.ts",
@@ -828,12 +804,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "noopTrace"
-    },
-    {
-      "file": "src/agent/workflowScript/persistence.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "writeWorkflowScriptCheckpoint"
     },
     {
       "file": "src/auth/SupabaseSession.ts",
@@ -972,12 +942,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "buildTeamOptions"
-    },
-    {
-      "file": "src/controllers/mainView/MainViewDroppedFilesController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "MainViewAllowedDropExtensions"
     },
     {
       "file": "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts",

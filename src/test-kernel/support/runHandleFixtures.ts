@@ -5,7 +5,6 @@ import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { AgentCategory } from '@shared/schemas';
 import type { RunId, RunIdentity } from '@shared/schemas';
 
@@ -33,21 +32,16 @@ export function testRunHandle(input: {
   return new RunHandle(run, input.parent ?? null, input.trace);
 }
 
-/** A registry with a status machine whose facts reach its `handleStatus`. */
+/** A registry over an empty fold: no run has a view, which is what a
+ *  fixture that never publishes a phase-moving row would see. */
 export function testRunRegistry(): RunRegistry {
-  // The machine's facts reach the registry built below; the closure runs
-  // only once a transition is published, after the registry exists.
-  const runStatus = new RunStatusMachine(
-    (event) => registry.handleStatus(event.runId),
-    () => {},
-  );
-  const registry = new RunRegistry({
+  return new RunRegistry({
+    runView: () => undefined,
     publish: () => {},
-    runStatus,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
+    acquireRunClaim: () => Effect.succeed(Effect.void),
   });
-  return registry;
 }

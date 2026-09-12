@@ -1,7 +1,9 @@
 import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
-import type { UserQuestionAnswers, UserQuestionPrompt } from '@shared/schemas';
-
-import type { ApprovalDecision } from '../state/approvalQueue';
+import type {
+  RequestDecision,
+  UserQuestionAnswers,
+  UserQuestionPrompt,
+} from '@shared/schemas';
 
 export function updateUserQuestionAnswers(
   answers: UserQuestionAnswers,
@@ -25,12 +27,9 @@ export function toggleUserQuestionSelection(
 
 export function userQuestionDecision(
   answers: UserQuestionAnswers,
-): ApprovalDecision {
+): RequestDecision {
   if (Object.keys(answers).length === 0) {
-    return {
-      accepted: false,
-      userMessage: USER_QUESTION_SKIPPED_FEEDBACK,
-    };
+    return { action: 'skip', feedback: USER_QUESTION_SKIPPED_FEEDBACK };
   }
-  return { accepted: true, userQuestionAnswers: answers };
+  return { action: 'submit', answers };
 }

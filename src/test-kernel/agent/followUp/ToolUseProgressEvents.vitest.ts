@@ -42,6 +42,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -91,7 +92,6 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,
@@ -338,7 +338,11 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
   const result = yield* runToolUse({ resume: false }).pipe(
     Effect.provide(
-      Layer.mergeAll(invokerLayer(init.script, requests), followUpsLayer).pipe(
+      Layer.mergeAll(
+        invokerLayer(init.script, requests),
+        followUpsLayer,
+        nativeToolTestLayer(),
+      ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
       ),
@@ -349,7 +353,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 });
 
 function quietSession(): SessionHandle {
-  return sessionWithInteractions({ emit: () => {}, cancel: () => {} });
+  return sessionWithInteractions({ emit: () => {} });
 }
 
 function startedRun(session: SessionHandle): RunId {
@@ -372,10 +376,12 @@ function userTexts(state: RunState | null): string[] {
 function echoTool(name: string): ITool {
   return {
     definition: { name },
-    call: vi.fn(async () => ({
-      status: 'executed' as const,
-      output: `${name} done`,
-    })),
+    call: vi.fn(() =>
+      Effect.succeed({
+        status: 'executed' as const,
+        output: `${name} done`,
+      }),
+    ),
   } as ITool;
 }
 
@@ -469,14 +475,16 @@ describe('the tool-use turn', () => {
       const structured: { value: JsonValue | undefined } = { value: undefined };
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
-        call: vi.fn(async () => {
-          structured.value = { answer: 'done' };
-          return {
-            status: 'executed' as const,
-            output: 'recorded',
-            endTurn: true,
-          };
-        }),
+        call: vi.fn(() =>
+          Effect.sync(() => {
+            structured.value = { answer: 'done' };
+            return {
+              status: 'executed' as const,
+              output: 'recorded',
+              endTurn: true,
+            };
+          }),
+        ),
       } as ITool;
 
       const { result } = yield* runScript({
@@ -669,7 +677,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
 
         expect(result.outcome).toBe(scenario.expectedOutcome);
         const sessionStages = store
-          .getRange(0)
+          .toJSON()
           .flatMap((entry) =>
             entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
             isObject(entry.data) &&
@@ -683,7 +691,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         // The turn is the only structural stage: rounds are row facts.
         expect(
           store
-            .getRange(0)
+            .toJSON()
             .some(
               (entry) => isObject(entry.data) && entry.data.kind === 'round',
             ),

@@ -5,7 +5,7 @@ import CliStorageHero from '../.vitepress/components/CliStorageHero.vue';
 
 # File management
 
-A research project involves many files: the manuscript, chapters and appendices with derivations, figures, references, notes, auxiliary styles. This guide explains how to organize, select, and manage files when working with TeXRA.
+A scientific research project encompasses diverse assets: manuscripts, derivations, appendices, computational scripts, figures, bibliographies, and auxiliary style files. This guide explains how TeXRA organizes, scopes, and manages these files during agent execution.
 
 ## File categories
 

@@ -7,6 +7,7 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
+  SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { coalesceAsync } from '@utils/core';
@@ -248,6 +249,22 @@ export class SubscriptionUsageService {
       key,
       () => this.fetchUsage(provider, variant),
     );
+  }
+
+  /** One snapshot per subscription provider, for a settings-view refresh. */
+  async getAllUsage(
+    options: { readonly forceRefresh?: boolean } = {},
+  ): Promise<SubscriptionUsageSnapshots> {
+    // Each snapshot key is the provider id itself, so key and provider can
+    // never drift apart the way a positional destructure would allow.
+    return Object.fromEntries(
+      await Promise.all(
+        SUBSCRIPTION_USAGE_PROVIDERS.map(async (provider) => [
+          provider,
+          await this.getUsage(provider, options),
+        ]),
+      ),
+    ) as SubscriptionUsageSnapshots;
   }
 
   private unavailable(

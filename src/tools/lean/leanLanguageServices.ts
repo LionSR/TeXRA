@@ -28,8 +28,8 @@ import type {
 /**
  * The Effect-typed port (Effect 4 runtime PRD, R1): adapters compose their
  * host or LSP primitives into these programs, and the one run of each program
- * sits in the calling tool's `execute()` — the tool execute() contract is an
- * R1 boundary kind, so no runtime leaks into this seam. The adapters' failure
+ * is composed directly by the native tool dispatcher. Run ownership is passed
+ * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure
  * channels are disjoint (VS Code bridge rejects with plain host errors, the
  * direct pool fails with its tagged errors) and every consumer folds a failure
  * into a `ToolError`, so the port declares `unknown` rather than a union no
@@ -39,24 +39,29 @@ export interface LeanLanguageServices {
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,
+    runId?: RunId,
   ): Effect.Effect<boolean>;
   getGoalState(
     filePath: string,
     line: number,
     column: number,
+    runId?: RunId,
   ): Effect.Effect<LspResult<PlainGoal>>;
   getTermGoal(
     filePath: string,
     line: number,
     column: number,
+    runId?: RunId,
   ): Effect.Effect<LspResult<PlainTermGoal>>;
   getHoverInfo(
     filePath: string,
     line: number,
     column: number,
+    runId?: RunId,
   ): Effect.Effect<LspResult<LspHover>>;
   fetchDiagnosticsForFile(
     file: string,
+    runId?: RunId,
   ): Effect.Effect<FetchDiagnosticsResult, unknown>;
   /**
    * Move the host editor cursor to the first error in `diagnostics`, when the
@@ -71,6 +76,7 @@ export interface LeanLanguageServices {
   ): Effect.Effect<void, unknown>;
   executeProjectCommand(
     command: LeanProjectCommand,
+    runId?: RunId,
   ): Effect.Effect<void, unknown>;
   /**
    * Stop the per-worktree servers attributed to an agent run that ended.

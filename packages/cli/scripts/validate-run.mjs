@@ -456,13 +456,12 @@ function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [
       binaryPath,
-      'agents',
       'run',
       'review',
       '--instruction-file',
       '--print',
     ]),
-    'texra agents run missing --instruction-file value',
+    'texra run missing --instruction-file value',
     'Missing value for --instruction-file',
   );
   assertUsageError(
@@ -856,7 +855,6 @@ function validateToolUseAgentRunCommand() {
       process.execPath,
       [
         binaryPath,
-        'agents',
         'run',
         'review',
         '--instruction-file',
@@ -873,7 +871,7 @@ function validateToolUseAgentRunCommand() {
       ],
       { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
-    assertSuccess(result, 'texra agents run review JSON');
+    assertSuccess(result, 'texra run review JSON');
 
     const jsonResult = JSON.parse(result.stdout);
     assert(
@@ -930,7 +928,6 @@ prompts:
       process.execPath,
       [
         binaryPath,
-        'agents',
         'run',
         'workflow_script_validation',
         '--model',
@@ -954,7 +951,7 @@ prompts:
         }),
       },
     );
-    assertSuccess(result, 'texra agents run workflow script NDJSON');
+    assertSuccess(result, 'texra run workflow script NDJSON');
     const records = parseNdjson(result.stdout, 'workflow-script run NDJSON');
     assert(
       records.every((record) => record.contract === 2),

@@ -1,3 +1,6 @@
+import { writeFile } from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { Effect, Stream } from 'effect';
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -22,21 +25,17 @@ vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
 }));
 
 // Local imports - agent runtime
-import { registerInlineAgents } from '@agent/index';
-import {
-  clearStoreCache,
-  getRunStore,
-  getRunRecords,
-  registerRun,
-} from '@agent/storage';
+import { refresh } from '@agent/index';
+import { getRunRecords, registerRun } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
   assertOwnedRunLease,
   ownsRunLease,
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
@@ -71,8 +70,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
+  makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
@@ -247,7 +248,6 @@ function scriptedBoundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin,
-    usageProvider: 'openai',
     usageRoute: 'api-key',
     contextWindow: config.contextWindow,
     supportsVision: false,
@@ -287,28 +287,41 @@ async function resumePersistedRun(
 
 async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
+  const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
+  await Promise.all(
+    [PARENT_AGENT, CHILD_AGENT].map((name) =>
+      writeFile(path.join(agentsDir, `${name}.yaml`), agentYaml(name)),
+    ),
+  );
   return {
     ...host,
     platform: {
       ...host.platform,
       agentResume: { tryResumeRun: resumePersistedRun },
+      agentDirectories: {
+        custom: async () => agentsDir,
+        builtIn: async () => agentsDir,
+        builtInToolUse: async () => agentsDir,
+      },
     },
   };
 }
 
-function inlineAgent(name: string) {
-  return {
-    name,
-    description: `Integration fixture ${name}.`,
-    settings: { agentCategory: AgentCategory.ToolUse, tools: [] },
+function agentYaml(name: string): string {
+  return [
+    `name: ${name}`,
+    `description: Integration fixture ${name}.`,
+    'settings:',
+    '  agentCategory: toolUse',
+    '  tools: []',
     // The loop builds the opening user message from the agent's prompts, so
     // the fixture carries a real request template rather than a transport
     // override that skipped prompt construction.
-    prompts: {
-      systemPrompt: `You are ${name}.`,
-      userRequest: '{{ INSTRUCTION }}',
-    },
-  };
+    'prompts:',
+    `  systemPrompt: You are ${name}.`,
+    "  userRequest: '{{ INSTRUCTION }}'",
+    '',
+  ].join('\n');
 }
 
 async function waitForPersistedResult(
@@ -371,16 +384,52 @@ async function queueSecondAssertionFollowUp(
   runId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
+  const parentRun =
+    parentContext.kind === 'launch'
+      ? parentContext.runScope
+      : {
+          runId: parentContext.runId,
+          session: parentContext.session,
+          workingDirectory: parentContext.workingDirectory,
+          delegationAgentScope: undefined,
+        };
+  if (!parentRun.runId || !parentRun.session) {
+    throw new Error('Test parent context requires a run id and session.');
+  }
+  const parentRunId = parentRun.runId;
+  const parentSession = parentRun.session;
   const resumed = await runAsParentOwner(() =>
-    withRunContext(parentContext, () =>
-      new DelegateAgentTool().call({
-        agent: null,
-        model: null,
-        instruction,
-        memories: [],
-        working_directory: null,
-        execution_id: runId,
-      }),
+    effectRuntime().runPromise(
+      new DelegateAgentTool()
+        .call({
+          agent: null,
+          model: null,
+          instruction,
+          memories: [],
+          working_directory: null,
+          execution_id: runId,
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              model: parentContext.model,
+              tracker: new FileInteractionState(),
+              workingDirectory: parentRun.workingDirectory,
+              delegationAgentScope: parentRun.delegationAgentScope,
+              run: {
+                runId: parentRunId,
+                session: parentSession,
+                toolPolicy: {
+                  approvalPromptsUnavailable:
+                    parentContext.approvalPromptsUnavailable,
+                  runtimeUnavailableTools:
+                    parentContext.runtimeUnavailableTools,
+                  stopAfterCycle: parentContext.stopAfterCycle,
+                },
+              },
+            }),
+          ),
+        ),
     ),
   );
   expect(resumed.status).toBe('executed');
@@ -419,7 +468,7 @@ async function launchWaitingChild(options: {
 
   const parentConfig = AgentConfigSchema.parse({
     agent: PARENT_AGENT,
-    agentSource: 'inline',
+    agentSource: 'custom',
     agentCategory: AgentCategory.ToolUse,
     model: PARENT_MODEL,
     instruction: 'Coordinate the child proof review.',
@@ -452,28 +501,40 @@ async function launchWaitingChild(options: {
     config: { model: PARENT_MODEL },
     session,
   });
+  const parentCall = {
+    config: session.roots.config,
+    model: PARENT_MODEL,
+    tracker: new FileInteractionState(),
+    workingDirectory: process.cwd(),
+    run: {
+      runId: PARENT_RUN_ID,
+      session,
+      toolPolicy: {
+        approvalPromptsUnavailable: false,
+        runtimeUnavailableTools: [],
+      },
+    },
+    inScope: <A>(operation: () => A): A => operation(),
+  };
   const runAsParentOwner: ParentOwnerRunner = (operation) => {
     assertOwnedRunLease(PARENT_RUN_ID);
     return operation();
   };
   const launch = await runAsParentOwner(() =>
-    withRunContext(parentContext, () =>
-      effectRuntime().runPromise(
-        executeSubagent(
-          parentContext,
-          undefined,
-          {
-            agent: CHILD_AGENT,
-            agentSource: 'inline',
-            agentCategory: AgentCategory.ToolUse,
-            model: CHILD_MODEL,
-            instruction: 'Prove the first assertion.',
-            memories: [],
-            workingDirectory: process.cwd(),
-          },
-          CHILD_AGENT,
-          PARENT_RUN_ID,
-        ),
+    effectRuntime().runPromise(
+      executeSubagent(
+        parentCall,
+        {
+          agent: CHILD_AGENT,
+          agentSource: 'custom',
+          agentCategory: AgentCategory.ToolUse,
+          model: CHILD_MODEL,
+          instruction: 'Prove the first assertion.',
+          memories: [],
+          workingDirectory: process.cwd(),
+        },
+        CHILD_AGENT,
+        PARENT_RUN_ID,
       ),
     ),
   );
@@ -487,9 +548,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
-    clearStoreCache();
-    clearInlineAgents();
-    registerInlineAgents([inlineAgent(PARENT_AGENT), inlineAgent(CHILD_AGENT)]);
+    await Effect.runPromise(refresh({ includeRemote: false }));
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     teardownDefaultSession();
@@ -506,8 +565,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedRunLease(PARENT_RUN_ID);
     teardownDefaultSession();
-    clearInlineAgents();
-    clearStoreCache();
     vi.restoreAllMocks();
   });
 
@@ -727,16 +784,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForCompletedResumes(1);
 
     // The loop minted a stable logical identity for turn 1's delivery.
-    const store = getRunStore(runId);
-    const turnState = await store.readTurnState();
-    expect(turnState?.activeTurn).toBeUndefined();
-    const completed = turnState?.lastCompletedTurn;
-    expect(completed?.token).toBeTruthy();
-    await expect(
-      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
-    ).resolves.toMatchObject({
-      turnToken: completed!.token,
-    });
+    const turnState = await Effect.runPromise(
+      readChildTurnState(session, runId),
+    );
+    expect(turnState.active).toBeNull();
+    const completed = turnState.lastCompleted;
+    expect(completed).not.toBeNull();
+    // The delivery id the loop derives from that turn's identity.
+    const deliveryId = `${runId}:${completed!.attemptId}:${completed!.turnIndex}:delivery`;
 
     // Replay the identical logical delivery 100 times through the real
     // admission path: no additional parent message, no additional wake.
@@ -750,8 +805,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           {
             text: report!,
             origin: 'subagent_result',
-            // Derived from the persisted turn token exactly as production does.
-            deliveryId: `${completed!.token}:delivery`,
+            deliveryId,
           },
           { session },
         ),
@@ -776,7 +830,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         {
           text: report!,
           origin: 'subagent_result',
-          deliveryId: `${completed!.token}:delivery:other`,
+          deliveryId: `${deliveryId}:other`,
         },
         { session },
       ),
@@ -813,9 +867,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
-    const store = getRunStore(runId);
-    const completed1 = (await store.readTurnState())?.lastCompletedTurn;
-    expect(completed1?.token).toBeTruthy();
+    const completed1 = (
+      await Effect.runPromise(readChildTurnState(session, runId))
+    ).lastCompleted;
+    expect(completed1).not.toBeNull();
 
     // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
     await queueSecondAssertionFollowUp(parentContext, runAsParentOwner, runId);
@@ -824,17 +879,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // persisted result still belongs to the latest completed turn (turn 1).
     await vi.waitFor(
       async () => {
-        const state = await store.readTurnState();
-        expect(state?.activeTurn?.token).toBeTruthy();
-        expect(state?.activeTurn?.token).not.toBe(completed1!.token);
-        expect(state?.lastCompletedTurn?.token).toBe(completed1!.token);
+        const state = await Effect.runPromise(
+          readChildTurnState(session, runId),
+        );
+        expect(state.active).not.toBeNull();
+        expect(state.active).not.toEqual(completed1);
+        expect(state.lastCompleted).toEqual(completed1);
       },
       { timeout: 10_000 },
     );
     await expect(
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
-      turnToken: completed1!.token,
       output: { response: 'Result A.' },
     });
 
@@ -850,13 +906,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
     // the interrupted active turn instead of turn 1 posing as current.
-    const finalState = await store.readTurnState();
-    expect(finalState?.lastCompletedTurn?.token).toBe(completed1!.token);
-    expect(finalState?.activeTurn?.token).toBeTruthy();
+    const finalState = await Effect.runPromise(
+      readChildTurnState(session, runId),
+    );
+    expect(finalState.lastCompleted).toEqual(completed1);
+    expect(finalState.active).not.toBeNull();
     await expect(
       Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
-      turnToken: completed1!.token,
       output: { response: 'Result A.' },
     });
     // How the run ended is the `run.end` row's fact, not the manifest's: the
@@ -867,15 +924,29 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // /report and /result distinguish the interrupted turn from the latest
     // completed one.
-    const reportView = await new ExecutionsTool().call({
-      path: `/executions/${runId}/report`,
+    const executionToolLayer = nativeToolTestLayer({
+      run: {
+        runId: PARENT_RUN_ID,
+        session,
+        toolPolicy: {
+          approvalPromptsUnavailable: false,
+          runtimeUnavailableTools: [],
+        },
+      },
     });
+    const reportView = await Effect.runPromise(
+      new ExecutionsTool()
+        .call({ path: `/executions/${runId}/report` })
+        .pipe(Effect.provide(executionToolLayer)),
+    );
     expect(reportView.status).toBe('executed');
     expect(reportView.output).toContain('Result A.');
     expect(reportView.output).toContain('interrupted');
-    const resultView = await new ExecutionsTool().call({
-      path: `/executions/${runId}/result`,
-    });
+    const resultView = await Effect.runPromise(
+      new ExecutionsTool()
+        .call({ path: `/executions/${runId}/result` })
+        .pipe(Effect.provide(executionToolLayer)),
+    );
     expect(resultView.status).toBe('executed');
     // /result is the machine-readable chaining endpoint: the attribution
     // rides inside the JSON, never as prefixed prose.

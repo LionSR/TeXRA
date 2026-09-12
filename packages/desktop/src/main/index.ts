@@ -34,7 +34,6 @@ import {
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { prepareMainViewRunLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
@@ -157,7 +156,6 @@ import {
   isFatalDesktopShutdownRequested,
   reportFatalStartupError,
 } from './fatalStartupError.js';
-import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
@@ -1021,10 +1019,8 @@ function createWindow(options: {
               return options.agentDirectories.builtIn();
             case 'builtInToolUse':
               return options.agentDirectories.builtInToolUse();
-            // No local directory: remote agents live in Supabase, inline ones
-            // were supplied as values and were never written to disk.
+            // No local directory: remote agents live in Supabase.
             case 'remote':
-            case 'inline':
               return Promise.resolve(undefined);
           }
         },
@@ -1263,12 +1259,12 @@ function createWindow(options: {
               if (!binding) {
                 throw new Error('Open a folder before running setup.');
               }
-              const { buildDesktopSetupExecuteMessage } =
+              const { buildDesktopSetupRunRequest } =
                 await import('@controllers/onboarding/setupLaunch');
-              const message = await buildDesktopSetupExecuteMessage(
+              const request = await buildDesktopSetupRunRequest(
                 options.secrets,
               );
-              if (!message) {
+              if (!request) {
                 throw new Error(
                   'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
                 );
@@ -1278,11 +1274,7 @@ function createWindow(options: {
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
               await effectRuntime().runPromise(loadAgents());
               await runInSession(binding.project.session, async () =>
-                binding.run.runValidated(
-                  await effectRuntime().runPromise(
-                    prepareMainViewRunLaunch(message, agentRunHost),
-                  ),
-                ),
+                binding.run.runValidated(request),
               );
             },
             catch: (error) => error,
@@ -1706,14 +1698,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             },
           });
 
-          void initializeDesktopCrashReporting({
-            sensitivePaths: () => [
-              ...projects.list().map((project) => project.root),
-              app.getPath('userData'),
-              platformInit.dataRoot,
-            ],
-            log: console,
-          });
           const authCoordinator = createDesktopAuthCoordinator({
             secrets: platformInit.secrets,
             log: console,

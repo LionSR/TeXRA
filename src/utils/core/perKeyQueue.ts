@@ -10,12 +10,13 @@ interface QueueMap<Key> {
 /**
  * Return the queue for a key, creating it with the requested concurrency.
  *
- * The Promise-shaped half of this module, kept for the two transcript call
- * sites whose contracts are still synchronous or Promise-returning and whose
- * layer may not import `@platform/processRuntime` to run an Effect. The
- * transcript lane converts them and deletes both functions with the last
- * caller; until then, code that already has a runtime at hand should reach
- * for {@link withPerKeyLane} instead.
+ * The Promise-shaped half of this module. One Promise-shaped caller is
+ * left — `runLease.ts`'s turn-taking between unleased writers. That file
+ * does not import `effect`, and it is not a boundary kind the migration
+ * ratchet lets open an `Effect.run*` in, so both functions die when it
+ * becomes an Effect up to its own callers — not before, and not by a
+ * hand-rolled promise chain in their place. Code that already runs as an
+ * Effect reaches for {@link withPerKeyLane} instead.
  */
 function getOrCreatePQueue<Key>(
   queues: QueueMap<Key>,
@@ -104,15 +105,26 @@ export interface PerKeyLanes<Key> {
  * body still on the caller's fiber, and it measured 84 lines against these
  * 65 while adding two lifecycle cases (raced creation, ended queue) that the
  * chain does not have.
+ *
+ * `refuseClaim` makes the claim conditional: it reads the lane's current
+ * occupant in the same synchronous step that would install the caller's own
+ * tail, so nothing can claim the lane between the decision and the claim.
+ * Returning a value refuses with it and leaves the lane exactly as it was
+ * found; returning `undefined` claims as usual.
  */
-export function withPerKeyLane<Key>(
+export function withPerKeyLane<Key, RefusalE = never>(
   lanes: PerKeyLanes<Key>,
   key: Key,
-): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
-  return (self) =>
-    Effect.suspend(() => {
-      const mine = Deferred.makeUnsafe<void>();
+  refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined,
+): <A, E, R>(
+  self: Effect.Effect<A, E, R>,
+) => Effect.Effect<A, E | RefusalE, R> {
+  return <A, E, R>(self: Effect.Effect<A, E, R>) =>
+    Effect.suspend((): Effect.Effect<A, E | RefusalE, R> => {
       const existing = lanes.get(key);
+      const refusal = refuseClaim?.(existing);
+      if (refusal !== undefined) return Effect.fail(refusal);
+      const mine = Deferred.makeUnsafe<void>();
       const previous = existing?.tail;
       const held = existing ?? { tail: mine, fibers: 0 };
       if (!existing) lanes.set(key, held);

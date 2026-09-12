@@ -28,14 +28,8 @@ import { byName } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
-import {
-  clearInlineAgentDefinitions,
-  defineInlineAgents,
-  inlineAgentDefinition,
-  inlineAgentEntries,
-} from './inlineAgents';
 import { loadRemoteAgents } from './remoteAgentMeta';
-import type { AgentEntry, ResolvedAgent } from './agentEntry';
+import type { AgentEntry } from './agentEntry';
 
 const log = createLog('agentRegistry');
 
@@ -48,12 +42,11 @@ export class AgentCatalogLoadError extends Data.TaggedError(
 }> {}
 
 /**
- * Source priority for lookups (higher priority first). `inline` must be listed,
- * not omitted: `deduplicateByName` compares `indexOf`, and an absent source
- * scores `-1`, ranking it first by accident instead of by decision.
+ * Source priority for lookups (higher priority first). Every source must be
+ * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
+ * source scores `-1`, ranking it first by accident instead of by decision.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
-  'inline',
   'custom',
   'remote',
   'builtInWorkflow',
@@ -62,7 +55,6 @@ const LOOKUP_PRIORITY: AgentSource[] = [
 
 /** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
-  'inline',
   'custom',
   'remote',
   'builtInToolUse',
@@ -149,33 +141,6 @@ function queueLoad(
   });
 }
 
-/**
- * Register agent definitions supplied as values, so an embedder can hand the
- * runtime an agent without writing a YAML file. Each definition is validated
- * here (throwing on a malformed one) and published under `inline:<name>` — a
- * namespace of its own, so an inline agent can never collide with a same-named
- * `custom` entry, only outrank it in bare-name lookups.
- *
- * Safe before or after {@link loadAgents}: entries land in the live cache
- * immediately and are re-merged by every subsequent load or refresh.
- */
-export function registerInlineAgents(definitions: readonly unknown[]): void {
-  for (const entry of defineInlineAgents(definitions)) {
-    cache.set(agentKeyOf(entry), entry);
-  }
-}
-
-/**
- * Remove all inline definitions and their corresponding live registry entries.
- * The two stores form one public registration state and must change together.
- */
-export function clearInlineAgents(): void {
-  clearInlineAgentDefinitions();
-  for (const [key, entry] of cache) {
-    if (entry.source === 'inline') cache.delete(key);
-  }
-}
-
 function doLoad(
   includeRemote: boolean,
   loadEpoch: number,
@@ -220,12 +185,8 @@ function doLoad(
     // builtInScan.issues and toolUseScan.issues are intentionally unused:
     // only custom-agent scan failures are a product surface.
 
-    // Register all entries. Inline definitions were normalized at registration
-    // and live outside the directory scan, so they are re-merged on every load —
-    // a catalog refresh rebuilds the cache from scratch and would otherwise drop
-    // them.
+    // Register all entries.
     const allEntries = [
-      ...inlineAgentEntries(),
       ...customScan.entries,
       ...builtInScan.entries,
       ...toolUseScan.entries,
@@ -253,8 +214,8 @@ function doLoad(
  * priority. This is not a category filter: callers that require a category
  * must check the returned entry.
  *
- * All other lookups in this module (`resolveAgent`, `resolveAgentKey`,
- * `isRemoteAgent`, `updateAgent*`) delegate here.
+ * All other lookups in this module (`resolveAgentKey`, `isRemoteAgent`,
+ * `updateAgent*`) delegate here.
  */
 export function getAgent(
   identifier: string,
@@ -294,33 +255,6 @@ export function updateAgentMeta(
     entry.defaultOutputFiles = meta.defaultOutputFiles?.length
       ? meta.defaultOutputFiles
       : undefined;
-}
-
-/**
- * Resolve an agent to a {@link ResolvedAgent} (entry + carried inline definition).
- *
- * Thin wrapper around {@link getAgent} that also carries the inline
- * definition the resolver selected. Returns `undefined` when the identifier
- * doesn't match any cached agent.
- *
- * Category-blind: a bare name resolves by source priority, so this is for
- * display/diagnostic/inheritance lookups, NOT launch. Launch must use
- * {@link resolveAgentForLaunch} so it lands on the exact entry validation chose.
- */
-export function resolveAgent(identifier: string): ResolvedAgent | undefined {
-  const entry = getAgent(identifier);
-  return entry ? toResolvedAgent(entry) : undefined;
-}
-
-function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
-  const resolved: ResolvedAgent = { entry };
-  // Carry the inline definition in the resolution so the load path doesn't
-  // re-lookup mutable global state — a re-registration between resolution
-  // and load could otherwise pair a stale entry with a replaced definition.
-  if (entry.source === 'inline') {
-    resolved.inlineDefinition = inlineAgentDefinition(entry.name);
-  }
-  return resolved;
 }
 
 /** Get agents for a category, deduplicated by name. */
@@ -540,17 +474,17 @@ export function resolveAgentForLaunch(
   category: AgentCategory,
   identifier: string,
   source?: AgentSource | null,
-): ResolvedAgent | undefined {
-  const entry =
+): AgentEntry | undefined {
+  return (
     (source ? getAgent(agentKey(source, agentName(identifier))) : undefined) ??
     getVisibleAgent(category, identifier) ??
-    getCategoryAgent(category, identifier);
-  return entry ? toResolvedAgent(entry) : undefined;
+    getCategoryAgent(category, identifier)
+  );
 }
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: inline > custom > remote > builtInWorkflow > builtInToolUse.
+ * Priority: custom > remote > builtInWorkflow > builtInToolUse.
  * When the same agent name exists in multiple sources (e.g. local + remote),
  * only the highest-priority version appears in the dropdown.
  */

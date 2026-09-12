@@ -1,3 +1,7 @@
+import {
+  validateRunRequest,
+  type ValidatedRunRequest,
+} from '@agent/core/state/runRequests';
 import { createLog } from '@logger/logUtils';
 import { hasUsableApiKey, API_PROVIDERS } from '@model/apiProviders';
 import {
@@ -18,7 +22,7 @@ import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { probeSetupCredential } from '@model/setupCredentialAccess';
 import type { PlatformSecrets } from '@platform/secrets';
-import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -145,19 +149,22 @@ export async function selectDesktopSetupModel(
 }
 
 /**
- * Build the execute message that launches the setup conversation, or `null`
- * when no credential resolves to a runnable model. The message rides the same
- * `handleExecute` path the renderer's execute button uses.
+ * Build the validated run request that launches the setup conversation, or
+ * `null` when no credential resolves to a runnable model.
  */
-export async function buildDesktopSetupExecuteMessage(
+export async function buildDesktopSetupRunRequest(
   secrets: PlatformSecrets,
-): Promise<MainViewExecuteMessage | null> {
+): Promise<ValidatedRunRequest | null> {
   const model = await selectDesktopSetupModel(secrets);
   if (!model) return null;
-  return {
-    agent: SETUP_AGENT_NAME,
-    model,
-    instruction: SETUP_INSTRUCTION,
-    agentCategory: AgentCategory.ToolUse,
-  };
+  const validation = validateRunRequest({
+    config: {
+      agent: SETUP_AGENT_NAME,
+      agentCategory: AgentCategory.ToolUse,
+      model,
+      instruction: SETUP_INSTRUCTION,
+    },
+  });
+  if (!validation.valid) throw new Error(validation.message);
+  return validation.request;
 }

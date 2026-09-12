@@ -9,10 +9,12 @@ const log = createLog(CHANNEL);
 
 export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
 
-export async function runTexFmt(filePath: string): Promise<boolean> {
+export async function runTexFmt(
+  filePath: string,
+  workspaceRoot?: string,
+  texfmtConfig: string | undefined = getConfig<string>(TEXFMT_CONFIG_KEY),
+): Promise<boolean> {
   try {
-    const texfmtConfig = getConfig<string>(TEXFMT_CONFIG_KEY);
-
     const args = [
       ...(texfmtConfig ? ['--config', texfmtConfig] : ['--nowrap']),
       filePath,
@@ -20,6 +22,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
 
     const result = await runToolWithCheck('tex-fmt', args, {
       channel: CHANNEL,
+      cwd: workspaceRoot,
       showError: true,
     });
     if (!result || !result.success) {

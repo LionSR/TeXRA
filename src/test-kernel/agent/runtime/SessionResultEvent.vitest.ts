@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -20,7 +19,6 @@ import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -38,7 +36,7 @@ let counter = 0;
  * it on the default runtime rather than a process runtime, so the services it
  * requires are provided here.
  */
-function runFlow(...args: Parameters<typeof runFlowWithLifecycle>) {
+function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
   return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
 }
 
@@ -52,7 +50,6 @@ function setupResultCase(session?: SessionHandle): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
-  runStatus: RunStatusMachine;
 } {
   const logger = new TraceEmitter();
   const n = counter++;
@@ -66,7 +63,7 @@ function setupResultCase(session?: SessionHandle): {
   runSession.onResult((event) => {
     if (event.runId === runId) results.push(event);
   });
-  return { logger, results, ctx, runStatus: runSession.status };
+  return { logger, results, ctx };
 }
 
 /** The completed tool-use result a flow returns for the given run. */
@@ -103,19 +100,15 @@ describe('terminal result event', () => {
   });
 
   it('emits exactly one completed result on a successful run', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlow(ctx, () => Effect.succeed(completedRun(ctx))),
-      );
-      expectSingleResult(results, ctx, {
-        outcome: 'completed',
-        output: { category: 'toolUse' },
-      });
-      expect(results[0].error).toBeUndefined();
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    const { ctx, results } = setupResultCase();
+    await Effect.runPromise(
+      runFlow(ctx, () => Effect.succeed(completedRun(ctx))),
+    );
+    expectSingleResult(results, ctx, {
+      outcome: 'completed',
+      output: { category: 'toolUse' },
+    });
+    expect(results[0].error).toBeUndefined();
   });
 
   it.each([
@@ -132,116 +125,92 @@ describe('terminal result event', () => {
       },
     },
   ])('keeps running when onRun $name', async ({ onRun }) => {
-    const { ctx, runStatus, results } = setupResultCase();
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
-            onRun,
-          }),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      await Promise.resolve();
+    const { ctx, results } = setupResultCase();
+    await expect(
+      Effect.runPromise(
+        runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
+          onRun,
+        }),
+      ),
+    ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+    await Promise.resolve();
 
-      expectSingleResult(results, ctx, { outcome: 'completed' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    expectSingleResult(results, ctx, { outcome: 'completed' });
   });
 
   it('keeps the failed subagent result when the onError delivery hook throws', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlow(ctx, explodedRun, {
-            parentRunId: generateRunId(),
-            onError: () => {
-              throw new Error('delivery hook boom');
-            },
-          }),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
+    const { ctx, results } = setupResultCase();
+    await expect(
+      Effect.runPromise(
+        runFlow(ctx, explodedRun, {
+          parentRunId: generateRunId(),
+          onError: () => {
+            throw new Error('delivery hook boom');
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
 
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    expectSingleResult(results, ctx, { outcome: 'failed' });
   });
 
   it('emits the failed result even if ending the parent stage throws', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
+    const { ctx, results } = setupResultCase();
     vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
       throw new Error('stage listener boom');
     });
 
-    try {
-      await expect(
-        Effect.runPromise(runFlow(ctx, explodedRun)),
-      ).rejects.toThrow('model exploded');
+    await expect(Effect.runPromise(runFlow(ctx, explodedRun))).rejects.toThrow(
+      'model exploded',
+    );
 
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    expectSingleResult(results, ctx, { outcome: 'failed' });
   });
 
   it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.succeed({
-            outcome: RUN_OUTCOME.CANCELLED,
-            runId: ctx.runScope.runId,
-            output: { category: 'toolUse', response: '', files: [] },
-          }),
-        ),
-      );
-      expectSingleResult(results, ctx, { outcome: 'cancelled' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    const { ctx, results } = setupResultCase();
+    await Effect.runPromise(
+      runFlow(ctx, () =>
+        Effect.succeed({
+          outcome: RUN_OUTCOME.CANCELLED,
+          runId: ctx.runScope.runId,
+          output: { category: 'toolUse', response: '', files: [] },
+        }),
+      ),
+    );
+    expectSingleResult(results, ctx, { outcome: 'cancelled' });
   });
 
   it('emits a cancelled result with kind=abort on a thrown abort', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlow(ctx, () =>
-          Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        ),
-      );
-      expectSingleResult(results, ctx, { outcome: 'cancelled' });
-      expect(results[0].error?.kind).toBe('abort');
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    const { ctx, results } = setupResultCase();
+    await Effect.runPromise(
+      runFlow(ctx, () =>
+        Effect.fail(new DOMException('Request aborted', 'AbortError')),
+      ),
+    );
+    expectSingleResult(results, ctx, { outcome: 'cancelled' });
+    expect(results[0].error?.kind).toBe('abort');
   });
 
   it('emits a failed result with usage on an unexpected throw after a round', async () => {
-    const { ctx, runStatus, results } = setupResultCase();
+    const { ctx, results } = setupResultCase();
     // Record one round of usage so the failed result still carries totals.
     await ctx.usageMonitor.recordUsage(
       AgentRunStateSnapshotSchema.parse({}),
       testModelInfo,
     );
-    try {
-      await expect(
-        Effect.runPromise(runFlow(ctx, explodedRun)),
-      ).rejects.toThrow('model exploded');
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-      expect(results[0].error?.kind).toBeDefined();
-      expect(results[0].usage).toBeDefined();
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
+    await expect(Effect.runPromise(runFlow(ctx, explodedRun))).rejects.toThrow(
+      'model exploded',
+    );
+    expectSingleResult(results, ctx, { outcome: 'failed' });
+    expect(results[0].error?.kind).toBeDefined();
+    expect(results[0].usage).toBeDefined();
   });
 
   it('bridges a child run result to session.onResult', async () => {
     const session = createTestSession();
     const onResult = vi.fn();
-    const { logger, ctx, runStatus } = setupResultCase(session);
+    const { logger, ctx } = setupResultCase(session);
     const parentRunId = publishTestRunStart(session);
     publishTestRunStart(session, ctx.runScope.runId, { parent: parentRunId });
     const detach = session.attachRunTrace(logger, ctx.runScope.runId);
@@ -261,7 +230,6 @@ describe('terminal result event', () => {
       });
     } finally {
       detach();
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
       session.dispose();
     }
   });

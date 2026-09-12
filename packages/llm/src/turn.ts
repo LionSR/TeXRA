@@ -41,20 +41,27 @@ const BindingSchema = z.strictObject({
     })
     .readonly(),
 });
+/**
+ * Every wire surface the package speaks. Usage is billed per surface, so a
+ * usage record's provider is the protocol of the turn that produced it.
+ */
+export const TurnProtocolSchema = z.enum([
+  'openai-chat',
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
+  'deepseek-chat',
+  'kimi-chat',
+  'glm-chat',
+  'xai-chat',
+  'dashscope-chat',
+  'minimax-chat',
+  'openrouter-chat',
+  'vscode-lm',
+]);
+
 const OriginSchema = BindingSchema.extend({
-  protocol: z.enum([
-    'openai-chat',
-    'google-interactions',
-    'openai-responses',
-    'anthropic-messages',
-    'deepseek-chat',
-    'kimi-chat',
-    'glm-chat',
-    'xai-chat',
-    'dashscope-chat',
-    'minimax-chat',
-    'openrouter-chat',
-  ]),
+  protocol: TurnProtocolSchema.exclude(['vscode-lm']),
   codecVersion: z.literal(1),
 });
 const EditorBindingSchema = BindingSchema.pick({ requestedModel: true }).extend(
@@ -65,7 +72,7 @@ const EditorBindingSchema = BindingSchema.pick({ requestedModel: true }).extend(
   },
 );
 const EditorOriginSchema = EditorBindingSchema.extend({
-  protocol: z.literal('vscode-lm'),
+  protocol: TurnProtocolSchema.extract(['vscode-lm']),
   codecVersion: OriginSchema.shape.codecVersion,
 });
 
@@ -616,6 +623,9 @@ const ToolChoiceSchema = z.union([
   z.literal('auto'),
   z.strictObject({ name: z.string().min(1) }).readonly(),
 ]);
+// This package speaks its own protocol vocabulary and takes no llm-zoo
+// dependency; the registry's enum is checked against this one by assignment at
+// the `modelBinding.ts` call sites that feed it.
 const ReasoningEffortSchema = z
   .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
   .nullable();

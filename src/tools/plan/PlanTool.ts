@@ -13,37 +13,18 @@
  * they return plain guidance for ordinary turn-by-turn chat.
  */
 
-// Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  classifyRejection,
-  type PlanApprovalResult,
-} from '@agent/runtime/HostInteractions';
-import {
-  getRunContextInteractions,
-  getRunContextRunId,
-} from '@agent/runtime/RunContext';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import {
-  getCurrentToolContexts,
-  type CurrentToolContexts,
-} from '@agent/followUp/ToolFileInteractionContext';
+import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
-import { requireRunId } from '@tools/contextHelpers';
+import { refusalOf } from '@shared/session/approvalDecision';
 import {
   GoalStore,
   isGoalEnabled,
@@ -53,7 +34,7 @@ import {
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import { assertNever, generateShortId } from '@utils/core';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -117,21 +98,17 @@ function buildApprovedResult(): ToolResult {
 }
 
 /**
- * Everything this tool's program needs from ambient storage, taken in the
- * caller's turn rather than read from the program's fiber.
+ * Everything this tool's program needs from its invocation capability.
  *
  * `GoalStore` and the goal feature flag both resolve `workspaceRoots()` —
  * per-session state whose fallback is the process (no-workspace) roots — so
- * they are re-entered in the calling turn's context instead of whichever one
- * the fiber carries.
+ * they are reached through the call's narrow legacy host frame.
  */
 interface PlanPorts {
-  /** The tool-call and run contexts of the calling turn. */
-  readonly contexts: CurrentToolContexts | undefined;
+  /** One native tool-call capability, scoped by the dispatcher. */
+  readonly call: ToolCallShape;
   /** The session that owns this turn; it holds the approval surface. */
-  readonly session: SessionHandle;
-  /** Runs `operation` in the calling turn's async context. */
-  readonly inRunScope: <A>(operation: () => A) => A;
+  readonly session: NonNullable<ToolCallShape['run']>['session'];
 }
 
 /**
@@ -145,8 +122,7 @@ const setGoalAutoApproval = Effect.fn('PlanTool.setGoalAutoApproval')(
     runId: RunId,
     scope: GoalAutoApprovalScope | false,
   ) {
-    const interactions = getRunContextInteractions(ports.contexts?.runContext);
-    if (interactions) {
+    if (ports.call.run) {
       yield* hostPort(() =>
         setGoalSessionAutoApproval(runId, scope, {
           session: ports.session,
@@ -168,7 +144,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
-  if (!ports.inRunScope(isGoalEnabled)) {
+  if (!ports.call.inScope(isGoalEnabled)) {
     logger.warn(
       'Run as Goal requested but goal feature flag is off; ' +
         'continuing without an autonomous goal.',
@@ -188,16 +164,16 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   // If a goal is already in flight on this run, retarget it at the
   // newly approved objective instead of silently leaving the loop driving
   // the stale one.
-  const existing = ports.inRunScope(() => GoalStore.getForRun(runId));
+  const existing = ports.call.inScope(() => GoalStore.getForRun(runId));
   if (isGoalInFlight(existing)) {
     return yield* Effect.gen(function* () {
       const retargeted = yield* hostPort(() =>
-        ports.inRunScope(() => GoalStore.editObjective(runId, objective)),
+        ports.call.inScope(() => GoalStore.editObjective(runId, objective)),
       );
       const active =
         retargeted.status === 'paused'
           ? ((yield* hostPort(() =>
-              ports.inRunScope(() => GoalStore.setStatus(runId, 'active')),
+              ports.call.inScope(() => GoalStore.setStatus(runId, 'active')),
             )) ?? retargeted)
           : retargeted;
       yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
@@ -240,7 +216,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   return yield* Effect.gen(function* () {
     const goal = yield* hostPort(() =>
-      ports.inRunScope(() => GoalStore.start(runId, objective)),
+      ports.call.inScope(() => GoalStore.start(runId, objective)),
     );
     yield* setGoalAutoApproval(ports, runId, autoApprovalScope);
     return executed(
@@ -284,23 +260,13 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   workPlanState: WorkPlanState,
 ) {
   const requestId = `plan-${generateShortId()}`;
-  const goalEnabled = ports.inRunScope(isGoalEnabled);
+  const goalEnabled = ports.call.inScope(isGoalEnabled);
 
   logger.info('Requesting approval for plan objective');
 
-  // Dispatching inside the port keeps a host that throws on the request
-  // itself on the same failure channel as one that rejects the interaction.
-  const result: PlanApprovalResult = yield* hostPort(() => {
-    const interaction = ports.session.interactions.requestPlanApproval({
-      requestId,
-      runId,
-      plan,
-      goalEnabled,
-    });
-    if (!interaction) {
-      throw new Error('HostInteractions.requestPlanApproval is required');
-    }
-    return interaction;
+  const result = yield* ports.session.openRequest(runId, {
+    kind: 'planApproval',
+    data: { requestId, runId, plan, goalEnabled },
   });
 
   if (result.action === 'approve') {
@@ -321,7 +287,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   // Rejected — clear the plan from UI
   workPlanState.updatePlan(null);
 
-  const classification = classifyRejection(result);
+  const refusal = refusalOf('planApproval', result);
 
   // 'cancelled' and 'policy' differ only in wording: a host cancel with an
   // optional cause vs a policy denial with its reason.
@@ -339,13 +305,13 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     );
   };
 
-  switch (classification.kind) {
-    case 'cancelled':
-      return denialResult('cancelled', classification.cause);
-    case 'policy':
-      return denialResult('denied', classification.reason);
-    case 'feedback': {
-      const feedback = classification.feedback?.trim();
+  switch (refusal.action) {
+    case 'cancel':
+      return denialResult('cancelled', refusal.cause ?? undefined);
+    case 'deny':
+      return denialResult('denied', refusal.reason);
+    case 'reject': {
+      const feedback = refusal.feedback?.trim();
       const feedbackNote = feedback
         ? `\nUser feedback: ${feedback}`
         : '\nNo specific feedback was provided.';
@@ -363,8 +329,6 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
         },
       );
     }
-    default:
-      return assertNever(classification, 'Unhandled rejection classification');
   }
 });
 
@@ -372,10 +336,10 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   ports: PlanPorts,
   plan: Plan,
 ) {
-  const callContext = ports.contexts?.callContext;
-  const runContext = ports.contexts?.runContext;
+  const callContext = ports.call;
+  const run = callContext.run;
 
-  if (!callContext?.workPlanState) {
+  if (!callContext.workPlanState) {
     return yield* Effect.fail(
       new ToolError(
         'plan(update) requires an active agent tool-use turn: there is no work plan to update.',
@@ -388,11 +352,8 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and
   // that decision belongs to the user.
-  const runId = getRunContextRunId(runContext);
-  if (!runId) {
-    logger.warn('Plan created without runId: skipping approval gate');
-    return buildApprovedResult();
-  }
+  if (!run) return buildApprovedResult();
+  const { runId } = run;
   return yield* requestApproval(ports, plan, runId, callContext.workPlanState);
 });
 
@@ -401,7 +362,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   runId: RunId,
   reason: string,
 ) {
-  const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
+  const goal = ports.call.inScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to pause. ' +
@@ -417,7 +378,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   }
   const updated =
     (yield* hostPort(() =>
-      ports.inRunScope(() => GoalStore.setStatus(runId, 'paused')),
+      ports.call.inScope(() => GoalStore.setStatus(runId, 'paused')),
     )) ?? goal;
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
@@ -431,7 +392,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   runId: RunId,
   reason: string,
 ) {
-  const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
+  const goal = ports.call.inScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to mark complete. ' +
@@ -442,7 +403,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // Completing forgets the record — a goal is a live pursuit, not an
   // archived one. The autonomous loop stops because no `active` record
   // remains for the next wait-node continuation check.
-  yield* hostPort(() => ports.inRunScope(() => GoalStore.forget(runId)));
+  yield* hostPort(() => ports.call.inScope(() => GoalStore.forget(runId)));
   yield* setGoalAutoApproval(ports, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
@@ -454,9 +415,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
 });
 
 /**
- * Build the program for one plan command. Called synchronously from
- * `execute`, so `requireRunId` / `requireNonEmptyString` still reject a
- * malformed call in the caller's own turn, before any fiber starts.
+ * Build the program for one plan command from the invocation capability.
  */
 function planCommand(
   ports: PlanPorts,
@@ -466,17 +425,21 @@ function planCommand(
     case 'update':
       return executeUpdate(ports, { objective: input.objective });
     case 'pause':
-      return executePause(
-        ports,
-        requireRunId('plan(pause)', ports.contexts?.runContext),
-        requireNonEmptyString(input.reason, 'reason'),
-      );
+      return ports.call.run
+        ? executePause(
+            ports,
+            ports.call.run.runId,
+            requireNonEmptyString(input.reason, 'reason'),
+          )
+        : Effect.fail(new ToolError('plan(pause) requires an active run.'));
     case 'complete':
-      return executeComplete(
-        ports,
-        requireRunId('plan(complete)', ports.contexts?.runContext),
-        requireNonEmptyString(input.reason, 'reason'),
-      );
+      return ports.call.run
+        ? executeComplete(
+            ports,
+            ports.call.run.runId,
+            requireNonEmptyString(input.reason, 'reason'),
+          )
+        : Effect.fail(new ToolError('plan(complete) requires an active run.'));
   }
 }
 
@@ -493,14 +456,16 @@ Commands:
 pause/complete only affect autonomous goals; with no goal running they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
 }) {
-  protected execute(input: PlanToolInput): Promise<ToolResult> {
-    const ports: PlanPorts = {
-      contexts: getCurrentToolContexts(),
-      session: currentSession(),
-      inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
-        operation(),
-      ),
-    };
-    return effectRuntime().runPromise(planCommand(ports, input));
+  protected execute(input: PlanToolInput) {
+    return Effect.gen(function* () {
+      const call = yield* ToolCall;
+      const run = call.run;
+      if (!run) {
+        return yield* Effect.fail(
+          new ToolError('plan requires an active agent run.'),
+        );
+      }
+      return yield* planCommand({ call, session: run.session }, input);
+    });
   }
 }

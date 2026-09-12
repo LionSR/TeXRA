@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { TraceEmitter, type StatusEvent } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -12,7 +12,6 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import { StreamLog } from '@shared/session/traceEntries';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -24,22 +23,18 @@ import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
-function attachRecorder(runId: RunId = 'stream:test' as RunId): {
-  trace: TraceEmitter;
-  handleStatus: (event: StatusEvent) => void;
-  rows: () => StreamLogEntry[];
-  row: (id: string | undefined) => StreamLogEntry | undefined;
-} {
+function attachRecorder(runId: RunId = 'stream:test' as RunId) {
   const trace = new TraceEmitter();
   const store = new StreamLog();
 
   const recorder = attachTestTranscriptFold(trace, runId, store);
-  const rows = (): StreamLogEntry[] => store.getRange(0);
+  const rows = (): StreamLogEntry[] => store.toJSON();
   return {
     trace,
-    handleStatus: recorder.handleStatus,
+    settlePhase: recorder.settlePhase,
     rows,
-    row: (id) => rows().find((entry) => entry.id === id),
+    row: (id: string | undefined): StreamLogEntry | undefined =>
+      rows().find((entry) => entry.id === id),
   };
 }
 
@@ -224,7 +219,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
 describe('attachTestTranscriptFold workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, handleStatus, row, rows } = attachRecorder(runId);
+    const { trace, settlePhase, row, rows } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -240,16 +235,11 @@ describe('attachTestTranscriptFold workflow task state', () => {
       call: {
         id: 'planned',
         label: 'Audit later',
-        status: 'planned',
+        status: 'queued',
       },
     });
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.CANCELLED,
-      cause: RUN_TRANSITION_CAUSE.USER_STOP,
-    });
+    settlePhase(RUN_PHASE.CANCELLED);
 
     expect(row(phase.id)).toMatchObject({
       settlementSeqNo: 1,
@@ -308,13 +298,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       data: { status: 'skipped', reason: 'not-reached' },
     });
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.RUNNING,
-      previousPhase: RUN_PHASE.CANCELLED,
-      cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
-    });
+    settlePhase(RUN_PHASE.RUNNING);
     trace.responseFinalized('Fresh turn response');
     const responses = rows().filter(
       (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
@@ -335,7 +319,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
     const runId = 'stream:waiting-settlement' as RunId;
-    const { trace, handleStatus, rows } = attachRecorder(runId);
+    const { trace, settlePhase, rows } = attachRecorder(runId);
 
     const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
@@ -344,12 +328,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       toolName: 'read',
       input: { path: 'waiting.tex' },
     });
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.WAITING,
-      cause: RUN_TRANSITION_CAUSE.WAIT,
-    });
+    settlePhase(RUN_PHASE.WAITING);
 
     expect(rows()).toMatchObject([
       {
@@ -365,13 +344,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       },
     ]);
 
-    handleStatus({
-      type: 'status',
-      runId,
-      phase: RUN_PHASE.RUNNING,
-      previousPhase: RUN_PHASE.WAITING,
-      cause: RUN_TRANSITION_CAUSE.RESUME,
-    });
+    settlePhase(RUN_PHASE.RUNNING);
     const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     resumedResponse.append('Resumed response');
     resumedResponse.finalize();
@@ -422,7 +395,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
         id: 'audit-core',
         label: 'Audit core',
         phase: 'Audit',
-        status: 'planned',
+        status: 'queued',
       },
     });
     trace.emit({
@@ -453,88 +426,6 @@ describe('attachTestTranscriptFold workflow task state', () => {
         model: 'gpt56',
         durationMs: 12_000,
         costUsd: 0.03,
-      },
-    });
-  });
-});
-
-describe('attachTestTranscriptFold record-time secret redaction', () => {
-  const API_KEY = 'sk-live1234567890abcdef';
-
-  it('redacts a secret in a plain log row before it is persisted', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.info(`Configured with ${API_KEY}`);
-
-    expect(rows()[0]?.text).toBe('Configured with [redacted]');
-  });
-
-  it("redacts an error row's provider detail, not just its summary", () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.error(`Request failed for ${API_KEY}`, {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: `401 from https://api.example.com/v1?key=${API_KEY}`,
-        statusCode: 401,
-      },
-    });
-
-    expect(rows()[0]).toMatchObject({
-      text: 'Request failed for [redacted]',
-      data: {
-        message: '401 from https://api.example.com/v1?key=[redacted]',
-        statusCode: 401,
-      },
-    });
-  });
-
-  it('redacts a secret split across streamed chunks once the stream settles', () => {
-    const { trace, row } = attachRecorder();
-
-    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('Use sk-live');
-    output.append('1234567890abcdef now');
-    output.finalize();
-
-    expect(row(output.id)?.text).toBe('Use [redacted] now');
-  });
-
-  it('redacts the authoritative finalized response text', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.responseFinalized(`Set API_KEY=${API_KEY} in your shell.`);
-
-    expect(rows()[0]?.text).toBe('Set API_KEY=[redacted] in your shell.');
-  });
-
-  it('redacts a stage label', () => {
-    const { trace, row } = attachRecorder();
-
-    const stage = trace.openStage(`Probe ${API_KEY}`, { kind: 'phase' });
-
-    expect(row(stage.id)?.text).toBe('Probe [redacted]');
-  });
-
-  it("redacts a failed workflow call's label and provider error", () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task-card',
-      call: {
-        id: 'audit-core',
-        label: `Audit ${API_KEY}`,
-        status: 'failed',
-        error: `401 rejected key ${API_KEY}`,
-      },
-    });
-
-    expect(rows()[0]).toMatchObject({
-      text: 'Audit [redacted]',
-      data: {
-        label: 'Audit [redacted]',
-        error: '401 rejected key [redacted]',
       },
     });
   });
@@ -600,7 +491,7 @@ describe('attachTestTranscriptFold active skills', () => {
     });
     recorder.unsubscribe();
     const persisted = store
-      .getRange(0)
+      .toJSON()
       .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
     expect(persisted).toStrictEqual({
       skills: [

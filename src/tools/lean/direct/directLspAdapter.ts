@@ -19,16 +19,15 @@
  * which converts with its only caller there.
  */
 
+import {
+  NodeChildProcessSpawner,
+  NodeFileSystem,
+  NodePath,
+} from '@effect/platform-node';
 import { Cause, Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
 
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
-import type { RunId } from '@shared/schemas';
 
 import { LeanAdapterStopped, LeanServerPool } from './leanServerPool';
 import {
@@ -44,6 +43,16 @@ import type {
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * The library's Node `ChildProcessSpawner`, over the `FileSystem` and `Path`
+ * services it validates and resolves a command's `cwd` through. Built here
+ * rather than by the process runtime: the Lean lane is its only consumer, so
+ * a process-wide spawner is a later lane's call.
+ */
+const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
+  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+);
 
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
@@ -89,19 +98,17 @@ export function createDirectLspLeanAdapter(
           idleTimeoutMs > 0
             ? Duration.millis(idleTimeoutMs)
             : Duration.infinity,
-      }).pipe(Layer.provide(nodeChildProcessSpawnerLayer)),
+      }).pipe(Layer.provide(spawnerLayer)),
     ).pipe(
       Scope.provide(scope),
       Effect.map((context) => Context.get(context, LeanServerPool)),
     ),
   );
 
-  // The run id is captured when the method is called, before any fiber
-  // starts, because the ambient run context is a property of the calling
-  // turn, not of the scheduler the fiber resumes on.
+  // Ownership is supplied by the invoking tool and survives fiber scheduling.
   return {
-    fetchDiagnosticsForFile: (file) =>
-      foldStopped(pool.fetchDiagnosticsForFile(file, currentRunId()), () => ({
+    fetchDiagnosticsForFile: (file, runId) =>
+      foldStopped(pool.fetchDiagnosticsForFile(file, runId), () => ({
         ok: false,
         kind: 'toolchain_unavailable',
         message: STOPPED_MESSAGE,
@@ -113,15 +120,15 @@ export function createDirectLspLeanAdapter(
     // The tool result still carries the diagnostic list for the agent to act
     // on.
 
-    executeFileCommand: (command, filePath) =>
+    executeFileCommand: (command, filePath, runId) =>
       foldStopped(
-        pool.executeFileCommand(command, filePath, currentRunId()),
+        pool.executeFileCommand(command, filePath, runId),
         () => false,
       ),
 
-    executeProjectCommand: (command) =>
+    executeProjectCommand: (command, runId) =>
       pool
-        .executeProjectCommand(command, currentRunId())
+        .executeProjectCommand(command, runId)
         .pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterrupts(cause)
@@ -130,38 +137,38 @@ export function createDirectLspLeanAdapter(
           ),
         ),
 
-    getGoalState: (filePath, line, column) =>
+    getGoalState: (filePath, line, column, runId) =>
       foldStopped(
         pool.positionRequest<PlainGoal>(
           filePath,
           line,
           column,
           '$/lean/plainGoal',
-          currentRunId(),
+          runId,
         ),
         stoppedLspResult<PlainGoal>,
       ),
 
-    getTermGoal: (filePath, line, column) =>
+    getTermGoal: (filePath, line, column, runId) =>
       foldStopped(
         pool.positionRequest<PlainTermGoal>(
           filePath,
           line,
           column,
           '$/lean/plainTermGoal',
-          currentRunId(),
+          runId,
         ),
         stoppedLspResult<PlainTermGoal>,
       ),
 
-    getHoverInfo: (filePath, line, column) =>
+    getHoverInfo: (filePath, line, column, runId) =>
       foldStopped(
         pool.positionRequest<LspHover>(
           filePath,
           line,
           column,
           'textDocument/hover',
-          currentRunId(),
+          runId,
         ),
         stoppedLspResult<LspHover>,
       ),
@@ -210,8 +217,3 @@ const foldStopped = <A, E>(
         : Effect.failCause(cause),
     ),
   );
-
-/** The agent run the current tool call executes for, when it runs inside one. */
-function currentRunId(): RunId | undefined {
-  return getRunContextRunId(tryUseRunContext());
-}

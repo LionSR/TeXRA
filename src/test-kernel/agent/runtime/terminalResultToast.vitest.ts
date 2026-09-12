@@ -34,7 +34,7 @@ async function toastsFor(
     emitted.push({ event: name, payload });
     return true;
   });
-  const detachHost = session.interactions.use({ emit, cancel: vi.fn() });
+  const detachHost = session.interactions.use({ emit });
   const detachToast = attachTerminalResultToast(session, session.interactions);
   const committed = new Promise<void>((resolve) =>
     session.onResult(() => resolve()),

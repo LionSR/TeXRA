@@ -38,7 +38,6 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import {
   RUN_OUTCOME,
   RUN_PHASE,
-  RUN_SUBSTATE,
   AgentCategory,
   type RunId,
 } from '@shared/schemas';
@@ -167,7 +166,6 @@ describe('AgentLaunchContext', () => {
         }
         events.push(event);
       },
-      cancel: () => {},
     });
 
     try {
@@ -193,7 +191,6 @@ describe('AgentLaunchContext', () => {
         }
         events.push(event);
       },
-      cancel: () => {},
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -209,9 +206,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession();
     session.interactions.use(recording.interactions);
 
-    mocks.resolve.mockReturnValueOnce({
-      entry: { path: '/agents/chat.yaml' },
-    });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -258,7 +253,7 @@ describe('AgentLaunchContext', () => {
       session.interactions,
     );
     publishTestRunStart(session, EXECUTION_ID);
-    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -336,11 +331,11 @@ describe('AgentLaunchContext', () => {
     });
   });
 
-  it('commits initial status with creation instead of publishing a reservation', async () => {
+  it('commits the activation with creation instead of publishing a reservation', async () => {
     const session = createTestSession();
     const batches = vi.spyOn(session, 'commitRegistration');
     const recording = recordSessionEvents(session);
-    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -374,19 +369,13 @@ describe('AgentLaunchContext', () => {
           'run.launchLabel',
           'run.record',
           'run.activate',
-          'status',
         ]);
         expect(
-          (await recording.read()).slice(0, 3).map((event) => event.type),
-        ).toEqual(['run.start', 'run.activate', 'status']);
-        // One aggregate, one counter: the status is the fifth durable row of
-        // the creation batch.
-        expect((await recording.read())[2]).toMatchObject({
-          seq: 5,
-          phase: RUN_PHASE.RUNNING,
-          substate: RUN_SUBSTATE.STARTING,
-          runStartedAt: expect.any(Number),
-        });
+          (await recording.read()).slice(0, 2).map((event) => event.type),
+        ).toEqual(['run.start', 'run.activate']);
+        // One aggregate, one counter: the activation is the fourth durable
+        // row of the creation batch, and the phase the fold reads from it.
+        expect((await recording.read())[1]).toMatchObject({ seq: 4 });
       } finally {
         context.disposeTrace();
       }
@@ -424,9 +413,7 @@ describe('AgentLaunchContext', () => {
     const rawDispose = vi.fn(() => order.push('raw-trace'));
     const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
     trace.openStage = vi.fn(() => stage);
-    mocks.resolve.mockReturnValueOnce({
-      entry: { path: '/agents/chat.yaml' },
-    });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -455,7 +442,7 @@ describe('AgentLaunchContext', () => {
         delegationAgentScope,
       });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-      expect(session.status.get(EXECUTION_ID)).toBe(RUN_PHASE.FAILED);
+      expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
         expect.objectContaining({

@@ -26,14 +26,12 @@ import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
 } from '@shared/schemas';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { AGENT_DECORATORS } from '@shared/wa/icons';
 import { getBasename, groupBy } from '@utils/core';
 
@@ -66,7 +64,7 @@ function sourceMeta(source: AgentSource): {
 }
 
 @customElement('agent-selection-panel')
-export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
+export class AgentSelectionPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -85,7 +83,6 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   private displayOrder: AgentSelectionItem[] = [];
 
   private static readonly SOURCE_ORDER = [
-    AGENT_SOURCE.INLINE,
     AGENT_SOURCE.CUSTOM,
     AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
@@ -292,10 +289,6 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     `;
   }
 
-  private supportsCommand(command: string): boolean {
-    return !isKnownUnsupported(this.unsupportedCommands, command);
-  }
-
   /** Detail-pane actions in render order, each with the condition that shows it. */
   private renderDetailActions(agent: AgentSelectionItem): TemplateResult[] {
     // Only the two built-in sources lack a decorator row, hence no badge.
@@ -321,10 +314,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         },
       },
       {
-        when:
-          agent.source === AGENT_SOURCE.REMOTE &&
-          !agent.hasPath &&
-          this.supportsCommand(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
+        when: agent.source === AGENT_SOURCE.REMOTE && !agent.hasPath,
         button: {
           icon: 'file-lines',
           text: 'View prompt',
@@ -354,9 +344,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         },
       },
       {
-        when:
-          builtIn &&
-          this.supportsCommand(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT),
+        when: builtIn,
         button: {
           icon: 'pencil',
           text: 'Customize',
@@ -374,9 +362,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         },
       },
       {
-        when:
-          isCustom &&
-          this.supportsCommand(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
+        when: isCustom,
         button: {
           icon: 'trash',
           text: 'Delete',

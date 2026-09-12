@@ -20,8 +20,6 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   };
 });
 
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -30,7 +28,6 @@ import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   askApproval,
   cliRetryQuotaRoute,
-  cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
@@ -45,12 +42,15 @@ import {
   DEFAULT_TOOL_CONFIG,
   RUN_OUTCOME,
   type AgentProposalPermission,
+  type PermissionPayload,
+  type RequestDecision,
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   const ctx = createTestCliContext({
@@ -79,16 +79,62 @@ function useCliHostInteractions(
   );
 }
 
-function requestNewProofEdit(): ReturnType<typeof requestToolEditApproval> {
-  return requestToolEditApproval({
-    path: '/tmp/new-proof.tex',
-    originalContent: '',
-    proposedContent: '\\section{Proof}\nA concise proof.\n',
-    sourceTool: 'write_file',
+const ROOT_RUN = 'a00001' as RunId;
+/** The runs this file opens requests on; a request is a row on its run, so
+ *  the run exists before the first one opens. */
+const started = new Set<RunId>();
+
+function ensureRun(runId: RunId) {
+  return Effect.gen(function* () {
+    if (started.has(runId)) return;
+    started.add(runId);
+    publishTestRunStart(defaultSession(), runId);
+    yield* Effect.promise(() => defaultSession().settlePublications());
   });
 }
 
-const ROOT_RUN = 'run-root' as RunId;
+function approvalLayer(runId: RunId, onApprovalPolicyDenial?: () => void) {
+  return nativeToolTestLayer({
+    workingDirectory: '/tmp',
+    run: { runId, session: defaultSession(), toolPolicy: {} },
+    onApprovalPolicyDenial,
+  });
+}
+
+function requestNewProofEdit(onApprovalPolicyDenial?: () => void) {
+  return Effect.gen(function* () {
+    yield* ensureRun(ROOT_RUN);
+    return yield* requestToolEditApproval({
+      path: '/tmp/new-proof.tex',
+      originalContent: '',
+      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      sourceTool: 'write_file',
+      runId: ROOT_RUN,
+    }).pipe(Effect.provide(approvalLayer(ROOT_RUN, onApprovalPolicyDenial)));
+  });
+}
+
+/**
+ * Ask through the protocol the headless host answers: `request.opened` on the
+ * run, then the `request.decided` the attached host commits (one run model,
+ * 3.7). The host must already be attached with {@link useCliHostInteractions}.
+ */
+function openRequestOn(
+  runId: RunId,
+  payload: PermissionPayload,
+): Effect.Effect<RequestDecision, Error> {
+  return Effect.gen(function* () {
+    const session = defaultSession();
+    yield* ensureRun(runId);
+    return yield* session.openRequest(runId, payload);
+  }).pipe(Effect.mapError((cause) => new Error(String(cause))));
+}
+
+function openRequest(
+  payload: PermissionPayload,
+): Effect.Effect<RequestDecision, Error> {
+  return openRequestOn(ROOT_RUN, payload);
+}
 
 function agentProposal(
   overrides: Partial<AgentProposalPermission> = {},
@@ -175,15 +221,16 @@ afterEach(() => {
 describe('shared retry and human-input decisions', () => {
   it.effect('denies an ordinary transient retry in yolo', () =>
     Effect.gen(function* () {
-      const ctx = context({ approvalPolicy: 'yolo' });
-      const result = yield* Effect.promise(async () =>
-        createHeadlessCliHostInteractions(ctx).requestRetry?.({
+      useCliHostInteractions(context({ approvalPolicy: 'yolo' }));
+      const result = yield* openRequest({
+        kind: 'retry',
+        data: {
           requestId: 'transient-retry',
-          runId: 'test-run' as RunId,
+          runId: ROOT_RUN,
           operation: 'Model request',
           errorMessage: 'stream dropped before first token',
-        }),
-      );
+        },
+      });
 
       expect(result).toMatchObject({ action: 'deny' });
     }),
@@ -199,17 +246,12 @@ describe('human input approval policy', () => {
         useCliHostInteractions(ctx);
         let policyDenials = 0;
 
-        const result = yield* Effect.promise(async () =>
-          withRunContext(
-            createRunContext({
-              onApprovalPolicyDenial: () => {
-                policyDenials += 1;
-              },
-            }),
-            requestNewProofEdit,
-          ),
-        );
-        expect(result).toMatchObject({ action: 'reject' });
+        const result = yield* requestNewProofEdit(() => {
+          policyDenials += 1;
+        });
+        // A policy refusal with nobody to ask is a denial, not a person's
+        // rejection: the model reads the reason and routes around it.
+        expect(result).toMatchObject({ action: 'deny' });
         expect(policyDenials).toBe(1);
         // The model routes around the denial, so the run's exit code is untouched.
         expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(
@@ -228,12 +270,11 @@ describe('approval prompt hooks', () => {
   it.effect('runs the before-prompt hook for interactive approval events', () =>
     Effect.gen(function* () {
       const tracker = trackPromptEvents();
-      const result = yield* Effect.promise(async () =>
-        createHeadlessCliHostInteractions(
-          context({ approvalPrompt: tracker.answerWith('n no review needed') }),
-          tracker.hooks,
-        ).requestAgentProposal?.(proposal),
+      useCliHostInteractions(
+        context({ approvalPrompt: tracker.answerWith('n no review needed') }),
+        tracker.hooks,
       );
+      const result = yield* openRequest({ kind: 'proposal', data: proposal });
 
       expect(result).toEqual({
         action: 'reject',
@@ -248,12 +289,11 @@ describe('approval prompt hooks', () => {
     () =>
       Effect.gen(function* () {
         const tracker = trackPromptEvents();
-        const result = yield* Effect.promise(async () =>
-          createHeadlessCliHostInteractions(
-            context({ approvalPolicy: 'yolo' }),
-            tracker.hooks,
-          ).requestAgentProposal?.(proposal),
+        useCliHostInteractions(
+          context({ approvalPolicy: 'yolo' }),
+          tracker.hooks,
         );
+        const result = yield* openRequest({ kind: 'proposal', data: proposal });
 
         expect(result).toEqual({ action: 'approve' });
         expect(tracker.events).toEqual([]);
@@ -264,22 +304,19 @@ describe('approval prompt hooks', () => {
     'routes automatic proposal rejection through the headless interaction port',
     () =>
       Effect.gen(function* () {
-        const result = yield* Effect.promise(async () =>
-          createHeadlessCliHostInteractions(
-            context({ approvalPolicy: 'never' }),
-          ).requestAgentProposal?.(proposal),
-        );
+        useCliHostInteractions(context({ approvalPolicy: 'never' }));
+        const result = yield* openRequest({ kind: 'proposal', data: proposal });
 
         expect(result).toEqual({
-          action: 'reject',
+          action: 'deny',
           reason: 'Denied by TeXRA approval policy.',
         });
       }),
   );
 });
 
-describe('requestRetry classification (#7331)', () => {
-  const retryRequest: HostRetryRequest = {
+describe('retry request classification (#7331)', () => {
+  const retryRequest: RetryPermission = {
     requestId: 'headless-retry',
     runId: ROOT_RUN,
     operation: 'Model invocation',
@@ -288,11 +325,12 @@ describe('requestRetry classification (#7331)', () => {
 
   function requestHeadlessRetry(
     ctx: CliContext,
-    overrides: Partial<HostRetryRequest> = {},
-  ) {
-    return createHeadlessCliHostInteractions(ctx).requestRetry?.({
-      ...retryRequest,
-      ...overrides,
+    overrides: Partial<RetryPermission> = {},
+  ): Effect.Effect<RequestDecision, Error> {
+    useCliHostInteractions(ctx);
+    return openRequest({
+      kind: 'retry',
+      data: { ...retryRequest, ...overrides },
     });
   }
 
@@ -301,9 +339,7 @@ describe('requestRetry classification (#7331)', () => {
     () =>
       Effect.gen(function* () {
         const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
-        const result = yield* Effect.promise(async () =>
-          requestHeadlessRetry(ctx),
-        );
+        const result = yield* requestHeadlessRetry(ctx);
 
         // A policy/headless auto-denial is a deny, not a user cancel: the model
         // receives the reason as feedback instead of the turn being abandoned.
@@ -321,10 +357,9 @@ describe('requestRetry classification (#7331)', () => {
     'preserves the credential denial reason in $approvalPolicy/$mode mode',
     ({ approvalPolicy, mode }) =>
       Effect.gen(function* () {
-        const result = yield* Effect.promise(async () =>
-          requestHeadlessRetry(context({ approvalPolicy, mode }), {
-            errorDetails: credentialExhaustedRetry.errorDetails,
-          }),
+        const result = yield* requestHeadlessRetry(
+          context({ approvalPolicy, mode }),
+          { errorDetails: credentialExhaustedRetry.errorDetails },
         );
 
         expect(result).toEqual({
@@ -338,8 +373,8 @@ describe('requestRetry classification (#7331)', () => {
     'denies a yolo retry without changing provider-failure exit classification',
     () =>
       Effect.gen(function* () {
-        const result = yield* Effect.promise(async () =>
-          requestHeadlessRetry(context({ approvalPolicy: 'yolo' })),
+        const result = yield* requestHeadlessRetry(
+          context({ approvalPolicy: 'yolo' }),
         );
 
         expect(result).toEqual({
@@ -361,10 +396,9 @@ describe('requestRetry classification (#7331)', () => {
     'preserves the credential denial reason for yolo credential/auth failure %#',
     (errorDetails) =>
       Effect.gen(function* () {
-        const result = yield* Effect.promise(async () =>
-          requestHeadlessRetry(context({ approvalPolicy: 'yolo' }), {
-            errorDetails,
-          }),
+        const result = yield* requestHeadlessRetry(
+          context({ approvalPolicy: 'yolo' }),
+          { errorDetails },
         );
 
         expect(result).toEqual({
@@ -376,13 +410,13 @@ describe('requestRetry classification (#7331)', () => {
 
   it.effect('cancels a retry the interactive user explicitly rejects', () =>
     Effect.gen(function* () {
-      const result = yield* Effect.promise(async () =>
-        requestHeadlessRetry(
-          context({ approvalPrompt: async () => 'n not now' }),
-        ),
+      const result = yield* requestHeadlessRetry(
+        context({ approvalPrompt: async () => 'n not now' }),
       );
 
-      expect(result).toEqual({ action: 'cancel' });
+      // The operator's note rides the cancellation: a dismissed retry is
+      // their call, and the reason they gave is the cause.
+      expect(result).toEqual({ action: 'cancel', cause: 'not now' });
     }),
   );
 });
@@ -394,22 +428,21 @@ describe('bounded yolo retry batches (#9532)', () => {
       // proves stream-agnostic bounding, not delegation inheritance: the
       // second run's request is denied exactly as the first one's was, so
       // neither can buy a second automatic batch off the other's decision.
-      const interactions = createHeadlessCliHostInteractions(
-        context({ approvalPolicy: 'yolo' }),
-      );
-      const requests = (
-        ['representative-a', 'representative-b'] as RunId[]
-      ).map((runId) => ({
-        requestId: `retry-${runId}`,
-        runId,
-        operation: 'Model invocation',
-        errorMessage: 'permanent provider failure',
-      }));
+      useCliHostInteractions(context({ approvalPolicy: 'yolo' }));
 
-      const decisions = yield* Effect.promise(async () =>
-        Promise.all(
-          requests.map(async (request) => interactions.requestRetry?.(request)),
-        ),
+      const decisions = yield* Effect.forEach(
+        ['a00002', 'a00003'] as RunId[],
+        (runId) =>
+          openRequestOn(runId, {
+            kind: 'retry',
+            data: {
+              requestId: `retry-${runId}`,
+              runId,
+              operation: 'Model invocation',
+              errorMessage: 'permanent provider failure',
+            },
+          }),
+        { concurrency: 'unbounded' },
       );
 
       expect(decisions).toEqual([
@@ -441,7 +474,7 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
       expect(result.action).toBe('reject');
       expect(promptSummary).toContain('Tool edit requested by write_file');
@@ -458,7 +491,7 @@ describe('buildToolEditApprovalContent', () => {
         tracker.hooks,
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
       expect(result.action).toBe('apply');
       expect(tracker.events).toEqual(['before', 'prompt']);
@@ -473,7 +506,7 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
       expect(result).toMatchObject({
         action: 'reject',
@@ -490,9 +523,9 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
-      expect(result).toEqual({ action: 'reject' });
+      expect(result).toEqual({ action: 'reject', feedback: null });
     }),
   );
 
@@ -506,10 +539,12 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
+      // A prompt that never reached a person closes the request as an
+      // automatic cancellation, never as that person's rejection.
       expect(result).toEqual({
-        action: 'reject',
+        action: 'cancel',
         cause: 'CLI approval prompt failed.',
       });
     }),
@@ -530,7 +565,7 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() => requestNewProofEdit());
+      const result = yield* requestNewProofEdit();
 
       expect(prompts).toEqual([
         'Approve? [y/N, or n <feedback>] ',
@@ -567,7 +602,7 @@ describe('buildToolEditApprovalContent', () => {
           { beforePrompt },
         );
 
-        expect(decision).toEqual({ accepted: true, userMessage: undefined });
+        expect(decision).toEqual({ action: 'approve' });
         expect(prompts).toEqual([
           'Approve? [y/N, v view full, or n <feedback>] ',
           'Approve? [y/N, v view full, or n <feedback>] ',
@@ -592,7 +627,7 @@ describe('buildToolEditApprovalContent', () => {
       );
 
       expect(details).not.toHaveBeenCalled();
-      expect(decision).toEqual({ accepted: true, userMessage: undefined });
+      expect(decision).toEqual({ action: 'approve' });
     }),
   );
 
@@ -656,14 +691,8 @@ describe('buildToolEditApprovalContent', () => {
       );
 
       resolveDecision('y');
-      expect(yield* Fiber.join(first)).toEqual({
-        accepted: true,
-        userMessage: undefined,
-      });
-      expect(yield* Fiber.join(second)).toEqual({
-        accepted: true,
-        userMessage: undefined,
-      });
+      expect(yield* Fiber.join(first)).toEqual({ action: 'approve' });
+      expect(yield* Fiber.join(second)).toEqual({ action: 'approve' });
       expect(summaries).toEqual(['first', 'first', 'second']);
     }),
   );
@@ -711,14 +740,14 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* Effect.promise(() =>
-        requestToolEditApproval({
-          path: '/tmp/auto-approved.tex',
-          originalContent: '',
-          proposedContent: '\\section{Auto-approved}\n',
-          sourceTool: 'write_file',
-        }),
-      );
+      yield* ensureRun(ROOT_RUN);
+      const result = yield* requestToolEditApproval({
+        path: '/tmp/auto-approved.tex',
+        originalContent: '',
+        proposedContent: '\\section{Auto-approved}\n',
+        sourceTool: 'write_file',
+        runId: ROOT_RUN,
+      }).pipe(Effect.provide(approvalLayer(ROOT_RUN)));
 
       expect(result).toMatchObject({
         action: 'apply',
@@ -823,10 +852,6 @@ describe('formatRetryRequestMessage', () => {
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
     expect(cliRetryQuotaRoute(retry)?.id).toBe('kimiCode');
-    expect(cliRetryApiSwitchDecision(retry)).toEqual({
-      accepted: true,
-      disableQuotaRoute: 'kimiCode',
-    });
   });
 
   it('uses the same coding-plan decision for a GLM quota limit', () => {
@@ -839,10 +864,6 @@ describe('formatRetryRequestMessage', () => {
     };
 
     expect(cliRetryQuotaRoute(retry)?.id).toBe('glmCodingPlan');
-    expect(cliRetryApiSwitchDecision(retry)).toEqual({
-      accepted: true,
-      disableQuotaRoute: 'glmCodingPlan',
-    });
     expect(formatRetryRequestMessage(retry)).toContain('regular GLM endpoint');
   });
 });

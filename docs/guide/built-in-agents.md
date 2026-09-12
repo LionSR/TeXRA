@@ -6,7 +6,7 @@ import CliAgentsListHero from '../.vitepress/components/CliAgentsListHero.vue';
 
 # Built-in agent reference
 
-TeXRA ships with built-in agents for theory work and the writing around it: deriving and checking results, formalizing proofs, searching the literature, and, in support, polishing prose, fixing errors, creating figures, and converting formats. Pick one from the agent dropdown in the TeXRA UI.
+TeXRA ships with built-in agents tailored for rigorous research workflows and scientific exposition: deriving and verifying mathematical results, formalizing proofs, exploring scholarly literature, refining prose, diagnosing LaTeX compilation errors, synthesizing figures, and converting formats. Select an agent from the dropdown menu in the TeXRA interface or run it directly from the CLI.
 
 <DropdownMenu
   label="Agent"
@@ -212,13 +212,13 @@ Don't change the technical content or writing style.
 
 The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning.
 
-> **User story:** Your draft is technically solid but the writing is rough. Select `polish`, tell it "Improve clarity for a CVPR audience: keep all equations and citations intact," and in a couple of minutes you have a version that reads like it went through a professional copyedit. Review the colour-coded diff to accept or reject each change.
+> **User story:** Your draft is technically solid but the writing is rough. Select `polish`, tell it "Improve clarity for a CVPR audience: keep all equations and citations intact," and in a couple of minutes you have a version that reads like it went through a professional copyedit. Review the color-coded diff to accept or reject each change.
 
 Use it for drafts that are technically sound but need language improvements before submission.
 
 #### Example output
 
-Run `polish` on the [sample document](/examples/draft.pdf) to see a colour-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
+Run `polish` on the [sample document](/examples/draft.pdf) to see a color-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
 
 <div class="agent-pdf-viewer">
   <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="agent-pdf-frame"></iframe>
@@ -427,15 +427,15 @@ Launch it with the **Find Issues** button in Source Control (or the `Find Issues
 
 ### `testEngineer`
 
-Writes and maintains tests: pins down existing behaviour, covers new code and edge cases, and keeps the suite fast and reliable.
+Writes and maintains tests: pins down existing behavior, covers new code and edge cases, and keeps the suite fast and reliable.
 
 **Best for:** Adding coverage, characterization tests, keeping suites healthy
 
 ### `codeSimplifier`
 
-Refactors working code for clarity, reuse, and efficiency without changing its behaviour, then confirms the tests still pass. It works on quality only and does not hunt for bugs.
+Refactors working code for clarity, reuse, and efficiency without changing its behavior, then confirms the tests still pass. It works on quality only and does not hunt for bugs.
 
-**Best for:** Behaviour-preserving cleanup of research code
+**Best for:** Behavior-preserving cleanup of research code
 
 ## Setup & meta agents
 
@@ -517,13 +517,13 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 **Teams** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
-| Team               | For                                                                                            | Lead agent         |
-| :----------------- | :--------------------------------------------------------------------------------------------- | :----------------- |
-| Lean Project       | Lean 4 projects: theorem search, tactic simplification, and blueprints                         | `leanOrchestrator` |
-| Physicist          | Physics research: analytical derivations, numerical experiments, literature search, and review | `orchestrator`     |
-| Mathematician      | Math research: attacking open problems, proofs, Lean 4 formalization, and LaTeX correction     | `orchestrator`     |
-| Computer Scientist | Computer science: algorithm design, code-driven experiments and ablations, tests, and review   | `orchestrator`     |
-| Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists            | `engineer`         |
+| Team               | For                                                                                                                   | Lead agent         |
+| :----------------- | :-------------------------------------------------------------------------------------------------------------------- | :----------------- |
+| Lean Project       | Lean 4 projects: theorem search, tactic simplification, and blueprints                                                | `leanOrchestrator` |
+| Physicist          | Physics research: analytical derivations, numerical experiments, literature search, slides, and critical review       | `orchestrator`     |
+| Mathematician      | Math research: attacking open problems, proofs, Lean 4 formalization, and LaTeX correction                            | `orchestrator`     |
+| Computer Scientist | Computer science research: algorithm design, code-driven experiments and ablations, reproducibility tests, and review | `orchestrator`     |
+| Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists                                   | `engineer`         |
 
 Every team except Software Engineer bundles the `progressCheck` audit helper
 and `latexFixer`. The Software Engineer

@@ -1,14 +1,15 @@
 /** Main container for the unified settings view. */
 
-import { html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
+import { SignalWatcher } from '@shared/signals';
+import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -120,12 +121,9 @@ registerTeXRAWebAwesomeIcons();
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-const SettingsAppBase = signalWatcherWebviewAppBase();
-
 @customElement('settings-app')
-export class SettingsApp extends SettingsAppBase {
-  // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [designTokens, commonViewStyles, settingsViewStyles];
+export class SettingsApp extends SignalWatcher(LitElement) {
+  static override styles = [designTokens, commonViewStyles, settingsViewStyles];
 
   private monthlyProfileRefreshTimer?: ReturnType<typeof setTimeout>;
 
@@ -137,8 +135,30 @@ export class SettingsApp extends SettingsAppBase {
     resetSettingsState();
   }
 
+  private readonly messageListener = (event: MessageEvent): void => {
+    const raw: unknown = event.data;
+    dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
+      const command =
+        raw && typeof raw === 'object' && 'command' in raw
+          ? String((raw as { command: unknown }).command)
+          : 'unknown';
+      console.warn(
+        `[SettingsApp] Message validation failed for command "${command}".`,
+        error,
+      );
+    });
+  };
+
+  /** True when the Electron desktop renderer mounted this webview. */
+  private get isDesktopHost(): boolean {
+    return this.hasAttribute('data-desktop-view');
+  }
+
   override connectedCallback(): void {
     super.connectedCallback();
+    installToolbarTooltips();
+    window.addEventListener('message', this.messageListener);
+    this.postReady();
     this.scheduleMonthlyProfileRefresh();
   }
 
@@ -147,7 +167,17 @@ export class SettingsApp extends SettingsAppBase {
       clearTimeout(this.monthlyProfileRefreshTimer);
       this.monthlyProfileRefreshTimer = undefined;
     }
+    window.removeEventListener('message', this.messageListener);
     super.disconnectedCallback();
+  }
+
+  /** Tell the host this view is mounted, tagged with the desktop surface. */
+  private postReady(): void {
+    const view = this.getAttribute('data-desktop-view');
+    postMessage(
+      SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+      view == null ? {} : { view },
+    );
   }
 
   private scheduleMonthlyProfileRefresh(): void {
@@ -166,12 +196,6 @@ export class SettingsApp extends SettingsAppBase {
       }
       this.scheduleMonthlyProfileRefresh();
     }, delay);
-  }
-
-  protected override handleMessage(raw: unknown): void {
-    dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
-      this.logMessageSchemaError('[SettingsApp]', raw, error);
-    });
   }
 
   private selectSettingsEntry(entry: SettingsNavEntry): void {
@@ -193,41 +217,21 @@ export class SettingsApp extends SettingsAppBase {
     selectedPanel.set(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
   }
 
-  private renderDesktopUnavailablePanel(
-    title: string,
-    description: string,
-  ): TemplateResult {
-    return html`
-      <div class="tab-content-container">
-        <div class="settings-unavailable">
-          <div class="settings-unavailable-title">
-            ${waIcon('ban', { className: 'settings-unavailable-icon' })}
-            ${title}
-          </div>
-          <div>${description}</div>
-        </div>
-      </div>
-    `;
-  }
-
   private entriesForGroup(
     group: SettingsNavGroup,
-    goalSupported: boolean,
   ): readonly SettingsNavEntry[] {
     return group.entries.filter(
       (entry) =>
-        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported) &&
-        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
-          this.isDesktopHost),
+        entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
+        this.isDesktopHost,
     );
   }
 
   private renderSettingsNavigation(
     activeGroup: SettingsNavGroup,
     activePanel: SettingsTabPanelName,
-    goalSupported: boolean,
   ): TemplateResult {
-    const activeEntries = this.entriesForGroup(activeGroup, goalSupported);
+    const activeEntries = this.entriesForGroup(activeGroup);
 
     return html`
       <nav class="settings-navigation" aria-label="Settings">
@@ -237,7 +241,7 @@ export class SettingsApp extends SettingsAppBase {
           aria-label="Settings categories"
         >
           ${SETTINGS_NAV_GROUPS.map((group) => {
-            const entries = this.entriesForGroup(group, goalSupported);
+            const entries = this.entriesForGroup(group);
             if (entries.length === 0) return nothing;
             const active = group === activeGroup;
             return html`
@@ -296,7 +300,6 @@ export class SettingsApp extends SettingsAppBase {
   private renderActivePanel(
     activePanel: SettingsTabPanelName,
     desktopHost: boolean,
-    goalSupported: boolean,
   ): TemplateResult {
     switch (activePanel) {
       case 'account':
@@ -346,7 +349,6 @@ export class SettingsApp extends SettingsAppBase {
             .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
-            .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>
         `;
       case 'multi-agent': {
@@ -422,7 +424,6 @@ export class SettingsApp extends SettingsAppBase {
             .authorName=${gitAuthorName.get()}
             .authorEmail=${gitAuthorEmail.get()}
             .toggleDisabled=${!gitSettingsLoaded.get()}
-            .unsupportedCommands=${unsupportedCommands.get()}
             .githubTokenStatus=${githubTokenStatus.get()}
             .prSubscriptions=${prSubscriptions.get()}
           ></git-tab>
@@ -430,12 +431,7 @@ export class SettingsApp extends SettingsAppBase {
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;
       case 'goal':
-        return goalSupported
-          ? html`<goal-tab .items=${goalItems.get()}></goal-tab>`
-          : this.renderDesktopUnavailablePanel(
-              'Goals unavailable',
-              'This host does not support autonomous goals.',
-            );
+        return html`<goal-tab .items=${goalItems.get()}></goal-tab>`;
       case 'memory':
         return html`
           <memory-tab
@@ -457,10 +453,6 @@ export class SettingsApp extends SettingsAppBase {
 
   override render(): TemplateResult {
     const desktopHost = this.isDesktopHost;
-    const goalSupported = !isKnownUnsupported(
-      unsupportedCommands.get(),
-      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-    );
     const requestedPanel = selectedPanel.get();
     const activePanel =
       !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
@@ -476,11 +468,7 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(
-          activeGroup,
-          activePanel,
-          goalSupported,
-        )}
+        ${this.renderSettingsNavigation(activeGroup, activePanel)}
         <section
           class="settings-panel"
           aria-label=${activeEntry?.label ?? 'Settings'}
@@ -497,7 +485,7 @@ export class SettingsApp extends SettingsAppBase {
                 `
               : nothing
           }
-          ${this.renderActivePanel(activePanel, desktopHost, goalSupported)}
+          ${this.renderActivePanel(activePanel, desktopHost)}
         </section>
       </div>
     `;

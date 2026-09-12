@@ -5,7 +5,6 @@ import {
   RUN_PHASE,
   type CliRunStatus,
   type RunOutcome,
-  type RunPhase,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 
@@ -53,18 +52,8 @@ export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
 }
 
 // ============================================================================
-// RunPhase transition algebra (stage 0 vocabulary only)
+// RunPhase predicates
 // ============================================================================
-
-export const RUN_TRANSITION_CAUSE = {
-  LIFECYCLE: 'lifecycle',
-  WAIT: 'wait',
-  RESUME: 'resume',
-  USER_STOP: 'user-stop',
-} as const;
-
-export type RunTransitionCause =
-  (typeof RUN_TRANSITION_CAUSE)[keyof typeof RUN_TRANSITION_CAUSE];
 
 /** Whether a `RunPhase` is one of the three terminal outcome phases
  *  (COMPLETED | CANCELLED | FAILED). This is the single enumeration of that
@@ -101,47 +90,11 @@ export function isInFlightPhase(
  * reads it off `runPhase`: a known status that is neither running nor
  * waiting. An unknown status is not "ended" — a plan-only phase must not
  * vanish before the stream's first status has arrived. This is the looser of
- * the model's two readings: `unavailable` (a run another process owns) counts
- * as ended here, which is why the model repaints a running card only on the
- * stricter `isTerminalOutcomePhase`.
+ * the model's two readings, which is why the model repaints a running card
+ * only on the stricter `isTerminalOutcomePhase`.
  */
 export function workflowRunSettled(
   phase: RunLifecycleStatus | undefined,
 ): boolean {
   return phase !== undefined && !isInFlightPhase(phase);
-}
-
-export function canTransitionRunPhase(
-  from: RunPhase | undefined,
-  to: RunPhase,
-  cause: RunTransitionCause,
-): boolean {
-  if (cause === RUN_TRANSITION_CAUSE.USER_STOP) {
-    return (
-      (from === undefined || isInFlightPhase(from)) &&
-      to === RUN_PHASE.CANCELLED
-    );
-  }
-
-  if (isTerminalOutcomePhase(from)) {
-    return cause === RUN_TRANSITION_CAUSE.RESUME && to === RUN_PHASE.RUNNING;
-  }
-
-  switch (cause) {
-    case RUN_TRANSITION_CAUSE.LIFECYCLE:
-      if (from === undefined) return to === RUN_PHASE.RUNNING;
-      return from === RUN_PHASE.RUNNING && isTerminalOutcomePhase(to);
-    case RUN_TRANSITION_CAUSE.WAIT:
-      return from === RUN_PHASE.RUNNING && to === RUN_PHASE.WAITING;
-    case RUN_TRANSITION_CAUSE.RESUME:
-      // WAITING terminalization is explicit choreography: WAITING resumes to
-      // RUNNING, then lifecycle writes the terminal outcome. RUNNING->RUNNING
-      // clears display-only resume substate through the same table-checked path.
-      return (
-        (from === undefined ||
-          from === RUN_PHASE.WAITING ||
-          from === RUN_PHASE.RUNNING) &&
-        to === RUN_PHASE.RUNNING
-      );
-  }
 }

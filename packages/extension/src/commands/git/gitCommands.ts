@@ -229,14 +229,17 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, workspacePath) =>
       Effect.tryPromise({
-        try: () =>
+        try: (signal) =>
           vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
             },
-            () =>
-              execa('git', ['clone', remoteUrl, '.'], {
+            () => {
+              // execa starts its child before observing an already-aborted
+              // cancelSignal, so do not enter it after the fiber is interrupted.
+              signal.throwIfAborted();
+              return execa('git', ['clone', remoteUrl, '.'], {
                 cwd: workspacePath,
                 // Same extended PATH as the executeCommandSync preflight
                 // above, so the probe can't pass while the clone misses git
@@ -245,7 +248,9 @@ function buildOverleafClonePorts(
                 // execa's default merge re-adds them.
                 env: makeMachineGitEnv(),
                 extendEnv: false,
-              }),
+                cancelSignal: signal,
+              });
+            },
           ),
         catch: ensureError,
       }).pipe(Effect.asVoid),

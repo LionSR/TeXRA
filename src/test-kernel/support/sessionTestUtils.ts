@@ -1,6 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 
-import type { AgentTrace, StatusEvent } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import { openSession } from '@agent/runtime/sessionGraph';
 import {
   forEachLiveSession,
@@ -9,7 +9,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -109,9 +109,9 @@ export function attachTestTranscriptFold(
   });
   return {
     unsubscribe,
-    handleStatus: (event: StatusEvent) => {
-      if (event.runId === runId) fold.status(event.phase);
-    },
+    /** The phase the run's fold reached; the transcript projection settles
+     *  its open rows on it. */
+    settlePhase: (phase: RunPhase) => fold.status(phase),
   };
 }
 
@@ -124,7 +124,7 @@ export function createTestRunTrace(
   const projection = attachTestTranscriptFold(run.trace, runId, log);
   return {
     trace: run.trace,
-    handleStatus: projection.handleStatus,
+    settlePhase: projection.settlePhase,
     dispose: () => {
       projection.unsubscribe();
       run.dispose();

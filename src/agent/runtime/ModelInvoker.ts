@@ -9,7 +9,7 @@
  * Two owners of retry, as before. Owner A is automatic and route-scoped: a
  * bounded batch of attempts under the session's `ModelRetryGate`, so sibling
  * runs on one credential share cooling. Owner B is a human and indefinite,
- * and it is durable here: the prompt is admitted by an `approval.requested`
+ * and it is durable here: the prompt is admitted by a `request.opened`
  * row bound through a `flow.snapshot` whose `pendingRetry` walks
  * `waiting` -> `authorized` -> `started`. A decision survives a restart, an
  * unused permit survives one, and a consumed permit never buys a second
@@ -24,6 +24,7 @@ import {
   Exit,
   Layer,
   Ref,
+  Result,
   Scope,
   Stream,
   SynchronizedRef,
@@ -54,17 +55,21 @@ import {
   MESSAGE_TYPES,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
-  RUN_PHASE,
   toRetryErrorInfo,
   type InvocationRef,
   type NormalizedUsage,
   type ProviderError,
+  type RequestDecision,
   type RetryErrorInfo,
   type SnapshotRuntime,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import {
+  foldRunState,
+  type RunLedgerDraft,
+  type RunState,
+} from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -84,7 +89,15 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
-import type { ModelCredentialSelection } from './HostInteractions';
+
+/**
+ * Credential source a retry decision picked: the account the run is already
+ * configured with, or the user's personal credential. Derived from the one
+ * request vocabulary so the retry arm stays the only definition.
+ */
+type RetryCredentials = NonNullable<
+  Extract<RequestDecision, { action: 'retry' }>['credentials']
+>;
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
@@ -877,7 +890,7 @@ export const modelInvokerLayer: Layer.Layer<
       );
 
     /** Rebuild the model binding a retry runs on. */
-    const rebind = (selection: ModelCredentialSelection, failed: BoundModel) =>
+    const rebind = (selection: RetryCredentials, failed: BoundModel) =>
       SynchronizedRef.updateEffect(run.model, (current) =>
         Effect.gen(function* () {
           // A switch may have landed while the panel waited; never undo it.
@@ -960,14 +973,15 @@ export const modelInvokerLayer: Layer.Layer<
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             {
-              type: 'approval.requested',
+              type: 'request.opened',
               aggregateId,
               requestId,
-              // The row is committed here rather than at the interaction
-              // owner's publish door (`requestRowCommitted`), so the scrub
-              // that door applies happens here: a provider message echoing
-              // an `Authorization` header never reaches a durable row.
+              // The row is committed here rather than at the session's door
+              // (`openRequest`), so the scrub that door applies happens here:
+              // a provider message echoing an `Authorization` header never
+              // reaches a durable row.
               payload: redactedForFact({ kind: 'retry', data: request }),
+              thread: null,
             },
             retrySnapshot(state, {
               pendingRetry: pendingRetry('waiting'),
@@ -976,45 +990,52 @@ export const modelInvokerLayer: Layer.Layer<
           ]),
         );
       }
-      session.status.transition(runId, RUN_PHASE.WAITING, 'wait');
       logger.debug('Waiting for manual retry', { data: info.message });
-      // The host's credential selection is recorded here and the binding is
-      // rebuilt on this fiber once the decision lands: the rebind is part of
-      // the admitted attempt, never a side effect of the prompt.
-      let selection: ModelCredentialSelection = 'configured';
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          session.interactions.requestRetry(request, {
-            requestRowCommitted: true,
-            prepareRetry: (selected) => {
-              selection = selected;
-              return Promise.resolve();
-            },
-          }),
-        catch: ensureError,
-      }).pipe(
-        // A rejected prompt (a host torn down mid-wait) is a cancellation.
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            logger.warn('The retry prompt failed', { data: error });
-            return { action: 'cancel' as const };
-          }),
-        ),
-      );
-      const decisionSource =
-        result.action === 'retry' ? (result.decisionSource ?? 'human') : null;
+      // The decision is the `request.decided` row (R5): one a surface already
+      // landed for an outstanding request (a crash after the decision keeps
+      // its unused consent), else the one the decide command lands on the
+      // tail while this fiber waits. A plane that closes first is a
+      // cancellation.
+      let decision = state.requests[requestId]?.decision ?? null;
+      if (decision === null) {
+        const row = yield* session
+          .decisionFor(runId, requestId, state.commit)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                logger.warn('The retry prompt closed before a decision', {
+                  data: error,
+                });
+                return null;
+              }),
+            ),
+          );
+        if (row === null) {
+          decision = { action: 'cancel', cause: 'The session closed.' };
+        } else {
+          const folded = foldRunState(state, [row]);
+          if (Result.isFailure(folded) || folded.success === null) {
+            return yield* Effect.die(
+              new Error(
+                `The retry decision does not fold onto the run: ${
+                  Result.isFailure(folded) ? folded.failure.detail : 'no state'
+                }`,
+              ),
+            );
+          }
+          state = folded.success;
+          decision = row.decision;
+        }
+      }
       logRetryLifecycle(operationId, 'retry_decided', failed, {
-        action: result.action,
-        decisionSource:
-          decisionSource ?? (result.action === 'deny' ? 'denied' : 'cancelled'),
+        action: decision.action,
       });
-      if (result.action === 'retry') {
+      if (decision.action === 'retry') {
         logger.debug('Manual retry triggered');
-        session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
         // Always rebuild the binding on a manual retry: the user may have set
         // a new key or toggled a route preference while the panel waited. A
         // rebind that fails leaves the run on the binding it has, loudly.
-        yield* rebind(selection, failed).pipe(
+        yield* rebind(decision.credentials ?? 'configured', failed).pipe(
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.warn('Failed to refresh the model binding before retry', {
@@ -1025,12 +1046,6 @@ export const modelInvokerLayer: Layer.Layer<
         );
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            {
-              type: 'approval.resolved',
-              aggregateId,
-              requestId,
-              decision: 'approved',
-            },
             retrySnapshot(state, {
               pendingRetry: pendingRetry('authorized'),
               lastError: info,
@@ -1039,36 +1054,18 @@ export const modelInvokerLayer: Layer.Layer<
         );
         return { kind: 'retry', state };
       }
-      if (result.action === 'deny') {
-        logProgressStatus(
-          logger,
-          result.reason ?? 'Retry denied (no human input available)',
-        );
-        session.status.transition(runId, RUN_PHASE.RUNNING, 'resume');
+      if (decision.action === 'deny') {
+        logProgressStatus(logger, decision.reason);
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            {
-              type: 'approval.resolved',
-              aggregateId,
-              requestId,
-              decision: 'denied',
-              ...(result.reason !== undefined ? { cause: result.reason } : {}),
-            },
             retrySnapshot(state, { pendingRetry: null, lastError: info }),
           ]),
         );
         return { kind: 'deny', state };
       }
       logProgressStatus(logger, 'Retry cancelled by user');
-      session.status.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
       state = yield* Effect.uninterruptible(
         ledger.appendBatch(runId, state, [
-          {
-            type: 'approval.resolved',
-            aggregateId,
-            requestId,
-            decision: 'cancelled',
-          },
           retrySnapshot(state, { pendingRetry: null, lastError: info }),
         ]),
       );

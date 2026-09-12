@@ -7,7 +7,7 @@
  * anchor. The fold publishes nothing before the replay marker, so the first
  * state a mounting reader sees already holds the listing, the aggregate
  * history, and the local snapshot; the tail then publishes every commit in
- * order. The waiting rule: a pending approval on a run whose owner this
+ * order. The waiting rule: a pending request on a run whose owner this
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
@@ -138,15 +138,15 @@ const runStart: SessionEventDraft = {
   parent: null,
 };
 
+/** The loop parked on the request below: the phase the fold reads. */
 const waiting: SessionEventDraft = {
-  type: 'status',
+  type: 'flow.step',
   aggregateId: qualifyAggregateId('run', RUN),
-  phase: RUN_PHASE.WAITING,
-  cause: 'wait',
+  payload: { family: 'toolUse', step: 'waiting' },
 };
 
 const requested: SessionEventDraft = {
-  type: 'approval.requested',
+  type: 'request.opened',
   aggregateId: qualifyAggregateId('run', RUN),
   requestId: 'req-1',
   payload: {
@@ -196,12 +196,12 @@ const graph = (history: readonly SessionEventDraft[]) => {
 };
 
 /** What a renderer would draw of each state: the run's status and the
- *  outstanding approvals, at the state's cursor. */
+ *  outstanding requests, at the state's cursor. */
 function drawn(view: SessionView) {
   return {
     cursor: view.cursor,
     status: view.runs.get(RUN)?.status ?? null,
-    approvals: view.approvals.map((a) => a.requestId),
+    requests: view.requests.map((request) => request.requestId),
   };
 }
 
@@ -313,6 +313,37 @@ describe('session events and view', () => {
     }).pipe(Effect.provide(graph([]))),
   );
 
+  it.effect('hangs a workflow checkpoint under the run that invoked it', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const log = yield* Database;
+      const checkpoint = qualifyAggregateId(
+        'workflow-checkpoint',
+        'cp-000000000000',
+      );
+      yield* events.publish([
+        runStart,
+        {
+          type: 'workflow.script',
+          aggregateId: checkpoint,
+          parentRunId: RUN,
+          script: 'return 1',
+          args: { kind: 'undefined' },
+          files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+        },
+      ]);
+      // Without the edge the journal is unreachable once the run is gone:
+      // deletion follows `parent_id`, and nothing else names this id.
+      expect((yield* log.aggregateState([checkpoint]))[0]?.parentId).toBe(
+        qualifyAggregateId('run', RUN),
+      );
+      yield* events.publish([
+        { type: 'run.removed', aggregateId: qualifyAggregateId('run', RUN) },
+      ]);
+      expect((yield* log.aggregateState([checkpoint]))[0]?.closed).toBe(true);
+    }).pipe(Effect.provide(graph([]))),
+  );
+
   it.effect(
     'reparents an answered inquiry atomically before old-parent deletion',
     () =>
@@ -418,18 +449,17 @@ describe('session events and view', () => {
       yield* settle(view.ref, (v) => v.runs.has(RUN));
       yield* events.publish([
         {
-          type: 'approval.resolved',
+          type: 'request.decided',
           aggregateId: qualifyAggregateId('run', RUN),
           requestId: 'req-1',
+          decision: { action: 'approve' },
         },
       ]);
       yield* events.publish([
         {
-          type: 'status',
+          type: 'flow.step',
           aggregateId: qualifyAggregateId('run', RUN),
-          phase: RUN_PHASE.RUNNING,
-          previousPhase: RUN_PHASE.WAITING,
-          cause: 'resume',
+          payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
         },
       ]);
       // The first state with the run in it has all of the history: no
@@ -437,14 +467,14 @@ describe('session events and view', () => {
       // no approval, is ever published. The anchor is the seeded log's
       // level, so the history is under it and the tail repeats none of it.
       expect(drawnSequence(yield* Fiber.join(states))).toEqual([
-        { cursor: 0, status: RUN_PHASE.WAITING, approvals: ['req-1'] },
-        { cursor: 5, status: RUN_PHASE.RUNNING, approvals: [] },
+        { cursor: 0, status: RUN_PHASE.WAITING, requests: ['req-1'] },
+        { cursor: 5, status: RUN_PHASE.RUNNING, requests: [] },
       ]);
     }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
 
   it.effect(
-    'folds a pending approval to waiting only while its owner is live',
+    'folds a pending request to waiting only while its owner is live',
     () =>
       Effect.gen(function* () {
         const view = yield* SessionViewService;
@@ -659,18 +689,20 @@ describe('Sessions owner', () => {
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(session.now()).toBe(3)),
           );
-          session.publishStatus({
-            type: 'status',
-            runId: RUN,
-            phase: RUN_PHASE.COMPLETED,
-            cause: 'lifecycle',
-          });
-          session.publishStatus({
-            type: 'status',
-            runId: OLDER,
-            phase: RUN_PHASE.WAITING,
-            cause: 'wait',
-          });
+          session.publish([
+            {
+              type: 'flow.step',
+              aggregateId: qualifyAggregateId('run', RUN),
+              payload: { family: 'toolUse', step: 'waiting' },
+            },
+          ]);
+          session.publish([
+            {
+              type: 'flow.step',
+              aggregateId: qualifyAggregateId('run', OLDER),
+              payload: { family: 'toolUse', step: 'waiting' },
+            },
+          ]);
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(handleStatus).toHaveBeenCalledOnce()),
           );
@@ -683,12 +715,12 @@ describe('Sessions owner', () => {
             ),
           );
           expect(
-            received.flat().filter((event) => event.type === 'status'),
+            received.flat().filter((event) => event.type === 'flow.step'),
           ).toEqual([
             expect.objectContaining({
-              type: 'status',
+              type: 'flow.step',
               aggregateId: qualifyAggregateId('run', OLDER),
-              phase: RUN_PHASE.WAITING,
+              payload: { family: 'toolUse', step: 'waiting' },
               seq: 2,
               commit: 4,
             }),
@@ -718,11 +750,17 @@ describe('Sessions owner', () => {
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
           // `run.end` carries the terminal phase, so the live run's end is a
-          // second status notification; the replay below must add none.
-          const statusCalls = handleStatus.mock.calls.length;
-          for (const event of committed)
-            yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
-          expect(handleStatus).toHaveBeenCalledTimes(statusCalls);
+          // second status notification, delivered once the view has folded
+          // it; the foreign-owned replay below must add none.
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(handleStatus).toHaveBeenCalledTimes(2)),
+          );
+          for (const event of committed) {
+            const foreign = { ...event, ownerId: OTHER };
+            yield* session.receiveCommittedEvent(foreign);
+            session.receiveFoldedEvent(foreign);
+          }
+          expect(handleStatus).toHaveBeenCalledTimes(2);
           expect(onResult).toHaveBeenCalledOnce();
         } finally {
           detachResult();
@@ -788,22 +826,41 @@ describe('Sessions owner', () => {
       }),
   );
 
-  it.effect(
+  // The request opened below commits from this fiber, so the session's own
+  // work must not wait on a test clock: `it.live`.
+  it.live(
     'close reports settled once the run ended, and releases the session',
     () =>
       Effect.gen(function* () {
         const session = open('/workspace/owner/settled');
         session.publish([runStart]);
         yield* Effect.promise(() => session.settlePublications());
-        const pending = session.interactions.requestPlanApproval({
-          requestId: 'closing-plan',
-          runId: RUN,
-          plan: { objective: 'Settle the pending approval during close.' },
-          goalEnabled: false,
-        });
-        yield* Effect.promise(() => session.settlePublications());
-        expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(
-          1,
+        // A request nobody answers: the fold lists it while the fiber that
+        // opened it waits on the decision.
+        const pending = yield* Effect.forkScoped(
+          session.openRequest(RUN, {
+            kind: 'planApproval',
+            data: {
+              requestId: 'closing-plan',
+              runId: RUN,
+              plan: { objective: 'Settle the pending request during close.' },
+              goalEnabled: false,
+            },
+          }),
+        );
+        const requestIds = () =>
+          SubscriptionRef.getUnsafe(session.view).requests.map(
+            (request) => request.requestId,
+          );
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(requestIds()).toEqual(['closing-plan'])),
+        );
+        // The run's teardown interrupts the fiber waiting on the decision,
+        // which closes the request as cancelled: the close leaves no pending
+        // request behind in the fold.
+        yield* Fiber.interrupt(pending);
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(requestIds()).toEqual([])),
         );
         const settled = RunIdSchema.parse('aa0001');
         track(session, settled);
@@ -827,12 +884,6 @@ describe('Sessions owner', () => {
           abandoned: [],
         });
         expect(interrupt).toHaveBeenCalledOnce();
-        expect(yield* Effect.promise(() => pending)).toMatchObject({
-          action: 'reject',
-        });
-        expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(
-          0,
-        );
         expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(
           session.now(),
         );
@@ -1377,8 +1428,8 @@ describe('the C1 event table and the C6 publisher', () => {
       yield* Effect.sync(() => {
         const raw = reader(storage);
         try {
-          raw.exec(`CREATE TRIGGER reject_status BEFORE INSERT ON event
-            WHEN NEW.type = 'status.1'
+          raw.exec(`CREATE TRIGGER reject_flow_step BEFORE INSERT ON event
+            WHEN NEW.type = 'flow.step.1'
             BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
         } finally {
           raw.close();
@@ -1484,8 +1535,16 @@ describe('the C1 event table and the C6 publisher', () => {
           waiting,
           requested,
           { ...requested, requestId: 'second' },
-          { type: 'approval.resolved', aggregateId: id, requestId: 'second' },
-          { ...waiting, cause: 'latest status' },
+          {
+            type: 'request.decided',
+            aggregateId: id,
+            requestId: 'second',
+            decision: { action: 'approve' },
+          },
+          {
+            ...waiting,
+            payload: { family: 'toolUse', step: 'waiting', round: 1 },
+          },
           {
             type: 'response.finalized',
             aggregateId: id,
@@ -1974,7 +2033,7 @@ describe('RunLedger', () => {
     error instanceof RunLedgerRefused ? error : null;
   /** The approval a barrier call waits on, and the snapshot that binds it. */
   const approvalRequested: RunLedgerDraft = {
-    type: 'approval.requested',
+    type: 'request.opened',
     aggregateId: AGGREGATE,
     requestId: 'req-1',
     payload: {
@@ -2247,7 +2306,7 @@ describe('RunLedger', () => {
           approvalRequested,
           bindingSnapshot,
         ]);
-        expect(state.approvals['req-1']?.resolved).toBe(false);
+        expect(state.requests['req-1']?.resolved).toBe(false);
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [

@@ -17,6 +17,7 @@ import {
   type FileListEntry,
   type StreamLogEntry,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
@@ -340,7 +341,6 @@ export function projectTranscriptRow(
   }
 
   const messageType = entry.messageType;
-  if (messageType === undefined) return projectLogRow(entry);
 
   switch (messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
@@ -539,7 +539,10 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.WORKFLOW_TASK: {
-      const call = entry.data;
+      const call =
+        entry.data.model === undefined
+          ? entry.data
+          : { ...entry.data, model: getModelLabel(entry.data.model) };
       const detail = workflowCallDetail(call);
       return {
         ...rowBase(entry),

@@ -50,12 +50,6 @@ interface FinalizeChildRunOptions {
 export interface ChildRun {
   childRunId: RunId;
   logger: AgentTrace;
-  /** The child loop is idle and waiting for the next follow-up instruction. */
-  waitForInput: () => void;
-  /** The child loop has started processing a turn. */
-  beginTurn: () => void;
-  /** The active turn failed; preserve explicit user stops. */
-  failTurn: () => void;
   /**
    * Complete the child run lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
@@ -110,9 +104,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       started = true;
       // Register local ownership before awaiting the creation commit. The start
       // batch is already queued, so its first event still precedes handle facts.
-      session.runs.trackAgentRun(handle, {
-        status: RUN_PHASE.RUNNING,
-      });
+      session.runs.track(handle);
       yield* Effect.tryPromise({
         try: () => session.settlePublications(),
         catch: ensureError,
@@ -126,18 +118,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       return {
         childRunId: runId,
         logger: runTrace.trace,
-        // Reports, not writes: the status machine's transition table decides
-        // which of these lands, so a stale handle or a run a stop already
-        // cancelled simply keeps the phase it has.
-        waitForInput: () => {
-          session.runs.updateAgentRunStatus(handle, RUN_PHASE.WAITING);
-        },
-        beginTurn: () => {
-          session.runs.updateAgentRunStatus(handle, RUN_PHASE.RUNNING);
-        },
-        failTurn: () => {
-          session.runs.updateAgentRunStatus(handle, RUN_PHASE.FAILED);
-        },
         finalize: (finalizeOptions) =>
           finalizeChildRun({
             handle,

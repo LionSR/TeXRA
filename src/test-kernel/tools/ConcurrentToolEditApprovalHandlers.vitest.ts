@@ -2,119 +2,125 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, Stream } from 'effect';
+import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   requestToolEditApproval,
   type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { generateRunId } from '@utils/core';
-import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
-/**
- * Proves the desktop multi-window invariant: two runs owned by distinct
- * sessions never cross-talk, even when both requests are in flight at once.
- * Each request must resolve through the `SessionHandle.interactions` owner
- * captured by its run context.
- */
+type PendingToolEdit = Omit<ToolEditApprovalRequest, 'permission'>;
+
 describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });
 
-  const testSessions: SessionHandle[] = [];
-
-  function createTestSession(): SessionHandle {
-    const session = createIsolatedTestSession();
-    testSessions.push(session);
-    return session;
-  }
-
   beforeEach(() => {
     defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
-  afterEach(() => {
-    defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
-    for (const session of testSessions.splice(0)) session.dispose();
-  });
+  it.effect('routes each in-flight request through its owning session', () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        function makeRequest(tag: string): PendingToolEdit {
+          return {
+            path: `/workspace/${tag}.tex`,
+            originalContent: `old-${tag}`,
+            proposedContent: `new-${tag}`,
+            sourceTool: 'write_file',
+          };
+        }
 
-  it('routes each in-flight request through its owning session', async () => {
-    function recordingHandler(
-      seen: ToolEditApprovalRequest[],
-      appliedContent: string,
-    ) {
-      return async (
-        request: ToolEditApprovalRequest,
-      ): Promise<ToolEditApprovalResult> => {
-        seen.push(request);
-        return { action: 'apply', appliedContent };
-      };
-    }
+        function attachWindow(session: SessionHandle, appliedContent: string) {
+          return Effect.gen(function* () {
+            const seen: string[] = [];
+            session.interactions.use({
+              presentToolEdit: (staged) =>
+                seen.push(staged.permission.relativePath),
+            });
+            yield* Effect.forkScoped(
+              Stream.runForEach(session.events.all(session.now()), (event) =>
+                Effect.sync(() => {
+                  if (event.type !== 'request.opened') return;
+                  if (event.payload.kind !== 'toolEdit') return;
+                  session.publish([
+                    {
+                      type: 'request.decided',
+                      aggregateId: event.aggregateId,
+                      requestId: event.requestId,
+                      decision: { action: 'approve', content: appliedContent },
+                    },
+                  ]);
+                }),
+              ),
+            );
+            return seen;
+          });
+        }
 
-    function makeRequest(tag: string): ToolEditApprovalRequest {
-      return toolEditApprovalRequest({
-        path: `${tag}.tex`,
-        originalContent: `old-${tag}`,
-        proposedContent: `new-${tag}`,
-        sourceTool: 'write_file',
-      });
-    }
+        const sessionA = createTestSession();
+        const sessionB = createTestSession();
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            sessionA.dispose();
+            sessionB.dispose();
+          }),
+        );
+        const windowA = yield* attachWindow(sessionA, 'from-a');
+        const windowB = yield* attachWindow(sessionB, 'from-b');
 
-    const seenByA: ToolEditApprovalRequest[] = [];
-    const seenByB: ToolEditApprovalRequest[] = [];
+        const runA = publishTestRunStart(sessionA);
+        const runB = publishTestRunStart(sessionB);
+        yield* Effect.all(
+          [sessionA.settlePublications(), sessionB.settlePublications()].map(
+            (settled) => Effect.tryPromise(() => settled),
+          ),
+        );
 
-    const sessionA = createTestSession();
-    const sessionB = createTestSession();
-    sessionA.interactions.use({
-      requestToolEditApproval: recordingHandler(seenByA, 'from-a'),
-      cancel: () => undefined,
-    });
-    sessionB.interactions.use({
-      requestToolEditApproval: recordingHandler(seenByB, 'from-b'),
-      cancel: () => undefined,
-    });
+        const call = (
+          session: SessionHandle,
+          runId: typeof runA,
+          request: PendingToolEdit,
+        ) =>
+          requestToolEditApproval(request).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { runId, session, toolPolicy: {} },
+              }),
+            ),
+          );
 
-    const contextA = createRunContext({
-      runId: generateRunId(),
-      session: sessionA,
-    });
-    const contextB = createRunContext({
-      runId: generateRunId(),
-      session: sessionB,
-    });
+        const requestA = yield* Effect.forkScoped(
+          call(sessionA, runA, makeRequest('a')),
+        );
+        const requestB = yield* Effect.forkScoped(
+          call(sessionB, runB, makeRequest('b')),
+        );
+        const [resultA, resultB] = yield* Effect.all([
+          Fiber.join(requestA),
+          Fiber.join(requestB),
+        ]);
 
-    // Fire both without awaiting between them — each call must still
-    // resolve through the handler captured from its own RunContext, not
-    // whichever ran last.
-    const resultAPromise = withRunContext(contextA, () =>
-      requestToolEditApproval(makeRequest('a')),
-    );
-    const resultBPromise = withRunContext(contextB, () =>
-      requestToolEditApproval(makeRequest('b')),
-    );
-
-    const [resultA, resultB] = await Promise.all([
-      resultAPromise,
-      resultBPromise,
-    ]);
-
-    expect(seenByA.map((request) => request.path)).toEqual(['a.tex']);
-    expect(seenByB.map((request) => request.path)).toEqual(['b.tex']);
-
-    expect(resultA).toMatchObject({
-      action: 'apply',
-      appliedContent: 'from-a',
-    });
-    expect(resultB).toMatchObject({
-      action: 'apply',
-      appliedContent: 'from-b',
-    });
-  });
+        expect(windowA).toEqual(['a.tex']);
+        expect(windowB).toEqual(['b.tex']);
+        expect(resultA).toMatchObject({
+          action: 'apply',
+          appliedContent: 'from-a',
+        });
+        expect(resultB).toMatchObject({
+          action: 'apply',
+          appliedContent: 'from-b',
+        });
+      }),
+    ),
+  );
 });

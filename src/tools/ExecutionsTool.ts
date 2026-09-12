@@ -6,15 +6,12 @@
  */
 
 // Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
 import { Data, Deferred, Duration, Effect } from 'effect';
 
 // Local imports
 import {
   deriveResumability,
-  getRunStore,
   getRunRecords,
   readRunChildren,
   listRunWorkspaceFiles,
@@ -27,11 +24,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { getRunContextRunId } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RunIdSchema,
@@ -162,11 +158,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const followUp = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
       Effect.sync(() =>
-        context.inRunScope(() =>
-          listenForFollowUp(() => {
-            Deferred.doneUnsafe(followUp, Effect.void);
-          }),
-        ),
+        listenForFollowUp(context.session, context.runId, () => {
+          Deferred.doneUnsafe(followUp, Effect.void);
+        }),
       ),
       (stop) => Effect.sync(stop),
     );
@@ -228,28 +222,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   schema: ExecutionsToolInputSchema,
 }) {
   /**
-   * The one run edge of this tool (PRD run-edge category b): every line of
-   * logic below is an Effect program, run once here on the process runtime.
-   * A collaborator's rejection is re-raised as its own cause, so the tool
-   * runner still sees the error storage or the filesystem raised; a
-   * `ToolError` stays a typed failure and `runPromise` rejects with it.
+   * Every line of logic below is one Effect program. Fatal storage and
+   * filesystem failures remain failures for the invocation boundary.
    */
-  protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
+  protected readonly execute = Effect.fn('ExecutionsTool.call')(function* (
+    this: ExecutionsTool,
+    input: ExecutionsToolInput,
+  ) {
+    const toolCall = yield* ToolCall;
+    if (!toolCall.run)
+      return yield* Effect.fail(
+        new ToolError('This tool requires an active agent session.'),
+      );
     const context: RunToolContext = {
-      session: currentSession(),
-      runId: getRunContextRunId(),
-      inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
-        operation(),
-      ),
+      session: toolCall.run.session,
+      runId: toolCall.run?.runId,
+      inRunScope: toolCall.inScope,
     };
-    return effectRuntime().runPromise(
-      this.run(context, input).pipe(
-        Effect.catchTag('ExecutionsReadFailed', (error) =>
-          Effect.die(error.cause),
-        ),
+    return yield* this.run(context, input).pipe(
+      Effect.catchTag('ExecutionsReadFailed', (error) =>
+        Effect.die(error.cause),
       ),
     );
-  }
+  });
 
   private readonly run = Effect.fn('ExecutionsTool.run')(function* (
     this: ExecutionsTool,
@@ -404,12 +399,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     // Exclude runs that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = candidateIds.filter(
-      (id) => !context.inRunScope(() => shouldSkipWait(id)),
+      (id) => !shouldSkipWait(context.session, id),
     );
     if (pendingIds.length === 0) return;
 
     yield* awaitStatusChange(context, timeout, pendingIds, () =>
-      pendingIds.every((id) => context.inRunScope(() => shouldSkipWait(id))),
+      pendingIds.every((id) => shouldSkipWait(context.session, id)),
     );
   });
 
@@ -496,6 +491,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             suppressReport: shouldSuppressAutoDeliveredSubagentReport(
               options,
               handle,
+              context.runId,
             ),
           },
         );
@@ -714,10 +710,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (context: RunToolContext, runId: RunId) {
       const records = getRunRecords(context.session, runId);
       const [report, note] = yield* Effect.all(
-        [
-          records.readReport(),
-          turnAttributionNote(getRunStore(runId), context.session),
-        ],
+        [records.readReport(), turnAttributionNote(runId, context.session)],
         { concurrency: 2 },
       );
       if (!report) {
@@ -740,7 +733,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         [
           records.readResultMeta(),
           records.readRunEnd(),
-          turnAttributionNote(getRunStore(runId), context.session),
+          turnAttributionNote(runId, context.session),
         ],
         { concurrency: 3 },
       );

@@ -27,11 +27,10 @@
  * nothing can settle. A workflow that needs tools runs in the tool-use
  * family, and the reflection run's tool registry is empty by construction.
  */
+import { dirname } from 'node:path';
 import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { K_SLICE } from '@agent/core/constants';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import {
   compileFailuresOf,
@@ -68,7 +67,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { supersedeLegacyFlowRecord } from '@agent/storage/resumability';
 import { logUserMessage, type StageHandle } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -80,6 +78,7 @@ import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
@@ -93,9 +92,10 @@ import {
   type RoundOutput,
   type RunOutcome,
   type RunStorageFileLocation,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -110,6 +110,7 @@ import { ModelInvoker, turnText } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
   runtimeSnapshotRow,
@@ -120,11 +121,11 @@ import {
 import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
+/** Length for preview slices of tool output and responses. */
+const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release. Start a new run instead.';
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -328,29 +329,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   };
 
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'reflection',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    approvals: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
   });
 
   // -------------------------------------------------------------- opening
@@ -367,7 +349,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
-    yield* supersedeLegacyFlowRecord(runId, session, logger);
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       reflectionSnapshotRow(runId, fresh(bound), {
@@ -576,9 +557,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           const path = location.absolutePath;
           const expected = flow.rawOutputBytes ?? 0;
           const fragmentBytes = Buffer.byteLength(fragment);
-          await AbsoluteFS.ensureDir(
-            path.slice(0, Math.max(0, path.lastIndexOf('/'))),
-          );
+          await AbsoluteFS.ensureDir(dirname(path));
           const exists = await AbsoluteFS.exists(path);
           const actual = exists ? (await AbsoluteFS.stat(path)).size : 0;
           if (
@@ -1270,9 +1249,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): ReflectionResult => ({
     outcome,
     roundOutputs: roundsToPersisted(outputState),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }
       : {}),

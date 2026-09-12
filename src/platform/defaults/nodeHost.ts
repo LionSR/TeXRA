@@ -28,7 +28,6 @@ import {
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
-import { nodeFileLocks } from './fileLocks';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
@@ -52,8 +51,8 @@ import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem, file locks, and the no-op
- * tool-availability host) are filled in by the helper. The
+ * shared Node defaults (filesystem and the no-op tool-availability host) are
+ * filled in by the helper. The
  * per-workspace services are not here: hosts build them with
  * {@link createNodeWorkspaceRoots}.
  */
@@ -130,8 +129,8 @@ const agentDirectoryBootstrapLanes = new Map<string, PerKeyLane>();
  * extension) or an SDK embedder.
  *
  * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`, `nodeFileLocks`, the
- * no-op tool-availability host) while preserving the rule that only
+ * in its own `initPlatform` literal (`nodeFilesystem`, the no-op
+ * tool-availability host) while preserving the rule that only
  * composition roots call `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
@@ -139,7 +138,6 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     globalState: services.globalState,
     fs: nodeFilesystem,
     storage: services.storage,
-    fileLocks: nodeFileLocks,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,

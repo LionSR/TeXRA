@@ -17,18 +17,13 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
-import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
-import { ToolError, type ToolResult } from '@shared/schemas';
-import { requireLiveRun } from '@tools/contextHelpers';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -168,18 +163,6 @@ function parsePath(raw: string): ParsedPath {
   );
 }
 
-/**
- * The one run of a subscription-tool program settles here (R1: the tool
- * execute() contract is the Promise boundary). A failure — the program's
- * ToolError, or a defect such as the registry's max-concurrent guard — is
- * rethrown as the squashed cause, the same identity the async implementation
- * rejected with.
- */
-function foldToolExit(exit: Exit.Exit<ToolResult, unknown>): ToolResult {
-  if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
-  return exit.value;
-}
-
 const requireToken = (): Effect.Effect<void, unknown, Secrets> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
@@ -225,9 +208,9 @@ function prSubscriptionActivitySentence(
 
 const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   input: SubscribeInput,
+  runId: RunId,
 ) {
   yield* requireToken();
-  const { runId } = requireLiveRun('github_subscription');
   const target = requirePath(input);
   const minAnnotationLevel =
     input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
@@ -333,8 +316,7 @@ const resolveIssueIsPR = (
         : Effect.succeed(res.data.pull_request != null),
   );
 
-function execUnsubscribe(input: UnsubscribeInput): ToolResult {
-  const { runId } = requireLiveRun('github_subscription');
+function execUnsubscribe(input: UnsubscribeInput, runId: RunId): ToolResult {
   const target = requirePath(input);
   const slug = slugOf(target);
   let removed: boolean;
@@ -365,8 +347,7 @@ function execUnsubscribe(input: UnsubscribeInput): ToolResult {
   };
 }
 
-function execList(): ToolResult {
-  const { runId } = requireLiveRun('github_subscription');
+function execList(runId: RunId): ToolResult {
   const keysBoundToRun = (
     bindings: ReadonlyArray<{ key: string; runIds: readonly string[] }>,
   ): string[] =>
@@ -492,11 +473,10 @@ const getFindCurrentFallbackInfo = (
   );
 
 const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
-  function* (input: FindCurrentInput) {
+  function* (input: FindCurrentInput, workingDirectory: string | undefined) {
     yield* requireToken();
     const cwd =
-      parseWorkingDirectory(input.working_directory) ??
-      getRunContextWorkingDirectory(tryUseRunContext());
+      parseWorkingDirectory(input.working_directory) ?? workingDirectory;
     if (!cwd) {
       return yield* Effect.fail(
         new ToolError(
@@ -585,20 +565,27 @@ export class GitHubSubscriptionTool extends defineTool({
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
 }) {
-  protected async execute(input: GitHubSubscriptionInput): Promise<ToolResult> {
-    switch (input.command) {
-      case 'subscribe':
-        return foldToolExit(
-          await effectRuntime().runPromiseExit(execSubscribe(input)),
+  protected execute(input: GitHubSubscriptionInput) {
+    return Effect.gen(function* () {
+      const toolCall = yield* ToolCall;
+      const runId = toolCall.run?.runId;
+      if (!runId) {
+        return yield* Effect.fail(
+          new ToolError(
+            'github_subscription must be called from within an agent stream.',
+          ),
         );
-      case 'unsubscribe':
-        return execUnsubscribe(input);
-      case 'list':
-        return execList();
-      case 'find_current':
-        return foldToolExit(
-          await effectRuntime().runPromiseExit(execFindCurrent(input)),
-        );
-    }
+      }
+      switch (input.command) {
+        case 'subscribe':
+          return yield* execSubscribe(input, runId);
+        case 'unsubscribe':
+          return yield* Effect.sync(() => execUnsubscribe(input, runId));
+        case 'list':
+          return yield* Effect.sync(() => execList(runId));
+        case 'find_current':
+          return yield* execFindCurrent(input, toolCall.workingDirectory);
+      }
+    });
   }
 }

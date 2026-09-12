@@ -24,7 +24,7 @@
  * does not hold is the one reported case.
  */
 
-import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
 import {

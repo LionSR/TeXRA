@@ -1,4 +1,4 @@
-import { cp, readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect, Result, Stream } from 'effect';
@@ -374,57 +374,6 @@ export async function readCliHistoryStandaloneTemplate(
             ),
       ),
     ),
-  );
-}
-
-/**
- * Stage the trace-viewer's single-file `index.html` into `destDir` for the
- * shared-assets export mode (`--assets-dir`) — a site hosting many traces
- * points every trace's `?trace=` query param at one shared copy instead of
- * duplicating it per trace. Without an injected trace the page fetches the
- * `?trace=` file itself, which works whenever the directory is served over
- * http(s).
- *
- * `fs.cp`'s recursive copy merges into an existing `destDir` rather than
- * nesting under it, so staging is safe to repeat across multiple exports
- * pointed at the same shared directory.
- *
- * Returns `'missing'` (without throwing) only when the bundled assets are
- * absent — e.g. a dev checkout where `copy:resources` hasn't run — so the
- * caller can warn instead of failing the export outright. Any other probe
- * failure (EACCES, a transient I/O error) is a different problem and surfaces
- * as a usage error naming the real cause rather than a "rebuild the CLI" hint.
- */
-export async function stageCliHistoryTraceViewerAssets(params: {
-  readonly resourcesPath: string;
-  readonly destDir: string;
-}): Promise<'staged' | 'missing'> {
-  const assetsSrc = path.join(params.resourcesPath, TRACE_VIEWER_DIR_NAME);
-  return effectRuntime().runPromise(
-    Effect.gen(function* () {
-      const sourceExists = yield* Effect.tryPromise({
-        try: async () => (await stat(assetsSrc)).isDirectory(),
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.catch((error) =>
-          isFileNotFoundError(error) || isNotADirectoryError(error)
-            ? Effect.succeed(false)
-            : Effect.fail(
-                new CliUsageError(
-                  `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
-                ),
-              ),
-        ),
-      );
-      // A plain file where the bundle should be is also "this install lacks it".
-      if (!sourceExists) return 'missing' as const;
-
-      yield* Effect.tryPromise({
-        try: () => cp(assetsSrc, params.destDir, { recursive: true }),
-        catch: (cause) => cause as Error,
-      });
-      return 'staged' as const;
-    }),
   );
 }
 

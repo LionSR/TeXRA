@@ -26,10 +26,8 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import {
-  SUBSCRIPTION_USAGE_PROVIDERS,
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageProvider,
-  type SubscriptionUsageSnapshots,
   type UpdateChatGptAuthStatusMessage,
   type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
@@ -67,7 +65,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
-    'getUsage' | 'invalidate'
+    'getAllUsage' | 'invalidate'
   >;
   readonly onCredentialChanged: () => Promise<void>;
   /** The model catalog changed: every open paper's `host` snapshot reloads
@@ -159,7 +157,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: Pick<
     SubscriptionUsageService,
-    'getUsage' | 'invalidate'
+    'getAllUsage' | 'invalidate'
   >;
 
   constructor(
@@ -238,17 +236,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postSubscriptionUsage(forceRefresh = false): Promise<void> {
-    const snapshots = Object.fromEntries(
-      await Promise.all(
-        SUBSCRIPTION_USAGE_PROVIDERS.map(async (provider) => [
-          provider,
-          await this.subscriptionUsage.getUsage(provider, { forceRefresh }),
-        ]),
-      ),
-    ) as SubscriptionUsageSnapshots;
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-      snapshots,
+      snapshots: await this.subscriptionUsage.getAllUsage({ forceRefresh }),
     });
   }
 

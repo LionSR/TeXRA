@@ -7,10 +7,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import {
-  attachedDroppedPaths,
-  planMainViewDroppedFileAttachments,
-} from '@controllers/mainView/MainViewDroppedFilesController';
+import { attachDroppedPaths } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
@@ -124,17 +121,8 @@ export function createDesktopFileSelection(
           return info?.isFile() ? relative : null;
         }),
       );
-      return attachedDroppedPaths(
-        planMainViewDroppedFileAttachments({
-          paths: resolved,
-          allowedExtensions: {
-            input: getIncludedExtensions('input'),
-            context: getIncludedExtensions('context'),
-            media: getIncludedExtensions('media'),
-          },
-          target: category,
-        }),
-      );
+      return attachDroppedPaths(resolved, getIncludedExtensions(category))
+        .paths;
     },
   };
 }

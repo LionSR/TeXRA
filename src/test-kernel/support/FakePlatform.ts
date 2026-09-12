@@ -30,7 +30,6 @@ import {
 } from '@platform/defaults/fsEntryTypeBits';
 import { getCoreSettingDefault } from '@shared/schemas';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -567,16 +566,10 @@ export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
 ): Platform {
-  // No file system to lock: the fake lane is the in-process one the real
-  // provider also takes before reaching `proper-lockfile`.
-  const lockLanes = new Map<string, PerKeyLane>();
   return {
     globalState: new FakeStateStore(options.globalState),
     fs: new FakeFileSystemProvider(options.files),
     storage: new FakeStorageProvider(options.globalStoragePath),
-    fileLocks: {
-      withFileLock: (lockPath) => withPerKeyLane(lockLanes, lockPath),
-    },
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeRun: async () => false },

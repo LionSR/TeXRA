@@ -1,13 +1,11 @@
-import type {
-  HostBashApprovalRequest,
-  HostUserQuestionRequest,
-} from '@agent/runtime';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
+  type BashPermission,
   type RetryPermission,
+  type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
@@ -202,11 +200,9 @@ export function formatRetryRequestMessage(payload: RetryPermission): string {
   return hint ? [message, hint].join('\n') : message;
 }
 
-export function formatBashApprovalSummary(
-  request: HostBashApprovalRequest,
-): string {
-  const cwd = request.cwd ? `Directory: ${request.cwd}\n` : '';
-  return `Command requested:\n${cwd}${request.command}`;
+export function formatBashApprovalSummary(payload: BashPermission): string {
+  const cwd = payload.cwd ? `Directory: ${payload.cwd}\n` : '';
+  return `Command requested:\n${cwd}${payload.command}`;
 }
 
 function toolEditDiffLines(
@@ -264,7 +260,7 @@ export function buildToolEditApprovalContent(
 }
 
 export function formatUserQuestionPrompt(
-  payload: HostUserQuestionRequest,
+  payload: UserQuestionPermission,
 ): string {
   return payload.questions
     .map((question, index) => {

@@ -1,13 +1,16 @@
-// Test composition imports
 import '@test/support/defaultSessionTestSetup';
+
+import { Effect, Fiber } from 'effect';
+import { it } from '@effect/vitest';
+// Test composition imports
 
 // Suites for src/tools/wolfram (WolframTool approval gating and the
 // wolframscript invocation it builds).
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { RunId } from '@shared/schemas';
+import { afterEach, describe, expect, vi } from 'vitest';
+import type { RequestDecision, RunId } from '@shared/schemas';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   wolframApprovalCommand,
   wolframRunSummary,
@@ -15,69 +18,107 @@ import {
 } from '@tools/wolfram/WolframTool';
 import * as toolUtils from '@utils/system/toolUtils';
 import {
+  autoDecideRequests,
   createRecordingHost,
+  decideRequest,
   sessionWithInteractions,
 } from '../agent/progressTestUtils';
-import { waitForRecordedEvent } from '../support/asyncTestUtils';
+import { waitForCondition } from '../support/asyncTestUtils';
 
-async function dispatchWolfram(runId: RunId, code: string) {
-  const explicit = createRecordingHost();
-  const result = withRunContext(
-    createRunContext({
-      runId,
-      session: sessionWithInteractions(explicit.interactions),
-    }),
-    () => new WolframTool().call({ code }),
-  );
-  const show = await waitForRecordedEvent(
-    explicit.events,
-    'showBashPermission',
-  );
-  return { explicit, result, show };
+/** Sessions and request watchers the cases opened, released after each. */
+const cleanups: Array<() => void> = [];
+
+/**
+ * Dispatch the tool on its own run and hold the command request it opens: the
+ * request is a `request.opened` row the run parks on, answered by the case's
+ * own `request.decide`.
+ */
+function dispatchWolfram(runId: RunId, code: string) {
+  return Effect.gen(function* () {
+    const session = sessionWithInteractions(createRecordingHost().interactions);
+    publishTestRunStart(session, runId);
+    yield* Effect.promise(() => session.settlePublications());
+    const requests = autoDecideRequests(session, () => null);
+    cleanups.push(() => {
+      requests.detach();
+      session.dispose();
+    });
+
+    const result = yield* Effect.forkChild(
+      new WolframTool().call({ code }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { session: session, runId: runId, toolPolicy: {} },
+          }),
+        ),
+      ),
+    );
+    yield* Effect.promise(() =>
+      waitForCondition(() => requests.opened.length > 0, {
+        timeoutMessage: 'Timed out waiting for the command request to open',
+      }),
+    );
+    const opened = requests.opened[0]!;
+    if (opened.payload.kind !== 'bash') {
+      throw new Error(`Expected a bash request, not ${opened.payload.kind}.`);
+    }
+    return {
+      result: Fiber.join(result),
+      permission: opened.payload.data,
+      decide: (decision: RequestDecision) =>
+        decideRequest(
+          session,
+          { runId, requestId: opened.requestId },
+          decision,
+        ),
+    };
+  });
 }
 
 describe('WolframTool approval', () => {
   afterEach(() => {
-    defaultSession().approvals.clearAll();
-    defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
+    for (const release of cleanups.splice(0)) release();
     vi.restoreAllMocks();
   });
 
-  it('requests bash-style approval before executing wolframscript', async () => {
-    const runId = 'a99f00000001' as RunId;
-    const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockResolvedValue({
-      success: true,
-      stdout: '2',
-      stderr: '',
-      timedOut: false,
-      exitCode: 0,
-    });
+  it.live('requests bash-style approval before executing wolframscript', () =>
+    Effect.gen(function* () {
+      const runId = 'a99f00000001' as RunId;
+      const execute = vi
+        .spyOn(toolUtils, 'runToolWithCheck')
+        .mockResolvedValue({
+          success: true,
+          stdout: '2',
+          stderr: '',
+          timedOut: false,
+          exitCode: 0,
+        });
 
-    const { explicit, result, show } = await dispatchWolfram(runId, '1+1');
-    expect(show.payload).toMatchObject({
-      command: wolframApprovalCommand('1+1'),
-      allowBypass: true,
-      runId,
-    });
+      const { result, permission, decide } = yield* dispatchWolfram(
+        runId,
+        '1+1',
+      );
+      expect(permission).toMatchObject({
+        command: wolframApprovalCommand('1+1'),
+        allowBypass: true,
+        runId,
+      });
 
-    expect(
-      explicit.decisions.submitBash(show.payload.requestId, {
-        action: 'approve',
-      }),
-    ).toBe(true);
+      decide({ action: 'approve' });
 
-    await expect(result).resolves.toMatchObject({
-      output: '2',
-      summary: 'Executed: 1+1',
-    });
-    expect(execute).toHaveBeenCalledWith(
-      'wolframscript',
-      ['-code', '1+1'],
-      expect.objectContaining({ timeout: 30000 }),
-    );
-  });
+      expect(yield* result).toMatchObject({
+        output: '2',
+        summary: 'Executed: 1+1',
+      });
+      expect(execute).toHaveBeenCalledWith(
+        'wolframscript',
+        ['-code', '1+1'],
+        expect.objectContaining({ timeout: 30000 }),
+      );
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 
-  it.each([
+  it.live.each([
     {
       name: 'does not execute wolframscript when approval is rejected',
       feedback: 'Use the requested node check instead.',
@@ -90,25 +131,25 @@ describe('WolframTool approval', () => {
       expectedInstruction: undefined,
       expectedGuidance: true,
     },
-  ])('$name', async ({ feedback, expectedInstruction, expectedGuidance }) => {
-    const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
+  ])('$name', ({ feedback, expectedInstruction, expectedGuidance }) =>
+    Effect.gen(function* () {
+      const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
 
-    const { explicit, result, show } = await dispatchWolfram(
-      'a99f00000002' as RunId,
-      'Factor[n^7 - n]',
-    );
-    expect(
-      explicit.decisions.submitBash(show.payload.requestId, {
+      const { result, decide } = yield* dispatchWolfram(
+        'a99f00000002' as RunId,
+        'Factor[n^7 - n]',
+      );
+      decide({
         action: 'reject',
         ...(feedback === undefined ? {} : { feedback }),
-      }),
-    ).toBe(true);
+      });
 
-    const rejection = await result;
-    expect(rejection.status).toBe('error');
-    if (rejection.status !== 'error') throw new Error('Expected rejection');
-    expect(rejection.userInstruction).toBe(expectedInstruction);
-    expect(rejection.error.includes('Do not retry')).toBe(expectedGuidance);
-    expect(execute).not.toHaveBeenCalled();
-  });
+      const rejection = yield* result;
+      expect(rejection.status).toBe('error');
+      if (rejection.status !== 'error') throw new Error('Expected rejection');
+      expect(rejection.userInstruction).toBe(expectedInstruction);
+      expect(rejection.error.includes('Do not retry')).toBe(expectedGuidance);
+      expect(execute).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
 });

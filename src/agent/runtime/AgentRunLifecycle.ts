@@ -25,13 +25,8 @@ import {
   agentName as baseAgentName,
   emptyRunEndOutput,
   RUN_OUTCOME,
-  RUN_PHASE,
   toRetryErrorInfo,
 } from '@shared/schemas';
-import {
-  isTerminalOutcomePhase,
-  RUN_TRANSITION_CAUSE,
-} from '@shared/runs/runStatus';
 import {
   getFirstRunDone,
   setFirstRunDone,
@@ -144,18 +139,14 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
   const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
-  // The `run.end` row written below is the run's terminal fact; the
-  // in-memory run phase supplies the stop precedence read here, so
-  // `params.outcome` is the exiting run's report rather than the verdict. A
-  // stop that already landed CANCELLED outranks a child whose process then
-  // exits non-zero; a turn that already published FAILED outranks a stop that
-  // arrived after it. Resolving once here is what lets every projection below
-  // (stage end, the `run.end` row, terminal phase) read one value, so no
-  // caller has to cross-check the phase for itself.
-  const observedPhase = session.status.get(handle.runId);
-  const outcome = isTerminalOutcomePhase(observedPhase)
-    ? observedPhase
-    : params.outcome;
+  // The `run.end` row written below is the run's terminal fact; the handle's
+  // stop latch supplies the stop precedence read here, so `params.outcome`
+  // is the exiting run's report rather than the verdict: a stop that landed
+  // before the run's exit outranks a child whose process then exits
+  // non-zero. Resolving once here is what lets every projection below (stage
+  // end, the `run.end` row) read one value, so no caller has to cross-check
+  // the latch for itself.
+  const outcome = handle.stopRequested ? RUN_OUTCOME.CANCELLED : params.outcome;
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
   const error = outcome === params.outcome ? params.error : undefined;
@@ -239,25 +230,6 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   yield* Effect.try({
     try: () => {
       session.runs.untrack(handle.runId);
-      // Refused only when the phase turned terminal after the resolution above,
-      // i.e. a stop that landed across this function's own awaits. The phase
-      // keeps its own value; the divergence from the written row is real and
-      // must stay loud.
-      if (
-        !session.status.transitionToTerminal(
-          handle.runId,
-          outcome,
-          RUN_TRANSITION_CAUSE.LIFECYCLE,
-        )
-      ) {
-        logger.warn('Failed to set terminal run status', {
-          data: {
-            agentIdentifier: handle.agentName,
-            runId: handle.runId,
-            status: outcome,
-          },
-        });
-      }
     },
     catch: ensureError,
   }).pipe(
@@ -312,27 +284,6 @@ function toFlowFailureError(error: RetryErrorInfo): Error {
   return failure;
 }
 
-function transitionRunStart(ctx: AgentLaunchContext): void {
-  const { runId, session } = ctx.runScope;
-  const runStatus = session.status;
-  const transitioned =
-    runStatus.transition(
-      runId,
-      RUN_PHASE.RUNNING,
-      RUN_TRANSITION_CAUSE.LIFECYCLE,
-    ) ||
-    runStatus.transition(runId, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.RESUME);
-  if (transitioned || runStatus.get(runId) === RUN_PHASE.RUNNING) {
-    return;
-  }
-  logger.warn('Failed to transition run to RUNNING', {
-    data: {
-      agentIdentifier: ctx.config.agent,
-      runId,
-    },
-  });
-}
-
 /**
  * The run's own flow result, relabelled with the outcome finalization resolved.
  *
@@ -348,51 +299,6 @@ function withResolvedOutcome(
 ): AgentFlowResult {
   if (result.outcome === outcome) return result;
   return { ...result, outcome };
-}
-
-/**
- * Claim the phase slot for a run a stop reached before it could start.
- *
- * The stop's own USER_STOP transition is refused while the slot still carries
- * a previous run's terminal phase (`canTransitionRunPhase` requires an
- * in-flight `from`), and this run skips the RUNNING claim so the stop it is
- * carrying survives. Without this write the slot would keep the earlier run's
- * COMPLETED/FAILED, and `finalizeRunTerminal` — which reads the phase for stop
- * precedence — would publish and persist that stale verdict
- * for a run that never ran a turn. Resuming first mirrors the explicit
- * RUNNING choreography `transitionToTerminal` uses to leave WAITING.
- *
- * A phase that already reads CANCELLED needs no write — whether this run's own
- * stop wrote it or a previous run left it, it is the outcome this run is headed
- * for — and rewriting it would publish a RUNNING blip for a run that never ran.
- * A non-terminal phase needs none either: the run's own report stands while the
- * phase carries nothing to inherit.
- */
-function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
-  const { runId, session } = ctx.runScope;
-  const runStatus = session.status;
-  const phase = runStatus.get(runId);
-  if (phase === RUN_PHASE.CANCELLED || !isTerminalOutcomePhase(phase)) {
-    return;
-  }
-  const recorded =
-    runStatus.transition(
-      runId,
-      RUN_PHASE.RUNNING,
-      RUN_TRANSITION_CAUSE.RESUME,
-    ) &&
-    runStatus.transition(
-      runId,
-      RUN_PHASE.CANCELLED,
-      RUN_TRANSITION_CAUSE.USER_STOP,
-    );
-  if (recorded) return;
-  logger.warn('Failed to record a stop that landed before run start', {
-    data: {
-      agentIdentifier: ctx.config.agent,
-      runId,
-    },
-  });
 }
 
 /** Close a suspended run's stage through its session after its trace detached. */
@@ -423,11 +329,13 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
  * agent run (registration, status accounting, error surfacing, cleanup).
  */
 export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
-  function* (
+  function* <R>(
     ctx: AgentLaunchContext,
-    runner: (handle: RunHandle) => Effect.Effect<AgentRuntimeFlowResult, Error>,
+    runner: (
+      handle: RunHandle,
+    ) => Effect.Effect<AgentRuntimeFlowResult, Error, R>,
     options?: RunFlowLifecycleOptions,
-  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
+  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, R | AppState> {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
     const handle = new RunHandle(
@@ -444,19 +352,14 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     // synchronously, so anything assigned later (e.g. from `onRun`) misses the
     // parent's first roster snapshot.
     if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
-    const cancelHostPrompts = () =>
-      session.interactions.cancel({
-        runId,
-        cause: 'Run interrupted.',
-      });
-    // The host's stop: the run's one stop latch, which the runner races, plus
-    // the prompts this run left open. The run signal is not aborted here — the
+    // The host's stop: the run's one stop latch, which the runner races. The
+    // requests this run left open close with the fibers waiting on them
+    // (`SessionHandle.openRequest`). The run signal is not aborted here: the
     // interruption the latch causes aborts it (below), so the Promise-tier
     // bridge stays downstream of the stop rather than beside it.
     const runInterruptHandler = {
       interrupt(): void {
         ctx.interrupt();
-        cancelHostPrompts();
       },
     };
     const detachRunInterrupt =
@@ -643,9 +546,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         // recorded on the run signal here: the launch's own Promise-tier work
         // is all there is to cancel.
         ctx.abortRunSignal();
-        transitionStopBeforeRunStart(ctx);
-      } else {
-        transitionRunStart(ctx);
       }
       // The flow is an Effect: a fiber interruption reaches its provider work
       // directly, and its own finalizers settle before the model and trace
@@ -653,12 +553,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // interruption, so Promise-tier work the flow still retains observes the
       // same stop.
       const result = yield* Effect.suspend(() => runner(handle)).pipe(
-        Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            ctx.abortRunSignal();
-            cancelHostPrompts();
-          }),
-        ),
+        Effect.onInterrupt(() => Effect.sync(() => ctx.abortRunSignal())),
         Effect.ensuring(Effect.sync(detachRunInterrupt)),
       );
       if (isWaitingFlowResult(result)) {
@@ -744,30 +639,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       Effect.ensuring(
         Effect.gen(function* () {
           detachRunInterrupt();
-          // Settle every host interaction this run left pending. The lifecycle owns
-          // it for both flows: a run that ends with an approval still on screen must
-          // release the host whether it completed, failed, was stopped, or parked at
-          // WAITING. The interrupt-time cancel a stop performs stays with the
-          // interrupt handler, which has to settle the prompt before the flow can
-          // unwind; a second cancel here matches nothing and is a no-op. Guarded so a
-          // throwing host adapter cannot replace the result this run already
-          // published.
-          yield* Effect.try({
-            try: () =>
-              session.interactions.cancel({ runId, cause: 'Run ended.' }),
-            catch: ensureError,
-          }).pipe(
-            Effect.catch((cancelError) =>
-              Effect.sync(() => {
-                logger.warn(
-                  'Failed to cancel host interactions after the run ended',
-                  {
-                    data: { agentIdentifier, runId, error: cancelError },
-                  },
-                );
-              }),
-            ),
-          );
           // Stop the Lean servers attributed to this run in its worktree(s) so they
           // do not idle until the timeout after the run is gone (CLI/desktop; a host
           // whose Lean integration owns server lifetime no-ops here). Servers still

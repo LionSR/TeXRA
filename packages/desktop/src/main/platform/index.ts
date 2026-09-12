@@ -79,9 +79,9 @@ export interface ElectronPlatformInitResult {
   agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
-   * production, see `resolveDesktopDataRoot()`). Threaded out so crash
-   * reporting can scrub it from event payloads the same way it already
-   * scrubs `userData` — this root no longer lives under `userData` (#7987).
+   * production, see `resolveDesktopDataRoot()`). Threaded out so the project
+   * registry gets it from one owner instead of re-resolving it — this root no
+   * longer lives under `userData` (#7987).
    */
   dataRoot: string;
   /**

@@ -20,7 +20,6 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { NodeAgentDirectoryBootstrapOptions } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -126,7 +125,6 @@ describe('desktop agent directory bootstrap', () => {
         globalState: globalStateStore,
         fs: nodeFilesystem,
         storage,
-        fileLocks: nodeFileLocks,
         secrets: new FakeSecrets(),
         lifecycle: createLifecycleHost(),
         agentResume: { tryResumeRun: async () => false },
@@ -388,9 +386,6 @@ describe('desktop agent directory bootstrap', () => {
         copiedSources.push(source);
         if (copiedSources.length === 1) await firstCopyBlocked;
       });
-      const withFileLock = vi
-        .spyOn(nodeFileLocks, 'withFileLock')
-        .mockImplementation(() => (self) => self);
       const first = yield* Effect.forkChild(
         bootstrapNodeAgentDirectories({
           channel: 'desktop',
@@ -413,7 +408,6 @@ describe('desktop agent directory bootstrap', () => {
       );
 
       yield* Effect.promise(() => nextTurn());
-      expect(withFileLock).toHaveBeenCalledOnce();
       expect(copiedSources).toEqual([join(resourcesPath, 'agents')]);
 
       releaseFirstCopy();

@@ -7,7 +7,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Handling multiple files (inputs & outputs)
 
-Academic projects are often split across several files, such as a paper with several chapters or appendices. This guide explains how to work with multiple input files and how agents can generate multiple, distinct output files in a single run.
+Academic projects often span multiple modular documents: chapters, appendices, dedicated proof files, or supplementary materials. This guide explains how to manage multiple input sources and coordinate agents that emit distinct, structured outputs within a single execution.
 
 ## Why use multiple files?
 

@@ -69,9 +69,6 @@ export enum GlobalStateKey {
 
   // Child-work policy. Global rather than per-workspace: these describe how the
   // user wants their own child runs handled, not anything about a checkout.
-  // The string values are unchanged from when they lived in
-  // `WorkspaceStateKey`; a value written before the slot move is abandoned
-  // there rather than migrated.
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
 

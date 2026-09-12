@@ -26,7 +26,7 @@ import {
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
-  resolveCliLaunchAgent: vi.fn(),
+  resolveCliRunAgent: vi.fn(),
   selectCliRunModel: vi.fn(),
 }));
 
@@ -41,10 +41,11 @@ vi.mock('@cli/runtime/runModel', () => ({
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
-  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+  resolveCliRunAgent: mocks.resolveCliRunAgent,
 }));
 
 vi.mock('@cli/runtime/executeCli', () => ({
+  executeCliConfig: vi.fn(),
   executeCliToolUseConfig: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.executeCliToolUseConfig(...args),
@@ -73,15 +74,18 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
         ),
       catch: ensureError,
     }),
+  hasMixedStdinWorkflowInputSpecs: vi.fn(() => false),
+  WORKFLOW_INPUT_REQUIRED_MESSAGE:
+    'At least one workflow input file is required.',
 }));
 
 // Hoisted out of each test body — a dynamic import()'s result is cached, so
 // one call here serves every test below.
-const { runToolUseAgent: nativeRun } = await import('@cli/commands/agentsRun');
+const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
 const runToolUseAgent = (...args: Parameters<typeof nativeRun>) =>
   Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
 
-describe('CLI agents run command', () => {
+describe('CLI run command, tool-use agents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
@@ -101,7 +105,7 @@ describe('CLI agents run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['problem.md'], contextFiles: ['notes.md'] }),
     );
-    mocks.resolveCliLaunchAgent.mockResolvedValue({
+    mocks.resolveCliRunAgent.mockResolvedValue({
       name: 'chat',
       category: AgentCategory.ToolUse,
       source: 'builtInToolUse',
@@ -143,11 +147,8 @@ describe('CLI agents run command', () => {
     );
     expect(
       cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0]);
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
-      'chat',
-      'agentsRun',
-    );
+    ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
+    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('chat');
     expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
       ['notes.md'],
@@ -259,16 +260,55 @@ describe('CLI agents run command', () => {
     await expect(
       runToolUseAgent(createRunCommandCliContext(), {
         agent: 'chat',
-        inputFiles: [],
+        inputFiles: ['problem.md'],
         contextFiles: [],
         model: 'gpt54',
         instruction: '',
       }),
     ).rejects.toThrow('Provide --instruction or --instruction-file.');
 
-    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
     expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.resolveCliLaunchAgent).not.toHaveBeenCalled();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
+
+  // Neither category can run an invocation with no instruction and no input,
+  // so it is refused before the platform init and the agent-catalog fetch a
+  // signed-in session would otherwise pay for on a plain usage error.
+  it('refuses an invocation no category can run without resolving the agent', async () => {
+    await expect(
+      runToolUseAgent(createRunCommandCliContext(), {
+        agent: 'chat',
+        inputFiles: [],
+        contextFiles: ['notes.md'],
+        instruction: '',
+      }),
+    ).rejects.toThrow(
+      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+    );
+
+    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
+  });
+
+  // The one headless `run` command carries both categories' flags, so the
+  // workflow-only destinations have to be refused once the agent is known.
+  it.each(['output', 'outputDir'] as const)(
+    'refuses the workflow-only --%s destination for a tool-use agent',
+    async (flag) => {
+      await expect(
+        runToolUseAgent(createRunCommandCliContext(), {
+          agent: 'chat',
+          inputFiles: ['problem.md'],
+          contextFiles: [],
+          instruction: 'Assess the proof.',
+          [flag]: 'out.tex',
+        }),
+      ).rejects.toThrow(
+        `${flag === 'output' ? '--output' : '--output-dir'} is only available for workflow agents; "chat" is a toolUse agent.`,
+      );
+
+      expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
+      expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
+    },
+  );
 });

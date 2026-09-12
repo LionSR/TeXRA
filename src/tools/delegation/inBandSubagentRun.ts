@@ -16,7 +16,7 @@
 import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
-import { getRunStore, getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import {
   prepareAgentDefinition,
@@ -26,7 +26,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
@@ -171,7 +170,6 @@ const executeInBand = Effect.fn('executeInBand')(
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    const store = runInSession(options.session, () => getRunStore(runId));
 
     yield* registerChildRun(options.session, {
       runId,
@@ -221,7 +219,6 @@ const executeInBand = Effect.fn('executeInBand')(
           ).readRunEnd();
           if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) return;
           yield* commitStableSubagentAttempt(
-            store,
             runId,
             stableAttempt,
             options.session,
@@ -233,20 +230,18 @@ const executeInBand = Effect.fn('executeInBand')(
             // Inside the loop's lease launch guard, like every attempt-scoped
             // setup: a throw here releases the owned-run lease.
             if (stableAttempt) {
-              yield* Effect.tryPromise({
-                try: () =>
-                  runInSession(options.session, () =>
-                    writeStableSubagentAttempt(store, {
-                      ...stableAttempt,
-                      phase: 'launched',
-                    }),
-                  ),
-                catch: (cause) =>
-                  new SubagentDurabilityError(
-                    `Failed to mark subagent ${runId} as launched.`,
-                    { cause },
-                  ),
-              });
+              yield* writeStableSubagentAttempt(options.session, {
+                ...stableAttempt,
+                phase: 'launched',
+              }).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new SubagentDurabilityError(
+                      `Failed to mark subagent ${runId} as launched.`,
+                      { cause },
+                    ),
+                ),
+              );
             }
             return {
               strategy: createNativeSubagentStrategy({

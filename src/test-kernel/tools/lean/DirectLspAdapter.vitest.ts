@@ -27,6 +27,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 // Third-party imports
 import { it } from '@effect/vitest';
 import {
+  NodeChildProcessSpawner,
+  NodeFileSystem,
+  NodePath,
+} from '@effect/platform-node';
+import {
   Context,
   Deferred,
   Duration,
@@ -55,8 +60,6 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 // Local imports
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
 import type { RunId } from '@shared/schemas';
 import {
   createDirectLspLeanAdapter,
@@ -150,6 +153,11 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
+/** The same spawner graph `createDirectLspLeanAdapter` builds for the pool. */
+const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
+  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+);
+
 const NO_RUN: RunId | undefined = undefined;
 const IDLE_HOUR = Duration.hours(1);
 
@@ -200,7 +208,7 @@ const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
         lakeCommand: fakeLakePath,
         idleTimeToLive: Duration.infinity,
         ...options,
-      }).pipe(Layer.provide(nodeChildProcessSpawnerLayer)),
+      }).pipe(Layer.provide(spawnerLayer)),
     ).pipe(
       Scope.provide(scope),
       Effect.map((context) => Context.get(context, LeanServerPool)),
@@ -363,7 +371,7 @@ describe('LeanServerPool', () => {
             LeanServer.layer({
               workspaceRoot: projectRoot,
               lakeCommand: fakeLakePath,
-            }).pipe(Layer.provide(nodeChildProcessSpawnerLayer)),
+            }).pipe(Layer.provide(spawnerLayer)),
           ).pipe(Scope.provide(scope)),
         );
         yield* Effect.promise(() => delay(20));
@@ -442,9 +450,7 @@ describe('LeanServerPool', () => {
       spawnOverride.current = () => {
         spawnCount += 1;
         if (spawnCount > 1 && !firstClosed) {
-          throw Object.assign(new Error('too many open files'), {
-            code: 'EMFILE',
-          });
+          return createFailedSpawnChild('EMFILE');
         }
         const child = createFakeLeanChild({
           closeDelayMs: spawnCount === 1 ? 200 : 0,
@@ -748,18 +754,10 @@ describe('createDirectLspLeanAdapter', () => {
       ),
   );
 
-  fakeLakeIt('attributes a request to the ambient agent run', () =>
+  fakeLakeIt('attributes a request to its explicitly supplied agent run', () =>
     withAdapter({ lakeCommand: fakeLakePath, idleTimeoutMs: 0 }, (adapter) =>
       Effect.gen(function* () {
-        // The run id is captured when the method is called, so the call
-        // itself happens inside the ambient run context. `withRunContext`'s
-        // `T | Promise<T>` covers its async users; this callback is
-        // synchronous, so the cast only narrows that union back.
-        const program = withRunContext(
-          createRunContext({ runId: run('e00001') }),
-          () => adapter.fetchDiagnosticsForFile(filePath),
-        ) as ReturnType<(typeof adapter)['fetchDiagnosticsForFile']>;
-        yield* program;
+        yield* adapter.fetchDiagnosticsForFile(filePath, run('e00001'));
         expect(activeServerRoots()).toEqual([projectRoot]);
 
         yield* Effect.promise(async () => {
@@ -881,6 +879,13 @@ function activeServerRoots(): string[] {
     .toSorted((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Above every real pid, so the spawner's process-group probe and group kill
+ * (`process.kill(-pid, ...)`) fail with ESRCH and fall back to the fake's own
+ * `kill` instead of signalling an unrelated group on the test machine.
+ */
+const FAKE_PID = 2_147_483_646;
+
 interface FakeLeanChild extends EventEmitter {
   stdin: PassThrough;
   stdout: PassThrough;
@@ -999,7 +1004,7 @@ function createFakeLeanChild(options?: {
     stdin,
     stdout,
     stderr,
-    pid: 4242,
+    pid: FAKE_PID,
     killed: false,
     exitCode: null as number | null,
     signalCode: null as NodeJS.Signals | null,
@@ -1007,9 +1012,11 @@ function createFakeLeanChild(options?: {
     kill(signal?: NodeJS.Signals) {
       if (this.exitCode != null || this.signalCode != null) return true;
       this.killed = true;
-      this.exitCode = 0;
-      this.emit('exit', 0, signal ?? null);
+      // A signalled child keeps running until it dies: `exit` and the stdio
+      // `close` that follows it both land after the delay, as Node's do.
       const finish = () => {
+        this.exitCode = 0;
+        this.emit('exit', 0, signal ?? null);
         if (!stdin.destroyed) stdin.end();
         if (!stdout.destroyed) stdout.end();
         if (!stderr.destroyed) stderr.end();
@@ -1021,10 +1028,21 @@ function createFakeLeanChild(options?: {
     },
     closeSoon() {
       this.exitCode = 1;
+      this.emit('exit', 1, null);
       this.emit('close', 1, null);
     },
     unref() {},
     ref() {},
   });
+  // Node emits `spawn` once the child is running, on a later tick than the
+  // `spawn()` call that attaches the listener. A fake may be built before the
+  // call that hands it out, so the emit hangs off the listener's arrival
+  // rather than off this constructor.
+  const emitSpawn = (event: string) => {
+    if (event !== 'spawn') return;
+    child.off('newListener', emitSpawn);
+    process.nextTick(() => child.emit('spawn'));
+  };
+  child.on('newListener', emitSpawn);
   return child;
 }

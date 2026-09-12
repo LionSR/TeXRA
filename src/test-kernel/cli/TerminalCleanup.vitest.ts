@@ -49,9 +49,9 @@ const NO_TERMINAL_CAPABILITIES = {
 };
 
 /** The fold's output the title reads: one root, every later run its
- *  child, and the session's pending approvals. */
+ *  child, and the session's pending requests. */
 const phases = new Map<RunId, RunPhase>();
-let approvals: SessionView['approvals'] = [];
+let requests: SessionView['requests'] = [];
 function syncView(): void {
   const ids = [...phases.keys()];
   const rootId = ids[0];
@@ -65,7 +65,7 @@ function syncView(): void {
     }),
   );
   if (rootId !== undefined) rootRunId.set(rootId);
-  seedView(viewWith(runs, { approvals }));
+  seedView(viewWith(runs, { requests }));
 }
 function setPhase(runId: string, status: RunPhase): void {
   phases.set(runId as RunId, status);
@@ -74,7 +74,7 @@ function setPhase(runId: string, status: RunPhase): void {
 beforeAll(bindTestSessionView);
 beforeEach(() => {
   phases.clear();
-  approvals = [];
+  requests = [];
   syncView();
 });
 afterEach(() => {
@@ -90,12 +90,12 @@ afterEach(() => {
   terminalCapabilities.set(NO_TERMINAL_CAPABILITIES);
 });
 
-/** Put one real approval in the queue: the title reads the queue's own
+/** Put one real request in the queue: the title reads the queue's own
  *  projection, so the test has to drive it through the queue. */
 function queueTitleApproval(label: string): void {
   const runId = label as RunId;
-  approvals = [
-    ...approvals,
+  requests = [
+    ...requests,
     {
       runId,
       requestId: `title-${runId}`,
@@ -108,12 +108,13 @@ function queueTitleApproval(label: string): void {
           command: 'echo ok',
         },
       },
+      thread: null,
     },
   ];
   syncView();
 }
 function clearTitleApprovals(): void {
-  approvals = [];
+  requests = [];
   syncView();
 }
 

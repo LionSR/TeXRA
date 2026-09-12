@@ -761,36 +761,36 @@ function observeSurfaceResizes(): void {
 }
 
 /**
- * The off-screen pending approvals (by request id) that have already
+ * The off-screen pending requests (by request id) that have already
  * reopened the sidebar once. A user who re-collapses it mid-run must not be
  * fought on every unrelated signal change; only a newly appearing off-screen
- * approval (one not in this set) reopens it again, including a new request
+ * request (one not in this set) reopens it again, including a new request
  * on a run whose earlier one was answered.
  */
-let sidebarRevealedForApprovalIds = new Set<string>();
+let sidebarRevealedForRequestIds = new Set<string>();
 
 /**
- * Auto-reveals a collapsed sidebar when a pending approval lands on a
+ * Auto-reveals a collapsed sidebar when a pending request lands on a
  * run other than the one on screen. That is the dead-end case: the
  * request card lives on the pending run's own view (one home for the
  * decision), so a collapsed, non-viewed rail leaves nothing to click
  * (#11511 — per-call workflow review cards land on a child run, not the
  * one the user is watching). The preference belongs to the project's surface.
  */
-function revealSidebarForOffScreenApproval(): void {
+function revealSidebarForOffScreenRequest(): void {
   const active = activeRailProject(railProjects());
-  const offScreen = (active?.view.approvals ?? [])
-    .filter((approval) => approval.runId !== active?.surface.selected)
-    .map((approval) => approval.requestId);
+  const offScreen = (active?.view.requests ?? [])
+    .filter((request) => request.runId !== active?.surface.selected)
+    .map((request) => request.requestId);
   if (offScreen.length === 0) {
-    sidebarRevealedForApprovalIds = new Set();
+    sidebarRevealedForRequestIds = new Set();
     return;
   }
-  const isNewApproval = offScreen.some(
-    (id) => !sidebarRevealedForApprovalIds.has(id),
+  const isNewRequest = offScreen.some(
+    (id) => !sidebarRevealedForRequestIds.has(id),
   );
-  sidebarRevealedForApprovalIds = new Set(offScreen);
-  if (isNewApproval && shellState().sidebarCollapsed) {
+  sidebarRevealedForRequestIds = new Set(offScreen);
+  if (isNewRequest && shellState().sidebarCollapsed) {
     projectSessions.act(shell.active, {
       kind: 'workbench',
       layout: toggleSidebar(shellState()),
@@ -800,7 +800,7 @@ function revealSidebarForOffScreenApproval(): void {
 
 function rerenderShell(): void {
   if (bootstrapFailed || applyingProjectList) return;
-  revealSidebarForOffScreenApproval();
+  revealSidebarForOffScreenRequest();
   const active = activeRailProject(railProjects());
   const session = active ? projectSessions.get(active.display.key) : undefined;
   conversationView.view = active?.view ?? null;

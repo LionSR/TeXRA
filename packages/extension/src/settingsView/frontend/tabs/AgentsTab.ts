@@ -30,8 +30,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -52,7 +50,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
-export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
+export class AgentsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -176,28 +174,22 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
     description: string,
     icon: TeXRAIconName,
   ): TemplateResult {
-    const createSupported = !isKnownUnsupported(
-      this.unsupportedCommands,
-      SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
-    );
-    const actions = createSupported
-      ? html`
-          ${renderLabeledActionButton({
-            icon: 'file-circle-plus',
-            text: 'Create from template',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: () => this.handleCreateAgent(category, true),
-          })}
-          ${renderLabeledActionButton({
-            icon: 'plus',
-            text: 'Create agent',
-            kind: 'primary',
-            appearance: 'filled',
-            onClick: () => this.handleCreateAgent(category),
-          })}
-        `
-      : nothing;
+    const actions = html`
+      ${renderLabeledActionButton({
+        icon: 'file-circle-plus',
+        text: 'Create from template',
+        kind: 'secondary',
+        appearance: 'outlined',
+        onClick: () => this.handleCreateAgent(category, true),
+      })}
+      ${renderLabeledActionButton({
+        icon: 'plus',
+        text: 'Create agent',
+        kind: 'primary',
+        appearance: 'filled',
+        onClick: () => this.handleCreateAgent(category),
+      })}
+    `;
     return html`
       <section
         id="${category}-agents-section"
@@ -214,7 +206,6 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         <agent-selection-panel
           .agents=${agents}
           .category=${category}
-          .unsupportedCommands=${this.unsupportedCommands}
         ></agent-selection-panel>
       </section>
     `;

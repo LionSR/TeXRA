@@ -4,7 +4,6 @@
  * generator, subscription, filesystem handle, or durable write.
  */
 // Shared contracts and utilities
-import { redactSecrets } from '@logger/redaction';
 import {
   ActiveSkillsSnapshotSchema,
   MESSAGE_TYPES,
@@ -28,7 +27,6 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
-import { redactLogData } from './traceRedaction';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -84,8 +82,8 @@ export function createTranscriptFold(
         timestamp: stamp.at,
         groupId: params.groupId,
         messageType: params.messageType,
-        text: redactSecrets(params.text),
-        data: redactLogData(params.data),
+        text: params.text,
+        data: params.data,
         verbose: params.verbose ?? stamp.debug,
       });
     };
@@ -133,7 +131,7 @@ export function createTranscriptFold(
           timestamp: stamp.at,
           groupId: event.parentId ?? undefined,
           messageType: MESSAGE_TYPES.DEFAULT,
-          text: redactSecrets(event.label),
+          text: event.label,
           data: {
             status: RUN_PHASE.RUNNING,
             ...metadata,
@@ -207,21 +205,11 @@ export function createTranscriptFold(
 
       case 'workflow.plan': {
         workflowAttemptId = event.attemptId;
-        // Display strings pass through record-time redaction like every
-        // stage label and card the recorder persists; ids stay verbatim.
         const marker = {
           kind: 'workflowPlan',
           attemptId: event.attemptId,
-          phases: event.phases.map((phase) => ({
-            title: redactSecrets(phase.title),
-          })),
-          tasks: event.tasks.map((task) => ({
-            ...task,
-            label: redactSecrets(task.label),
-            ...(task.phase !== undefined && {
-              phase: redactSecrets(task.phase),
-            }),
-          })),
+          phases: [...event.phases],
+          tasks: [...event.tasks],
         } satisfies WorkflowPlanMarker;
         writer.appendSettled({
           id: `workflow-plan-${event.attemptId}`,
@@ -239,17 +227,7 @@ export function createTranscriptFold(
       case 'workflow.call': {
         const level: LogLevel =
           event.call.status === 'failed' ? 'error' : 'info';
-        // A failed call carries a provider error body in `error`, which
-        // hosts render next to the label, so it needs the same treatment as
-        // an error row's `data.message`.
-        const task: WorkflowCallProgress =
-          event.call.status === 'failed'
-            ? {
-                ...event.call,
-                label: redactSecrets(event.call.label),
-                error: redactSecrets(event.call.error),
-              }
-            : { ...event.call, label: redactSecrets(event.call.label) };
+        const task: WorkflowCallProgress = event.call;
         const entry = {
           level,
           groupId: event.stageId,
@@ -344,9 +322,7 @@ export function createTranscriptFold(
       case 'stream.end': {
         if (!runs.has(event.id) || transcriptBoundaryClosed) return;
         writer.settle(event.id, {
-          ...(event.finalText !== undefined && {
-            text: redactSecrets(event.finalText),
-          }),
+          ...(event.finalText !== undefined && { text: event.finalText }),
           data: { status: 'completed' },
         });
         runs.delete(event.id);
@@ -366,7 +342,7 @@ export function createTranscriptFold(
         if (correlatorId) {
           runs.delete(correlatorId);
           writer.settle(correlatorId, {
-            text: redactSecrets(event.text),
+            text: event.text,
             data: { status: 'completed' },
           });
           return;
@@ -379,7 +355,7 @@ export function createTranscriptFold(
           timestamp: stamp.at,
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-          text: redactSecrets(event.text),
+          text: event.text,
           data: { status: 'completed' },
           verbose: stamp.debug,
         });

@@ -247,7 +247,18 @@ export function priceTurnUsage(
       break;
     case 'minimax':
     case undefined:
-      cost = standardCost(usage, rates, bound.usageProvider === 'openai');
+      // Keyed on the wire surface, not the vendor: the OpenAI chat-completions
+      // surface reports reasoning tokens outside its output count, so they
+      // bill on top. An editor (`vscode-lm`) turn never reaches here with a
+      // usage record — the editor model reports `usage: null` and this
+      // function returns above — so no editor turn is silently billing
+      // reasoning at zero; a future editor model that starts reporting usage
+      // needs its own arm rather than this flag.
+      cost = standardCost(
+        usage,
+        rates,
+        bound.origin.protocol === 'openai-chat',
+      );
       break;
   }
   return {
@@ -255,7 +266,7 @@ export function priceTurnUsage(
     outputTokens,
     cost: Math.max(0, cost),
     responseTimeMs,
-    provider: bound.usageProvider,
+    provider: bound.origin.protocol,
     usageRoute: bound.usageRoute,
     ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
     ...(cached !== undefined && inputTokens >= cached

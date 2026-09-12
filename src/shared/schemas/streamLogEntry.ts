@@ -134,19 +134,14 @@ const StreamLogMessageEntrySchema = z.discriminatedUnion('messageType', [
   messageEntry(MESSAGE_TYPES.DEFAULT, StreamMessageDataSchemas.default),
 ]);
 
-const MessageTypeAbsentLogEntrySchema = logEntryBase.extend({
-  messageType: z.undefined().optional(),
-  data: z.unknown().optional(),
-});
-
 const GroupStreamLogEntrySchema = z.strictObject({
   ...streamLogSharedFields,
   type: z.enum([
     STREAM_LOG_ENTRY_TYPES.GROUP_START,
     STREAM_LOG_ENTRY_TYPES.GROUP_END,
   ]),
-  messageType: z.literal(MESSAGE_TYPES.DEFAULT).optional(),
-  data: GroupLogPayloadSchema.prefault({}),
+  messageType: z.literal(MESSAGE_TYPES.DEFAULT),
+  data: GroupLogPayloadSchema,
 });
 
 /**
@@ -158,11 +153,11 @@ const GroupStreamLogEntrySchema = z.strictObject({
 export const StreamLogEntrySchema = z.union([
   GroupStreamLogEntrySchema,
   StreamLogMessageEntrySchema,
-  MessageTypeAbsentLogEntrySchema,
 ]);
 
 export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
 
-export type StreamLogEntryOf<
-  T extends NonNullable<StreamLogEntry['messageType']>,
-> = Extract<StreamLogEntry, { messageType: T }>;
+export type StreamLogEntryOf<T extends StreamLogEntry['messageType']> = Extract<
+  StreamLogEntry,
+  { messageType: T }
+>;

@@ -57,6 +57,12 @@ session stores or execution checkpoints.
 New releases begin with the current defaults. TeXRA does not import old values
 from `.vscode/settings.json`.
 
+SQLite is the authoritative store for persistent runtime application state
+(`texra.db` under workspace storage: sessions, executions, and run events). The
+JSON files described here are used strictly for workspace and user settings.
+TeXRA 1.0 does not import or migrate legacy JSON session stores, histories, or
+execution checkpoints.
+
 The JSON files use flat `texra.*` keys. For example:
 
 ```json

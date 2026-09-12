@@ -7,7 +7,6 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache } from '@agent/storage';
 import {
   createAgentResponseTextConnector,
   defaultSession,
@@ -33,7 +32,6 @@ import {
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
-import { SecretManager } from '@frontend/secretManager';
 import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
@@ -106,7 +104,10 @@ import {
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  gitHubTokenRejectedMessage,
+} from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -582,7 +583,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => effectRuntime().runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    afterRunSettlement: [() => clearStoreCache(), () => disposeDiffRefresh()],
+    afterRunSettlement: [() => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
@@ -693,7 +694,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
+      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
       void effectRuntime()
@@ -775,10 +776,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   });
 
   const statusBarSession = defaultSession();
-  const statusBarUsageTracker = new StatusBarUsageTracker(
-    statusBarSession.status,
-    statusBarSession,
-  );
+  const statusBarUsageTracker = new StatusBarUsageTracker(statusBarSession);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const policy = statusBarSession.approvalPolicy;
@@ -831,6 +829,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
     session: statusBarSession,
+    tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
       updateStatusBarText();
@@ -852,7 +851,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context);
+  registerLanguageModelTools(context, runtime, statusBarSession.roots.config);
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },

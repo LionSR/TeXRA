@@ -9,16 +9,49 @@ All notable changes to this project will be documented in this file.
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
   documents and research files are unchanged.
+- **One streaming toggle instead of one per provider** — the per-provider
+  Streaming switches in the Models tab are gone. The global **Enable
+  streaming** setting now governs every provider.
+- **The OpenAI "Use the Responses API" setting is gone** — requests to OpenAI
+  always use the Responses API, and the classic Chat Completions fallback is
+  removed. OpenAI models routed through OpenRouter are unaffected.
 
 ### Bug Fixes
 
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
+
+### Extension (VS Code)
+
+#### Breaking Changes
+
+- **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
+  from the command palette, the Progress toolbar and the getting-started
+  walkthrough. Clean in the Progress toolbar now clears the selected run's
+  output folder, and "Clean All Build Files (Workspace-wide)" is unchanged.
 
 ### CLI and Agent SDK
 
 #### Breaking Changes
 
 - Node.js 22.16.0 or later in 22.x, or Node.js 24 or later is required.
+- **`texra history show --export html` no longer takes `--assets-dir`** — the
+  shared-assets export mode, which staged the trace viewer into a directory and
+  wrote only the trace JSON to stdout, is gone. The default single-file HTML
+  export is unchanged.
+- **`texra chat` no longer starts on the last run's model** — the chat model
+  comes from your workspace or user config, and otherwise from the CLI's
+  built-in default. Set a model in config if you relied on the previous run's
+  choice carrying over.
+- **`texra agents run` is gone — use `texra run`.** One headless run command now
+  serves both agent categories: `texra run <agent>` runs a workflow agent or a
+  tool-use agent, picking the run shape from the agent itself. There is no alias
+  or deprecation shim. `--output`/`--output-dir` stay workflow-only and a
+  tool-use agent still needs an instruction — `--instruction`,
+  `--instruction-file`, or both; using one on the wrong
+  category is a usage error that names the flag and the agent's category.
+  `--input` is no longer a required flag, because a tool-use run may take none.
+  A name carried by both categories is refused rather than resolved to one of
+  them: the error names both candidates and their source-qualified spellings.
 
 ## [0.40.10] - 2026-09-06
 

@@ -3,25 +3,11 @@ import { Effect } from 'effect';
 // Node imports
 
 // Third-party imports
+import { it as effectIt } from '@effect/vitest';
 import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  tryUseRunContext: vi.fn(),
-  currentSession: vi.fn(),
   submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/RunContext', () => {
-  const readRunContextField = (context: any, field: string) =>
-    context?.kind === 'launch' ? context.runScope[field] : context?.[field];
-  return {
-    tryUseRunContext: mocks.tryUseRunContext,
-    getRunContextRunId: (context: any) => readRunContextField(context, 'runId'),
-  };
-});
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
@@ -34,6 +20,7 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   rejectOversizedBibAttachments,
@@ -118,15 +105,9 @@ describe('DelegateAgentTool resume ownership', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.tryUseRunContext.mockReturnValue({
-      runId: parentRunId,
-    } as never);
-    mocks.currentSession.mockReturnValue({
-      runs: { getHandle: () => makeHandle() },
-    } as never);
   });
 
-  it('reports a merged recovery failure to the parent', async () => {
+  effectIt.effect('reports a merged recovery failure to the parent', () => {
     mocks.submitFollowUp.mockReturnValue(
       Effect.succeed({
         status: 'queued',
@@ -134,18 +115,34 @@ describe('DelegateAgentTool resume ownership', () => {
       }),
     );
 
-    await new DelegateAgentTool().call({
-      execution_id: runId,
-      instruction: 'Keep going.',
-    });
+    const session = {
+      runs: { getHandle: () => makeHandle() },
+    } as never;
+    return Effect.gen(function* () {
+      yield* new DelegateAgentTool()
+        .call({
+          execution_id: runId,
+          instruction: 'Keep going.',
+        })
+        .pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              model: 'parent-model',
+              run: { session, runId: parentRunId, toolPolicy: {} },
+            }),
+          ),
+        );
 
-    await vi.waitFor(() =>
-      assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 2),
-    );
-    expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
-      parentRunId,
-      expect.objectContaining({ origin: 'subagent_result' }),
-      expect.anything(),
-    );
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 2),
+        ),
+      );
+      expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
+        parentRunId,
+        expect.objectContaining({ origin: 'subagent_result' }),
+        expect.anything(),
+      );
+    });
   });
 });

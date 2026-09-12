@@ -8,10 +8,8 @@
  * If the external model returns files, the user saves them into the workspace
  * and tells the agent the paths.
  *
- * User input (answer text) is persisted in a module-level cache keyed by
- * requestId so it survives component recreation during webview hide/show
- * cycles — the permission is replayed via ApprovalRequestHandler but the
- * component is re-mounted with fresh @state.
+ * The answer draft lives in the surface's `inquiryDrafts`, keyed by
+ * `draftKey`, so it survives a re-mount.
  */
 
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
@@ -42,6 +40,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
+import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
@@ -59,7 +58,6 @@ type ExternalInquiryPermissionState = Extract<
 // ── Draft persistence ──
 
 const DRAFT_SAVE_DELAY_MS = 400;
-const INQUIRY_SUBMIT_ACTION = 'submit';
 
 /** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
  *  (PRD 9): the thread and the number of turns already answered. */
@@ -159,9 +157,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   /** A decision resolves the inquiry: its draft goes with it. */
-  protected override emitAction(
-    decision: Parameters<BaseFeedbackPanel<'externalInquiry'>['emitAction']>[0],
-  ): void {
+  protected override emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
     this.draftSaveDebounce.cancel();
     this.pendingDraftKey = null;
@@ -479,7 +475,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           icon: 'check',
           text: 'Submit answer',
           title: 'Submit the answer from the external model',
-          action: INQUIRY_SUBMIT_ACTION,
+          action: 'submit',
           kind: 'primary',
           disabled: this.readOnly,
           onClick: this.handleSubmit,
@@ -548,7 +544,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     const answer = this.answerText.trim();
 
     this.emitAction({
-      action: INQUIRY_SUBMIT_ACTION,
+      action: 'answer',
       answer,
       ...(sessionLinks.length ? { sessionLinks } : {}),
     });

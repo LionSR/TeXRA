@@ -97,7 +97,7 @@ describe('desktop preview host', () => {
   it.each([
     { kind: 'openFile', path: '/missing/output.pdf' },
     { kind: 'apiKeyBanner', action: 'guide' },
-    { kind: 'compileInputPdf' },
+    { kind: 'extractFigures' },
     { kind: 'latexdiffs', action: 'compare' },
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
@@ -119,10 +119,7 @@ describe('desktop preview host', () => {
         await import('@controllers/session/hostSnapshotSource');
       const session = createTestSession();
       const present = vi.fn<(...args: unknown[]) => boolean>(() => true);
-      const detachPresentation = session.interactions.use({
-        emit: present,
-        cancel: () => {},
-      });
+      const detachPresentation = session.interactions.use({ emit: present });
       const { createDesktopFileSelection } =
         await import('@desktop/main/desktopFileSelection');
       const { HostDraftRequests } =

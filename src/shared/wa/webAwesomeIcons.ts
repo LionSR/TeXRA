@@ -1,6 +1,5 @@
 // Third-party imports
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
-import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons/faArrowRotateLeft';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate';
@@ -14,7 +13,6 @@ import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
 import { faBrain } from '@fortawesome/free-solid-svg-icons/faBrain';
-import { faBuilding } from '@fortawesome/free-solid-svg-icons/faBuilding';
 import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
@@ -71,7 +69,6 @@ import { faGem } from '@fortawesome/free-solid-svg-icons/faGem';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
 import { faGraduationCap } from '@fortawesome/free-solid-svg-icons/faGraduationCap';
 import { faHashtag } from '@fortawesome/free-solid-svg-icons/faHashtag';
-import { faHeart } from '@fortawesome/free-solid-svg-icons/faHeart';
 import { faHexagon } from '@fortawesome/free-solid-svg-icons/faHexagon';
 import { faImage } from '@fortawesome/free-solid-svg-icons/faImage';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
@@ -86,7 +83,6 @@ import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faMoon } from '@fortawesome/free-solid-svg-icons/faMoon';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
-import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlane } from '@fortawesome/free-solid-svg-icons/faPlane';
@@ -150,7 +146,6 @@ function iconSvg(iconDefinition: FontAwesomeIconDefinition): string {
 // Canonical Font Awesome names. Use these directly when adding new icons.
 const icons = {
   'arrow-down': faArrowDown,
-  'arrow-left': faArrowLeft,
   'arrow-right': faArrowRight,
   'arrow-rotate-left': faArrowRotateLeft,
   'arrow-up': faArrowUp,
@@ -164,7 +159,6 @@ const icons = {
   box: faBox,
   'box-archive': faBoxArchive,
   brain: faBrain,
-  building: faBuilding,
   bullseye: faBullseye,
   'caret-down': faCaretDown,
   'chart-line': faChartLine,
@@ -221,7 +215,6 @@ const icons = {
   globe: faGlobe,
   'graduation-cap': faGraduationCap,
   hashtag: faHashtag,
-  heart: faHeart,
   hexagon: faHexagon,
   image: faImage,
   key: faKey,
@@ -236,7 +229,6 @@ const icons = {
   minus: faMinus,
   moon: faMoon,
   'note-sticky': faNoteSticky,
-  'paper-plane': faPaperPlane,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   plane: faPlane,

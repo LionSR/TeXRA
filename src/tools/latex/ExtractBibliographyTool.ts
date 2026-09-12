@@ -1,15 +1,14 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
+import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
@@ -50,27 +49,30 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   function* ({
     texPath,
     bibPath,
-  }: ExtractBibliographyInput): Effect.fn.Return<ToolResult, Error> {
+  }: ExtractBibliographyInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+    const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);
 
-    const context = yield* extractBibliographyContext(path.relative);
+    const context = yield* extractBibliographyContext(path.absolute);
     const bibliographyFiles = [...context.bibliographyFiles];
     const missingBibliographyFiles = [...context.missingBibliographyFiles];
     let citationKeys = [...context.citationKeys];
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || getConfig<string>('texra.bib.defaultPath');
+      bibPath || call.inScope(() => getConfig<string>('texra.bib.defaultPath'));
 
     if (effectiveBibPath) {
-      const { path: resolved } = resolveAndFormat(effectiveBibPath);
+      const { path: resolved } = call.inScope(() =>
+        resolveAndFormat(effectiveBibPath, call.workingDirectory),
+      );
       const exists = yield* Effect.tryPromise({
-        try: () => WorkspaceFS.exists(resolved.relative),
+        try: () => call.inScope(() => WorkspaceFS.exists(resolved.fsPath)),
         catch: ensureError,
       });
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
-      if (!target.includes(resolved.relative)) {
-        target.push(resolved.relative);
+      if (!target.includes(resolved.absolute)) {
+        target.push(resolved.absolute);
       }
       if (citationKeys.length === 0) {
         citationKeys = ['*'];
@@ -91,7 +93,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     if (citationKeys.length === 0) {
       const missingNote =
         missingBibliographyFiles.length > 0
-          ? `\n\nNote: Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`
+          ? `\n\nNote: Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`
           : '';
       const result = emptyExtractionResult(
         `BibTeX entries in ${display}`,
@@ -128,7 +130,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     const instructions = [
       missingBibliographyFiles.length > 0 &&
-        `Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`,
+        `Missing bibliography files: ${call.inScope(() => formatPathList(missingBibliographyFiles))}.`,
       missingKeys.length > 0 &&
         `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
       entryCount > DEFAULT_MAX_ENTRIES &&
@@ -148,11 +150,7 @@ export class ExtractBibliographyTool extends defineTool({
     'Collect BibTeX records for citations referenced in a LaTeX document.',
   schema: ExtractBibliographyInputSchema,
 }) {
-  protected execute(input: ExtractBibliographyInput): Promise<ToolResult> {
-    // The owning run's cancellation enters the bibliography reads as
-    // interruption rather than waiting them out.
-    return effectRuntime().runPromise(extractBibliography(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+  protected execute(input: ExtractBibliographyInput) {
+    return extractBibliography(input);
   }
 }

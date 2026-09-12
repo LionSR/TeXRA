@@ -128,6 +128,13 @@ export class RunHandle<
 
   /** Whether a caller has claimed the run's exactly-once terminal outcome. */
   private terminalClaimed = false;
+  /**
+   * Whether a stop reached this handle. Stop precedence reads it: a stop
+   * that landed before the run's own exit outranks the report the flow makes
+   * of that exit, so the `run.end` row says cancelled. In-process only; the
+   * durable verdict is the row.
+   */
+  private stopped = false;
 
   constructor(
     /**
@@ -231,7 +238,14 @@ export class RunHandle<
     };
   }
 
+  /** True once a stop reached this handle, whether or not a program was
+   *  there to interrupt. */
+  get stopRequested(): boolean {
+    return this.stopped;
+  }
+
   interrupt(): boolean {
+    this.stopped = true;
     const handler = this.interruptHandler;
     if (handler) {
       handler.interrupt();
@@ -289,6 +303,7 @@ export class RunHandle<
   beginSuspendedTermination(): Effect.Effect<void, Error> | undefined {
     if (this.suspension?.state !== 'parked') return undefined;
     if (!this.claimTerminalFinalize()) return undefined;
+    this.stopped = true;
     const { teardown } = this.suspension;
     this.suspension = { state: 'terminating' };
     return teardown;

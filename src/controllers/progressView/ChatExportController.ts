@@ -29,7 +29,6 @@ import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import {
@@ -178,11 +177,6 @@ export class ChatExportController {
       }
       const { trace } = traceResult;
 
-      const exportTrace = {
-        ...trace,
-        entries: projectWorkflowCallEntries(trace.entries),
-      };
-
       if (
         !(yield* Effect.tryPromise({
           try: () => AbsoluteFS.exists(standaloneTemplatePath),
@@ -200,7 +194,7 @@ export class ChatExportController {
         try: () => AbsoluteFS.read(standaloneTemplatePath),
         catch: ensureError,
       });
-      const html = injectStandaloneTrace(template, exportTrace);
+      const html = injectStandaloneTrace(template, trace);
 
       const filename = generateExportFilename(
         {

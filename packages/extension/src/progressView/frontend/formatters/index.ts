@@ -61,8 +61,8 @@ const ROW_FORMATTERS: RowFormatters = {
   statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
-  // The run board paints every call of a script run; only a legacy import
-  // without a run identity reaches this line.
+  // Only a run without a run model reaches this; the run board paints
+  // script calls.
   workflowTask: formatDefaultLogMessageTemplate,
   compactionActivity: formatCompactionActivityTemplate,
   phase: formatDefaultLogMessageTemplate,

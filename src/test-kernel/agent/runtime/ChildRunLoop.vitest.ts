@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   assertOwnedRunLease: vi.fn((_runId: RunId) => undefined),
 }));
 
-// Turn-state persistence runs against the real (memfs-backed) run store:
-// the loop writes it best-effort and no assertion here depends on it.
+// Turn attribution is committed as `child.turn` rows on the run aggregate,
+// so the fixtures read it back through the fold rather than a store mock.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeRun: mocks.finalizeRun,
@@ -46,7 +46,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-import { getRunRecords, getRunStore } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { readChildTurnState } from '@agent/storage/runRecords';
 import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
   typeof import('@agent/followUp/ToolUseFollowUp')
@@ -66,10 +67,11 @@ import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget'
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
+  aggregateId as qualifyAggregateId,
+  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  type RunPhase,
   AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -80,7 +82,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
@@ -109,20 +110,41 @@ function loopRunId(): RunId {
   return runId;
 }
 
-function trackChildHandle(
-  runId: RunId,
-  parentRunId: RunId,
-  status: RunPhase = RUN_PHASE.RUNNING,
-): RunHandle {
+function trackChildHandle(runId: RunId, parentRunId: RunId): RunHandle {
   const handle = testRunHandle({
     runId,
     parent: parentRunId,
     agent: 'fake',
     trace: { emit: vi.fn() } as never,
   });
-  session.runs.trackAgentRun(handle, { status });
+  session.runs.track(handle);
   trackedRunIds.add(runId);
   return handle;
+}
+
+/**
+ * Move the parent run's folded phase, the way the runtime does: an
+ * activation row makes it running, the terminal row ends it. The fold is
+ * the one phase authority, so a follow-up test states its premise in rows.
+ */
+async function foldParentPhase(active: boolean): Promise<void> {
+  const aggregateId = qualifyAggregateId('run', PARENT_RUN_ID);
+  session.publish([
+    active
+      ? {
+          type: 'run.activate',
+          aggregateId,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+        }
+      : {
+          type: 'run.end',
+          aggregateId,
+          outcome: RUN_OUTCOME.COMPLETED,
+          output: emptyRunEndOutput(AgentCategory.ToolUse),
+        },
+  ]);
+  await session.settlePublications();
 }
 
 /** A turn the fake strategy can produce: interim (loop continues) or terminal. */
@@ -434,47 +456,45 @@ describe('childRunLoop E2E fixtures', () => {
     },
   );
 
-  it('drains accepted-turn attribution before releasing the run lease', async () => {
+  it('commits accepted-turn attribution before releasing the run lease', async () => {
     const runId = loopRunId();
     const { strategy, rejectTurn } = createFakeStrategy();
-    const writeBarrier = pDefer<void>();
-    const writeStarted = pDefer<void>();
-    const store = getRunStore(runId);
-    const writeTurnState = vi
-      .spyOn(store, 'writeTurnState')
-      .mockImplementationOnce(async () => {
-        writeStarted.resolve();
-        await writeBarrier.promise;
-      });
 
-    try {
-      const completion = startLoop(runId, strategy);
-      await writeStarted.promise;
-      // Interrupt the loop through its parent lineage: no turn handle is
-      // tracked in this fixture, so the stop reaches the loop via its
-      // child activation.
-      const stopSettlement = Effect.runPromise(
-        session.runs.stopAgentRun(PARENT_RUN_ID),
-      );
-      await rejectTurn(1, createAbortError());
-      await stopSettlement;
+    const completion = startLoop(runId, strategy);
+    // Acceptance is committed before the turn is dispatched, so the run's
+    // report/result slots are attributable while the turn is still running.
+    await vi.waitFor(async () =>
+      expect(
+        await Effect.runPromise(readChildTurnState(session, runId)),
+      ).toEqual({
+        active: { attemptId: expect.any(String), turnIndex: 1 },
+        lastCompleted: null,
+      }),
+    );
+    expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      await vi.waitFor(() =>
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true),
-      );
-      expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+    // Interrupt the loop through its parent lineage: no turn handle is
+    // tracked in this fixture, so the stop reaches the loop via its
+    // child activation.
+    const stopSettlement = Effect.runPromise(
+      session.runs.stopAgentRun(PARENT_RUN_ID),
+    );
+    await rejectTurn(1, createAbortError());
+    await stopSettlement;
+    await completion;
 
-      writeBarrier.resolve();
-      await completion;
-      expect(writeTurnState).toHaveBeenCalledOnce();
-      expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
-        session,
-        runId,
-      );
-    } finally {
-      writeBarrier.resolve();
-      writeTurnState.mockRestore();
-    }
+    // An interrupted turn never settles, so the acceptance row stands and
+    // the lease is released only once the loop is done with it.
+    expect(await Effect.runPromise(readChildTurnState(session, runId))).toEqual(
+      {
+        active: { attemptId: expect.any(String), turnIndex: 1 },
+        lastCompleted: null,
+      },
+    );
+    expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+      session,
+      runId,
+    );
   });
 
   it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
@@ -514,9 +534,7 @@ describe('childRunLoop E2E fixtures', () => {
     await launchStarted.promise;
 
     try {
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
+      await foldParentPhase(true);
       await expect(
         Effect.runPromise(
           realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
@@ -526,9 +544,7 @@ describe('childRunLoop E2E fixtures', () => {
         ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.COMPLETED,
-      });
+      await foldParentPhase(false);
       const userAdmission = vi.fn();
       await expect(
         Effect.runPromise(
@@ -577,9 +593,7 @@ describe('childRunLoop E2E fixtures', () => {
       notifyProgress({ kind: 'started' });
       expect(session.followUps.getAll(PARENT_RUN_ID)).toEqual(terminalQueue);
 
-      seedRunStatusForTest(session.status, PARENT_RUN_ID, {
-        phase: RUN_PHASE.RUNNING,
-      });
+      await foldParentPhase(true);
       notifyProgress({ kind: 'started' });
       const progressQueue = session.followUps.getAll(PARENT_RUN_ID);
       expect(progressQueue).toHaveLength(terminalQueue.length + 1);
@@ -777,6 +791,46 @@ describe('childRunLoop E2E fixtures', () => {
     await waitForLoopEnd(runId);
   });
 
+  it('parks a child-stream loop on a waiting row, so the next turn is admitted onto its queue', async () => {
+    const runId = loopRunId();
+    const { strategy, resolveTurn, callCount } = createFakeStrategy();
+    const childRun = await Effect.runPromise(
+      createChildRun(session, runId, PARENT_RUN_ID, {
+        run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+        userFollowUpSupport: 'terminalBacked',
+        description: 'Keep an agent-CLI child running',
+        config: childRunConfig,
+      }),
+    );
+    trackedRunIds.add(runId);
+    const completion = startLoop(runId, strategy, { childRun });
+
+    await waitForLiveOwner(runId);
+    await resolveTurn(1, { kind: 'interim', value: 'first' });
+
+    // Blocked between turns the run is idle, and the phase row says so: a
+    // run that only looked busy is refused as `no_session` and its session
+    // can never take another turn.
+    await vi.waitFor(() =>
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING),
+    );
+    expect(session.runs.getToolUseFollowUpTarget(runId)).toEqual({
+      kind: 'queue',
+    });
+
+    session.followUps.submit(
+      runId,
+      { text: 'keep going', origin: 'user' },
+      'live_owner',
+    );
+    await vi.waitFor(() => expect(callCount()).toBe(2));
+    await vi.waitFor(() =>
+      expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING),
+    );
+    await resolveTurn(2, { kind: 'terminal', value: 'final' });
+    await completion;
+  });
+
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
     const runId = loopRunId();
     const { strategy, resolveTurn, callCount } = createFakeStrategy();
@@ -847,9 +901,8 @@ describe('childRunLoop E2E fixtures', () => {
     await waitForLiveOwner(runId);
 
     // Mirrors what a real native turn's runFlowWithLifecycle does: track a
-    // fresh handle for this runId/runId, WAITING, once the
-    // turn suspends.
-    const handle = trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
+    // fresh handle for this run once the turn suspends.
+    const handle = trackChildHandle(runId, PARENT_RUN_ID);
 
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
@@ -1013,7 +1066,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLiveOwner(runId);
 
-    trackChildHandle(runId, PARENT_RUN_ID, RUN_PHASE.WAITING);
+    trackChildHandle(runId, PARENT_RUN_ID);
 
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
@@ -1031,7 +1084,11 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.runs.getHandle(runId)).toBeUndefined();
   });
 
-  it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
+  // The handle's stop latch is the one precedence authority
+  // (`finalizeRunTerminal`): a stop that reached the run before its exit
+  // outranks the turn's own report, so the terminal row says cancelled even
+  // though the turn failed first.
+  it('lets a stop landing after a turn failure win the terminal outcome', async () => {
     const runId = 'fa11ed01' as RunId;
     publishTestRunStart(session, runId);
     const childRun = await Effect.runPromise(
@@ -1044,9 +1101,8 @@ describe('childRunLoop E2E fixtures', () => {
     );
     trackedRunIds.add(runId);
     const { strategy, rejectTurn } = createFakeStrategy();
-    // Fires between the turn failure landing FAILED on the stream phase and
-    // the loop's finalize, so the loop reports an interrupted run for a stream
-    // whose phase already carries the failure.
+    // Fires between the turn failure and the loop's finalize, which is the
+    // window the stop latch has to win.
     const stopSettlements: Promise<void>[] = [];
     const interruptAfterFailure = vi.fn(() => {
       stopSettlements.push(
@@ -1066,15 +1122,14 @@ describe('childRunLoop E2E fixtures', () => {
 
     await Promise.all(stopSettlements);
     expect(interruptAfterFailure).toHaveBeenCalledOnce();
-    expect(session.status.get(runId)).toBe(RUN_PHASE.FAILED);
     expect(mocks.finalizeRun).toHaveBeenCalledWith(
       session,
       expect.objectContaining({
         runId,
-        outcome: RUN_OUTCOME.FAILED,
-        error: expect.objectContaining({
-          message: expect.stringContaining('turn blew up'),
-        }),
+        outcome: RUN_OUTCOME.CANCELLED,
+        // Error facts classified for a failure the stop outranked are not
+        // facts about this run's outcome.
+        error: undefined,
       }),
     );
   });

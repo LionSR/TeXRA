@@ -1,20 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-} from '@agent/workflowScript/persistence';
+} from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowJournalEntry,
   WorkflowScriptControl,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
-const runId = '7154c0570057' as RunId;
 const key = '0000000000000000';
 const meta = `export const meta = {
   name: 'cost-test',
@@ -61,54 +66,59 @@ function toolUseResult(cost: number): unknown {
  * zero-cost attempt per entry makes `total` charge each entry's validated
  * final-result cost (`max(0, journalCost)`), i.e. the sum of journal costs.
  */
+/**
+ * Settle a journal's completed cost through the public tracker surface: one
+ * zero-cost attempt per entry makes `total` charge each entry's validated
+ * final-result cost (`max(0, journalCost)`), i.e. the sum of journal costs.
+ */
 function settleJournalCost(journal: readonly WorkflowJournalEntry[]): number {
   const tracker = createWorkflowAttemptCostTracker();
   for (const journalEntry of journal) tracker.record(journalEntry, 0);
   return tracker.total(journal);
 }
 
-beforeEach(() => clearStoreCache());
-
 describe('workflow attempt cost', () => {
-  it('aggregates observability cost across physical interactive attempts', async () => {
-    let control!: WorkflowScriptControl;
-    let attempt = 0;
-    const run = runWorkflowScript({
-      script: `${meta}
+  it.live(
+    'aggregates observability cost across physical interactive attempts',
+    () =>
+      Effect.gen(function* () {
+        let control!: WorkflowScriptControl;
+        let attempt = 0;
+        const started = yield* Deferred.make<void>();
+        const run = runWorkflowScript({
+          script: `${meta}
 return await agent('retry cost')`,
-      runAgent: async (invocation) => {
-        attempt += 1;
-        invocation.report({
-          costUsd: attempt === 1 ? 0.2 : 0.3,
-          childRunId: `retry-cost-${attempt}` as RunId,
+          runAgent: (invocation) =>
+            Effect.gen(function* () {
+              attempt += 1;
+              invocation.report({
+                costUsd: attempt === 1 ? 0.2 : 0.3,
+                childRunId: `retry-cost-${attempt}` as RunId,
+              });
+              if (attempt === 1) {
+                yield* Deferred.succeed(started, undefined);
+                yield* Effect.never;
+              }
+              return 'done';
+            }),
+          onControl: (value) => {
+            control = value;
+          },
         });
-        if (attempt === 1) {
-          await new Promise<void>((_resolve, reject) =>
-            invocation.signal.addEventListener(
-              'abort',
-              () => reject(new Error('retrying')),
-              { once: true },
-            ),
-          );
-        }
-        return 'done';
-      },
-      onControl: (value) => {
-        control = value;
-      },
-    });
 
-    await vi.waitFor(() => expect(attempt).toBe(1));
-    control('retry-cost-1' as RunId, 'retry');
-    await vi.waitFor(() => expect(attempt).toBe(2));
-    const result = await run;
+        const fiber = yield* run.pipe(Effect.forkScoped);
+        yield* Deferred.await(started);
+        control('retry-cost-1' as RunId, 'retry');
+        const result = yield* Fiber.join(fiber);
+        expect(attempt).toBe(2);
 
-    expect(result.snapshot.calls[0]?.attempts).toMatchObject([
-      { number: 1, costUsd: 0.2 },
-      { number: 2, costUsd: 0.3 },
-    ]);
-    expect(result.snapshot.calls[0]?.costUsd).toBeCloseTo(0.5);
-  });
+        expect(result.snapshot.calls[0]?.attempts).toMatchObject([
+          { number: 1, costUsd: 0.2 },
+          { number: 2, costUsd: 0.3 },
+        ]);
+        expect(result.snapshot.calls[0]?.costUsd).toBeCloseTo(0.5);
+      }),
+  );
 
   it('adds discarded retry cost before an undefined final observer fallback', () => {
     const completed = entry(0, workflowResult(0.5), 'completed');
@@ -194,6 +204,16 @@ return await agent('retry cost')`,
 });
 
 describe('workflow-script completed journal cost', () => {
+  let session: SessionHandle;
+  // The checkpoint aggregate hangs under the run that invoked the workflow,
+  // so that run has to exist before a script row can name it.
+  let parentRunId: RunId;
+  beforeEach(async () => {
+    session = createProcessSession();
+    parentRunId = publishTestRunStart(session);
+    await session.settlePublications();
+  });
+
   it('sums canonical workflow and tool-use results independent of entry order', () => {
     const journal = [
       entry(4, toolUseResult(0.25)),
@@ -223,48 +243,63 @@ describe('workflow-script completed journal cost', () => {
     );
   });
 
-  it('produces the same total after a checkpoint replay', async () => {
-    const store = getRunStore(runId);
-    const script = `${meta}
+  it.live('produces the same total after a checkpoint replay', () =>
+    Effect.gen(function* () {
+      const script = `${meta}
 await agent('first')
 return await agent('second')`;
-    const results = [workflowResult(0.4), toolUseResult(0.6)];
-    const first = await runPersistedWorkflowScript({
-      store,
-      checkpointId: 'replay',
-      script,
-      runAgent: async ({ index }) => results[index],
-    });
+      const results = [workflowResult(0.4), toolUseResult(0.6)];
+      const first = yield* runPersistedWorkflowScript({
+        session,
+        parentRunId,
+        checkpointId: 'replay',
+        script,
+        runAgent: ({ index }) =>
+          Effect.sync(function () {
+            return results[index];
+          }),
+      });
 
-    clearStoreCache();
-    const runner = vi.fn(() => Promise.reject(new Error('must replay')));
-    const replayed = await runPersistedWorkflowScript({
-      store: getRunStore(runId),
-      checkpointId: 'replay',
-      runAgent: runner,
-    });
+      const runner = vi.fn(() => Effect.fail(new Error('must replay')));
+      const replayed = yield* runPersistedWorkflowScript({
+        session,
+        parentRunId,
+        checkpointId: 'replay',
+        runAgent: runner,
+      });
 
-    expect(runner).not.toHaveBeenCalled();
-    expect(settleJournalCost(first.journal)).toBe(1);
-    expect(settleJournalCost(replayed.journal)).toBe(1);
-  });
+      expect(runner).not.toHaveBeenCalled();
+      expect(settleJournalCost(first.journal)).toBe(1);
+      expect(settleJournalCost(replayed.journal)).toBe(1);
+    }),
+  );
 
-  it('can settle completed entries retained after a script failure', async () => {
-    const store = getRunStore(runId);
-    const script = `${meta}
+  it.live('can settle completed entries retained after a script failure', () =>
+    Effect.gen(function* () {
+      const script = `${meta}
 await agent('completed')
 throw new Error('later failure')`;
 
-    await expect(
-      runPersistedWorkflowScript({
-        store,
-        checkpointId: 'failure',
-        script,
-        runAgent: async () => workflowResult(0.75),
-      }),
-    ).rejects.toThrow('later failure');
+      expect(
+        yield* Effect.flip(
+          runPersistedWorkflowScript({
+            session,
+            parentRunId,
+            checkpointId: 'failure',
+            script,
+            runAgent: () =>
+              Effect.sync(function () {
+                return workflowResult(0.75);
+              }),
+          }),
+        ),
+      ).toMatchObject({ message: expect.stringContaining('later failure') });
 
-    const checkpoint = await readWorkflowScriptCheckpoint(store, 'failure');
-    expect(settleJournalCost(checkpoint?.journal ?? [])).toBe(0.75);
-  });
+      const checkpoint = yield* readWorkflowScriptCheckpoint(
+        session,
+        'failure',
+      );
+      expect(settleJournalCost(checkpoint?.journal ?? [])).toBe(0.75);
+    }),
+  );
 });

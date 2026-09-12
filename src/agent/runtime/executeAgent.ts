@@ -7,9 +7,9 @@ import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
@@ -129,6 +129,7 @@ function runLayerFor(
         parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
         toolInjections,
+        onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         inScope,
         callbacks: {
           onProgress: (update) => {
@@ -174,10 +175,10 @@ function runLayerFor(
  * request and the tool bodies that still need a signal — so the signal is
  * downstream of the stop rather than a second way to stop the run.
  */
-function runUntilStopped(
+function runUntilStopped<R>(
   ctx: AgentLaunchContext,
-  program: Effect.Effect<AgentRuntimeFlowResult, Error>,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  program: Effect.Effect<AgentRuntimeFlowResult, Error, R>,
+): Effect.Effect<AgentRuntimeFlowResult, Error, R> {
   const { runId } = ctx.runScope;
   return Effect.raceFirst(
     program.pipe(
@@ -221,7 +222,7 @@ function launchToolUseRun(
   },
   variant: ToolUseLaunchVariant,
   inScope: <A>(operation: () => A) => A,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx.runScope;
   const program = runToolUse({
     resume: variant.kind === 'resume',
@@ -287,7 +288,7 @@ function launchReflectionRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions & { readonly setting: AgentSetting },
   inScope: <A>(operation: () => A) => A,
-): Effect.Effect<AgentRuntimeFlowResult, Error> {
+): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
   const { runId } = ctx.runScope;
   const program = runReflection({ resume: options.resumed === true }).pipe(
     // The reflection family injects no conditional tools (memory and plan are

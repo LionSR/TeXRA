@@ -21,6 +21,12 @@ const UsageRouteSchema = z.enum([
 const UsageLogEntryInputSchema = z.object({
   timestamp: z.iso.datetime(),
   model: z.string(),
+  /** The wire surface of the turn (`openai-responses`, `anthropic-messages`,
+   *  `openrouter-chat`, ...), stored verbatim in the `provider` column. From
+   *  TeXRA 1.0 the client sends protocol names where it used to send vendor
+   *  names (`openai`, `anthropic`); the column is an external contract
+   *  versioned with this function, so it stays `z.string()` and rows written
+   *  by earlier clients keep their vendor names. */
   provider: z.string(),
   inputTokens: z.int().nonnegative(),
   outputTokens: z.int().nonnegative(),

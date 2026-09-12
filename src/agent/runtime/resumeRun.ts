@@ -20,7 +20,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
-import { getRunRecords } from '@agent/storage/RunKVStore';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -266,10 +266,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
           catch: ensureError,
         }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
-  session.status.clearHold(runId);
+  session.clearUnreadable(runId);
   if (lease?.status === 'held') {
     releaseQueue();
-    session.status.markUnavailable(runId, runHeldMessage(lease.owner.pid));
+    session.markUnreadable(runId, runHeldMessage(lease.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
@@ -339,7 +339,7 @@ function refusalFor(
   runId: RunId,
 ): ResumeRunResult | undefined {
   if (error instanceof RunLeaseActiveError) {
-    session.status.markUnavailable(runId, runHeldMessage(error.owner.pid));
+    session.markUnreadable(runId, runHeldMessage(error.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {
@@ -356,11 +356,12 @@ function refusalFor(
 }
 
 /**
- * The tool-use resume "queue dance": flip the stream to RESUMING, drain the
- * queued follow-ups and notify the UI, resume while handing the drained batch
- * to the flow's WAITING cursor via `drainedFollowUps`, on failure re-enqueue
- * the follow-ups and re-notify, and always return the stream to WAITING if
- * the resume never reached the run lifecycle.
+ * The tool-use resume "queue dance": drain the queued follow-ups and notify
+ * the UI, resume while handing the drained batch to the flow's WAITING
+ * cursor via `drainedFollowUps`, and on failure re-enqueue the follow-ups
+ * and re-notify. The phase is the fold's: the resume's `run.activate` reads
+ * as resuming, and a resume that never reached the lifecycle leaves the run
+ * to read as interrupted once its claim is released.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
@@ -369,16 +370,12 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
-  const runStatus = session.status;
   const followUpsQueue = session.followUps;
 
   if (session.runs.getHandle(resume.runId)?.suspendedTerminationStarted) {
     followUpsQueue.release(queueLease, 'recoverable');
     return REFUSED;
   }
-  runStatus.transition(runId, RUN_PHASE.RUNNING, 'resume', {
-    substate: RUN_SUBSTATE.RESUMING,
-  });
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
@@ -455,16 +452,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     ),
     Effect.ensuring(
       Effect.sync(() => {
-        // Early failures leave the stream RESUMING. Startup cancellation can
-        // instead reach lifecycle terminalization before the queue owner regains
-        // control. In both cases, restored input makes WAITING the durable state.
-        if (
-          cancelledAtFlowAttachment ||
-          followUpsRestored ||
-          runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING
-        ) {
-          runStatus.transitionToWaiting(runId, 'wait');
-        }
         followUpsQueue.release(
           queueLease,
           !runResult || isWaitingFlowResult(runResult) || followUpsRestored

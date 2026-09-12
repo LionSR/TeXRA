@@ -3,9 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex utilities
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getTeXCount } from '@latex/texcount';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -67,11 +65,9 @@ export class TexcountTool extends defineTool({
     'Run texcount on one or more LaTeX files. Use mode="separate" (default) for individual files, "include" to follow \\input/\\include, or "sum" to aggregate independent sources.',
   schema: TexcountInputSchema,
 }) {
-  protected execute(input: TexcountInput): Promise<ToolResult> {
+  protected execute(input: TexcountInput): Effect.Effect<ToolResult, unknown> {
     // Cancelling a parallel batch interrupts this fiber, and the texcount
     // subprocesses abort with it — no signal is threaded through by hand.
-    return effectRuntime().runPromise(texcount(input), {
-      signal: getCurrentToolCallContext()?.signal,
-    });
+    return texcount(input);
   }
 }

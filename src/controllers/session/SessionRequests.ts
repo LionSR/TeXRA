@@ -26,14 +26,13 @@
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type {
-  PlanApprovalResult,
-  ProposalResult,
-} from '@agent/runtime/HostInteractions';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunBusy } from '@agent/runtime/runLanes';
-import { aggregateId as qualifyAggregateId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  requestParksItsCaller,
+} from '@shared/schemas';
 import type { LocalRuntimeState, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
@@ -50,9 +49,22 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
+import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const done: Outcome = { kind: 'done' };
+
+/**
+ * One in-process serial lane per request id. `decideRequest`'s checked append
+ * fences the row across processes, but the row alone: two surfaces of this
+ * process deciding one inquiry would both pass the pending check and both
+ * reach the thread record before either appended, so the loser's verdict
+ * could stand over an answer already recorded and delivered. The lane makes
+ * the pending check, the inquiry record and the append one operation per
+ * request.
+ */
+const decisionLanes = new Map<string, PerKeyLane>();
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
@@ -70,7 +82,7 @@ export function sessionRequests(
     req: RuntimeRequest,
   ) {
     const admitted = yield* admit(log, local, req);
-    return yield* handle(session, req, log, admitted).pipe(
+    return yield* handle(session, req, log, admitted, local).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
     );
   });
@@ -134,45 +146,106 @@ function admit(
   );
 }
 
-/** A decision for a request no longer pending: settled already, or never made. */
-function settled(runId: RunId, what: string): Unavailable {
+/** A decision for a request no longer pending: decided already, or never opened. */
+function settled(runId: RunId): Unavailable {
   return new Unavailable({
     runId,
-    reason: `No pending ${what} request under that id.`,
+    reason: 'No pending request under that id.',
   });
 }
 
-function planDecision(
-  decision: Extract<RuntimeRequest, { kind: 'decision.plan' }>['decision'],
-): PlanApprovalResult {
-  switch (decision.action) {
-    case 'approve':
-      return { action: 'approve' };
-    case 'approve_and_goal':
-      return {
-        action: 'approve_and_goal',
-        ...(decision.autoApproveAll ? { autoApproveAll: true } : {}),
-      };
-    case 'reject':
-      return { action: 'reject', feedback: decision.feedback ?? undefined };
-  }
-}
-
-function proposalDecision(
-  decision: Extract<RuntimeRequest, { kind: 'decision.proposal' }>['decision'],
-): ProposalResult {
-  switch (decision.action) {
-    case 'approve':
-      return {
-        action: 'approve',
-        ...(decision.model == null ? {} : { model: decision.model }),
-        ...(decision.agent == null ? {} : { agent: decision.agent }),
-      };
-    case 'setup':
-      return { action: 'setup' };
-    case 'reject':
-      return { action: 'reject', feedback: decision.feedback ?? undefined };
-  }
+/**
+ * The one way in for a decision (one run model, 3.7): the request must be
+ * pending (opened, not decided), the decision lands as the run's
+ * `request.decided` row, and the waiting run reads it from the tail. The
+ * fold routes the arm; `SessionHandle.decideRequest` re-reads the committed
+ * rows under the session's publication permit and is the authority, so two
+ * surfaces deciding at once record one decision and the loser hears that the
+ * request was settled rather than overwriting it.
+ *
+ * An inquiry's answer is also recorded on its thread and delivered as a
+ * follow-up, since an inquiry never parks its run. That record lives in the
+ * cross-project inquiry database, so it cannot share the run's transaction;
+ * it is written first, because a process that exits in the gap then leaves
+ * the request pending and answerable, rather than settled with nothing
+ * recorded on the thread and no way to ask again. Two surfaces of this
+ * process therefore cannot run this in parallel: the whole decision takes
+ * the request's lane ({@link decisionLanes}), so the second reads a request
+ * already decided instead of answering its thread behind the first.
+ */
+function decide(
+  session: SessionHandle,
+  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  admitted: AggregateState,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+): Effect.Effect<Outcome, RequestError, InquiryRecords> {
+  // A run whose owner is gone (proved dead, or a claim already released)
+  // takes no append until this process holds its claim: the decision
+  // acquires it with the fencing resume uses and gives it back, so a later
+  // resume can still take the run.
+  const heldHere =
+    admitted.ownerId !== null &&
+    SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
+  const answer = Effect.gen(function* () {
+    const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
+      (request) =>
+        request.runId === req.runId && request.requestId === req.requestId,
+    );
+    if (pending === undefined) return yield* Effect.fail(settled(req.runId));
+    // A request that parks its caller is answered by the fiber waiting on
+    // it, and that fiber died with the owner this decision is taking over
+    // from: recording a decision would clear the panel without doing what
+    // it says. Resuming the run retires those requests
+    // (`RunLedger.acquire`) and asks again.
+    if (!heldHere && requestParksItsCaller(pending.payload)) {
+      return yield* Effect.fail(
+        new Unavailable({
+          runId: req.runId,
+          reason:
+            'The run that asked is no longer running: resume it to answer this request.',
+        }),
+      );
+    }
+    if (pending.payload.kind === 'externalInquiry') {
+      yield* recordInquiryDecision(
+        pending.payload.data,
+        req.decision,
+        session,
+      ).pipe(Effect.orDie);
+    }
+    const recorded = yield* session
+      .decideRequest(req.runId, req.requestId, req.decision)
+      .pipe(
+        Effect.mapError((error): RequestError =>
+          error instanceof DatabaseWriteFailed
+            ? new Unavailable({
+                runId: req.runId,
+                reason: 'The decision could not be recorded.',
+              })
+            : new NotOwner({ runId: req.runId }),
+        ),
+      );
+    if (!recorded) return yield* Effect.fail(settled(req.runId));
+    return done;
+  });
+  return withPerKeyLane(
+    decisionLanes,
+    `${req.runId}/${req.requestId}`,
+  )(
+    heldHere
+      ? answer
+      : Effect.acquireUseRelease(
+          session
+            .acquireClaims(qualifyAggregateId('run', req.runId))
+            .pipe(
+              Effect.mapError(
+                (): RequestError => new NotOwner({ runId: req.runId }),
+              ),
+            ),
+          () => answer,
+          (release) => release.pipe(Effect.orDie),
+        ),
+  );
 }
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
@@ -238,6 +311,7 @@ function handle(
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   switch (req.kind) {
     case 'run.stop':
@@ -245,7 +319,20 @@ function handle(
         session.runs.stopAgentRun(req.runId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
         }),
-      ).pipe(Effect.as(done), Effect.uninterruptible);
+      ).pipe(
+        // The stop fails when the run's terminal row was refused (a live
+        // foreign owner, a rolled-back transaction): the run is still in
+        // flight, so the requester hears that rather than `done`.
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({
+              runId: req.runId,
+              reason: `The run could not be stopped: ${toErrorMessage(error)}`,
+            }),
+        ),
+        Effect.as(done),
+        Effect.uninterruptible,
+      );
     case 'run.delete':
       return deleteAdmittedRun(session, log, req.runId, admitted, 'single');
     case 'run.compact':
@@ -291,114 +378,8 @@ function handle(
               }),
         ),
       );
-    case 'decision.bash':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'bash',
-          req.approvalId,
-          req.decision.action === 'approve'
-            ? { action: 'approve' }
-            : {
-                action: 'reject',
-                feedback: req.decision.feedback ?? undefined,
-              },
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'bash approval')),
-      );
-    case 'decision.plan':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'planApproval',
-          req.approvalId,
-          planDecision(req.decision),
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'plan approval')),
-      );
-    case 'decision.proposal':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'proposal',
-          req.approvalId,
-          proposalDecision(req.decision),
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'proposal')),
-      );
-    case 'decision.userQuestion':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'userQuestion',
-          req.approvalId,
-          req.decision.action === 'submit'
-            ? { action: 'submit', answers: req.decision.answers }
-            : {
-                action: req.decision.action,
-                feedback: req.decision.feedback ?? undefined,
-              },
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.runId, 'user question')),
-      );
-    case 'decision.retry':
-      // A rejection from the run's client preparation is a handler defect,
-      // per the module contract above, not a `RequestError` to word.
-      return Effect.promise(() =>
-        session.interactions.settleRetry(
-          req.approvalId,
-          req.decision.action === 'retry'
-            ? {
-                action: 'retry',
-                ...(req.decision.feedback == null
-                  ? {}
-                  : { feedback: req.decision.feedback }),
-              }
-            : { action: 'cancel' },
-          req.decision.action === 'retry'
-            ? (req.decision.credentials ?? 'configured')
-            : 'configured',
-        ),
-      ).pipe(
-        Effect.flatMap((accepted) =>
-          accepted
-            ? Effect.succeed(done)
-            : Effect.fail(settled(req.runId, 'retry')),
-        ),
-      );
-    case 'externalInquiry.submit':
-    case 'externalInquiry.drop':
-      return handleExternalInquiryAction(
-        req.kind === 'externalInquiry.submit'
-          ? {
-              action: 'submit',
-              threadId: req.threadId,
-              turnIndex: req.turnIndex,
-              answer: req.answer,
-              ...(req.sessionLinks == null
-                ? {}
-                : { sessionLinks: req.sessionLinks }),
-            }
-          : {
-              action: 'drop',
-              threadId: req.threadId,
-              turnIndex: req.turnIndex,
-              ...(req.feedback == null ? {} : { feedback: req.feedback }),
-            },
-        { session },
-      ).pipe(
-        Effect.orDie,
-        Effect.flatMap((accepted) =>
-          accepted
-            ? Effect.succeed(done)
-            : Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: 'This inquiry turn is no longer open.',
-                }),
-              ),
-        ),
-      );
+    case 'request.decide':
+      return decide(session, req, admitted, local);
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;

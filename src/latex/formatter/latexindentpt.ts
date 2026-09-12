@@ -65,17 +65,20 @@ async function cleanupBackupFiles(
   }
 }
 
-export async function runLatexIndent(filePath: string): Promise<boolean> {
+export async function runLatexIndent(
+  filePath: string,
+  workspacePath: string | undefined = WorkspaceFS.getPath(),
+  latexindentConfig: string | undefined = getConfig<string>(
+    LATEXINDENT_CONFIG_KEY,
+  ),
+): Promise<boolean> {
   try {
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
     // Some callers (latexCommands, housekeeping/indent) pass relative paths.
-    const workspacePath = WorkspaceFS.getPath();
     const absolutePath =
       path.isAbsolute(filePath) || !workspacePath
         ? filePath
         : path.join(workspacePath, filePath);
-
-    const latexindentConfig = getConfig<string>(LATEXINDENT_CONFIG_KEY);
 
     const args = ['-w', '-s'];
     if (latexindentConfig) {
@@ -85,6 +88,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
     const result = await runToolWithCheck('latexindent', args, {
       channel: CHANNEL,
+      cwd: workspacePath,
       showError: !missingLatexindentReported,
     });
     if (result === false) missingLatexindentReported = true;

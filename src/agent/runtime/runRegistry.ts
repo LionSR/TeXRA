@@ -5,12 +5,10 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
-import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -21,11 +19,8 @@ import {
   type SessionEventDraft,
   type RunPhase,
 } from '@shared/schemas';
-import {
-  isActivePhase,
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-} from '@shared/runs/runStatus';
+import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
 import { formatDuration } from '@utils/core';
 import {
   type RunHandle,
@@ -37,8 +32,6 @@ import {
   WaitingTermination,
   type WaitingTerminationContext,
 } from './waitingTermination';
-
-const logger = createChannelTrace('runRegistry');
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
@@ -101,13 +94,14 @@ type ManualCompactionRequestResult =
     };
 
 /**
- * A caller bringing its own status machine must route that machine's facts
- * through `handleStatus`: the registry's waiters and child rosters follow the
- * canonical status rail, and a machine publishing elsewhere would leave them
- * listening where nothing is ever published.
+ * The registry reads a run's phase from the session's fold (`RunView.status`,
+ * one run model, 3.3) and keeps no phase of its own; the session routes each
+ * phase-moving row it committed through `handleStatus` once the view has
+ * folded it, so the registry's waiters and child rosters follow the one rail
+ * every renderer reads and never read it a row behind.
  */
 interface RunRegistryInit {
-  readonly runStatus: RunStatusMachine;
+  readonly runView: (runId: RunId) => RunView | undefined;
   /** The session's publisher (`SessionHandle.publish`) for the registry's
    *  own durable fact, a severed parent edge (`run.detach`). */
   readonly publish: (events: readonly SessionEventDraft[]) => void;
@@ -119,6 +113,16 @@ interface RunRegistryInit {
    */
   readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  /**
+   * Admit one run's claim (`SessionHandle.acquireClaims`) and hand back its
+   * release. A run aggregate takes an append from its claim holder alone, so
+   * a stop that reached no live handle takes the claim the same fenced way a
+   * decision over a dead owner does (`SessionRequests.decide`) before it
+   * writes the run's terminal row.
+   */
+  readonly acquireRunClaim: (
+    runId: RunId,
+  ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
 }
 
 /**
@@ -132,7 +136,7 @@ export class RunRegistry {
   private disposed = false;
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
-  private readonly runStatus: RunStatusMachine;
+  private readonly runView: (runId: RunId) => RunView | undefined;
   private readonly publish: (events: readonly SessionEventDraft[]) => void;
   private readonly childActivityListeners = new Set<
     (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void
@@ -140,6 +144,7 @@ export class RunRegistry {
   private readonly approvals: SessionApprovals;
   private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
   private readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
+  private readonly acquireRunClaim: RunRegistryInit['acquireRunClaim'];
   private readonly listeners = new Map<
     string,
     Set<(handle: RunHandle | undefined) => void>
@@ -150,10 +155,11 @@ export class RunRegistry {
 
   constructor(options: RunRegistryInit) {
     this.publish = options.publish;
-    this.runStatus = options.runStatus;
+    this.runView = options.runView;
     this.approvals = options.approvals;
     this.releaseRootRunLease = options.releaseRootRunLease;
     this.finalizeRun = options.finalizeRun;
+    this.acquireRunClaim = options.acquireRunClaim;
     this.waitingTermination = new WaitingTermination({
       releaseRootRunLease: this.releaseRootRunLease,
       finalizeRun: this.finalizeRun,
@@ -161,7 +167,6 @@ export class RunRegistry {
       getHandle: (runId) => this.handles.get(runId),
       untrackIfCurrent: (handle) => this.untrackIfCurrent(handle),
       untrackHandle: (handle) => this.untrackHandle(handle),
-      cancelRunStatus: (runId) => this.cancelRunStatus(runId),
     });
   }
 
@@ -170,7 +175,7 @@ export class RunRegistry {
    * live-only presentation state (never a plane row, contract C3), told to
    * the renderers that still draw a roster until the fold's `childIds` and
    * `rollup` replace it (PRD 5.1). Called on every roster change: a child
-   * tracked, untracked, detached, or moved by a canonical `status` fact.
+   * tracked, untracked, detached, or moved by a phase-moving row.
    */
   onChildActivity(
     listener: (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void,
@@ -182,9 +187,12 @@ export class RunRegistry {
   }
 
   /**
-   * One canonical `status` fact, from the session's `publishStatus` in
-   * publish order and before any renderer wakes: notify waiters and refresh
-   * the child roster when a run's status changes (e.g. RUNNING to WAITING).
+   * One phase-moving row this process committed (`run.activate`, the
+   * `waiting` step and the step that leaves it, `run.end`), from the
+   * session's fold-gated tail in commit order: notify waiters and refresh the
+   * child roster when a run's status changes (e.g. RUNNING to WAITING). Both
+   * read the new phase from the view here, which is why the caller delivers
+   * the row only once the view has folded it.
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
@@ -210,15 +218,18 @@ export class RunRegistry {
   }
 
   /**
-   * Whether `runId` is running, resuming, or parked with a live flow in this
-   * process: the states in which a resume must be refused outright rather than
-   * queued on the run lane, since it would otherwise start a fresh
-   * generation of a run that just finished.
+   * Whether a generation of `runId` is live in this process — holding its
+   * lane, still unwinding, or parked with a live tool-use flow: the states in
+   * which a resume must be refused outright rather than queued on the run
+   * lane, since it would otherwise start a fresh generation over a live one.
+   *
+   * Local ownership, never the durable phase: a crash leaves the phase RUNNING
+   * by design (owner loss is the fold's interrupted reading, 5.2), and an
+   * orphaned run in that phase is exactly what a resume exists to take over.
    */
   isActiveOrResuming(runId: RunId): boolean {
     return (
-      isActivePhase(this.runStatus.get(runId)) ||
-      this.runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING ||
+      this.lanes.isHeld(runId) ||
       this.getToolUseFlowContext(runId) !== undefined
     );
   }
@@ -270,25 +281,6 @@ export class RunRegistry {
   }
 
   /**
-   * Register an agent run and, when requested, publish its initial
-   * run status through the registry-owned status store.
-   */
-  trackAgentRun(
-    handle: RunHandle,
-    options: { readonly status: RunPhase },
-  ): void {
-    this.assertActive();
-    const previousStatus = this.runStatus.get(handle.runId);
-    const cause =
-      options.status === RUN_PHASE.RUNNING &&
-      isTerminalOutcomePhase(previousStatus)
-        ? 'resume'
-        : 'lifecycle';
-    this.runStatus.transition(handle.runId, options.status, cause);
-    this.track(handle);
-  }
-
-  /**
    * Refuse every run registered from here on: the session is closing
    * (`Sessions.close`). The runs already tracked keep their handles,
    * waiters, and status until they settle, and a native child loop keeps
@@ -306,25 +298,6 @@ export class RunRegistry {
     if (this.closing) {
       throw new Error('Cannot register run work while the session is closing.');
     }
-  }
-
-  /**
-   * Publish an in-flight agent status through the registry-owned status store.
-   * Explicit user stops win over loop transitions, and stale handles cannot
-   * revive a run that has already been untracked.
-   */
-  updateAgentRunStatus(handle: RunHandle, status: RunPhase): boolean {
-    if (this.handles.get(handle.runId) !== handle) return false;
-    const previous = this.runStatus.get(handle.runId);
-    let cause: 'wait' | 'resume' | 'lifecycle';
-    if (status === RUN_PHASE.WAITING) {
-      cause = 'wait';
-    } else if (status === RUN_PHASE.RUNNING && previous === RUN_PHASE.WAITING) {
-      cause = 'resume';
-    } else {
-      cause = 'lifecycle';
-    }
-    return this.runStatus.transition(handle.runId, status, cause);
   }
 
   /** Remove a run handle and notify waiters. */
@@ -356,11 +329,16 @@ export class RunRegistry {
   }
 
   getStatus(handle: RunHandle): RunStatusInfo & { status: RunPhase } {
-    const phaseState = this.runStatus.getRunState(handle.runId);
-    const status = phaseState?.phase ?? RUN_PHASE.RUNNING;
-    const runStartedAt = phaseState?.runStartedAt;
+    const run = this.runView(handle.runId);
+    // A tracked run whose activation has not folded yet is running: the
+    // handle exists because its process is live.
+    const status: RunPhase =
+      run === undefined || run.status === 'ready'
+        ? RUN_PHASE.RUNNING
+        : run.status;
+    const runStartedAt = run?.runStartedAt ?? null;
 
-    if (!isActivePhase(status) || runStartedAt === undefined) {
+    if (!isActivePhase(status) || runStartedAt === null) {
       return { status, elapsed: null };
     }
 
@@ -404,7 +382,9 @@ export class RunRegistry {
    * snapshot of run status, active flow context, and child runs.
    */
   getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
-    const status = this.runStatus.get(runId);
+    const run = this.runView(runId);
+    const status: RunPhase | undefined =
+      run === undefined || run.status === 'ready' ? undefined : run.status;
 
     if (status !== undefined && !isInFlightPhase(status)) {
       // Only a native child's explicit delivery reservation can retain a
@@ -421,7 +401,7 @@ export class RunRegistry {
     if (context) return { kind: 'active', context };
 
     if (
-      this.runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING ||
+      run?.substate === RUN_SUBSTATE.RESUMING ||
       status === RUN_PHASE.WAITING ||
       hasActiveChildren
     ) {
@@ -616,11 +596,39 @@ export class RunRegistry {
    *
    * Hosts should call this instead of reconstructing stop behavior from
    * child-interrupts, root interrupts, and run-status writes.
+   *
+   * Fails when the run's terminal row could not be written: the run is still
+   * in flight, and a caller that reported the stop done would be lying about
+   * it.
+   *
+   * A stop of a run no handle here owns writes that row from outside the
+   * run, so the run's claim fences the whole gesture — the descendant sweep
+   * included. Taken first, a refusal leaves the descendants running instead
+   * of detaching or killing them and then reporting the stop unavailable. A
+   * locally owned run is already this process's to stop and takes the direct
+   * path.
    */
   stopAgentRun(
     runId: RunId,
     options: RunStopOptions = {},
-  ): Effect.Effect<void> {
+  ): Effect.Effect<void, Error> {
+    if (this.handles.has(runId)) return this.applyStop(runId, options);
+    return Effect.acquireUseRelease(
+      this.acquireRunClaim(runId),
+      () => this.applyStop(runId, options),
+      (release) => release.pipe(Effect.orDie),
+    );
+  }
+
+  /**
+   * Apply one stop: the descendant policy the caller declared, the root
+   * handle's own termination, and — when no live handle took it — the
+   * terminal row an ownerless stop must write itself.
+   */
+  private applyStop(
+    runId: RunId,
+    options: RunStopOptions,
+  ): Effect.Effect<void, Error> {
     const rootHandle = this.handles.get(runId);
     // Shared across the child sweep and the root cascade so each run in
     // the chain is interrupted exactly once.
@@ -642,17 +650,13 @@ export class RunRegistry {
         )
       : false;
     // `terminate()` already finalizes a run it owned; an ownerless (or
-    // already-untracked) run still needs both writes here: the in-memory
-    // phase, which local readers consult for stop precedence, and the
-    // `run.end` row, which is the run's terminal fact. The status machine
-    // records a terminal phase in memory only, so without the finalize below
-    // the fold, history and every other host would keep the stopped run in
-    // flight.
-    if (!stopped) {
-      this.cancelRunStatus(runId);
-      settlements.push(this.finalizeOwnerlessStop(runId));
-    }
-    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
+    // already-untracked) run still needs the `run.end` row, which is the
+    // run's terminal fact: without the finalize below the fold, history and
+    // every other host would keep the stopped run in flight.
+    const all: Effect.Effect<void, Error>[] = stopped
+      ? settlements
+      : [...settlements, this.finalizeOwnerlessStop(runId)];
+    return Effect.all(all, { concurrency: 'unbounded', discard: true });
   }
 
   /**
@@ -768,10 +772,7 @@ export class RunRegistry {
         activationInterrupted = true;
       }
     }
-    if (handle.interrupt()) {
-      this.cancelRunStatus(handle.runId);
-      return true;
-    }
+    if (handle.interrupt()) return true;
     // The loop's own interrupt already carried the stop into the turn: the
     // native-subagent strategy links the loop signal to this handle, so
     // aborting the loop spends the handle's interrupt target before we reach
@@ -790,48 +791,36 @@ export class RunRegistry {
   }
 
   /**
-   * Mark a run CANCELLED from a user stop. The status machine publishes the
-   * canonical session fact itself — the single status rail every consumer,
-   * including the transcript recorder, subscribes to — so no caller routes it.
-   * A terminal phase stays in memory: the `run.end` row is the durable fact,
-   * so a caller that owns no other finalizer pairs this with
-   * {@link finalizeOwnerlessStop}.
-   */
-  private cancelRunStatus(runId: RunId): void {
-    this.runStatus.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
-  }
-
-  /**
    * Write the terminal fact for a stop that reached no live handle, through
    * the run's one writer. `keepExistingOutcome` leaves a run that already
    * ended with its own verdict, which is what the status machine's refusal to
    * leave a terminal phase used to express. The checkpoint is preserved: a
    * cancelled run is exactly the one a user resumes.
+   *
+   * The row is an append on the run aggregate, which takes one only from its
+   * claim holder: {@link stopAgentRun} holds that claim around the whole
+   * ownerless stop, and a run this process still tracks is its own writer
+   * already. A refusal — a live foreign owner, a rolled-back transaction —
+   * fails the stop rather than being logged behind a caller that already
+   * reported it done.
    */
-  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const finalization = yield* Effect.exit(
-        this.finalizeRun({
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          keepExistingOutcome: true,
-        }),
-      );
-      if (Exit.isFailure(finalization)) {
-        logger.warn('Failed to finalize a stop with no live run handle', {
-          data: { runId, error: Cause.squash(finalization.cause) },
-        });
-        return;
-      }
-      if (!finalization.value.ok)
-        logger.warn('Failed to finalize a stop with no live run handle', {
-          data: {
-            runId,
-            outcomePersisted: finalization.value.outcomePersisted,
-            error: finalization.value.error,
-          },
-        });
-    });
+  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
+    return this.finalizeRun({
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      keepExistingOutcome: true,
+    }).pipe(
+      Effect.flatMap((finalization) =>
+        finalization.ok
+          ? Effect.void
+          : Effect.fail(
+              new Error(
+                `Failed to finalize a stop with no live run handle for run ${runId}`,
+                { cause: finalization.error },
+              ),
+            ),
+      ),
+    );
   }
 
   private notifyWaiters(runId: RunId): void {

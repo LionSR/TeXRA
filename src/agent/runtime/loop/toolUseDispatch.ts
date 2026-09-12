@@ -7,8 +7,8 @@
  * and derives its primary's result with no edits, attachments or mutation;
  * a result that ends the turn stops dispatch after its partition settles;
  * one interrupt cancels the whole in-flight batch through the fiber; and no
- * sibling failure interrupts another call, because a call never fails: its
- * error is its result.
+ * ordinary tool failures become model-visible results. Durable write failures
+ * halt dispatch so an unsettled call is never recorded as successful.
  *
  * Write points: `tool.intent` before every barrier call; `tool.result` plus
  * its `tool.end` card per settled call, in one batch, with attachment bytes
@@ -20,17 +20,19 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { normalizeToolCallError } from '@agent/core/flows/toolCallParsing';
+import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { endToolUseCard, type AgentTrace } from '@agent/trace';
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   type DispatchFacts,
   type FileLocation,
+  type RequestDecision,
   type StateOperation,
   type ToolCallStatus,
   type ToolFileAttachment,
@@ -38,9 +40,13 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
-import { RunLedger, type RunLedgerRefused } from '@shared/session/runLedger';
-import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  foldRunState,
+  type RunLedgerDraft,
+  type RunState,
+} from '@shared/session/runStateFold';
 import { generateShortId, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -228,7 +234,11 @@ function settlementContent(
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   initial: RunState,
   turn: TurnContext,
-): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | RunLedger> {
+): Effect.fn.Return<
+  DispatchOutcome,
+  InvokeError,
+  AgentRun | RunLedger | ProcessServices
+> {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
   const { runId, logger } = run;
@@ -328,7 +338,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
     attempt: number,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
@@ -376,43 +386,55 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     } else {
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          Effect.gen(function* () {
-            const signal = yield* Effect.abortSignal;
-            return yield* Effect.tryPromise({
-              try: () =>
-                run.inScope(() =>
-                  withToolFileInteractionContext(
-                    {
-                      tracker: turn.workspace.interactions,
-                      workPlanState: turn.workspace.workPlan,
-                      trace: logger,
-                      userInstruction:
-                        run.config.rootUserInstruction ?? turn.userInstruction,
-                      toolCallId: fact.callId,
-                      signal,
-                      hooks: {
-                        onRunReady,
-                        onToolOutput,
-                        // Subagent cost lands in the parent's totals only, so
-                        // per-round usage reporting never double-counts it.
-                        recordSubagentCost: (costUsd) => {
-                          if (costUsd > 0) subagentCost += costUsd;
-                        },
-                      },
-                    },
-                    () => tool.call(parsedInput),
-                  ),
-                ),
-              catch: (cause) => cause,
-            });
-          }),
+          tool.call(parsedInput).pipe(
+            Effect.provideService(ToolCall, {
+              config: run.session.roots.config,
+              run,
+              delegationAgentScope: run.delegationAgentScope,
+              model: run.config.model,
+              workingDirectory: run.workingDirectory,
+              stopAfterCycle: run.toolPolicy.stopAfterCycle,
+              onApprovalPolicyDenial: run.onApprovalPolicyDenial,
+              inScope: run.inScope,
+              tracker: turn.workspace.interactions,
+              workPlanState: turn.workspace.workPlan,
+              trace: logger,
+              userInstruction:
+                run.config.rootUserInstruction ?? turn.userInstruction,
+              toolCallId: fact.callId,
+              hooks: {
+                onRunReady,
+                onToolOutput,
+                recordSubagentCost: (costUsd) => {
+                  if (costUsd > 0) subagentCost += costUsd;
+                },
+              },
+            }),
+          ),
         ),
       );
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
-        return yield* Effect.interrupt;
+        // A finalizer may also have failed while cancellation drained a write.
+        // Preserve that cause instead of replacing it with a bare interrupt.
+        return yield* Effect.failCause(
+          Cause.fromReasons<never>(
+            invoked.cause.reasons.map((reason) =>
+              Cause.isFailReason(reason)
+                ? Cause.makeDieReason(reason.error)
+                : reason,
+            ),
+          ),
+        );
       } else {
+        const failure = Cause.squash(invoked.cause);
+        if (
+          failure instanceof DatabaseWriteFailed ||
+          failure instanceof RunLedgerRefused
+        ) {
+          return yield* Effect.fail(failure);
+        }
         const { message, diagnostics } = normalizeToolCallError(
           fact.toolName,
           Cause.squash(invoked.cause),
@@ -559,21 +581,33 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly approvalRequestId: string | null;
     },
   ): Effect.fn.Return<'rerun' | 'skip', never> {
-    const current = yield* SynchronizedRef.get(stateRef);
-    const bound = current.approvals[intent.approvalRequestId ?? ''];
-    // Only an answered barrier is decided. A resolution carrying anything
-    // else (`cancelled`, `interrupted`, a denial, or no decision at all) was
-    // written by a cleanup, not by a person, so it decides nothing and the
-    // barrier is asked again.
-    if (bound !== undefined && bound.resolved) {
-      if (bound.decision === 'approved') return 'rerun';
-      if (bound.decision === 'skipped') return 'skip';
+    let current = yield* SynchronizedRef.get(stateRef);
+    const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
+    const rerunOption = 'Run again';
+    // Only a person decides this barrier: the answer's chosen option, or a
+    // `skip` (the host's own word for a person declining to answer), both
+    // land as the request's `request.decided` (R5). A refusal with any
+    // other provenance (a cancellation, a policy denial) was written by a
+    // cleanup, not by a person, so it decides nothing and the barrier is
+    // asked again.
+    const decided = (decision: RequestDecision): 'rerun' | 'skip' | null => {
+      if (decision.action === 'submit') {
+        return decision.answers[question] === rerunOption ? 'rerun' : 'skip';
+      }
+      if (decision.action === 'skip') return 'skip';
+      return null;
+    };
+    const bound = current.requests[intent.approvalRequestId ?? ''];
+    if (bound !== undefined && bound.resolved && bound.decision !== null) {
+      const answer = decided(bound.decision);
+      if (answer !== null)
+        return yield* recordOutcomeDecision(fact, intent, answer);
     }
     // A request the run committed and nobody answered is asked again under
     // its own id, so one barrier never accumulates requests. Anything else
-    // opens a fresh one: the fold refuses a second `approval.requested` on an
-    // id it already carries, so a request retired without a decision cannot
-    // be reopened, only replaced (and the snapshot below rebinds the intent).
+    // opens a fresh one: the fold refuses a second `request.opened` on an id
+    // it already carries, so a request retired without a decision cannot be
+    // reopened, only replaced (and the snapshot below rebinds the intent).
     const standing =
       intent.approvalRequestId !== null &&
       bound !== undefined &&
@@ -581,7 +615,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? intent.approvalRequestId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
-    const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const request = {
       requestId,
       allowBypass: false,
@@ -591,7 +624,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           question,
           header: 'Tool',
           options: [
-            { label: 'Run again', description: 'Execute the call once more.' },
+            { label: rerunOption, description: 'Execute the call once more.' },
             {
               label: 'Skip',
               description: 'Report it to the model as skipped.',
@@ -613,12 +646,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       }
       yield* append([
         {
-          type: 'approval.requested',
+          type: 'request.opened',
           aggregateId,
           requestId,
           // The one redaction door every durable request payload passes,
-          // whether the plane publishes the row or the loop commits it.
+          // whether the session opens the request or the loop commits it.
           payload: redactedForFact({ kind: 'userQuestion', data: request }),
+          thread: null,
         },
         snapshotRow(runId, current, {
           phase: 'tools.dispatching',
@@ -626,59 +660,63 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           intentBindings: { [fact.callId]: requestId },
         }),
       ]).pipe(Effect.orDie);
+      current = yield* SynchronizedRef.get(stateRef);
     }
-    const settlement = yield* Effect.tryPromise({
-      try: () =>
-        run.session.interactions.askUserQuestion(request, {
-          requestRowCommitted: true,
-        }),
-      catch: (cause) => cause,
-    }).pipe(
-      Effect.catch((cause) =>
-        Effect.sync(() => {
-          logger.warn(
-            'The tool-outcome prompt failed; the call stays outcome-unknown and the next resume asks again.',
-            { data: cause },
-          );
-          return { action: 'reject' as const, answers: undefined };
-        }),
-      ),
-    );
-    // Only a person decides this barrier. `submit` carries the chosen option
-    // and `skip` is the host's own word for a person declining to answer;
-    // both are answers, and both write the decision. Every other settlement
-    // is a cancellation — a host Stop or a session teardown retires the
-    // pending question with `{ action: 'reject', cause }`, and the prompt
-    // failure above lands there too — so no row is written: the `tool.intent`
-    // keeps its binding, the request stays open, and the dispatch interrupts
-    // so the next resume asks the same question again. Writing `skipped` for
-    // a cancellation would tell the model a person skipped the call.
-    if (settlement.action === 'reject') return yield* Effect.interrupt;
-    const rerun =
-      settlement.action === 'submit' &&
-      settlement.answers[question] === 'Run again';
-    const decision = rerun ? 'rerun' : 'skip';
-    yield* append([
-      {
-        type: 'approval.resolved',
-        aggregateId,
-        requestId,
-        decision: rerun ? 'approved' : 'skipped',
-      },
-      ...(rerun
-        ? [
-            {
-              type: 'tool.intent',
-              aggregateId,
-              payload: {
-                responseId,
-                callIds: [fact.callId],
-                attempt: intent.attempt + 1,
-              },
-            } satisfies RunLedgerDraft,
-          ]
-        : []),
-    ]).pipe(Effect.orDie);
+    // The decision is the `request.decided` row the decide command lands on
+    // the tail. A plane that closes first, and every refusal a person did not
+    // make, leave the `tool.intent` bound and the request open, and the
+    // dispatch interrupts so the next resume asks the same question again.
+    // Writing `skip` for a cancellation would tell the model a person skipped
+    // the call.
+    const row = yield* run.session
+      .decisionFor(runId, requestId, current.commit)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              'The tool-outcome prompt closed; the call stays outcome-unknown and the next resume asks again.',
+              { data: error },
+            );
+            return null;
+          }),
+        ),
+      );
+    if (row === null) return yield* Effect.interrupt;
+    yield* SynchronizedRef.update(stateRef, (state) => {
+      const folded = foldRunState(state, [row]);
+      if (Result.isFailure(folded) || folded.success === null) {
+        throw new Error(
+          `The tool-outcome decision does not fold onto the run: ${
+            Result.isFailure(folded) ? folded.failure.detail : 'no state'
+          }`,
+        );
+      }
+      return folded.success;
+    });
+    const answer = decided(row.decision);
+    if (answer === null) return yield* Effect.interrupt;
+    return yield* recordOutcomeDecision(fact, intent, answer);
+  });
+
+  /** A rerun admits a new attempt with its `tool.intent`; a skip records nothing further, the decision row is the fact. */
+  const recordOutcomeDecision = Effect.fn('toolUse.outcomeDecision')(function* (
+    fact: DispatchFacts,
+    intent: { readonly attempt: number },
+    decision: 'rerun' | 'skip',
+  ): Effect.fn.Return<'rerun' | 'skip', never> {
+    if (decision === 'rerun') {
+      yield* append([
+        {
+          type: 'tool.intent',
+          aggregateId,
+          payload: {
+            responseId,
+            callIds: [fact.callId],
+            attempt: intent.attempt + 1,
+          },
+        },
+      ]).pipe(Effect.orDie);
+    }
     return decision;
   });
 
@@ -686,7 +724,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const dispatchCall = Effect.fn('toolUse.dispatchCall')(function* (
     fact: DispatchFacts,
     afterEndTurn: boolean,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
@@ -736,7 +774,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const deriveDuplicate = Effect.fn('toolUse.duplicate')(function* (
     fact: DispatchFacts,
     primaryId: string,
-  ): Effect.fn.Return<void, never> {
+  ): Effect.fn.Return<void, InvokeError, ProcessServices> {
     const current = yield* SynchronizedRef.get(stateRef);
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);

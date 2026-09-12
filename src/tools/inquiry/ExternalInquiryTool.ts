@@ -2,12 +2,13 @@
  * Inquiry tool — human-in-the-loop bridge to external AI models.
  *
  * The agent dispatches a self-contained question; the user later pastes
- * the external model's answer back via the inquiry panel. Dispatch is
- * non-blocking: the tool returns immediately with `dispatched` and the
- * cycle continues. When an answer (or rejection) arrives — even hours
- * later, even after extension reload — the action handler injects a
- * `[inquiry] …` continuation message that auto-resumes the originating
- * run.
+ * the external model's answer back via the inquiry panel. The question is a
+ * request like any other (`request.opened { kind: 'externalInquiry' }`, one
+ * run model, 3.7), whose `thread` names the earlier turn it follows up;
+ * dispatch is non-blocking: the tool returns immediately with `dispatched`
+ * and the cycle continues. When the decision arrives, even hours later,
+ * even after a restart, `recordInquiryDecision` records it on the thread and
+ * delivers a `[inquiry]` follow-up that wakes or resumes the run.
  *
  * Three subcommands:
  *   - `ask`  → dispatch (default behavior)
@@ -15,21 +16,14 @@
  *   - `list` → enumerate threads by status / scope
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-
-import {
-  getRunContextRunId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { hostPort } from '@common/hostPort';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
@@ -41,11 +35,9 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
-import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';
@@ -230,26 +222,26 @@ export class ExternalInquiryTool extends defineTool({
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
 }) {
-  protected execute(input: InquiryInput): Promise<ToolResult> {
-    // Capture the run owner before the shared Effect scheduler can yield.
-    const context = tryUseRunContext();
-    const runId = getRunContextRunId(context);
-    const signal = getCurrentToolCallContext()?.signal;
-    let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
-
-    switch (input.command) {
-      case 'ask':
-        requireInteractions('inquiry', context);
-        operation = this.executeAsk(input, runId, currentSession());
-        break;
-      case 'read':
-        operation = this.executeRead(input);
-        break;
-      case 'list':
-        operation = this.executeList(input, runId);
-        break;
-    }
-    return effectRuntime().runPromise(operation, { signal });
+  protected execute(input: InquiryInput) {
+    return Effect.gen({ self: this }, function* () {
+      const toolCall = yield* ToolCall;
+      const runId = toolCall.run?.runId;
+      switch (input.command) {
+        case 'ask':
+          if (!toolCall.run?.session.interactions) {
+            return yield* Effect.fail(
+              new ToolError(
+                'inquiry requires a session with host interactions.',
+              ),
+            );
+          }
+          return yield* this.executeAsk(input, runId, toolCall.run.session);
+        case 'read':
+          return yield* this.executeRead(input);
+        case 'list':
+          return yield* this.executeList(input, runId);
+      }
+    });
   }
 
   private executeAsk(
@@ -286,8 +278,16 @@ export class ExternalInquiryTool extends defineTool({
       // A re-read would only reintroduce the write/read race the continuation
       // injectors already avoid via writer snapshots.
 
+      // The first turn's request is the thread itself; a follow-up turn is
+      // its own request whose `thread` names the first, which is the whole
+      // of the inquiry's multi-turn.
+      const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
+      const requestId =
+        turnIndex === 1
+          ? manifest.threadId
+          : `${manifest.threadId}:${turnIndex}`;
       const permission: ExternalInquiryPermission = {
-        requestId: manifest.threadId, // The panel addresses the inquiry by threadId.
+        requestId,
         question: input.question,
         threadId: manifest.threadId,
         context: questionContext,
@@ -298,13 +298,63 @@ export class ExternalInquiryTool extends defineTool({
         sessionLinks: collectKnownSessionLinks(manifest),
         transcript: manifest.turns,
       };
-      const interaction = session.interactions.openExternalInquiry(permission);
-      if (!interaction) {
-        return yield* Effect.fail(
-          new Error('HostInteractions.openExternalInquiry is required'),
+      yield* session
+        .commit([
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', runId),
+            requestId,
+            payload: { kind: 'externalInquiry', data: permission },
+            thread: turnIndex === 1 ? null : manifest.threadId,
+          },
+        ])
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new Error(`The inquiry request could not be opened: ${error}`),
+          ),
+          // The turn is committed in the global inquiry database before the
+          // request that renders it, and the two stores cannot share a
+          // transaction. A publication that never landed takes the turn back
+          // down with it: left open, no surface would list it and no later
+          // `ask` could re-dispatch on the thread. `commit` appends before it
+          // waits for the fold to settle, so failing is not proof of a
+          // rolled-back append: the committed rows decide, and a turn whose
+          // request is durably open stays open with it.
+          Effect.onError(() =>
+            session.readAggregate(qualifyAggregateId('run', runId)).pipe(
+              Effect.flatMap((rows) =>
+                rows.some(
+                  (row) =>
+                    row.type === 'request.opened' &&
+                    row.requestId === requestId,
+                )
+                  ? Effect.void
+                  : Effect.asVoid(
+                      records.markDropped({
+                        threadId: manifest.threadId,
+                        turnIndex,
+                      }),
+                    ),
+              ),
+              // `catchCause`, not `catch`: the aggregate read is exposed as
+              // a defect-only effect (`sessionLayer` reads it through
+              // `Effect.orDie`), so a database failure here arrives as a
+              // defect and a typed catch would let it replace the commit
+              // failure this compensation runs under. Either way the thread
+              // stays open, which the warning says, and the original failure
+              // is what the tool reports.
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  logger.warn(
+                    `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+                    { data: Cause.squash(cause) },
+                  );
+                }),
+              ),
+            ),
+          ),
         );
-      }
-      yield* hostPort(() => interaction).pipe(Effect.mapError(ensureError));
 
       // Background Tasks panel: announce the open thread.
       const summary = yield* records.getThreadSummary(manifest.threadId);
