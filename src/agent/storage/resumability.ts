@@ -26,22 +26,25 @@ const log = createLog('Resumability');
  * ledger has moved past. The `.superseded` file stays on disk for the D8
  * sweep.
  */
-const LEGACY_FLOW_RECORD_PREFIX = 'flow_';
+const RETIRED_CHECKPOINT_PREFIX = 'flow_';
 const SUPERSEDED_SUFFIX = '.superseded';
 
-const legacyFlowRecordPath = (runId: RunId): string =>
-  resolveRunStoragePath(runId, `${LEGACY_FLOW_RECORD_PREFIX}${runId}.json`);
+const retiredCheckpointPath = (runId: RunId): string =>
+  resolveRunStoragePath(runId, `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`);
 
 /** A retired checkpoint, renamed or not, is internal and never a run output. */
 export function isLegacyFlowRecordFile(name: string): boolean {
   return (
-    name.startsWith(LEGACY_FLOW_RECORD_PREFIX) &&
+    name.startsWith(RETIRED_CHECKPOINT_PREFIX) &&
     (name.endsWith('.json') || name.endsWith(`.json${SUPERSEDED_SUFFIX}`))
   );
 }
 
-/** The user-visible fact a listing states for a legacy-record-only run (R10). */
-const LEGACY_RECORD_NOTICE =
+/**
+ * The user-visible fact a listing states for a run whose only durable state
+ * is a retired checkpoint (R10).
+ */
+const RETIRED_CHECKPOINT_NOTICE =
   'This run was recorded before the run ledger and is not resumable under this release.';
 
 /**
@@ -55,22 +58,22 @@ export const supersedeLegacyFlowRecord = Effect.fn('supersedeLegacyFlowRecord')(
     session: SessionHandle,
     logger: AgentTrace,
   ): Effect.fn.Return<void, Error> {
-    const path = legacyFlowRecordPath(runId);
-    const exists = yield* Effect.tryPromise({
-      try: () => runInSession(session, () => StorageFS.exists(path)),
-      catch: ensureError,
-    });
-    if (!exists) return;
-    yield* Effect.tryPromise({
+    const path = retiredCheckpointPath(runId);
+    // One session frame for the stat and the rename: the second read would
+    // resolve the same workspace roots the first already entered.
+    const renamed = yield* Effect.tryPromise({
       try: () =>
-        runInSession(session, () =>
-          StorageFS.rename(path, `${path}${SUPERSEDED_SUFFIX}`),
-        ),
+        runInSession(session, async () => {
+          if (!(await StorageFS.exists(path))) return false;
+          await StorageFS.rename(path, `${path}${SUPERSEDED_SUFFIX}`);
+          return true;
+        }),
       catch: ensureError,
     });
-    const fileName = `${LEGACY_FLOW_RECORD_PREFIX}${runId}.json`;
+    if (!renamed) return;
+    const fileName = `${RETIRED_CHECKPOINT_PREFIX}${runId}.json`;
     logger.warn(
-      `A checkpoint from an earlier release (${fileName}) was found for this run. ${LEGACY_RECORD_NOTICE} It was renamed ${fileName}${SUPERSEDED_SUFFIX}.`,
+      `A checkpoint from an earlier release (${fileName}) was found for this run. ${RETIRED_CHECKPOINT_NOTICE} It was renamed ${fileName}${SUPERSEDED_SUFFIX}.`,
     );
   },
 );
@@ -163,15 +166,15 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
       ...metaFields,
     };
   }
-  const legacy = yield* Effect.tryPromise({
+  const retired = yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        StorageFS.exists(legacyFlowRecordPath(runId)),
+        StorageFS.exists(retiredCheckpointPath(runId)),
       ),
     catch: ensureError,
   }).pipe(Effect.result);
-  if (legacy._tag === 'Failure') {
-    const error = legacy.failure;
+  if (retired._tag === 'Failure') {
+    const error = retired.failure;
     log.debug(
       `Failed to stat the retired checkpoint of ${runId}: ${toErrorMessage(error)}`,
     );
@@ -184,7 +187,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   return {
     kind: 'none',
     ...metaFields,
-    ...(legacy.success ? { notice: LEGACY_RECORD_NOTICE } : {}),
+    ...(retired.success ? { notice: RETIRED_CHECKPOINT_NOTICE } : {}),
   };
 });
 

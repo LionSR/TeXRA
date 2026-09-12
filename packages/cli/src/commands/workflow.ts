@@ -226,13 +226,15 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const canAdvertiseInterruptedRun = (
       resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
     ): boolean => {
-      // Only a reflection run reaches here — this is the workflow command —
-      // and both facts the hint turns on live on the family state its
-      // snapshot carries: the round-level failure and the compile rejection.
+      // Only a reflection run reaches here — this is the workflow command.
+      // The two facts the hint turns on sit in different halves of the
+      // snapshot: the model failure is runtime-owned (`runtime.lastError`,
+      // the single durable location, written with the waiting/deny
+      // snapshots), the compile rejection is family state.
       const { snapshot } = resumability;
       if (snapshot.family !== 'reflection') return false;
       return (
-        snapshot.state.lastError == null &&
+        snapshot.runtime.lastError == null &&
         !snapshotHoldsTerminalCompileRejection(snapshot)
       );
     };

@@ -13,7 +13,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import { Effect, Fiber, Layer, Stream, SynchronizedRef } from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect } from 'vitest';
@@ -51,7 +51,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { testModelCell } from './modelCellTestUtils';
@@ -140,9 +140,9 @@ function turnWithCalls(calls: readonly Call[]): TurnResult {
 function boundModel(): BoundModel {
   const model: Model = {
     prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
-    streamTurn: () => Effect.die(new Error('dispatch issues no turn')),
+    streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
     generateTurn: () => Effect.die(new Error('dispatch issues no turn')),
-  } as unknown as Model;
+  };
   return {
     modelId: 'gpt54',
     config: MODEL_CONFIGS.gpt54,
@@ -226,6 +226,8 @@ function agentRun(
     prompt: AgentPromptSchema.parse({}),
     logger,
     parentStage: logger.openStage('Run: assistant'),
+    // The launch stores a real run carries; no fixture reads through them.
+    stores: hostStores(),
     toolPolicy: {},
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
@@ -557,6 +559,9 @@ describe('tool-use dispatch', () => {
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
           makeCall('c2', 'read_file', { path: 'b' }),
+          // A duplicate of the interrupted primary: it must derive nothing
+          // from a call whose outcome nobody knows.
+          makeCall('c3', 'grep', { pattern: 'a' }),
         ],
       });
 
@@ -572,7 +577,14 @@ describe('tool-use dispatch', () => {
         }),
         kit.layer,
       );
-      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([]);
+      const pending = folded?.pendingResponse ?? null;
+      expect(Object.keys(pending?.settled ?? {})).toEqual([]);
+      // The duplicate is recognised as one and still settles nothing: with
+      // the primary interrupted it waits rather than fabricating a result.
+      expect(
+        pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
+      ).toBe('c1');
+      expect(countStarts(probe, 'grep')).toBe(1);
       kit.session.dispose();
     }),
   );

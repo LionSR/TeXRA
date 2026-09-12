@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import { Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -28,7 +28,10 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import {
+  runToolUse,
+  type ToolUseFlowContext,
+} from '@agent/runtime/loop/toolUse';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -48,6 +51,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   clearRunStatusForTest,
@@ -223,6 +227,11 @@ interface LoopInit {
   readonly stopAfterCycle?: boolean;
   readonly onIdle?: () => void;
   readonly onFollowUpConsumed?: () => void;
+  /** Host wiring that is live while the loop can accept an interrupt. */
+  readonly attachment?: {
+    attach(context: ToolUseFlowContext): void;
+    detach(context: ToolUseFlowContext): void;
+  };
 }
 
 function agentRunTestLayer(init: LoopInit) {
@@ -253,6 +262,8 @@ function agentRunTestLayer(init: LoopInit) {
         prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
         logger,
         parentStage: logger.openStage('Run: chat'),
+        // The launch stores a real run carries; no fixture reads through them.
+        stores: hostStores(),
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Do the thing.',
@@ -288,6 +299,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
     ...(init.drainedFollowUps
       ? { drainedFollowUps: init.drainedFollowUps }
       : {}),
+    ...(init.attachment ? { attachment: init.attachment } : {}),
   }).pipe(
     Effect.provide(
       Layer.mergeAll(invokerLayer(init.script, requests), followUpsLayer).pipe(
@@ -939,5 +951,42 @@ describe('an active goal at the wait', () => {
           releaseRunResources(runId);
         }
       }),
+  );
+});
+
+describe('the host wiring a run attaches', () => {
+  // The loop registers the flow context on the run handle and may interrupt
+  // it in the same call. A throw anywhere after that first statement used to
+  // strand the live context on the handle, because the pairing lived in the
+  // value the callback never got to return.
+  it.effect('detaches a host whose attach threw after wiring itself up', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const attachFailure = new Error('host wiring failed');
+      const detached: ToolUseFlowContext[] = [];
+
+      const exit = yield* Effect.exit(
+        loopProgram(
+          {
+            runId,
+            session,
+            script: [textTurn('never reached')],
+            attachment: {
+              attach: () => {
+                throw attachFailure;
+              },
+              detach: (context) => {
+                detached.push(context);
+              },
+            },
+          },
+          [],
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(detached).toHaveLength(1);
+    }),
   );
 });

@@ -52,8 +52,9 @@ export class KVStore {
     // switch, test temp platform) and a latch would write into a directory
     // that no longer exists. mkdir on an existing directory is cheap.
     await StorageFS.ensureDir(this.dir);
-    // Atomic: a torn flow_{id}.json on an unclean exit makes the run fail to
-    // parse on resume and silently restart from scratch (losing applied edits).
+    // Atomic: a torn turn-state or workflow-checkpoint file on an unclean
+    // exit makes the run fail to parse on resume and silently restart from
+    // scratch (losing applied edits).
     await StorageFS.writeAtomic(
       keyToPath(this.dir, key),
       JSON.stringify(value, null, 2),

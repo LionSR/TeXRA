@@ -101,9 +101,9 @@ interface SessionExitControllerContext {
   readonly resumeTerminalTitle: () => void;
   /** Whether an actively-running turn can be stopped (vs idle/WAITING). */
   readonly canStopActiveRun: () => boolean;
-  /** Whether the session is a resumable-idle exit (preserve the flow record). */
+  /** Whether the session is a resumable-idle exit (keep the `flow.snapshot`). */
   readonly isResumableIdle: () => boolean;
-  /** Stop the active run (clears the flow record). */
+  /** Stop the active run (writes a `halted` `flow.step`). */
   readonly interruptActive: () => void;
 }
 
@@ -221,13 +221,13 @@ export function createSessionExitController(
         });
         return;
       case 'preserve-exit':
-        // Resumable-idle: exit WITHOUT interrupting. This preserves the
-        // suspended tool-use flow record (executions/<id>/flow-*.json) so
+        // Resumable-idle: exit WITHOUT interrupting. The suspended tool-use
+        // run keeps its latest `flow.snapshot` on the run aggregate, so
         // `texra resume` can continue it. Preserve the session's current
         // terminal status too; an intentional idle exit after a successful turn
         // should not report SIGINT/130.
         //
-        // Signal teardown calls process.exit, leaving the flow on disk.
+        // Signal teardown calls process.exit, appending no `halted` step.
         void teardown({ kind: 'signal', exitCode: session.runExitCode });
         return;
       case 'interrupt-and-arm-exit':
@@ -239,7 +239,7 @@ export function createSessionExitController(
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its flow record survives for resume (see handleSigint).
+  // suspended so its `flow.snapshot` stays resumable (see handleSigint).
   const handleTermSignal = (exitCode: number): void => {
     if (ctx.canStopActiveRun()) {
       ctx.interruptActive();

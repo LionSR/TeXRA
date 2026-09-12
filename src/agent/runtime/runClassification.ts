@@ -45,7 +45,10 @@ export type RunClassification =
   | {
       readonly kind: 'finished';
       readonly outcome?: RunOutcome;
-      /** The user-visible fact for a legacy-record-only run (R10). */
+      /**
+       * The user-visible fact for a run whose only durable state is a
+       * retired checkpoint (R10).
+       */
       readonly notice?: string;
     }
   | {
@@ -55,7 +58,7 @@ export type RunClassification =
        * Which durable fact was unreadable, when a fact-level probe named one.
        * A caller words a run's refusal from this, never from `cause`, which is
        * display text. Absent when the classification failed above the facts
-       * (an unreadable stream index, a lease lock that could not be taken).
+       * (an unreadable run index, a lease lock that could not be taken).
        */
       readonly fault?: ResumabilityFault | 'lease-unreadable';
     };

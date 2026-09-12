@@ -172,7 +172,7 @@ function waitingResult(runId: RunId): WaitingToolUseFlowResult {
  * Returns the suspended handle for a run that reported WAITING.
  *
  * The fake runners below return the WAITING outcome without driving the real
- * `transitionToWaiting()`, so the stream phase never reaches WAITING here —
+ * `transitionToWaiting()`, so the run phase never reaches WAITING here —
  * which is the point: the handle's own suspension is what makes a stop tear
  * the run down, so no phase seeding is needed to reach that path.
  */
@@ -375,7 +375,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('does not emit a status event when starting an already-running stream with no substate', async () => {
+  it('does not emit a status event when starting an already-running run with no substate', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
 
     const recorded = recordSessionEvents(ctx.runScope.session);
@@ -436,11 +436,10 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlow(
-          ctx,
-          () => Effect.fail(new Error('subagent failed')),
-          { parentRunId: PARENT_RUN_ID, onError },
-        ),
+        runFlow(ctx, () => Effect.fail(new Error('subagent failed')), {
+          parentRunId: PARENT_RUN_ID,
+          onError,
+        }),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
@@ -545,7 +544,7 @@ describe('runFlowWithLifecycle', () => {
               rosterEmissionsBeforeOnRun = rosters.rosters.length;
             },
           },
-        }),
+        ),
       );
 
       const [firstRoster] = rosters.rosters;
@@ -591,11 +590,11 @@ describe('runFlowWithLifecycle', () => {
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
   });
 
-  // The stream is reused across runs, so a run that never claims it inherits
-  // whatever the last one left. A stop landing in the track()-to-start window
-  // is refused by the phase table while that leftover is terminal, so without
-  // the start-time claim this run would adopt the previous run's COMPLETED as
-  // its own verdict and drop its abort facts.
+  // The status record is reused across runs, so a run that never claims it
+  // inherits whatever the last one left. A stop landing in the track()-to-start
+  // window is refused by the phase table while that leftover is terminal, so
+  // without the start-time claim this run would adopt the previous run's
+  // COMPLETED as its own verdict and drop its abort facts.
   it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
 
@@ -639,9 +638,9 @@ describe('runFlowWithLifecycle', () => {
   });
 
   // The claim above is a repair for an inherited phase, not a second start: a
-  // stop that already reads CANCELLED on the stream is this run's outcome too,
+  // stop that already reads CANCELLED on the run is this run's outcome too,
   // so a run that never ran must not publish a RUNNING blip on the way out.
-  it('publishes no RUNNING blip when the stop that beat run start already cancelled the stream', async () => {
+  it('publishes no RUNNING blip when the stop that beat run start already cancelled the run', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
     publishTestRunStart(ctx.runScope.session, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
@@ -703,7 +702,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       // The caller receives the same verdict persistence carries: the stop
-      // won on the stream, so the flow's COMPLETED report is relabeled.
+      // won on the run, so the flow's COMPLETED report is relabeled.
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
         defaultSession(),
@@ -780,11 +779,11 @@ describe('runFlowWithLifecycle', () => {
 
       takeWaitingHandle(runId);
 
-      // runToolUseFlow's finally detaches this stream's interrupt handler but
+      // The tool-use loop's finally detaches this run's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
       // session — by the time a native subagent suspends at WAITING (not
       // reproduced by this fake runner, but true in production — see
-      // runToolUseFlow.ts). With no interrupt target left, `runs.kill()`
+      // loop/toolUse.ts). With no interrupt target left, `runs.kill()`
       // falls back to the teardown the WAITING branch parked and tears the
       // run down.
       const stop = defaultSession().runs.kill(runId);
@@ -853,19 +852,19 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('projects returned outcomes to terminal status, stage end, and stream status', async () => {
+  it('projects returned outcomes to terminal status, stage end, and run status', async () => {
     const cases = [
       {
         outcome: RUN_OUTCOME.COMPLETED,
-        stream: RUN_PHASE.COMPLETED,
+        phase: RUN_PHASE.COMPLETED,
       },
       {
         outcome: RUN_OUTCOME.CANCELLED,
-        stream: RUN_PHASE.CANCELLED,
+        phase: RUN_PHASE.CANCELLED,
       },
       {
         outcome: RUN_OUTCOME.FAILED,
-        stream: RUN_PHASE.FAILED,
+        phase: RUN_PHASE.FAILED,
       },
     ] as const;
 
@@ -890,7 +889,7 @@ describe('runFlowWithLifecycle', () => {
           },
         );
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
-        expect(runStatus.get(runId)).toBe(expected.stream);
+        expect(runStatus.get(runId)).toBe(expected.phase);
       } finally {
         clearRunStatusForTest(runStatus, runId);
       }
@@ -967,9 +966,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, () =>
-            Effect.fail(new Error('model exploded')),
-          ),
+          runFlow(ctx, () => Effect.fail(new Error('model exploded'))),
         ),
       ).rejects.toThrow('model exploded');
 
@@ -991,7 +988,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('terminalizes a waiting stream when the lifecycle catch path fails', async () => {
+  it('terminalizes a waiting run when the lifecycle catch path fails', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
@@ -1304,11 +1301,11 @@ describe('finalizeRunTerminal', () => {
     }
   });
 
-  // The stream phase is the single owner of a run's terminal outcome. A
+  // The run phase is the single owner of a run's terminal outcome. A
   // stop/kill transitions the phase behind the run's back, and the run it
   // killed then reports its own non-zero exit as a failure — so the phase, not
   // the report, has to decide, and no caller may cross-check it for itself.
-  it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
+  it('resolves the terminal outcome from an already-cancelled run phase', async () => {
     const { runId, session, runStatus, handle } = finalizeFixture();
     const stage = { end: vi.fn() };
 
@@ -1354,7 +1351,7 @@ describe('finalizeRunTerminal', () => {
   // The same ownership rule in the other direction: a phase that already
   // published FAILED is a terminal fact a later stop cannot rewrite, so a
   // caller reporting `cancelled` does not get to relabel it.
-  it('keeps an already-failed stream phase over a later cancelled report', async () => {
+  it('keeps an already-failed run phase over a later cancelled report', async () => {
     const { runId, session, runStatus, handle } = finalizeFixture();
 
     try {

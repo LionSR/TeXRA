@@ -51,8 +51,10 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
   RUN_PHASE,
+  toRetryErrorInfo,
   type InvocationRef,
   type NormalizedUsage,
+  type ProviderError,
   type RetryErrorInfo,
   type SnapshotRuntime,
 } from '@shared/schemas';
@@ -423,7 +425,7 @@ export const modelInvokerLayer: Layer.Layer<
         request.round,
         `${request.debugName}_response`,
       );
-      const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
+      const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
       if (usage !== null && usage.inputTokens > 0 && bound.contextWindow > 0) {
         logger.contextState({
           inputTokens: usage.inputTokens,
@@ -508,7 +510,10 @@ export const modelInvokerLayer: Layer.Layer<
             },
           ];
           // The permits: an abort or a disposed gate while waiting rejects,
-          // which is this fiber being stopped or the session torn down.
+          // which is this fiber being stopped or the session torn down, and
+          // only those two reasons become an interrupt. Any other rejection
+          // is a bug in the gate and dies with its cause rather than reading
+          // to the user as a stop.
           const acquired = yield* Effect.tryPromise({
             try: () =>
               gate.acquireAll(routes, {
@@ -519,7 +524,13 @@ export const modelInvokerLayer: Layer.Layer<
                   ),
               }),
             catch: (cause) => cause,
-          }).pipe(Effect.catch(() => Effect.interrupt));
+          }).pipe(
+            Effect.catchIf(
+              (cause) => isUserAbort(cause) || cause === signal.reason,
+              () => Effect.interrupt,
+            ),
+            Effect.catch((cause) => Effect.die(ensureError(cause))),
+          );
           const exit = yield* Effect.exit(
             attemptOnce(state, invocation, request, bound, operationId),
           );
@@ -559,6 +570,7 @@ export const modelInvokerLayer: Layer.Layer<
               : failed.config;
           const next = yield* bindModel({
             config,
+            stores: run.stores,
             compatibilityKey: failed.compatibilityKey,
             agentCategory: run.config.agentCategory,
             temperature: run.setting.temperature,
@@ -582,14 +594,17 @@ export const modelInvokerLayer: Layer.Layer<
     const manualRetry = Effect.fn('ModelInvoker.manualRetry')(function* (
       initial: RunState,
       failed: BoundModel,
-      failure: ModelFailure,
+      // The failure as it is recorded, live or recovered from the ledger:
+      // the prompt, the row and the reported error all read this one value,
+      // so a restart re-presents the same facts the first prompt showed.
+      recorded: ProviderError,
       failedAttempt: InvocationRef,
       operationId: string,
       outstanding: string | null,
     ): Effect.fn.Return<Decision, InvokeError> {
       let state = initial;
       const requestId = outstanding ?? `retry-${generateShortId()}`;
-      const info = failure.info;
+      const info = toRetryErrorInfo(recorded);
       const request = {
         requestId,
         runId,
@@ -612,7 +627,7 @@ export const modelInvokerLayer: Layer.Layer<
           substate,
         }) as const;
       if (outstanding === null) {
-        logErrorData(logger, 'Model request failed', failure.formatted);
+        logErrorData(logger, 'Model request failed', recorded);
         logRetryLifecycle(operationId, 'retry_decision_requested', failed, {
           userRetryable: info.userRetryable,
           statusCode: info.statusCode,
@@ -752,7 +767,9 @@ export const modelInvokerLayer: Layer.Layer<
       let admission: 'automatic' | 'authorized' | 'decision' | 'waiting' =
         'automatic';
       let outstanding: string | null = null;
-      let lastFailure: ModelFailure | null = null;
+      // The failure the manual gate presents: the live attempt's own record,
+      // or, on a resume, the one the snapshot committed with the gate.
+      let lastFailure: ProviderError | null = null;
       let failedAttempt: InvocationRef = {
         invocationId,
         attempt: Math.max(1, attempt - 1),
@@ -768,9 +785,15 @@ export const modelInvokerLayer: Layer.Layer<
         } else {
           admission = 'decision';
         }
-        lastFailure = classifyModelFailure(
-          new Error(state.lastError?.message ?? 'The previous attempt failed.'),
-        );
+        // Every gate write commits `lastError` in the same batch, so a gate
+        // without its failure is a malformed aggregate: refuse loudly rather
+        // than re-present a fabricated one.
+        if (state.lastError === null) {
+          return yield* Effect.die(
+            new Error('A manual retry gate has no recorded failure.'),
+          );
+        }
+        lastFailure = state.lastError;
       }
       for (;;) {
         const bound = yield* SynchronizedRef.get(run.model);
@@ -793,7 +816,11 @@ export const modelInvokerLayer: Layer.Layer<
             state = decision.state;
             outstanding = null;
             if (decision.kind === 'deny') {
-              return { kind: 'failed', state, error: failure.info };
+              return {
+                kind: 'failed',
+                state,
+                error: toRetryErrorInfo(failure),
+              };
             }
             if (decision.kind === 'cancel') return { kind: 'cancelled', state };
           }
@@ -837,7 +864,7 @@ export const modelInvokerLayer: Layer.Layer<
           return yield* Effect.die(error);
         }
         state = error.state;
-        lastFailure = error.failure;
+        lastFailure = error.failure.formatted;
         failedAttempt = invocation;
         attempt += 1;
         automaticAttempts += 1;

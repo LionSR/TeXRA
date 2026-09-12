@@ -296,31 +296,8 @@ const UserVariableChannelRecordSchema = z
   .looseObject(UserVariableValueSchemas)
   .partial();
 
-/**
- * User variables for template rendering: one mutable record.
- *
- * The retired two-channel `input`/`transient` envelope is rejected explicitly
- * rather than left to the record schema above: that schema is loose, so an
- * unrejected envelope would parse as two junk variables instead of failing.
- * The check goes when the `flow_<id>.json` parse that can still meet the old
- * envelope goes.
- */
-export const UserVariableChannelsSchema = UserVariableChannelRecordSchema.check(
-  (ctx) => {
-    // Either key alone is enough to reject: the envelope always carried
-    // both, and a malformed one (a non-record in either channel) must fail
-    // just as loudly as a well-formed one rather than parsing into two junk
-    // variables.
-    if ('input' in ctx.value || 'transient' in ctx.value) {
-      ctx.issues.push({
-        code: 'custom',
-        input: ctx.value,
-        message:
-          'Retired two-channel user-variable envelope: `input`/`transient` are no longer merged',
-      });
-    }
-  },
-);
+/** User variables for template rendering: one mutable record. */
+export const UserVariableChannelsSchema = UserVariableChannelRecordSchema;
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 
@@ -382,9 +359,6 @@ export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
   systemPrompt: z.string().optional(),
-  userCancelledRetry: z.boolean().optional(),
-  /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

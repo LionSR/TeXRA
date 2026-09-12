@@ -15,7 +15,11 @@
  *
  * Reflection dispatches no tools: a turn advertises none, so a response never
  * carries a local call and the assistant message enters history with its
- * `response` row.
+ * `response` row. That narrows the retired flow, which forwarded a workflow's
+ * declared `setting.tools` to any model that supported function calling: this
+ * program has no dispatch site, so advertising a tool would invite a call
+ * nothing can settle. A workflow that needs tools runs in the tool-use
+ * family, and the reflection run's tool registry is empty by construction.
  */
 import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
 

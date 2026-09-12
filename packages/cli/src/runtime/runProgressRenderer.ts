@@ -203,7 +203,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return this.rootRunId ? this.view?.runs.get(this.rootRunId) : undefined;
   }
 
-  private get rootStreamTerminal(): boolean {
+  private get rootRunTerminal(): boolean {
     return isTerminalOutcomePhase(this.root()?.status);
   }
 
@@ -224,12 +224,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     // A terminal root freezes the line: the final status is its last paint.
     if (wasTerminal && !phaseChanged) return;
     this.updateHeartbeat();
-    this.render(phaseChanged || this.rootStreamTerminal);
+    this.render(phaseChanged || this.rootRunTerminal);
   }
 
   private liveChildren(): readonly RunView[] {
     const root = this.root();
-    if (!root || this.rootStreamTerminal) return [];
+    if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
       return child && !isTerminalOutcomePhase(child.status) ? [child] : [];
@@ -252,7 +252,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private updateHeartbeat(): void {
-    if (this.rootStreamTerminal || !this.rootRunId) {
+    if (this.rootRunTerminal || !this.rootRunId) {
       this.stopHeartbeat();
       return;
     }

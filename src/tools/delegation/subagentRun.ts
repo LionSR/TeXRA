@@ -136,7 +136,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   };
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
-  const inheritChildStreamApprovals = (resolvedRunId: RunId): void => {
+  const inheritChildRunApprovals = (resolvedRunId: RunId): void => {
     // Live inherited bypass values: each approval follows the parent's
     // corresponding bypass, so a partial grant propagates only that grant.
     // Complete delegated-task approval also reaches nested orchestrators.
@@ -169,7 +169,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        onRunResolved: inheritChildStreamApprovals,
+        onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
         notify: notifyParentTrace,
       }),
@@ -225,7 +225,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        onRunResolved: inheritChildStreamApprovals,
+        onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,
       };
 

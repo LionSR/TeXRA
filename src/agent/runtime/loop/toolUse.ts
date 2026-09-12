@@ -161,16 +161,26 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         userChannels,
       },
       ...(systemPrompt !== undefined ? { systemPrompt } : {}),
-      ...(lastError !== undefined ? { lastError } : {}),
       ...(run.structured.value !== undefined
         ? { structured: run.structured.value }
         : {}),
     };
   };
+  /**
+   * Every snapshot names the run's error fact, so the value `restore` reads
+   * back (`state.lastError`, the fold's runtime field) is the value the live
+   * loop holds: a failed turn resumes as failed, and a follow-up that
+   * recovers the run clears it for good.
+   */
   const snapshot = (
     state: RunState,
     patch: Omit<Parameters<typeof snapshotRow>[2], 'state'>,
-  ) => snapshotRow(runId, state, { ...patch, state: flowState(state) });
+  ) =>
+    snapshotRow(runId, state, {
+      ...patch,
+      runtime: { lastError: lastError ?? null, ...patch.runtime },
+      state: flowState(state),
+    });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -200,7 +210,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (current.modelId === model) return undefined;
       const nextConfig = getRuntimeModelConfig(model);
       if (!nextConfig) return `Model ${model} is not registered`;
-      const nextKey = resolveModelHandlerCompatibilityKey(nextConfig);
+      const nextKey = resolveModelHandlerCompatibilityKey(
+        nextConfig,
+        run.stores.globalState,
+      );
       if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
       return current.compatibilityKey === nextKey
         ? undefined
@@ -254,6 +267,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
       const next = yield* bindModel({
         config: nextConfig,
+        stores: run.stores,
         compatibilityKey: current.compatibilityKey,
         agentCategory: run.config.agentCategory,
         temperature: run.setting.temperature,

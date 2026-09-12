@@ -492,8 +492,9 @@ export class RunRegistry {
   /**
    * Kill only background OS processes (bash, codex) without touching agent
    * run status. Agent runs are left in RUNNING: whether one is
-   * resumable afterwards is decided from its durable facts (a flow record on
-   * disk, and no live owner), never from a phase some later pass rewrites.
+   * resumable afterwards is decided from its durable facts (a `flow.snapshot`
+   * on the run aggregate, and no live run claim), never from a phase some
+   * later pass rewrites.
    *
    * Killing a background run's underlying OS process requires
    * `interruptBackgroundProcess()`, which only fires for a handle whose

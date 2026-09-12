@@ -347,7 +347,7 @@ export const createHostRunActions = (
         }).pipe(Effect.asVoid);
       },
       /**
-       * Resume the run behind a stream: a workflow relaunches through the
+       * Resume a settled run: a workflow relaunches through the
        * host's launcher with its run id; a tool-use run carries
        * canonical session state, so it goes through the resume port that
        * restores it instead of starting a fresh run.

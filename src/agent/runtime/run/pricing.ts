@@ -4,6 +4,9 @@
  * `response` row beside the dispatch facts (D12), so a resumed run's cost is
  * the sum of its rows and nothing else.
  */
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
+
+import type { AgentTrace } from '@agent/trace';
 import type { TurnResult } from '@llm/turn';
 import type { NormalizedUsage } from '@shared/schemas';
 
@@ -23,20 +26,120 @@ const perMillion = (tokens: number, price: number): number =>
   (tokens * price) / 1e6;
 
 /**
+ * xAI pricing the llm-zoo catalog cannot express: per-model long-context
+ * tiers and the documented cached-token rate, keyed by catalog `fullName`.
+ * Source: the models catalog embedded in docs.x.ai, verified 2026-08-14.
+ * llm-zoo has no tier field (still true at 1.28.0) and its xAI entries
+ * inherit the default `cacheDiscountFactor` of 1, which would zero the
+ * cache rebate, so both live here until the catalog carries them (#10073).
+ * Rates are USD per 1M tokens.
+ */
+const XAI_DOCUMENTED_PRICING: Readonly<
+  Record<
+    string,
+    {
+      readonly thresholdTokens: number;
+      readonly inputPrice: number;
+      readonly outputPrice: number;
+      readonly cacheDiscountFactor: number;
+    }
+  >
+> = {
+  'grok-4.3': {
+    thresholdTokens: 200_000,
+    inputPrice: 2.5,
+    outputPrice: 5,
+    cacheDiscountFactor: 0.16,
+  },
+  'grok-4.5': {
+    thresholdTokens: 200_000,
+    inputPrice: 4,
+    outputPrice: 12,
+    cacheDiscountFactor: 0.15,
+  },
+  'grok-4.6': {
+    thresholdTokens: 200_000,
+    inputPrice: 4,
+    outputPrice: 12,
+    cacheDiscountFactor: 0.25,
+  },
+};
+
+/** Lowest documented threshold; the drift tripwire's reference. */
+const LOWEST_XAI_THRESHOLD_TOKENS = Math.min(
+  ...Object.values(XAI_DOCUMENTED_PRICING).map(
+    (documented) => documented.thresholdTokens,
+  ),
+);
+
+/** Models already reported as missing a tier; the warning is once per model. */
+const xaiTierGapWarned = new Set<string>();
+
+/**
+ * A live xAI model whose window reaches the lowest documented threshold but
+ * which has no row above would silently bill flat rates, so it warns once.
+ */
+function warnOnMissingXaiTier(config: ModelConfig, logger: AgentTrace): void {
+  if (
+    config.deprecated === true ||
+    config.retired === true ||
+    config.contextWindow < LOWEST_XAI_THRESHOLD_TOKENS ||
+    xaiTierGapWarned.has(config.fullName)
+  ) {
+    return;
+  }
+  xaiTierGapWarned.add(config.fullName);
+  logger.warn(
+    `xAI model ${config.fullName} has no documented long-context pricing ` +
+      'tier; billing flat catalog rates. If xAI publishes a tier for it, ' +
+      'add it to XAI_DOCUMENTED_PRICING in pricing.ts.',
+    {
+      data: {
+        fullName: config.fullName,
+        contextWindow: config.contextWindow,
+      },
+    },
+  );
+}
+
+/**
  * The rates for one turn. A plan route (ChatGPT/Codex, Grok, the GLM coding
  * plan, Kimi Code) is covered by the subscription, so every rate is zero and
  * the run records tokens without spend; an API-key route bills the registry's
  * rates for the bound model.
+ *
+ * xAI is the one provider whose rates are not flat: once a request's whole
+ * prompt — cached tokens included — reaches the model's documented threshold,
+ * every token of that request bills at the tier, output included, so the
+ * complete tuple switches and the rebate below follows it.
  */
-function turnRates(bound: BoundModel, plan: boolean): TurnRates {
+function turnRates(
+  bound: BoundModel,
+  plan: boolean,
+  promptTokens: number,
+  logger: AgentTrace,
+): TurnRates {
   const { config } = bound;
-  return plan
-    ? { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 }
-    : {
-        inputPrice: config.inputPrice,
-        outputPrice: config.outputPrice,
-        cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
-      };
+  if (plan) return { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 };
+  const base = {
+    inputPrice: config.inputPrice,
+    outputPrice: config.outputPrice,
+    cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
+  };
+  if (config.provider !== ModelProvider.XAI) return base;
+  const documented = XAI_DOCUMENTED_PRICING[config.fullName];
+  if (documented === undefined) {
+    warnOnMissingXaiTier(config, logger);
+    return base;
+  }
+  const { cacheDiscountFactor } = documented;
+  return promptTokens >= documented.thresholdTokens
+    ? {
+        inputPrice: documented.inputPrice,
+        outputPrice: documented.outputPrice,
+        cacheDiscountFactor,
+      }
+    : { ...base, cacheDiscountFactor };
 }
 
 /**
@@ -103,6 +206,7 @@ export function priceTurnUsage(
   bound: BoundModel,
   usage: TurnResult['usage'],
   responseTimeMs: number,
+  logger: AgentTrace,
 ): NormalizedUsage | null {
   if (usage === null) return null;
   const provider = usage.providerUsage;
@@ -111,7 +215,7 @@ export function priceTurnUsage(
   const cached = usage.cachedInputTokens ?? undefined;
   const reasoning = usage.reasoningTokens ?? undefined;
   const plan = bound.usageRoute !== 'api-key';
-  const rates = turnRates(bound, plan);
+  const rates = turnRates(bound, plan, inputTokens, logger);
   let cost: number;
   let cacheCreationTokens: number | undefined;
   let toolUsePromptTokens: number | undefined;

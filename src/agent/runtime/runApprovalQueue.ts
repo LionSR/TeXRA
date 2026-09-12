@@ -1,9 +1,9 @@
 /**
- * Generic stream-scoped approval controller, owned per session.
+ * Generic run-scoped approval controller, owned per session.
  *
  * Encapsulates the shared concerns of bash and tool-edit approvals:
- *   - serialized request queues (one prompt at a time per stream)
- *   - per-stream bypass state announced over a bound progress event
+ *   - serialized request queues (one prompt at a time per run)
+ *   - per-run bypass state announced over a bound progress event
  *
  * Controller instances live on {@link SessionApprovals}, one per
  * `SessionHandle` (#8144) — there is no process-global controller, so two
@@ -18,22 +18,22 @@ import type { SessionHostInteractions } from './HostInteractions';
 import type PQueue from 'p-queue';
 
 /**
- * Per-stream bypass state bound to the host interaction that announces it.
+ * Per-run bypass state bound to the host interaction that announces it.
  *
  * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
  * bypass values, so set/clear semantics and UI notification stay uniform
  * across approval kinds.
  *
- * A stream with no explicit bypass value of its own defers to its ancestor
+ * A run with no explicit bypass value of its own defers to its ancestor
  * chain (see `resolveParent`) rather than defaulting straight to `false` —
- * this is what lets a delegated subagent stream, or the next round of a CLI
+ * this is what lets a delegated subagent run, or the next round of a CLI
  * conversation, inherit a bypass its predecessor turned on, without a
  * one-shot copy that misses toggles made after the child/round was created.
  */
 export interface RunApprovalBypass {
   isBypassed(runId: RunId): boolean;
   /**
-   * Set bypass for a stream. Notifies the active host interaction (unless
+   * Set bypass for a run. Notifies the active host interaction (unless
    * `silent`); omit the interaction host for pre-activation setup where no UI
    * exists yet.
    */
@@ -46,8 +46,8 @@ export interface RunApprovalBypass {
 }
 
 /**
- * Internal bypass surface: adds per-stream value teardown, which only the
- * ancestry owner (`forgetRunAncestry`) may call — clearing a stream's
+ * Internal bypass surface: adds per-run value teardown, which only the
+ * ancestry owner (`forgetRunAncestry`) may call — clearing a run's
  * explicit values before its children are promoted would silently revoke
  * their inherited bypasses.
  */
@@ -124,22 +124,22 @@ function createRunApprovalBypass(
 
 /**
  * One queued approval. `bypassed` exists because the queue can hold a request
- * behind another stream prompt for arbitrarily long: if the user turns the
- * stream's bypass on while this one waits (typically by answering the prompt
+ * behind another run prompt for arbitrarily long: if the user turns the
+ * run's bypass on while this one waits (typically by answering the prompt
  * ahead of it with "approve and stop asking"), prompting anyway would ignore
  * the decision they just made.
  */
 interface QueuedApproval<T> {
   /** Present the prompt and settle it. */
   readonly prompt: () => Promise<T>;
-  /** Result used instead when the stream is bypassed by dispatch time. */
+  /** Result used instead when the run is bypassed by dispatch time. */
   readonly bypassed: () => T | Promise<T>;
 }
 
 interface RunApprovalController {
   bypass: RunApprovalBypass;
   /**
-   * Serialize one prompt at a time per stream, re-checking the stream's bypass
+   * Serialize one prompt at a time per run, re-checking the run's bypass
    * at dispatch rather than at enqueue.
    */
   enqueue<T>(runId: RunId | undefined, approval: QueuedApproval<T>): Promise<T>;
@@ -175,22 +175,21 @@ export interface SessionApprovals {
   readonly toolEdit: RunApprovalController;
   readonly bash: RunApprovalController;
   /**
-   * Per-stream bypass for agent delegation proposals (super-YOLO). Proposals
-   * settle through the run coordinators rather than a stream approval queue,
+   * Per-run bypass for agent delegation proposals (super-YOLO). Proposals
+   * settle through the run coordinators rather than a run approval queue,
    * so unlike bash / tool-edit there is no controller — only bypass state.
    */
   readonly proposal: RunApprovalBypass;
   /**
-   * Set the complete delegated-task approval mode for one stream: later
+   * Set the complete delegated-task approval mode for one run: later
    * delegation proposals, file edits, and commands are all approved for it.
    *
-   * This is the shared meaning of the extension's legacy "Super Yolo"
-   * control. Approval state is session-owned, so the grant cannot leak to
+   * This is the shared meaning of the extension's "Super Yolo" control. Approval state is session-owned, so the grant cannot leak to
    * another CLI, extension, or desktop session.
    */
   setDelegatedWorkBypasses(runId: RunId, enabled: boolean): void;
-  /** Every kind's effective bypass for one stream: the `bypasses` half of
-   *  the stream's `approval.policy` snapshot. */
+  /** Every kind's effective bypass for one run: the `bypasses` half of
+   *  the run's `approval.policy` snapshot. */
   bypassesFor(runId: RunId): ApprovalPolicySnapshot['bypasses'];
   /**
    * Record that `childRunId` descends from `parentRunId` for bypass
@@ -199,18 +198,18 @@ export interface SessionApprovals {
    * still keeps its own values, so a parent with bash bypassed but edits
    * gated propagates exactly that split.
    *
-   * Used for delegated subagent runs (parent = the orchestrator stream,
+   * Used for delegated subagent runs (parent = the orchestrator run,
    * so complete delegated-task approval remains effective through nested
    * orchestrators; see `configureDelegatedChildApprovals`) and, in the CLI,
    * successive conversation rounds (parent = the previous round's root
-   * stream — a CLI round should carry forward whichever bypasses were on) —
+   * run — a CLI round should carry forward whichever bypasses were on) —
    * both mint a fresh `RunId` that would otherwise start every bypass
    * kind ungated.
    */
   registerRunParent(childRunId: RunId, parentRunId: RunId): void;
   /**
-   * Promote a stream out of its approval ancestry while preserving each
-   * effective bypass value as an explicit value on the stream.
+   * Promote a run out of its approval ancestry while preserving each
+   * effective bypass value as an explicit value on the run.
    */
   detachRunFromParent(runId: RunId): void;
   /**
@@ -227,19 +226,19 @@ export interface SessionApprovals {
 }
 
 /**
- * `onPolicyChanged` fires for every stream whose effective bypass state
+ * `onPolicyChanged` fires for every run whose effective bypass state
  * moved, after the values are written: a non-silent `setBypass` reports the
- * stream and each affected descendant, and `registerRunParent` reports
+ * run and each affected descendant, and `registerRunParent` reports
  * the child and each of its descendants whose inherited value the new edge
- * changed. The session publishes that stream's `approval.policy` snapshot
- * from it. Silent writes are pre-activation setup for a stream no host shows
+ * changed. The session publishes that run's `approval.policy` snapshot
+ * from it. Silent writes are pre-activation setup for a run no host shows
  * yet and publish nothing, exactly as they notify no host.
  */
 export function createSessionApprovals(
   interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   onPolicyChanged: (runId: RunId) => void = () => {},
 ): SessionApprovals {
-  // One ancestry graph: "who is this stream's parent" is kind-independent.
+  // One ancestry graph: "who is this run's parent" is kind-independent.
   // The per-kind split lives in the bypass *values* — each
   // `createRunApprovalBypass` owns its own `byRun` map — so a parent
   // with bash bypassed but edits gated still propagates exactly that split.
@@ -294,7 +293,7 @@ export function createSessionApprovals(
   function detachRunFromParent(runId: RunId): void {
     if (!parentOf.has(runId)) return;
     // Read every effective value BEFORE dropping the edge: resolving after
-    // the delete would report `false` for a kind the stream only inherited,
+    // the delete would report `false` for a kind the run only inherited,
     // silently revoking that bypass instead of pinning it.
     const promoted = bypasses.map((bypass) => ({
       bypass,
@@ -319,7 +318,7 @@ export function createSessionApprovals(
     bypassesFor,
     setDelegatedWorkBypasses(runId, enabled) {
       proposal.setBypass(runId, enabled);
-      // Unconditional: write the stream's own explicit tool-edit entry even
+      // Unconditional: write the run's own explicit tool-edit entry even
       // when `isBypassed` already reports true, because that can be an
       // ancestry-resolved inheritance from the parent — super-YOLO granted
       // here must survive the parent later re-gating its own edits.
@@ -328,7 +327,7 @@ export function createSessionApprovals(
     },
     registerRunParent(childRunId, parentRunId) {
       // The child's `run.start` already carried its snapshot without this
-      // edge, so every stream the inheritance moves publishes a fresh one.
+      // edge, so every run the inheritance moves publishes a fresh one.
       const affected = [childRunId, ...resolveDescendants(childRunId)];
       const before = new Map(
         affected.map((runId) => [runId, bypassesFor(runId)]),

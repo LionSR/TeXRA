@@ -61,8 +61,8 @@ export function snapshotHoldsTerminalCompileRejection(
  * The one exception buys back a refusal the user would otherwise be walked
  * into: a workflow that stopped at its round cap on an unresolved compile
  * rejection has a snapshot that only replays the same rejection. The
- * reflection loop writes that marker during the final round, before the run
- * lifecycle records `meta.outcome`, so the terminal outcomes that prove
+ * reflection loop writes that marker during the final round, before
+ * `finalizeRun` writes the `run.end` row, so the terminal outcomes that prove
  * `resolveOutcome` already ran — CANCELLED and COMPLETED, neither of which
  * `deriveRunOutcome` can produce over a terminal rejection — skip the read,
  * while FAILED and a missing outcome are read.

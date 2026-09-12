@@ -181,7 +181,7 @@ export function statusInfoFromLiveness(liveness: RunLiveness): RunStatusInfo {
         detail: 'interrupted; no owner and no recorded outcome',
       };
     case 'settled':
-      return { status: liveness.outcome ?? 'unknown', elapsed: null };
+      return { status: liveness.outcome, elapsed: null };
   }
 }
 

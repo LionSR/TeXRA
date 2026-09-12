@@ -1,9 +1,16 @@
 /**
  * The run's follow-up input: a lease over the session's queue for this run,
  * the blocking wait and the non-blocking drain, and `consume`, which commits
- * one drained batch as canonical user rows plus `flow.step turn.ready` in one
- * ledger transaction. A batch whose rows fail to commit goes back on the
- * queue, so lost input is never acknowledged.
+ * one drained batch plus `flow.step turn.ready` in one ledger transaction. A
+ * batch whose rows fail to commit goes back on the queue, so lost input is
+ * never acknowledged.
+ *
+ * One batch enters the conversation as **one** user message carrying every
+ * queued item as its own text part, not one message per item. The retired
+ * engine appended a message per item and left each provider's handler to
+ * merge them, because chat protocols reject consecutive user turns; the one
+ * message is that merge, done once, where the row is written. The
+ * provider-visible difference is the message count of a multi-item batch.
  *
  * A native child loop owns continuation across all of its turns; its inner
  * one-cycle loop uses that queue without becoming a second consumer.
@@ -29,7 +36,12 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
-import { appendRow, stepRow, type Message } from './loop/rows';
+import {
+  appendRow,
+  runtimeSnapshotRow,
+  stepRow,
+  type Message,
+} from './loop/rows';
 
 export interface ConsumedFollowUps {
   readonly state: RunState;
@@ -184,6 +196,10 @@ export const followUpsLayer: Layer.Layer<
         Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             appendRow(runId, [built.value.message]),
+            // The input that recovers a failed run clears the error fact in
+            // the same transaction, so a resume taken between this batch and
+            // the next turn's snapshot does not read the run as still failed.
+            runtimeSnapshotRow(runId, state, { lastError: null }),
             stepRow(runId, state, 'turn.ready'),
           ]),
         ),
