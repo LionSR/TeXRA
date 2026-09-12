@@ -504,7 +504,7 @@ describe('completedRunArchive facade', () => {
           leaseModule.acquireResumedRunLease,
         );
         launchMocks.resolveAgent.mockReturnValue({
-          entry: { path: '/agents/orchestrator.yaml' },
+          path: '/agents/orchestrator.yaml',
         });
         launchMocks.loadAgent.mockResolvedValue([
           { agentCategory: AgentCategory.ToolUse },

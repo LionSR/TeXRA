@@ -11,18 +11,9 @@ import {
   afterEach,
   vi,
 } from 'vitest';
-import { z } from 'zod';
 
-import {
-  getAgent,
-  loadAgents,
-  refresh,
-  registerInlineAgents,
-  resolveAgent,
-  resolveAgentForLaunch,
-} from '@agent/index';
-import type { ResolvedAgent } from '@agent/index/agentEntry';
-import { clearInlineAgents } from '@agent/index/agentRegistry';
+import { getAgent, loadAgents, refresh } from '@agent/index';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
@@ -37,7 +28,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 vi.mock('@agent/index', async () => {
   const actual =
     await vi.importActual<typeof import('@agent/index')>('@agent/index');
-  return { ...actual, resolveAgent: vi.fn(actual.resolveAgent) };
+  return { ...actual, getAgent: vi.fn(actual.getAgent) };
 });
 
 const tempDirs: string[] = [];
@@ -101,18 +92,13 @@ describe('validateAgentYamlContent', () => {
 describe('loadAgentSettingAndPrompts', () => {
   const fileContents = new Map<string, string>();
 
-  function putYaml(resolution: ResolvedAgent, lines: string[]): void {
-    fileContents.set(path.normalize(resolution.entry.path), lines.join('\n'));
+  function putYaml(entry: AgentEntry, lines: string[]): void {
+    fileContents.set(path.normalize(entry.path), lines.join('\n'));
   }
 
-  function customResolution(
-    name: string,
-    category: AgentCategory,
-  ): ResolvedAgent {
+  function customEntry(name: string, category: AgentCategory): AgentEntry {
     const definitionPath = path.join('/', 'tmp', 'agents', `${name}.yaml`);
-    return {
-      entry: { source: 'custom', name, path: definitionPath, category },
-    };
+    return { source: 'custom', name, path: definitionPath, category };
   }
 
   beforeEach(() => {
@@ -138,9 +124,9 @@ describe('loadAgentSettingAndPrompts', () => {
   });
 
   it('loads settings and prompts from the given definition path', async () => {
-    const resolution = customResolution('polish', AgentCategory.Workflow);
+    const entry = customEntry('polish', AgentCategory.Workflow);
 
-    putYaml(resolution, [
+    putYaml(entry, [
       'name: polish',
       'settings:',
       // agentCategory is the discriminator of AgentSettingSchema; only
@@ -152,38 +138,33 @@ describe('loadAgentSettingAndPrompts', () => {
       '',
     ]);
 
-    const [, prompts] = await loadAgentSettingAndPrompts(resolution);
+    const [, prompts] = await loadAgentSettingAndPrompts(entry);
 
     assert.strictEqual(prompts.userRequest, 'unified variant');
   });
 
   it('rejects with a wrapped error naming the path for malformed YAML', async () => {
-    const resolution = customResolution('broken', AgentCategory.Workflow);
+    const entry = customEntry('broken', AgentCategory.Workflow);
 
-    fileContents.set(
-      path.normalize(resolution.entry.path),
-      'name: "unterminated\n',
-    );
+    fileContents.set(path.normalize(entry.path), 'name: "unterminated\n');
 
     await assert.rejects(
-      () => loadAgentSettingAndPrompts(resolution),
+      () => loadAgentSettingAndPrompts(entry),
       (error: unknown) =>
         error instanceof Error &&
-        error.message.startsWith(
-          `Failed to parse YAML at ${resolution.entry.path}:`,
-        ),
+        error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
     );
   });
 
   it('rejects a circular "inherits" chain instead of recursing without bound', async () => {
-    const resolutionA = customResolution('agent_a', AgentCategory.Workflow);
-    const resolutionB = customResolution('agent_b', AgentCategory.Workflow);
-    const resolutionByName: Record<string, ResolvedAgent> = {
-      agent_a: resolutionA,
-      agent_b: resolutionB,
+    const entryA = customEntry('agent_a', AgentCategory.Workflow);
+    const entryB = customEntry('agent_b', AgentCategory.Workflow);
+    const entryByName: Record<string, AgentEntry> = {
+      agent_a: entryA,
+      agent_b: entryB,
     };
 
-    putYaml(resolutionA, [
+    putYaml(entryA, [
       'name: agent_a',
       'inherits: agent_b',
       'settings:',
@@ -191,7 +172,7 @@ describe('loadAgentSettingAndPrompts', () => {
       'prompts: {}',
       '',
     ]);
-    putYaml(resolutionB, [
+    putYaml(entryB, [
       'name: agent_b',
       'inherits: agent_a',
       'settings:',
@@ -202,291 +183,25 @@ describe('loadAgentSettingAndPrompts', () => {
 
     const actual =
       await vi.importActual<typeof import('@agent/index')>('@agent/index');
-    const resolveAgentMock = vi.mocked(resolveAgent);
-    resolveAgentMock.mockImplementation(
-      (identifier: string) => resolutionByName[identifier.split(':').pop()!],
+    const getAgentMock = vi.mocked(getAgent);
+    getAgentMock.mockImplementation(
+      (identifier: string) => entryByName[identifier.split(':').pop()!],
     );
 
     try {
       await assert.rejects(
-        () => loadAgentSettingAndPrompts(resolutionA),
+        () => loadAgentSettingAndPrompts(entryA),
         (error: unknown) =>
           error instanceof Error &&
           error.message.startsWith('Circular "inherits" chain detected:'),
       );
     } finally {
       // mockRestore() only rehydrates vi.spyOn() mocks; this is a plain
-      // vi.fn(actual.resolveAgent), so restore the real implementation
-      // explicitly to avoid leaving `resolveAgent` returning undefined for
+      // vi.fn(actual.getAgent), so restore the real implementation
+      // explicitly to avoid leaving `getAgent` returning undefined for
       // any later test in this describe block.
-      resolveAgentMock.mockImplementation(actual.resolveAgent);
+      getAgentMock.mockImplementation(actual.getAgent);
     }
-  });
-});
-
-describe('inline agent definitions', () => {
-  const SCRATCHPAD = {
-    name: 'scratchpad',
-    description: 'Registered as a value, never written to disk.',
-    settings: { agentCategory: AgentCategory.ToolUse, tools: ['grep'] },
-    prompts: { systemPrompt: 'You are an inline agent.' },
-  };
-
-  async function useAgentDirectories(
-    dir: string,
-    workspaceState: Record<string, unknown> = {},
-  ): Promise<void> {
-    const directories: AgentDirectoriesPort = {
-      custom: async () => dir,
-      builtIn: async () => dir,
-      builtInToolUse: async () => dir,
-    };
-    await installPlatform(
-      { workspaceState },
-      { fs: nodeFilesystem, agentDirectories: directories },
-    );
-  }
-
-  beforeAll(async () => {
-    // Every agent directory points at an empty folder: nothing the registry
-    // returns below can have come from YAML on disk.
-    await useAgentDirectories(
-      await makeTempDir('texra-empty-agents-', tempDirs),
-    );
-    registerInlineAgents([SCRATCHPAD]);
-    await Effect.runPromise(loadAgents({ includeRemote: false }));
-  });
-
-  it('resolves a registered definition with no YAML behind it', () => {
-    const entry = getAgent('scratchpad');
-    assert.strictEqual(entry?.source, 'inline');
-    assert.strictEqual(entry.path, '');
-    assert.strictEqual(entry.category, AgentCategory.ToolUse);
-    assert.deepStrictEqual(entry.tools, ['grep']);
-    assert.strictEqual(getAgent('inline:scratchpad')?.name, 'scratchpad');
-  });
-
-  it('returns settings and prompts without reading the filesystem', async () => {
-    const resolution = resolveAgentForLaunch(
-      AgentCategory.ToolUse,
-      'scratchpad',
-    );
-    assert.ok(resolution, 'launch resolution should find the inline agent');
-    assert.strictEqual(resolution.entry.path, '');
-
-    const read = vi.spyOn(AbsoluteFS, 'read');
-    try {
-      const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
-
-      assert.strictEqual(settings.agentCategory, AgentCategory.ToolUse);
-      assert.strictEqual(
-        prompts.systemPrompt,
-        'You are an inline agent.',
-        'prompts should come back already parsed',
-      );
-      assert.strictEqual(read.mock.calls.length, 0);
-    } finally {
-      read.mockRestore();
-    }
-  });
-
-  it('defaults an omitted category to a launchable workflow definition', async () => {
-    registerInlineAgents([
-      {
-        name: 'defaultWorkflow',
-        settings: { rounds: 1 },
-        prompts: { userRequest: 'Do the thing.' },
-      },
-    ]);
-
-    const resolution = resolveAgentForLaunch(
-      AgentCategory.Workflow,
-      'defaultWorkflow',
-    );
-    assert.ok(resolution);
-    const [settings] = await loadAgentSettingAndPrompts(resolution);
-    assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
-  });
-
-  it('removes cleared definitions from the live registry immediately', () => {
-    try {
-      clearInlineAgents();
-      assert.strictEqual(getAgent('scratchpad'), undefined);
-      assert.strictEqual(resolveAgent('inline:scratchpad'), undefined);
-    } finally {
-      registerInlineAgents([SCRATCHPAD]);
-    }
-  });
-
-  it('rejects a definition that declares inherits', () => {
-    assert.throws(
-      () =>
-        registerInlineAgents([
-          {
-            name: 'derived',
-            inherits: 'scratchpad',
-            settings: { agentCategory: AgentCategory.ToolUse },
-            prompts: {},
-          },
-        ]),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.includes('must be self-contained'),
-    );
-  });
-
-  it('rejects every workflow-only setting on a tool-use definition', () => {
-    assert.throws(() =>
-      registerInlineAgents([
-        {
-          name: 'invalidToolUse',
-          settings: {
-            agentCategory: AgentCategory.ToolUse,
-            isRewrite: false,
-          },
-          prompts: {},
-        },
-      ]),
-    );
-  });
-
-  it('does not expose the stored definition through a resolution', async () => {
-    registerInlineAgents([
-      {
-        name: 'immutableResolution',
-        settings: {
-          agentCategory: AgentCategory.ToolUse,
-          tools: ['grep'],
-        },
-        prompts: { userRequest: 'Original request.' },
-      },
-    ]);
-
-    const first = resolveAgent('inline:immutableResolution');
-    assert.ok(first?.inlineDefinition);
-    first.inlineDefinition.prompts.userRequest = 'Mutated request.';
-    first.inlineDefinition.settings.tools?.push('bash');
-
-    const second = resolveAgentForLaunch(
-      AgentCategory.ToolUse,
-      'inline:immutableResolution',
-    );
-    assert.ok(second);
-    const [settings, prompts] = await loadAgentSettingAndPrompts(second);
-    assert.strictEqual(prompts.userRequest, 'Original request.');
-    assert.deepStrictEqual(
-      settings.tools.map((tool) => tool.name),
-      ['grep'],
-    );
-  });
-
-  it.live('does not expose stored entry arrays through the live registry', () =>
-    Effect.gen(function* () {
-      registerInlineAgents([
-        {
-          name: 'immutableEntry',
-          settings: {
-            agentCategory: AgentCategory.ToolUse,
-            tools: ['grep'],
-            defaultOutputFiles: ['report.md'],
-          },
-          prompts: {},
-        },
-      ]);
-
-      const first = getAgent('inline:immutableEntry');
-      assert.ok(first?.tools);
-      assert.ok(first.defaultOutputFiles);
-      first.tools.push('bash');
-      first.defaultOutputFiles.push('mutated.md');
-
-      yield* refresh({ includeRemote: false });
-      const restored = getAgent('inline:immutableEntry');
-      assert.deepStrictEqual(restored?.tools, ['grep']);
-      assert.deepStrictEqual(restored?.defaultOutputFiles, ['report.md']);
-    }),
-  );
-
-  it('preserves runtime schemas in object-form tool definitions', async () => {
-    const runtimeSchema = z.strictObject({ query: z.string() });
-    const parameters = {
-      type: 'object',
-      properties: { query: { type: 'string' } },
-    };
-    registerInlineAgents([
-      {
-        name: 'runtimeToolSchema',
-        settings: {
-          agentCategory: AgentCategory.ToolUse,
-          tools: [
-            {
-              name: 'runtimeTool',
-              parameters,
-              zodSchema: runtimeSchema,
-            },
-          ],
-        },
-        prompts: {},
-      },
-    ]);
-    parameters.properties.query.type = 'number';
-
-    const resolution = resolveAgentForLaunch(
-      AgentCategory.ToolUse,
-      'inline:runtimeToolSchema',
-    );
-    assert.ok(resolution);
-    const [settings] = await loadAgentSettingAndPrompts(resolution);
-    assert.strictEqual(settings.tools[0]?.zodSchema, runtimeSchema);
-    assert.deepStrictEqual(settings.tools[0]?.parameters, {
-      type: 'object',
-      properties: { query: { type: 'string' } },
-    });
-  });
-
-  it('fails loudly when the load path names an unregistered inline agent', async () => {
-    await assert.rejects(
-      () =>
-        loadAgentSettingAndPrompts({
-          entry: {
-            name: 'ghost',
-            source: 'inline',
-            path: '',
-            category: AgentCategory.ToolUse,
-          },
-        }),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.includes('Inline agent "ghost" is not registered'),
-    );
-  });
-
-  it('keys inline agents apart from a same-named custom agent', async () => {
-    const customDir = await makeTempDir('texra-custom-', tempDirs);
-    await writeFile(
-      path.join(customDir, 'scratchpad.yaml'),
-      [
-        'name: scratchpad',
-        'description: On-disk namesake',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: On-disk scratchpad.',
-        '',
-      ].join('\n'),
-    );
-    await useAgentDirectories(customDir);
-    await Effect.runPromise(refresh({ includeRemote: false }));
-
-    // Distinct keys, so neither registration displaces the other...
-    assert.strictEqual(
-      getAgent('custom:scratchpad')?.path,
-      path.join(customDir, 'scratchpad.yaml'),
-    );
-    assert.strictEqual(getAgent('inline:scratchpad')?.path, '');
-    // ...and the bare name prefers the definition the embedder supplied.
-    assert.strictEqual(getAgent('scratchpad')?.source, 'inline');
   });
 });
 

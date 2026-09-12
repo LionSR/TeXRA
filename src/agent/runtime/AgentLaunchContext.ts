@@ -11,7 +11,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { ResolvedAgent } from '@agent/index/agentEntry';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   AgentPrompt,
@@ -236,7 +236,7 @@ async function getAgentPath(
   interactions: Pick<SessionHostInteractions, 'emit'>,
   category: AgentCategory,
   source?: AgentSource | null,
-): Promise<ResolvedAgent> {
+): Promise<AgentEntry> {
   // Single launch resolution rule (see resolveAgentForLaunch): exact
   // (source, name) when the delegation pinned one, else the same visible-set
   // resolver validation uses, else the full set for internal agents. Never
@@ -328,7 +328,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // lands on the exact entry validation/display resolved. When no source is
     // pinned (direct launches, restored records), resolution falls to the
     // category-scoped rule validation uses; never blind name resolution.
-    const resolution = yield* Effect.tryPromise({
+    const agentEntry = yield* Effect.tryPromise({
       try: async () =>
         runInSession(input.session, () =>
           getAgentPath(
@@ -348,7 +348,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const [setting, prompt] = yield* Effect.tryPromise({
       try: async () =>
         runInSession(input.session, () =>
-          loadAgentSettingAndPrompts(resolution),
+          loadAgentSettingAndPrompts(agentEntry),
         ),
       catch: ensureError,
     });
@@ -392,7 +392,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ...fullConfig,
       agentCategory: setting.agentCategory,
     };
-    return { config, setting, prompt, resolution, modelConfig };
+    return { config, setting, prompt, agentEntry, modelConfig };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -429,7 +429,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error, Secrets | AppState> {
     yield* failIfAborted(input.signal);
-    const { config, setting, prompt, resolution, modelConfig } =
+    const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
@@ -522,7 +522,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     );
     if (visionWarning) agentLogger.warn(visionWarning);
 
-    const agentPath = path.dirname(resolution.entry.path);
+    const agentPath = path.dirname(agentEntry.path);
     const workingDirectory = config.workingDirectory?.trim() || undefined;
     const runAbortController = new AbortController();
     // The run's one stop. `interrupt()` completes it; the runner races it and
@@ -597,7 +597,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     );
     return {
       config,
-      resolvedAgentDescription: resolution.entry.description,
+      resolvedAgentDescription: agentEntry.description,
       setting,
       prompt,
       modelConfig,

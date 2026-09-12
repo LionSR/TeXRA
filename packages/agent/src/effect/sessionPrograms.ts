@@ -30,7 +30,7 @@ import {
 // curated `@agent/runtime` barrel rather than by module path, so this
 // package stops pinning the runtime's internal file layout. These never
 // reach the emitted declarations, so they carry no provider-type leak risk.
-import { loadAgents, resolveAgent } from '@agent/index';
+import { getAgent, loadAgents } from '@agent/index';
 import {
   closeSession as closeOwnedSession,
   listSessions as listOwnedSessions,
@@ -191,14 +191,14 @@ function admitInput(
         return new RunFailure({ cause, message: toErrorMessage(cause) });
       }),
     );
-    const resolved = resolveAgent(input.agent);
+    const resolved = getAgent(input.agent);
     if (!resolved) {
       return yield* new AgentNotFound({
         agent: input.agent,
         message: `Agent "${input.agent}" was not found in the configured agent directory.`,
       });
     }
-    if (tools.length > 0 && resolved.entry.category !== AgentCategory.ToolUse) {
+    if (tools.length > 0 && resolved.category !== AgentCategory.ToolUse) {
       return yield* new ToolsRefused({
         tools: tools.map((tool) => tool.definition.name),
         message: `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
@@ -211,9 +211,9 @@ function admitInput(
     return yield* Effect.try({
       try: () =>
         AgentConfigSchema.parse({
-          agent: resolved.entry.name,
-          agentCategory: resolved.entry.category,
-          agentSource: resolved.entry.source,
+          agent: resolved.name,
+          agentCategory: resolved.category,
+          agentSource: resolved.source,
           instruction: input.instruction,
           ...(input.model ? { model: input.model } : {}),
         }),

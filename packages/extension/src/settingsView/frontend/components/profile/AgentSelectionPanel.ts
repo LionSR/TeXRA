@@ -83,7 +83,6 @@ export class AgentSelectionPanel extends LitElement {
   private displayOrder: AgentSelectionItem[] = [];
 
   private static readonly SOURCE_ORDER = [
-    AGENT_SOURCE.INLINE,
     AGENT_SOURCE.CUSTOM,
     AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,

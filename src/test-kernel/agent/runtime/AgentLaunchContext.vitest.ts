@@ -206,9 +206,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession();
     session.interactions.use(recording.interactions);
 
-    mocks.resolve.mockReturnValueOnce({
-      entry: { path: '/agents/chat.yaml' },
-    });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -255,7 +253,7 @@ describe('AgentLaunchContext', () => {
       session.interactions,
     );
     publishTestRunStart(session, EXECUTION_ID);
-    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -337,7 +335,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession();
     const batches = vi.spyOn(session, 'commitRegistration');
     const recording = recordSessionEvents(session);
-    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},
@@ -415,9 +413,7 @@ describe('AgentLaunchContext', () => {
     const rawDispose = vi.fn(() => order.push('raw-trace'));
     const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
     trace.openStage = vi.fn(() => stage);
-    mocks.resolve.mockReturnValueOnce({
-      entry: { path: '/agents/chat.yaml' },
-    });
+    mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
     mocks.load.mockResolvedValueOnce([
       { agentCategory: AgentCategory.ToolUse },
       {},

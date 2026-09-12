@@ -91,12 +91,10 @@ vi.mock('@utils/core', async (importActual) => ({
 
 vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
-  resolveAgent: () => ({
-    entry: {
-      category: mocks.agentCategory,
-      source: 'custom',
-      name: 'assistant',
-    },
+  getAgent: () => ({
+    category: mocks.agentCategory,
+    source: 'custom',
+    name: 'assistant',
   }),
 }));
 
