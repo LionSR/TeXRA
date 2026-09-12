@@ -36,6 +36,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   RUN_PHASE,
   type JsonValue,
@@ -45,7 +46,7 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -55,10 +56,11 @@ import { bindModel, type BoundModel } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
-import { ModelInvoker, turnText } from '../ModelInvoker';
+import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -77,8 +79,6 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 /** The live control surface a host reaches through the run handle. */
 export interface ToolUseFlowContext {
@@ -393,29 +393,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   /** The state a fresh run's opening snapshot is authored against. */
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'toolUse',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    requests: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
   });
 
   const restore = (state: RunState): void => {
@@ -882,9 +863,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     outcome,
     response,
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     structured: run.structured.value,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }

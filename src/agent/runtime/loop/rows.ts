@@ -23,6 +23,11 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
+/** Why a run the ledger holds no rows for cannot be continued. Both run
+ *  programs refuse a resume with it. */
+export const NOT_RESUMABLE_MESSAGE =
+  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
+
 type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
 type ReflectionSnapshot = Extract<
   FlowSnapshotPayload,

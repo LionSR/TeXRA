@@ -78,6 +78,7 @@ import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
@@ -94,7 +95,7 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -109,6 +110,7 @@ import { ModelInvoker, turnText } from '../ModelInvoker';
 import {
   appendRow,
   haltedStepRow,
+  NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
   runtimeSnapshotRow,
@@ -124,8 +126,6 @@ const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 export interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -329,29 +329,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   };
 
   const fresh = (bound: BoundModel): RunState => ({
-    commit: 0,
-    snapshotCommit: null,
-    rowsBeforeSnapshot: 0,
+    ...freshRunState(0),
     family: 'reflection',
-    step: null,
-    outcome: null,
-    phase: null,
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
-    lastError: null,
-    pendingRetry: null,
-    messages: [],
-    continuation: null,
-    openAttempt: null,
-    lastTurn: null,
-    pendingResponse: null,
-    pendingIntents: {},
-    requests: {},
-    usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
-    flow: null,
   });
 
   // -------------------------------------------------------------- opening
@@ -1268,9 +1249,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): ReflectionResult => ({
     outcome,
     roundOutputs: roundsToPersisted(outputState),
-    usage:
-      at?.usage ??
-      AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
       ? { error: lastError }
       : {}),
