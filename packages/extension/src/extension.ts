@@ -599,9 +599,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
 
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  const runtime = effectRuntime();
+
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await effectRuntime().runPromise(
+  await runtime.runPromise(
     seedDisabledToolDefaults(
       context.globalState,
       GlobalStateKey.LAST_KNOWN_VERSION,
@@ -670,7 +675,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(context.globalState), 0);
-  registerCommands(context, progressViewProvider, secrets);
+  registerCommands(context, progressViewProvider, secrets, runtime);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 

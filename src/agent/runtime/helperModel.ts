@@ -17,7 +17,6 @@ import { AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { getHelperModelName } from './helperModelName';
-import { turnText } from './ModelInvoker';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { classifyModelFailure } from './run/modelFailure';
 
@@ -106,5 +105,12 @@ export const helperCompletion = Effect.fn('helperCompletion')(function* (
       while: (error) => classifyModelFailure(error).autoRetryable,
     }),
   );
-  return turnText(turn);
+  // The assistant text of the turn: message parts, in order. Derived here
+  // rather than borrowed from the run loop: a helper turn never touches
+  // `ModelInvoker`, and importing it would drag the whole run-loop closure.
+  return turn.content
+    .flatMap((part) =>
+      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
+    )
+    .join('');
 });
