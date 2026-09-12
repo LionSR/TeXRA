@@ -52,6 +52,7 @@ import { formatToolResultTextWithAttachments } from '../run/toolResultText';
 import {
   appendRow,
   displayRow,
+  redactedForFact,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -171,9 +172,14 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
  *
  * An attachment the binding cannot carry inline (a PDF on a route without
  * native PDF support, an image on a text-only route, any other type) reaches
- * the model as the text mention only. The provider upload paths that carried
- * those bytes are not on the loop yet (ruling R3), so the degradation is
- * named in the transcript instead of being silent.
+ * the model as the text mention only, and says so in the transcript rather
+ * than degrading silently. Carrying those bytes by reference instead is
+ * blocked on the package: `InputPartSchema` (`@llm/turn`) admits inline
+ * base64 only and no `Model` exposes an upload, so the provider Files API
+ * paths (`anthropicDocumentHandling`, `openAIResponseFileUploads`) have no
+ * lowering to reach through and stay on the handlers that still call them.
+ * The system design lists that gap as package work that gates the handler
+ * retirement (2026-09-10-effect-native-runtime-system-design.md §5.4, slice 0).
  */
 function settlementContent(
   settlement: Settlement,
@@ -505,8 +511,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       if (bound.decision === 'approved') return 'rerun';
       if (bound.decision === 'skipped') return 'skip';
     }
-    const requestId =
-      intent.approvalRequestId ?? `tool-outcome-${generateShortId()}`;
+    // A request the run committed and nobody answered is asked again under
+    // its own id, so one barrier never accumulates requests. Anything else
+    // opens a fresh one: the fold refuses a second `approval.requested` on an
+    // id it already carries, so a request retired without a decision cannot
+    // be reopened, only replaced (and the snapshot below rebinds the intent).
+    const standing =
+      intent.approvalRequestId !== null &&
+      bound !== undefined &&
+      !bound.resolved
+        ? intent.approvalRequestId
+        : null;
+    const requestId = standing ?? `tool-outcome-${generateShortId()}`;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const request = {
       requestId,
@@ -527,10 +543,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ],
       context: call.argumentsText,
     };
-    // A request row is committed whenever no live request stands: either the
-    // call never raised one, or the standing one was retired without an
-    // answer and this asks again on the same request id (the fold reopens it).
-    if (bound === undefined || bound.resolved) {
+    // A request row is committed whenever no live request stands: the call
+    // never raised one, or the one it raised was retired without a decision
+    // and this opens its replacement, bound to the same call by the snapshot.
+    if (standing === null) {
       const flow = toolUseFlowState(current);
       if (flow === null) {
         return yield* Effect.die(
@@ -542,7 +558,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           type: 'approval.requested',
           aggregateId,
           requestId,
-          payload: { kind: 'userQuestion', data: request },
+          // The one redaction door every durable request payload passes,
+          // whether the plane publishes the row or the loop commits it.
+          payload: redactedForFact({ kind: 'userQuestion', data: request }),
         },
         snapshotRow(runId, current, {
           phase: 'tools.dispatching',
@@ -568,14 +586,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         }),
       ),
     );
-    // A settlement that is not a submitted answer is a cancellation: a host
-    // Stop or a session teardown retires the pending question, and the prompt
-    // failure above lands here too. Neither is a decision, so no row is
-    // written: the `tool.intent` keeps its binding, the request stays the
-    // barrier's, and the next resume asks the same question again. Writing
-    // `skipped` here would tell the model a person skipped the call.
-    if (settlement.action !== 'submit') return yield* Effect.interrupt;
-    const rerun = settlement.answers[question] === 'Run again';
+    // Only a person decides this barrier. `submit` carries the chosen option
+    // and `skip` is the host's own word for a person declining to answer;
+    // both are answers, and both write the decision. Every other settlement
+    // is a cancellation — a host Stop or a session teardown retires the
+    // pending question with `{ action: 'reject', cause }`, and the prompt
+    // failure above lands there too — so no row is written: the `tool.intent`
+    // keeps its binding, the request stays open, and the dispatch interrupts
+    // so the next resume asks the same question again. Writing `skipped` for
+    // a cancellation would tell the model a person skipped the call.
+    if (settlement.action === 'reject') return yield* Effect.interrupt;
+    const rerun =
+      settlement.action === 'submit' &&
+      settlement.answers[question] === 'Run again';
     const decision = rerun ? 'rerun' : 'skip';
     yield* append([
       {

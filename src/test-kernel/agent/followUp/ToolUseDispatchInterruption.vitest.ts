@@ -4,7 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { randomUUID } from 'node:crypto';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -15,7 +15,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
-import type { HostUserQuestionRequest } from '@agent/runtime/HostInteractions';
+import type {
+  HostUserQuestionRequest,
+  UserQuestionSettlement,
+} from '@agent/runtime/HostInteractions';
 import { ModelInvoker, turnText } from '@agent/runtime/ModelInvoker';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -311,15 +314,18 @@ describe('tool dispatch interrupted mid-turn', () => {
     'leaves no half-delivered tool turn in history, and resume pairs every call',
     () =>
       Effect.gen(function* () {
-        const questions: string[] = [];
+        const asked: HostUserQuestionRequest[] = [];
         const session = sessionWithInteractions({
           emit: () => {},
           cancel: () => {},
           askUserQuestion: async (request: HostUserQuestionRequest) => {
-            questions.push(request.questions[0].question);
-            // Skip: the model is told the call was skipped rather than being
-            // handed a fabricated cancellation or a blind second run.
-            return { action: 'reject' as const };
+            asked.push(request);
+            // The person answers "Skip": the model is told the call was
+            // skipped rather than being handed a blind second run.
+            return {
+              action: 'submit' as const,
+              answers: { [request.questions[0].question]: 'Skip' },
+            };
           },
         });
         const runId = generateRunId();
@@ -383,8 +389,8 @@ describe('tool dispatch interrupted mid-turn', () => {
 
         // The outcome-unknown barrier asked before anything re-ran, and was
         // not re-run when the answer was "skip".
-        expect(questions).toHaveLength(1);
-        expect(questions[0]).toContain('toolB');
+        expect(asked).toHaveLength(1);
+        expect(asked[0].questions[0].question).toContain('toolB');
         expect(toolB.call).toHaveBeenCalledTimes(1);
         // The call that never started runs normally on resume.
         expect(toolC.call).toHaveBeenCalledTimes(1);
@@ -396,6 +402,122 @@ describe('tool dispatch interrupted mid-turn', () => {
         // Every requested call is paired exactly once, in call order.
         expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
         expect(delivered?.pendingResponse).toBeNull();
+      }),
+  );
+
+  /**
+   * The barrier prompt is a question for a person, and only a person's answer
+   * retires it. A host Stop settles the pending question as a cancellation
+   * (`session.interactions.cancel` -> `{ action: 'reject', cause }`), which
+   * decides nothing: no `approval.resolved` is written, the request stays
+   * open under the intent's binding, and the next resume presents the same
+   * request id rather than telling the model a person skipped the call.
+   */
+  it.effect(
+    'records no decision when the outcome-unknown prompt is cancelled, and re-presents it on the next resume',
+    () =>
+      Effect.gen(function* () {
+        const asked: HostUserQuestionRequest[] = [];
+        let answer: (
+          request: HostUserQuestionRequest,
+        ) => UserQuestionSettlement = () => ({
+          action: 'reject',
+          cause: 'Run interrupted.',
+        });
+        const session = sessionWithInteractions({
+          emit: () => {},
+          cancel: () => {},
+          askUserQuestion: async (request: HostUserQuestionRequest) => {
+            asked.push(request);
+            return answer(request);
+          },
+        });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+
+        const toolA = executedTool('toolA');
+        const toolB = blockingTool('toolB');
+        const toolC = executedTool('toolC');
+        const tools = {
+          toolA: toolA.tool,
+          toolB: toolB.tool,
+          toolC: toolC.tool,
+        };
+
+        const fiber = yield* Effect.forkDetach(
+          runToolUse({ resume: false }).pipe(
+            Effect.provide(
+              loopLayer({
+                runId,
+                session,
+                tools,
+                turns: [toolCallTurn(CALLS)],
+                stopAfterCycle: true,
+              }),
+            ),
+          ),
+        );
+        yield* Effect.promise(() => toolB.startedPromise);
+        yield* Fiber.interrupt(fiber);
+
+        // The first resume asks, and the prompt is cancelled under it.
+        const cancelled = yield* Effect.exit(
+          runToolUse({ resume: true }).pipe(
+            Effect.provide(
+              loopLayer({
+                runId,
+                session,
+                tools,
+                turns: [],
+                stopAfterCycle: true,
+              }),
+            ),
+          ),
+        );
+        expect(
+          Exit.isFailure(cancelled) && Cause.hasInterrupts(cancelled.cause),
+        ).toBe(true);
+        expect(asked).toHaveLength(1);
+
+        const open = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const request = open?.approvals[asked[0].requestId];
+        // The request stands undecided, and the call is still outcome-unknown.
+        expect(request?.resolved).toBe(false);
+        expect(request?.decision).toBeNull();
+        expect(Object.keys(open?.pendingResponse?.settled ?? {})).toEqual([
+          'call-a',
+        ]);
+        expect(toolB.call).toHaveBeenCalledTimes(1);
+        expect(toolC.call).not.toHaveBeenCalled();
+
+        // The next resume presents the same request, and the answer decides.
+        answer = (request) => ({
+          action: 'submit',
+          answers: { [request.questions[0].question]: 'Skip' },
+        });
+        const resumed = yield* runToolUse({ resume: true }).pipe(
+          Effect.provide(
+            loopLayer({
+              runId,
+              session,
+              tools,
+              turns: [textTurn('All three calls are accounted for.')],
+              stopAfterCycle: true,
+            }),
+          ),
+        );
+        expect(resumed.outcome).toBe('completed');
+        expect(asked).toHaveLength(2);
+        expect(asked[1].requestId).toBe(asked[0].requestId);
+
+        const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        expect(delivered?.approvals[asked[0].requestId]?.decision).toBe(
+          'skipped',
+        );
+        const group = delivered?.messages.find(
+          (message) => message.role === 'tool',
+        );
+        expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
       }),
   );
 });
