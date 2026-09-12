@@ -156,7 +156,6 @@ import {
   isFatalDesktopShutdownRequested,
   reportFatalStartupError,
 } from './fatalStartupError.js';
-import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
@@ -1701,14 +1700,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             },
           });
 
-          void initializeDesktopCrashReporting({
-            sensitivePaths: () => [
-              ...projects.list().map((project) => project.root),
-              app.getPath('userData'),
-              platformInit.dataRoot,
-            ],
-            log: console,
-          });
           const authCoordinator = createDesktopAuthCoordinator({
             secrets: platformInit.secrets,
             log: console,
