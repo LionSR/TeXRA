@@ -10,7 +10,7 @@
 // capability a retry on the user's own key needs.
 
 import { computed, signal } from '@lit-labs/signals';
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { currentSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
@@ -34,7 +34,11 @@ import { assertNever, groupBy } from '@utils/core';
 
 import { currentSessionRunIds, registerCliStateResetHook } from './cliState';
 import { sessionView } from './sessionView';
-import { appendLocalRequestRefusal } from './transcript';
+import {
+  appendLocalAssistantTranscript,
+  appendLocalRequestRefusal,
+  reportRequestDefect,
+} from './transcript';
 
 interface TuiApprovalAdornments {
   readonly toolEdit: {
@@ -381,6 +385,15 @@ function issue(
         },
         onSuccess: () => undefined,
       }),
+      // `match` recovers only the typed refusal; a collaborator that rejects
+      // defects, and fire-and-forget would leave it an unhandled rejection.
+      // A pure interruption is teardown, not a failure to report.
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          if (Cause.hasInterruptsOnly(cause)) return;
+          appendLocalAssistantTranscript(reportRequestDefect(cause), runId);
+        }),
+      ),
     ),
   );
 }
