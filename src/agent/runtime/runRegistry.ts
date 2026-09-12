@@ -8,7 +8,6 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { createChannelTrace } from '@agent/trace';
-import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
@@ -493,8 +492,9 @@ export class RunRegistry {
   /**
    * Kill only background OS processes (bash, codex) without touching agent
    * run status. Agent runs are left in RUNNING: whether one is
-   * resumable afterwards is decided from its durable facts (a flow record on
-   * disk, and no live owner), never from a phase some later pass rewrites.
+   * resumable afterwards is decided from its durable facts (a `flow.snapshot`
+   * on the run aggregate, and no live run claim), never from a phase some
+   * later pass rewrites.
    *
    * Killing a background run's underlying OS process requires
    * `interruptBackgroundProcess()`, which only fires for a handle whose
@@ -768,20 +768,28 @@ export class RunRegistry {
     // stopping it ends the loop too, so the interrupted turn is not delivered
     // to the parent as a completed one.
     const activation = this.childActivations.get(handle.runId);
+    let activationInterrupted = false;
     if (activation && !activation.isDetached()) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
         activation.interrupt();
+        activationInterrupted = true;
       }
     }
     if (handle.interrupt()) {
       this.cancelRunStatus(handle.runId);
       return true;
     }
+    // The loop's own interrupt already carried the stop into the turn: the
+    // native-subagent strategy links the loop signal to this handle, so
+    // aborting the loop spends the handle's interrupt target before we reach
+    // it. The delivered stop is the admission, exactly as the handle-less
+    // branch of `kill` reports an activation-only stop.
+    if (activationInterrupted) return true;
     // No live interrupt context: a native subagent suspended at WAITING has
     // already had its tool-use session disposed and interrupt handler detached
-    // (runToolUseFlow's finally), while the handle stays tracked for resume
+    // (the tool-use loop's scope), while the handle stays tracked for resume
     // (runFlowWithLifecycle). Run the teardown it parked with instead of
     // silently no-oping the kill.
     const settlement = this.waitingTermination.terminateWaitingHandle(handle);
@@ -815,7 +823,6 @@ export class RunRegistry {
         this.finalizeRun({
           runId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
           keepExistingOutcome: true,
         }),
       );

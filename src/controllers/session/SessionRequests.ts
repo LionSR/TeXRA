@@ -3,10 +3,10 @@
  * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2). A request
  * is answered exactly once: an `Outcome` the host renders, or one of the
  * request errors. Existence is read from the log's sequence table before
- * any arm runs (contract C2: a stream exists iff its sequence row exists
+ * any arm runs (contract C2: a run exists iff its sequence row exists
  * and is not closed, minted synchronously by the publish of its `run.start`
  * and ahead of every fold), so a stop issued the moment a launch exposes its
- * stream is admitted; a stream with no row is `Unavailable`, never a defect
+ * run is admitted; a run with no row is `Unavailable`, never a defect
  * (a second surface can act from a view that has not yet folded a
  * `run.removed`). Ownership comes from that same current sequence row:
  * a foreign claim
@@ -116,7 +116,7 @@ function admit(
         return Effect.fail(
           new Unavailable({
             runId,
-            reason: 'The stream is no longer open.',
+            reason: 'The run is no longer open.',
           }),
         );
       }
@@ -189,7 +189,7 @@ function deleteAdmittedRun(
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The stream has no recorded start.',
+          reason: 'The run has no recorded start.',
         }),
       );
     }
@@ -200,7 +200,7 @@ function deleteAdmittedRun(
       return yield* Effect.fail(
         new Unavailable({
           runId,
-          reason: 'The stream start could not be read.',
+          reason: 'The run start could not be read.',
         }),
       );
     }
@@ -225,7 +225,7 @@ function deleteAdmittedRun(
           }
           return new Unavailable({
             runId,
-            reason: 'The stream could not be removed from the listing.',
+            reason: 'The run could not be removed from the listing.',
           });
         }),
       );
@@ -265,7 +265,7 @@ function handle(
             return Effect.fail(
               new Unavailable({
                 runId: req.runId,
-                reason: 'No active tool-use session found for this stream.',
+                reason: 'No active tool-use session found for this run.',
               }),
             );
         }

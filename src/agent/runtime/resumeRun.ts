@@ -21,8 +21,6 @@ import {
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
 import { getRunRecords } from '@agent/storage/RunKVStore';
-import { checkpointExists } from '@agent/storage/resumability';
-import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -34,6 +32,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -165,18 +164,20 @@ const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 
 /**
- * Positive evidence that the checkpoint itself is what failed, walking the
- * cause chain the retrieval boundary wraps its failures in. `persistedFlow`
- * throws this for a record that cannot be resumed (malformed, spent, an
- * unsupported format); its `read-failed` reason is a transient storage
- * failure, which is not evidence about the record. Every other failure on the
- * resume path — a rejected snapshot preload, a KV or metadata read, a lease
- * read — stays the operational error the host words with its cause.
+ * Positive evidence that the run's saved state itself is what failed, walking
+ * the cause chain the launch wraps its failures in: the ledger refused the
+ * run's rows (`inconsistent`, `unprepared-history`) at the fold that would
+ * continue them. A `not-owner` refusal and every other failure on the resume
+ * path — a KV or metadata read, a lease read — stay the operational error
+ * the host words with its cause.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   for (let current = error, depth = 0; depth < 8; depth++) {
-    if (current instanceof PersistedFlowStateError) {
-      return current.reason !== 'read-failed';
+    if (current instanceof RunLedgerRefused) {
+      return (
+        current.reason === 'inconsistent' ||
+        current.reason === 'unprepared-history'
+      );
     }
     if (!(current instanceof Error) || current.cause === undefined)
       return false;
@@ -246,13 +247,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   );
   if (Result.isFailure(retrieved)) {
     releaseQueue();
-    if (!namesUnusableCheckpoint(retrieved.failure))
-      return yield* Effect.fail(retrieved.failure);
-    log.warn(
-      `Refusing to resume ${runId}: its checkpoint holds no resumable state: ${toErrorMessage(retrieved.failure)}`,
-      { data: retrieved.failure },
-    );
-    return { failed: 'unusable_checkpoint' };
+    return yield* Effect.fail(retrieved.failure);
   }
   const resume = retrieved.success;
   if (cancelled() || session.runs.isActiveOrResuming(runId)) {
@@ -262,21 +257,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   if (!resume) {
     releaseQueue();
     const classification = yield* classifyRun(runId, session);
-    const failed = recordRunRefusal(runId, session, classification);
-    if (
-      classification.kind === 'held_elsewhere' ||
-      classification.kind === 'owned_here'
-    )
-      return { failed };
-    const unusable =
-      classification.kind === 'unclassified'
-        ? classification.fault === 'checkpoint-malformed'
-        : yield* checkpointExists(runId, session);
-    if (!unusable) return { failed };
-    log.warn(
-      `Refusing to resume ${runId}: its checkpoint holds no resumable state.`,
-    );
-    return { failed: 'unusable_checkpoint' };
+    return { failed: recordRunRefusal(runId, session, classification) };
   }
   const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
   const lease =
@@ -365,6 +346,13 @@ function refusalFor(
   if (error instanceof ResumeSessionUnavailableError) {
     return { failed: 'finished' };
   }
+  if (namesUnusableCheckpoint(error)) {
+    log.warn(
+      `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return { failed: 'unusable_checkpoint' };
+  }
   return undefined;
 }
 
@@ -430,7 +418,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // The drained batch must reach the resumed flow through the direct
       // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
       // cursor suspends again before ever reading the stream queue (see
-      // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
+      // the tool-use loop's wait; only its child-run loop's queue wait consumes it),
       // so re-queued items would sit unconsumed until the next wake. A root
       // cursor accepts either route; the handoff works for both.
       return yield* resumeToolUseFromResumeData(resume, {

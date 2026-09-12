@@ -16,7 +16,7 @@ Use the alias, not a long relative chain.
 
 | Directory           | What it is                                                                                                                                                                                               |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/agent/`        | The agent domain model, PocketFlow flows, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                   |
+| `src/agent/`        | The agent domain model, the two run loops, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                  |
 | `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                    |
 | `src/shared/`       | Two things: wire contracts and message types (Zod schemas), **and** the shared browser UI kit (`wa/`, `styles/`, `litControllers/`, `markdown/`). Browser-reachable throughout                           |
 | `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                              |

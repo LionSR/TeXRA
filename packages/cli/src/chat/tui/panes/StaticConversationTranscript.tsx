@@ -119,17 +119,17 @@ function shortenCwd(cwd: string): string {
   return cwd;
 }
 
-/** The header facts of a child scrollback stream, read from the fold. */
+/** The header facts of a child run scrollback, read from the fold. */
 interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
-  readonly streamKind: 'workflow script' | 'subagent';
+  readonly childKind: 'workflow script' | 'subagent';
   readonly phaseText: string | undefined;
   readonly parentLabel: string;
 }
 
 /**
- * What the scrollback paints: the stream's folded rows joined with this
+ * What the scrollback paints: the run's folded rows joined with this
  * TUI's notices, its settled prefix, and the facts the session header names.
  */
 interface StaticScrollbackSource {
@@ -150,17 +150,17 @@ function childHeaderFor(
   view: SessionView,
   runId: RunId | undefined,
 ): ChildHeader | undefined {
-  const stream = runViewOf(view, runId);
-  if (!stream?.parentId) return undefined;
-  const parent = runViewOf(view, stream.parentId);
+  const child = runViewOf(view, runId);
+  if (!child?.parentId) return undefined;
+  const parent = runViewOf(view, child.parentId);
   return {
-    label: stream.label,
-    modelLabel: stream.modelLabel,
-    streamKind:
-      stream.identity?.kind === 'multiAgentWorkflow'
+    label: child.label,
+    modelLabel: child.modelLabel,
+    childKind:
+      child.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent',
-    phaseText: ancestorPhaseLabel(view, stream.id),
+    phaseText: ancestorPhaseLabel(view, child.id),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };
 }
@@ -172,8 +172,8 @@ export function sessionHeaderIdentityLine(
   if (child) {
     const model = child.modelLabel ?? getModelLabel(meta.model || '-');
     return child.phaseText
-      ? `${child.streamKind}: ${child.label} · ${child.phaseText} · parent: ${child.parentLabel} · model: ${model}`
-      : `${child.streamKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
+      ? `${child.childKind}: ${child.label} · ${child.phaseText} · parent: ${child.parentLabel} · model: ${model}`
+      : `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
   }
   const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';

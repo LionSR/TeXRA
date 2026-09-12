@@ -107,43 +107,55 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:completed-run', runId);
 
     await Effect.runPromise(
-      runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+      runFlow(ctx, () =>
+        Effect.succeed(toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+      ),
     );
 
     await expectRunEndedRejection(pending);
     session.dispose();
   });
 
-  it('settles and untracks the run after native interruption joins the active flow', async () => {
+  it('settles and untracks the run after native interruption reaches the flow', async () => {
     const { session, ctx, runId } = lifecycleCase();
     const started = createDeferred();
-    const aborted = createDeferred();
-    const released = createDeferred();
-    const stopped = createDeferred();
+    // The order the teardown must hold: the flow's own finalizer unwinds
+    // first, the run's interrupt handler aborts the run signal next, and the
+    // trace is disposed only after both.
+    const order: string[] = [];
+    const disposeTrace = ctx.disposeTrace;
+    ctx.disposeTrace = () => {
+      order.push('dispose');
+      disposeTrace();
+    };
     const fiber = Effect.runFork(
-      runFlow(ctx, async () => {
-        started.resolve();
-        ctx.runScope.signal.addEventListener('abort', () => aborted.resolve(), {
-          once: true,
-        });
-        await aborted.promise;
-        await released.promise;
-        stopped.resolve();
-        return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
-      }),
+      runFlow(ctx, () =>
+        Effect.gen(function* () {
+          started.resolve();
+          ctx.runScope.signal.addEventListener(
+            'abort',
+            () => order.push('abort'),
+            { once: true },
+          );
+          yield* Effect.never;
+          return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
+        }).pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              order.push('flow-unwound');
+            }),
+          ),
+        ),
+      ),
     );
     await started.promise;
-    const interrupted = Effect.runPromise(Fiber.interrupt(fiber));
-    await aborted.promise;
-    expect(ctx.disposeTrace).not.toHaveBeenCalled();
-    released.resolve();
-    await interrupted;
+    await Effect.runPromise(Fiber.interrupt(fiber));
     const exit = await Effect.runPromise(Fiber.await(fiber));
     expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true);
-    await stopped.promise;
+    expect(order).toEqual(['flow-unwound', 'abort', 'dispose']);
     expect(session.runs.getHandle(runId)).toBeUndefined();
     expect(session.status.get(runId)).toBe(RUN_PHASE.CANCELLED);
-    expect(ctx.disposeTrace).toHaveBeenCalledOnce();
+    expect(disposeTrace).toHaveBeenCalledOnce();
     session.dispose();
   });
 
@@ -153,9 +165,7 @@ describe('run lifecycle host-interaction cancel', () => {
 
     await expect(
       Effect.runPromise(
-        runFlow(ctx, async () => {
-          throw new Error('flow exploded');
-        }),
+        runFlow(ctx, () => Effect.fail(new Error('flow exploded'))),
       ),
     ).rejects.toThrow('flow exploded');
 
@@ -168,7 +178,7 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:waiting-run', runId);
 
     const result = await Effect.runPromise(
-      runFlow(ctx, async () => toolUseRun(runId, RUN_PHASE.WAITING)),
+      runFlow(ctx, () => Effect.succeed(toolUseRun(runId, RUN_PHASE.WAITING))),
     );
 
     expect(result.outcome).toBe(RUN_PHASE.WAITING);
@@ -190,7 +200,9 @@ describe('run lifecycle host-interaction cancel', () => {
     });
 
     await Effect.runPromise(
-      runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+      runFlow(ctx, () =>
+        Effect.succeed(toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+      ),
     );
     await Promise.resolve();
 
@@ -210,13 +222,15 @@ describe('run lifecycle host-interaction cancel', () => {
 
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => {
-          try {
-            return toolUseRun(runId, RUN_OUTCOME.COMPLETED);
-          } finally {
-            order.push('flow-teardown');
-          }
-        }),
+        runFlow(ctx, () =>
+          Effect.sync(() => toolUseRun(runId, RUN_OUTCOME.COMPLETED)).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                order.push('flow-teardown');
+              }),
+            ),
+          ),
+        ),
       );
 
       expect(order).toEqual(['flow-teardown', 'cancel']);
@@ -235,11 +249,13 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:interrupted-run', runId);
 
     const result = await Effect.runPromise(
-      runFlow(ctx, async () => {
-        // What `flowContext.interrupt` does while the flow is still live.
-        session.interactions.cancel({ runId, cause: 'Run interrupted.' });
-        return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
-      }),
+      runFlow(ctx, () =>
+        Effect.sync(() => {
+          // What `flowContext.interrupt` does while the flow is still live.
+          session.interactions.cancel({ runId, cause: 'Run interrupted.' });
+          return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
+        }),
+      ),
     );
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -263,7 +279,9 @@ describe('run lifecycle host-interaction cancel', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+          runFlow(ctx, () =>
+            Effect.succeed(toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
+          ),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(session.status.get(runId)).toBe(RUN_PHASE.COMPLETED);

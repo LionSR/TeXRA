@@ -35,7 +35,7 @@ vi.mock('@agent/storage/runLease', async (importActual) => ({
   assertOwnedRunLease: vi.fn(),
 }));
 
-import { clearStoreCache, getRunStore, getRunRecords } from '@agent/storage';
+import { clearStoreCache, getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -44,7 +44,6 @@ import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { flowKey } from '@agent/node/persistedFlow';
 import {
   readCliHistoryDetails,
   formatCliHistoryDetailsText,
@@ -59,6 +58,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   AgentCategory,
   aggregateId,
+  FlowSnapshotPayloadSchema,
 } from '@shared/schemas';
 import type { RunId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -78,7 +78,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   assembleTrace,
@@ -503,19 +502,29 @@ describe('completedRunArchive facade', () => {
         });
         launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
-        const persistedResumeState = createToolUseResumeData({
-          runId,
-          agentConfig: config,
-          shared: {
-            modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+        // The one fact a resume reads: the run aggregate's latest
+        // `flow.snapshot`, committed here as this run's opening row.
+        yield* session.commit([
+          {
+            type: 'flow.snapshot',
+            aggregateId: aggregateId('run', runId),
+            payload: FlowSnapshotPayloadSchema.parse({
+              family: 'toolUse',
+              runtime: {
+                phase: 'waiting',
+                round: 0,
+                turn: 0,
+                continuationIndex: 0,
+                modelId: config.model,
+                modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+                lastError: null,
+                pendingRetry: null,
+              },
+              references: { pendingIntents: [], pendingResponse: null },
+              state: { shouldSkipCycle: false, stateSlices: null },
+            }),
           },
-        });
-        yield* Effect.promise(() =>
-          getRunStore(runId).write(flowKey(runId), {
-            shared: persistedResumeState.shared,
-            cursor: { nextNodeId: 'start' },
-          }),
-        );
+        ]);
 
         const acquireRunResidency = logs.acquireRunResidency.bind(logs);
         const resumedWriter = vi

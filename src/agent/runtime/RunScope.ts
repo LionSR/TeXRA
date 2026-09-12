@@ -16,7 +16,14 @@ export interface RunScope {
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;
-  /** Sticky cancellation state shared by every part of this run. */
+  /**
+   * Sticky cancellation state shared by every part of this run, for the
+   * Promise-tier work a run still owns (the launch's session description, a
+   * tool body that takes an `AbortSignal`). It is aborted *from* the run's
+   * interruption, never the thing that stops the run: a stop completes the
+   * launch context's stop latch, the run's program is interrupted, and the
+   * bridge on that interruption aborts this signal.
+   */
   readonly signal: AbortSignal;
 }
 

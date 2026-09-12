@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
  * looping, persisted resume, result/report writes, parent admission, recovery,
@@ -12,14 +12,13 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const modelFactoryMocks = vi.hoisted(() => ({
-  createModelHandler: vi.fn(),
+const modelBindingMocks = vi.hoisted(() => ({
+  bindModel: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/ModelFactory')>()),
-  createModelHandler: modelFactoryMocks.createModelHandler,
-  createModelHandlerForCompatibilityKey: modelFactoryMocks.createModelHandler,
+vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/run/modelBinding')>()),
+  bindModel: modelBindingMocks.bindModel,
 }));
 
 // Local imports - agent runtime
@@ -40,6 +39,8 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { ModelCell } from '@agent/runtime/ModelCell';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import type { Message } from '@agent/runtime/loop/rows';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -51,6 +52,16 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  ModelError,
+  ResolvedTurnSchema,
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnResult,
+} from '@llm/turn';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
@@ -66,7 +77,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
-import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -78,7 +88,6 @@ const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const PARENT_MODEL = 'gpt54';
 const CHILD_MODEL = 'gpt55';
-const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse';
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;
@@ -90,62 +99,173 @@ interface ScriptedTurn {
   readonly text: string;
 }
 
-interface ObservedFollowUp {
-  readonly model: string;
-  readonly messages: readonly unknown[];
-  readonly text: string;
+/** The http arm of a binding: `identified` events carry no editor origin. */
+type HttpOrigin = Exclude<ModelOrigin, { protocol: 'vscode-lm' }>;
+
+/**
+ * The transport stub: one `Model` per registry name, serving one scripted
+ * turn per invocation. The loop calls `prepareTurn` then `streamTurn`, so
+ * those two are the whole provider surface this fixture has to script.
+ */
+function scriptedOrigin(model: string): HttpOrigin {
+  return {
+    protocol: 'openai-chat',
+    codecVersion: 1,
+    requestedModel: model,
+    deployment: {
+      endpoint: 'https://api.example.test/v1',
+      credentialScope: 'openai',
+    },
+  };
 }
 
-function taggedScriptedHandler(
-  model: string,
+function preparedTurn(origin: ModelOrigin): ResolvedTurn {
+  return ResolvedTurnSchema.parse({
+    ...origin,
+    mode: 'foreground',
+    messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+    tools: [],
+    controls: {
+      temperature: null,
+      maxOutputTokens: 1024,
+      parallelToolCalls: false,
+      toolChoice: 'auto',
+      effort: null,
+    },
+  });
+}
+
+/**
+ * An answerless turn carries no content at all: the scripted transport ends
+ * the turn without an assistant message rather than with an empty one.
+ */
+function scriptedResult(origin: ModelOrigin, text: string): TurnResult {
+  return TurnResultSchema.parse({
+    kind: 'http',
+    providerResponseId: `resp-${origin.requestedModel}-${text.length}`,
+    requestedOrigin: origin,
+    returnedModel: null,
+    modelFingerprint: null,
+    content:
+      text === ''
+        ? []
+        : [{ kind: 'message', content: [{ kind: 'text', text }] }],
+    finishReason: 'stop',
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      cachedInputTokens: null,
+      reasoningTokens: null,
+    },
+  });
+}
+
+/** One request the transport was asked to prepare, as the loop assembled it. */
+interface ObservedRequest {
+  readonly model: string;
+  readonly messages: readonly Message[];
+}
+
+/** The text one canonical message carries, whatever role wrote it. */
+function messageText(message: Message): string {
+  switch (message.role) {
+    case 'user':
+      return message.content
+        .map((part) => (part.kind === 'text' ? part.text : ''))
+        .join('');
+    case 'assistant':
+      return message.content
+        .flatMap((part) =>
+          part.kind === 'message'
+            ? part.content.map((piece) => piece.text)
+            : [],
+        )
+        .join('');
+    case 'tool':
+      return message.results
+        .flatMap((result) =>
+          result.content.map((part) => (part.kind === 'text' ? part.text : '')),
+        )
+        .join('');
+  }
+}
+
+function scriptedBoundModel(
+  config: BoundModel['config'],
   turns: Array<ScriptedTurn | 'hang'>,
-  observedFollowUps: ObservedFollowUp[],
+  observed: ObservedRequest[],
   hangGate?: Promise<unknown>,
-) {
-  const handler = roundModelHandler({
-    capabilities: {
-      supportsFunctionCalling: true,
-      supportsNativeAudio: false,
-      supportsVision: false,
+): BoundModel {
+  const origin = scriptedOrigin(config.fullName);
+  const model: Model = {
+    prepareTurn: (request) => {
+      observed.push({ model: config.name, messages: request.messages });
+      return Effect.succeed(preparedTurn(origin));
     },
-    config: { provider: 'openai', fullName: model },
-    requiresPerCallSystemPrompt: false,
-    initializeMessages: async () => [{ role: 'user', content: 'Start.' }],
-    consumeInsertedAttachmentKinds: () => [],
-    createUserFollowUpMessages: async (
-      messages: readonly unknown[],
-      text: string,
-    ) => {
-      observedFollowUps.push({
-        model,
-        messages: structuredClone(messages),
-        text,
-      });
-      return [...messages, { role: 'user', content: text }];
-    },
-    createResponse: vi.fn(async () => {
-      const turn = turns.shift();
-      if (turn === 'hang') {
-        await hangGate;
-        throw new Error(`Hang gate for ${model} resolved unexpectedly.`);
-      }
-      if (!turn) throw new Error(`Unexpected ${model} model invocation.`);
-      return { response: turn };
-    }),
-    extractResponse: (response: unknown) => ({
-      text: (response as ScriptedTurn).text,
-      usage: null,
-      stopReason: 'stop',
-    }),
-    extractToolUse: () => [],
-    setAgentCategory: vi.fn(),
-    setLogger: vi.fn(),
-    dispose: vi.fn(),
-  });
-  Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
-    value: MODEL_HANDLER_KEY,
-  });
-  return handler;
+    streamTurn: () =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const turn = turns.shift();
+          if (turn === 'hang') {
+            yield* Effect.tryPromise({
+              try: () => hangGate ?? new Promise(() => {}),
+              catch: (cause) =>
+                new ModelError({
+                  kind: 'transport',
+                  message: 'Scripted hang released.',
+                  cause,
+                }),
+            });
+            return Stream.empty;
+          }
+          if (!turn) {
+            return Stream.fail(
+              new ModelError({
+                kind: 'transport',
+                message: `Unexpected ${config.name} model invocation.`,
+              }),
+            );
+          }
+          const events: TurnEvent[] = [
+            {
+              kind: 'identified',
+              providerResponseId: `resp-${config.name}`,
+              requestedOrigin: origin,
+              returnedModel: null,
+            },
+            { kind: 'completed', result: scriptedResult(origin, turn.text) },
+          ];
+          return Stream.fromIterable(events);
+        }),
+      ),
+    generateTurn: () =>
+      Effect.die(new Error('The run loops stream; they never generate.')),
+  };
+  return {
+    modelId: config.name,
+    config,
+    compatibilityKey: 'ModelHandlerOpenAI',
+    model,
+    origin,
+    usageProvider: 'openai',
+    usageRoute: 'api-key',
+    contextWindow: config.contextWindow,
+    supportsVision: false,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: false,
+    supportsForcedToolChoice: true,
+    wireRouteKey: JSON.stringify(['openai', 'api-key', config.fullName]),
+    modelRetryRouteKey: JSON.stringify([
+      'openai',
+      'api-key',
+      config.fullName,
+      config.name,
+    ]),
+    routedOnKimiCode: false,
+    backgroundCapable: false,
+  };
 }
 
 async function resumePersistedRun(
@@ -182,7 +302,13 @@ function inlineAgent(name: string) {
     name,
     description: `Integration fixture ${name}.`,
     settings: { agentCategory: AgentCategory.ToolUse, tools: [] },
-    prompts: { systemPrompt: `You are ${name}.` },
+    // The loop builds the opening user message from the agent's prompts, so
+    // the fixture carries a real request template rather than a transport
+    // override that skipped prompt construction.
+    prompts: {
+      systemPrompt: `You are ${name}.`,
+      userRequest: '{{ INSTRUCTION }}',
+    },
   };
 }
 
@@ -275,18 +401,20 @@ async function launchWaitingChild(options: {
   readonly runId: RunId;
   readonly parentContext: ReturnType<typeof createRunContext>;
   readonly runAsParentOwner: ParentOwnerRunner;
-  readonly observedFollowUps: ObservedFollowUp[];
+  readonly observedRequests: ObservedRequest[];
 }> {
-  const observedFollowUps: ObservedFollowUp[] = [];
-  modelFactoryMocks.createModelHandler.mockImplementation(
-    async (modelConfig: { name: string }) =>
-      taggedScriptedHandler(
-        modelConfig.name,
-        modelConfig.name === CHILD_MODEL
-          ? options.childTurns
-          : options.parentTurns,
-        observedFollowUps,
-        options.childGate,
+  const observedRequests: ObservedRequest[] = [];
+  modelBindingMocks.bindModel.mockImplementation(
+    (input: { readonly config: BoundModel['config'] }) =>
+      Effect.succeed(
+        scriptedBoundModel(
+          input.config,
+          input.config.name === CHILD_MODEL
+            ? options.childTurns
+            : options.parentTurns,
+          observedRequests,
+          options.childGate,
+        ),
       ),
   );
 
@@ -353,12 +481,7 @@ async function launchWaitingChild(options: {
   expect(launch.status).toBe('executed');
   const runId = childRunId(launch.output);
   childId = runId;
-  return {
-    runId,
-    parentContext,
-    runAsParentOwner,
-    observedFollowUps,
-  };
+  return { runId, parentContext, runAsParentOwner, observedRequests };
 }
 
 describe('native subagent production delivery path', { retry: 2 }, () => {
@@ -396,7 +519,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { text: 'Parent received result B.' },
     ];
     const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext, runAsParentOwner, observedFollowUps } =
+    const { runId, parentContext, runAsParentOwner, observedRequests } =
       await launchWaitingChild({ parentTurns, childTurns });
 
     await waitForPersistedResult(runId, 'Result A.');
@@ -412,14 +535,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForPersistedResult(runId, 'Result B.');
     await waitForCompletedResumes(2);
 
-    const childResumeInput = observedFollowUps.find(
-      ({ model, text }) =>
-        model === CHILD_MODEL && text.includes('second assertion'),
-    );
-    expect(childResumeInput?.messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ role: 'assistant', content: 'Result A.' }),
-      ]),
+    // The resumed turn asks the model with the follow-up as its last message
+    // and turn 1's answer still in the history it carries.
+    const childResumeRequest = observedRequests.find(({ model, messages }) => {
+      const last = messages.at(-1);
+      return (
+        model === CHILD_MODEL &&
+        last !== undefined &&
+        messageText(last).includes('second assertion')
+      );
+    });
+    expect(childResumeRequest?.messages.map(messageText)).toContain(
+      'Result A.',
     );
 
     await session.settlePublications();

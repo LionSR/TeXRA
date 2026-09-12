@@ -21,6 +21,8 @@ import type {
   DeepSeekToolCall,
   OpenAIToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import { detectRequestId } from '@common/errors/sdkError/errorInspection';
 import {
   isMissingFinishReasonError,
@@ -53,7 +55,6 @@ import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
-import { normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
@@ -68,10 +69,8 @@ import {
   extractReasoningDelta as extractReasoningDeltaFromChunk,
 } from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
-import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
@@ -684,28 +683,6 @@ export class ModelHandlerOpenAI<
     );
   }
 
-  /** Adds user message content for subsequent rounds. */
-  async createRoundMessages(
-    messages: ChatCompletionMessageParam[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<ChatCompletionMessageParam[]> {
-    return createChatRoundMessages(
-      messages,
-      userMessage,
-      mediaFiles,
-      this.capabilities,
-      (files, context) => this.createMediaForRound(files, context),
-    );
-  }
-
-  async createUserFollowUpMessages(
-    messages: ChatCompletionMessageParam[],
-    userMessage: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    return createChatUserFollowUpMessages(messages, userMessage);
-  }
-
   createAssistantMessage(text: string): ChatCompletionMessageParam {
     return { role: 'assistant', content: this.formatAssistantContent(text) };
   }
@@ -862,17 +839,6 @@ export class ModelHandlerOpenAI<
     return { text: this.postProcessResponse(withEndTag), usage, stopReason };
   }
 
-  protected appendUserText(
-    messages: ChatCompletionMessageParam[],
-    text: string,
-  ): void {
-    appendUserTextToChatMessages(
-      messages,
-      text,
-      this.capabilities.supportsIntermDevMsgs,
-    );
-  }
-
   protected appendTextToLastAssistantMessage(
     messages: ChatCompletionMessageParam[],
     text: string,
@@ -922,19 +888,6 @@ export class ModelHandlerOpenAI<
     return this.config.provider as NormalizedUsage['provider'];
   }
 
-  /** Normalizes OpenAI usage data into a unified format. */
-  normalizeUsage(
-    rawUsage: ExtendedCompletionUsage | null,
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    return normalizeOpenAIUsage(
-      rawUsage,
-      responseTimeMs,
-      this.usageProvider,
-      this.standardPricingConfig(),
-    );
-  }
-
   /**
    * Extracts reasoning content from an API response message.
    * Subclasses can override to look at different fields (e.g., OpenRouter uses 'reasoning').
@@ -981,78 +934,6 @@ export class ModelHandlerOpenAI<
     return reasoning;
   }
 
-  private ensureStringifiedArguments(value: unknown): string {
-    if (typeof value === 'string') return value;
-    if (value === undefined) return '{}';
-    try {
-      return JSON.stringify(value);
-    } catch (err) {
-      this.logger.warn('Failed to serialize tool arguments', {
-        data: buildErrorLogData(err, { operation: 'serialize tool arguments' }),
-      });
-      return '{}';
-    }
-  }
-
-  protected normalizeToolCall(
-    call: ChatCompletionMessageToolCall,
-  ): ChatCompletionMessageToolCall {
-    if (call.type === 'function') {
-      return {
-        id: call.id,
-        type: 'function',
-        function: {
-          name: call.function.name,
-          arguments: this.ensureStringifiedArguments(call.function.arguments),
-        },
-      };
-    }
-    if (call.type === 'custom') {
-      return {
-        id: call.id,
-        type: 'custom',
-        custom: {
-          name: call.custom.name,
-          input: this.ensureStringifiedArguments(call.custom.input),
-        },
-      };
-    }
-    // Type should be exhaustive, but return as-is for safety
-    return call;
-  }
-
-  /**
-   * Provider name used when extracting tool calls.
-   * Defaults to config.provider. Override only when tool calls
-   * need a different identifier.
-   */
-  protected get toolCallProvider(): string {
-    return this.config.provider;
-  }
-
-  extractToolUse(responseObject: ChatCompletion): TCall[] {
-    const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
-      return [];
-    }
-
-    // Let a malformed payload throw: swallowing it here would return an
-    // empty tool-call list, which the caller reads as "the model made no
-    // tool calls" and finalizes the run as a successful completion instead
-    // of surfacing the corrupted provider response. The thrown error
-    // propagates to the existing classifyAgentError boundary
-    // (AgentRunLifecycle.ts), which fails the run loudly and retryably.
-    assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
-
-    return toolCalls.map((call) => ({
-      provider: this.toolCallProvider,
-      callId: call.id,
-      name: call.function.name,
-      input: parseToolInput(call.function.arguments, call.id, this.logger),
-      raw: call,
-    })) as TCall[];
-  }
-
   /**
    * Formats text content for assistant messages in tool call follow-ups.
    * Subclasses can override to use string format instead of array format.
@@ -1064,147 +945,10 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Whether to include reasoning_content in assistant messages for tool-use cycles.
-   * Override in subclasses (DeepSeek, Kimi) that require reasoning content preservation.
-   *
-   * When true, reasoning content from workspaceState.reasoning.thinkingBlocks
-   * will be included in the assistant message and cleared after use.
-   */
-  protected shouldIncludeReasoningInToolCalls(): boolean {
-    return false;
-  }
-
-  /**
    * Whether final assistant messages should also replay reasoning_content.
    * DeepSeek requires this for subsequent user turns after a thinking+tool cycle.
    */
   protected shouldIncludeReasoningInAssistantMessages(): boolean {
     return false;
-  }
-
-  /**
-   * Some providers require assistant tool-call messages to include a content
-   * field even when the model emitted an empty string.
-   */
-  protected shouldIncludeEmptyAssistantToolContent(): boolean {
-    return false;
-  }
-
-  /**
-   * Builds an assistant message with tool calls and optional reasoning_content.
-   *
-   * For providers that support thinking mode with tool calls (DeepSeek, Kimi),
-   * reasoning_content must be included in the assistant message for the model
-   * to continue its reasoning chain across tool-use cycles.
-   *
-   * @param toolCalls - Normalized tool calls
-   * @param workspaceState - Workspace state containing reasoning blocks
-   * @param text - Optional text content
-   * @returns Assistant message with tool calls and optional reasoning_content
-   */
-  protected buildAssistantMessageWithToolCalls(
-    toolCalls: ChatCompletionMessageToolCall[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): ChatCompletionAssistantMessageParam {
-    const callMsg: ChatCompletionAssistantMessageParam & {
-      reasoning_content?: string;
-    } = {
-      role: 'assistant',
-      tool_calls: toolCalls,
-    };
-
-    // Include reasoning_content if this provider requires it for tool-use cycles.
-    // Always include (even as empty string) to ensure consistency: once
-    // reasoning_content appears in the conversation history, DeepSeek's API
-    // requires it on every subsequent assistant message in thinking mode.
-    if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
-      callMsg.reasoning_content =
-        workspaceState.reasoning.thinkingBlocks[0]?.thinking ?? '';
-      // Clear after use to prevent stale reasoning in subsequent calls
-      workspaceState.resetReasoning();
-    }
-
-    if (text !== undefined || this.shouldIncludeEmptyAssistantToolContent()) {
-      callMsg.content = this.formatAssistantContent(text ?? '');
-    }
-
-    return callMsg;
-  }
-
-  /**
-   * Creates batched tool-use follow-up messages for multiple parallel tool calls.
-   *
-   * For providers with thinking mode (DeepSeek, Kimi), all tool calls from a
-   * single model response must be in ONE assistant message with reasoning_content,
-   * followed by individual tool result messages. Without batching,
-   * resetReasoning() after the first call clears reasoning_content for
-   * subsequent calls, causing the API to reject the request.
-   */
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: TCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    if (entries.length === 0) {
-      return [];
-    }
-
-    const toolCalls = entries.map(({ call }) =>
-      this.normalizeToolCall(call.raw),
-    );
-    const callMsg = this.buildAssistantMessageWithToolCalls(
-      toolCalls,
-      workspaceState,
-      text,
-    );
-
-    const toolResultMessages = toolCalls.map((call, i) => ({
-      role: 'tool' as const,
-      tool_call_id: call.id,
-      content: formatToolResultTextWithAttachments(
-        entries[i].result,
-        entries[i].attachments,
-        this.canProcessToolResultAttachments,
-      ),
-    }));
-
-    return [callMsg, ...toolResultMessages];
-  }
-
-  // =========================================================================
-  // Message modification methods (for post-build enrichment)
-  // =========================================================================
-
-  /**
-   * Prepend text to the last user message in the conversation.
-   */
-  prependTextToUserMessage(
-    messages: ChatCompletionMessageParam[],
-    text: string,
-  ): void {
-    prependTextToChatUserMessage(messages, text);
-  }
-
-  /**
-   * Add media files to the last user message in the conversation.
-   */
-  async addMediaToUserMessage(
-    messages: ChatCompletionMessageParam[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
-
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return [];
-
-    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return [];
-    insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
-    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

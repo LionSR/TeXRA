@@ -375,7 +375,6 @@ export function executeCliRequest(
             const terminalStatusPersisted = (yield* finalizeRun(session, {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
-              flowRecord: 'preserve',
               report: reportShutdownFinalizationFailure,
             })).ok;
             yield* session.releaseRunLease(runId);

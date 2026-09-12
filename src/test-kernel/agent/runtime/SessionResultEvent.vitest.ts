@@ -75,9 +75,9 @@ function completedRun(ctx: AgentLaunchContext): AgentFlowResult {
   };
 }
 
-/** The flow throws a model failure. */
-async function explodedRun(): Promise<never> {
-  throw new Error('model exploded');
+/** The flow fails with a model failure. */
+function explodedRun(): Effect.Effect<never, Error> {
+  return Effect.fail(new Error('model exploded'));
 }
 
 /** Assert the run emitted exactly one result matching the given fields. */
@@ -102,7 +102,9 @@ describe('terminal result event', () => {
   it('emits exactly one completed result on a successful run', async () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
-      await Effect.runPromise(runFlow(ctx, async () => completedRun(ctx)));
+      await Effect.runPromise(
+        runFlow(ctx, () => Effect.succeed(completedRun(ctx))),
+      );
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         output: { category: 'toolUse' },
@@ -134,7 +136,9 @@ describe('terminal result event', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlow(ctx, async () => completedRun(ctx), { onRun }),
+          runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
+            onRun,
+          }),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       await Promise.resolve();
@@ -186,11 +190,13 @@ describe('terminal result event', () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => ({
-          outcome: RUN_OUTCOME.CANCELLED,
-          runId: ctx.runScope.runId,
-          output: { category: 'toolUse', response: '', files: [] },
-        })),
+        runFlow(ctx, () =>
+          Effect.succeed({
+            outcome: RUN_OUTCOME.CANCELLED,
+            runId: ctx.runScope.runId,
+            output: { category: 'toolUse', response: '', files: [] },
+          }),
+        ),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
     } finally {
@@ -202,9 +208,9 @@ describe('terminal result event', () => {
     const { ctx, runStatus, results } = setupResultCase();
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => {
-          throw new DOMException('Request aborted', 'AbortError');
-        }),
+        runFlow(ctx, () =>
+          Effect.fail(new DOMException('Request aborted', 'AbortError')),
+        ),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
       expect(results[0].error?.kind).toBe('abort');
@@ -239,7 +245,7 @@ describe('terminal result event', () => {
     session.onResult(onResult);
     try {
       await Effect.runPromise(
-        runFlow(ctx, async () => completedRun(ctx), {
+        runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
           parentRunId,
         }),
       );

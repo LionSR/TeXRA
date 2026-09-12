@@ -9,7 +9,6 @@
  */
 import { z } from 'zod';
 
-import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import {
@@ -79,14 +78,6 @@ const RunUsageAccumulatorJSONSchema = z.strictObject({
   totals: RunUsageTotalsSchema.prefault({}),
   latestUsage: NormalizedUsageSchema.nullable().prefault(null),
 });
-/**
- * Output type for RunUsageAccumulator serialization.
- * Uses z.output<> to get the type after parsing (totals fully resolved).
- */
-export type RunUsageAccumulatorJSON = z.output<
-  typeof RunUsageAccumulatorJSONSchema
->;
-
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),
@@ -296,31 +287,8 @@ const UserVariableChannelRecordSchema = z
   .looseObject(UserVariableValueSchemas)
   .partial();
 
-/**
- * User variables for template rendering: one mutable record.
- *
- * The retired two-channel `input`/`transient` envelope is rejected explicitly
- * rather than left to the record schema above: that schema is loose, so an
- * unrejected envelope would parse as two junk variables instead of failing.
- * The check goes when the `flow_<id>.json` parse that can still meet the old
- * envelope goes.
- */
-export const UserVariableChannelsSchema = UserVariableChannelRecordSchema.check(
-  (ctx) => {
-    // Either key alone is enough to reject: the envelope always carried
-    // both, and a malformed one (a non-record in either channel) must fail
-    // just as loudly as a well-formed one rather than parsing into two junk
-    // variables.
-    if ('input' in ctx.value || 'transient' in ctx.value) {
-      ctx.issues.push({
-        code: 'custom',
-        input: ctx.value,
-        message:
-          'Retired two-channel user-variable envelope: `input`/`transient` are no longer merged',
-      });
-    }
-  },
-);
+/** User variables for template rendering: one mutable record. */
+export const UserVariableChannelsSchema = UserVariableChannelRecordSchema;
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
 
@@ -355,7 +323,6 @@ export const StateSlicesSchema = z.object({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   userChannels: UserVariableChannelsSchema,
 });
-export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 
 /**
  * The message-free core of one tool-use flow's shared state: every field of
@@ -382,9 +349,6 @@ export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
   systemPrompt: z.string().optional(),
-  userCancelledRetry: z.boolean().optional(),
-  /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });
@@ -409,9 +373,6 @@ export const ReflectionSnapshotStateSchema = z.object({
   continueRounds: z.boolean(),
   endTurn: z.boolean(),
 
-  /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
-
   /** Provider-message format used by the persisted `context` messages.
    *  Absent for an untagged handler. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
@@ -421,4 +382,11 @@ export const ReflectionSnapshotStateSchema = z.object({
 
   /** Rejected compile result awaiting an explicit successful compile. */
   unresolvedCompileRejection: z.boolean().optional(),
+
+  /**
+   * Byte length of the round's raw output file after the last processed
+   * response. A replayed response completes a partial write or skips one
+   * already complete instead of appending its text twice.
+   */
+  rawOutputBytes: z.int().nonnegative().optional(),
 });

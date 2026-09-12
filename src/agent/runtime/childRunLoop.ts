@@ -22,12 +22,8 @@ import {
 } from '@agent/storage/runLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import {
-  finalizeRunTerminal,
-  type FlowRecordRetention,
-} from '@agent/runtime/AgentRunLifecycle';
+import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
 import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import type {
   FollowUpQueue,
@@ -133,8 +129,6 @@ interface ChildRunPort {
     error?: unknown;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
-    /** The flow-record policy applied beside the `run.end` row. */
-    flowRecord?: FlowRecordRetention;
     /** Drop the child's tab once finalized (ephemeral process children). */
     autoClose?: boolean;
   }): Effect.Effect<void, Error>;
@@ -173,7 +167,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly ownsBackgroundProcess?: boolean;
 
   /**
-   * Drop the child's stream tab when the run finalizes. For a child whose tab
+   * Drop the child's run tab when the run finalizes. For a child whose tab
    * is ephemeral by construction (a background shell), the tab exists only
    * while the process does; every other child type keeps its tab for reading
    * back.
@@ -298,7 +292,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    * Presentation/lifecycle wrapper for agent-CLI child runs. Native
    * strategies omit this; `executeAgent`/`resumeToolUseFromResumeData`
    * already own handle creation, tracking, and terminal finalization for
-   * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
+   * every turn via `runFlowWithLifecycle`, so there is no separate run tab
    * for this loop to finalize.
    */
   readonly childRun?: ChildRunPort;
@@ -722,7 +716,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   });
   if (delivery.status === 'failed') {
     logger.warn(
-      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the run report.`,
+      `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
       {
         data: {
           runId,
@@ -760,7 +754,6 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
             outcome: Cause.hasInterrupts(exit.cause)
               ? RUN_OUTCOME.CANCELLED
               : RUN_OUTCOME.FAILED,
-            flowRecord: 'preserve',
           }),
         );
         const released = yield* Effect.exit(session.releaseRunLease(runId));
@@ -1145,7 +1138,6 @@ export function startChildRunLoop<TTurn, R = never>(
               outcome,
               error: lastTurnErr,
               stage: sessionStage,
-              flowRecord: retainFlowRecordUnlessCompleted,
               ...(strategy.autoCloseChildRun === true && {
                 autoClose: true,
               }),
@@ -1165,7 +1157,6 @@ export function startChildRunLoop<TTurn, R = never>(
                         message: toErrorMessage(lastTurnErr),
                       }
                     : undefined,
-                flowRecord: retainFlowRecordUnlessCompleted,
               });
             }
           }

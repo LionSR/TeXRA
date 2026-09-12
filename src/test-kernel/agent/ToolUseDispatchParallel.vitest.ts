@@ -1,28 +1,80 @@
-import { strict as assert } from 'node:assert';
+/**
+ * The dispatch guarantees the loop must keep: barrier segmentation, the
+ * parallel-safe concurrency window, duplicate fan-out without repeated
+ * effects, the terminal-result stop, and the deliberate absence of
+ * fail-fast sibling interruption. Settlements are read where the model
+ * reads them — the one delivered tool group — and, where a dispatch is
+ * interrupted, off the ledger it did or did not commit to.
+ */
+
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Third-party imports
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { describe, it, beforeAll } from 'vitest';
+import { Effect, Fiber, Layer, Scope, Stream, SynchronizedRef } from 'effect';
+import { it } from '@effect/vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
+import { describe, expect } from 'vitest';
 
-import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
+// Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import {
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
+import {
+  appendRow,
+  rowAggregate,
+  snapshotRow,
+  toolUseFlowState,
+  type ToolUseFlowState,
+} from '@agent/runtime/loop/rows';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { dispatchFactsFor } from '@agent/runtime/run/tools';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { noopTrace, type AgentTrace } from '@agent/trace';
+import {
+  TurnResultSchema,
+  type Model,
+  type ModelOrigin,
+  type TurnResult,
+} from '@llm/turn';
+import {
+  AgentCategory,
   AgentRunStateSnapshotSchema,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
-import { installPlatform } from '@test/support/setupPlatform';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { RunLedger } from '@shared/session/runLedger';
+import type { RunState } from '@shared/session/runStateFold';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-import { testRunScope, withTestRunContext } from './progressTestUtils';
+import { recordSessionEvents } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';
+import { testModelInfo } from './runtime/launchContextTestUtils';
+
+setupPlatform({ workspacePath: '/workspace' });
+
+const ORIGIN = {
+  protocol: 'openai-chat',
+  codecVersion: 1,
+  requestedModel: 'gpt-test',
+  deployment: {
+    endpoint: 'https://api.example.test/v1',
+    credentialScope: 'openai',
+  },
+} satisfies ModelOrigin;
 
 interface DispatchProbe {
   events: string[];
@@ -60,109 +112,275 @@ function probeTool(
   } as ITool;
 }
 
-function makeCall(
+interface Call {
+  readonly callId: string;
+  readonly name: string;
+  readonly input: Record<string, unknown>;
+}
+
+const makeCall = (
   callId: string,
   name: string,
   input: Record<string, unknown>,
-): SdkToolCall {
+): Call => ({ callId, name, input });
+
+/** The completed turn whose calls the dispatch settles. */
+function turnWithCalls(calls: readonly Call[]): TurnResult {
+  return TurnResultSchema.parse({
+    kind: 'http',
+    providerResponseId: 'resp-1',
+    requestedOrigin: ORIGIN,
+    returnedModel: null,
+    modelFingerprint: null,
+    content: calls.map((call) => ({
+      kind: 'local-call',
+      providerCallId: call.callId,
+      name: call.name,
+      argumentsText: JSON.stringify(call.input),
+    })),
+    finishReason: 'tool-calls',
+    usage: null,
+  });
+}
+
+/** A binding whose model is never called: dispatch only reads capabilities. */
+function boundModel(): BoundModel {
+  const model: Model = {
+    prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
+    streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
+    generateTurn: () => Effect.die(new Error('dispatch issues no turn')),
+  };
   return {
-    provider: 'openai',
-    callId,
-    name,
-    input,
-    raw: {},
-  } as unknown as SdkToolCall;
+    modelId: 'gpt54',
+    config: MODEL_CONFIGS.gpt54,
+    compatibilityKey: 'ModelHandlerOpenAI',
+    model,
+    origin: ORIGIN,
+    usageProvider: 'openai',
+    usageRoute: 'api-key',
+    contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
+    supportsVision: false,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: false,
+    supportsForcedToolChoice: true,
+    wireRouteKey: 'wire',
+    modelRetryRouteKey: 'wire:gpt54',
+    routedOnKimiCode: false,
+    backgroundCapable: false,
+  };
+}
+
+let dispatchRunCounter = 0;
+const dispatchRunId = (): RunId =>
+  `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}` as RunId;
+
+/** The opening state of a fresh tool-use run, as the loop authors it. */
+const freshState = (): RunState => ({
+  commit: 0,
+  snapshotCommit: null,
+  rowsBeforeSnapshot: 0,
+  family: 'toolUse',
+  step: null,
+  outcome: null,
+  phase: null,
+  round: 0,
+  turn: 0,
+  continuationIndex: 0,
+  modelId: 'gpt54',
+  modelHandlerCompatibilityKey: 'ModelHandlerOpenAI',
+  lastError: null,
+  pendingRetry: null,
+  messages: [],
+  continuation: null,
+  openAttempt: null,
+  lastTurn: null,
+  pendingResponse: null,
+  pendingIntents: {},
+  approvals: {},
+  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  flow: null,
+});
+
+const INVOCATION = {
+  invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
+  attempt: 1,
+} as const;
+const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+
+function agentRun(
+  runId: RunId,
+  session: SessionHandle,
+  logger: AgentTrace,
+  tools: MapToolRegistry,
+  model: SynchronizedRef.SynchronizedRef<BoundModel>,
+  rootUserInstruction: string | undefined,
+): AgentRunShape {
+  const config = AgentConfigSchema.parse({
+    agent: 'assistant',
+    model: 'gpt54',
+    agentCategory: AgentCategory.ToolUse,
+    ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
+  });
+  const setting = AgentSettingSchema.parse({
+    agentCategory: AgentCategory.ToolUse,
+  });
+  return {
+    runId,
+    parentRunId: null,
+    session,
+    config,
+    setting,
+    prompt: AgentPromptSchema.parse({}),
+    logger,
+    parentStage: logger.openStage('Run: assistant'),
+    // The launch stores a real run carries; no fixture reads through them.
+    stores: hostStores(),
+    toolPolicy: {},
+    userVarChannels: {},
+    initialUserMessageForTranscript: undefined,
+    fileService: new TaskRunFileService(runId),
+    tools,
+    finalToolName: null,
+    structured: { value: undefined },
+    model,
+    scope: Scope.makeUnsafe(),
+    pendingModelSwitch: { value: null },
+    inScope: (operation) => operation(),
+    usageMonitor: new UsageMonitor(
+      testModelCell(testModelInfo, 'gpt54'),
+      { logger, runId, runStageId: undefined },
+      { agentName: config.agent, agentCategory: setting.agentCategory },
+    ),
+    callbacks: { onModelChanged: () => undefined },
+    interrupt: () => undefined,
+  };
+}
+
+interface DispatchKit {
+  readonly runId: RunId;
+  readonly session: SessionHandle;
+  /** The folded state with the turn's response pending and unsettled. */
+  readonly state: RunState;
+  readonly workspace: AgentWorkspaceState;
+  readonly layer: Layer.Layer<AgentRun | RunLedger>;
 }
 
 interface HarnessOptions {
-  tools: Record<string, ITool>;
-  rootUserInstruction?: string;
-  /** The run's one interrupt signal; defaults to a run nobody interrupts. */
-  abortSignal?: AbortSignal;
-  modelHandlerOverrides?: Record<string, unknown>;
-  runClient?: unknown;
+  readonly tools: Record<string, ITool>;
+  readonly calls: readonly Call[];
+  readonly rootUserInstruction?: string;
+  readonly logger?: AgentTrace;
+  /** Opened with the slices a real run carries, for the cases that read the
+   *  workspace a settlement persisted. */
+  readonly stateSlices?: ToolUseFlowState['stateSlices'];
 }
 
-function dispatchHarness(opts: HarnessOptions) {
-  const runTrace = createTestRunTrace(
-    'DispatchParallelTest' as RunId,
-    new StreamLog(),
+/** The slices of a run that has yet to touch a file. */
+const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
+  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
+  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
+    excludeAssemblyStrings: true,
+  }),
+  userChannels: {},
+});
+
+/**
+ * Open a run aggregate and commit the completed turn the dispatch continues
+ * from, exactly as `ModelInvoker` does before it hands over.
+ */
+const openDispatch = Effect.fn('openDispatch')(function* (
+  options: HarnessOptions,
+) {
+  const session = createTestSession();
+  const runId = dispatchRunId();
+  const logger = options.logger ?? noopTrace;
+  const tools = new MapToolRegistry(options.tools);
+  publishTestRunStart(session, runId);
+  yield* Effect.promise(() => session.settlePublications());
+  yield* session.ledger.acquire(runId);
+  const opened = yield* session.ledger.appendBatch(runId, null, [
+    appendRow(runId, [
+      { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+    ]),
+    snapshotRow(runId, freshState(), {
+      phase: 'initial',
+      state: {
+        shouldSkipCycle: false,
+        stateSlices: options.stateSlices ?? null,
+      },
+    }),
+  ]);
+  const turn = turnWithCalls(options.calls);
+  const state = yield* session.ledger.appendBatch(runId, opened, [
+    {
+      type: 'model.message',
+      aggregateId: rowAggregate(runId),
+      payload: {
+        kind: 'attempt',
+        invocation: INVOCATION,
+        origin: ORIGIN,
+        delivery: 'stream',
+      },
+    },
+    {
+      type: 'model.message',
+      aggregateId: rowAggregate(runId),
+      payload: {
+        kind: 'response',
+        responseId: RESPONSE_ID,
+        invocation: INVOCATION,
+        turn,
+        calls: dispatchFactsFor(turn, tools, logger, () => 'log-id'),
+        usage: null,
+      },
+    },
+  ]);
+  const model = yield* SynchronizedRef.make(boundModel());
+  const layer = Layer.mergeAll(
+    Layer.succeed(
+      AgentRun,
+      agentRun(
+        runId,
+        session,
+        logger,
+        tools,
+        model,
+        options.rootUserInstruction,
+      ),
+    ),
+    Layer.succeed(RunLedger, session.ledger),
   );
-  const services = {
-    config: AgentConfigSchema.parse({
-      rootUserInstruction: opts.rootUserInstruction,
-    }),
-    logger: runTrace.trace,
-    toolRegistry: new MapToolRegistry(opts.tools),
-    runScope: testRunScope('dispatch-parallel', {
-      signal: opts.abortSignal,
-    }),
-    onRoundFinalized: () => {},
-    modelCell: testModelCell({
-      requiresBatchedParallelToolResults: false,
-      createBatchedToolUseFollowUpMessages: async () => [],
-      getClient: async () => opts.runClient ?? {},
-      ...opts.modelHandlerOverrides,
-    }),
-    run: AgentRunStateSnapshotSchema.parse({}),
+  return {
+    runId,
+    session,
+    state,
     workspace: AgentWorkspaceState.create(),
-  } as unknown as ToolUseRoundServices;
-  const node = new ToolUseDispatchNode();
-  node.setServices(services);
-  return { node, trace: runTrace.trace, dispose: () => runTrace.dispose() };
-}
+    layer,
+  } satisfies DispatchKit;
+});
 
-type DispatchHarness = ReturnType<typeof dispatchHarness>;
+/** Dispatch the pending response of an opened run. */
+const dispatch = (kit: DispatchKit, userInstruction?: string) =>
+  dispatchPendingResponse(kit.state, {
+    workspace: kit.workspace,
+    userInstruction,
+  }).pipe(Effect.provide(kit.layer));
 
-/** Run `fn` with a dispatch harness that is always disposed afterwards. */
-async function withDispatchHarness<T>(
-  opts: HarnessOptions,
-  fn: (harness: DispatchHarness) => Promise<T>,
-): Promise<T> {
-  const harness = dispatchHarness(opts);
-  try {
-    return await fn(harness);
-  } finally {
-    harness.dispose();
+/** The one tool group the dispatch delivers, in call order. */
+function deliveredResults(
+  state: RunState,
+): readonly { status: string; text: string }[] {
+  const group = state.messages.at(-1);
+  if (group === undefined || group.role !== 'tool') {
+    throw new Error('The dispatch delivered no tool group.');
   }
-}
-
-interface DispatchInternals {
-  prep(shared: unknown): Promise<SdkToolCall[]>;
-  _exec(items: unknown[]): Promise<unknown[]>;
-  post(
-    shared: unknown,
-    dispatched: SdkToolCall[],
-    results: unknown[],
-  ): Promise<string | undefined>;
-}
-
-function internals(node: ToolUseDispatchNode): DispatchInternals {
-  return node as unknown as DispatchInternals;
-}
-
-function execPrepped(
-  node: ToolUseDispatchNode,
-  prepped: SdkToolCall[],
-): Promise<unknown[]> {
-  return withTestRunContext(node.services.runScope, () =>
-    internals(node)._exec(prepped),
-  );
-}
-
-/** prep() then the batch executor, mirroring Node's _run sequence. */
-async function runDispatch(
-  node: ToolUseDispatchNode,
-  calls: SdkToolCall[],
-  currentUserInstruction?: string,
-): Promise<unknown[]> {
-  const prepped = await internals(node).prep({
-    toolCalls: calls,
-    shouldStop: false,
-    messages: [],
-    currentUserInstruction,
-  });
-  return execPrepped(node, prepped);
+  return group.results.map((result) => ({
+    status: result.status,
+    text: result.content
+      .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+      .join(''),
+  }));
 }
 
 function countStarts(probe: DispatchProbe, toolName = ''): number {
@@ -170,362 +388,382 @@ function countStarts(probe: DispatchProbe, toolName = ''): number {
     .length;
 }
 
-type ExecResult = {
-  call: SdkToolCall;
-  result: ToolResult;
-  editedFiles: unknown[];
-} | null;
+describe('tool-use dispatch', () => {
+  it.effect('converts a malformed attachment result into a tool error', () =>
+    Effect.gen(function* () {
+      const malformedAttachmentTool: ITool = {
+        definition: {
+          name: 'malformed_attachment',
+          description: 'malformed_attachment',
+          parameters: {},
+        },
+        async call(): Promise<ToolResult> {
+          // Deliberately malformed (`path` is a number): parsed from JSON so
+          // the shape reaches the dispatch boundary unchecked, as a real tool
+          // returning bad data would, without a cast asserting it is valid.
+          return JSON.parse(
+            '{"status":"executed","output":"not accepted","files":[{"path":42,"mimeType":"image/png"}]}',
+          );
+        },
+      } as ITool;
+      const kit = yield* openDispatch({
+        tools: { malformed_attachment: malformedAttachmentTool },
+        calls: [makeCall('c1', 'malformed_attachment', {})],
+      });
 
-/** The duplicate inherits the primary's output, not a synthetic error. */
-function assertDuplicateInheritsOutput(results: ExecResult[]): void {
-  const primary = results[0]?.result;
-  const duplicate = results[1]?.result;
-  assert.equal(duplicate?.status, 'executed');
-  assert.equal(
-    duplicate?.status === 'executed' ? duplicate.output : undefined,
-    primary?.status === 'executed' ? primary.output : 'missing',
+      const { state } = yield* dispatch(kit);
+
+      const [delivered] = deliveredResults(state);
+      expect(delivered?.status).toBe('error');
+      expect(delivered?.text).toMatch(
+        /malformed_attachment: Tool returned an invalid result/i,
+      );
+      kit.session.dispose();
+    }),
   );
-}
 
-describe('ToolUseDispatchNode parallel dispatch', () => {
-  beforeAll(() => installPlatform({ workspacePath: '/workspace' }));
-
-  it('converts a malformed attachment result into a tool error', async () => {
-    const malformedAttachmentTool: ITool = {
-      definition: {
-        name: 'malformed_attachment',
-        description: 'malformed_attachment',
-        parameters: {},
-      },
-      async call(): Promise<ToolResult> {
-        return {
-          status: 'executed',
-          output: 'not accepted',
-          files: [{ path: 42, mimeType: 'image/png' }],
-        } as unknown as ToolResult;
-      },
-    } as ITool;
-
-    await withDispatchHarness(
-      { tools: { malformed_attachment: malformedAttachmentTool } },
-      async ({ node }) => {
-        const [run] = (await runDispatch(node, [
-          makeCall('c1', 'malformed_attachment', {}),
-        ])) as ExecResult[];
-
-        assert.equal(run?.result.status, 'error');
-        assert.match(
-          run?.result.status === 'error' ? run.result.error : '',
-          /malformed_attachment: Tool returned an invalid result/i,
-        );
-      },
-    );
-  });
-
-  it('preserves the unwrapped root instruction across nested delegation', async () => {
-    let observedInstruction: string | undefined;
-    let observedTrace: unknown;
-    const inspectContext: ITool = {
-      definition: {
-        name: 'inspect_context',
-        description: 'inspect_context',
-        parameters: {},
-      },
-      async call(): Promise<ToolResult> {
-        const context = getCurrentToolCallContext();
-        observedInstruction = context?.userInstruction;
-        observedTrace = context?.trace;
-        return { status: 'executed', output: 'ok' };
-      },
-    } as ITool;
-
-    await withDispatchHarness(
-      {
+  it.effect('preserves the unwrapped root instruction across delegation', () =>
+    Effect.gen(function* () {
+      let observedInstruction: string | undefined;
+      let observedTrace: unknown;
+      const inspectContext: ITool = {
+        definition: {
+          name: 'inspect_context',
+          description: 'inspect_context',
+          parameters: {},
+        },
+        async call(): Promise<ToolResult> {
+          const context = getCurrentToolCallContext();
+          observedInstruction = context?.userInstruction;
+          observedTrace = context?.trace;
+          return { status: 'executed', output: 'ok' };
+        },
+      } as ITool;
+      const kit = yield* openDispatch({
         tools: { inspect_context: inspectContext },
+        calls: [makeCall('c1', 'inspect_context', {})],
         rootUserInstruction: 'Do not use files or external tools.',
-      },
-      async ({ node, trace }) => {
-        await runDispatch(
-          node,
-          [makeCall('c1', 'inspect_context', {})],
-          'Wrapped child instruction with prior handoff boilerplate.',
-        );
-        assert.equal(
-          observedInstruction,
-          'Do not use files or external tools.',
-        );
-        assert.equal(observedTrace, trace);
-      },
-    );
-  });
+      });
 
-  it('executes contiguous parallel-safe calls concurrently, preserving order', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
+      yield* dispatch(
+        kit,
+        'Wrapped child instruction with prior handoff boilerplate.',
+      );
+
+      expect(observedInstruction).toBe('Do not use files or external tools.');
+      expect(observedTrace).toBe(noopTrace);
+      kit.session.dispose();
+    }),
+  );
+
+  it.effect('runs contiguous parallel-safe calls concurrently, in order', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: {
           grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
           read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
         },
-      },
-      async ({ node }) => {
-        const results = (await runDispatch(node, [
+        calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
           makeCall('c2', 'read_file', { path: 'b' }),
-        ])) as ExecResult[];
+        ],
+      });
 
-        assert.equal(probe.maxInFlight, 2, 'safe calls should overlap');
-        assert.equal(results.length, 2);
-        assert.equal(results[0]?.call.callId, 'c1');
-        assert.equal(results[1]?.call.callId, 'c2');
-        assert.equal(results[0]?.result.status, 'executed');
-        assert.equal(results[1]?.result.status, 'executed');
-      },
-    );
-  });
+      const { state } = yield* dispatch(kit);
 
-  it('treats non-safe tools as ordering barriers', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
+      expect(probe.maxInFlight).toBe(2);
+      expect(deliveredResults(state).map((result) => result.status)).toEqual([
+        'success',
+        'success',
+      ]);
+      expect(deliveredResults(state)[0]?.text).toContain(
+        'grep:{"pattern":"a"}',
+      );
+      kit.session.dispose();
+    }),
+  );
+
+  it.effect('treats non-safe tools as ordering barriers', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: {
           read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
           write_file: probeTool(probe, 'write_file', 10),
         },
-      },
-      async ({ node }) => {
-        await runDispatch(node, [
+        calls: [
           makeCall('c1', 'read_file', { n: 1 }),
           makeCall('c2', 'write_file', { n: 2 }),
           makeCall('c3', 'read_file', { n: 3 }),
-        ]);
+        ],
+      });
 
-        assert.equal(probe.maxInFlight, 1, 'barrier should force sequential');
-        assert.deepEqual(probe.events, [
-          'start read_file:{"n":1}',
-          'end read_file:{"n":1}',
-          'start write_file:{"n":2}',
-          'end write_file:{"n":2}',
-          'start read_file:{"n":3}',
-          'end read_file:{"n":3}',
-        ]);
-      },
-    );
-  });
+      yield* dispatch(kit);
 
-  it('stops dispatch and ends the turn after a terminal result', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
+      expect(probe.maxInFlight).toBe(1);
+      expect(probe.events).toEqual([
+        'start read_file:{"n":1}',
+        'end read_file:{"n":1}',
+        'start write_file:{"n":2}',
+        'end write_file:{"n":2}',
+        'start read_file:{"n":3}',
+        'end read_file:{"n":3}',
+      ]);
+      kit.session.dispose();
+    }),
+  );
+
+  it.effect('stops dispatch and ends the turn after a terminal result', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: {
           submit_output: probeTool(probe, 'submit_output', 0, {
             endTurn: true,
           }),
           write_file: probeTool(probe, 'write_file', 0),
         },
-      },
-      async ({ node }) => {
-        const calls = [
+        calls: [
           makeCall('c1', 'submit_output', { title: 'done' }),
           makeCall('c2', 'write_file', { path: 'late.txt' }),
-        ];
-        const shared = {
-          toolCalls: calls,
-          shouldStop: false,
-          endTurn: false,
-          messages: [],
-        };
+        ],
+      });
 
-        const prepped = await internals(node).prep(shared);
-        const results = await execPrepped(node, prepped);
-        const transition = await internals(node).post(shared, prepped, results);
+      const outcome = yield* dispatch(kit);
 
-        assert.deepEqual(probe.events, [
-          'start submit_output:{"title":"done"}',
-          'end submit_output:{"title":"done"}',
-        ]);
-        assert.equal(shared.shouldStop, true);
-        assert.equal(shared.endTurn, true);
-        assert.equal(transition, FlowTransition.COMPLETE);
-      },
-    );
-  });
+      expect(probe.events).toEqual([
+        'start submit_output:{"title":"done"}',
+        'end submit_output:{"title":"done"}',
+      ]);
+      expect(outcome.endTurn).toBe(true);
+      // The skipped call still settles: the model sees a complete group.
+      const delivered = deliveredResults(outcome.state);
+      expect(delivered[1]?.status).toBe('error');
+      expect(delivered[1]?.text).toContain(
+        'an earlier tool call ended the turn',
+      );
+      kit.session.dispose();
+    }),
+  );
 
-  it('executes duplicate parallel calls once and fans the result out', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
-        tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
-      },
-      async ({ node }) => {
-        const results = (await runDispatch(node, [
-          makeCall('c1', 'grep', { pattern: 'same' }),
-          makeCall('c2', 'grep', { pattern: 'same' }),
-          makeCall('c3', 'grep', { pattern: 'other' }),
-        ])) as ExecResult[];
+  it.effect(
+    'executes duplicate parallel calls once and fans the result out',
+    () =>
+      Effect.gen(function* () {
+        const probe = newProbe();
+        const kit = yield* openDispatch({
+          tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
+          calls: [
+            makeCall('c1', 'grep', { pattern: 'same' }),
+            makeCall('c2', 'grep', { pattern: 'same' }),
+            makeCall('c3', 'grep', { pattern: 'other' }),
+          ],
+        });
 
-        assert.equal(
-          countStarts(probe),
-          2,
-          'duplicate must not execute the tool again',
-        );
-        assert.equal(results[1]?.call.callId, 'c2');
-        assertDuplicateInheritsOutput(results);
-        assert.deepEqual(
-          results[1]?.editedFiles,
-          [],
-          'duplicate must not re-track edits',
-        );
-        assert.deepEqual(
-          (results[1] as { extracted?: { attachments: unknown[] } })?.extracted
-            ?.attachments,
-          [],
-          'duplicate must not re-inject the primary attachments',
-        );
-      },
-    );
-  });
+        const { state } = yield* dispatch(kit);
 
-  it('cancels every concurrent call from the one run signal', async () => {
-    const probe = newProbe();
-    const runController = new AbortController();
-    await withDispatchHarness(
-      {
+        expect(countStarts(probe)).toBe(2);
+        const delivered = deliveredResults(state);
+        expect(delivered[1]?.status).toBe('success');
+        expect(delivered[1]?.text).toBe(delivered[0]?.text);
+        kit.session.dispose();
+      }),
+  );
+
+  // The settlement is the whole transactional boundary: the result, the card
+  // that reports it, and the workspace the call mutated commit together, so a
+  // stop before the delivering snapshot cannot leave a settled call whose
+  // edits, media and tool-call count existed only in memory.
+  it.effect('commits the card and the workspace with the tool result', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const editingTool: ITool = {
+        definition: { name: 'edit_file', description: 'edit_file' },
+        async call(): Promise<ToolResult> {
+          probe.events.push('end edit_file');
+          return {
+            status: 'executed',
+            output: 'edited',
+            edits: [
+              { path: 'notes.tex', lineChanges: { added: 3, removed: 1 } },
+            ],
+          };
+        },
+      } as ITool;
+      const kit = yield* openDispatch({
+        tools: {
+          edit_file: editingTool,
+          slow_barrier: probeTool(probe, 'slow_barrier', 5_000),
+        },
+        calls: [
+          makeCall('c1', 'edit_file', { path: 'notes.tex' }),
+          makeCall('c2', 'slow_barrier', {}),
+        ],
+        stateSlices: emptySlices(),
+      });
+      const recorded = recordSessionEvents(kit.session, {
+        aggregateId: rowAggregate(kit.runId),
+      });
+
+      const fiber = yield* Effect.forkChild(dispatch(kit));
+      // The barriers are ordered, so the second call starting is proof the
+      // first has settled; the dispatch is then stopped before delivery.
+      while (!probe.events.some((event) => event.startsWith('start slow'))) {
+        yield* Effect.promise(() => delay(5));
+      }
+      yield* Fiber.interrupt(fiber);
+
+      const folded = yield* Effect.provide(
+        Effect.gen(function* () {
+          const ledger = yield* RunLedger;
+          return yield* ledger.load(kit.runId);
+        }),
+        kit.layer,
+      );
+      expect(Object.keys(folded?.pendingResponse?.settled ?? {})).toEqual([
+        'c1',
+      ]);
+      // No delivery ran, so this workspace can only have come from the
+      // settlement's own state operation.
+      const slices = toolUseFlowState(folded!)?.stateSlices;
+      expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
+        { path: 'notes.tex', added: 3, removed: 1 },
+      ]);
+      // The count the settling call had made: the interrupted barrier's own
+      // call is not in it, because it never settled.
+      expect(slices?.workspaceSnapshot.interactions.toolCallCount).toBe(1);
+
+      // The fast tool's card is now two rows of that same batch rather than a
+      // pair of trace publications: exactly one open and one close reach the
+      // display plane, and the interrupted second call opens none.
+      const types = (yield* Effect.promise(() => recorded.read())).map(
+        (event) => event.type,
+      );
+      expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
+      expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
+      kit.session.dispose();
+    }),
+  );
+
+  // No fail-fast sibling interruption and no fabricated settlement: an
+  // interrupted call is outcome-unknown, and resume asks rather than guesses.
+  it.effect('commits no settlement for a call interrupted in flight', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: {
           grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
           read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
         },
-        abortSignal: runController.signal,
-      },
-      async ({ node }) => {
-        const pending = runDispatch(node, [
+        calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
           makeCall('c2', 'read_file', { path: 'b' }),
-        ]);
-        await delay(15);
-        assert.equal(probe.maxInFlight, 2, 'both calls should be in flight');
-        runController.abort();
+          // A duplicate of the interrupted primary: it must derive nothing
+          // from a call whose outcome nobody knows.
+          makeCall('c3', 'grep', { pattern: 'a' }),
+        ],
+      });
 
-        const results = (await pending) as ExecResult[];
-        assert.deepEqual(
-          results,
-          [null, null],
-          'aborted concurrent calls should resolve to null',
-        );
-      },
-    );
-  });
+      const fiber = yield* Effect.forkChild(dispatch(kit));
+      // A real wait, matching the probe tools' own real timers: the point is
+      // that both calls are genuinely in flight when the interrupt lands.
+      yield* Effect.promise(() => delay(15));
+      expect(probe.maxInFlight).toBe(2);
+      yield* Fiber.interrupt(fiber);
 
-  it('does not share read results across a mutating barrier', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
+      const folded = yield* Effect.provide(
+        Effect.gen(function* () {
+          const ledger = yield* RunLedger;
+          return yield* ledger.load(kit.runId);
+        }),
+        kit.layer,
+      );
+      const pending = folded?.pendingResponse ?? null;
+      expect(Object.keys(pending?.settled ?? {})).toEqual([]);
+      // The duplicate is recognised as one and still settles nothing: with
+      // the primary interrupted it waits rather than fabricating a result.
+      expect(
+        pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
+      ).toBe('c1');
+      expect(countStarts(probe, 'grep')).toBe(1);
+      kit.session.dispose();
+    }),
+  );
+
+  it.effect('does not share read results across a mutating barrier', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: {
           read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
           write_file: probeTool(probe, 'write_file', 5),
         },
-      },
-      async ({ node }) => {
-        const results = (await runDispatch(node, [
+        calls: [
           makeCall('c1', 'read_file', { path: 'x' }),
           makeCall('c2', 'write_file', { path: 'x', content: 'new' }),
           makeCall('c3', 'read_file', { path: 'x' }),
-        ])) as ExecResult[];
+        ],
+      });
 
-        // The post-barrier read must execute again — the write may have
-        // changed what it returns, so sharing the pre-barrier result would
-        // feed the model stale contents.
-        assert.equal(
-          countStarts(probe, 'read_file'),
-          2,
-          'read after a barrier must re-execute',
-        );
-        assert.equal(results[2]?.result.status, 'executed');
-      },
-    );
-  });
+      const { state } = yield* dispatch(kit);
 
-  it('leaves side-effect duplicates cancelled when their primary never ran', async () => {
-    const probe = newProbe();
-    const runController = new AbortController();
-    await withDispatchHarness(
-      {
-        tools: { write_file: probeTool(probe, 'write_file', 5) },
-        abortSignal: runController.signal,
-      },
-      async ({ node }) => {
-        const calls = [
-          makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
-          makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
-        ];
-        const shared = { toolCalls: calls, shouldStop: false, messages: [] };
-        const prepped = await internals(node).prep(shared);
-        // Interrupt lands after planning but before anything executes.
-        runController.abort();
-        const results = (await execPrepped(node, prepped)) as ExecResult[];
+      // The post-barrier read must execute again — the write may have changed
+      // what it returns, so sharing the pre-barrier result would feed the
+      // model stale contents.
+      expect(countStarts(probe, 'read_file')).toBe(2);
+      expect(deliveredResults(state)[2]?.status).toBe('success');
+      kit.session.dispose();
+    }),
+  );
 
-        assert.equal(probe.events.length, 0, 'nothing should execute');
-        // The duplicate stays cancelled with its primary — no synthetic
-        // success when no effect happened at all.
-        assert.deepEqual(results, [null, null]);
-      },
-    );
-  });
+  it.effect(
+    'allows an identical mutation again after a different mutation',
+    () =>
+      Effect.gen(function* () {
+        const probe = newProbe();
+        const kit = yield* openDispatch({
+          tools: {
+            write_file: probeTool(probe, 'write_file', 5),
+            edit_file: probeTool(probe, 'edit_file', 5),
+          },
+          calls: [
+            makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
+            makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
+            makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
+          ],
+        });
 
-  it('allows an identical mutation again after a different mutation', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
-        tools: {
-          write_file: probeTool(probe, 'write_file', 5),
-          edit_file: probeTool(probe, 'edit_file', 5),
-        },
-      },
-      async ({ node }) => {
-        const results = (await runDispatch(node, [
-          makeCall('c1', 'write_file', { path: 'x', content: 'v1' }),
-          makeCall('c2', 'edit_file', { path: 'x', patch: 'p' }),
-          makeCall('c3', 'write_file', { path: 'x', content: 'v1' }),
-        ])) as ExecResult[];
+        const { state } = yield* dispatch(kit);
 
         // The edit changed state, so re-issuing the identical write is a
         // plausible restore — it must execute, not be swallowed as a glitch.
-        assert.equal(
-          countStarts(probe, 'write_file'),
-          2,
-          'post-mutation identical write must run',
-        );
-        assert.equal(results[2]?.result.status, 'executed');
-      },
-    );
-  });
+        expect(countStarts(probe, 'write_file')).toBe(2);
+        expect(deliveredResults(state)[2]?.status).toBe('success');
+        kit.session.dispose();
+      }),
+  );
 
-  it('shares the primary result for side-effect tool duplicates', async () => {
-    const probe = newProbe();
-    await withDispatchHarness(
-      {
+  it.effect('shares the primary result for side-effect tool duplicates', () =>
+    Effect.gen(function* () {
+      const probe = newProbe();
+      const kit = yield* openDispatch({
         tools: { write_file: probeTool(probe, 'write_file', 5) },
-      },
-      async ({ node }) => {
-        const results = (await runDispatch(node, [
+        calls: [
           makeCall('c1', 'write_file', { path: 'a', content: 'x' }),
           makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
-        ])) as ExecResult[];
+        ],
+      });
 
-        assert.equal(
-          countStarts(probe),
-          1,
-          'the side effect must run exactly once',
-        );
-        assert.equal(results[0]?.result.status, 'executed');
-        // Accidental GPT re-emissions get the primary's result, not an error.
-        assertDuplicateInheritsOutput(results);
-        assert.deepEqual(
-          results[1]?.editedFiles,
-          [],
-          'duplicate must not re-track edits',
-        );
-      },
-    );
-  });
+      const { state } = yield* dispatch(kit);
+
+      expect(countStarts(probe)).toBe(1);
+      const delivered = deliveredResults(state);
+      expect(delivered[0]?.status).toBe('success');
+      // Accidental re-emissions get the primary's result, not an error.
+      expect(delivered[1]?.status).toBe('success');
+      expect(delivered[1]?.text).toBe(delivered[0]?.text);
+      kit.session.dispose();
+    }),
+  );
 });

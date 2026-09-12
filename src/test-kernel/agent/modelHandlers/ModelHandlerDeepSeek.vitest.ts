@@ -55,34 +55,6 @@ function supportsForcedToolChoice(supportsReasoning: boolean): boolean {
   }).supportsForcedToolChoice;
 }
 
-function thinkingWorkspace(...blocks: string[]) {
-  return {
-    reasoning: {
-      thinkingBlocks: blocks.map((thinking) => ({
-        type: 'thinking',
-        thinking,
-      })),
-    },
-    resetReasoning() {
-      this.reasoning.thinkingBlocks = [];
-    },
-  };
-}
-
-function executedToolEntry(callId: string, toolName: string, output: string) {
-  return {
-    call: {
-      raw: {
-        id: callId,
-        type: 'function',
-        function: { name: toolName, arguments: '{}' },
-      },
-    },
-    result: { status: 'executed', output },
-    attachments: [],
-  };
-}
-
 /**
  * Send one non-streaming completion through a stubbed Chat Completions client
  * and return the request params it received.
@@ -173,69 +145,6 @@ describe('ModelHandlerDeepSeek.supportsForcedToolChoice', () => {
 });
 
 describe('ModelHandlerDeepSeek tool conversion', () => {
-  it('normalizes DeepSeek cache hit and miss tokens', () => {
-    const usage = createHandler().normalizeUsage(
-      {
-        prompt_tokens: 100,
-        completion_tokens: 20,
-        total_tokens: 120,
-        prompt_cache_hit_tokens: 70,
-        prompt_cache_miss_tokens: 30,
-      },
-      2500,
-    );
-
-    assert.equal(usage.inputTokens, 100);
-    assert.equal(usage.outputTokens, 20);
-    assert.equal(usage.cachedInputTokens, 70);
-    assert.equal(usage.cacheMissInputTokens, 30);
-  });
-
-  it('falls back to DeepSeek cache hit plus miss when prompt_tokens is absent', () => {
-    const usage = createHandler().normalizeUsage(
-      {
-        completion_tokens: 20,
-        total_tokens: 120,
-        prompt_cache_hit_tokens: 70,
-        prompt_cache_miss_tokens: 30,
-      } as any,
-      2500,
-    );
-
-    assert.equal(usage.inputTokens, 100);
-    assert.equal(usage.cachedInputTokens, 70);
-    assert.equal(usage.cacheMissInputTokens, 30);
-  });
-
-  it('maps prompt_tokens_details.cache_write_tokens to cacheCreationTokens', () => {
-    const usage = createHandler().normalizeUsage(
-      {
-        prompt_tokens: 100,
-        completion_tokens: 20,
-        total_tokens: 120,
-        prompt_tokens_details: { cached_tokens: 10, cache_write_tokens: 15 },
-      } as any,
-      2500,
-    );
-
-    assert.equal(usage.cacheCreationTokens, 15);
-    assert.equal(usage.cachedInputTokens, 10);
-  });
-
-  it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
-    const usage = createHandler().normalizeUsage(
-      {
-        prompt_tokens: 100,
-        completion_tokens: 20,
-        total_tokens: 120,
-        prompt_tokens_details: { cached_tokens: 0 },
-      } as any,
-      2500,
-    );
-
-    assert.equal(usage.cacheCreationTokens, undefined);
-  });
-
   it('passes thinking toggle and low effort in OpenAI wire format', async () => {
     const capturedParams = await captureRequestParams(
       createHandler({
@@ -287,44 +196,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     // and DeepSeek's own validateReasoningEffort (xhigh -> max), landing on the
     // 'max' effort its API accepts rather than leaking an invalid value.
     assert.equal(capturedParams.reasoning_effort, 'max');
-  });
-
-  it('passes back content and reasoning_content in tool-call messages', async () => {
-    const messages =
-      await reasoningHandler().createBatchedToolUseFollowUpMessages(
-        [
-          executedToolEntry('call_1', 'first_tool', 'first result'),
-          executedToolEntry('call_2', 'second_tool', 'second result'),
-        ] as any,
-        thinkingWorkspace('Need to call both tools.') as any,
-        '',
-      );
-
-    assert.equal(messages.length, 3);
-    assert.equal(messages[0].role, 'assistant');
-    assert.equal((messages[0] as any).content, '');
-    assert.equal(
-      (messages[0] as any).reasoning_content,
-      'Need to call both tools.',
-    );
-    assert.equal(messages[1].role, 'tool');
-    assert.equal((messages[1] as any).tool_call_id, 'call_1');
-    assert.equal(messages[2].role, 'tool');
-    assert.equal((messages[2] as any).tool_call_id, 'call_2');
-  });
-
-  it('includes empty reasoning_content in tool-call messages when model generated none', async () => {
-    const messages =
-      await reasoningHandler().createBatchedToolUseFollowUpMessages(
-        [executedToolEntry('call_1', 'some_tool', 'result')] as any,
-        thinkingWorkspace() as any,
-        '',
-      );
-
-    assert.equal(messages.length, 2);
-    assert.equal(messages[0].role, 'assistant');
-    // reasoning_content must always be present in thinking mode, even as empty string
-    assert.equal((messages[0] as any).reasoning_content, '');
   });
 
   it('passes back response reasoning_content on final assistant messages', () => {

@@ -3,16 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import {
   xaiCacheDiscountFactor,
   xaiLongContextTier,
   xaiLongContextTierGap,
 } from '@agent/modelHandlers/openai/xaiLongContextPricing';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import { noopTrace, TraceEmitter } from '@agent/trace';
+import type { Model, TurnResult } from '@llm/turn';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-/** The real llm-zoo catalog entry — the config production handlers run on. */
+/** The real llm-zoo catalog entry, the config a production run binds. */
 function catalogXaiConfig(fullName: string): ModelConfig {
   const config = Object.values(MODEL_CONFIGS).find(
     (model) =>
@@ -20,6 +22,59 @@ function catalogXaiConfig(fullName: string): ModelConfig {
   );
   if (!config) throw new Error(`llm-zoo has no xAI model ${fullName}`);
   return config;
+}
+
+/** Pricing reads the binding's config and route; the model is never called. */
+const unusedModel = new Proxy({} as Model, {
+  get(_target, property) {
+    throw new Error(`The pricing fixture has no ${String(property)}.`);
+  },
+});
+
+function xaiBinding(config: ModelConfig): BoundModel {
+  return {
+    modelId: config.name,
+    config,
+    compatibilityKey: 'ModelHandlerXAI',
+    model: unusedModel,
+    origin: {
+      protocol: 'xai-chat',
+      codecVersion: 1,
+      requestedModel: config.fullName,
+      deployment: {
+        endpoint: 'https://api.x.ai/v1',
+        credentialScope: 'xai',
+      },
+    },
+    usageProvider: 'xai',
+    usageRoute: 'api-key',
+    contextWindow: config.contextWindow,
+    supportsVision: false,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: false,
+    supportsForcedToolChoice: true,
+    wireRouteKey: 'xai',
+    modelRetryRouteKey: `xai/${config.name}`,
+    routedOnKimiCode: false,
+    backgroundCapable: false,
+  };
+}
+
+/** One xAI turn's usage as the package observes it, without a settled cost. */
+function xaiUsage(
+  inputTokens: number,
+  outputTokens: number,
+  cachedInputTokens: number | null = null,
+): TurnResult['usage'] {
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cachedInputTokens,
+    reasoningTokens: null,
+    providerUsage: { kind: 'xai', costInUsdTicks: null, serviceTier: null },
+  };
 }
 
 describe('xaiLongContextTier', () => {
@@ -96,43 +151,34 @@ describe('xaiLongContextTierGap', () => {
   });
 });
 
-describe('ModelHandlerXAI cache rebate wiring', () => {
+describe('the run price of an xAI turn', () => {
   it('follows the tier input rate for the rebate past the threshold', () => {
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
+    const priced = priceTurnUsage(
+      xaiBinding(catalogXaiConfig('grok-4.6')),
+      xaiUsage(250_000, 1_000, 40_000),
+      0,
+      noopTrace,
+    );
 
-    expect(
-      handler.normalizeUsage(
-        {
-          prompt_tokens: 250_000,
-          completion_tokens: 1_000,
-          total_tokens: 251_000,
-          prompt_tokens_details: { cached_tokens: 40_000 },
-        },
-        0,
-      ).cost,
-    ).toBeCloseTo((250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.75) / 1e6, 12);
+    expect(priced?.cost).toBeCloseTo(
+      (250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.75) / 1e6,
+      12,
+    );
   });
-});
 
-describe('ModelHandlerXAI tier-gap warning', () => {
   it('warns once when a live long-context xAI model has no documented tier', () => {
-    const warn = vi.fn();
-    const handler = new ModelHandlerXAI(
+    const logger = new TraceEmitter();
+    const warn = vi.spyOn(logger, 'warn');
+    const bound = xaiBinding(
       buildTestModelConfig({
         provider: ModelProvider.XAI,
         fullName: 'grok-9',
         contextWindow: 1_000_000,
       }),
     );
-    handler.setLogger({ warn } as unknown as AgentTrace);
-    const usage = {
-      prompt_tokens: 100,
-      completion_tokens: 10,
-      total_tokens: 110,
-    };
 
-    handler.normalizeUsage(usage, 0);
-    handler.normalizeUsage(usage, 0);
+    priceTurnUsage(bound, xaiUsage(100, 10), 0, logger);
+    priceTurnUsage(bound, xaiUsage(100, 10), 0, logger);
 
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0]?.[0]).toContain('grok-9');
@@ -142,17 +188,14 @@ describe('ModelHandlerXAI tier-gap warning', () => {
   });
 
   it('stays quiet for models the table covers', () => {
-    const warn = vi.fn();
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
-    handler.setLogger({ warn } as unknown as AgentTrace);
+    const logger = new TraceEmitter();
+    const warn = vi.spyOn(logger, 'warn');
 
-    handler.normalizeUsage(
-      {
-        prompt_tokens: 100,
-        completion_tokens: 10,
-        total_tokens: 110,
-      },
+    priceTurnUsage(
+      xaiBinding(catalogXaiConfig('grok-4.6')),
+      xaiUsage(100, 10),
       0,
+      logger,
     );
 
     expect(warn).not.toHaveBeenCalled();

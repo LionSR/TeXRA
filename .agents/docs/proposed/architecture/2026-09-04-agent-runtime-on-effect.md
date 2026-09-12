@@ -16,14 +16,14 @@ Amended 2026-09-04 against substrate contract §6.1 after it adopted the §2.1
 row vocabulary: C1/C2 name the columns (`aggregate_id`, `commit`), C10
 forbids the `run_state` and transcript projections this draft had, C1
 forbids rewriting a row (so no null-on-complete), and C3 was rewritten the
-same day with three owners so that execution-aggregate rows stay byte-exact.
-The two-aggregate shape and its transaction boundaries are in §2.1.
+same day with three owners so that the ledger-private rows stay byte-exact.
+The run-aggregate shape and its transaction boundaries are in §2.1.
 
 ## 0. Recommendation
 
 Move both flow families onto one shape: **each family is a plain Effect loop
 whose durable state is recorded by appending rows to the session event table
-on the execution and stream aggregates**. Provider messages, tool intents and results,
+on the run's one aggregate**. Provider messages, tool intents and results,
 flow coordinates, and a periodic state snapshot are the rows; run state is a
 pure fold of those rows, computed by the same function on resume and in the
 trace viewer, and never persisted as a separate projection (substrate C10).
@@ -189,8 +189,9 @@ Findings all refuters agreed on, regardless of design:
   settle with each call; a turn-end snapshot alone leaves a crash window.
 - Provider messages cannot get a native Zod schema; `ProviderMessage` is
   `z.custom` over external SDK unions by design (`ProviderMessage.ts:25-28`).
-  Rows must carry the handler-built message delta, never the raw SDK
-  response.
+  Rows must carry a natively schematized message delta, never the raw SDK
+  response — which is why PR 1 froze the row vocabulary on `@llm/turn`'s
+  `Message` and the loop calls the llm `Model`.
 - `previous_response_id` chains are handler instance state
   (`ServerChainState.ts`), deliberately not in messages; a resumed handler
   starts with a null anchor today. Single-owner §6 listed them as checkpoint
@@ -212,32 +213,39 @@ Findings all refuters agreed on, regardless of design:
 
 ## 2. The shape
 
+**Amended by the landed PR 1 and the PR 2 manifest.** The row payloads are
+`packages/llm`'s `Message` / `TurnResult` (`@llm/turn`), so the run loop calls
+the llm `Model` (`prepareTurn` / `streamTurn` / `generateTurn`) directly and
+`IModelHandler` never sits behind it; wherever this section says the rows carry
+a handler-built `ProviderMessage[]` delta, the manifest's choice wins. The
+aggregate wording below is likewise the one run model's single `run` aggregate
+(D0), not the first draft's execution/stream pair.
+
 ### 2.1 Rows
 
-Two aggregates per run in the substrate's `event` table, keyed
-`(aggregate_id, seq)` (contract C1). Their storage keys are
-`aggregateId('execution', executionId)` and `aggregateId('stream', streamId)`
-under C2; a logical id alone is never an aggregate key, even if a stream and
-an execution happen to share that id. `RunLedger.load` accepts the logical
-execution id and qualifies its database reads internally. The `commit` column (`INTEGER
+One `run` aggregate per run in the substrate's `event` table, keyed
+`(aggregate_id, seq)` (contract C1). Its storage key is
+`aggregateId('run', runId)` under C2 (one run model §3.1, decision D0); a
+logical id alone is never an aggregate key. `RunLedger.load` accepts the run
+id and qualifies its database reads internally. The `commit` column (`INTEGER
 PRIMARY KEY AUTOINCREMENT`) is the database-wide total order; nothing
-relies on the implicit rowid. The split is the one that exists today as two
-files, made explicit:
+relies on the implicit rowid. What exists today as two files is two classes
+of row on that one aggregate:
 
-- The **stream aggregate** holds what people see: the existing trace rows
+- **Display rows** hold what people see: the existing trace rows
   (`tool.start`/`tool.end`, `response.finalized`, `usage`, stages) and
-  `flow.step`. Every row is scrubbed at publish (C3 applies in full) and
-  lives until the user explicitly deletes the stream under C9. This is today's
+  `flow.step`. Every one is scrubbed at publish (C3 applies in full) and
+  lives until the user explicitly deletes the run under C9. This is today's
   transcript sidecar.
-- The **execution aggregate** holds what the model sees: `model.message`,
-  `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`. Rows
+- **Ledger-private rows** hold what the model sees: `model.message`,
+  `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`. They
   are byte-exact and never scrubbed (C3, second owner). Raw reads belong to
   `RunLedger`, including the input it supplies to the shared display fold;
   the lease gates writes, not reads. No row is ever rewritten and nothing is removed at completion:
   single-owner D8 (#11304, "a checkpoint is deleted only by the user")
   keeps a completed run continuable, and once the view-state
   fold collapses these rows are the only copy of the conversation. The
-  aggregate remains with the stream until explicit user deletion (C9).
+  rows remain with the run until explicit user deletion (C9).
   There is no age-based expiry for completed, cancelled, or failed runs.
   The shared display fold applies redaction before updating view state,
   including the in-process CLI's `SessionViewService.ref`. Transport framers
@@ -247,14 +255,14 @@ files, made explicit:
 Flow row types, all Zod-validated at the boundary, all carried as
 `AgentEvent` arms so the existing trace plumbing, fold, and viewer see them:
 
-| Row                            | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, response ready/processed, `waiting`, `halted`                                                                                                                                                                                           | `{ family, step, round?, turn?, continuation?, outcome? }`; replay coordinates. Listing status comes from the canonical `status` fact, including failures before the runtime starts                                                                                                                                                                                                   |
-| `model.message`                | a completed model response is recorded, or provider-native messages are appended: initial/round prompt, completed tool-follow-up batch, user follow-up, synthetic continuation                                                                                                        | a discriminated payload: `pending-tools` stores normalized response and builder inputs plus ordered extracted calls; `append` stores the handler-built `ProviderMessage[]` delta (z.custom), with `sourceResponseCommit` for a completed tool-follow-up batch. No raw SDK response                                                                                                    |
-| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array after runtime context injection; later loads start here                                                                                                                                                                                                                                                                                                    |
-| `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
-| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, immutable attachment payloads encoded as below, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same cross-aggregate batch, scrubbed at publish                                                          |
-| `flow.snapshot`                | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
+| Row                       | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow.step` (display row) | round begin/end (reflection), turn begin/end, response ready/processed, `waiting`, `halted`                                                                                                                                                                                           | `{ family, step, round?, turn?, continuation?, outcome? }`; replay coordinates. Listing status comes from the canonical `status` fact, including failures before the runtime starts                                                                                                                                                                                                   |
+| `model.message`           | a completed model response is recorded, or provider-native messages are appended: initial/round prompt, completed tool-follow-up batch, user follow-up, synthetic continuation                                                                                                        | a discriminated payload: `pending-tools` stores normalized response and builder inputs plus ordered extracted calls; `append` stores the llm `Message[]` delta (`@llm/turn`), with `sourceResponseCommit` for a completed tool-follow-up batch. No raw SDK response                                                                                                                   |
+| `model.compaction`        | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array after runtime context injection; later loads start here                                                                                                                                                                                                                                                                                                    |
+| `tool.intent`             | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
+| `tool.result`             | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, immutable attachment payloads encoded as below, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same batch, scrubbed at publish                                                                          |
+| `flow.snapshot`           | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
 
 Snapshots omit the accumulated provider message array. `messageBaseCommit`
 references the latest `model.compaction`, or the first `model.message` append if
@@ -280,7 +288,7 @@ mutation exactly once and removes its pending intent. A crash after the row
 commits therefore cannot retain the result while losing work-plan,
 file-interaction, or usage changes. Each settlement is one
 `RunLedger.appendBatch`, backed by C6 `publishBatch`: its `tool.result` and
-terminal stream-aggregate `tool.end` commit together, with the same call and
+terminal display `tool.end` commit together, with the same call and
 attempt identity. The settlement owner constructs both rows; the executor
 must not publish completion earlier from `logAndProcessMediaFiles` or its
 cancellation path. A card can become terminal only when its recovery fact
@@ -376,19 +384,19 @@ content: that per-call recovery record is deliberate. It does not
 justify copying complete message history into snapshots or installing the
 same assistant/tool turn twice in the provider conversation.
 
-Redaction: `redactSecrets` runs at publish on every stream-aggregate row
-(C3, unchanged from today's recorder), and never on execution-aggregate
-rows. There is no projection table (C10): the transcript surfaces and
+Redaction: `redactSecrets` runs at publish on every display row
+(C3, unchanged from today's recorder), and never on a ledger-private
+row. There is no projection table (C10): the transcript surfaces and
 `readCompletedRunConversation` (executions tool, chat export, CLI history)
 read through C7's aggregate queries. After the conversation fold collapses,
-display also consumes the execution aggregate through `RunLedger` and the
-shared redaction boundary. Each aggregate has its own `fromSeq`, and the
+display also consumes the ledger-private rows through `RunLedger` and the
+shared redaction boundary. Each read takes its own `fromSeq`, and the
 50 KB display bound is a fold and render decision, not a stored one. The
 first draft's transcript projector and `transcript_entries` table are
 withdrawn, as is its "null payloads on COMPLETED" rule, since C1 forbids
 rewriting a row.
 
-Why the execution aggregate is exempt from C3, and why that is not a second
+Why the ledger-private rows are exempt from C3, and why that is not a second
 store: `redactSecrets` rewrites JSON string values under token, secret,
 password, and API-key names and any `sk-`, `AIza`, `xai-`, or `Bearer`
 token (`src/logger/redaction.ts:5-14`). Applied to model-visible content it
@@ -398,18 +406,18 @@ the blocks must go back byte-exact), so the provider rejects the resumed
 run; and it changes `tool_use` inputs and tool results the model has
 already reasoned over, so the resumed context is not the one the model saw.
 That is why today's checkpoint is never redacted (single-owner §6). The two
-aggregates do not duplicate a store: the stream aggregate never holds
-provider messages, and the execution aggregate never holds display rows.
+row classes do not duplicate a store: a display row never holds provider
+messages, and a ledger-private row never holds display content.
 One residue, named in C3 as well: until the view-state PRD collapses the
 fold, message text is durable twice (redacted trace rows and
 `model.message`); the collapse deletes the trace copy, after which the
-execution aggregate is the only conversation and the shared display fold
+ledger-private rows are the only conversation and the shared display fold
 redacts it before any view state is exposed, including direct in-process
 subscribers. A secret in a payload remains on disk until explicit user deletion under
 C9; display redaction does not remove it from the recovery data.
 
 Resumability follows single-owner D8: "resumable" is "a `flow.snapshot`
-exists and no live owner holds either run aggregate's current claim",
+exists and no live owner holds the run's current claim",
 independent of the outcome, so a
 completed run can be continued; the fold is the same in every case, and
 the viewer steps any run from the same rows.
@@ -421,8 +429,8 @@ mid-step durable commit that a private working copy loses. In the row
 model a switch calls `RunLedger.appendBatch`, backed by substrate C6's
 `SessionEvents.publishBatch(events)`: all target ownership checks, sequence
 assignments, and inserts share one transaction. It appends the existing
-`run.config` event on the stream aggregate and a `flow.snapshot` with the
-new `modelId` and `modelHandlerCompatibilityKey` on the execution aggregate
+`run.config` display row and a `flow.snapshot` with the
+new `modelId` and `modelHandlerCompatibilityKey`
 as the final row. Neither event is visible unless both commit. Resume order
 is fixed by that: read the latest `flow.snapshot` for the model id and
 compat key, build the handler, then fold, which is what
@@ -446,10 +454,10 @@ version, nothing downstream branching on version.
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ) {
-  const ledger = yield* RunLedger; // append/appendBatch -> Effect<RunState>; load(executionId)
-  const run = yield* RunContext; // executionId, streamId, modelCell, setting, logger, session
+  const ledger = yield* RunLedger; // appendBatch -> Effect<RunState>; load(runId)
+  const run = yield* AgentRun; // runId, model binding, setting, logger, session
   const followUps = yield* FollowUps; // ToolUseSessionLifecycle behind Effect.callback
-  let s = yield* ledger.load(run.executionId); // fold of rows, or null on a fresh run
+  let s = yield* ledger.load(run.runId); // fold of rows, or null on a fresh run
   if (s === null) {
     const initial = yield* prepareSession(start); // no model or tool activity
     s = yield* ledger.appendBatch([
@@ -500,10 +508,9 @@ that fails (oversized or corrupt media in `addMediaToUserMessage`,
 `resumeQueuedToolUse` restores it to the queue on the next resume. The
 sketch's `FollowUps.consume` keeps that: `wait` and `drain` reserve a batch
 without removing it durably. `consume` validates and builds its messages,
-then uses `RunLedger.appendBatch` to commit the `model.message` rows on the
-execution aggregate, `flow.step turn.ready`, and the post-consumption
-queued-follow-ups snapshot on the stream aggregate in the same C6
-transaction. The step makes the consumed batch ready for the next turn.
+then uses `RunLedger.appendBatch` to commit the `model.message` rows,
+`flow.step turn.ready`, and the post-consumption queued-follow-ups snapshot
+in the same C6 transaction. The step makes the consumed batch ready for the next turn.
 Queue mutations, including
 new enqueues, are serialized through that transaction and remove only the
 reserved item ids from the current queue, so a concurrent enqueue is not
@@ -628,30 +635,29 @@ state the loop saw when it appended step `k`, "state at step k" and "resume
 would continue after step k" are the same fact. This is the
 replay-along-the-flow property, obtained without re-executing anything.
 
-Ordering across aggregates: execution-aggregate flow rows and
-stream-aggregate rows have independent `seq` values. `flow.step` shares the
-stream aggregate and is ordered with trace rows by that stream's `seq`. Every
+Ordering: one aggregate is one `seq` space, so `flow.step` is ordered with
+the trace rows it sits between by that run's `seq`, and no reader has two
+sequence spaces to reconcile. Every
 row also carries the database-wide `commit` value, exported under the same
 name, and the scrubber keys on that. `StreamLogEntry.seqNo` is
 renumbered on merge and is explicitly not foldable, so it is not the key.
 `RunLedger.load` uses C7's indexed
-`aggregatesAfterCommit([aggregateId('execution', executionId),
-aggregateId('stream', streamId)], snapshot.commit)` for the
-tail, so it neither confuses the two sequence spaces nor scans unrelated
-runs. A snapshot includes the preceding rows on both aggregates and its
+`aggregatesAfterCommit([aggregateId('run', runId)], snapshot.commit)` for the
+tail, so it does not scan unrelated
+runs. A snapshot includes the preceding rows and its
 explicit non-message state; `appendBatch` resolves any reference to an
 earlier message in the same batch while assigning commits. When a step
 checkpoints new non-message state, its snapshot precedes the `flow.step`
 in that same transaction. The viewer's cut at the step's commit therefore
 includes those fields, and resume folds the step after the snapshot without
-repeating the associated activity. Referenced message history is read separately on
-the execution aggregate, through that snapshot boundary. The viewer sees
+repeating the associated activity. Referenced message history is read
+separately, through that snapshot boundary. The viewer sees
 coordinates, the tool-call graph, and display-redacted state at step `k`;
 the runtime alone receives byte-exact provider content. Both local display
 and exported documents pass through C3's display redaction.
 
-Resume: `runAgent({kind:'resume'})` acquires the current claims for the
-execution and stream aggregates first (C5), then calls `RunLedger.load`.
+Resume: `runAgent({kind:'resume'})` acquires the run's current claim
+first (C5), then calls `RunLedger.load`.
 Claims come from current aggregate state, never the writer on a historical
 event. It restores the recoverable approval bindings below before retiring
 any stale process-local request. The
@@ -737,7 +743,7 @@ approval events in PR 2 (§7 item 3).
 `Context.Service` classes with static layers, `Data.TaggedError` errors, Zod
 payloads, no Effect Schema. Per session root (inside the one-fold PRD 7.3
 `LayerMap`): `Database`, `SessionEvents`, `RunLedger`. Per run, provided at
-the Promise boundary in `executeAgent`: `RunContext`, `ModelInvoker`
+the Promise boundary in `executeAgent`: `AgentRun`, `ModelInvoker`
 (`ModelCell`, `ModelRetryGate`, the auto-retry batch as
 `Effect.retry` with a `Schedule`, the manual approval loop, `prepareRetry`
 rebind), `Tools` (overlay registry plus the `submit_output` terminal tool),
@@ -770,22 +776,22 @@ delete, together with `RunScope.signal`; its two Promise-tier readers
 exit in the same PR rather than keeping the field alive for them.
 
 Child dispatch: native delegation and workflow-script
-`agent()` re-enter `runAgent`; a child has its own stream and execution
-aggregates, independent of its parent's owning lifecycle (C9). The parent's
+`agent()` re-enter `runAgent`; a child has its own run aggregate,
+independent of its parent's owning lifecycle (C9). The parent's
 `tool.result` for the delegation call is the launch acknowledgement for
 detached children and the terminal result for in-band ones, exactly as
 today. R4.6's single activity protocol (the script journal moving into the
 event table, `persistence.ts` deleted) is PR 4 and is in scope.
 
 Detachment after parent deletion is reconstructed from durable parent
-state, not just the live registry. `run.start.parentStreamId` and
-`parentStartCommit` record the declared parent and that parent's particular
-`run.start` commit, captured together when the child is registered. Before
-admission, resume, a new child turn after
+state, not just the live registry. `run.start.parent` is the whole edge
+(`{ id, startCommit }`): the launching run and that parent's particular
+`run.start` commit, stamped by the database inside the child's creation
+transaction. Before admission, resume, a new child turn after
 WAITING, or parent-directed delivery/approval routing, the runtime resolves
-`aggregateId('stream', parentStreamId)` through C7 `aggregateState` and the
+`aggregateId('run', parent.id)` through C7 `aggregateState` and the
 indexed current `run.start` lookup. A missing or closed parent, or a current
-start commit unequal to `parentStartCommit`, gives **no effective parent**;
+start commit unequal to `parent.startCommit`, gives **no effective parent**;
 the matching open parent remains the parent even when it has no live owner.
 Missing view residency or an
 unsubscribed transcript is never evidence of deletion. Snapshot fields and
@@ -804,7 +810,8 @@ approval, or later follow-up can return to a deleted parent merely because
 its immutable launch edge or an old snapshot still names it. The commit
 comparison also prevents a reused logical id from adopting the child after
 retention erased the original parent. It uses the existing non-reused commit
-ordinal, so removing `setParentStream` requires no new detachment event.
+ordinal, so the parent edge needs no mutator and no new detachment event
+beyond the existing `run.detach` row.
 Legacy import retains a parent edge only when the import manifest identifies
 that exact parent run; otherwise the imported child is detached.
 
@@ -988,7 +995,7 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    in-memory ledger layer, one ledger test and one fold test. Nothing
    deleted yet; nothing in production calls it yet.
 2. Both families on the ledger, one PR: `ModelInvoker`, `Tools`,
-   `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`,
+   `FollowUps`, `AgentRun`, `OutputPipeline`, `runToolUse`,
    `runReflection`; `executeAgent` and every resume arm call
    `runtime.runPromiseExit` with the fiber's signal; ~~the importer's
    `flow_<id>.json` to canonical rows/cursor mapping,~~ and the existing
@@ -1057,8 +1064,8 @@ branch.
   already reasoned over, so the resumed context diverges from the one the
   model actually saw; and (c) is exactly why today's checkpoint is never
   redacted (single-owner §6). Settled with the substrate owner on
-  2026-09-04: C3 now has three owners (scrub at publish for stream rows,
-  error and approval payloads; byte-exact execution-aggregate rows; display
+  2026-09-04: C3 now has three owners (scrub at publish for display rows,
+  error and approval payloads; byte-exact ledger-private rows; display
   redaction in the shared display fold before exposing view state, and at
   every transport framer and export). This document's
   "null on COMPLETED" and "removed at completion" were withdrawn because
@@ -1067,8 +1074,8 @@ branch.
   conversation. Those bytes remain until explicit user deletion under C9.
 - One-fold PRD line 102: reversed by the owner's ruling; its `fold(view,
 event)` gains the `flow.step` arm and its §6 durable set gains six rows.
-- Single-owner §6: its single door at admission stays for the stream
-  aggregate; for the execution aggregate display redaction precedes every
+- Single-owner §6: its single door at admission stays for display
+  rows; for ledger-private rows display redaction precedes every
   view-state update, including in-process CLI views, as well as transport
   and export (C3, third owner); its "checkpoint content" list is false
   of the table, by design. Single-owner D8 is upheld and extended: nothing
@@ -1110,7 +1117,7 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 - Raw provider content lives in the database until explicit user deletion
   (§7 item 2). Any new reader of the `event` table that bypasses the fold is a
   redaction leak. The `Database` layer exposes the five
-  execution-aggregate row types only through `RunLedger`, so the raw query is
+  ledger-private row types only through `RunLedger`, so the raw query is
   unconstructible elsewhere and no test is needed. Otherwise the
   architecture test that fails persistence writes outside the database
   (substrate Stage 1) needs a sibling that fails raw reads of those rows

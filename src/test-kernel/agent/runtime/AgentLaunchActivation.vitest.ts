@@ -268,7 +268,7 @@ describe('native agent launch activation', () => {
       const resume = createToolUseResumeData({
         runId,
         agentConfig: config,
-        shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
+        modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
       });
       mocks.retrieveSessionResumeData.mockReturnValueOnce(
         Effect.succeed(resume),

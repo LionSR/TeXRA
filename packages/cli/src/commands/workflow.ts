@@ -7,16 +7,14 @@ import {
   getRunRecords,
   type ResumabilityDecision,
 } from '@agent/storage';
-import {
-  isTerminalPersistedCompileRejection,
-  type AgentConfigPayload,
-} from '@agent/runtime';
+import { type AgentConfigPayload } from '@agent/runtime';
 import { AppState } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
+import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
 import {
   CliUsageError,
@@ -228,12 +226,17 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const canAdvertiseInterruptedRun = (
       resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
     ): boolean => {
-      const shared = resumability.flowRecord.shared;
-      const lastError =
-        typeof shared === 'object' && shared !== null
-          ? (shared as Record<string, unknown>).lastError
-          : undefined;
-      return lastError == null && !isTerminalPersistedCompileRejection(shared);
+      // Only a reflection run reaches here — this is the workflow command.
+      // The two facts the hint turns on sit in different halves of the
+      // snapshot: the model failure is runtime-owned (`runtime.lastError`,
+      // the single durable location, written with the waiting/deny
+      // snapshots), the compile rejection is family state.
+      const { snapshot } = resumability;
+      if (snapshot.family !== 'reflection') return false;
+      return (
+        snapshot.runtime.lastError == null &&
+        !snapshotHoldsTerminalCompileRejection(snapshot)
+      );
     };
     const writeResumeHint = (
       runId: RunId,

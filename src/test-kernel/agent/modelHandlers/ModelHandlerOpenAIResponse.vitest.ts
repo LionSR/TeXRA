@@ -15,10 +15,7 @@ import { APIUserAbortError, OpenAIError } from 'openai';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
-import type {
-  ModelCredentialRoute,
-  OpenAIResponseToolCall,
-} from '@agent/types/ModelHandlerContracts';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
   attachContextWindowError,
@@ -40,7 +37,6 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import type {
   ResponseCreateParamsBase,
   ResponseInputItem,
-  ResponseUsage,
 } from 'openai/resources/responses/responses';
 import type OpenAI from 'openai';
 
@@ -347,50 +343,6 @@ function createRetrieveThrowingClient(error: unknown): OpenAI {
     },
   } as unknown as OpenAI;
 }
-
-describe('ModelHandlerOpenAIResponse auxiliary requests', () => {
-  it('restores SDK retries for tool-result uploads outside the model gate', async () => {
-    const handler = createHandler({ openRouterOnly: false });
-    const create = vi.fn(async () => ({ id: 'file-1' }));
-    const uploadClient = { files: { create } };
-    const withOptions = vi.fn(() => uploadClient);
-    const client = { withOptions } as unknown as OpenAI;
-    const call: OpenAIResponseToolCall = {
-      provider: 'openai-response',
-      callId: 'call-1',
-      name: 'read_file',
-      input: {},
-      raw: {
-        type: 'function_call',
-        call_id: 'call-1',
-        name: 'read_file',
-        arguments: '{}',
-      } as OpenAIResponseToolCall['raw'],
-    };
-
-    await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call,
-          result: { status: 'executed', output: 'done' },
-          attachments: [
-            {
-              path: 'chart.png',
-              mimeType: 'image/png',
-              bytes: new Uint8Array([1, 2, 3]),
-            },
-          ],
-        },
-      ],
-      undefined,
-      undefined,
-      client,
-    );
-
-    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
-    assert.equal(create.mock.calls.length, 1);
-  });
-});
 
 function createMessages(count: number): ResponseInputItem[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -1448,40 +1400,6 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
     );
 
     assert.equal(result.text, expected);
-  });
-});
-
-describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
-  it('maps cache writes and derives usage attribution from configuration', () => {
-    const handler = createHandler({ provider: ModelProvider.META });
-    const usage: ResponseUsage = {
-      input_tokens: 100,
-      output_tokens: 20,
-      total_tokens: 120,
-      input_tokens_details: { cached_tokens: 10, cache_write_tokens: 15 },
-      output_tokens_details: { reasoning_tokens: 0 },
-    } as ResponseUsage;
-
-    const normalized = handler.normalizeUsage(usage, 0);
-
-    assert.equal(normalized.provider, 'meta');
-    assert.equal(normalized.cacheCreationTokens, 15);
-    assert.equal(normalized.cachedInputTokens, 10);
-  });
-
-  it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
-    const handler = createHandler();
-    const usage: ResponseUsage = {
-      input_tokens: 100,
-      output_tokens: 20,
-      total_tokens: 120,
-      input_tokens_details: { cached_tokens: 0 },
-      output_tokens_details: { reasoning_tokens: 0 },
-    } as ResponseUsage;
-
-    const normalized = handler.normalizeUsage(usage, 0);
-
-    assert.equal(normalized.cacheCreationTokens, undefined);
   });
 });
 

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import { recordCycleMetrics } from '@agent/core/state/AgentState';
-import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
+  type AgentRunStateSnapshot,
+  type NormalizedUsage,
   type RunId,
 } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -21,6 +21,29 @@ import { testModelInfo } from '../runtime/launchContextTestUtils';
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/**
+ * One round's usage folded into the snapshot the monitor reads, the way the
+ * loop's fold sums `response.usage` rows: totals accumulate, `latestUsage`
+ * is the round's own figure (null for a usage-less continuation).
+ */
+function recordRound(
+  state: AgentRunStateSnapshot,
+  responseTimeMs: number,
+  usage: NormalizedUsage | null,
+): void {
+  const acc = state.usageAccumulator;
+  if (usage) {
+    if (acc.totals.firstInputTokens === 0) {
+      acc.totals.firstInputTokens = usage.inputTokens;
+    }
+    acc.totals.totalInputTokens += usage.inputTokens;
+    acc.totals.totalOutputTokens += usage.outputTokens;
+    acc.totals.totalCost += usage.cost;
+  }
+  acc.latestUsage = usage;
+  state.totalResponseTimeMs += responseTimeMs;
+}
 
 type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
@@ -72,7 +95,7 @@ describe('UsageMonitor', () => {
   it('forwards the ChatGPT subscription route to session usage facts', async () => {
     await withMonitor(async ({ monitor, events }) => {
       const state = AgentRunStateSnapshotSchema.parse({});
-      recordNormalizedUsage(state.usageAccumulator, {
+      recordRound(state, 50, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0,
@@ -104,9 +127,9 @@ describe('UsageMonitor', () => {
         responseTimeMs: 50,
         provider: 'openai' as const,
       };
-      recordCycleMetrics(state, 50, round);
+      recordRound(state, 50, round);
       await monitor.recordUsage(state);
-      recordCycleMetrics(state, 50, round);
+      recordRound(state, 50, round);
       await monitor.recordUsage(state);
 
       // The session row is a snapshot of the run's spend (the fold replaces
@@ -136,10 +159,10 @@ describe('UsageMonitor', () => {
         responseTimeMs: 50,
         provider: 'openai' as const,
       };
-      recordCycleMetrics(state, 50, usage);
+      recordRound(state, 50, usage);
       await monitor.recordUsage(state);
 
-      recordCycleMetrics(state, 25, null);
+      recordRound(state, 25, null);
       expect(state.usageAccumulator.latestUsage).toBeNull();
       await monitor.recordUsage(state);
 
@@ -166,7 +189,7 @@ describe('UsageMonitor', () => {
       );
 
       const state = AgentRunStateSnapshotSchema.parse({});
-      recordCycleMetrics(state, 50, {
+      recordRound(state, 50, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0.01,
@@ -196,7 +219,7 @@ describe('UsageMonitor', () => {
         'other-provider-model',
       );
       const state = AgentRunStateSnapshotSchema.parse({});
-      recordCycleMetrics(state, 50, {
+      recordRound(state, 50, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0.01,

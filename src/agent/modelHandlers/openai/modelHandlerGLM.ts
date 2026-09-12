@@ -35,16 +35,6 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
       : super.standardPricingConfig();
   }
 
-  /**
-   * GLM keeps reasoning continuity without batching parallel tool results into
-   * one follow-up message. See the base getter's doc comment (#7101 triage)
-   * for why this can't fold into a single `supportsReasoning` read: GLM's
-   * reasoning-capable variants (`glm45`, `glm52`) still don't batch.
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return false;
-  }
-
   private normalizeReasoningEffort(effort: ReasoningEffort): ReasoningEffort {
     const supported = this.capabilities.supportedReasoningEfforts;
     return supported?.length

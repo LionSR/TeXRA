@@ -49,5 +49,3 @@ const ProviderMessageSchema = z.custom<ProviderMessage>(
     error: 'messages must contain provider message objects',
   },
 );
-
-export const ProviderMessageArraySchema = z.array(ProviderMessageSchema);

@@ -21,7 +21,7 @@ import {
 
 import { LaunchSurfaceSchema } from './surface';
 
-const streamScoped = { runId: RunIdSchema };
+const runScoped = { runId: RunIdSchema };
 
 export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -30,30 +30,30 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     line: z.int().positive().nullish(),
   }),
   z.object({ kind: z.literal('openLabel'), label: z.string() }),
-  z.object({ kind: z.literal('openTaskStorage'), ...streamScoped }),
-  z.object({ kind: z.literal('exportTranscript'), ...streamScoped }),
-  z.object({ kind: z.literal('restoreIntoLauncher'), ...streamScoped }),
+  z.object({ kind: z.literal('openTaskStorage'), ...runScoped }),
+  z.object({ kind: z.literal('exportTranscript'), ...runScoped }),
+  z.object({ kind: z.literal('restoreIntoLauncher'), ...runScoped }),
   /** Relaunch a settled run: a workflow through the host's launcher with
    *  its run id, a tool-use run through the resume port. */
-  z.object({ kind: z.literal('resume'), ...streamScoped }),
+  z.object({ kind: z.literal('resume'), ...runScoped }),
   /** A fresh run from a settled run's setup. */
-  z.object({ kind: z.literal('runNew'), ...streamScoped }),
+  z.object({ kind: z.literal('runNew'), ...runScoped }),
   /** The latexFixer follow-up over a workflow run's compile failures. */
-  z.object({ kind: z.literal('runCompileFixer'), ...streamScoped }),
+  z.object({ kind: z.literal('runCompileFixer'), ...runScoped }),
   /** A retry on the user's own API key: the host stores one, then settles
    *  the pending retry on personal credentials. */
   z.object({
     kind: z.literal('useOwnApiKey'),
-    ...streamScoped,
+    ...runScoped,
     requestId: z.string().min(1),
     model: z.string().nullish(),
     provider: z.string().nullish(),
     exhaustionReason: z.string().nullish(),
     kimiCodeRoutedOnFailure: z.boolean().nullish(),
   }),
-  z.object({ kind: z.literal('latexdiff'), ...streamScoped }),
-  z.object({ kind: z.literal('pack'), ...streamScoped }),
-  z.object({ kind: z.literal('clean'), ...streamScoped }),
+  z.object({ kind: z.literal('latexdiff'), ...runScoped }),
+  z.object({ kind: z.literal('pack'), ...runScoped }),
+  z.object({ kind: z.literal('clean'), ...runScoped }),
   /** The Tools sheet's LaTeXDiffs verbs over the launcher's base and
    *  edited files and its commit, as the sheet's surface holds them. */
   z.object({
@@ -153,7 +153,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   /** An output file's verbs on a workflow run's file list. */
   z.object({
     kind: z.literal('fileAction'),
-    ...streamScoped,
+    ...runScoped,
     action: z.enum([
       'compareOriginal',
       'comparePrevious',

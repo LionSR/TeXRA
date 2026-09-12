@@ -1,8 +1,5 @@
 // Node imports
 import { strict as assert } from 'node:assert';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 
 // Third-party imports
 import {
@@ -23,7 +20,6 @@ import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
-import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   enforceCacheControlLimit,
@@ -33,7 +29,6 @@ import {
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
-import type { ToolFileAttachment } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -44,11 +39,10 @@ import type {
   ContentBlock,
   ContentBlockParam,
   MessageParam,
-  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-// Real node fs is required because the output-initialization tests write and
-// read files in os.tmpdir().
+// Real node fs is required because `pathToLocation` resolves through the
+// platform filesystem.
 setupPlatform({}, { fs: nodeFilesystem });
 
 afterEach(() => {
@@ -159,150 +153,6 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
 function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
   return (block as { cache_control?: unknown } | undefined)?.cache_control;
 }
-
-describe('ModelHandlerAnthropic.shouldContinue', () => {
-  it('does not treat context-window recovery as an ordinary continuation', () => {
-    const handler = createAnthropicHandler();
-    handler.setLogger({ ...noopTrace });
-
-    assert.equal(
-      handler.shouldContinue(
-        ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
-        'partial response',
-      ),
-      false,
-    );
-  });
-});
-
-describe('ModelHandlerAnthropic cache pricing', () => {
-  it.each([
-    {
-      name: 'prices cache creation by TTL breakdown when Anthropic reports it',
-      cacheCreation: {
-        ephemeral_5m_input_tokens: 10,
-        ephemeral_1h_input_tokens: 20,
-      },
-      expected:
-        (1000 * 3) / 1e6 +
-        (100 * 15) / 1e6 +
-        (10 * 3 * 1.25) / 1e6 +
-        (20 * 3 * 2) / 1e6,
-    },
-    {
-      name: 'falls back to 5-minute pricing when the TTL breakdown is absent',
-      cacheCreation: {},
-      expected: (1000 * 3) / 1e6 + (100 * 15) / 1e6 + (30 * 3 * 1.25) / 1e6,
-    },
-  ])('$name', ({ cacheCreation, expected }) => {
-    const handler = new ModelHandlerAnthropic(
-      buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
-        inputPrice: 3,
-        outputPrice: 15,
-      }),
-    );
-    const { cost: price } = handler.normalizeUsage(
-      {
-        input_tokens: 1000,
-        output_tokens: 100,
-        cache_read_input_tokens: 0,
-        cache_creation_input_tokens: 30,
-        cache_creation: cacheCreation,
-        server_tool_use: null,
-        service_tier: 'standard',
-      } as any,
-      0,
-    );
-
-    expect(price).toBeCloseTo(expected, 12);
-  });
-});
-
-/** A minimal direct tool call for follow-up message tests. */
-function createAnthropicToolCall(callId: string): AnthropicToolCall {
-  return {
-    provider: 'anthropic',
-    callId,
-    name: 'read_file',
-    input: {},
-    raw: {
-      id: callId,
-      type: 'tool_use',
-      caller: { type: 'direct' },
-      name: 'read_file',
-      input: {},
-    },
-  };
-}
-
-/** A Files API client reached via withOptions, plus its upload spy. */
-function createUploadClient(fileId: string): {
-  upload: ReturnType<typeof vi.fn>;
-  withOptions: ReturnType<typeof vi.fn>;
-} {
-  const upload = vi.fn(async () => ({ id: fileId }));
-  const uploadClient = { beta: { files: { upload } } };
-  const withOptions = vi.fn(() => uploadClient);
-  return { upload, withOptions };
-}
-
-function chartAttachment(): ToolFileAttachment {
-  return {
-    path: 'chart.png',
-    mimeType: 'image/png',
-    bytes: new Uint8Array([1, 2, 3]),
-  };
-}
-
-describe('ModelHandlerAnthropic auxiliary requests', () => {
-  it('restores SDK retries for tool-result uploads outside the model gate', async () => {
-    const handler = createAnthropicHandler();
-    handler.setLogger({ ...noopTrace });
-    const { upload, withOptions } = createUploadClient('file-1');
-
-    await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: createAnthropicToolCall('call-1'),
-          result: { status: 'executed', output: 'done' },
-          attachments: [chartAttachment()],
-        },
-      ],
-      undefined,
-      undefined,
-      { withOptions } as never,
-    );
-
-    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
-    assert.equal(upload.mock.calls.length, 1);
-  });
-
-  it('uses the run-bound client for batched tool-result uploads', async () => {
-    const handler = createAnthropicHandler();
-    handler.setLogger({ ...noopTrace });
-    const { upload, withOptions } = createUploadClient('file-batched');
-    const getClient = vi
-      .spyOn(handler, 'getClient')
-      .mockRejectedValue(new Error('must not select another credential route'));
-
-    await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: createAnthropicToolCall('call-batched'),
-          result: { status: 'executed', output: 'done' },
-          attachments: [chartAttachment()],
-        },
-      ],
-      undefined,
-      undefined,
-      { withOptions } as never,
-    );
-
-    assert.equal(getClient.mock.calls.length, 0);
-    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
-    assert.equal(upload.mock.calls.length, 1);
-  });
-});
 
 describe('ModelHandlerAnthropic forced tool choice', () => {
   it('maps finalTool to a named Anthropic tool choice', async () => {
@@ -566,44 +416,6 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it.each([
-    {
-      method: 'createRoundMessages',
-      text: 'follow up text',
-      emptyPattern: /non-empty content block/i,
-    },
-    {
-      method: 'createUserFollowUpMessages',
-      text: 'another follow up',
-      emptyPattern: /non-empty user text/i,
-    },
-  ] as const)(
-    'trims $method text and rejects empty content',
-    async ({ method, text, emptyPattern }) => {
-      const handler = createAnthropicHandler();
-      const baseMessages = await handler.initializeMessages(
-        'prefix',
-        'request',
-      );
-
-      const updated = await handler[method]([...baseMessages], `  ${text}  `);
-      const followUp = updated.at(-1)!;
-      const textBlock = assertSingleTextBlock(
-        followUp.content as ContentBlock[],
-      );
-      assert.equal(textBlock.text, text);
-
-      await assert.rejects(
-        handler[method]([...baseMessages], '   '),
-        (err: unknown) => {
-          assert.ok(err instanceof Error);
-          assert.match(err.message, emptyPattern);
-          return true;
-        },
-      );
-    },
-  );
-
   it('does not set block-level cache markers on messages (top-level automatic caching handles this)', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages(
@@ -617,113 +429,6 @@ describe('ModelHandlerAnthropic message guards', () => {
       getCacheMarker(initialBlock),
       undefined,
       'initial message blocks should not include block-level cache markers',
-    );
-
-    const updated = await handler.createRoundMessages(
-      [...baseMessages],
-      'next follow up',
-    );
-    const followUp = updated.at(-1)!;
-    const followUpContent = followUp.content as ContentBlockParam[];
-    const followUpBlock = followUpContent.at(-1);
-
-    assert.equal(
-      getCacheMarker(followUpBlock),
-      undefined,
-      'follow-up message blocks should not include block-level cache markers',
-    );
-  });
-
-  it('does not set block-level cache markers on tool result follow-ups', async () => {
-    const handler = createAnthropicHandler();
-    const call: ToolUseBlock = {
-      id: 'tool-call',
-      type: 'tool_use',
-      name: 'demo',
-      input: {},
-    } as ToolUseBlock;
-
-    const providerCall = {
-      provider: 'anthropic',
-      callId: call.id,
-      name: call.name,
-      input: call.input,
-      raw: call,
-    } as const;
-
-    const [, resultMsg] = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: providerCall,
-          result: { status: 'executed', output: 'ok' },
-          attachments: [],
-        },
-      ],
-      undefined,
-      undefined,
-      NO_UPLOAD_CLIENT,
-    );
-
-    const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
-    assert.equal(
-      getCacheMarker(toolResultBlock),
-      undefined,
-      'tool result block should not include block-level cache markers (top-level automatic caching handles this)',
-    );
-  });
-
-  it('batches parallel tool results into one assistant and one user message', async () => {
-    const handler = createAnthropicHandler();
-    assert.equal(handler.requiresBatchedParallelToolResults, true);
-
-    const providerCall = (id: string) =>
-      ({
-        provider: 'anthropic',
-        callId: id,
-        name: 'demo',
-        input: {},
-        raw: { id, type: 'tool_use', name: 'demo', input: {} } as ToolUseBlock,
-      }) as const;
-
-    const messages = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: providerCall('call-1'),
-          result: { status: 'executed', output: 'ok-1' },
-          attachments: [],
-        },
-        {
-          call: providerCall('call-2'),
-          result: { status: 'error', error: 'boom' },
-          attachments: [],
-        },
-      ],
-      undefined,
-      'analysis',
-      NO_UPLOAD_CLIENT,
-    );
-
-    assert.equal(messages.length, 2);
-    const [callMsg, resultMsg] = messages;
-    assert.equal(callMsg.role, 'assistant');
-    const callContent = callMsg.content as ContentBlockParam[];
-    assert.deepEqual(
-      callContent.map((block) => block.type),
-      ['text', 'tool_use', 'tool_use'],
-    );
-
-    assert.equal(resultMsg.role, 'user');
-    const resultContent = resultMsg.content as ContentBlockParam[];
-    assert.deepEqual(
-      resultContent.map((block) =>
-        block.type === 'tool_result'
-          ? [block.tool_use_id, block.is_error]
-          : block.type,
-      ),
-      [
-        ['call-1', undefined],
-        ['call-2', true],
-      ],
     );
   });
 
@@ -1343,6 +1048,18 @@ function createForcedCompactionHandler(
   });
 }
 
+/**
+ * The user turn the reflection loop appends when a response was cut off. It
+ * lives in the loop now, so the handler tests only supply the resulting
+ * message shape.
+ */
+function appendContinuation(messages: MessageParam[]): void {
+  messages.push({
+    role: 'user',
+    content: [{ type: 'text', text: 'Continue from where you left off.' }],
+  });
+}
+
 describe('ModelHandlerAnthropic forced compaction', () => {
   it('round-trips forced compaction state into the next workflow invocation', async () => {
     const handler = createAnthropicHandler({
@@ -1407,7 +1124,10 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       first.response,
     );
     handler.requestCompaction();
-    handler.addContinueMessage(messages, workspace);
+    // The continuation prompt is the reflection loop's message now
+    // (src/agent/runtime/loop/reflection.ts); the handler only has to carry
+    // whatever user turn trails the compacted assistant message.
+    appendContinuation(messages);
 
     const second = await handler.createResponse({
       client,
@@ -1424,7 +1144,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       workspace,
       second.response,
     );
-    handler.addContinueMessage(messages, workspace);
+    appendContinuation(messages);
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1452,7 +1172,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
     assert.equal(nextMessages[1].role, 'user');
     assert.match(
       (nextMessages[1].content as Array<{ text?: string }>)[0]?.text ?? '',
-      /continue responding exactly from where you left/i,
+      /continue from where you left off/i,
     );
     assert.equal(JSON.stringify(nextMessages).includes('partial'), false);
   });
@@ -2383,60 +2103,6 @@ describe('ModelHandlerAnthropic usage and server-side compaction reporting', () 
     );
   });
 
-  it('normalizes Anthropic usage using per-iteration totals when available', () => {
-    const handler = createAnthropicHandler();
-    const usage = handler.normalizeUsage(
-      {
-        input_tokens: 111,
-        output_tokens: 22,
-        cache_read_input_tokens: 3,
-        cache_creation_input_tokens: 4,
-        server_tool_use: null,
-        service_tier: 'standard',
-        iterations: [
-          {
-            type: 'compaction',
-            input_tokens: 1000,
-            output_tokens: 100,
-            cache_read_input_tokens: 90,
-            cache_creation_input_tokens: 40,
-            cache_creation: null,
-          },
-          {
-            type: 'message',
-            input_tokens: 200,
-            output_tokens: 80,
-            cache_read_input_tokens: 10,
-            cache_creation_input_tokens: 5,
-            cache_creation: null,
-          },
-        ],
-      } as any,
-      1000,
-    );
-
-    assert.equal(
-      usage.inputTokens,
-      1345,
-      'input tokens should sum all iteration input and cache tokens',
-    );
-    assert.equal(
-      usage.outputTokens,
-      180,
-      'output tokens should sum all iteration outputs',
-    );
-    assert.equal(
-      usage.cachedInputTokens,
-      100,
-      'cached read tokens should come from iteration totals',
-    );
-    assert.equal(
-      usage.cacheCreationTokens,
-      45,
-      'cache creation tokens should come from iteration totals',
-    );
-  });
-
   it('logs the summary and statistics from the last usable compaction boundary', () => {
     const events: Array<{ message: string; data: unknown }> = [];
     const logger = {
@@ -2516,55 +2182,6 @@ describe('ModelHandlerAnthropic usage and server-side compaction reporting', () 
     assert.equal(eventData.tokensBefore, 93000);
     assert.equal(eventData.tokensAfter, 25600);
     assert.equal(eventData.summary, '<summary>latest</summary>');
-  });
-});
-
-/**
- * Creates a fresh temp directory with an `r0/output.xml` path for output
- * initialization tests, invokes `run` with that path, and removes the
- * directory afterward regardless of outcome.
- */
-async function withTempOutputPath(
-  prefix: string,
-  run: (outputPath: string) => Promise<void>,
-): Promise<void> {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  const outputPath = path.join(tempDir, 'r0', 'output.xml');
-  try {
-    await run(outputPath);
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-}
-
-describe('ModelHandlerAnthropic output initialization', () => {
-  it('leaves messages untouched when no output file exists', async () => {
-    await withTempOutputPath('anthropic-output-init-', async (outputPath) => {
-      const handler = createAnthropicHandler({
-        supportsAssistantPrefill: true,
-      });
-      stubHandlerForTest(handler);
-
-      const userMessage: MessageParam = {
-        role: 'user',
-        content: [{ type: 'text', text: 'revise the document' }],
-      };
-      const messages: MessageParam[] = [userMessage];
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          messages,
-          workspaceState,
-          pathToLocation(outputPath),
-        );
-
-      assert.equal(isComplete, false);
-      assert.equal(fs.existsSync(outputPath), false);
-      assert.equal(workspaceState.assembly.accumulatedOutput, '');
-      assert.equal(updatedMessages.length, 1);
-      assert.equal(updatedMessages.at(-1)?.role, 'user');
-    });
   });
 });
 

@@ -264,6 +264,10 @@ export class UsageMonitor {
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usage.usageRoute,
+        // The relay's request column is still named `streamId`; this is the
+        // last production spelling of the word outside the token-stream
+        // sense, and it stays until the relay column is renamed (a
+        // server-side change, not part of this release).
         streamId: this.context.runId,
       });
     } catch (error) {

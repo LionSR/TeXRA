@@ -1,25 +1,25 @@
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
-import type { AgentConfig } from '@agent/runtime';
-import { flowKey } from '@agent/node/persistedFlow';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import {
   isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { createProcessSession } from '@test/support/sessionTestUtils';
+import {
+  aggregateId,
+  RUN_OUTCOME,
+  type FlowSnapshotPayload,
+  type RunId,
+} from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
-
-function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
-  return Effect.runPromise(
-    isCliRunResumableEffect(facts, createProcessSession()),
-  );
-}
 
 const config = {
   agent: 'correct',
@@ -27,7 +27,7 @@ const config = {
   model: 'deepseekT',
 } as AgentConfig;
 
-/** A failed workflow row: the one shape whose checkpoint is still read. */
+/** A failed workflow row: the one shape whose snapshot is still read. */
 function listingFacts(
   runId: RunId,
   overrides: Partial<CliRunResumabilityFacts> = {},
@@ -49,37 +49,85 @@ function mintRunId(): RunId {
   return `beef${runCounter.toString(16).padStart(2, '0')}` as RunId;
 }
 
-const TERMINAL_REJECTION = {
+type ReflectionState = Extract<
+  FlowSnapshotPayload,
+  { family: 'reflection' }
+>['state'];
+
+/** The reflection snapshot a round writes, minus the fields a case sets. */
+function reflectionSnapshot(
+  state: Partial<ReflectionState>,
+): FlowSnapshotPayload {
+  return {
+    family: 'reflection',
+    runtime: {
+      phase: 'initial',
+      round: 0,
+      turn: 0,
+      continuationIndex: 0,
+      modelId: config.model,
+      modelHandlerCompatibilityKey: null,
+      lastError: null,
+      pendingRetry: null,
+    },
+    references: { pendingIntents: [], pendingResponse: null },
+    state: {
+      currentRound: 0,
+      totalRounds: 4,
+      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+      outputLocation: null,
+      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
+      ...state,
+    },
+  };
+}
+
+/** A round that ended on a rejection with no round left to clear it. */
+const TERMINAL_REJECTION: Partial<ReflectionState> = {
   currentRound: 1,
   totalRounds: 2,
   unresolvedCompileRejection: true,
 };
 
-async function writeFlowRecord(
-  runId: RunId,
-  shared: Record<string, unknown>,
-): Promise<void> {
-  await getRunStore(runId).write(flowKey(runId), {
-    shared,
-    cursor: { nextNodeId: 'start' },
-  });
-}
-
-afterEach(async () => {
-  clearStoreCache();
-  await StorageFS.delete('executions', { recursive: true }).catch(
-    () => undefined,
-  );
-});
-
 describe('CLI listing resumability', () => {
-  it.each([['no checkpoint file', { checkpointPresent: false }]])(
+  let session: SessionHandle;
+  beforeEach(() => {
+    session = createProcessSession();
+  });
+
+  function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
+    return Effect.runPromise(isCliRunResumableEffect(facts, session));
+  }
+
+  /** Open the run aggregate the way a reflection round does. */
+  async function writeSnapshot(
+    runId: RunId,
+    state: Partial<ReflectionState>,
+  ): Promise<void> {
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    await Effect.runPromise(session.ledger.acquire(runId));
+    await Effect.runPromise(
+      session.ledger.appendBatch(runId, null, [
+        {
+          type: 'flow.snapshot',
+          aggregateId: aggregateId('run', runId),
+          payload: reflectionSnapshot(state),
+        },
+      ]),
+    );
+  }
+
+  it.each([['no snapshot', { checkpointPresent: false }]])(
     'does not advertise a row with %s, without reading its state',
     async (_description, overrides) => {
       const runId = mintRunId();
-      // A continuable record is on disk, so reading it would answer `true`.
-      // Only the free fact can produce the `false` asserted below.
-      await writeFlowRecord(runId, { currentRound: 0, totalRounds: 4 });
+      // A continuable snapshot is on the aggregate, so reading it would answer
+      // `true`. Only the free fact can produce the `false` asserted below.
+      await writeSnapshot(runId, { currentRound: 0, totalRounds: 4 });
 
       await expect(
         isCliRunResumable(listingFacts(runId, overrides)),
@@ -94,12 +142,12 @@ describe('CLI listing resumability', () => {
     ],
     ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
   ])(
-    'advertises %s without parsing its checkpoint',
+    'advertises %s without reading its snapshot',
     async (_description, overrides) => {
       const runId = mintRunId();
-      // A terminal rejection is on disk, so a parse would answer `false`.
-      // Only the short-circuit can produce the `true` asserted below.
-      await writeFlowRecord(runId, TERMINAL_REJECTION);
+      // A terminal rejection is on the aggregate, so a read would answer
+      // `false`. Only the short-circuit can produce the `true` asserted below.
+      await writeSnapshot(runId, TERMINAL_REJECTION);
 
       await expect(
         isCliRunResumable(listingFacts(runId, overrides)),
@@ -107,23 +155,10 @@ describe('CLI listing resumability', () => {
     },
   );
 
-  it.each([
-    ['the unresolved rejection marker', TERMINAL_REJECTION],
-    [
-      'legacy compile failure context',
-      {
-        currentRound: 1,
-        totalRounds: 2,
-        compileFailureContext: 'The generated document did not compile.',
-      },
-    ],
-  ])(
-    'does not advertise a failed workflow with terminal %s as resumable',
-    async (_description, shared) => {
-      const runId = mintRunId();
-      await writeFlowRecord(runId, shared);
+  it('does not advertise a failed workflow with a terminal rejection', async () => {
+    const runId = mintRunId();
+    await writeSnapshot(runId, TERMINAL_REJECTION);
 
-      await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
-    },
-  );
+    await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
+  });
 });

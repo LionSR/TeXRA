@@ -512,6 +512,12 @@
       "name": "formatDoctorText"
     },
     {
+      "file": "packages/cli/src/runtime/executeCli.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "executeCliRequest"
+    },
+    {
       "file": "packages/cli/src/runtime/initPlatform.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -546,12 +552,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resolvePagerCommand"
-    },
-    {
-      "file": "packages/cli/src/runtime/executeCli.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "executeCliRequest"
     },
     {
       "file": "packages/cli/src/runtime/supabaseAuthDeviceCode.ts",
@@ -776,12 +776,6 @@
       "name": "TraceDataSchema"
     },
     {
-      "file": "src/agent/core/flows/ModelInvocationNode.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "handleInvocationResult"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -846,12 +840,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "rewriteCodexRequestBody"
-    },
-    {
-      "file": "src/agent/node/persistedFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "FLOW_RECORD_SCHEMA_VERSION"
     },
     {
       "file": "src/agent/prompt/userVars.ts",

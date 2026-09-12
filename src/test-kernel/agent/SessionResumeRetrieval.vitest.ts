@@ -1,59 +1,33 @@
+/**
+ * The resume identity a host launches a resumed run with, read from the run
+ * aggregate's latest `flow.snapshot`. The run's state is `RunLedger.load`,
+ * folded by the loop that continues it: nothing here carries a conversation,
+ * and no checkpoint file is parsed.
+ */
+
 import { Effect } from 'effect';
-import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { noopTrace } from '@agent/trace';
-import { getRunStore } from '@agent/storage';
-import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import {
-  AgentPromptSchema,
-  AgentToolUseSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  FLOW_RECORD_SCHEMA_VERSION,
-  PersistedFlow,
-  PersistedFlowStateError,
-  flowKey,
-  type FlowRecord,
-} from '@agent/node/persistedFlow';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  retrieveSessionResumeData,
-  type ToolUseResumeData,
-} from '@agent/runtime/SessionResumeRetrieval';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
+import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
-import { parseToolUseShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
-  AgentRunStateSnapshotSchema,
-  RUN_OUTCOME,
-  RUN_PHASE,
+  aggregateId,
+  AgentCategory,
+  type FlowSnapshotPayload,
   type ModelHandlerCompatibilityKey,
   type RunId,
-  type StateSlicesSnapshot,
-  AgentCategory,
 } from '@shared/schemas';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-
-import { testModelCell } from './modelCellTestUtils';
-import { reflectionFlowShared } from './progressTestUtils';
-import { roundModelHandler } from './toolUseRoundTestUtils';
-
-let retrievalSession: SessionHandle;
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
@@ -62,1631 +36,160 @@ const CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
 });
-const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
 const WORKFLOW_CONFIG: AgentConfig = {
   ...CONFIG,
   agentCategory: AgentCategory.Workflow,
 };
+const COMPATIBILITY_KEY: ModelHandlerCompatibilityKey =
+  'ModelHandlerOpenAIResponse';
 
-function structuredOutputConfig(): AgentConfig {
-  return AgentConfigSchema.parse({
-    ...CONFIG,
-    outputSchema: {
-      type: 'object',
-      properties: { answer: { type: 'string' } },
-      required: ['answer'],
-    },
-  });
-}
-
-const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
-const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
-const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
-const WAIT_NODE_CURSOR = 'start/default/default';
-const VALID_TOOL_USE_SHARED = {
-  messages: [],
-  shouldSkipCycle: false,
-  stateSlices: null,
-};
-
-type RunToolUseFlowInput = Parameters<typeof runToolUseFlow>[0];
-type ToolUseFlowAttachment = NonNullable<Parameters<typeof runToolUseFlow>[2]>;
-
-// Stored shared state left by a run whose handler identity was persisted.
-function activeHandlerShared(): Record<string, unknown> {
-  return {
-    ...VALID_TOOL_USE_SHARED,
-    modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-  };
-}
-
-function createAbortError(): DOMException {
-  return new DOMException('This operation was aborted', 'AbortError');
-}
-type ToolUseSetupContext = Parameters<ToolUseFlowAttachment['attach']>[0];
-
-// A record parked on the wait node, as a resumable turn leaves it.
-const WAITING_AT_START = {
-  cursor: { nextNodeId: WAIT_NODE_CURSOR },
-};
-
-async function writeFlowRecord(
-  runId: RunId,
-  shared: unknown,
-  overrides: Record<string, unknown> = {},
-): Promise<void> {
-  await getRunStore(runId).write(flowKey(runId), {
-    shared,
-    cursor: { nextNodeId: 'start' },
-    ...overrides,
-  });
-}
-
-function readFlowRecord(runId: RunId): Promise<FlowRecord | undefined> {
-  return getRunStore(runId).read<FlowRecord>(flowKey(runId));
-}
-
-async function retrieveToolUseResume(
-  runId: RunId,
-  config: AgentConfig = CONFIG,
-): Promise<ToolUseResumeData> {
-  const resume = await Effect.runPromise(
-    retrieveSessionResumeData(runId, config, retrievalSession),
-  );
-  expect(resume?.type).toBe('toolUse');
-  if (resume?.type !== 'toolUse') {
-    throw new Error(`Expected tool-use resume data for run: ${runId}`);
-  }
-  return resume;
-}
-
-// Most flow-record fixtures below persist a fresh run/workspace snapshot
-// with only the current model and (occasionally) an override varying
-// between cases.
-function defaultStateSlices(
-  model = 'gpt54',
-  overrides: Record<string, string> = {},
-): StateSlicesSnapshot {
-  return {
-    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    userChannels: { MODEL: model, ...overrides },
-  };
-}
-
-function createTaggedModelCell(
-  compatibilityKey: ModelHandlerCompatibilityKey,
+const runtimeOf = (
   modelId: string,
-  handler: Record<string, unknown> = {},
-): RunToolUseFlowInput['modelCell'] {
-  // ModelFactory installs this non-enumerable tag on every active handler.
-  Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
-    value: compatibilityKey,
-  });
-  return testModelCell(handler, modelId);
-}
+  compatibilityKey: ModelHandlerCompatibilityKey | null,
+): Extract<FlowSnapshotPayload, { family: 'toolUse' }>['runtime'] => ({
+  phase: 'initial',
+  round: 0,
+  turn: 0,
+  continuationIndex: 0,
+  modelId,
+  modelHandlerCompatibilityKey: compatibilityKey,
+  lastError: null,
+  pendingRetry: null,
+});
 
-function testToolCall(name: string, input: unknown): SdkToolCall {
+const references = { pendingIntents: [], pendingResponse: null } as const;
+
+function toolUseSnapshot(
+  modelId: string,
+  compatibilityKey: ModelHandlerCompatibilityKey | null = COMPATIBILITY_KEY,
+): FlowSnapshotPayload {
   return {
-    provider: 'deepseek',
-    callId: `call-${name}`,
-    name,
-    input,
-    raw: {} as never,
+    family: 'toolUse',
+    runtime: runtimeOf(modelId, compatibilityKey),
+    references,
+    state: { shouldSkipCycle: false, stateSlices: null },
   };
 }
 
-interface TestModelTurn {
-  readonly text?: string;
-  readonly error?: Error;
-  readonly toolCalls?: SdkToolCall[];
-  readonly updatedMessages?: Array<Record<string, unknown>>;
-}
-
-function responseModelHandler(
-  turns: readonly TestModelTurn[],
-  overrides: Record<string, unknown> = {},
-) {
-  const pendingTurns = [...turns];
-  return roundModelHandler({
-    requiresPerCallSystemPrompt: false,
-    initializeMessages: async () => [{ role: 'user', content: 'Start.' }],
-    consumeInsertedAttachmentKinds: () => [],
-    createUserFollowUpMessages: async (
-      messages: Array<Record<string, unknown>>,
-      text: string,
-    ) => [...messages, { role: 'user', content: text }],
-    createResponse: vi.fn(async () => {
-      const turn = pendingTurns.shift();
-      if (!turn) throw new Error('Unexpected model invocation');
-      if (turn.error) throw turn.error;
-      return {
-        response: { text: turn.text ?? '', toolCalls: turn.toolCalls ?? [] },
-        updatedMessages: turn.updatedMessages,
-      };
-    }),
-    extractResponse: (response: unknown) => {
-      const { text, toolCalls } = response as {
-        text: string;
-        toolCalls: SdkToolCall[];
-      };
-      return {
-        text,
-        usage: null,
-        stopReason: toolCalls.length ? 'tool_use' : 'stop',
-      };
+function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
+  return {
+    family: 'reflection',
+    runtime: runtimeOf(modelId, COMPATIBILITY_KEY),
+    references,
+    state: {
+      currentRound: 1,
+      totalRounds: 2,
+      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+      outputLocation: null,
+      runStateSnapshot: { totalRounds: 2, totalResponseTimeMs: 0 },
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
     },
-    extractToolUse: (response: unknown) =>
-      (response as { toolCalls: SdkToolCall[] }).toolCalls,
-    createBatchedToolUseFollowUpMessages: async (
-      entries: Array<{ call: SdkToolCall; result: unknown }>,
-      _workspace: AgentWorkspaceState | undefined,
-      assistantText: string | undefined,
-      _client: unknown,
-    ) => [
-      ...(assistantText ? [{ role: 'assistant', content: assistantText }] : []),
-      ...entries.map(({ call, result }) => ({
-        role: 'tool',
-        tool_call_id: call.callId,
-        content: JSON.stringify(result),
-      })),
-    ],
-    ...overrides,
-  });
-}
-
-function buildToolUseResumeData(runId: RunId): ToolUseResumeData {
-  const shared = {
-    messages: [],
-    shouldSkipCycle: false,
-    stateSlices: defaultStateSlices(),
   };
-  return {
-    type: 'toolUse',
-    runId,
-    agentConfig: CONFIG,
-    shared,
-  };
-}
-
-function buildResponseResumeData(
-  runId: RunId,
-  response: string,
-): ToolUseResumeData {
-  const shared = {
-    messages: [{ role: 'assistant', content: response }],
-    shouldSkipCycle: false,
-    stateSlices: defaultStateSlices(),
-  };
-  return {
-    type: 'toolUse',
-    runId,
-    agentConfig: CONFIG,
-    shared,
-  };
-}
-
-interface PersistedFlowRunOptions {
-  readonly attachment?: Partial<ToolUseFlowAttachment>;
-  readonly session?: SessionHandle;
-  /** Omitted runs as a child of `parent0`; `null` runs as a root. */
-  readonly parentRunId?: RunId | null;
-  readonly stopAfterCycle?: boolean;
-  readonly config?: AgentConfig;
-  readonly modelHandler?: Record<string, unknown>;
-  readonly tools?: readonly ITool[];
-  readonly drainedFollowUps?: RunToolUseFlowInput['drainedFollowUps'];
-  readonly onIdle?: () => void;
-  readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
-  readonly onFlowRecordDisposition?: (
-    disposition: 'preserve' | 'delete',
-  ) => void;
-  /**
-   * Keep the session alive after the run so a test can assert on its
-   * follow-up queue before the session-root teardown disposes it.
-   */
-  readonly deferDispose?: boolean;
-}
-
-async function runPersistedFlow(
-  runId: RunId,
-  resume: ToolUseResumeData | undefined,
-  options: PersistedFlowRunOptions = {},
-) {
-  const { attachment } = options;
-  const session = options.session ?? createProcessSession();
-  publishTestRunStart(session, runId);
-  await session.settlePublications();
-  const config = options.config ?? resume?.agentConfig ?? CONFIG;
-  const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
-    MODEL: config.model,
-  };
-  const abortController = new AbortController();
-  const runScope = createRunScope({
-    runId,
-    session,
-    signal: abortController.signal,
-  });
-  const modelCell = createTaggedModelCell(
-    ACTIVE_COMPATIBILITY_KEY,
-    config.model,
-    options.modelHandler,
-  );
-  const context = createRunContext({
-    runScope,
-    modelCell,
-    stopAfterCycle: options.stopAfterCycle,
-  });
-  const hostAttachment = attachment && {
-    attach: (flowContext: ToolUseSetupContext): void =>
-      attachment.attach?.(flowContext),
-    detach: (flowContext: ToolUseSetupContext): void =>
-      attachment.detach?.(flowContext),
-  };
-
-  try {
-    return await withRunContext(context, () =>
-      runToolUseFlow(
-        {
-          config,
-          runScope,
-          setting: TOOL_USE_SETTING,
-          prompt: TOOL_USE_PROMPT,
-          stores: hostStores(),
-          logger: noopTrace,
-          userVarChannels,
-          modelCell,
-          toolPolicy: createToolPolicy({
-            stopAfterCycle: options.stopAfterCycle,
-          }),
-          onModelChanged: () => {},
-          interrupt: () => abortController.abort(),
-          onRoundFinalized: () => {},
-          ...(resume !== undefined && { resume }),
-          drainedFollowUps: options.drainedFollowUps,
-          parentRunId:
-            options.parentRunId === null
-              ? undefined
-              : (options.parentRunId ?? ('parent0' as RunId)),
-          tools: options.tools,
-          onIdle: options.onIdle,
-          takePendingFollowUps: options.takePendingFollowUps,
-          onFlowRecordDisposition: options.onFlowRecordDisposition,
-          toolInjections: new ToolInjectionRegistry(),
-        },
-        new MapToolRegistry({}),
-        hostAttachment,
-      ),
-    );
-  } finally {
-    if (!options.deferDispose) {
-      session.dispose();
-    }
-  }
-}
-
-async function runResumedFlowToWaiting(
-  runId: RunId,
-  resume: ToolUseResumeData,
-): Promise<void> {
-  const result = await runPersistedFlow(runId, resume);
-  expect(result.outcome).toBe(RUN_PHASE.WAITING);
-}
-
-/**
- * Rejects the flow's first in-flight node-step write with an abort error,
- * optionally queuing a follow-up first. Models a cancellation landing
- * mid-turn at the only writes that carry a cursor. `onlyStepWrite` narrows
- * that further to the write that stamps `cursor.lastAction`, for tests that
- * must distinguish a step write from any other cursor-bearing write.
- */
-function abortOnFirstFlowStepWrite(
-  store: ReturnType<typeof getRunStore>,
-  getFlowContext: () => ToolUseSetupContext | undefined,
-  options: { onlyStepWrite?: boolean; onFlowStepWrite?: () => void } = {},
-): { writeSpy: ReturnType<typeof vi.spyOn>; abortError: DOMException } {
-  const abortError = createAbortError();
-  const realWrite = store.write.bind(store);
-  let fired = false;
-  const writeSpy = vi
-    .spyOn(store, 'write')
-    .mockImplementation(async (key, value) => {
-      const isCursorWrite =
-        value !== null && typeof value === 'object' && 'cursor' in value;
-      const isTargetWrite = options.onlyStepWrite
-        ? isCursorWrite &&
-          (value.cursor as { lastAction?: string } | null)?.lastAction !==
-            undefined
-        : isCursorWrite;
-      if (!fired && isTargetWrite) {
-        fired = true;
-        if (getFlowContext()) options.onFlowStepWrite?.();
-        getFlowContext()?.interrupt();
-        throw abortError;
-      }
-      return realWrite(key, value);
-    });
-  return { writeSpy, abortError };
 }
 
 describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
+
+  let session: SessionHandle;
   beforeEach(() => {
-    retrievalSession = createProcessSession();
+    session = createProcessSession();
   });
 
-  it('rejects malformed fields at the shared-state boundary', () => {
-    expect(
-      parseToolUseShared({
-        messages: [],
-        shouldSkipCycle: 'false',
-        stateSlices: null,
-      }),
-    ).toEqual({
-      success: false,
-      error: expect.objectContaining({ name: 'ZodError' }),
+  /** Open the run aggregate the way a loop does: claim, then snapshot. */
+  async function openRun(
+    runId: RunId,
+    payload: FlowSnapshotPayload,
+  ): Promise<void> {
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    await Effect.runPromise(session.ledger.acquire(runId));
+    await Effect.runPromise(
+      session.ledger.appendBatch(runId, null, [
+        {
+          type: 'flow.snapshot',
+          aggregateId: aggregateId('run', runId),
+          payload,
+        },
+      ]),
+    );
+  }
+
+  it('resumes on the model the snapshot names, under the original run id', async () => {
+    const runId = 'abc123' as RunId;
+    await openRun(runId, toolUseSnapshot('gpt55'));
+
+    await expect(
+      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
+    ).resolves.toMatchObject({
+      type: 'toolUse',
+      runId,
+      agentConfig: { model: 'gpt55' },
+      modelHandlerCompatibilityKey: COMPATIBILITY_KEY,
     });
   });
 
-  it('preserves the checkpoint after a read failure from a later in-flow cycle', async () => {
+  it('resumes an untagged conversation format as untagged', async () => {
     const runId = 'ab0001' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const store = getRunStore(runId);
-    await writeFlowRecord(runId, snapshot.shared, WAITING_AT_START);
-    const readFailure = new Error('flow storage unavailable');
-    const realRead = store.read.bind(store);
-    let flowReads = 0;
-    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
-      if (key === flowKey(runId) && ++flowReads === 2) {
-        throw readFailure;
-      }
-      return realRead(key);
-    });
-    const takePendingFollowUps = vi
-      .fn<NonNullable<RunToolUseFlowInput['takePendingFollowUps']>>()
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }]);
-    const dispositions: Array<'preserve' | 'delete'> = [];
+    await openRun(runId, toolUseSnapshot('gpt54', null));
 
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          takePendingFollowUps,
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        }),
-      ).rejects.toMatchObject({
-        name: PersistedFlowStateError.name,
-        reason: 'read-failed',
-        cause: readFailure,
-      });
-      expect(dispositions).toEqual(['preserve']);
-    } finally {
-      readSpy.mockRestore();
-    }
+    await expect(
+      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
+    ).resolves.toMatchObject({ modelHandlerCompatibilityKey: null });
   });
 
-  it('preserves the checkpoint after an unrelated read-failed flow error', async () => {
+  it('reports a run with no snapshot as nothing to resume', async () => {
     const runId = 'ab0002' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const runFailure = new PersistedFlowStateError(runId, 'read-failed');
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockRejectedValueOnce(runFailure);
-    const dispositions: Array<'preserve' | 'delete'> = [];
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
 
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        }),
-      ).rejects.toBe(runFailure);
-      expect(dispositions).toEqual(['preserve']);
-    } finally {
-      runSpy.mockRestore();
-    }
+    await expect(
+      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
+    ).resolves.toBeNull();
   });
 
-  it('rejects a malformed MODEL user variable at the shared-state boundary', () => {
-    const result = parseToolUseShared({
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices('gpt54', {
-        MODEL: 42,
-      } as unknown as Record<string, string>),
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: expect.objectContaining({ name: 'ZodError' }),
-    });
-  });
-
-  it('retrieves a workflow record in the current shape', async () => {
+  it('retrieves a workflow run from its reflection snapshot', async () => {
     const runId = 'ab0003' as RunId;
-    await writeFlowRecord(runId, reflectionFlowShared({ currentRound: 1 }));
+    await openRun(runId, reflectionSnapshot('gpt54'));
 
     await expect(
       Effect.runPromise(
-        retrieveSessionResumeData(runId, WORKFLOW_CONFIG, retrievalSession),
+        retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
       ),
     ).resolves.toMatchObject({ type: 'workflow', runId });
   });
 
-  it('rejects a workflow record that only has the retired messages field', async () => {
+  // A family the launch config contradicts is corruption, never a silent
+  // "nothing to resume": the caller must be able to tell the two apart.
+  it('refuses a tool-use launch onto a reflection run', async () => {
     const runId = 'ab0004' as RunId;
-    await writeFlowRecord(runId, {
-      currentRound: 1,
-      totalRounds: 2,
-      messages: [{ role: 'user', content: 'Continue.' }],
-    });
+    await openRun(runId, reflectionSnapshot('gpt54'));
 
     await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(runId, WORKFLOW_CONFIG, retrievalSession),
-      ),
-    ).resolves.toBeNull();
+      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
+    ).rejects.toThrow(
+      `Run ${runId} is configured as toolUse but its snapshot is a reflection run.`,
+    );
   });
 
-  it('preserves structured output at the persisted shared-state boundary', () => {
-    const result = parseToolUseShared({
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: null,
-      structured: { title: 'Durable result' },
-    });
-
-    expect(result).toEqual({
-      success: true,
-      data: expect.objectContaining({
-        structured: { title: 'Durable result' },
-      }),
-    });
-  });
-
-  it('does not derive a missing model id from the MODEL user variable', () => {
-    const result = parseToolUseShared({
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
-    });
-
-    expect(result).toMatchObject({ success: true });
-    if (!result.success) return;
-    expect(result.data).not.toHaveProperty('modelId');
-  });
-
-  it('keeps a persisted model id over the MODEL variable', () => {
-    const result = parseToolUseShared({
-      messages: [],
-      modelId: 'gpt55',
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
-    });
-
-    expect(result).toMatchObject({
-      success: true,
-      data: { modelId: 'gpt55' },
-    });
-  });
-
-  it('uses the persisted model id while preserving the original run id', async () => {
-    const runId = 'abc123' as RunId;
-    await writeFlowRecord(runId, {
-      messages: [],
-      modelId: 'gpt55',
-      shouldSkipCycle: false,
-      // A stale MODEL projection must not win over the persisted model id.
-      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
-    });
-
-    const resume = await retrieveToolUseResume(runId);
-
-    expect(resume.runId).toBe(runId);
-    expect(resume.shared.modelId).toBe('gpt55');
-    expect(resume.agentConfig.model).toBe('gpt55');
-  });
-
-  it('uses the launch model when only MODEL contains a retired identity', async () => {
+  it('throws when the durable run facts cannot be read', async () => {
     const runId = 'ab0005' as RunId;
-    await writeFlowRecord(runId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
-    });
-
-    const resume = await retrieveToolUseResume(runId);
-
-    expect(resume.shared.modelId).toBeUndefined();
-    expect(resume.agentConfig.model).toBe(CONFIG.model);
-  });
-
-  it('falls back to the launch model when nothing persisted a model', async () => {
-    const runId = 'ab0006' as RunId;
-    await writeFlowRecord(runId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: {
-        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: {},
-      },
-    });
-
-    const resume = await retrieveToolUseResume(runId);
-
-    expect(resume.shared.modelId).toBeUndefined();
-    expect(resume.agentConfig.model).toBe(CONFIG.model);
-  });
-
-  it('throws when resumable tool-use storage cannot be read', async () => {
-    const runId = 'abc129' as RunId;
-    const store = getRunStore(runId);
-    await writeFlowRecord(runId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    });
-    const originalRead = store.read.bind(store);
-    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
-      if (key === flowKey(runId)) {
-        throw new Error('KV timeout');
-      }
-      return originalRead(key);
-    });
-
-    try {
-      await expect(
-        Effect.runPromise(
-          retrieveSessionResumeData(runId, CONFIG, retrievalSession),
-        ),
-      ).rejects.toThrow(
-        `Failed to retrieve tool-use resume data for run: ${runId}`,
-      );
-    } finally {
-      readSpy.mockRestore();
-    }
-  });
-
-  it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
-    const runId = 'abc130' as RunId;
-    const readMetadata = vi
-      .spyOn(retrievalSession, 'readRunRecords')
-      .mockReturnValue(
-        Effect.die(
-          new z.ZodError([
-            { code: 'custom', path: [], message: 'corrupt metadata' },
-          ]),
-        ),
-      );
-    await writeFlowRecord(runId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    });
-
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(runId, CONFIG, retrievalSession),
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('KV timeout'),
+        }),
       ),
-    ).rejects.toThrow(
-      `Failed to retrieve tool-use resume data for run: ${runId}`,
     );
-    readMetadata.mockRestore();
-  });
-});
-
-describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
-  setupPlatform({ workspacePath: '/workspace' });
-  beforeEach(() => {
-    retrievalSession = createProcessSession();
-  });
-
-  it('rejects a persisted record on a fresh launch', async () => {
-    const runId = 'ab0007' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    await writeFlowRecord(runId, snapshot.shared);
-
-    await expect(runPersistedFlow(runId, undefined)).rejects.toMatchObject({
-      name: PersistedFlowStateError.name,
-      reason: 'unexpected-record',
-    });
-  });
-
-  it('preserves the validation cause for an invalid fresh-launch collision', async () => {
-    const runId = 'ab0008' as RunId;
-    await writeFlowRecord(runId, { messages: 'not-an-array' });
-
-    await expect(runPersistedFlow(runId, undefined)).rejects.toMatchObject({
-      name: PersistedFlowStateError.name,
-      reason: 'invalid-shared',
-      cause: expect.anything(),
-    });
-  });
-
-  it('creates fresh shared state when the flow record is absent', async () => {
-    const runId = 'ab0009' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-
-    const result = await runPersistedFlow(runId, snapshot);
-
-    expect(result.outcome).toBe(RUN_PHASE.WAITING);
-    const stored = await readFlowRecord(runId);
-    expect(stored?.shared).toMatchObject({
-      messages: snapshot.shared.messages,
-      stateSlices: snapshot.shared.stateSlices,
-    });
-  });
-
-  it.each([
-    { name: 'persisted record', persistRecord: true },
-    { name: 'absent record with resume handoff', persistRecord: false },
-  ])(
-    'does not return a prior assistant response when a resumed child produces no new answer: $name',
-    async ({ persistRecord }) => {
-      const runId = (persistRecord ? 'ab0021' : 'ab0022') as RunId;
-      const resume = buildResponseResumeData(runId, 'A');
-      if (persistRecord) {
-        await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
-      }
-
-      const result = await runPersistedFlow(runId, resume);
-
-      expect(result).toMatchObject({ outcome: RUN_PHASE.WAITING });
-      expect(result.response).toBeUndefined();
-    },
-  );
-
-  it.each([
-    { name: 'different text', prior: 'A', fresh: 'B' },
-    { name: 'identical text', prior: 'A', fresh: 'A' },
-  ])(
-    'returns a response produced by a real resumed model cycle: $name',
-    async ({ prior, fresh }) => {
-      const runId = (prior === fresh ? 'ab0023' : 'ab0024') as RunId;
-      const resume = buildResponseResumeData(runId, prior);
-      await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
-
-      const result = await runPersistedFlow(runId, resume, {
-        modelHandler: responseModelHandler([{ text: fresh }]),
-        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-      });
-
-      expect(result.response).toBe(fresh);
-    },
-  );
-
-  it('retains identical partial text produced before a resumed cycle fails', async () => {
-    const runId = 'ab000a' as RunId;
-    const resume = buildResponseResumeData(runId, 'A');
-    await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
-
-    const result = await runPersistedFlow(runId, resume, {
-      modelHandler: responseModelHandler([{ text: 'A' }], {
-        createAssistantMessageFromResponse: () => {
-          throw new Error('Provider stream failed after partial output');
-        },
-      }),
-      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-    });
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.FAILED,
-      response: 'A',
-      error: {
-        message: expect.stringContaining(
-          'Provider stream failed after partial output',
-        ),
-      },
-    });
-  });
-
-  it('scrubs persisted assembly text before an answerless resumed cycle fails', async () => {
-    const runId = 'ab000b' as RunId;
-    const baseResume = buildResponseResumeData(runId, 'A');
-    const shared = {
-      ...baseResume.shared,
-      stateSlices: {
-        ...baseResume.shared.stateSlices,
-        workspaceSnapshot: {
-          ...baseResume.shared.stateSlices.workspaceSnapshot,
-          assembly: { lastResponse: 'A', accumulatedOutput: 'A' },
-        },
-      },
-    };
-    const resume: ToolUseResumeData = {
-      ...baseResume,
-      shared,
-    };
-    await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
-    const providerError = Object.assign(
-      new Error('Answerless provider failure'),
-      {
-        status: 401,
-      },
-    );
-
-    const result = await runPersistedFlow(runId, resume, {
-      modelHandler: responseModelHandler([{ error: providerError }]),
-      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-    });
-
-    expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-    expect(result.response).toBeUndefined();
-  });
-
-  it('returns explanatory text accompanying submit_output', async () => {
-    const runId = 'ab000c' as RunId;
-    const config = structuredOutputConfig();
-
-    const result = await runPersistedFlow(runId, undefined, {
-      config,
-      parentRunId: null,
-      stopAfterCycle: true,
-      modelHandler: responseModelHandler([
-        {
-          text: 'Here is the structured result.',
-          toolCalls: [testToolCall('submit_output', { answer: 'done' })],
-        },
-      ]),
-    });
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.COMPLETED,
-      response: 'Here is the structured result.',
-      structured: { answer: 'done' },
-    });
-  });
-
-  it('retains tool-round text when a later model round fails', async () => {
-    const runId = 'ab000d' as RunId;
-    const providerError = Object.assign(new Error('Later provider failure'), {
-      status: 401,
-    });
-    const probeTool: ITool = {
-      definition: {
-        name: 'probe',
-        description: 'Probe once',
-        parameters: {},
-      },
-      call: vi.fn(async () => ({ status: 'executed' as const, output: 'ok' })),
-    };
-
-    const result = await runPersistedFlow(runId, undefined, {
-      modelHandler: responseModelHandler([
-        {
-          text: 'I checked the tool.',
-          toolCalls: [testToolCall('probe', {})],
-        },
-        { error: providerError },
-      ]),
-      tools: [probeTool],
-    });
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.FAILED,
-      response: 'I checked the tool.',
-      error: { message: expect.stringContaining('Later provider failure') },
-    });
-  });
-
-  it('retains a fresh response when compaction replaces the whole message array', async () => {
-    const runId = 'ab000e' as RunId;
-    const resume = buildResponseResumeData(runId, 'A');
-    await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
-
-    const result = await runPersistedFlow(runId, resume, {
-      modelHandler: responseModelHandler([
-        {
-          text: 'B',
-          updatedMessages: [{ role: 'user', content: 'Compacted context.' }],
-        },
-      ]),
-      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-    });
-
-    expect(result.response).toBe('B');
-    expect(await readFlowRecord(runId)).toMatchObject({
-      shared: {
-        messages: [
-          { role: 'user', content: 'Compacted context.' },
-          { role: 'assistant', content: 'B' },
-        ],
-      },
-    });
-  });
-
-  it('keeps returning a response from a fresh root model cycle', async () => {
-    const runId = 'ab000f' as RunId;
-
-    const result = await runPersistedFlow(runId, undefined, {
-      parentRunId: null,
-      stopAfterCycle: true,
-      modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
-    });
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.COMPLETED,
-      response: 'fresh answer',
-    });
-  });
-
-  it('returns the latest response across real same-invocation follow-up cycles', async () => {
-    const runId = 'ab0010' as RunId;
-    const takePendingFollowUps = vi
-      .fn<NonNullable<RunToolUseFlowInput['takePendingFollowUps']>>()
-      .mockReturnValueOnce([])
-      .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }])
-      .mockReturnValue([]);
-
-    const result = await runPersistedFlow(runId, undefined, {
-      modelHandler: responseModelHandler([
-        { text: 'first answer' },
-        { text: 'latest answer' },
-      ]),
-      takePendingFollowUps,
-    });
-
-    expect(result).toMatchObject({
-      outcome: RUN_PHASE.WAITING,
-      response: 'latest answer',
-    });
-    expect(takePendingFollowUps).toHaveBeenCalledTimes(3);
-  });
-
-  it('offers queue ownership again after a resumed subagent parks', async () => {
-    const runId = 'ab0011' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const boundaryEvents: string[] = [];
-    const takePendingFollowUps = vi.fn(() => {
-      boundaryEvents.push('take');
-      return [];
-    });
-
-    const result = await runPersistedFlow(runId, snapshot, {
-      attachment: {
-        attach: () => {
-          boundaryEvents.push('attach');
-        },
-        detach: () => {
-          boundaryEvents.push('detach');
-        },
-      },
-      takePendingFollowUps,
-    });
-
-    expect(result.outcome).toBe(RUN_PHASE.WAITING);
-    expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
-    expect(boundaryEvents).toEqual(['attach', 'take', 'detach', 'take']);
-  });
-
-  it('detaches a host whose attach threw after wiring itself up', async () => {
-    // `executeAgent`'s attach registers the flow context on the run handle and
-    // may then interrupt it. A throw anywhere after that first statement used
-    // to strand the live context on the handle, because the pairing lived in
-    // the value the callback never got to return.
-    const runId = 'ab0012' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const attachFailure = new Error('host wiring failed');
-    const detached: ToolUseSetupContext[] = [];
 
     await expect(
-      runPersistedFlow(runId, snapshot, {
-        attachment: {
-          attach: () => {
-            throw attachFailure;
-          },
-          detach: (context) => {
-            detached.push(context);
-          },
-        },
-      }),
-    ).rejects.toBe(attachFailure);
-    expect(detached).toHaveLength(1);
-  });
-
-  // A resumed run has no pre-flow recovery read any more: retrieval reads the
-  // record under the run lease and hands it in, so only a fresh launch
-  // still probes for a leftover record here.
-  it('releases follow-ups while preserving the record after a persistence read failure', async () => {
-    const runId = 'ab0013' as RunId;
-    const snapshot = undefined;
-    const store = getRunStore(runId);
-    const session = createProcessSession();
-    const readFailure = new Error('flow storage unavailable');
-    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
-    const deleteSpy = vi.spyOn(store, 'delete');
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          attachment: {
-            attach: () => {
-              session.followUps.submit(
-                runId,
-                { text: 'queued before recovery' },
-                'live_owner',
-              );
-            },
-          },
-          session,
-        }),
-      ).rejects.toMatchObject({
-        name: PersistedFlowStateError.name,
-        reason: 'read-failed',
-        cause: readFailure,
-      });
-      expect(deleteSpy).not.toHaveBeenCalled();
-      expect(session.followUps.getAll(runId)).toEqual([]);
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-      session.followUps.terminalize(runId);
-    }
-  });
-
-  it('preserves a resumed record when its first in-flow read fails', async () => {
-    const runId = 'ab0014' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const store = getRunStore(runId);
-    await writeFlowRecord(runId, snapshot.shared);
-    const readFailure = new Error('flow storage unavailable');
-    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
-    const dispositions: Array<'preserve' | 'delete'> = [];
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        }),
-      ).rejects.toMatchObject({
-        name: PersistedFlowStateError.name,
-        reason: 'read-failed',
-        cause: readFailure,
-      });
-      expect(dispositions).toEqual(['preserve']);
-    } finally {
-      readSpy.mockRestore();
-    }
-    expect(await readFlowRecord(runId)).toMatchObject({
-      shared: snapshot.shared,
-    });
-  });
-
-  it('preserves the structured flow error when teardown also fails', async () => {
-    const runId = 'ab0015' as RunId;
-    const base = buildToolUseResumeData(runId);
-    const failedShared = {
-      ...base.shared,
-      lastError: {
-        message: 'provider failed after partial output',
-        userRetryable: true,
-      },
-    };
-    const snapshot: ToolUseResumeData = {
-      ...base,
-      shared: failedShared,
-    };
-    // A terminal cursor makes the resumed flow exit COMPLETE without stepping
-    // any node, leaving the failed shared state exactly as persisted.
-    await writeFlowRecord(runId, failedShared, {
-      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
-    });
-    const session = createProcessSession();
-    const teardownFailure = new Error('flow detachment failed');
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-    const errorLogSpy = vi
-      .spyOn(noopTrace, 'error')
-      .mockImplementation(() => {});
-
-    try {
-      // The run's own failure outranks the teardown failure: it is carried
-      // out on the result rather than replaced by the thrown teardown error.
-      const result = await runPersistedFlow(runId, snapshot, {
-        attachment: {
-          detach: () => {
-            throw teardownFailure;
-          },
-        },
-        session,
-      });
-
-      expect(result).toMatchObject({
-        outcome: RUN_OUTCOME.FAILED,
-        error: failedShared.lastError,
-      });
-      expect(releaseSpy).toHaveBeenCalled();
-      expect(errorLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('detaching the live flow'),
-        expect.any(Object),
-      );
-    } finally {
-      releaseSpy.mockRestore();
-      errorLogSpy.mockRestore();
-    }
-  });
-
-  it('surfaces the first teardown failure after an otherwise successful exit', async () => {
-    const runId = 'ab0016' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const session = createProcessSession();
-    const teardownFailure = new Error('flow detachment failed');
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          attachment: {
-            attach: (context) => context.interrupt(),
-            detach: () => {
-              throw teardownFailure;
-            },
-          },
-          session,
-        }),
-      ).rejects.toBe(teardownFailure);
-      expect(releaseSpy).toHaveBeenCalled();
-    } finally {
-      releaseSpy.mockRestore();
-    }
-  });
-
-  it('preserves a missing structured-output failure when teardown also fails', async () => {
-    const runId = 'ab0017' as RunId;
-    const snapshot = {
-      ...buildToolUseResumeData(runId),
-      agentConfig: structuredOutputConfig(),
-    };
-    // A terminal cursor makes the resumed flow exit COMPLETE without stepping
-    // any node, so the run completes without a structured result.
-    await writeFlowRecord(runId, snapshot.shared, {
-      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
-    });
-    const session = createProcessSession();
-    const teardownFailure = new Error('flow detachment failed');
-
-    await expect(
-      runPersistedFlow(runId, snapshot, {
-        attachment: {
-          detach: () => {
-            throw teardownFailure;
-          },
-        },
-        session,
-      }),
+      Effect.runPromise(retrieveSessionResumeData(runId, CONFIG, session)),
     ).rejects.toThrow(
-      'Structured-output run completed without calling submit_output.',
+      `Failed to retrieve toolUse resume data for run: ${runId}`,
     );
-
-    // #11314: this exit preserves the record, so the cursor must have been
-    // rewound before the throw. A preserved record still sitting on the
-    // terminal cursor fails `ResumableFlowRecordSchema`'s `nextNodeId !== null`
-    // refinement, which makes it unresumable garbage only `history delete` can
-    // clear -- strictly worse than not keeping it at all.
-    const persisted = await readFlowRecord(runId);
-    expect(persisted?.cursor.nextNodeId).not.toBeNull();
-  });
-
-  it.each([
-    {
-      name: 'legacy record without a replay cursor',
-      runId: 'ab0025' as RunId,
-      reason: 'unsupported-record',
-      stored: {
-        shared: VALID_TOOL_USE_SHARED,
-      },
-    },
-    {
-      name: 'missing shared state',
-      runId: 'ab0026' as RunId,
-      reason: 'missing-shared',
-      stored: {
-        cursor: { nextNodeId: 'start' },
-      },
-    },
-    {
-      name: 'unsupported null record',
-      runId: 'ab0027' as RunId,
-      reason: 'unsupported-record',
-      stored: null,
-    },
-    {
-      name: 'future envelope schema version',
-      runId: 'ab0028' as RunId,
-      reason: 'unsupported-record',
-      stored: {
-        schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
-        shared: VALID_TOOL_USE_SHARED,
-        // Cursor present so the version bound is the only failing constraint.
-        cursor: { nextNodeId: 'start' },
-      },
-    },
-    // Fresh launches only: a resume handoff over a malformed record is
-    // unrepresentable now that retrieval validates the same envelope under
-    // the run lease before any resume reaches the flow.
-  ])('rejects and preserves $name', async ({ runId, reason, stored }) => {
-    const snapshot = undefined;
-    const store = getRunStore(runId);
-    await store.write(flowKey(runId), stored);
-    const deleteSpy = vi.spyOn(store, 'delete');
-
-    try {
-      const expectedError = {
-        name: PersistedFlowStateError.name,
-        reason,
-        cause: expect.objectContaining({ name: 'ZodError' }),
-      };
-      await expect(runPersistedFlow(runId, snapshot)).rejects.toMatchObject(
-        expectedError,
-      );
-      expect(deleteSpy).not.toHaveBeenCalled();
-      expect(await store.read(flowKey(runId))).toEqual(stored);
-    } finally {
-      deleteSpy.mockRestore();
-    }
-  });
-
-  it('skips persistence recovery when setup hands off a cancellation', async () => {
-    const runId = 'ab0018' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const store = getRunStore(runId);
-    const readSpy = vi.spyOn(store, 'read');
-    const writeSpy = vi.spyOn(store, 'write');
-    const deleteSpy = vi.spyOn(store, 'delete');
-
-    try {
-      const result = await runPersistedFlow(runId, snapshot, {
-        attachment: {
-          attach: (flowContext) => flowContext.interrupt(),
-        },
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(readSpy).not.toHaveBeenCalled();
-      expect(writeSpy).not.toHaveBeenCalled();
-      expect(deleteSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-      deleteSpy.mockRestore();
-    }
-  });
-
-  it('distinguishes reused and fresh startup cancellation checkpoint and queue disposition', async () => {
-    {
-      const runId = 'ab0019' as RunId;
-      const storedShared = activeHandlerShared();
-      await writeFlowRecord(runId, storedShared);
-      const store = getRunStore(runId);
-      const deleteSpy = vi.spyOn(store, 'delete');
-      const session = createProcessSession();
-      const releaseSpy = vi.spyOn(session.followUps, 'release');
-      const realRead = store.read.bind(store);
-      let flowContext: ToolUseSetupContext | undefined;
-      const readSpy = vi
-        .spyOn(store, 'read')
-        .mockImplementation(async (key) => {
-          const record = await realRead(key);
-          flowContext?.interrupt();
-          return record;
-        });
-      const dispositions: Array<'preserve' | 'delete'> = [];
-
-      try {
-        const result = await runPersistedFlow(runId, undefined, {
-          attachment: {
-            attach: (context) => {
-              flowContext = context;
-              session.followUps.submit(
-                runId,
-                { text: 'reused recovery input' },
-                'live_owner',
-              );
-            },
-          },
-          session,
-          deferDispose: true,
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(runId));
-        expect(dispositions).toEqual(['preserve']);
-        expect(releaseSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ runId, kind: 'flow' }),
-          'recoverable',
-        );
-        expect(await readFlowRecord(runId)).toMatchObject({
-          shared: storedShared,
-        });
-        expect(session.followUps.getAll(runId)).toEqual([
-          'reused recovery input',
-        ]);
-      } finally {
-        readSpy.mockRestore();
-        deleteSpy.mockRestore();
-        releaseSpy.mockRestore();
-        session.dispose();
-      }
-    }
-
-    {
-      const runId = 'ab001a' as RunId;
-      const storedShared = activeHandlerShared();
-      await writeFlowRecord(runId, storedShared);
-      const session = createProcessSession();
-      const releaseSpy = vi.spyOn(session.followUps, 'release');
-      const dispositions: Array<'preserve' | 'delete'> = [];
-
-      try {
-        const result = await runPersistedFlow(runId, undefined, {
-          attachment: {
-            attach: (flowContext) => {
-              session.followUps.submit(
-                runId,
-                { text: 'reused attachment input' },
-                'live_owner',
-              );
-              flowContext.interrupt();
-            },
-          },
-          session,
-          deferDispose: true,
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(dispositions).toEqual(['preserve']);
-        expect(releaseSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ runId, kind: 'flow' }),
-          'recoverable',
-        );
-        expect(session.followUps.getAll(runId)).toEqual([
-          'reused attachment input',
-        ]);
-        expect(await readFlowRecord(runId)).toMatchObject({
-          shared: storedShared,
-        });
-      } finally {
-        releaseSpy.mockRestore();
-        session.dispose();
-      }
-    }
-
-    {
-      const runId = 'ab001b' as RunId;
-      const store = getRunStore(runId);
-      const session = createProcessSession();
-      let flowContext: ToolUseSetupContext | undefined;
-      const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
-        flowContext?.interrupt();
-        return undefined;
-      });
-      const deleteSpy = vi.spyOn(store, 'delete');
-      const releaseSpy = vi.spyOn(session.followUps, 'release');
-      const dispositions: Array<'preserve' | 'delete'> = [];
-
-      try {
-        const result = await runPersistedFlow(runId, undefined, {
-          attachment: {
-            attach: (context) => {
-              flowContext = context;
-              session.followUps.submit(
-                runId,
-                { text: 'fresh recovery input' },
-                'live_owner',
-              );
-            },
-          },
-          session,
-          deferDispose: true,
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(readSpy).toHaveBeenCalledOnce();
-        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(runId));
-        expect(dispositions).toEqual(['delete']);
-        expect(releaseSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ runId, kind: 'flow' }),
-          'terminal',
-        );
-        expect(await readFlowRecord(runId)).toBeUndefined();
-        expect(session.followUps.getAll(runId)).toEqual([]);
-      } finally {
-        readSpy.mockRestore();
-        deleteSpy.mockRestore();
-        releaseSpy.mockRestore();
-        session.dispose();
-      }
-    }
-  });
-
-  it('preserves the resumable flow after an established run is interrupted', async () => {
-    const runId = 'ab001c' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const store = getRunStore(runId);
-    let flowContext: ToolUseSetupContext | undefined;
-
-    const result = await runPersistedFlow(runId, snapshot, {
-      attachment: {
-        attach: (context) => {
-          flowContext = context;
-        },
-      },
-      session: createProcessSession(),
-      parentRunId: null,
-      onIdle: () => flowContext?.interrupt(),
-    });
-
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(await readFlowRecord(runId)).toMatchObject({
-      cursor: { nextNodeId: 'start' },
-      shared: { shouldSkipCycle: true },
-    });
-  });
-
-  it('preserves an established flow when provider cancellation rejects the run', async () => {
-    const runId = 'ab001d' as RunId;
-    const store = getRunStore(runId);
-    let flowContext: ToolUseSetupContext | undefined;
-    const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(runId);
-    await writeFlowRecord(runId, storedShared);
-    // Reject the flow's first node-step persist with the provider's abort:
-    // the run then fails mid-flight through the public storage boundary, the
-    // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
-      store,
-      () => flowContext,
-      { onlyStepWrite: true },
-    );
-    const deleteSpy = vi.spyOn(store, 'delete');
-    const dispositions: Array<'preserve' | 'delete'> = [];
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          attachment: {
-            attach: (context) => {
-              flowContext = context;
-            },
-          },
-          modelHandler: responseModelHandler([]),
-          onFlowRecordDisposition: (value) => dispositions.push(value),
-        }),
-      ).rejects.toBe(abortError);
-      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(runId));
-      expect(dispositions).toEqual(['preserve']);
-      expect(await readFlowRecord(runId)).toMatchObject({
-        cursor: { nextNodeId: 'start' },
-        shared: { shouldSkipCycle: true },
-      });
-    } finally {
-      writeSpy.mockRestore();
-      deleteSpy.mockRestore();
-    }
-  });
-
-  it('preserves a follow-up appended during setup when cancellation lands at attach (issue #8049 P2)', async () => {
-    // Once setup attaches the live flow context, a new follow-up can enter its
-    // session queue before the flow is interruptible. When a cancellation
-    // lands in that startup window, the run reports CANCELLED with the resume
-    // record preserved, and the queued input must survive with it:
-    // `resumeQueuedToolUseFromResumeData` never restores follow-ups on this
-    // success path, so dropping the item here would lose it for good. (The
-    // former async window during a pre-flow recovery read no longer exists:
-    // a resumed flow does no disk read before it becomes interruptible.)
-    const runId = 'ab001e' as RunId;
-    const snapshot = buildToolUseResumeData(runId);
-    const session = createProcessSession();
-
-    try {
-      const result = await runPersistedFlow(runId, snapshot, {
-        attachment: {
-          attach: (context) => {
-            session.followUps.submit(
-              runId,
-              { text: 'queued during resume' },
-              'live_owner',
-            );
-            context.interrupt();
-          },
-        },
-        session,
-        deferDispose: true,
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(session.followUps.getAll(runId)).toEqual(['queued during resume']);
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
-    const runId = 'ab001f' as RunId;
-    const session = createProcessSession();
-    const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(runId);
-    await writeFlowRecord(runId, storedShared);
-    // `resumeQueuedToolUseFromResumeData` holds the recovery lease across the
-    // whole host resume, so the flow borrows that consumer's queue instead of
-    // claiming one. Model that here: the borrower may cancel its own wait but
-    // never drops the owner's queued input, whatever the run's own outcome.
-    const recovery = session.followUps.claimRecovery(runId, true);
-    expect(recovery).toBeDefined();
-    const store = getRunStore(runId);
-    let flowContext: ToolUseSetupContext | undefined;
-    // The late input lands while the cancelled turn is mid-flight, modelled at
-    // the flow's first node-step persist (the only writes carrying a cursor).
-    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
-      store,
-      () => flowContext,
-      {
-        onFlowStepWrite: () =>
-          session.followUps.submit(
-            runId,
-            { text: 'late active-turn input' },
-            'live_owner',
-          ),
-      },
-    );
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          attachment: {
-            attach: (context) => {
-              flowContext = context;
-            },
-          },
-          modelHandler: responseModelHandler([]),
-          session,
-          takePendingFollowUps: () => [],
-          deferDispose: true,
-        }),
-      ).rejects.toBe(abortError);
-      expect(session.followUps.getAll(runId)).toEqual([
-        'late active-turn input',
-      ]);
-    } finally {
-      writeSpy.mockRestore();
-      session.dispose();
-    }
-  });
-
-  it('leaves a child loop its queued input when the borrowed inner turn is interrupted', async () => {
-    // A native subagent's inner turn resumes without `takePendingFollowUps`:
-    // the child-run loop owns the queue across all of its turns and releases it
-    // with the terminal/recoverable decision. The borrowing flow may cancel its
-    // own wait, but dropping the owner's queued items is not its call to make.
-    const runId = 'ab0020' as RunId;
-    const session = createProcessSession();
-    const storedShared = activeHandlerShared();
-    const snapshot = buildToolUseResumeData(runId);
-    await writeFlowRecord(runId, storedShared);
-    const childLease = session.followUps.claimLive(runId, 'child');
-    expect(childLease).toBeDefined();
-    const store = getRunStore(runId);
-    let flowContext: ToolUseSetupContext | undefined;
-    // The queued input lands while the interrupted turn is mid-flight,
-    // modelled at the flow's first node-step persist (the only writes
-    // carrying a cursor).
-    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
-      store,
-      () => flowContext,
-      {
-        onFlowStepWrite: () =>
-          session.followUps.submit(
-            runId,
-            { text: 'queued for next turn' },
-            'live_owner',
-          ),
-      },
-    );
-
-    try {
-      await expect(
-        runPersistedFlow(runId, snapshot, {
-          attachment: {
-            attach: (context) => {
-              flowContext = context;
-            },
-          },
-          modelHandler: responseModelHandler([]),
-          session,
-          deferDispose: true,
-        }),
-      ).rejects.toBe(abortError);
-      expect(session.followUps.getAll(runId)).toEqual(['queued for next turn']);
-    } finally {
-      writeSpy.mockRestore();
-      session.dispose();
-    }
-  });
-
-  it('does not write during resume startup before the first flow step (issue #8018)', async () => {
-    // `resumeToolUseFromResumeData` passes the resume handoff on every
-    // native-subagent turn, so resume startup must not add its own disk
-    // write ahead of the flow's step writes -- otherwise every turn costs
-    // a `StorageFSKVStore` disk write for a no-op overwrite.
-    const runId = 'abc143' as RunId;
-    await writeFlowRecord(
-      runId,
-      {
-        messages: [{ role: 'user', content: 'Continue.' }],
-        modelId: 'gpt54',
-        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      WAITING_AT_START,
-    );
-
-    const resume = await retrieveToolUseResume(runId);
-    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
-      ACTIVE_COMPATIBILITY_KEY,
-    );
-
-    const store = getRunStore(runId);
-    const writeSpy = vi.spyOn(store, 'write');
-    try {
-      await runResumedFlowToWaiting(runId, resume);
-
-      // `PersistedFlow` still legitimately persists its own node-cursor
-      // progress once as the flow steps through to WAITING -- that write is
-      // not under test here. What must NOT happen is a *second*, earlier
-      // resume-startup write. Every write the flow does make must already
-      // carry the final WAITING cursor, never a pre-step one.
-      expect(writeSpy.mock.calls.length).toBeGreaterThan(0);
-      for (const [, record] of writeSpy.mock.calls) {
-        expect((record as FlowRecord).cursor).toEqual({
-          lastAction: 'waiting',
-          nextNodeId: WAIT_NODE_CURSOR,
-        });
-      }
-    } finally {
-      writeSpy.mockRestore();
-    }
-  });
-
-  it('keeps a persisted snapshot compatibility key authoritative over the active handler', async () => {
-    const runId = 'abc142' as RunId;
-    const persistedCompatibilityKey = 'ModelHandlerAnthropic';
-    await writeFlowRecord(
-      runId,
-      {
-        messages: [{ role: 'user', content: 'Continue.' }],
-        modelHandlerCompatibilityKey: persistedCompatibilityKey,
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      WAITING_AT_START,
-    );
-
-    const resume = await retrieveToolUseResume(runId);
-    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
-      persistedCompatibilityKey,
-    );
-
-    await runResumedFlowToWaiting(runId, resume);
-
-    const healedRecord = await readFlowRecord(runId);
-    expect(healedRecord?.shared).toMatchObject({
-      modelHandlerCompatibilityKey: persistedCompatibilityKey,
-    });
-  });
-
-  it('rejects a retired workspace snapshot at the tool-use resume boundary', () => {
-    const result = parseToolUseShared({
-      ...VALID_TOOL_USE_SHARED,
-      stateSlices: {
-        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-        workspaceSnapshot: { todos: [], plan: null },
-        userChannels: {},
-      },
-    });
-
-    expect(result.success).toBe(false);
   });
 });

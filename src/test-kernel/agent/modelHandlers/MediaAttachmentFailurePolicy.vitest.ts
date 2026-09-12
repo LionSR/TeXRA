@@ -84,11 +84,6 @@ type ThrowingMediaHandler = {
     userRequest: string,
     mediaFiles?: FileLocation[],
   ): Promise<unknown[]>;
-  createRoundMessages(
-    messages: never[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<unknown[]>;
 };
 
 const THROWING_MEDIA_HANDLERS: Array<{
@@ -121,7 +116,9 @@ const THROWING_MEDIA_HANDLERS: Array<{
  *  - Google GenAI.createRoundMessages (a *follow-up* round) had no catch at
  *    all and threw, instead of warning and continuing.
  * Both now follow the single policy: initial rounds fail loudly, follow-up
- * rounds warn and continue without the attachment.
+ * rounds warn and continue without the attachment. The follow-up round is
+ * built by the run loop now, so its half of the policy is exercised through
+ * `reportMediaAttachmentFailure` directly.
  */
 describe('media attachment failure policy (#7465)', () => {
   it.each(THROWING_MEDIA_HANDLERS)(
@@ -133,27 +130,6 @@ describe('media attachment failure policy (#7465)', () => {
       await assert.rejects(
         handler.initializeMessages('prefix', 'request', MEDIA_FILES),
         (err: unknown) => err === MEDIA_FAILURE,
-      );
-    },
-  );
-
-  it.each(THROWING_MEDIA_HANDLERS)(
-    '$name createRoundMessages warns and continues without the attachment',
-    async ({ create }) => {
-      const handler = create();
-      const { logger, errorMessages } = createFailureRecorder();
-      handler.setLogger(logger);
-
-      const messages = await handler.createRoundMessages(
-        [],
-        'follow-up text',
-        MEDIA_FILES,
-      );
-
-      assert.equal(messages.length, 1, 'round message should still be built');
-      assert.ok(
-        errorMessages.some((m) => m.includes('follow-up round')),
-        'should emit one error-level trace entry describing the dropped attachment',
       );
     },
   );

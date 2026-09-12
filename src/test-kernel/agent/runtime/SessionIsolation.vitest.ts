@@ -226,16 +226,18 @@ describe('session isolation', () => {
     try {
       await Effect.runPromise(
         Effect.provide(
-          runFlowWithLifecycle(ctx, async () => {
-            // Mid-run: the handle is registered in session B's registry only.
-            expect(sessionB.runs.getHandle(runId)).toBeDefined();
-            expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
-            return {
-              outcome: RUN_OUTCOME.COMPLETED,
-              runId,
-              output: emptyRunEndOutput(AgentCategory.ToolUse),
-            };
-          }),
+          runFlowWithLifecycle(ctx, () =>
+            Effect.sync(() => {
+              // Mid-run: the handle is registered in session B's registry only.
+              expect(sessionB.runs.getHandle(runId)).toBeDefined();
+              expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+              return {
+                outcome: RUN_OUTCOME.COMPLETED,
+                runId,
+                output: emptyRunEndOutput(AgentCategory.ToolUse),
+              };
+            }),
+          ),
           fakeProcessServices(),
         ),
       );

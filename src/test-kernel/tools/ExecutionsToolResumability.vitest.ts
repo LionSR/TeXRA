@@ -1,21 +1,38 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache, getRunStore } from '@agent/storage';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import type { RunId } from '@shared/schemas';
+import { clearStoreCache } from '@agent/storage';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { aggregateId, type RunId } from '@shared/schemas';
+import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
-const BASE_FLOW_RECORD: FlowRecord = {
-  shared: { messages: [] },
-  cursor: { nextNodeId: 'start' },
-};
-
-async function writeRecord(runId: RunId, record: unknown): Promise<void> {
-  await getRunStore(runId).write(flowKey(runId), record);
+/** The opening snapshot a run writes before its first external activity. */
+function openingSnapshot(runId: RunId): RunLedgerDraft {
+  return {
+    type: 'flow.snapshot',
+    aggregateId: aggregateId('run', runId),
+    payload: {
+      family: 'toolUse',
+      runtime: {
+        phase: 'initial',
+        round: 0,
+        turn: 0,
+        continuationIndex: 0,
+        modelId: 'test-model',
+        modelHandlerCompatibilityKey: null,
+        lastError: null,
+        pendingRetry: null,
+      },
+      references: { pendingIntents: [], pendingResponse: null },
+      state: { shouldSkipCycle: false, stateSlices: null },
+    },
+  };
 }
 
 describe('ExecutionsTool resumability fallback', () => {
@@ -25,9 +42,13 @@ describe('ExecutionsTool resumability fallback', () => {
     clearStoreCache();
   });
 
-  it('does not label metadata-free resumable flow records as completed', async () => {
+  it('does not label a metadata-free run carrying a snapshot as completed', async () => {
     const runId = 'abc123abc123' as RunId;
-    await writeRecord(runId, BASE_FLOW_RECORD);
+    const session = defaultSession();
+    publishTestRunStart(session, runId);
+    await Effect.runPromise(
+      session.ledger.appendBatch(runId, null, [openingSnapshot(runId)]),
+    );
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${runId}`,

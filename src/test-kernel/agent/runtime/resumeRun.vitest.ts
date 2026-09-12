@@ -2,13 +2,13 @@ import { Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -460,41 +460,29 @@ describe('resumeRun tool-use queue ownership', () => {
     }),
   );
 
-  // History listings advertise a row from the checkpoint file alone, so a file
-  // that yields no resume state is refused as unusable state — telling that
-  // user the run "has finished", or throwing retrieval's internal wording at
-  // them, are the two ways this used to go wrong.
-  it.live.each([
-    [
-      'retrieval answers empty',
-      (): void =>
-        void retrieveSessionResumeDataMock.mockResolvedValueOnce(null),
-    ],
-    [
-      'retrieval throws on a record it cannot resume',
-      (): void =>
-        void retrieveSessionResumeDataMock.mockRejectedValueOnce(
-          new Error('Failed to retrieve tool-use resume data', {
-            cause: new PersistedFlowStateError(RUN, 'unsupported-record'),
+  // The fold that continues a run is the one reader of its rows, so an
+  // aggregate that does not fold is refused as unusable state at the launch
+  // that folded it. Telling that user the run "has finished", or throwing the
+  // launch's internal wording at them, are the two ways this used to go wrong.
+  it.live('refuses an aggregate the ledger cannot fold as unusable state', () =>
+    Effect.gen(function* () {
+      const session = createSession();
+      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+        Effect.fail(
+          new Error('Failed to launch the resumed run', {
+            cause: new RunLedgerRefused({
+              reason: 'inconsistent',
+              runId: RUN,
+              detail: 'unsupported-record',
+            }),
           }),
         ),
-    ],
-  ] as const)(
-    'refuses a checkpoint as unusable when %s',
-    ([_description, arrange]) =>
-      Effect.gen(function* () {
-        const session = createSession();
-        getRunStoreMock.mockReturnValue({
-          readConfig: async () => snapshot().agentConfig,
-          exists: async () => true,
-        });
-        arrange();
+      );
 
-        expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
-          failed: 'unusable_checkpoint',
-        });
-        expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      }),
+      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
+        failed: 'unusable_checkpoint',
+      });
+    }),
   );
 
   // Only a cause that names the checkpoint refuses as unusable state. A

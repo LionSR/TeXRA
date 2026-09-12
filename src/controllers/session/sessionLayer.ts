@@ -41,6 +41,7 @@ import {
   AGENT_TOOL_INJECTIONS,
   ToolInjections,
 } from '@agent/runtime/toolInjection';
+import { EditorModel } from '@agent/runtime/run/modelBinding';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
@@ -61,6 +62,7 @@ import { AppState, type StateStore } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -223,6 +225,7 @@ const sessionHandleLayer = (
     Effect.gen(function* () {
       const { publish, ...reads } = yield* SessionEvents;
       const eventLog = yield* Database;
+      const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
@@ -273,6 +276,7 @@ const sessionHandleLayer = (
         });
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
+        ledger,
         publishText: (runId, id, text) =>
           SubscriptionRef.update(chunks.ref, (held) => {
             const next = new Map(held);
@@ -764,6 +768,12 @@ export interface ProcessRuntimeOptions {
   readonly secrets: () => PlatformSecrets;
   readonly appState: () => StateStore;
   readonly setup: SetupPlatformShape;
+  /**
+   * The editor's language models, for the one host that has an editor: the
+   * run layer binds `vscode-lm` models through it. Absent on a host without
+   * one, where binding such a model fails with that fact.
+   */
+  readonly editorModel?: EditorModel['Service'];
 }
 
 /**
@@ -794,6 +804,7 @@ export function installProcessRuntime({
   secrets,
   appState,
   setup,
+  editorModel,
 }: ProcessRuntimeOptions): void {
   const identity =
     processStart instanceof Promise
@@ -812,6 +823,9 @@ export function installProcessRuntime({
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
     processServicesLayer({ secrets, appState, setup }),
+    editorModel === undefined
+      ? Layer.empty
+      : Layer.succeed(EditorModel)(editorModel),
   ).pipe(Layer.provideMerge(identity));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));

@@ -1,4 +1,5 @@
 import { ModelProvider } from 'llm-zoo';
+import { BASE_URLS } from '@agent/runtime/run/routeEndpoint';
 import { resolveGlmRoute } from '@model/glmRouting';
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
@@ -8,42 +9,8 @@ import {
 } from '@model/openRouterRouting';
 import {
   getProviderEndpoint,
-  useChinaRegion,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-
-/**
- * Provider default base URLs. Providers whose endpoint depends on the
- * China/international toggles supply a thunk, read only when that provider is
- * the one being resolved.
- */
-const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
-  [ModelProvider.GOOGLE]: null,
-  [ModelProvider.OPENAI]: null,
-  [ModelProvider.ANTHROPIC]: null,
-  [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
-  [ModelProvider.XAI]: 'https://api.x.ai/v1',
-  // China: api.moonshot.cn, International: api.moonshot.ai. Keys are
-  // platform-specific. Kimi Code models never reach here — their directAccess
-  // baseUrl wins as `route: 'custom'` at the top of the resolver.
-  [ModelProvider.MOONSHOT]: () =>
-    `https://${useChinaRegion('moonshot') ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
-  [ModelProvider.DASHSCOPE]: () =>
-    `https://${
-      useChinaRegion('dashscope')
-        ? 'dashscope.aliyuncs.com'
-        : 'dashscope-intl.aliyuncs.com'
-    }/compatible-mode/v1`,
-  // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
-  [ModelProvider.MINIMAX]: () =>
-    `https://${useChinaRegion('minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
-  // Resolved separately below so the selected endpoint carries its usage
-  // classification through asynchronous client construction.
-  [ModelProvider.GLM]: null,
-  [ModelProvider.META]: 'https://api.meta.ai/v1',
-  [ModelProvider.COPILOT]: null,
-  [ModelProvider.OTHERS]: null,
-};
 
 type ProxyLogger = { debug: (message: string) => void };
 

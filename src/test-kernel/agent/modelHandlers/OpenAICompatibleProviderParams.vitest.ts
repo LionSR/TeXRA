@@ -190,13 +190,10 @@ class GlmUsageRouteProbe extends ModelHandlerGLM {
 }
 
 describe('OpenAI-compatible provider request params', () => {
-  it('keeps GLM coding-plan attribution and pricing on the request client', async () => {
+  it('keeps GLM coding-plan attribution on the request client', async () => {
     const handler = configureHandler(
       new GlmUsageRouteProbe(
-        buildTestModelConfig(
-          { provider: ModelProvider.GLM },
-          { inputPrice: 2, outputPrice: 4 },
-        ),
+        buildTestModelConfig({ provider: ModelProvider.GLM }),
       ),
     );
     const { client } = createClientStub();
@@ -210,16 +207,6 @@ describe('OpenAI-compatible provider request params', () => {
     expect(handler.getLastCredentialUsageRoute()).toBe(
       'glm-coding-plan-subscription',
     );
-    expect(
-      handler.normalizeUsage(
-        {
-          prompt_tokens: 1_000_000,
-          completion_tokens: 1_000_000,
-          total_tokens: 2_000_000,
-        },
-        10,
-      ).cost,
-    ).toBe(0);
   });
 
   it('records coding-endpoint Kimi requests as subscription usage', async () => {

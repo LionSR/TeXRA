@@ -16,6 +16,8 @@ import type {
   ModelCredentialSelection,
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { formatToolResultTextWithAttachments } from '@agent/runtime/run/toolResultText';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
 import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -47,7 +49,6 @@ import {
   resolveMoonshotRequestParameters,
   type MoonshotRequestParameters,
 } from '../support/moonshotRequestParameters';
-import { normalizeOpenRouterUsage } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { toOpenAITools } from '../toolConversion';
 import {
@@ -58,14 +59,12 @@ import {
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
-import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { extractTextFromReasoningDetails } from './openRouterReasoning';
 import {
   OpenRouterStreamAggregator,
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
 import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 
 // Third-party type imports
 import type {
@@ -109,27 +108,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   /** Client-side compaction is implemented for tool-use sessions regardless of the routed-through provider. */
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
-  }
-
-  /**
-   * OpenRouter proxies multiple underlying providers behind a single handler
-   * class (config.provider is preserved through routing), so batching must be
-   * decided by the routed-through provider rather than the handler class —
-   * mirroring the Anthropic/Google/DeepSeek/Kimi/MiniMax direct-handler
-   * overrides.
-   * Keyed on provider identity rather than `capabilities.supportsReasoning`
-   * for the same reason those direct-handler overrides are — see the base
-   * getter's doc comment (#7101 triage).
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    const { provider } = this.config;
-    return (
-      provider === ModelProvider.ANTHROPIC ||
-      provider === ModelProvider.GOOGLE ||
-      provider === ModelProvider.DEEPSEEK ||
-      provider === ModelProvider.MOONSHOT ||
-      provider === ModelProvider.MINIMAX
-    );
   }
 
   /** Whether this is an Anthropic model routed through OpenRouter. */
@@ -446,27 +424,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     );
   }
 
-  async createRoundMessages(
-    messages: ChatMessages[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<ChatMessages[]> {
-    return createChatRoundMessages(
-      messages,
-      userMessage,
-      mediaFiles,
-      this.capabilities,
-      (files, context) => this.createMediaForRound(files, context),
-    );
-  }
-
-  async createUserFollowUpMessages(
-    messages: ChatMessages[],
-    userMessage: string,
-  ): Promise<ChatMessages[]> {
-    return createChatUserFollowUpMessages(messages, userMessage);
-  }
-
   createAssistantMessage(text: string): ChatMessages {
     return { role: 'assistant', content: text };
   }
@@ -572,22 +529,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   // ---------------------------------------------------------------------------
-  // Pricing & usage
-  // ---------------------------------------------------------------------------
-
-  normalizeUsage(
-    rawUsage: ChatUsage | null,
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    return normalizeOpenRouterUsage(
-      rawUsage,
-      responseTimeMs,
-      'openrouter',
-      this.standardPricingConfig(),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // Thinking / reasoning
   // ---------------------------------------------------------------------------
 
@@ -628,75 +569,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     this.logger.debug('Reasoning content preview', {
       data: reasoning.slice(0, K_SLICE),
     });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tool use
-  // ---------------------------------------------------------------------------
-
-  extractToolUse(responseObject: ChatResult): OpenRouterToolCall[] {
-    const toolCalls = responseObject?.choices?.[0]?.message?.toolCalls;
-    if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
-
-    return toolCalls
-      .filter((call): call is ChatToolCall =>
-        Boolean(call && call.function?.name && call.id),
-      )
-      .map((call) => ({
-        provider: 'openrouter' as const,
-        callId: call.id,
-        name: call.function.name,
-        input: parseToolInput(call.function.arguments, call.id, this.logger),
-        raw: call,
-      }));
-  }
-
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: OpenRouterToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ChatMessages[]> {
-    if (entries.length === 0) return [];
-
-    const reasoningDetails = this.reasoningDetails;
-    this.reasoningDetails = [];
-    const callMsg: ChatAssistantMessage & { role: 'assistant' } = {
-      role: 'assistant',
-      toolCalls: entries.map(({ call }) => call.raw),
-      ...(reasoningDetails.length ? { reasoningDetails } : {}),
-      ...(text ? { content: text } : {}),
-    };
-    workspaceState?.resetReasoning();
-
-    const resultMsgs: ChatMessages[] = entries.map(
-      ({ call, result, attachments }) => ({
-        role: 'tool',
-        toolCallId: call.callId,
-        content: formatToolResultTextWithAttachments(
-          result,
-          attachments,
-          this.canProcessToolResultAttachments,
-        ),
-      }),
-    );
-
-    return [callMsg, ...resultMsgs];
-  }
-
-  // ---------------------------------------------------------------------------
-  // Stop / continue logic
-  // ---------------------------------------------------------------------------
-
-  protected appendUserText(messages: ChatMessages[], text: string): void {
-    appendUserTextToChatMessages(
-      messages,
-      text,
-      this.capabilities.supportsIntermDevMsgs,
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -749,27 +621,5 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       messages.pop();
     }
     return true;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Message modification
-  // ---------------------------------------------------------------------------
-
-  prependTextToUserMessage(messages: ChatMessages[], text: string): void {
-    prependTextToChatUserMessage(messages, text);
-  }
-
-  async addMediaToUserMessage(
-    messages: ChatMessages[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg || !('content' in lastUserMsg)) return [];
-
-    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return [];
-    insertMediaIntoChatUserMessage(lastUserMsg, formattedMedia);
-    return this.consumeInsertedAttachmentKinds('insert');
   }
 }

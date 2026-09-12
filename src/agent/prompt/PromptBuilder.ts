@@ -182,7 +182,7 @@ export async function buildInitialToolUsePrompts(
   options?: {
     resolvedToolNames?: readonly string[];
     hasDelegationTools?: boolean;
-    isSubagent?: boolean;
+    isChild?: boolean;
   },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(agentPrompt, userVars, logger);
@@ -197,7 +197,7 @@ export async function buildInitialToolUsePrompts(
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
     if (options?.hasDelegationTools) {
       suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-    } else if (options?.isSubagent) {
+    } else if (options?.isChild) {
       suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
     }
   }

@@ -175,13 +175,13 @@ export function statusInfoFromLiveness(liveness: RunLiveness): RunStatusInfo {
       return {
         status: RUN_OUTCOME.CANCELLED,
         elapsed: null,
-        // Presence-only: the listing decided this from a stat, which cannot
-        // tell a resumable checkpoint from a spent or malformed flow record.
-        // Only the single-run paths that parse it may promise a resume.
-        detail: 'interrupted; a flow record remains (not validated here)',
+        // The two facts this arm was decided from: nobody holds the run
+        // claim and no outcome was ever recorded. Whether anything is left
+        // to continue is the resume path's question, not this one.
+        detail: 'interrupted; no owner and no recorded outcome',
       };
     case 'settled':
-      return { status: liveness.outcome ?? 'unknown', elapsed: null };
+      return { status: liveness.outcome, elapsed: null };
   }
 }
 

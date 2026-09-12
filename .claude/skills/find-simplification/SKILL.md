@@ -11,7 +11,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 - Read `AGENTS.md` — especially "Code quality rules" (earned from the 2026-07 simplification campaign), "Pragmatic implementations", "Discouraged factory patterns", "Flattening abstraction layers", "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
 - Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) (the Refactor-LOC lesson: 22 "reduction" PRs netted +5,046 LoC) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
-- Skim `docs/architecture/` before judging anything under `src/agent/`, `src/platform/`, or the PocketFlow flows; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` records settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` or `rejected/` are history, not current justification.
+- Skim `docs/architecture/` before judging anything under `src/agent/`, `src/platform/`, or the run loops; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` records settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` or `rejected/` are history, not current justification.
 - Search `is:issue label:tech-debt` (open and closed) and the relevant per-proposal `Tracking:` issues before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
 
 ## Settled Surfaces — Do Not Propose Collapsing
@@ -20,7 +20,7 @@ Treat these as intentional by default; removing an unused method *inside* one ca
 
 - The checked-in architectural ratchets under `config/ratchets/` (listed in `CLAUDE.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to *shrink* one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/agent/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
-- The trimmed PocketFlow engine (`src/agent/node/index.ts`). It deliberately lacks upstream `BatchNode`/`BatchFlow`, parallel variants, and the `params` channel — do not propose re-adding them, and do not propose replacing the engine without reading it first.
+- The two run programs (`src/agent/runtime/loop/toolUse.ts`, `src/agent/runtime/loop/reflection.ts`) over the run ledger. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the ledger.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a *simplification* source (no migration machinery allowed), not a target.
 - The five browser-reachable `@utils/*` modules (the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs`). The constraint is intentional; reducing the reachable set is welcome, adding Node built-ins to it is a regression.
 
@@ -43,7 +43,7 @@ Thin candidates are not enough: deleting one typo, a single `knip` run's raw out
 
 Use parallel subagents when the user asks for breadth or many candidates. Give each agent a domain and require evidence, not guesses. Useful domains for this repo:
 
-- Agent runtime and PocketFlow: flows, nodes, retry/fallback hooks, session resume paths, `src/agent/runtime/`.
+- Agent runtime: the run loops, `ModelInvoker` retry, session resume paths, `src/agent/runtime/`.
 - Model handlers and tools: `src/agent/modelHandlers/<provider>/`, `src/tools/`, delegation, tool schema defaults.
 - Platform and hosts: port interfaces versus their actual consumers, `src/hosts/`, per-host wiring in `packages/*/`.
 - Webviews: the three parallel view trees (`webview`, `progressView`, `settingsView`) — duplicated manager or slice logic across them is a recurring find, but keep their directory structures aligned.

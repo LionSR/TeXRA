@@ -32,7 +32,6 @@ describe('run metadata updates', () => {
           finalizeRun(session, {
             runId: id,
             outcome: 'completed',
-            flowRecord: 'preserve',
           }),
         ],
         { concurrency: 'unbounded' },
@@ -50,14 +49,12 @@ describe('run metadata updates', () => {
       finalizeRun(session, {
         runId: id,
         outcome: 'completed',
-        flowRecord: 'preserve',
       }),
     );
     await Effect.runPromise(
       finalizeRun(session, {
         runId: id,
         outcome: 'cancelled',
-        flowRecord: 'preserve',
         keepExistingOutcome: true,
       }),
     );

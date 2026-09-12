@@ -185,13 +185,13 @@ export function chatTuiSigintAction(input: {
 }
 
 /**
- * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) with a
- * live flow is left uninterrupted. Since #11304/#11315 the checkpoint survives
- * either way — `retainFlowRecordUnlessCompleted` keeps it on a CANCELLED
- * outcome — so what this preserves is the run's persisted status and its side
- * effects: an idle exit leaves the run WAITING instead of recording a
- * CANCELLED the user never asked for, and does not clear approvals or sweep
- * active children through `detachSubagentsOnStop`.
+ * On exit, a tool-use session suspended at a wait (idle/WAITING) with an active
+ * tool-use run is left uninterrupted. Resumability survives either way: a run's
+ * rows and its latest `flow.snapshot` stay until the run is explicitly deleted,
+ * so even a CANCELLED run remains resumable. What this preserves is the run's
+ * persisted status and its side effects: an idle exit leaves the run WAITING
+ * instead of recording a CANCELLED the user never asked for, and does not clear
+ * approvals or sweep active children through `detachSubagentsOnStop`.
  */
 export function chatTuiIsResumableIdleOnExit(input: {
   readonly canInterruptActiveRun: boolean;

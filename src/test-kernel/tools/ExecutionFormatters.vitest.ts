@@ -18,7 +18,6 @@ const RUN_ID = RunIdSchema.parse('ec1000000001');
 const mocks = vi.hoisted(() => ({
   inspectRunLease: vi.fn(),
   readRunEnd: vi.fn(),
-  exists: vi.fn(),
 }));
 
 vi.mock('@agent/storage/runLease', () => ({
@@ -27,7 +26,6 @@ vi.mock('@agent/storage/runLease', () => ({
 
 vi.mock('@agent/storage/RunKVStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/RunKVStore')>()),
-  getRunStore: () => ({ exists: mocks.exists }),
   getRunRecords: () => ({ readRunEnd: mocks.readRunEnd }),
 }));
 
@@ -43,43 +41,33 @@ afterEach(() => {
   session.dispose();
 });
 
-/** Persisted facts: the run's terminal row, and whether a checkpoint is on disk. */
-function persisted(
-  outcome: RunOutcome | null,
-  checkpoint: 'checkpoint' | 'no-checkpoint',
-): void {
+/** The one persisted fact the ladder reads: the run's terminal row. */
+function persisted(outcome: RunOutcome | null): void {
   const end: RunEnd | null =
     outcome === null ? null : { outcome, output: emptyRunEndOutput('toolUse') };
   mocks.readRunEnd.mockReturnValue(Effect.succeed(end));
-  mocks.exists.mockResolvedValue(checkpoint === 'checkpoint');
 }
 
 describe('getRunStatusInfo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Unowned unless a case says otherwise: every outcome-less row reads the
-    // lease before it decides anything from the checkpoint.
+    // Unowned unless a case says otherwise: the lease is the only thing an
+    // outcome-less row has left to ask.
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
   });
 
-  it.each<{ outcome: RunOutcome | null; expected: string }>([
-    { outcome: null, expected: 'unknown' },
-    { outcome: 'cancelled', expected: 'cancelled' },
-  ])(
-    'reports $expected when the live handle is gone and nothing owns the run',
-    async ({ outcome, expected }) => {
-      persisted(outcome, 'no-checkpoint');
+  it('reports the recorded outcome when the live handle is gone', async () => {
+    persisted('cancelled');
 
-      const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
-      assert.strictEqual(info.status, expected);
-    },
-  );
+    assert.strictEqual(info.status, 'cancelled');
+  });
 
-  it('reads no checkpoint and no lease for a row that recorded its outcome', async () => {
+  it('reads no durable row and no lease for a run the caller already settled', async () => {
     // The listing's whole budget: one terminal row (here the caller's own),
     // and nothing else for a run that already said how it ended.
-    persisted(null, 'no-checkpoint');
+    persisted(null);
 
     const info = await Effect.runPromise(
       getRunStatusInfo(RUN_ID, session, 'completed'),
@@ -87,14 +75,13 @@ describe('getRunStatusInfo', () => {
 
     assert.strictEqual(info.status, 'completed');
     assert.strictEqual(mocks.readRunEnd.mock.calls.length, 0);
-    assert.strictEqual(mocks.exists.mock.calls.length, 0);
     assert.strictEqual(mocks.inspectRunLease.mock.calls.length, 0);
   });
 
-  it('reports a checkpointless run a live foreign owner holds as held', async () => {
+  it('reports an outcome-less run a live foreign owner holds as held', async () => {
     // A background shell holds its run lease for its whole lifetime and
-    // never writes a flow record, so the checkpoint stat cannot decide it.
-    persisted(null, 'no-checkpoint');
+    // records no outcome until it ends, so the claim is what decides it.
+    persisted(null);
     mocks.inspectRunLease.mockResolvedValue({
       status: 'held',
       owner: { pid: 5150, hostname: 'other-host' },
@@ -106,25 +93,25 @@ describe('getRunStatusInfo', () => {
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 5150 on other-host/);
-    assert.strictEqual(mocks.exists.mock.calls.length, 0);
   });
 
-  it('calls a checkpointed run nobody owns interrupted', async () => {
-    persisted(null, 'checkpoint');
+  it('calls a run nobody owns and nothing recorded interrupted', async () => {
+    persisted(null);
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
 
     const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'cancelled');
-    // Presence, not validity: a stat cannot promise the record can be resumed.
+    // The two facts the arm was decided from, and nothing about whether
+    // there is anything left to continue.
     assert.match(
       info.detail ?? '',
-      /interrupted; a flow record remains \(not validated here\)/,
+      /interrupted; no owner and no recorded outcome/,
     );
   });
 
   it('does not call a run cancelled while another process holds it', async () => {
-    persisted(null, 'checkpoint');
+    persisted(null);
     mocks.inspectRunLease.mockResolvedValue({
       status: 'held',
       owner: { pid: 4242, hostname: 'other-host' },
@@ -138,7 +125,7 @@ describe('getRunStatusInfo', () => {
 
   it('does not settle a run whose lease this process holds with no run', async () => {
     // Nothing durable behind the lease: no outcome ever written.
-    persisted(null, 'checkpoint');
+    persisted(null);
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
     const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
@@ -151,7 +138,7 @@ describe('getRunStatusInfo', () => {
     // A finished child untracks its handle and writes the outcome long before
     // its loop releases the run lease (#8093), and the parent reads the
     // run inside exactly that window.
-    persisted('completed', 'checkpoint');
+    persisted('completed');
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
     const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
@@ -160,7 +147,7 @@ describe('getRunStatusInfo', () => {
   });
 
   it('reports an unreadable lease rather than a terminal reading', async () => {
-    persisted(null, 'checkpoint');
+    persisted(null);
     mocks.inspectRunLease.mockRejectedValue(new Error('lease corrupt'));
 
     const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));

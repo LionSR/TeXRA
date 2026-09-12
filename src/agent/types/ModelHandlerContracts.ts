@@ -70,7 +70,7 @@ export interface TokenValidationResult {
 }
 
 /** Named terminal tool selected for a provider-native forced turn. */
-export interface FinalTool {
+interface FinalTool {
   name: string;
 }
 

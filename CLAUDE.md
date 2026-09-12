@@ -53,10 +53,10 @@ Things the tree won't tell you:
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `shared-schemas-deep-import`, `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `platform()`, `setServices()`, `new AbortController(`,
+  shrink-only counts: `platform()`, `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
-  `effect`-importing files, and imports reaching into `src/agent/node/` or
-  `src/agent/modelHandlers/` from outside them; it admits a new `Effect.run*`
+  `effect`-importing files, and imports reaching into
+  `src/agent/modelHandlers/` from outside it; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` or
   `src/tools/**/*Tool.ts`, R1's three boundary kinds, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
@@ -176,13 +176,17 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 ## Agent system
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
-`src/agent/core/README.md`), `implementations/flows/` holds the two PocketFlow
-flows (`reflection`, `tooluse`) — each owning its own cycle/round flow, with
-`core/flows/` keeping only the kernel both families use. Beside them,
-`implementations/agentCreator/` is _not_ a flow despite the filename: it is one
-linear async function (`runAgentCreator`) with a single production caller.
-`modelHandlers/` abstracts
-provider APIs. Agents are configured by YAML in
+`src/agent/core/README.md`); `runtime/loop/` holds the two run programs
+(`toolUse.ts`, `reflection.ts`), plain Effect loops over the run ledger, with
+`runtime/run/` the per-run services they take from context (`AgentRun`, model
+binding, pricing, media, tools) and `runtime/ModelInvoker.ts` the one service
+that calls the `packages/llm` `Model`. `core/flows/` keeps only the one helper
+both families use (`toolCallParsing`). `implementations/flows/reflection/output/` is the reflection
+output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
+filename: it is one linear async function (`runAgentCreator`) with a single
+production caller. `modelHandlers/` abstracts provider APIs for the helper
+paths only (`helperModel`, `agentCreatorFlow`, `userVars`); the run loop never
+calls it. Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.
 
@@ -190,18 +194,19 @@ single and multi-document output.
 assigns an `executionId`, registers the run, and opens workflow output. Use the
 lower-level `executeAgent` only when you already own the `executionId` (subagent
 dispatch, resume paths). Resume a persisted tool-use session via
-`resumeToolUseFromResumeData`, not `runAgent`. PocketFlow conventions and the
-services/shared-store split: AGENTS.md "Patterns across the codebase"
-(PocketFlow architecture) and `docs/architecture/2026-06-20-pocketflow-state.md`.
+`resumeToolUseFromResumeData`, not `runAgent`. Loop conventions and the
+write points: AGENTS.md "Patterns across the codebase" (Run loop
+architecture).
 
-**The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
-(~150 lines) is the only definition of `BaseNode` and `Flow`. Upstream's
-`BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, and the
-`params`/`setParams` channel do not exist here — read the file rather than
-upstream docs. There is no retrying `Node` class: the manual-retry loop
-(automatic `p-retry` batch → `retryPrompt` → one approved attempt at a time →
-`execFallback`) lives on `ModelInvocationNode`, its only implementor. A node
-that just needs a failure hook overrides `BaseNode.execFallback`.
+**There is no flow engine.** A run is one Effect program that appends rows to
+the run ledger (`src/shared/session/runLedger.ts`) and continues from the
+folded `RunState` each `appendBatch` returns; resume is the same function
+reading the same rows. Every wait writes a `flow.step`; a response row is
+committed before its tools dispatch and a `tool.result` before the loop
+continues. Retry has two owners inside `ModelInvoker`: an automatic
+route-scoped batch under the session's `ModelRetryGate`, and a durable human
+permit (`approval.requested` + the snapshot's `pendingRetry`). Do not add a
+node, a cursor, a services bag, or a second writer of the ledger.
 
 ## Design guardrails
 

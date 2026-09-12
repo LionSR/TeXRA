@@ -52,7 +52,7 @@ export interface DesktopAgentRunOptions {
     agentName: string;
     category: AgentCategory;
   }): void;
-  /** Select the stream launched by this window. */
+  /** Select the run launched by this window. */
   onLaunched?: (runId: RunId) => void;
   logger?: AgentTrace;
 }

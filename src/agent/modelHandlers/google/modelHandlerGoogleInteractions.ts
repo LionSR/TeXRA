@@ -41,6 +41,12 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import {
+  DEFAULT_ATTACHMENT_MIME_TYPE,
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@agent/runtime/run/toolResultText';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '@agent/runtime/run/compaction';
+import {
   detectRawErrorBody,
   detectStatusCode,
   firstBodyStringField,
@@ -74,7 +80,6 @@ import {
   type GoogleMediaSource,
 } from './googleHandlerShared';
 import { tagGoogleSdkError } from './googleSdkError';
-import { normalizeGoogleInteractionsUsage } from './googleInteractionsUsage';
 import {
   BackgroundRunLifecycle,
   type BackgroundRetrieveFailureVerdict,
@@ -82,13 +87,7 @@ import {
 } from '../support/BackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
 import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
-import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
-import {
-  DEFAULT_ATTACHMENT_MIME_TYPE,
-  formatAttachmentSummary,
-  formatToolResultAsText,
-  loadAttachmentBuffer,
-} from '../utils/toolAttachmentUtils';
+import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
 import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
 import type { BackgroundPollStats } from '../support/BackgroundPoller';
 
@@ -730,30 +729,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   /**
-   * Google passes the system prompt per call as `system_instruction` rather
-   * than storing it in `messages`, so the round flow must resupply it on every
-   * invocation.
-   */
-  override get requiresPerCallSystemPrompt(): boolean {
-    return true;
-  }
-
-  /**
-   * Gemini carries thought signatures across parallel function calls, which must
-   * be preserved by batching the results into a single follow-up: the handler
-   * rebuilds the model-generated turn (thought signatures + every function call)
-   * ahead of the results, in the order the model emitted them. The tool-use flow
-   * only records the assistant turn through the follow-up methods (see
-   * `ToolUseDispatchNode`), so splitting parallel calls across separate turns
-   * would lose the signature and reference a call absent from the transcript.
-   * Unconditional (not gated on `capabilities.supportsReasoning`) — see the base
-   * getter's doc comment (#7101 triage).
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  /**
    * Map the model's reasoning effort to a Gemini `thinking_level`.
    * Interactions emits the lowercase `thinking_level` string literals.
    *
@@ -1002,21 +977,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   // ===========================================================================
-  // Usage / price (PORT — delegate to the snake_case adapter)
-  // ===========================================================================
-
-  normalizeUsage(
-    rawUsage: Usage | null,
-    responseTimeMs: number,
-  ): NormalizedUsage {
-    return normalizeGoogleInteractionsUsage(
-      rawUsage,
-      responseTimeMs,
-      this.standardPricingConfig(),
-    );
-  }
-
-  // ===========================================================================
   // Message construction (typed Content + Step[], not chat parts)
   // ===========================================================================
 
@@ -1048,47 +1008,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
-  }
-
-  async createRoundMessages(
-    messages: Step[],
-    userMessage: string,
-    mediaFiles?: FileLocation[],
-  ): Promise<Step[]> {
-    const media =
-      mediaFiles && this.canAttachMedia(mediaFiles)
-        ? await this.createMediaForRound(mediaFiles, 'followUp')
-        : [];
-    const content: Content[] = [
-      ...media,
-      ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
-    ];
-
-    if (content.length === 0) {
-      throw new Error(
-        'Google follow-up messages require non-empty text or an attachment.',
-      );
-    }
-
-    messages.push({ type: 'user_input', content } satisfies UserInputStep);
-    return messages;
-  }
-
-  async createUserFollowUpMessages(
-    messages: Step[],
-    userMessage: string,
-  ): Promise<Step[]> {
-    if (!userMessage.trim()) return messages;
-    const last = messages.at(-1);
-    if (last?.type === 'user_input') {
-      (last.content ??= []).push(this.textMedia(userMessage));
-    } else {
-      messages.push({
-        type: 'user_input',
-        content: [this.textMedia(userMessage)],
-      } satisfies UserInputStep);
-    }
-    return messages;
   }
 
   createAssistantMessage(text: string): Step {
@@ -1235,32 +1154,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GoogleGenAIInteraction): GoogleToolCall[] {
-    const steps = responseObject?.steps ?? [];
-    return steps
-      .filter((s): s is FunctionCallStep => s.type === 'function_call')
-      .map((step): GoogleToolCall => ({
-        provider: 'google',
-        callId: step.id ?? generateShortId(),
-        name: step.name,
-        input: step.arguments,
-        // GoogleToolCall.raw is a chat `FunctionCall`; reconstruct the shape the
-        // downstream code reads (name/args/id) from the Interactions step.
-        raw: { id: step.id, name: step.name, args: step.arguments },
-      }));
-  }
-
-  // ===========================================================================
-  // Stop / continue (PORT — keyed on Interaction status, not FinishReason)
-  // ===========================================================================
-
-  protected appendUserText(messages: Step[], text: string): void {
-    messages.push({
-      type: 'user_input',
-      content: [this.textMedia(text)],
-    } satisfies UserInputStep);
-  }
-
   protected appendTextToLastAssistantMessage(
     messages: Step[],
     text: string,
@@ -1297,53 +1190,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return true;
   }
 
-  // ===========================================================================
-  // Tool round-trip (REWRITE — verbatim Step[] + a function_result step)
-  // ===========================================================================
-
-  /**
-   * Follow-up for MULTIPLE parallel tool calls. All model-generated steps
-   * (thoughts + every function-call step) are emitted together in model-emitted
-   * order, followed by every function_result step — mirroring the chat handler's
-   * batched path, re-expressed as Interactions `Step[]` (spec §6.1).
-   */
-  async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: GoogleToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<Step[]> {
-    if (entries.length === 0) return [];
-    for (const [index, { call }] of entries.entries()) {
-      if (!call.callId) {
-        throw new Error(
-          `Function call at index ${index} (${call.name ?? 'unknown'}) is missing callId`,
-        );
-      }
-    }
-
-    const assistantSteps = this.buildAssistantTurnSteps(
-      entries.map((e) => e.call),
-      workspaceState,
-      text,
-    );
-    const resultSteps = await Promise.all(
-      entries.map(({ call, result, attachments }) =>
-        this.buildFunctionResultStep(call, result, attachments),
-      ),
-    );
-
-    if (workspaceState) {
-      workspaceState.resetServerToolContent();
-      workspaceState.resetReasoning();
-    }
-
-    return [...assistantSteps, ...resultSteps];
-  }
-
   /**
    * Build a `thought` step from an optional signature and thinking summary, or
    * `undefined` when both are empty (an empty thought step is noise on the wire).
@@ -1360,112 +1206,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } satisfies ThoughtStep;
   }
 
-  /**
-   * Reconstruct the model-generated steps of the just-finished turn: the
-   * thought steps (carrying their signatures, sourced from the reasoning cache
-   * populated by `processThinkingBlock`), optional assistant text, then the
-   * function-call steps. Carried verbatim in the transcript so the backend can
-   * validate reasoning across tool turns (resent each round in stateless mode;
-   * retained server-side once sent in chained mode).
-   */
-  private buildAssistantTurnSteps(
-    calls: GoogleToolCall[],
-    workspaceState: AgentWorkspaceState | undefined,
-    text: string | undefined,
-  ): Step[] {
-    const steps: Step[] = [];
-
-    for (const block of workspaceState?.reasoning.thinkingBlocks ?? []) {
-      const step = this.thoughtStep(block.signature, block.thinking);
-      if (step) steps.push(step);
-    }
-
-    if (text) {
-      steps.push(this.createAssistantMessage(text));
-    }
-
-    for (const call of calls) {
-      steps.push({
-        type: 'function_call',
-        id: call.callId ?? generateShortId(),
-        name: call.name ?? '',
-        arguments: (call.input ?? {}) as Record<string, unknown>,
-      } satisfies FunctionCallStep);
-    }
-
-    return steps;
-  }
-
-  /** Build a `function_result` step, embedding tool-result images inline. */
-  private async buildFunctionResultStep(
-    call: GoogleToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-  ): Promise<FunctionResultStep> {
-    const subcontent: FunctionResultSubcontent[] = [];
-    let attachmentSummary: string | undefined;
-
-    if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      attachmentSummary = formatAttachmentSummary(
-        attachments,
-        'included-inline',
-      );
-      const encoded = (
-        await Promise.all(
-          attachments.map((a) => this.buildFunctionResultImage(a)),
-        )
-      ).filter(filterNotNull);
-      subcontent.push(...encoded);
-      if (encoded.length === 0) {
-        this.logger.warn(
-          `All attachments for Interactions function result '${call.name}' failed to encode.`,
-        );
-      }
-    }
-
-    const text = formatToolResultAsText(result, attachmentSummary);
-    const resultContent: FunctionResultSubcontent[] = [
-      { type: 'text', text },
-      ...subcontent,
-    ];
-
-    return {
-      type: 'function_result',
-      call_id: call.callId,
-      name: call.name,
-      ...(result.status === 'error' ? { is_error: true } : {}),
-      result: resultContent,
-    } satisfies FunctionResultStep;
-  }
-
-  private async buildFunctionResultImage(
-    attachment: ToolFileAttachment,
-  ): Promise<ImageContent | null> {
-    try {
-      const buffer = await loadAttachmentBuffer(attachment);
-      if (!buffer || buffer.length === 0) {
-        this.logger.warn(
-          `Skipping empty attachment '${attachment.path}' in Interactions function result.`,
-        );
-        return null;
-      }
-      const mimeType = attachment.mimeType ?? DEFAULT_ATTACHMENT_MIME_TYPE;
-      return {
-        type: 'image',
-        data: buffer.toString('base64'),
-        mime_type: mimeType,
-      } satisfies ImageContent;
-    } catch (error) {
-      reportMediaAttachmentFailure(
-        this.logger,
-        'toolAttachment',
-        error,
-        `failed to encode '${attachment.path}' for Interactions function result`,
-      );
-      return null;
-    }
-  }
-
   /** Flatten a function-result payload's `result` field to plain text. */
   private functionResultToText(result: FunctionResultStep['result']): string {
     if (typeof result === 'string') return result;
@@ -1473,38 +1213,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       return joinTextContent(result);
     }
     return '';
-  }
-
-  // ===========================================================================
-  // Message modification (post-build enrichment)
-  // ===========================================================================
-
-  prependTextToUserMessage(messages: Step[], text: string): void {
-    if (!text.trim()) return;
-    const lastUser = messages.findLast(
-      (s): s is UserInputStep => s.type === 'user_input',
-    );
-    if (lastUser) {
-      (lastUser.content ??= []).unshift(this.textMedia(text));
-    }
-  }
-
-  async addMediaToUserMessage(
-    messages: Step[],
-    mediaFiles: FileLocation[],
-  ): Promise<MediaAttachmentKind[]> {
-    if (!this.canAttachMedia(mediaFiles)) return [];
-    const media = await this.createMediaForRound(mediaFiles, 'insert');
-    if (media.length === 0) return [];
-    const trailing = messages.at(-1);
-    const lastUser =
-      trailing?.type === 'user_input' &&
-      messages.length > this.chainState.getSentCount()
-        ? trailing
-        : ({ type: 'user_input', content: [] } satisfies UserInputStep);
-    if (lastUser !== trailing) messages.push(lastUser);
-    (lastUser.content ??= []).unshift(...media);
-    return this.consumeInsertedAttachmentKinds('insert');
   }
 
   // ===========================================================================

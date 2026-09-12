@@ -15,9 +15,6 @@ import {
 /** Runtime sites allowed to perform ordinary transcript hydration. */
 const HYDRATION_SITE_ALLOWLIST = new Set([
   'packages/cli/src/chat/chatSessionController.ts',
-  'src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts',
-  'src/agent/runtime/executeAgent.ts',
-  'src/transcript/StreamLogStore.ts',
 ]);
 
 /** Files under a scan root that match `pattern` and are not allowlisted. */

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -11,20 +11,13 @@ import {
 
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
-import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
-import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
-import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import {
   activeModelHandlerCompatibilityKey,
-  createKimiCodeFallbackHandler,
   createModelHandler,
   createModelHandlerForCompatibilityKey,
   resolveModelHandlerCompatibilityKey,
-  modelHandlersShareConversationFormat,
   shouldUseResponsesAPI,
 } from '@agent/runtime/ModelFactory';
 import {
@@ -761,7 +754,6 @@ describe('OpenAI model handler routing', () => {
       expect(activeModelHandlerCompatibilityKey(codex)).toBe(
         activeModelHandlerCompatibilityKey(signedOut),
       );
-      expect(modelHandlersShareConversationFormat(codex, signedOut)).toBe(true);
     } finally {
       codex.dispose();
       signedOut.dispose();
@@ -942,75 +934,7 @@ describe('Google Interactions API routing', () => {
   });
 });
 
-describe('OpenRouter-proxied provider capabilities', () => {
-  // ModelFactory preserves config.provider when routing through OpenRouter
-  // (new ModelHandlerOpenRouterNative({ ...config })). The capability getters
-  // must therefore reflect the routed-through provider, not the handler class —
-  // otherwise parallel-tool batching and DeepSeek reasoning-level overrides
-  // silently stop applying on the global OpenRouter path. Regression guard.
-  function openRouterHandler(
-    provider: ModelProvider,
-    caps: Partial<ModelConfig['capabilities']> = {},
-  ): ModelHandlerOpenRouterNative {
-    return new ModelHandlerOpenRouterNative({
-      ...modelConfig(provider, caps),
-      openRouterOnly: true,
-    });
-  }
-
-  it('requires batched parallel tool results for proxied Anthropic/Google/DeepSeek/Kimi/MiniMax', () => {
-    for (const provider of [
-      ModelProvider.ANTHROPIC,
-      ModelProvider.GOOGLE,
-      ModelProvider.DEEPSEEK,
-      ModelProvider.MOONSHOT,
-      ModelProvider.MINIMAX,
-    ]) {
-      expect(
-        openRouterHandler(provider).requiresBatchedParallelToolResults,
-      ).toBe(true);
-    }
-  });
-
-  it('does not batch for proxied providers that never carried cross-call reasoning', () => {
-    for (const provider of [ModelProvider.OPENAI, ModelProvider.OTHERS]) {
-      expect(
-        openRouterHandler(provider).requiresBatchedParallelToolResults,
-      ).toBe(false);
-    }
-  });
-});
-
 describe('direct handler capability overrides', () => {
-  // Formal coverage of `requiresBatchedParallelToolResults` behavior that
-  // replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
-  it('flags batching on reasoning-carrying providers except GLM', () => {
-    expect(
-      new ModelHandlerGoogleInteractions(modelConfig(ModelProvider.GOOGLE))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerDeepSeek(modelConfig(ModelProvider.DEEPSEEK))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerKimi(modelConfig(ModelProvider.MOONSHOT))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerMiniMax(modelConfig(ModelProvider.MINIMAX))
-        .requiresBatchedParallelToolResults,
-    ).toBe(true);
-    expect(
-      new ModelHandlerGLM(modelConfig(ModelProvider.GLM))
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
-    expect(
-      new ModelHandlerOpenAI(modelConfig(ModelProvider.OPENAI))
-        .requiresBatchedParallelToolResults,
-    ).toBe(false);
-  });
-
   it('grants a reasoning-level override to DeepSeek with reasoning but no granular effort', () => {
     expect(
       new ModelHandlerDeepSeek(
@@ -1114,58 +1038,5 @@ describe('Kimi Code reroute', () => {
       (handler) => handler.config,
     );
     expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
-  });
-});
-
-describe('createKimiCodeFallbackHandler', () => {
-  /** The synthesized config a dual-backend handler carries on the coding route. */
-  const codingRoutedKimi3 = {
-    ...MODEL_CONFIGS.kimi3,
-    fullName: 'k3',
-    shortName: 'k3',
-    baseUrl: 'https://api.kimi.com/coding/v1',
-  } as ModelConfig;
-
-  beforeEach(async () => {
-    // The "Prefer Kimi Code" switch is off here, matching the retry switch's
-    // pre-commit: the rebuild must resolve the Moonshot fallback, not the
-    // coding route again.
-    await installPlatform();
-  });
-
-  it('rebuilds a coding-routed dual-backend model from the registry config', async () => {
-    const handler = await createKimiCodeFallbackHandler(
-      codingRoutedKimi3,
-      'kimi3',
-      hostStores(),
-    );
-
-    // The compat-key tag (not instanceof) survives this file's
-    // vi.resetModules() re-imports, and pins the conversation format.
-    expect(handler && activeModelHandlerCompatibilityKey(handler)).toBe(
-      'ModelHandlerKimi',
-    );
-    expect(handler?.config.fullName).toBe('kimi-k3');
-    expect(handler?.config.baseUrl).toBeUndefined();
-    handler?.dispose();
-  });
-
-  it('rebuilds nothing for a Kimi Code-exclusive model', async () => {
-    // kimi-for-coding pins the coding baseUrl in the registry: no Moonshot
-    // fallback exists to rebuild onto.
-    await expect(
-      createKimiCodeFallbackHandler(
-        MODEL_CONFIGS.kimiCoding,
-        'kimiCoding',
-        hostStores(),
-      ),
-    ).resolves.toBeUndefined();
-  });
-
-  it('rebuilds nothing when the live config is not on the coding route', async () => {
-    // A plain direct kimi3 handler re-resolves fine with a rebind.
-    await expect(
-      createKimiCodeFallbackHandler(MODEL_CONFIGS.kimi3, 'kimi3', hostStores()),
-    ).resolves.toBeUndefined();
   });
 });

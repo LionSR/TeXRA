@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest';
 import {
   formatToolResultAsText,
   formatToolResultTextWithAttachments,
-} from '@agent/modelHandlers/utils/toolAttachmentUtils';
+} from '@agent/runtime/run/toolResultText';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import type { ToolFileAttachment } from '@shared/schemas';
+
+/** The formatter's cap: a result longer than this is truncated head+tail. */
+const TOOL_RESULT_TEXT_CAP = 200_000;
 
 /** Head and tail well over their truncation budgets, with an elidable middle. */
 function oversizedText(): { head: string; tail: string; text: string } {
@@ -17,7 +19,7 @@ function oversizedText(): { head: string; tail: string; text: string } {
   return {
     head,
     tail,
-    text: head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail,
+    text: head + 'x'.repeat(TOOL_RESULT_TEXT_CAP) + tail,
   };
 }
 
@@ -53,7 +55,7 @@ describe('formatToolResultAsText', () => {
     expect(result).toContain('HEAD_MARKER_');
     expect(result).toContain('TAIL_MARKER_');
     expect(result).not.toContain('x'.repeat(1000));
-    expect(result.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_TEXT_LENGTH);
+    expect(result.length).toBeLessThanOrEqual(TOOL_RESULT_TEXT_CAP);
   });
 });
 

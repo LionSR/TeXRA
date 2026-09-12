@@ -7,48 +7,22 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import pDefer from 'p-defer';
 import { Effect } from 'effect';
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentEvent } from '@agent/trace';
 import { getRunRecords } from '@agent/storage';
-import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
-import type {
-  AgentPrompt,
-  AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
-import {
-  AgentWorkspaceState,
-  FileInteractionState,
-} from '@agent/core/state/AgentWorkspaceState';
-import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode';
-import { createToolUseRoundFlow } from '@agent/implementations/flows/tooluse/ToolUseRoundFlow';
-import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
-import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
-import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
   aggregateId,
-  AgentRunStateSnapshotSchema,
   RUN_PHASE,
   type ExecResult,
   type RunId,
   type ToolResult,
-  AgentCategory,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -58,169 +32,17 @@ import {
   clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
-import {
-  installedHost,
-  installPlatform,
-  setupPlatform,
-} from '@test/support/setupPlatform';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
 import { generateRunId } from '@utils/core';
-import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
-import { testModelCell } from '../agent/modelCellTestUtils';
-import {
-  recordSessionEvents,
-  testRunScope,
-  withTestRunContext,
-} from '../agent/progressTestUtils';
+import { recordSessionEvents } from '../agent/progressTestUtils';
 
-// Third-party type-only import (import/order places it last)
-import type OpenAI from 'openai';
-
-const testModelConfig: ModelConfig = {
-  name: 'test',
-  label: 'Test',
-  fullName: 'test',
-  shortName: 'test',
-  provider: ModelProvider.OPENAI,
-  maxOutputTokens: 10,
-  inputPrice: 0,
-  outputPrice: 0,
-  contextWindow: 1000,
-  capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-  openRouterOnly: false,
-};
-
-class BashMockHandler extends ModelHandlerOpenAIResponse {
-  private callCount = 0;
-
-  override async getClient(): Promise<OpenAI> {
-    return {} as OpenAI;
-  }
-
-  // createResponse returns a CreateResponseResult wrapper around the raw
-  // provider response (see IModelHandler.createResponse).
-  override async createResponse(): Promise<any> {
-    this.callCount += 1;
-    if (this.callCount === 1) {
-      return {
-        response: {
-          id: 'bash-call',
-          status: 'completed',
-          output_text: 'running bash',
-          output: [
-            {
-              type: 'message',
-              role: 'assistant',
-              content: [
-                { type: 'output_text', text: 'running bash', annotations: [] },
-              ],
-            },
-            {
-              type: 'function_call',
-              call_id: 'bash-1',
-              name: 'bash',
-              arguments: '{"command":"echo long"}',
-            },
-          ],
-          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-        },
-      };
-    }
-    return {
-      response: {
-        id: 'bash-complete',
-        status: 'completed',
-        output_text: 'done',
-        output: [
-          {
-            type: 'message',
-            role: 'assistant',
-            status: 'completed',
-            content: [{ type: 'output_text', text: 'done', annotations: [] }],
-          },
-        ],
-        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-      },
-    };
-  }
-
-  override extractResponse(resp: any) {
-    if (resp.id === 'bash-call') {
-      return {
-        text: 'running bash',
-        usage: resp.usage,
-        stopReason: 'stop',
-      };
-    }
-    if (resp.id === 'bash-complete') {
-      return { text: 'done', usage: resp.usage, stopReason: 'stop' };
-    }
-    return { text: '', usage: resp.usage, stopReason: 'stop' };
-  }
-}
-
-/**
- * Build the tool-use round services shared by every case. Only the tool name,
- * logger, run id, registry, and interruption hooks vary between tests.
- */
-function roundServices(opts: {
-  toolName: string;
-  logger: ToolUseRoundServices['logger'];
-  runId: RunId;
-  toolRegistry: ToolUseRoundServices['toolRegistry'];
-  abortSignal?: AbortSignal;
-}): ToolUseRoundServices {
-  return {
-    runScope: testRunScope(opts.runId, { signal: opts.abortSignal }),
-    modelCell: testModelCell(new BashMockHandler(testModelConfig)),
-    config: testModelConfig as any,
-    setting: {
-      agentCategory: AgentCategory.ToolUse,
-      temperature: 0,
-      requiredFilesInternal: {},
-      defaultOutputFiles: [],
-      tools: [{ name: opts.toolName }],
-    } satisfies AgentSetting,
-    prompt: {
-      systemPrompt: '',
-      userPrefix: '',
-      userRequest: '',
-    } satisfies AgentPrompt,
-    userVarChannels: {},
-    toolPolicy: createToolPolicy(),
-    logger: opts.logger,
-    fileService: new TaskRunFileService('deadbeef' as RunId),
-    toolRegistry: opts.toolRegistry,
-    onRoundFinalized: () => {},
-    // The process stores a launch threads into the round, taken from the
-    // fake host this suite installs.
-    stores: {
-      secrets: installedHost().platform.secrets,
-      globalState: installedHost().platform.globalState,
-    },
-    run: AgentRunStateSnapshotSchema.parse({}),
-    workspace: AgentWorkspaceState.create(),
-  };
-}
-
-function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
-  return {
-    messages,
-    shouldStop: false,
-    endTurn: false,
-    response: undefined,
-    responseTimeMs: undefined,
-    stopReason: undefined,
-    lastError: undefined,
-    toolCalls: undefined,
-    text: undefined,
-  };
-}
+/** The formatter's cap: a result longer than this is truncated head+tail. */
+const TOOL_RESULT_TEXT_CAP = 200_000;
 
 type ExecuteCommandOptions = NonNullable<
   Parameters<typeof execUtils.executeCommand>[1]
@@ -270,28 +92,6 @@ function holdCommand(): (result: ExecResult) => void {
     () => command.promise,
   );
   return command.resolve;
-}
-
-/**
- * Set up a run trace whose emitted events are captured for inspection, and
- * return a `dispose` that undoes both the subscription and the trace itself.
- */
-function traceWithEvents(runId: RunId): {
-  trace: ReturnType<typeof createTestRunTrace>['trace'];
-  events: AgentEvent[];
-  dispose: () => void;
-} {
-  const runTrace = createTestRunTrace(runId, new StreamLog());
-  const events: AgentEvent[] = [];
-  const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
-  return {
-    trace: runTrace.trace,
-    events,
-    dispose: () => {
-      unsubscribe();
-      runTrace.dispose();
-    },
-  };
 }
 
 /** Shared teardown for background-launch cases. */
@@ -368,42 +168,30 @@ describe('BashTool', () => {
       },
     );
 
-    const bashTool = new BashTool();
-    const directResult = await bashTool.call({ command: 'echo long' });
+    const callSignal = new AbortController().signal;
+    const result = await withToolEnvironment(
+      {
+        run: { runId: 'bash-tool' as RunId, session: defaultSession() },
+        call: { tracker: new FileInteractionState(), signal: callSignal },
+      },
+      () => new BashTool().call({ command: 'echo long' }),
+    );
     assert.equal(
-      directResult.output,
+      result.output,
       longOutput,
       'Bash tool should return the full stdout text',
     );
-
-    const options = roundServices({
-      toolName: 'bash',
-      logger: createTestRunTrace('bash-tool' as RunId, new StreamLog()).trace,
-      runId: 'bash-tool' as RunId,
-      toolRegistry: new MapToolRegistry({ bash: bashTool }),
-    });
-
-    const messages: ProviderMessage[] = [];
-    const shared = freshRoundShared(messages);
-
-    const flow = createToolUseRoundFlow();
-    flow.setServices(options);
-    await withTestRunContext(options.runScope, () => flow.run(shared));
-
-    const toolOutputMessage = messages.find(
-      (msg) => (msg as any).type === 'function_call_output',
-    ) as any;
-    assert.ok(toolOutputMessage, 'Tool output message was not produced');
+    // The lowering every settled call passes through on its way to the model.
     assert.ok(
-      typeof toolOutputMessage.output === 'string' &&
-        toolOutputMessage.output.includes(longOutput),
-      'Model follow-up payload should contain the complete stdout text',
+      formatToolResultAsText(result).includes(longOutput),
+      'Model payload should contain the complete stdout text',
     );
-    assert.ok(
+    assert.equal(
       receivedSignal,
+      callSignal,
       'Bash command should receive the active tool-call abort signal',
     );
-    assert.equal(receivedSignal.aborted, false);
+    assert.equal(callSignal.aborted, false);
   });
 
   it('marks exactly one character elided at 54,001 normalized characters', async () => {
@@ -532,7 +320,7 @@ describe('BashTool', () => {
     // at the tail (where LaTeX/build errors cluster), filler in between.
     const hugeStderr =
       'ENGINE_HEADER '.repeat(400) +
-      'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) +
+      'x'.repeat(TOOL_RESULT_TEXT_CAP) +
       'TAIL_ERROR_DETAIL '.repeat(5000);
 
     mockStreamingCommand((options) => options.onStderr?.(hugeStderr), {
@@ -846,7 +634,11 @@ describe('BashTool', () => {
     assert.ok(error.includes('run_in_background: true'));
   });
 
-  it('finalizes deferred progress card when foreground bash is aborted', async () => {
+  it('opens its deferred card before running and streams output into it, then reports an aborted command as an error result', async () => {
+    // Bash's half of the deferred progress card: the tool signals run-ready
+    // once approval has settled (the dispatcher opens the card there, not at
+    // dispatch time) and every streamed chunk reaches the same hook, in that
+    // order. An aborted command is an error result, never a silent success.
     const runController = new AbortController();
     let receivedSignal: AbortSignal | undefined;
 
@@ -863,62 +655,30 @@ describe('BashTool', () => {
       },
     );
 
-    const { trace, events, dispose } = traceWithEvents(
-      'BashToolAbortTest' as RunId,
+    const hookCalls: string[] = [];
+    const result = await withToolEnvironment(
+      {
+        run: { runId: 'bash-tool' as RunId, session: defaultSession() },
+        call: {
+          tracker: new FileInteractionState(),
+          signal: runController.signal,
+          hooks: {
+            onRunReady: () => hookCalls.push('ready'),
+            onToolOutput: (chunk) => hookCalls.push(`output:${chunk}`),
+          },
+        },
+      },
+      () => new BashTool().call({ command: 'echo long' }),
     );
 
-    const node = new ToolUseDispatchNode();
-    const bashTool = new BashTool();
-    const options = roundServices({
-      toolName: 'bash',
-      logger: trace,
-      runId: 'bash-tool' as RunId,
-      toolRegistry: new MapToolRegistry({ bash: bashTool }),
-      abortSignal: runController.signal,
-    });
-
-    const call = {
-      provider: 'google',
-      callId: 'bash-abort-1',
-      name: 'bash',
-      input: { command: 'echo long' },
-      raw: { name: 'bash', args: { command: 'echo long' } },
-    } as SdkToolCall;
-
-    try {
-      node.setServices(options);
-      const result = await withTestRunContext(options.runScope, () =>
-        node.exec(call),
-      );
-
-      assert.equal(result, null);
-      assert.ok(receivedSignal, 'Bash command should receive an abort signal');
-      assert.equal(receivedSignal.aborted, true);
-
-      const toolEvents = events.filter(
-        (event) => event.type === 'tool.start' || event.type === 'tool.end',
-      );
-      assert.equal(toolEvents[0]?.type, 'tool.start');
-
-      const startedLogId =
-        toolEvents[0]?.type === 'tool.start' ? toolEvents[0].logId : null;
-      const progressEvent = toolEvents.find(
-        (event) => event.type === 'tool.end' && event.status === 'in_progress',
-      );
-      const failedEvent = toolEvents.findLast(
-        (event) => event.type === 'tool.end' && event.status === 'failed',
-      );
-
-      assert.ok(progressEvent, 'Streaming output should update the card');
-      assert.ok(failedEvent, 'Abort should close the progress card as failed');
-      if (progressEvent?.type === 'tool.end') {
-        assert.equal(progressEvent.logId, startedLogId);
-      }
-      if (failedEvent?.type === 'tool.end') {
-        assert.equal(failedEvent.logId, startedLogId);
-      }
-    } finally {
-      dispose();
-    }
+    assert.deepEqual(hookCalls, ['ready', 'output:started\n']);
+    assert.equal(
+      receivedSignal,
+      runController.signal,
+      'Bash command should receive the active tool-call abort signal',
+    );
+    assert.equal(runController.signal.aborted, true);
+    assert.equal(result.status, 'error');
+    assert.ok(String(result.error).includes('Command aborted by user'));
   });
 });

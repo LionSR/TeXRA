@@ -49,44 +49,6 @@ function completionWithValidToolCall() {
   return completionWithToolCalls([VALID_TOOL_CALL]);
 }
 
-describe('ModelHandlerOpenAI.extractToolUse', () => {
-  it('extracts a well-formed function tool call', () => {
-    const result = newHandler().extractToolUse(completionWithValidToolCall());
-
-    assert.equal(result.length, 1);
-    assert.equal(result[0]?.name, 'do_thing');
-  });
-
-  it('throws instead of silently returning no tool calls for a malformed payload', () => {
-    // Regression test for #7467: previously this caught the parser's
-    // assertion error and returned [], which the tool-use cycle read as
-    // "the model made no tool calls" and finalized the run as a successful
-    // completion despite the corrupted provider payload. It must now throw
-    // so the run fails loudly via the classifyAgentError boundary instead.
-    const handler = newHandler();
-
-    assert.throws(() =>
-      handler.extractToolUse(
-        completionWithToolCalls([{ id: 'call_1', type: 'not_a_real_type' }]),
-      ),
-    );
-  });
-});
-
-describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
-  const attachments = [{ path: 'chart.png', mimeType: 'image/png' }] as never;
-  const call = { raw: VALID_TOOL_CALL } as never;
-  const result = { status: 'executed', output: 'done' } as const;
-
-  it('follow-up path includes the attachment summary — regression for parallel tool calls silently dropping it', async () => {
-    const messages = await newHandler().createBatchedToolUseFollowUpMessages([
-      { call, result, attachments },
-    ] as never);
-    const toolMsg = messages.find((m) => m.role === 'tool') as any;
-    assert.ok(String(toolMsg.content).includes('chart.png (image/png)'));
-  });
-});
-
 describe('ModelHandlerOpenAI forced tool choice', () => {
   it('maps finalTool to a named function choice', async () => {
     const handler = newHandler();

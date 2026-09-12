@@ -208,7 +208,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
               finalizeRun(runSession, {
                 runId,
                 outcome: restoredOutcome,
-                flowRecord: shouldRegister ? 'delete' : 'preserve',
               }),
             );
             if (Exit.isFailure(finalization))

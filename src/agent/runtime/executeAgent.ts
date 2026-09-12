@@ -1,18 +1,12 @@
 import * as path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
-import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
-import {
-  type AgentToolUseSetting,
-  type AgentWorkflowSetting,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/RunKVStore';
@@ -30,10 +24,12 @@ import {
 } from '@shared/schemas';
 import {
   AgentCategory,
-  JsonValueSchema,
+  RUN_OUTCOME,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
+import { RunLedger } from '@shared/session/runLedger';
+import { emptyRunEndOutput } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
@@ -48,7 +44,6 @@ import {
 } from './AgentLaunchContext';
 import {
   runFlowWithLifecycle,
-  type FlowLifecycleControl,
   type RunFlowLifecycleOptions,
 } from './AgentRunLifecycle';
 import {
@@ -64,7 +59,16 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
-import { ToolInjections, type AgentRunServices } from './toolInjection';
+import { followUpsLayer } from './FollowUps';
+import { modelInvokerLayer } from './ModelInvoker';
+import { agentRunLayer } from './run/AgentRun';
+import { runReflection } from './loop/reflection';
+import { runToolUse } from './loop/toolUse';
+import {
+  ToolInjectionRegistry,
+  ToolInjections,
+  type AgentRunServices,
+} from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
@@ -76,15 +80,6 @@ export class ResumeSessionUnavailableError extends Error {
     super('This session can no longer be resumed. Start a new run instead.');
     this.name = 'ResumeSessionUnavailableError';
   }
-}
-
-/** Create the awaited round-finalized callback used by agent flows. */
-function createUsageRecordingCallback(
-  ctx: AgentLaunchContext,
-): RoundFinalizedCallback {
-  return async (run) => {
-    await ctx.usageMonitor.recordUsage(run);
-  };
 }
 
 /**
@@ -109,7 +104,104 @@ type ToolUseLaunchVariant =
     };
 
 /**
- * Run the tool-use flow for a single agent run, fresh or resumed.
+ * The per-run layer both families run under: the run's `AgentRun`, the
+ * invoker, and the session's ledger. The follow-up lease is not here: only
+ * the tool-use loop consumes a queue and only its finalizer releases the
+ * lease, so building `followUpsLayer` for a workflow run would claim a live
+ * consumer nothing ever releases — later submissions would report as
+ * delivered live to a run that has ended.
+ */
+function runLayerFor(
+  ctx: AgentLaunchContext,
+  shared: SubagentRunOptions & {
+    readonly setting: AgentSetting;
+    readonly onFollowUpConsumed?: () => void;
+  },
+  toolInjections: ToolInjections['Service'],
+  onIdle: (() => void) | undefined,
+  inScope: <A>(operation: () => A) => A,
+) {
+  const { runId, session: runSession } = ctx.runScope;
+  return modelInvokerLayer.pipe(
+    Layer.provideMerge(
+      agentRunLayer(ctx, {
+        setting: shared.setting,
+        parentRunId: shared.parentRunId ?? null,
+        tools: shared.tools,
+        toolInjections,
+        inScope,
+        callbacks: {
+          onProgress: (update) => {
+            if (update.kind === 'overview') {
+              logConversationProgress(ctx.logger, {
+                toolCallCount: update.toolCallCount,
+              });
+            }
+            shared.onProgress?.(update);
+          },
+          onFollowUpConsumed: () => {
+            runSession.publish([
+              {
+                type: 'updateQueuedFollowUps',
+                aggregateId: qualifyAggregateId('run', runId),
+                messages: runSession.followUps.getAll(runId),
+              },
+            ]);
+            shared.onFollowUpConsumed?.();
+          },
+          onModelChanged: (model) => {
+            // The cell is the live model; usage accounting and the prompt
+            // side MODEL variable read it directly. This one mirror remains
+            // because config.model is a persisted AgentConfig schema field.
+            ctx.config.model = model;
+          },
+          ...(onIdle ? { onIdle } : {}),
+        },
+      }),
+    ),
+    Layer.provideMerge(Layer.succeed(RunLedger)(runSession.ledger)),
+  );
+}
+
+/**
+ * The one boundary that races the run's stop. `ctx.stopped` is completed by
+ * every stop entry (a host kill through the run handle, the live tool-use
+ * flow context, an aborted launch signal); winning it interrupts the
+ * program's fiber, whose masked exit protocol records the halt before this
+ * returns, and reports the cancelled shell result of the run's category.
+ * The run's `AbortSignal` is aborted from that interruption — the loop reads
+ * the fiber's own interruption (`Effect.abortSignal`) for the provider
+ * request and the tool bodies that still need a signal — so the signal is
+ * downstream of the stop rather than a second way to stop the run.
+ */
+function runUntilStopped(
+  ctx: AgentLaunchContext,
+  program: Effect.Effect<AgentRuntimeFlowResult, Error>,
+): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  const { runId } = ctx.runScope;
+  return Effect.raceFirst(
+    program.pipe(
+      Effect.onInterrupt(() => Effect.sync(() => ctx.abortRunSignal())),
+      Effect.map((result) => ({ kind: 'result' as const, result })),
+    ),
+    Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
+  ).pipe(
+    Effect.map((winner): AgentRuntimeFlowResult => {
+      if (winner.kind === 'result') return winner.result;
+      return {
+        outcome: RUN_OUTCOME.CANCELLED,
+        output: emptyRunEndOutput(ctx.setting.agentCategory),
+        runId,
+        ...(ctx.attachedMemoryMisses?.length
+          ? { memoryMisses: ctx.attachedMemoryMisses }
+          : {}),
+      };
+    }),
+  );
+}
+
+/**
+ * Run the tool-use loop for a single agent run, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
  * model-change side effects. A failed run arrives as a FAILED result carrying
@@ -118,68 +210,28 @@ type ToolUseLaunchVariant =
  * stream-status; this function owns only what is specific to the ToolUse
  * category.
  */
-async function launchToolUseRun(
+function launchToolUseRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
-  lifecycle: FlowLifecycleControl,
   shared: SubagentRunOptions & {
-    readonly setting: AgentToolUseSetting;
+    readonly setting: AgentSetting;
     readonly onFollowUpConsumed?: () => void;
-    /** The process services the Effect-typed caller read before this Promise seam. */
+    /** The process injections the Effect-typed caller read for this run. */
     readonly toolInjections: ToolInjections['Service'];
   },
   variant: ToolUseLaunchVariant,
-): Promise<AgentRuntimeFlowResult> {
+  inScope: <A>(operation: () => A) => A,
+): Effect.Effect<AgentRuntimeFlowResult, Error> {
   const { runId } = ctx.runScope;
-  const result = await runToolUseFlow(
-    {
-      ...ctx,
-      onRoundFinalized: createUsageRecordingCallback(ctx),
-      setting: shared.setting,
-      toolInjections: shared.toolInjections,
-      // A child (a run with a parent) takes the subagent prompt and may park
-      // at WAITING for its loop; the fresh launch and the resume both read
-      // the same edge.
-      parentRunId: shared.parentRunId,
-      tools: shared.tools,
-      onProgress: (update) => {
-        if (update.kind === 'overview') {
-          logConversationProgress(ctx.logger, {
-            toolCallCount: update.toolCallCount,
-          });
+  const program = runToolUse({
+    resume: variant.kind === 'resume',
+    ...(variant.kind === 'resume'
+      ? {
+          drainedFollowUps: variant.drainedFollowUps,
+          takePendingFollowUps: variant.takePendingFollowUps,
         }
-        shared.onProgress?.(update);
-      },
-      onFollowUpConsumed: () => {
-        const { session, runId } = ctx.runScope;
-        session.publish([
-          {
-            type: 'updateQueuedFollowUps',
-            aggregateId: qualifyAggregateId('run', runId),
-            messages: session.followUps.getAll(runId),
-          },
-        ]);
-        shared.onFollowUpConsumed?.();
-      },
-      onFlowRecordDisposition: (disposition) =>
-        lifecycle.setFlowRecordDisposition(disposition),
-      onModelChanged: (model) => {
-        // The cell is the live model; usage accounting and the prompt-side
-        // MODEL variable read it directly. This one mirror remains because
-        // config.model is a persisted AgentConfig schema field, not a view
-        // of the cell.
-        ctx.config.model = model;
-      },
-      ...(variant.kind === 'fresh'
-        ? { onIdle: variant.onIdle }
-        : {
-            resume: variant.resume,
-            drainedFollowUps: variant.drainedFollowUps,
-            takePendingFollowUps: variant.takePendingFollowUps,
-          }),
-    },
-    undefined,
-    {
+      : {}),
+    attachment: {
       attach: (flowContext) => {
         handle.attachToolUseFlow(flowContext);
         if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
@@ -189,26 +241,98 @@ async function launchToolUseRun(
       },
       detach: (flowContext) => handle.detachToolUseFlow(flowContext),
     },
-  );
-  return {
-    outcome: result.outcome,
-    output: {
-      category: 'toolUse',
-      response: result.response ?? '',
-      files: result.files ?? [],
-      // The terminal tool validated the value against the run's own schema;
-      // the row's type is the JSON it must already be.
-      ...(result.structured !== undefined
-        ? { structured: JsonValueSchema.parse(result.structured) }
+  }).pipe(
+    Effect.provide(
+      // The follow-up lease is the tool-use loop's alone; its finalizer is
+      // what releases it.
+      followUpsLayer.pipe(
+        Layer.provideMerge(
+          runLayerFor(
+            ctx,
+            shared,
+            shared.toolInjections,
+            variant.kind === 'fresh' ? variant.onIdle : undefined,
+            inScope,
+          ),
+        ),
+      ),
+    ),
+    Effect.map((result): AgentRuntimeFlowResult => ({
+      outcome: result.outcome,
+      output: {
+        category: 'toolUse',
+        response: result.response,
+        files: [...result.files],
+        ...(result.structured !== undefined
+          ? { structured: result.structured }
+          : {}),
+      },
+      runId,
+      usage: result.usage,
+      ...(result.error ? { error: result.error } : {}),
+      ...(ctx.attachedMemoryMisses?.length
+        ? { memoryMisses: ctx.attachedMemoryMisses }
         : {}),
-    },
-    runId,
-    ...(result.usage ? { usage: result.usage } : {}),
-    ...(result.error ? { error: result.error } : {}),
-    ...(ctx.attachedMemoryMisses?.length
-      ? { memoryMisses: ctx.attachedMemoryMisses }
-      : {}),
-  };
+    })),
+  );
+  return runUntilStopped(ctx, program);
+}
+
+/**
+ * Run the reflection loop for a single agent run, fresh or resumed. The
+ * host's output finalization runs after the loop's result and may change the
+ * verdict; a run that failed keeps its error.
+ */
+function launchReflectionRun(
+  ctx: AgentLaunchContext,
+  options: ExecuteAgentOptions & { readonly setting: AgentSetting },
+  inScope: <A>(operation: () => A) => A,
+): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  const { runId } = ctx.runScope;
+  const program = runReflection({ resume: options.resumed === true }).pipe(
+    // The reflection family injects no conditional tools (memory and plan are
+    // tool-use infrastructure), so its run resolves tools from an empty list.
+    Effect.provide(
+      runLayerFor(
+        ctx,
+        options,
+        new ToolInjectionRegistry(),
+        undefined,
+        inScope,
+      ),
+    ),
+    Effect.flatMap((result) =>
+      Effect.gen(function* () {
+        const flowResult: WorkflowFlowResult = {
+          outcome: result.outcome,
+          output: {
+            category: 'workflow',
+            outputs: roundOutputsToOutputSummaries(result.roundOutputs),
+            compileFailures: roundOutputsToCompileFailureSummaries(
+              result.roundOutputs,
+            ),
+            diffs: [],
+          },
+          runId,
+          usage: result.usage,
+          ...(result.error ? { error: result.error } : {}),
+          ...(ctx.attachedMemoryMisses?.length
+            ? { memoryMisses: ctx.attachedMemoryMisses }
+            : {}),
+        };
+        if (flowResult.error || !options.openWorkflowOutput) return flowResult;
+        const openWorkflowOutput = options.openWorkflowOutput;
+        const outputOutcome = yield* Effect.tryPromise({
+          try: () => inScope(() => openWorkflowOutput(flowResult)),
+          catch: ensureError,
+        });
+        return outputOutcome === undefined
+          ? flowResult
+          : { ...flowResult, outcome: outputOutcome };
+      }),
+    ),
+  );
+  return runUntilStopped(ctx, program);
 }
 
 /**
@@ -226,41 +350,6 @@ function buildLifecycleOptions(
     onError: options.onRunError,
     onRun: options.onRun,
     onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
-  };
-}
-
-/**
- * Run the reflection (workflow) flow for a single agent run.
- *
- * Owns workflow-specific usage recording. The caller (`executeAgent`) owns
- * lifecycle and stream-status.
- */
-async function runReflectionAgent(
-  ctx: AgentLaunchContext,
-  setting: AgentWorkflowSetting,
-): Promise<WorkflowFlowResult> {
-  const { runId } = ctx.runScope;
-  const result = await runReflectionFlow({
-    ...ctx,
-    onRoundFinalized: createUsageRecordingCallback(ctx),
-    setting,
-  });
-  return {
-    outcome: result.outcome,
-    output: {
-      category: 'workflow',
-      outputs: roundOutputsToOutputSummaries(result.roundOutputs),
-      compileFailures: roundOutputsToCompileFailureSummaries(
-        result.roundOutputs,
-      ),
-      diffs: [],
-    },
-    runId,
-    ...(result.usage ? { usage: result.usage } : {}),
-    ...(result.error ? { error: result.error } : {}),
-    ...(ctx.attachedMemoryMisses?.length
-      ? { memoryMisses: ctx.attachedMemoryMisses }
-      : {}),
   };
 }
 
@@ -359,7 +448,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * event, for a consumer that must hear every trace event.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  /** Root-run-only: fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
@@ -370,7 +459,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 // A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
-// minted solely behind `ToolUseWaitNode`'s `parentRunId` check, which is the
+// minted solely behind the tool-use loop's `parentRunId` check, which is the
 // parent edge, so a caller that names a parent admits WAITING and one that
 // names none never sees it. Resume paths need no flag at all — whether a
 // resumed run is a child comes from the persisted `run.start`, so
@@ -461,10 +550,13 @@ export function executeAgent(
             try {
               const result = yield* runFlowWithLifecycle(
                 ctx,
-                async (handle, lifecycle) =>
-                  runInScope(async () => {
+                (handle) =>
+                  Effect.gen(function* () {
                     // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
-                    await ensureRunDir(runId);
+                    yield* Effect.tryPromise({
+                      try: () => runInScope(() => ensureRunDir(runId)),
+                      catch: ensureError,
+                    });
                     logger.info(`Starting task run (runId: ${runId})`);
                     logger.info(
                       `Input file: ${config.inputFiles[0] ?? '(none)'}`,
@@ -496,21 +588,19 @@ export function executeAgent(
                     });
 
                     if (setting.agentCategory === AgentCategory.ToolUse) {
-                      return launchToolUseRun(
+                      return yield* launchToolUseRun(
                         ctx,
                         handle,
-                        lifecycle,
                         { ...options, setting, toolInjections },
                         { kind: 'fresh', onIdle: options.onIdle },
+                        runInScope,
                       );
                     }
-                    const result = await runReflectionAgent(ctx, setting);
-                    if (result.error) return result;
-                    const outputOutcome =
-                      await options.openWorkflowOutput?.(result);
-                    return outputOutcome === undefined
-                      ? result
-                      : { ...result, outcome: outputOutcome };
+                    return yield* launchReflectionRun(
+                      ctx,
+                      { ...options, setting },
+                      runInScope,
+                    );
                   }),
                 buildLifecycleOptions(options, options.parentRunId),
               );
@@ -584,8 +674,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
           definition,
           runId: resume.runId,
           resumed: true,
-          modelHandlerCompatibilityKey:
-            resume.shared.modelHandlerCompatibilityKey,
+          modelHandlerCompatibilityKey: resume.modelHandlerCompatibilityKey,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -613,37 +702,32 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             );
             return runFlowWithLifecycle(
               ctx,
-              async (handle, lifecycle) =>
-                runInScope(async () => {
-                  // Inside the lifecycle so the rejection ends the started stream
-                  // with its FAILED result like any other run failure.
-                  if (setting.agentCategory !== AgentCategory.ToolUse) {
-                    // Keep this historical diagnostic byte-for-byte for external monitors.
-                    throw new AgentError(
-                      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-                    );
-                  }
-                  return launchToolUseRun(
-                    ctx,
-                    handle,
-                    lifecycle,
-                    {
-                      ...options,
-                      setting,
-                      parentRunId,
-                      toolInjections,
-                    },
-                    {
-                      kind: 'resume',
-                      resume,
-                      drainedFollowUps: options.drainedFollowUps,
-                      takePendingFollowUps: options.takePendingFollowUps,
-                      isCancellationRequested: options.isCancellationRequested,
-                      onCancellationAtFlowAttachment:
-                        options.onCancellationAtFlowAttachment,
-                    },
-                  );
-                }),
+              (handle) =>
+                // Inside the lifecycle so the rejection ends the started stream
+                // with its FAILED result like any other run failure.
+                setting.agentCategory !== AgentCategory.ToolUse
+                  ? // Keep this historical diagnostic byte-for-byte for external monitors.
+                    Effect.fail(
+                      new AgentError(
+                        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+                      ),
+                    )
+                  : launchToolUseRun(
+                      ctx,
+                      handle,
+                      { ...options, setting, parentRunId, toolInjections },
+                      {
+                        kind: 'resume',
+                        resume,
+                        drainedFollowUps: options.drainedFollowUps,
+                        takePendingFollowUps: options.takePendingFollowUps,
+                        isCancellationRequested:
+                          options.isCancellationRequested,
+                        onCancellationAtFlowAttachment:
+                          options.onCancellationAtFlowAttachment,
+                      },
+                      runInScope,
+                    ),
               buildLifecycleOptions(options, parentRunId),
             );
           },

@@ -2,15 +2,13 @@ import '@test/support/sessionGraphTestSetup';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
-import { registerRun, getRunStore } from '@agent/storage';
+import { registerRun } from '@agent/storage';
 import { releaseOwnedRunLease } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { flowKey } from '@agent/node/persistedFlow';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
   initializeDefaultSession,
   currentSession,
@@ -25,10 +23,11 @@ import {
   aggregateId,
   CLI_RUN_STATUS,
   AgentCategory,
+  FlowSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
   resolveHistoryRunStatus,
 } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -57,23 +56,64 @@ beforeEach(() => {
   initializeDefaultSession({});
 });
 
-/** Registers a run, releases its lease, and writes a flow record. */
-async function seedFlowRecord(
+const SNAPSHOT_RUNTIME = {
+  phase: 'waiting',
+  round: 0,
+  turn: 0,
+  continuationIndex: 0,
+  modelId: 'deepseekT',
+  modelHandlerCompatibilityKey: null,
+  lastError: null,
+  pendingRetry: null,
+};
+const SNAPSHOT_REFERENCES = { pendingIntents: [], pendingResponse: null };
+
+/** The opening `flow.snapshot` of a run of either family. */
+function snapshotPayload(
+  family: 'toolUse' | 'reflection',
+): FlowSnapshotPayload {
+  return FlowSnapshotPayloadSchema.parse({
+    family,
+    runtime: SNAPSHOT_RUNTIME,
+    references: SNAPSHOT_REFERENCES,
+    state:
+      family === 'toolUse'
+        ? { shouldSkipCycle: false, stateSlices: null }
+        : {
+            currentRound: 1,
+            totalRounds: 2,
+            workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
+            outputLocation: null,
+            runStateSnapshot: {},
+            roundOutputs: [],
+            continueRounds: false,
+            endTurn: false,
+          },
+  });
+}
+
+/** Commits a run's opening snapshot — the fact resume reads — then releases its lease. */
+async function seedSnapshot(
   id: RunId,
   config: AgentConfig,
   agent: string,
-  shared: unknown,
+  family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
     registerRun(currentSession(), id, config, agent, {
       identity: { kind: 'agent', agent },
     }),
   );
+  await Effect.runPromise(
+    currentSession().commit([
+      {
+        type: 'flow.snapshot',
+        aggregateId: aggregateId('run', id),
+        payload: snapshotPayload(family),
+      },
+    ]),
+  );
   await releaseOwnedRunLease(id);
-  await getRunStore(id).write(flowKey(id), {
-    shared,
-    cursor: { nextNodeId: 'start' },
-  });
 }
 
 describe('CLI history status formatting', () => {
@@ -151,59 +191,27 @@ describe('CLI history status formatting', () => {
   });
 
   // `status` is a frozen contract, so `history show` answers it from the same
-  // facts as `history list`: the checkpoint file, the stamped stream id, and
-  // the terminal-rejection filter. A record the resume path could not load is
-  // therefore still advertised here and refused, in its own words, on open —
-  // what it must never become is 'completed' (the crash-masking guard).
-  it.each([
-    [
-      'shared state that is not an object',
-      TOOL_USE_CONFIG,
-      'orchestrator',
-      null,
-    ],
-    [
-      'workflow state the category no longer accepts',
-      WORKFLOW_CONFIG,
-      'correct',
-      { currentRound: 1, totalRounds: 2, messages: [] },
-    ],
-  ])(
-    'still advertises a checkpoint with %s, and never calls it completed',
-    async (description, config, agent, shared) => {
-      const id = 'bad-f10' as RunId;
-      await seedFlowRecord(id, config, agent, shared);
+  // facts as `history list`: the run's latest snapshot, its config, and the
+  // terminal-rejection filter. A run the resume path later refuses is still
+  // advertised here and refused, in its own words, on open — what it must
+  // never become is 'completed' (the crash-masking guard).
+  it('advertises a run with a snapshot, and never calls it completed', async () => {
+    const id = 'bad-f10' as RunId;
+    await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
 
-      const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(hostStores(), id);
 
-      expect(details?.hasFlowRecord).toBe(true);
-      expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-      expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
-      expect(formatCliHistoryDetailsText(details!)).toContain(
-        'Flow record: present',
-      );
-    },
-  );
-
-  it('marks workflow flow records as CLI-resumable', async () => {
-    const id = 'c0ffee-f10' as RunId;
-    await seedFlowRecord(
-      id,
-      WORKFLOW_CONFIG,
-      'correct',
-      ReflectionFlowStateSchema.parse({
-        currentRound: 1,
-        totalRounds: 2,
-        workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-        context: null,
-        outputLocation: null,
-        conversation: [],
-        runStateSnapshot: {},
-        roundOutputs: [],
-        continueRounds: false,
-        endTurn: false,
-      }),
+    expect(details?.hasFlowRecord).toBe(true);
+    expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
+    expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
+    expect(formatCliHistoryDetailsText(details!)).toContain(
+      'Flow record: present',
     );
+  });
+
+  it('marks workflow snapshots as CLI-resumable', async () => {
+    const id = 'c0ffee-f10' as RunId;
+    await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
 
     const details = await readCliHistoryDetails(hostStores(), id);
 
@@ -231,10 +239,15 @@ describe('CLI history status formatting', () => {
         },
       ]),
     );
-    await getRunStore(id).write(flowKey(id), {
-      shared: {},
-      cursor: { nextNodeId: 'start' },
-    });
+    await Effect.runPromise(
+      currentSession().commit([
+        {
+          type: 'flow.snapshot',
+          aggregateId: aggregateId('run', id),
+          payload: snapshotPayload('toolUse'),
+        },
+      ]),
+    );
 
     const details = await readCliHistoryDetails(hostStores(), id);
 

@@ -1,8 +1,9 @@
 /**
  * Run-scoped key-value store infrastructure.
  *
- * Checkpoints and delegation state retain file-backed key-value access.
- * Canonical run metadata is read and written through private events.
+ * The child protocol's turn state retains file-backed key-value access
+ * until PR 4 moves it into the event table. Canonical run metadata is read
+ * and written through private events; the run loop writes the run ledger.
  */
 
 import { Cause, Effect } from 'effect';
@@ -40,7 +41,7 @@ import { runWithRunLeaseWriteFence } from './runLease';
 
 const KEYS = { TURN_STATE: 'turn-state' } as const;
 
-/** Generic persistence remains scoped to checkpoints and delegation state. */
+/** Generic persistence remains scoped to the child protocol's turn state. */
 export function isReservedKvKeyName(key: string): boolean {
   return key === KEYS.TURN_STATE;
 }
@@ -121,9 +122,7 @@ export interface RunKVStore {
  */
 class StorageFSKVStore extends KVStore implements RunKVStore {
   constructor(private readonly runId: RunId) {
-    // Compact JSON: flow records rewrite full shared state on every node
-    // transition, so pretty-printing this machine-owned store is pure churn.
-    super(resolveRunStoragePath(runId), { compactJson: true });
+    super(resolveRunStoragePath(runId));
   }
 
   override async write<T = unknown>(key: string, value: T): Promise<void> {

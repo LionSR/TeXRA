@@ -10,12 +10,12 @@
  * resume, and it keeps a session-root service free of per-run mutable cache.
  *
  * Deliberately absent: no `append` (a one-row case is a one-element batch),
- * no `messages()` (the folded state holds them), no `snapshot()` helper (a
- * snapshot is a row like any other), no subscribe surface.
+ * no `messages()` (the folded state holds them), no snapshot writer helper
+ * (a snapshot is a row like any other), no subscribe surface.
  */
 import { Context, Data, type Effect } from 'effect';
 
-import type { RunId } from '@shared/schemas';
+import type { RunId, SessionEvent } from '@shared/schemas';
 import type { DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
   RunLedgerDraft,
@@ -29,13 +29,15 @@ import type {
  * degradation defect in a different costume, so `acquire` and `load` keep
  * them in their error channel beside it.
  *
- * Which arms are reachable, and from where (D6):
- * - `not-owner`: from `acquire` only. `Database.acquireClaims` proves prior
- *   owners dead before moving the claim; a live foreign owner is the
- *   `DatabaseClaimRefused` verdict it fails with, and that verdict is the
- *   refusal. It is never synthesised from a lost write: `SessionEvents.publish`
- *   is `Effect.orDie`, so a lost single-owner race arrives as a defect and
- *   never reaches this union (F3).
+ * Which arms are reachable, and from where (D6 b):
+ * - `not-owner`: from `acquire`, where `Database.acquireClaims` proves prior
+ *   owners dead before moving the claim and a live foreign owner is the
+ *   `DatabaseClaimRefused` verdict it fails with; and from `appendBatch`,
+ *   where `SessionEvents.publish` refuses a target this process no longer
+ *   holds open as `DatabaseNotOwner`, nothing written. It is never
+ *   synthesised from any other write failure: a disk error stays a
+ *   `DatabaseWriteFailed` (F3). A loop that meets it mid-turn stops with it,
+ *   no retry and no second write (R7).
  * - `unsafe-endpoint`: a pre-publish assertion over every durable origin,
  *   the loud restatement of the package's endpoint constraint (D1).
  * - `unprepared-history`: `PreparedHistorySchema` over the history the batch
@@ -80,11 +82,27 @@ export class RunLedger extends Context.Service<
      * are not that case: they are a malformed aggregate and fail
      * `inconsistent`, because folding an `attempt` or a `response` into a
      * fresh run is how a paid invocation gets issued twice. Reads the run
-     * aggregate in full; the snapshot-anchored read is PR 2's optimization.
+     * aggregate in full: a `flow.snapshot` carries no reference to the
+     * message history below it (D5 dropped `messageBaseCommit`), so a fold
+     * anchored at the latest snapshot would restore a run with no
+     * conversation and no error to say so.
      */
     readonly load: (
       run: RunId,
     ) => Effect.Effect<RunState | null, RunLedgerRefused | DatabaseReadFailed>;
+    /**
+     * The latest `flow.snapshot` on the run aggregate, one indexed row read
+     * and no fold: what every reader of the retired `flow_<id>.json` becomes.
+     * `null` when the run has never written one, or is closed. Existence,
+     * `payload.family`, and `payload.runtime` (phase, coordinates, model id,
+     * compatibility key) are the facts it answers; a run's state is `load`.
+     */
+    readonly latestSnapshot: (
+      run: RunId,
+    ) => Effect.Effect<
+      Extract<SessionEvent, { type: 'flow.snapshot' }> | null,
+      DatabaseReadFailed
+    >;
     /**
      * Commit one ordered batch in one transaction, and return the state the
      * loop continues from: `state` folded with the rows the publisher
@@ -115,6 +133,6 @@ export class RunLedger extends Context.Service<
       run: RunId,
       state: RunState | null,
       rows: readonly RunLedgerDraft[],
-    ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseReadFailed>;
+    ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
   }
 >()('@texra/session/RunLedger') {}

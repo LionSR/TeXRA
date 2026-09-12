@@ -1523,15 +1523,15 @@ describe('the C1 event table and the C6 publisher', () => {
             startCommit: 2,
           },
         ]);
-        for (const draft of [
-          { ...waiting, aggregateId: other },
-          olderStart,
-          runStart,
-          { ...waiting, aggregateId: absent },
-        ]) {
-          expect((yield* Effect.flip(db.appendAll([draft])))._tag).toBe(
-            'DatabaseWriteFailed',
-          );
+        // A closed target is the typed ownership refusal (D6 b); a seq-1
+        // violation on an open or absent one is a plain write failure.
+        for (const [draft, tag] of [
+          [{ ...waiting, aggregateId: other }, 'DatabaseNotOwner'],
+          [olderStart, 'DatabaseNotOwner'],
+          [runStart, 'DatabaseWriteFailed'],
+          [{ ...waiting, aggregateId: absent }, 'DatabaseWriteFailed'],
+        ] as const) {
+          expect((yield* Effect.flip(db.appendAll([draft])))._tag).toBe(tag);
         }
         expect(yield* db.currentCommit).toBe(9);
         expect(yield* db.aggregateState([absent])).toEqual([]);
@@ -1790,9 +1790,14 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.appendAll([runStart, olderStart]);
         yield* Effect.gen(function* () {
           const second = yield* Database;
-          expect((yield* Effect.flip(second.appendAll([waiting])))._tag).toBe(
-            'DatabaseWriteFailed',
-          );
+          // The lost single-owner race is typed and names the holder (D6 b).
+          const fenced = yield* Effect.flip(second.appendAll([waiting]));
+          expect(fenced).toMatchObject({
+            _tag: 'DatabaseNotOwner',
+            aggregateId: waiting.aggregateId,
+            ownerId: SELF,
+            closed: false,
+          });
           expect((yield* Effect.flip(second.acquireClaims(targets)))._tag).toBe(
             'DatabaseWriteFailed',
           );
@@ -1821,9 +1826,12 @@ describe('the C1 event table and the C6 publisher', () => {
             ),
           ).toBe(true);
           expect(yield* second.currentCommit).toBe(2);
-          expect((yield* Effect.flip(first.appendAll([waiting])))._tag).toBe(
-            'DatabaseWriteFailed',
-          );
+          // The claim moved: the former holder is now the fenced writer.
+          expect(yield* Effect.flip(first.appendAll([waiting]))).toMatchObject({
+            _tag: 'DatabaseNotOwner',
+            ownerId: OTHER,
+            closed: false,
+          });
           expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
           const otherRoot = qualifyAggregateId('run', OLDER);
           const otherStart = (yield* first.aggregateState([otherRoot]))[0]!

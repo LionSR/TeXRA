@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import { createResponseCycleFlow } from '@agent/implementations/flows/reflection/ResponseCycleFlow';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import type { MediaAttachmentContext } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
@@ -13,10 +12,7 @@ import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
-import {
-  GOOGLE_INTERACTIONS_TEST_CONFIG,
-  userStep,
-} from './googleInteractionsTestUtils';
+import { GOOGLE_INTERACTIONS_TEST_CONFIG } from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { GoogleGenAI, Interactions } from '@google/genai';
@@ -78,6 +74,18 @@ class MediaProbeHandler extends ModelHandlerGoogleInteractions {
     return (await this.uploadMediaEntries(entries, 'initial')).media;
   }
 
+  /**
+   * Build a round's media through the shared policy template — the entry
+   * point every surviving message builder goes through now that the round
+   * message itself is assembled by the run loop.
+   */
+  async mediaForRound(
+    mediaFiles: FileLocation[],
+    context: MediaAttachmentContext,
+  ): Promise<Interactions.Content[]> {
+    return this.createMediaForRound(mediaFiles, context);
+  }
+
   protected override async createMediaMessage(
     _files: FileLocation[],
     context: MediaAttachmentContext,
@@ -120,73 +128,11 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     );
   });
 
-  it('rejects a follow-up round with no content', async () => {
-    const handler = createHandler();
-    await expect(handler.createRoundMessages([], ' ')).rejects.toThrow(
-      'Google follow-up messages require non-empty text or an attachment.',
-    );
-  });
-
   it('rejects empty text when constructing a content block', () => {
     const handler = createHandler();
     expect(() => handler.createAssistantMessage('')).toThrow(
       'Google text content must not be empty.',
     );
-  });
-
-  it('does not append an empty follow-up text block', async () => {
-    const handler = createHandler();
-    const steps: Step[] = [userStep('body')];
-    await handler.createUserFollowUpMessages(steps, '');
-    expect(steps).toEqual([userStep('body')]);
-  });
-
-  it('prependTextToUserMessage prepends into the trailing user_input step', () => {
-    const handler = createHandler();
-    const steps: Step[] = [userStep('body')];
-    handler.prependTextToUserMessage(steps, 'stats');
-    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
-    expect((content[0] as Interactions.TextContent).text).toBe('stats');
-    expect((content[1] as Interactions.TextContent).text).toBe('body');
-  });
-
-  it('addMediaToUserMessage unshifts inline image content into the trailing user_input step', async () => {
-    const handler = createMediaProbe();
-    const steps: Step[] = [userStep('caption')];
-
-    handler.setMediaContent([
-      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
-    ]);
-
-    await handler.addMediaToUserMessage(steps, [
-      { absolutePath: '/x/fig.png' } as never,
-    ]);
-
-    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
-    expect(content[0]?.type).toBe('image');
-    expect((content[1] as Interactions.TextContent).text).toBe('caption');
-  });
-
-  it('creates a new user turn for an image-only follow-up', async () => {
-    const handler = createMediaProbe();
-    const steps: Step[] = [
-      userStep('question'),
-      { type: 'model_output', content: [{ type: 'text', text: 'answer' }] },
-    ];
-    handler.setMediaContent([
-      { type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' },
-    ]);
-
-    await handler.createUserFollowUpMessages(steps, '');
-    await handler.addMediaToUserMessage(steps, [
-      { absolutePath: '/x/follow-up.png' } as never,
-    ]);
-
-    expect(steps).toHaveLength(3);
-    expect(steps[2]).toEqual({
-      type: 'user_input',
-      content: [{ type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' }],
-    });
   });
 
   it('initializeMessages includes typed media content when mediaFiles are provided', async () => {
@@ -341,20 +287,22 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       },
     ]);
 
-    const steps = await handler.createRoundMessages([], 'Compare the figures', [
-      { absolutePath: '/x/inline.png' } as FileLocation,
-      { absolutePath: '/x/failed.pdf' } as FileLocation,
-      { absolutePath: '/x/uploaded.png' } as FileLocation,
-    ]);
+    const content = await handler.mediaForRound(
+      [
+        { absolutePath: '/x/inline.png' } as FileLocation,
+        { absolutePath: '/x/failed.pdf' } as FileLocation,
+        { absolutePath: '/x/uploaded.png' } as FileLocation,
+      ],
+      'followUp',
+    );
 
-    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
     expect(content.filter((part) => part.type === 'image')).toEqual([
       expect.objectContaining({
         data: Buffer.from('figure').toString('base64'),
       }),
       expect.objectContaining({ uri: 'files/figure' }),
     ]);
-    expect(textOf(steps[0])).not.toContain('failed.pdf');
+    expect(JSON.stringify(content)).not.toContain('failed.pdf');
     expect(handler.consumeInsertedAttachmentKinds('followUp')).toEqual([
       'image',
       'image',
@@ -530,66 +478,12 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(extracted.text).toContain('answer body');
     expect(extracted.text).not.toContain('ignore me');
     expect(extracted.text.endsWith('</doc>')).toBe(true);
-    // The Interactions 'completed' status is normalized to the canonical Google
-    // STOP finish reason so shared stop logic reads it as a natural end-of-turn.
+    // The Interactions 'completed' status is normalized to the canonical
+    // Google STOP finish reason so shared stop logic reads it as a natural
+    // end-of-turn. Regression: the raw 'completed' status is not an end-turn
+    // reason, so a background response that finished cleanly on the document
+    // end tag read as a stop without an end of turn — a spurious
+    // cancellation that discarded output already paid for.
     expect(extracted.stopReason).toBe(GOOGLE_FINISH.STOP);
-  });
-
-  it('maps a completed interaction to endTurn (not a spurious cancellation)', async () => {
-    // Regression: a background/non-streaming Interactions response that finished
-    // cleanly on the document end tag was returning the raw 'completed' status,
-    // which is not a reflection end-turn reason — so the cycle yielded
-    // endTurn=false while encounterDocumentTag forced shouldStop=true. The
-    // ResponseCycle then read `shouldStop && !endTurn` as a user cancellation
-    // and discarded the already-generated output. The status must normalize to
-    // GOOGLE_FINISH.STOP so endTurn=true.
-    const handler = createHandler();
-    const response = {
-      id: 'int',
-      status: 'completed',
-      steps: [
-        {
-          type: 'model_output',
-          content: [{ type: 'text', text: 'body</documents>' }],
-        },
-      ],
-    } as never;
-
-    const { stopReason, text } = handler.extractResponse(
-      response,
-      '</documents>',
-    );
-    const setting = {} as never;
-    const round = { continuationCount: 0 } as never;
-    const global = {
-      usageAccumulator: {
-        totals: {
-          firstInputTokens: 100,
-          totalInputTokens: 100,
-          totalOutputTokens: 50,
-        },
-      },
-    } as never;
-
-    const continuationNode = createResponseCycleFlow()
-      .start.getNextNode()
-      ?.getNextNode()
-      ?.getNextNode();
-    if (!continuationNode) throw new Error('Missing continuation node');
-    continuationNode.setServices({
-      modelCell: { handler },
-      round,
-      run: global,
-      setting,
-      logger: noopTrace,
-    });
-    const result = await continuationNode.exec({
-      kind: 'success',
-      value: { interrupted: false, stopReason, processedResponse: text },
-    });
-    expect(result).toMatchObject({
-      kind: 'success',
-      value: { shouldStop: true, shouldEndTurn: true },
-    });
   });
 });

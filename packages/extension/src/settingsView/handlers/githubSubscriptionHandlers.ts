@@ -122,7 +122,7 @@ export class GitHubSubscriptionHandlers {
 
     if (result === 'missing') {
       await vscode.window.showWarningMessage(
-        'The agent stream is no longer available.',
+        'The agent run is no longer available.',
       );
     }
   }

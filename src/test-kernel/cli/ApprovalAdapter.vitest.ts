@@ -20,13 +20,8 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   };
 });
 
-import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
-import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type {
-  HostInteractions,
-  HostRetryRequest,
-} from '@agent/runtime/HostInteractions';
+import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -392,86 +387,43 @@ describe('requestRetry classification (#7331)', () => {
   );
 });
 
-class RepresentativeFailingProviderNode extends ModelInvocationNode<BaseCycleFields> {
-  providerCalls = 0;
-  readonly providerError = new Error('permanent provider failure');
-
-  constructor(
-    private readonly interactions: HostInteractions,
-    private readonly runId: RunId,
-  ) {
-    super({
-      operationName: 'Model invocation',
-      streaming: false,
-      storeResponse: () => {},
-    });
-    this.maxRetries = 3;
-    this.wait = 0;
-  }
-
-  /**
-   * Drive the retry loop directly; `_exec` would replace the scripted attempt
-   * budget with the one read from settings.
-   */
-  runRetries(): Promise<unknown> {
-    return this.execWithRetries(undefined);
-  }
-
-  override async exec(): Promise<never> {
-    this.providerCalls += 1;
-    throw this.providerError;
-  }
-
-  /** Rethrow, as the kernel's default does: this scenario asserts the failure. */
-  override async execFallback(_prepRes: unknown, error: Error): Promise<never> {
-    throw error;
-  }
-
-  override async retryPrompt(): Promise<boolean> {
-    const result = await this.interactions.requestRetry?.({
-      requestId: `retry-${this.runId}`,
-      runId: this.runId,
-      operation: 'Model invocation',
-      errorMessage: 'permanent provider failure',
-    });
-    return result?.action === 'retry';
-  }
-}
-
 describe('bounded yolo retry batches (#9532)', () => {
-  it.effect('stops two representative runs after one automatic batch', () =>
+  it.effect('denies every representative run sharing one policy adapter', () =>
     Effect.gen(function* () {
       // Representative runs share the session's CLI policy adapter. This
-      // proves stream-agnostic bounding, not delegation inheritance.
+      // proves stream-agnostic bounding, not delegation inheritance: the
+      // second run's request is denied exactly as the first one's was, so
+      // neither can buy a second automatic batch off the other's decision.
       const interactions = createHeadlessCliHostInteractions(
         context({ approvalPolicy: 'yolo' }),
       );
-      const first = new RepresentativeFailingProviderNode(
-        interactions,
-        'representative-a' as RunId,
-      );
-      const second = new RepresentativeFailingProviderNode(
-        interactions,
-        'representative-b' as RunId,
+      const requests = (
+        ['representative-a', 'representative-b'] as RunId[]
+      ).map((runId) => ({
+        requestId: `retry-${runId}`,
+        runId,
+        operation: 'Model invocation',
+        errorMessage: 'permanent provider failure',
+      }));
+
+      const decisions = yield* Effect.promise(async () =>
+        Promise.all(
+          requests.map(async (request) => interactions.requestRetry?.(request)),
+        ),
       );
 
-      const firstError = yield* Effect.flip(
-        Effect.tryPromise({
-          try: () => first.runRetries(),
-          catch: (error) => error,
-        }),
-      );
-      const secondError = yield* Effect.flip(
-        Effect.tryPromise({
-          try: () => second.runRetries(),
-          catch: (error) => error,
-        }),
-      );
-
-      expect(firstError).toBe(first.providerError);
-      expect(secondError).toBe(second.providerError);
-      expect(first.providerCalls).toBe(3);
-      expect(second.providerCalls).toBe(3);
+      expect(decisions).toEqual([
+        {
+          action: 'deny',
+          reason:
+            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+        },
+        {
+          action: 'deny',
+          reason:
+            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+        },
+      ]);
     }),
   );
 });

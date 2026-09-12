@@ -369,7 +369,20 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     /** What the UI shows (diff, command, question), never host handles. */
     payload: PermissionPayloadSchema,
   }),
-  durable('approval.resolved', { requestId: z.string() }),
+  /**
+   * `decision` and `cause` are the durable recovery facts (R5): a
+   * `model-retry` or `tool-outcome` resolution names what was decided so a
+   * resumed run never reads consent off a snapshot alone. The interaction
+   * plane's own settlement rows carry neither: they close a request, the
+   * loop's row carries its meaning.
+   */
+  durable('approval.resolved', {
+    requestId: z.string(),
+    decision: z
+      .enum(['approved', 'denied', 'skipped', 'cancelled', 'interrupted'])
+      .optional(),
+    cause: z.string().optional(),
+  }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
    * The loop's position: family, step, and the coordinates it carries. The

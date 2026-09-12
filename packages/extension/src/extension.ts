@@ -32,6 +32,7 @@ import {
 } from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
+import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import { SecretManager } from '@frontend/secretManager';
 import {
   initializeLatexSupport,
@@ -196,6 +197,12 @@ async function initVscodePlatform(
     secrets: () => secrets,
     appState: () => context.globalState,
     setup: vscodeSetupPlatform,
+    // The editor's language models, so the run layer binds `vscode-lm`
+    // models on this host (R2); consent was granted from the settings view.
+    editorModel: {
+      acquire: (configuration) =>
+        acquireVscodeLanguageModel(context, configuration),
+    },
   });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.

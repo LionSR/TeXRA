@@ -37,9 +37,11 @@ export type DuplicateCallMap = Map<string, number>;
  * side-effect call runs in between, since changed state makes an identical
  * repeat plausibly intentional (e.g. write x; edit x; write x as a restore).
  */
-export function partitionDuplicateCalls(
-  toolCalls: SdkToolCall[],
-  isParallelSafe: (call: SdkToolCall) => boolean,
+export function partitionDuplicateCalls<
+  Call extends Pick<SdkToolCall, 'callId' | 'name' | 'input'>,
+>(
+  toolCalls: readonly Call[],
+  isParallelSafe: (call: Call) => boolean,
 ): DuplicateCallMap {
   const sharedWithPrimary: DuplicateCallMap = new Map();
   const segmentPrimaries = new Map<string, number>();

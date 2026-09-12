@@ -1,5 +1,5 @@
 {
-  "semantics": "Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). Files are parsed with the TypeScript compiler API, so comments and string literals never count. Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; 'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (@platform/workspaceRoots {workspaceRoots, tryWorkspaceRoots, processWorkspaceRoots, tryProcessWorkspaceRoots, runWithWorkspaceRoots}; @agent/runtime/RunContext {runInSession, withRunContext, tryUseRunContext, getRunContextRunId, getRunContextWorkingDirectory, getRunContextSession, getRunContextInteractions}; @agent/followUp/ToolFileInteractionContext {getCurrentToolCallContext, getCurrentToolContexts}; @agent/storage/runLease {ownsRunLease, assertOwnedRunLease}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; 'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); 'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); 'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; 'dep:@agent/node' counts, in each file OUTSIDE src/agent/node/, the module specifiers that reach into that directory — the @agent/node alias itself or any deeper path under it, plus relative specifiers that resolve inside it (type-only included, as for the package rows) — so the row measures the PocketFlow engine's consumers, not its class hierarchy, and a file inside the directory importing its own sibling is not a consumer and does not count; 'dep:@agent/modelHandlers' counts the same reaches into src/agent/modelHandlers/, the model handler hierarchy the ModelInvoker service replaces. Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. The PR that zeroes a row deletes the row.",
+  "semantics": "Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). Files are parsed with the TypeScript compiler API, so comments and string literals never count. Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; 'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (@platform/workspaceRoots {workspaceRoots, tryWorkspaceRoots, processWorkspaceRoots, tryProcessWorkspaceRoots, runWithWorkspaceRoots}; @agent/runtime/RunContext {runInSession, withRunContext, tryUseRunContext, getRunContextRunId, getRunContextWorkingDirectory, getRunContextSession, getRunContextInteractions}; @agent/followUp/ToolFileInteractionContext {getCurrentToolCallContext, getCurrentToolContexts}; @agent/storage/runLease {ownsRunLease, assertOwnedRunLease}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; 'new AbortController()' counts new-expressions on the identifier AbortController; 'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); 'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); 'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; 'dep:@agent/modelHandlers' counts the same reaches into src/agent/modelHandlers/, the model handler hierarchy the ModelInvoker service replaces. Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. The PR that zeroes a row deletes the row.",
   "rows": {
     "platform()": {
       "packages/cli/src/runtime/executeCli.ts": 1,
@@ -107,8 +107,6 @@
       "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 6,
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 3,
       "packages/extension/src/settingsView/handlers/memoryHandlers.ts": 4,
-      "src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts": 2,
-      "src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts": 1,
       "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 2,
       "src/controllers/session/SessionBridge.ts": 6,
@@ -168,7 +166,6 @@
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx": 1,
       "packages/cli/src/runtime/agentRoster.ts": 1,
       "packages/cli/src/runtime/multiAgentPresets.ts": 1,
-      "packages/cli/src/runtime/toolUseResumeData.ts": 1,
       "packages/desktop/src/main/desktopDiffHost.ts": 1,
       "packages/desktop/src/main/desktopPreviewHost.ts": 1,
       "packages/extension/src/commands/latex/latexdiffCommands.ts": 2,
@@ -177,7 +174,7 @@
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "src/agent/followUp/ToolFileInteractionContext.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 7,
+      "src/agent/runtime/AgentLaunchContext.ts": 6,
       "src/agent/runtime/RunContext.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 6,
       "src/agent/runtime/childRunBudget.ts": 1,
@@ -189,7 +186,7 @@
       "src/agent/storage/childRunOutput.ts": 1,
       "src/agent/storage/resumability.ts": 2,
       "src/agent/storage/runLease.ts": 1,
-      "src/agent/storage/runLifecycle.ts": 6,
+      "src/agent/storage/runLifecycle.ts": 5,
       "src/controllers/mainView/teamCatalogPorts.ts": 1,
       "src/controllers/progressView/ChatExportController.ts": 1,
       "src/controllers/session/applyCommittedRunRemoval.ts": 1,
@@ -225,7 +222,7 @@
       "src/tools/delegation/workflowScriptStrategy.ts": 1,
       "src/tools/executionFormatters.ts": 2,
       "src/tools/executions/runGeneratedFiles.ts": 3,
-      "src/tools/executions/runLiveness.ts": 2,
+      "src/tools/executions/runLiveness.ts": 1,
       "src/tools/executions/turnAttribution.ts": 1,
       "src/tools/executions/waitCoordination.ts": 2,
       "src/tools/fileInteractions.ts": 2,
@@ -260,14 +257,6 @@
       "src/utils/files/storageFS.ts": 1,
       "src/utils/files/workspaceFS.ts": 2
     },
-    "setServices()": {
-      "src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts": 1,
-      "src/agent/implementations/flows/reflection/runReflectionFlow.ts": 1,
-      "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/runToolUseFlow.ts": 1,
-      "src/agent/node/index.ts": 1,
-      "src/agent/node/persistedFlow.ts": 1
-    },
     "new AbortController()": {
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,
       "packages/cli/src/chat/tui/state/approvalQueue.ts": 1,
@@ -287,7 +276,6 @@
       "packages/cli/src/chat/tui/sessionExitController.ts": 1,
       "packages/cli/src/chat/tui/state/subscribeApprovals.ts": 1,
       "packages/extension/src/extension.ts": 1,
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
       "src/agent/runtime/runApprovalQueue.ts": 1,
       "src/agent/storage/runLease.ts": 1,
       "src/agent/workflowScript/persistence.ts": 1,
@@ -298,7 +286,6 @@
       "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1
     },
     "import:p-retry": {
-      "src/agent/core/flows/ModelInvocationNode.ts": 1,
       "src/agent/implementations/agentCreator/agentCreatorFlow.ts": 1,
       "src/agent/modelHandlers/support/auxiliaryRetry.ts": 1
     },
@@ -315,8 +302,6 @@
     },
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
-      "src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts": 2,
-      "src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts": 1,
       "src/agent/implementations/flows/reflection/output/LatexDiffManager.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 2,
       "src/controllers/session/SessionBridge.ts": 6,
@@ -334,42 +319,11 @@
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     },
-    "dep:@agent/node": {
-      "src/agent/core/flows/ModelInvocationNode.ts": 1,
-      "src/agent/implementations/flows/reflection/ResponseCycleFlow.ts": 1,
-      "src/agent/implementations/flows/reflection/RoundPersistedFlow.ts": 2,
-      "src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/OutputNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/PrepareContextNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts": 1,
-      "src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts": 1,
-      "src/agent/implementations/flows/reflection/runReflectionFlow.ts": 1,
-      "src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts": 1,
-      "src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/runToolUseFlow.ts": 2,
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts": 1,
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseRoundPrepNode.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 1,
-      "src/agent/runtime/SessionResumeRetrieval.ts": 1,
-      "src/agent/runtime/persistedCompileRejection.ts": 1,
-      "src/agent/runtime/resumeRun.ts": 1,
-      "src/agent/storage/resumability.ts": 1,
-      "src/agent/storage/runLifecycle.ts": 1,
-      "src/tools/executions/runKvFiles.ts": 1,
-      "src/tools/executions/runLiveness.ts": 1
-    },
     "dep:@agent/modelHandlers": {
-      "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts": 1,
       "src/agent/runtime/ModelFactory.ts": 18,
       "src/agent/runtime/helperModel.ts": 2,
       "src/agent/types/IModelHandler.ts": 1,
-      "src/tools/bash.ts": 1,
-      "src/tools/media/audio.ts": 1,
-      "src/tools/structuredOutput.ts": 1,
-      "src/transcript/completedRunArchive.ts": 1
+      "src/tools/media/audio.ts": 1
     }
   }
 }

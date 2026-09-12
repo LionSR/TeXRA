@@ -112,7 +112,7 @@ const KillActionSchema = z.strictObject({
   path: PathFieldSchema,
   action: z
     .literal('kill')
-    .describe('Terminate a running run by ID (use on /executions/{id}).'),
+    .describe('Terminate a live run by ID (use on /executions/{id}).'),
 });
 
 const ExecutionsToolActionSchema = z.discriminatedUnion('action', [

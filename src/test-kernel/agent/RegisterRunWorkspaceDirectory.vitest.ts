@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRunRecords, getRunStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
-import { flowKey } from '@agent/node/persistedFlow';
 import {
   finalizeRun,
   acquireResumedRunOwnership,
@@ -129,67 +128,19 @@ describe('run registration and finalization', () => {
     });
   });
 
-  it.each(['preserve', 'delete'] as const)(
-    'retains the existing requested checkpoint disposition %s',
-    async (flowRecord) => {
-      await register();
-      const store = getRunStore(runId);
-      await runInSession(session, () =>
-        store.write(flowKey(runId), { checkpoint: 'existing format' }),
-      );
-      expect(
-        await run(
-          finalizeRun(session, {
-            runId,
-            outcome: 'completed',
-            flowRecord,
-          }),
-        ),
-      ).toEqual({ ok: true, outcome: 'completed' });
-      expect(
-        await runInSession(session, () => store.exists(flowKey(runId))),
-      ).toBe(flowRecord === 'preserve');
-    },
-  );
-
-  it.each([
-    { statusFails: true, deletionFails: false },
-    { statusFails: true, deletionFails: true },
-    { statusFails: false, deletionFails: true },
-  ])(
-    'preserves independent finalization failures $statusFails/$deletionFails',
-    async ({ statusFails, deletionFails }) => {
-      await register();
-      const statusFailure = new Error('status write failed');
-      const deletionFailure = new Error('checkpoint delete failed');
-      if (statusFails)
-        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
-          Effect.die(statusFailure),
-        );
-      const deletion = vi.spyOn(getRunStore(runId), 'delete');
-      if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
-      const result = await run(
-        finalizeRun(session, {
-          runId,
-          outcome: 'failed',
-          flowRecord: 'delete',
-        }),
-      );
-      expect(result).toMatchObject({
-        ok: false,
-        outcomePersisted: !statusFails,
-      });
-      expect(deletion).toHaveBeenCalledWith(flowKey(runId));
-      const singleFailure = statusFails ? statusFailure : deletionFailure;
-      if (!result.ok)
-        expect(result.error).toEqual(
-          statusFails && deletionFails
-            ? new AggregateError(
-                [statusFailure, deletionFailure],
-                `Terminal status and flow deletion failed for ${runId}`,
-              )
-            : singleFailure,
-        );
-    },
-  );
+  it('reports a terminal status write that failed, and persists nothing', async () => {
+    await register();
+    const failure = new Error('status write failed');
+    vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+      Effect.die(failure),
+    );
+    // The run's rows live until explicit deletion (C9): finalization writes
+    // the terminal row and removes nothing beside it, so a failed write is
+    // the whole failure and comes back unwrapped.
+    const result = await run(
+      finalizeRun(session, { runId, outcome: 'failed' }),
+    );
+    expect(result).toMatchObject({ ok: false, outcomePersisted: false });
+    if (!result.ok) expect(result.error).toBe(failure);
+  });
 });

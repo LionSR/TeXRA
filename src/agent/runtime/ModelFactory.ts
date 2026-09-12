@@ -6,12 +6,14 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
+import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
+import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -29,13 +31,12 @@ import {
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
+  resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import {
-  copilotRouteForModel,
-  resolveRuntimeModelConfig,
-} from '@model/runtimeModelRegistry';
+import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
+import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import type { StateStore } from '@platform/interfaces';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -43,13 +44,8 @@ import {
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { ModelHandlerCompatibilityKey } from '@shared/schemas';
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-  type KimiSubscriptionModelFields,
-} from '@shared/model/kimiCodeRetryGate';
+import type { ModelHandlerCompatibilityKey, UsageRoute } from '@shared/schemas';
+import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
@@ -215,6 +211,60 @@ function getPreferShortModelNames(globalState: StateStore): boolean {
   );
 }
 
+/** The credential and endpoint of one model route, resolved together. */
+export interface RouteCredential {
+  readonly apiKey: string;
+  readonly endpoint: string;
+  readonly provider: ApiProvider;
+  readonly route: 'api-key' | 'openrouter';
+  readonly usageRoute: UsageRoute;
+}
+
+/**
+ * Resolve the credential and endpoint the run loop binds a model under: the
+ * direct API key of the model's provider, or the OpenRouter key when the
+ * route goes through OpenRouter. The one producer of the missing-credential
+ * fact the run lifecycle classifies for the loop, so the thrown error carries
+ * the typed marker rather than a message pattern. Lives beside the route
+ * resolver above so route and credential are decided in one place. `secrets`
+ * is the process secret store the caller already holds.
+ */
+export async function resolveRouteCredential(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+  secrets: PlatformSecrets,
+): Promise<RouteCredential> {
+  const provider = useOpenRouter
+    ? 'openRouter'
+    : resolveDirectModelApiKeyProvider(config);
+  if (!provider) {
+    throw new Error(`Model "${config.name}" has no direct API-key provider.`);
+  }
+  let apiKey: string;
+  try {
+    apiKey = exposeApiKey(await getApiKey(secrets, provider));
+  } catch (cause) {
+    const error = new Error(
+      useOpenRouter
+        ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
+        : `Missing API key for ${provider}. Set a provider API key in settings.`,
+      { cause },
+    );
+    attachMissingApiKeyError(error);
+    throw error;
+  }
+  const endpoint = resolveRouteEndpoint(config, useOpenRouter);
+  return {
+    apiKey,
+    endpoint: endpoint.baseUrl,
+    provider,
+    route: useOpenRouter ? 'openrouter' : 'api-key',
+    usageRoute:
+      endpoint.usageRoute ??
+      (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
+  };
+}
+
 function applyShortModelNamePreference(
   config: ModelConfig,
   preferShortModelNames: boolean,
@@ -299,18 +349,6 @@ export function activeModelHandlerCompatibilityKey(
   return (handler as ModelHandlerCompatibilityTagged)[
     MODEL_HANDLER_COMPATIBILITY_PROPERTY
   ];
-}
-
-/** Compare persisted format keys, falling back to class identity for untagged handlers. */
-export function modelHandlersShareConversationFormat(
-  first: object,
-  second: object,
-): boolean {
-  const firstKey = activeModelHandlerCompatibilityKey(first);
-  const secondKey = activeModelHandlerCompatibilityKey(second);
-  return firstKey !== undefined && secondKey !== undefined
-    ? firstKey === secondKey
-    : first.constructor === second.constructor;
 }
 
 function withModelHandlerCompatibilityKey<T extends ModelHandler>(
@@ -434,53 +472,6 @@ export async function createModelHandlerForCompatibilityKey(
       allowCodexSubscriptionOverride:
         compatibilityKey === 'ModelHandlerOpenAIResponse',
     },
-    stores,
-    responseTextProcessing,
-  );
-}
-
-/**
- * The handler a Kimi Code-routed dual-backend model must be rebuilt onto when
- * a retry switches to the user's own Moonshot API key. A credential-only
- * rebind cannot undo the dispatch-time route: the live handler's synthesized
- * config pins the coding `baseUrl` and wire id, so it would resolve the same
- * exhausted Kimi Code credential and endpoint again (the pinned config reads
- * as exclusive to `resolveDirectModelApiKeyProvider`).
- *
- * Returns the handler built from the registry config under the same
- * compatibility key, or undefined when no rebuild applies — the live config
- * is not on the coding route, the model id is not Kimi-subscription-eligible,
- * or the model is Kimi Code-EXCLUSIVE (no Moonshot fallback exists; those
- * retries must not switch at all). The caller must have already disabled the
- * "Prefer Kimi Code" preference; with it still on, the rebuild would resolve
- * the coding route again.
- */
-export async function createKimiCodeFallbackHandler(
-  currentConfig: KimiSubscriptionModelFields,
-  modelId: string,
-  stores: ModelOptionStores,
-  responseTextProcessing?: ResponseTextProcessing,
-): Promise<ModelHandler | undefined> {
-  if (
-    !isKimiSubscriptionEligible(currentConfig) ||
-    currentConfig.baseUrl !== KIMI_CODE_BASE_URL
-  ) {
-    return undefined;
-  }
-  const registryConfig = await resolveRuntimeModelConfig(modelId);
-  if (
-    !registryConfig ||
-    !isKimiSubscriptionEligible(registryConfig) ||
-    isKimiCodeExclusiveModel(registryConfig)
-  ) {
-    return undefined;
-  }
-  // Pin the same compatibility key the coding route dispatched under: the
-  // rebuilt handler keeps the conversation format (and stays off a mid-run
-  // OpenRouter toggle) exactly like a resume-path rebuild.
-  return createModelHandlerForCompatibilityKey(
-    registryConfig,
-    'ModelHandlerKimi',
     stores,
     responseTextProcessing,
   );

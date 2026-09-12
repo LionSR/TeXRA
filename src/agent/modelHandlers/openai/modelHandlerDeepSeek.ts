@@ -60,14 +60,6 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   }
 
   /**
-   * DeepSeek's examples pass back `content` beside `reasoning_content` and
-   * `tool_calls`, even when content is the empty string.
-   */
-  protected override shouldIncludeEmptyAssistantToolContent(): boolean {
-    return true;
-  }
-
-  /**
    * DeepSeek V4 thinking supports effort control. llm-zoo 1.4.2 does not mark
    * these models as configurable yet, so treat DeepSeek thinking models as
    * effort-capable here.

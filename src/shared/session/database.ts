@@ -65,6 +65,21 @@ export class DatabaseWriteFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+/**
+ * C5: a batch member targets an aggregate this process does not hold open,
+ * because the claim moved, was never held, or the aggregate closed. Nothing
+ * was written. The one write refusal that is a fact about ownership rather
+ * than the disk, which is why `appendAll` fails with it typed instead of
+ * wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
+ * stops, and never mistakes a disk error for a stolen claim or the reverse.
+ */
+export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
+  readonly aggregateId: AggregateId;
+  /** The holder and closure at refusal time, read in the refusing transaction. */
+  readonly ownerId: OwnerId | null;
+  readonly closed: boolean;
+}> {}
+
 /** A claim cannot be acquired under the requested deletion policy. */
 export class DatabaseClaimRefused extends Data.TaggedError(
   'DatabaseClaimRefused',
@@ -91,11 +106,16 @@ export class Database extends Context.Service<
      * writer is this process (C5, derived here, never supplied by a caller),
      * and a failure of any member rolls back every member and every sequence
      * change. Returns the complete committed batch, which is what the fold
-     * reads before exposing the state it produced.
+     * reads before exposing the state it produced. A target this process
+     * does not hold open refuses the batch as `DatabaseNotOwner`; every
+     * other rollback is `DatabaseWriteFailed`.
      */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>;
+    ) => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseNotOwner | DatabaseWriteFailed
+    >;
     /** Replaying wake counter. Local commits and foreign data-version changes
      *  advance it; it is never interpreted as an event ordinal. */
     readonly level: SubscriptionRef.SubscriptionRef<number>;
@@ -117,6 +137,16 @@ export class Database extends Context.Service<
     readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** The latest `flow.snapshot` on one open run, through the
+     *  `(aggregate_id, type, seq)` index: the run ledger's existence and
+     *  coordinates read, never a fold. A closed (tombstoned) run reads as
+     *  absent, as `readRunRecords` does. */
+    readonly readRunSnapshot: (
+      id: AggregateId,
+    ) => Effect.Effect<
+      Extract<SessionEvent, { type: 'flow.snapshot' }> | null,
+      DatabaseReadFailed
+    >;
     /** Direct child creation edges and their labels from one captured prefix. */
     readonly readRunChildren: (
       id: AggregateId,

@@ -472,9 +472,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Google background responses',
     description:
       'Run Google workflow generations as background Interactions (submit + poll). When this and the global streaming toggle (Enable streaming) are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The global streaming toggle (Enable streaming) avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     model: {
       provider: 'google',
       label: 'Background responses',
@@ -487,9 +485,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-    honoredBy: everyHost(
-      'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
-    ),
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     model: {
       provider: 'openai',
       label: 'Background responses',
@@ -521,11 +517,11 @@ const CORE_SETTING_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts', {
+    honoredBy: everyHost('src/agent/runtime/run/compaction.ts', {
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/loop/toolUse.ts -> src/agent/runtime/run/compaction.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -534,11 +530,11 @@ const CORE_SETTING_ROWS: Record<
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts', {
+    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts', {
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts -> src/agent/core/flows/ModelInvocationNode.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/ModelInvoker.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -882,7 +878,7 @@ const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts -> src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/runtime/loop/reflection.ts',
 } satisfies CliRuntimeReachability;
 const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
@@ -1296,14 +1292,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: {
-        reader:
-          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-      },
-      desktop: {
-        reader:
-          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-      },
+      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1318,7 +1308,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/runtime/loop/reflection.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'latex', cliConfig: true },

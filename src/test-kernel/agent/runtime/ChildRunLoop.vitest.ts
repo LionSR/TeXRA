@@ -873,7 +873,6 @@ describe('childRunLoop E2E fixtures', () => {
       error: undefined,
       usage: undefined,
       output: { category: 'toolUse', response: '', files: [] },
-      flowRecord: 'preserve',
     });
   });
 

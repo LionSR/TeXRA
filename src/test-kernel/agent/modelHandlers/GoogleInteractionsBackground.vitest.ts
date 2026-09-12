@@ -1227,8 +1227,9 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     );
 
     expect(result.response.status).toBe('requires_action');
-    expect(handler.extractToolUse(result.response).map((c) => c.name)).toEqual([
-      'get_weather',
+    // The polled interaction carries the call steps back to the caller.
+    expect((result.response.steps ?? []).map((step) => step.type)).toEqual([
+      'function_call',
     ]);
   });
 

@@ -85,10 +85,12 @@ export const sessionEventsLayer = Layer.effect(
   SessionEvents,
   Effect.gen(function* () {
     const log = yield* Database;
+    // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
+    // single-owner race is the caller's fact to act on, not a defect.
     const publish = Effect.fn('SessionEvents.publish')(function* (
       events: readonly SessionEventDraft[],
     ) {
-      return yield* log.appendAll(events).pipe(Effect.orDie);
+      return yield* log.appendAll(events);
     });
     // THE tail (C7): the drain woken by the log's level.
     const all = (

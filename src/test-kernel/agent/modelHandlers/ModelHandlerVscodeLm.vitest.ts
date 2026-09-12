@@ -22,7 +22,6 @@ import {
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
-  type LanguageModelMessage,
   type LanguageModelPort,
   type LanguageModelPortErrorCode,
   type LanguageModelResponsePart,
@@ -129,7 +128,6 @@ describe('ModelHandlerVscodeLm messages', () => {
         content: [{ kind: 'text', text: 'system\n\nprefix\n\nrequest' }],
       },
     ]);
-    expect(handler.requiresPerCallSystemPrompt).toBe(false);
 
     expect(
       foldSystemPromptIntoVscodeLmMessages(
@@ -148,7 +146,7 @@ describe('ModelHandlerVscodeLm messages', () => {
     ]);
   });
 
-  it('preserves image bytes across initial, round, and insertion paths', async () => {
+  it('preserves image bytes on the initial message path', async () => {
     const handler = new ModelHandlerVscodeLm(modelConfig());
     const data = Buffer.from([1, 2, 3, 4]);
     const loadEntries = mockMediaEntries(handler, [
@@ -181,30 +179,7 @@ describe('ModelHandlerVscodeLm messages', () => {
       },
     ]);
 
-    const rounds = await handler.createRoundMessages(initial, 'next question', [
-      IMAGE_LOCATION,
-    ]);
-    expect(rounds.at(-1)).toEqual({
-      role: 'user',
-      content: [
-        { kind: 'text', text: 'next question' },
-        { kind: 'text', text: 'Image: figure.png' },
-        { kind: 'data', data, mimeType: 'image/png' },
-      ],
-    });
-
-    const withTrailingAssistant: LanguageModelMessage[] = [
-      ...rounds,
-      { role: 'assistant', content: [{ kind: 'text', text: 'working' }] },
-    ];
-    await expect(
-      handler.addMediaToUserMessage(withTrailingAssistant, [IMAGE_LOCATION]),
-    ).resolves.toEqual(['image']);
-    expect(withTrailingAssistant.at(-2)?.content.slice(-2)).toEqual([
-      { kind: 'text', text: 'Image: figure.png' },
-      { kind: 'data', data, mimeType: 'image/png' },
-    ]);
-    expect(loadEntries).toHaveBeenCalledTimes(3);
+    expect(loadEntries).toHaveBeenCalledTimes(1);
   });
 
   it('rejects media for non-vision models and rejects audio for vision models', async () => {
@@ -212,51 +187,13 @@ describe('ModelHandlerVscodeLm messages', () => {
     expect(textOnlyHandler.capabilities.supportsVision).toBe(false);
 
     await expect(
-      textOnlyHandler.createRoundMessages([], 'question', [IMAGE_LOCATION]),
+      textOnlyHandler.initializeMessages('', 'question', [IMAGE_LOCATION]),
     ).rejects.toThrow('does not support image input');
 
     const visionHandler = new ModelHandlerVscodeLm(modelConfig());
     await expect(
       visionHandler.initializeMessages('', 'question', [AUDIO_LOCATION]),
     ).rejects.toThrow('audio and other native file inputs are not supported');
-
-    const brokenHandler = new ModelHandlerVscodeLm(modelConfig());
-    mockMediaEntries(brokenHandler, [
-      {
-        file_name: 'broken.png',
-        data: '',
-        media_type: 'image/png',
-        media_category: 'image',
-      },
-    ]);
-    const messages: LanguageModelMessage[] = [
-      { role: 'user', content: [{ kind: 'text', text: 'question' }] },
-    ];
-    await expect(
-      brokenHandler.addMediaToUserMessage(messages, [IMAGE_LOCATION]),
-    ).resolves.toEqual([]);
-    expect(messages).toEqual([
-      { role: 'user', content: [{ kind: 'text', text: 'question' }] },
-    ]);
-  });
-
-  it('does not insert empty text before a tool result', () => {
-    const handler = new ModelHandlerVscodeLm(modelConfig());
-    const messages: LanguageModelMessage[] = [
-      {
-        role: 'user',
-        content: [{ kind: 'toolResult', callId: 'call-1', text: 'done' }],
-      },
-    ];
-
-    handler.prependTextToUserMessage(messages, '  ');
-
-    expect(messages).toEqual([
-      {
-        role: 'user',
-        content: [{ kind: 'toolResult', callId: 'call-1', text: 'done' }],
-      },
-    ]);
   });
 });
 
@@ -316,18 +253,6 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
         },
       ],
     });
-    expect(handler.extractToolUse(response)).toMatchObject([
-      {
-        provider: 'vscode-lm',
-        callId: 'call-1',
-        input: { query: 'alpha' },
-      },
-      {
-        provider: 'vscode-lm',
-        callId: 'call-2',
-        input: { url: 'https://example.com' },
-      },
-    ]);
     expect(handler.supportsForcedToolChoice).toBe(false);
     expect(port.sendRequest).toHaveBeenCalledWith(
       { vendor: ModelProvider.COPILOT, id: 'copilot-model-id' },
@@ -371,75 +296,6 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
       justification: 'Run the selected TeXRA agent.',
       maxTokens: 4096,
     });
-  });
-
-  it('round-trips parallel tool calls and results in one message pair', async () => {
-    const handler = new ModelHandlerVscodeLm(modelConfig());
-    const calls = handler.extractToolUse({
-      text: '',
-      usage: undefined,
-      stopReason: OPENAI_CHAT_FINISH.TOOL_CALLS,
-      toolCalls: [
-        {
-          kind: 'toolCall',
-          callId: 'call-1',
-          name: 'search',
-          input: { q: 'x' },
-        },
-        {
-          kind: 'toolCall',
-          callId: 'call-2',
-          name: 'fetch',
-          input: { u: 'y' },
-        },
-      ],
-    });
-
-    const followUp = await handler.createBatchedToolUseFollowUpMessages(
-      [
-        {
-          call: calls[0],
-          result: { status: 'executed', output: 'first' },
-          attachments: [],
-        },
-        {
-          call: calls[1],
-          result: { status: 'executed', output: 'second' },
-          attachments: [],
-        },
-      ],
-      undefined,
-      'checking',
-    );
-
-    expect(handler.requiresBatchedParallelToolResults).toBe(true);
-    expect(followUp).toEqual([
-      {
-        role: 'assistant',
-        content: [
-          { kind: 'text', text: 'checking' },
-          {
-            kind: 'toolCall',
-            callId: 'call-1',
-            name: 'search',
-            input: { q: 'x' },
-          },
-          {
-            kind: 'toolCall',
-            callId: 'call-2',
-            name: 'fetch',
-            input: { u: 'y' },
-          },
-        ],
-      },
-      {
-        role: 'user',
-        content: [
-          { kind: 'toolResult', callId: 'call-1', text: 'first' },
-          { kind: 'toolResult', callId: 'call-2', text: 'second' },
-        ],
-      },
-    ]);
   });
 
   it('reports cancellation even when the stream closes normally', async () => {
@@ -502,7 +358,6 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
       ),
     ).resolves.toBe(8);
     expect(port.countTokens).toHaveBeenCalledTimes(2);
-    expect(handler.normalizeUsage(undefined, 100)).toBeUndefined();
   });
 
   it('reduces request maxTokens when the counted prompt leaves no output room', async () => {

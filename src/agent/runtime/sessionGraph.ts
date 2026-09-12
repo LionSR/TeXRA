@@ -35,6 +35,7 @@ import type { DeletionMode } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
+import type { RunLedger } from '@shared/session/runLedger';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
@@ -46,6 +47,9 @@ export interface SessionGraph {
   readonly events: Omit<SessionEventsShape, 'publish'>;
   readonly publish: SessionEventsShape['publish'];
   readonly publishRegistration: SessionEventsShape['publish'];
+  /** The run ledger over this root's event plane: the run loop's one
+   *  writer of run rows, provided to each run's program from here. */
+  readonly ledger: Context.Service.Shape<typeof RunLedger>;
   /** The run's one claim, acquired before a resume reads or mutates. Private
    *  record reads never enter display transport. */
   readonly acquireRunClaims: (

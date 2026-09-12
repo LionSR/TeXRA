@@ -73,9 +73,8 @@ import {
  * `@agent/runtime/executeAgent` at its module load rather than imported: a
  * static import here would close the
  * registry -> DelegationTools -> proposalFlow -> subagentRun ->
- * nativeSubagentStrategy -> executeAgent -> runToolUseFlow -> registry cycle,
- * because the engine's flow driver statically imports the tool registry (a
- * kept edge). Agents launching agents is inherently recursive; this slot is
+ * nativeSubagentStrategy -> executeAgent -> AgentRun -> registry cycle,
+ * because the run layer statically imports the tool registry (a kept edge). Agents launching agents is inherently recursive; this slot is
  * the single, typed point where that recursion closes at runtime.
  */
 export interface AgentEngine {
@@ -356,7 +355,7 @@ export function createNativeSubagentStrategy(
             );
 
           // childRunLoop already consumed this batch from the stream queue. A
-          // queued-resume wrapper would append it to ToolUseSessionLifecycle,
+          // queued-resume wrapper would append it to the run's `FollowUps`,
           // which is backed by that same queue; the next WAITING result would
           // therefore feed the identical batch back into this method forever.
           // Hand it directly to the persisted WAITING cursor instead. Any item

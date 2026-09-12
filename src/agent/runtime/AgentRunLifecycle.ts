@@ -1,12 +1,8 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Deferred, Effect } from 'effect';
 
-import type { FinalizeRunInput } from '@agent/storage';
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  finalizeRun,
-  retainFlowRecordUnlessCompleted,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -82,24 +78,6 @@ export interface RunFlowLifecycleOptions {
   onRunEnd?: (runId: RunId) => void | Promise<void>;
 }
 
-type FlowRecordDisposition = FinalizeRunInput['flowRecord'];
-
-/**
- * Flow-record retention: a fixed disposition, or the caller's policy keyed on
- * the terminal outcome {@link finalizeRunTerminal} resolves. Keying it on the
- * caller's own report instead would derive the record's fate from a different
- * owner than the outcome it is persisted beside — a genuinely failed run kept
- * resumable, or a cancelled one stripped of the record every other cancel path
- * preserves.
- */
-export type FlowRecordRetention =
-  FlowRecordDisposition | ((outcome: RunOutcome) => FlowRecordDisposition);
-
-/** Private control channel through which a flow reports its retention policy. */
-export interface FlowLifecycleControl {
-  setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
-}
-
 interface FinalizeRunTerminalParams {
   /**
    * Owns the registry tracking the handle (untracked after the delivery
@@ -134,8 +112,6 @@ interface FinalizeRunTerminalParams {
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
-  /** The flow-record policy the storage finalizer applies beside the row. */
-  readonly flowRecord: FlowRecordRetention;
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
@@ -225,15 +201,12 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     ...(params.usage ? { usage: params.usage } : {}),
     output,
   };
-  const { flowRecord } = params;
   const finalization = yield* finalizeRun(session, {
     runId: handle.runId,
     outcome,
     error,
     usage: params.usage,
     output,
-    flowRecord:
-      typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
   });
   if (!finalization.ok) {
     logger.warn('Failed to finalize durable run state', {
@@ -452,15 +425,11 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
 export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
   function* (
     ctx: AgentLaunchContext,
-    runner: (
-      handle: RunHandle,
-      lifecycle: FlowLifecycleControl,
-    ) => Promise<AgentRuntimeFlowResult>,
+    runner: (handle: RunHandle) => Effect.Effect<AgentRuntimeFlowResult, Error>,
     options?: RunFlowLifecycleOptions,
   ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
-    const isSubagent = options?.parentRunId !== undefined;
     const handle = new RunHandle(
       {
         runId,
@@ -475,13 +444,19 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     // synchronously, so anything assigned later (e.g. from `onRun`) misses the
     // parent's first roster snapshot.
     if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
+    const cancelHostPrompts = () =>
+      session.interactions.cancel({
+        runId,
+        cause: 'Run interrupted.',
+      });
+    // The host's stop: the run's one stop latch, which the runner races, plus
+    // the prompts this run left open. The run signal is not aborted here — the
+    // interruption the latch causes aborts it (below), so the Promise-tier
+    // bridge stays downstream of the stop rather than beside it.
     const runInterruptHandler = {
       interrupt(): void {
         ctx.interrupt();
-        session.interactions.cancel({
-          runId,
-          cause: 'Run interrupted.',
-        });
+        cancelHostPrompts();
       },
     };
     const detachRunInterrupt =
@@ -490,12 +465,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     // A lease record removed out from under this run is not watched: the next
     // fenced write throws `RunLeaseLostError` and the run aborts dirty.
     let suspended = false;
-    let flowRecordDisposition: FlowRecordDisposition | undefined;
-    const lifecycleControl: FlowLifecycleControl = {
-      setFlowRecordDisposition(disposition): void {
-        flowRecordDisposition = disposition;
-      },
-    };
     // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
     // throw nor an async rejection from a consumer callback may abort the run.
     if (options?.onRun) {
@@ -530,11 +499,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         handle,
         usage: ctx.usageMonitor.lastTotals(),
         stage: ctx.parentStage,
-        // Tool-use flows report the exact recovery decision through the
-        // private lifecycle control. Other flows retain the historical
-        // policy, read against the outcome finalization resolves rather
-        // than this arm's report.
-        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
         ...arm,
       });
     /**
@@ -563,7 +527,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // Root-agent failures are surfaced in the stream log. Subagent failures
       // are delivered to the orchestrator below, so avoid adding a second
       // wrapper error that makes a child failure look like the parent failed.
-      if (kind !== 'abort' && !isSubagent) {
+      if (kind !== 'abort' && !handle.isChild) {
         logSdkError(ctx.logger, errorMsg, err, {
           operation: `execute ${agentIdentifier}`,
         });
@@ -590,7 +554,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
               message,
               ...providerErrorInfo,
             };
-      const subagentResult = isSubagent
+      const subagentResult = handle.isChild
         ? (carried ??
           buildTerminalFlowResult(
             handle.category,
@@ -675,30 +639,25 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // set run status themselves. Either branch leaves the run carrying
       // this run's own phase, which is what makes the terminal phase a verdict
       // about this run rather than whatever the last one left behind.
-      if (ctx.runScope.signal.aborted) {
+      if (Deferred.isDoneUnsafe(ctx.stopped)) {
+        // The stop landed before this run had a program to interrupt, so it is
+        // recorded on the run signal here: the launch's own Promise-tier work
+        // is all there is to cancel.
+        ctx.abortRunSignal();
         transitionStopBeforeRunStart(ctx);
       } else {
         transitionRunStart(ctx);
       }
-      const flow = yield* Effect.try({
-        try: () => runner(handle, lifecycleControl),
-        catch: ensureError,
-      });
-      const result = yield* Effect.tryPromise({
-        try: () => flow,
-        catch: ensureError,
-      }).pipe(
+      // The flow is an Effect: a fiber interruption reaches its provider work
+      // directly, and its own finalizers settle before the model and trace
+      // resources below are disposed. The run signal is aborted from that
+      // interruption, so Promise-tier work the flow still retains observes the
+      // same stop.
+      const result = yield* Effect.suspend(() => runner(handle)).pipe(
         Effect.onInterrupt(() =>
-          Effect.gen(function* () {
-            // The retained Promise flow owns provider work. Signal its real abort
-            // path, then join it before disposing its model and trace resources.
-            runInterruptHandler.interrupt();
-            yield* Effect.promise(() =>
-              flow.then(
-                () => undefined,
-                () => undefined,
-              ),
-            );
+          Effect.sync(() => {
+            ctx.abortRunSignal();
+            cancelHostPrompts();
           }),
         ),
         Effect.ensuring(Effect.sync(detachRunInterrupt)),
@@ -708,7 +667,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         logger.debug(`Task suspended with outcome: ${result.outcome}`);
         // The handle stays tracked (correct for resume) but the live tool-use
         // session and its interrupt handler are already gone by the time
-        // this returns (runToolUseFlow's finally). Parking the handle is the
+        // this returns (the tool-use loop's scope). Parking the handle is the
         // one place this run is recorded as suspended, and carries the teardown
         // a stop/kill runs instead of the absent interrupt target, see
         // AgentRunLifecycle/RunRegistry issue #7287.

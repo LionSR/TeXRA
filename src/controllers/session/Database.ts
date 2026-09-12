@@ -69,6 +69,7 @@ import {
   Database,
   DatabaseOpenFailed,
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
@@ -325,6 +326,12 @@ export const databaseLayer = (
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
+      // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
+      const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.aggregate_id = ? AND e.type = 'flow.snapshot.1'
+          AND EXISTS (SELECT 1 FROM event_sequence s
+                      WHERE s.aggregate_id = e.aggregate_id AND s.closed = 0)
+        ORDER BY e.seq DESC LIMIT 1`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
         'approval.requested.1',
@@ -610,9 +617,20 @@ export const databaseLayer = (
               identity.ownerId,
             ]))[0]?.seq;
             if (typeof seq !== 'number') {
-              throw new Error(
-                `Aggregate is closed or not owned: ${draft.aggregateId}`,
-              );
+              // C5: the sequence row exists and refused this writer, because
+              // its claim moved or it closed. Read that row in the refusing
+              // transaction so the typed refusal names the holder.
+              const held = (yield* readState([draft.aggregateId]))[0];
+              if (held === undefined) {
+                throw new Error(
+                  `Sequence refused for an absent aggregate: ${draft.aggregateId}`,
+                );
+              }
+              return yield* new DatabaseNotOwner({
+                aggregateId: draft.aggregateId,
+                ownerId: held.ownerId,
+                closed: held.closed,
+              });
             }
             const target = aggregateTarget(draft.aggregateId);
             // The seq-1 rule (decision 9): a run aggregate begins with exactly
@@ -798,6 +816,20 @@ export const databaseLayer = (
                 id,
                 JSON.stringify(LISTING_TYPES),
               ])).map(decodeEvent);
+            }),
+          ),
+        readRunSnapshot: (id) =>
+          query(
+            Effect.gen(function* () {
+              const row = (yield* sql.unsafe<Record<string, unknown>>(
+                runSnapshot,
+                [id],
+              ))[0];
+              if (row === undefined) return null;
+              const event = decodeEvent(row);
+              if (event.type !== 'flow.snapshot')
+                throw new Error('Invalid run snapshot row');
+              return event;
             }),
           ),
         readRunChildren: (id) =>
@@ -1167,7 +1199,15 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(appendPrepared(prepared, at));
+            // The ownership refusal leaves typed (D6 b); the transaction
+            // wrapper carried it as the write failure's cause.
+            return yield* transact(appendPrepared(prepared, at)).pipe(
+              Effect.mapError((failure) =>
+                failure.cause instanceof DatabaseNotOwner
+                  ? failure.cause
+                  : failure,
+              ),
+            );
           }),
       };
     }),

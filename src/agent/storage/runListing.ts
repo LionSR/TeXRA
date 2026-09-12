@@ -41,11 +41,10 @@ interface RunListingBase {
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /**
-   * Whether a checkpoint (persisted flow record) exists on disk — one `stat`
-   * per row, never a parse. This is what a listing needs to advertise "this
-   * run can be continued"; deciding whether the record is actually loadable
-   * belongs to the resume path, which parses it once for the one run asked
-   * for and refuses loudly.
+   * Whether a `flow.snapshot` row exists on the run aggregate — one indexed
+   * read per row, never a fold. This is what a listing needs to advertise
+   * "this run can be continued"; loadability is decided by `RunLedger.load`,
+   * which folds the one run asked for and refuses loudly.
    */
   checkpointPresent: boolean;
 }
