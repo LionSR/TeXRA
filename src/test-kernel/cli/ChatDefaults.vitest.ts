@@ -238,7 +238,7 @@ describe('CLI chat defaults', () => {
     expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
   });
 
-  it('skips user I/O when environment resolves agent and model', async () => {
+  it('skips workspace and user I/O when environment resolves agent and model', async () => {
     await expectChatDefaults(
       { cwd: NO_WORKSPACE, envAgent: 'assistant', envModel: 'sonnet46T' },
       {
@@ -247,6 +247,7 @@ describe('CLI chat defaults', () => {
         modelSource: 'environment',
       },
     );
+    expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
     expect(mockedReadJson).not.toHaveBeenCalled();
   });
 
