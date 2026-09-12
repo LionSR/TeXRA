@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -84,9 +83,6 @@ interface LeaseHeld {
   readonly owner: LeaseOwnerRecord;
 }
 
-type InactiveRunLeaseResult<T> =
-  LeaseHeld | { readonly status: 'performed'; readonly value: T };
-
 /**
  * Which surviving claims a claimant may unlink. Every automatic path reaps
  * only provably `dead` owners. The user's explicit deletion of a run also
@@ -94,7 +90,7 @@ type InactiveRunLeaseResult<T> =
  * the only party who can know that owner is gone, and asked for exactly
  * this.
  */
-export type LeaseReapPolicy = 'dead' | 'dead-or-unprovable';
+type LeaseReapPolicy = 'dead' | 'dead-or-unprovable';
 
 /** Why a run refused a claim, in the words the user is shown. */
 export function runLeaseHeldMessage(
@@ -122,7 +118,6 @@ export class RunLeaseLostError extends Error {
 }
 
 const ownedLeases = new Map<string, OwnedRunLease>();
-const maintenanceRuns = new AsyncLocalStorage<ReadonlySet<string>>();
 
 function storageRoot(): string {
   return workspaceRoots().storage;
@@ -547,51 +542,4 @@ export async function inspectRunLease(runId: RunId): Promise<RunLeasePresence> {
   const survivors = judged.filter((c) => c.liveness !== 'dead');
   if (survivors.length === 0) return { status: 'free' };
   return { status: 'held', owner: shownClaim(survivors).record.owner };
-}
-
-/**
- * Run maintenance on a run nobody alive owns. The maintenance is
- * itself a claim: the record is published for its duration and unlinked
- * afterwards, so a concurrent acquisition sees a live local owner and
- * refuses, and a crash mid-maintenance leaves a record whose dead pid the
- * next claimant unlinks. An owner that is alive refuses maintenance
- * outright; an unprovable one refuses it unless `reap` says otherwise.
- */
-export async function runWithInactiveRunLease<T>(
-  runId: RunId,
-  operation: () => Promise<T>,
-  reap: LeaseReapPolicy = 'dead',
-): Promise<InactiveRunLeaseResult<T>> {
-  const root = storageRoot();
-  const key = ownershipKey(root, runId);
-  const local = ownedLeases.get(key);
-  if (local) {
-    if (await ownClaimPresent(local)) {
-      // The record names this live process. Report our own identity, not
-      // the record's copy, so a tampered owner field cannot misdescribe a
-      // live local owner.
-      return { status: 'active', owner: await currentLeaseOwner() };
-    }
-    forgetOwnedLease(local);
-  }
-  const claim = await claimLease(runId, root, reap);
-  if (claim.status === 'active') return claim;
-  const maintenanceKeys = new Set(maintenanceRuns.getStore());
-  maintenanceKeys.add(key);
-  let value: T;
-  try {
-    value = await maintenanceRuns.run(maintenanceKeys, operation);
-  } catch (error) {
-    try {
-      await unlinkOwnClaim(runId, root, claim.record.ownerToken);
-    } catch (releaseError) {
-      log.warn(
-        `Run ${runId}: maintenance failed and its lease could not be released`,
-        { data: releaseError },
-      );
-    }
-    throw error;
-  }
-  await unlinkOwnClaim(runId, root, claim.record.ownerToken);
-  return { status: 'performed', value };
 }

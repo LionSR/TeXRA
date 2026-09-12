@@ -398,18 +398,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   ),
 ]);
 /**
- * A stable subagent attempt's lifecycle phase (#10663): reserved before its
- * run exists, launched once its loop owns it, committed after its result
- * manifest drained, retryable when repeating it is known to be safe.
- */
-const StableSubagentPhaseSchema = z.enum([
-  'reserved',
-  'launched',
-  'committed',
-  'retryable',
-]);
-export type StableSubagentPhase = z.infer<typeof StableSubagentPhaseSchema>;
-/**
  * The run's private records: on the same aggregate as its display rows, read
  * by the runtime's typed accessors and never by a renderer
  * (`isDisplaySessionEvent` keeps them out of the transport by type).
@@ -421,23 +409,6 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
   durable('run.workflow', { workflow: WorkflowRunSnapshotSchema }),
-  /**
-   * The stable-subagent protocol's parent-owned facts, on the launching
-   * run's aggregate and keyed inside the payload (one run model, section
-   * 3.6): the number of physical attempts reserved for one logical call,
-   * and each attempt's lifecycle phase. Latest per key is the fold; neither
-   * is a listing type because one parent carries many keys.
-   */
-  durable('run.subagentSequence', {
-    logicalRunId: RunIdSchema,
-    nextAttempt: z.int().nonnegative(),
-  }),
-  durable('run.subagentAttempt', {
-    /** The physical attempt's run. */
-    runId: RunIdSchema,
-    logicalRunId: RunIdSchema,
-    phase: StableSubagentPhaseSchema,
-  }),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
@@ -631,8 +602,6 @@ export function listingTypeOf(
     case 'tool.result':
     case 'flow.snapshot':
     case 'child.turn':
-    case 'run.subagentSequence':
-    case 'run.subagentAttempt':
     case 'workflow.script':
     case 'workflow.journal':
       // The run ledger's private rows stay out of the listing: a cold hydrate
