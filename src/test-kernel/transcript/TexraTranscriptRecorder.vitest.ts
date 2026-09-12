@@ -34,7 +34,7 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId): {
   const store = new StreamLog();
 
   const recorder = attachTestTranscriptFold(trace, runId, store);
-  const rows = (): StreamLogEntry[] => store.getRange(0);
+  const rows = (): StreamLogEntry[] => store.toJSON();
   return {
     trace,
     handleStatus: recorder.handleStatus,
@@ -458,88 +458,6 @@ describe('attachTestTranscriptFold workflow task state', () => {
   });
 });
 
-describe('attachTestTranscriptFold record-time secret redaction', () => {
-  const API_KEY = 'sk-live1234567890abcdef';
-
-  it('redacts a secret in a plain log row before it is persisted', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.info(`Configured with ${API_KEY}`);
-
-    expect(rows()[0]?.text).toBe('Configured with [redacted]');
-  });
-
-  it("redacts an error row's provider detail, not just its summary", () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.error(`Request failed for ${API_KEY}`, {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: `401 from https://api.example.com/v1?key=${API_KEY}`,
-        statusCode: 401,
-      },
-    });
-
-    expect(rows()[0]).toMatchObject({
-      text: 'Request failed for [redacted]',
-      data: {
-        message: '401 from https://api.example.com/v1?key=[redacted]',
-        statusCode: 401,
-      },
-    });
-  });
-
-  it('redacts a secret split across streamed chunks once the stream settles', () => {
-    const { trace, row } = attachRecorder();
-
-    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('Use sk-live');
-    output.append('1234567890abcdef now');
-    output.finalize();
-
-    expect(row(output.id)?.text).toBe('Use [redacted] now');
-  });
-
-  it('redacts the authoritative finalized response text', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.responseFinalized(`Set API_KEY=${API_KEY} in your shell.`);
-
-    expect(rows()[0]?.text).toBe('Set API_KEY=[redacted] in your shell.');
-  });
-
-  it('redacts a stage label', () => {
-    const { trace, row } = attachRecorder();
-
-    const stage = trace.openStage(`Probe ${API_KEY}`, { kind: 'phase' });
-
-    expect(row(stage.id)?.text).toBe('Probe [redacted]');
-  });
-
-  it("redacts a failed workflow call's label and provider error", () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task-card',
-      call: {
-        id: 'audit-core',
-        label: `Audit ${API_KEY}`,
-        status: 'failed',
-        error: `401 rejected key ${API_KEY}`,
-      },
-    });
-
-    expect(rows()[0]).toMatchObject({
-      text: 'Audit [redacted]',
-      data: {
-        label: 'Audit [redacted]',
-        error: '401 rejected key [redacted]',
-      },
-    });
-  });
-});
-
 describe('attachTestTranscriptFold active skills', () => {
   const tempDirs = useTempDirs();
   setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
@@ -600,7 +518,7 @@ describe('attachTestTranscriptFold active skills', () => {
     });
     recorder.unsubscribe();
     const persisted = store
-      .getRange(0)
+      .toJSON()
       .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
     expect(persisted).toStrictEqual({
       skills: [

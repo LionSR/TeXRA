@@ -17,6 +17,7 @@ describe('StreamLog', () => {
       level: LOG_LEVELS.INFO,
       timestamp: 1,
       text: 'run',
+      messageType: MESSAGE_TYPES.DEFAULT,
       data: { status: 'running' },
     });
 
@@ -32,11 +33,7 @@ describe('StreamLog', () => {
       });
     }
 
-    expect(log.head).toBe(5_001);
-    expect(log.head).toBe(5_001);
-    expect(log.hasRunningGroup).toBe(true);
-
-    const entries = log.getRange(0, log.head);
+    const entries = log.toJSON();
     expect(entries).toHaveLength(5_001);
     expect(entries[0]?.seqNo).toBe(1);
     expect(entries.at(-1)?.seqNo).toBe(5_001);
@@ -49,9 +46,9 @@ describe('StreamLog', () => {
 
     log.update('run', {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { status: 'stopped' },
+      messageType: MESSAGE_TYPES.DEFAULT,
+      data: { status: 'cancelled' },
     });
-    expect(log.hasRunningGroup).toBe(false);
 
     const delta = log.drainEmission();
     expect(delta.appended).toEqual([]);
@@ -87,6 +84,8 @@ describe('StreamLog', () => {
       level: LOG_LEVELS.INFO,
       timestamp: 1,
       text: 'Audit',
+      messageType: MESSAGE_TYPES.DEFAULT,
+      data: { status: 'running' },
     });
     log.append({
       id: 'task',
@@ -110,18 +109,9 @@ describe('StreamLog', () => {
       },
     });
     const revised = log.settle('task', { text: 'Audit core complete' });
-    const restored = new StreamLog(log.getRange(0));
-    const later = restored.appendSettled({
-      id: 'summary',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 3,
-      text: 'Done',
-    });
 
     expect(header.settlementSeqNo).toBe(1);
     expect(completed?.settlementSeqNo).toBe(2);
     expect(revised?.settlementSeqNo).toBe(2);
-    expect(later.settlementSeqNo).toBe(3);
   });
 });

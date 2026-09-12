@@ -669,7 +669,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
 
         expect(result.outcome).toBe(scenario.expectedOutcome);
         const sessionStages = store
-          .getRange(0)
+          .toJSON()
           .flatMap((entry) =>
             entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
             isObject(entry.data) &&
@@ -683,7 +683,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         // The turn is the only structural stage: rounds are row facts.
         expect(
           store
-            .getRange(0)
+            .toJSON()
             .some(
               (entry) => isObject(entry.data) && entry.data.kind === 'round',
             ),

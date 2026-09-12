@@ -1,8 +1,7 @@
 // Host-neutral projection of task-group lifecycle rows from a StreamLog.
 //
-// The session fold applies entries as they arrive and the CLI rebuilds the
-// same task groups from persisted entries. Both paths use this module so
-// ordering and orphan GROUP_END behavior remain identical.
+// The session fold (`sessionFold.ts`) is the one caller; ordering and orphan
+// GROUP_END behavior live here.
 
 import {
   STREAM_LOG_ENTRY_TYPES,
@@ -12,16 +11,6 @@ import {
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-
-/**
- * The status a GROUP_END row settles its group on. Producers write
- * `TaskGroupStatus`; an absent value means the group simply completed.
- */
-function taskGroupEndStatus(
-  value: TaskGroupStatus | undefined,
-): TaskGroupStatus {
-  return value ?? RUN_PHASE.COMPLETED;
-}
 
 /**
  * The status a task group RENDERS as, given the outcome its run durably
@@ -117,14 +106,12 @@ export function upsertTaskGroupFromStreamLog(
   };
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    // The run has not ended, so an absent status means "running".
-    const startStatus = payload.status ?? RUN_PHASE.RUNNING;
-    const name = entry.text ?? payload.name ?? entry.id;
+    const name = entry.text ?? entry.id;
     const nextGroup: TaskGroup = {
       id: entry.id,
       name,
       startTime: entry.timestamp,
-      status: startStatus,
+      status: payload.status,
       ...lifecycleFields,
     };
 
@@ -137,7 +124,7 @@ export function upsertTaskGroupFromStreamLog(
     return true;
   }
 
-  const status = taskGroupEndStatus(payload.status);
+  const status = payload.status;
   const endTime = payload.endTime;
 
   if (groupIndex === -1) {

@@ -66,7 +66,7 @@ function threadOf(events: ThreadEvent[]): Thread {
 }
 
 function toolLogs(store: StreamLog): Record<string, unknown>[] {
-  const entries = store.getRange(0, store.head);
+  const entries = store.toJSON();
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
     .map((entry) => entry.data as Record<string, unknown>);

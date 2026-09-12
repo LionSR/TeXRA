@@ -45,7 +45,7 @@ describe('session-owned transcripts and follow-up queues', () => {
         expect(
           launching.transcripts
             .get(runId)
-            ?.getRange(0)
+            ?.toJSON()
             .map((entry) => entry.text),
         ).toEqual(['owned by launching session']);
         expect(sibling.transcripts.get(runId)).toBeUndefined();

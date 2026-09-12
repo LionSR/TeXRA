@@ -979,7 +979,7 @@ function reconcileCompactionRows(
 function isStreamingEntry(entry: StreamLogEntry): boolean {
   return (
     entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-    STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '') &&
+    STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType) &&
     isObject(entry.data) &&
     entry.data.status === 'running'
   );

@@ -32,7 +32,7 @@ describe('logUserMessage', () => {
   });
 
   function capturedEntries(): StreamLogEntry[] {
-    return store.getRange(0, store.head);
+    return store.toJSON();
   }
 
   it('logs a plain userMessage row with no data when there are no attachments', () => {

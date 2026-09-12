@@ -39,12 +39,11 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * is rejected at the parse boundary.
  */
 const groupLogPayloadFields = {
-  status: TaskGroupStatusSchema.optional(),
+  status: TaskGroupStatusSchema,
   kind: StageKindSchema.optional(),
   attemptId: z.string().min(1).optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
-  name: z.string().optional(),
   endTime: taskGroupEndTimeField.optional(),
 };
 

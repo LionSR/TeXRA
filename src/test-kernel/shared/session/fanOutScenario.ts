@@ -275,7 +275,14 @@ export function buildScenario({ proposal = false } = {}) {
       id: 'phase-Map',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       text: 'Map',
-      data: { kind: 'phase', index: 0, total: 1, attemptId: 'attempt-1' },
+      messageType: MESSAGE_TYPES.DEFAULT,
+      data: {
+        status: RUN_PHASE.RUNNING,
+        kind: 'phase',
+        index: 0,
+        total: 1,
+        attemptId: 'attempt-1',
+      },
     }),
   );
   log.emit(ROOT, T.root + 1, {
@@ -432,6 +439,7 @@ export function buildScenario({ proposal = false } = {}) {
     log.entry(PROCESS, T.process + sec(1 + offset), {
       id: `out-${offset}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
+      messageType: MESSAGE_TYPES.DEFAULT,
       text,
     });
   }
@@ -504,6 +512,7 @@ export function buildScenario({ proposal = false } = {}) {
       id: 'phase-Map',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       text: 'Map',
+      messageType: MESSAGE_TYPES.DEFAULT,
       data: { kind: 'phase', status: 'completed', endTime: T.childDone + 2 },
     }),
   );
@@ -931,7 +940,9 @@ function boardView({
       id: `phase-${title}`,
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       text: title,
+      messageType: MESSAGE_TYPES.DEFAULT,
       data: {
+        status: RUN_PHASE.RUNNING,
         kind: 'phase',
         index,
         total: phases.length,
@@ -952,6 +963,7 @@ function boardView({
       id: `phase-${title}`,
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       text: title,
+      messageType: MESSAGE_TYPES.DEFAULT,
       data: { kind: 'phase', status: 'completed', endTime: at },
     });
   };
@@ -1088,6 +1100,7 @@ function boardView({
       id: 'phase-Review',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       text: 'Review',
+      messageType: MESSAGE_TYPES.DEFAULT,
       data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
     });
     log.emit(ROOT, closedAt + 2, {

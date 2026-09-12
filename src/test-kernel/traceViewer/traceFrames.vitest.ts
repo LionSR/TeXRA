@@ -9,6 +9,7 @@ import {
   AgentCategory,
   emptyUsageStats,
   LOG_LEVELS,
+  MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
   type RunId,
@@ -91,6 +92,7 @@ describe('traceFrame replays the document through the one fold', () => {
         timestamp: 1,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.DEFAULT,
         text: 'Archived derivation',
       }),
     );

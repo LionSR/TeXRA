@@ -541,7 +541,7 @@ export class SessionHandle {
   statusClosureFacts(runId: RunId, phase: RunPhase): SessionEventDraft[] {
     const closure: SessionEventDraft[] = [];
     if (phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
-      for (const entry of this.transcripts.get(runId)?.getRange(0) ?? []) {
+      for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
         if (!isRunningStreamingTextEntry(entry)) continue;
         closure.push({
           type: 'stream.end',
