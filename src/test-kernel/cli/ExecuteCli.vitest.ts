@@ -13,9 +13,9 @@ import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import {
-  createFakeHost,
   fakeProcessServices,
   installFakeHost,
+  installedHost,
 } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -333,10 +333,9 @@ function mockCancelledOutcome(): void {
   });
 }
 
-/** Loads executeCliRequest against a fresh fake platform for shutdown tests. */
-async function installFakePlatform() {
-  const host = createFakeHost();
-  await installFakeHost(host);
+/** Loads shutdown tests against the host that owns the current session. */
+async function loadExecuteCliOnInstalledHost() {
+  const host = installedHost();
   const { executeCliRequest } = await loadExecuteCli();
   return { platform: host.platform, executeCliRequest };
 }
@@ -719,8 +718,9 @@ describe('executeCliRequest', () => {
     'marks $label owned runs interrupted during platform shutdown',
     ({ kind }) =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
         const { defaultSession } = yield* Effect.promise(
           () => import('@agent/runtime/SessionHandle'),
@@ -813,8 +813,9 @@ describe('executeCliRequest', () => {
     'does not advertise signal recovery before a flow checkpoint exists',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         mocks.deriveResumability.mockResolvedValueOnce({
           kind: 'none',
           outcome: RUN_OUTCOME.CANCELLED,
@@ -853,8 +854,9 @@ describe('executeCliRequest', () => {
 
   it.live('forwards a failed shutdown drain to the runtime release hook', () =>
     Effect.gen(function* () {
-      const { platform, executeCliRequest } =
-        yield* Effect.promise(installFakePlatform);
+      const { platform, executeCliRequest } = yield* Effect.promise(
+        loadExecuteCliOnInstalledHost,
+      );
       const drainError = new Error('snapshot drain failed');
       mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
       const published = yield* Deferred.make<LeaseOptions>();
@@ -884,8 +886,9 @@ describe('executeCliRequest', () => {
     'cancels launch preparation when shutdown precedes run registration',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const launch = yield* Deferred.make<AbortSignal | undefined>();
         mocks.runAgent.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
@@ -925,8 +928,9 @@ describe('executeCliRequest', () => {
     'preserves a terminal outcome when shutdown cannot interrupt the finished run',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { defaultSession } = yield* Effect.promise(
           () => import('@agent/runtime/SessionHandle'),
         );
@@ -959,8 +963,9 @@ describe('executeCliRequest', () => {
     'denies workflow output publication after shutdown interruption commits',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);
         let publicationCommitted: boolean | undefined;
@@ -1005,8 +1010,9 @@ describe('executeCliRequest', () => {
     'preserves the workflow verdict after output publication commits',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { defaultSession } = yield* Effect.promise(
           () => import('@agent/runtime/SessionHandle'),
         );
@@ -1050,8 +1056,9 @@ describe('executeCliRequest', () => {
     'does not convert a committed output failure to cancelled by a later shutdown',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { defaultSession } = yield* Effect.promise(
           () => import('@agent/runtime/SessionHandle'),
         );
@@ -1127,8 +1134,9 @@ describe('executeCliRequest', () => {
     'does not report a shutdown drain that fails because the lease is already lost',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } =
-          yield* Effect.promise(installFakePlatform);
+        const { platform, executeCliRequest } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         // Imported dynamically (matching the module above) so the `instanceof`
         // check in executeCli.ts sees the same module instance even after an
         // earlier test's `vi.resetModules()` in this file.
@@ -1161,8 +1169,9 @@ describe('executeCliRequest', () => {
 
   it.live('closes the runtime host when shutdown finalization fails', () =>
     Effect.gen(function* () {
-      const { platform, executeCliRequest } =
-        yield* Effect.promise(installFakePlatform);
+      const { platform, executeCliRequest } = yield* Effect.promise(
+        loadExecuteCliOnInstalledHost,
+      );
       const persistenceError = new Error('terminal metadata disk full');
       mocks.finalizeRun.mockImplementation(async (input) => {
         input.report?.(
@@ -1215,8 +1224,9 @@ describe('executeCliRequest', () => {
 
   it.live('removes the shutdown status hook after owned runs finish', () =>
     Effect.gen(function* () {
-      const { platform, executeCliRequest } =
-        yield* Effect.promise(installFakePlatform);
+      const { platform, executeCliRequest } = yield* Effect.promise(
+        loadExecuteCliOnInstalledHost,
+      );
       const request = baseRequest();
 
       yield* executeCliRequest(request, cliContext(), {});
@@ -1266,7 +1276,9 @@ describe('executeCliConfig', () => {
     'prints a complete resume command after interrupted tool-use recovery is available',
     () =>
       Effect.gen(function* () {
-        const { platform } = yield* Effect.promise(installFakePlatform);
+        const { platform } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { executeCliToolUseConfig } =
           yield* Effect.promise(loadExecuteCli);
         const context = cliContext({
@@ -1328,7 +1340,9 @@ describe('executeCliConfig', () => {
     'does not advertise recovery for invocation-owned temporary inputs',
     () =>
       Effect.gen(function* () {
-        const { platform } = yield* Effect.promise(installFakePlatform);
+        const { platform } = yield* Effect.promise(
+          loadExecuteCliOnInstalledHost,
+        );
         const { executeCliToolUseConfig } =
           yield* Effect.promise(loadExecuteCli);
         const published = yield* Deferred.make<LeaseOptions>();
