@@ -36,6 +36,7 @@ import type { Model, TurnResult } from '@llm/turn';
 import {
   AgentCategory,
   RUN_OUTCOME,
+  STREAM_LOG_ENTRY_TYPES,
   type CompileResult,
   type OutputFileInfo,
   type RetryErrorInfo,
@@ -43,23 +44,31 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
+  attachTestTranscriptFold,
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import {
   hostStores,
+  installedHost,
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
+import { generateRunId, isObject } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 import { testModelCell } from './modelCellTestUtils';
-import { recordTraceEvents, traceEventsOfType } from './progressTestUtils';
+import {
+  createRecordingHost,
+  recordTraceEvents,
+  traceEventsOfType,
+} from './progressTestUtils';
 
 /**
  * The reflection loop over a real session ledger: the round loop, the
@@ -79,6 +88,8 @@ const scripted = vi.hoisted(() => ({
   runId: '' as string,
   /** Per round: what the compile check reports, when it reports at all. */
   compileResults: new Map<number, CompileResult | undefined>(),
+  /** Whether the round summary lists its outputs as files to open. */
+  openFiles: false,
 }));
 
 vi.mock(
@@ -169,10 +180,15 @@ vi.mock(
           _deps: unknown,
           _location: unknown,
           round: number,
-        ) => ({
-          fileInfos: ensureRoundData(outputState, round).outputs,
-          filesToOpen: [],
-        }),
+        ) => {
+          const outputs = ensureRoundData(outputState, round).outputs;
+          return {
+            fileInfos: outputs,
+            filesToOpen: scripted.openFiles
+              ? outputs.map((output) => output.location)
+              : [],
+          };
+        },
       ),
     };
   },
@@ -247,14 +263,17 @@ function testBoundModel(): BoundModel {
   };
 }
 
+type ScriptedFinish = 'stop' | 'length' | 'context-window-exceeded';
+
 /** What the faked invoker reports for one turn, in script order. */
 type ScriptedTurn =
-  | { readonly finish: 'stop' | 'length' }
+  | { readonly finish: ScriptedFinish; readonly text?: string }
   | { readonly failWith: RetryErrorInfo };
 
 const COMPLETE: ScriptedTurn = { finish: 'stop' };
+const CUT_OFF: ScriptedTurn = { finish: 'length' };
 
-function textTurn(text: string, finish: 'stop' | 'length'): TurnResult {
+function textTurn(text: string, finish: ScriptedFinish): TurnResult {
   return {
     kind: 'http',
     providerResponseId: randomUUID(),
@@ -331,7 +350,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
             const turn = textTurn(
-              `round ${request.round} output`,
+              turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
             const next = yield* ledger.appendBatch(run.runId, state, [
@@ -453,13 +472,67 @@ const loadState = Effect.fn('test.loadState')(function* (init: LoopInit) {
   return state;
 });
 
+/**
+ * Start a run and interrupt it once the invoker is reached in `round`, the
+ * way a host stop lands mid-turn; returns the state the halt left behind.
+ */
+const interruptedAt = Effect.fn('test.interruptedAt')(function* (
+  init: LoopInit,
+  round: number,
+) {
+  const reached = yield* Deferred.make<void>();
+  const fiber = yield* Effect.forkDetach(
+    loopProgram(
+      {
+        ...init,
+        beforeResponse: (current) =>
+          current === round
+            ? Deferred.succeed(reached, undefined).pipe(
+                Effect.andThen(Effect.never),
+              )
+            : Effect.void,
+      },
+      [],
+    ),
+  );
+  yield* Deferred.await(reached);
+  yield* Fiber.interrupt(fiber);
+  return yield* loadState(init);
+});
+
 function startedRun(session: SessionHandle): RunId {
   const runId = generateRunId();
   scripted.runId = runId;
   scripted.compileResults.clear();
+  scripted.openFiles = false;
   publishTestRunStart(session, runId);
   return runId;
 }
+
+/** Flip the compile-rejection policy under a run already in flight. */
+const setRejectOnCompileFailure = (enabled: boolean) =>
+  Effect.promise(() =>
+    installedHost().roots.workspaceState.update(
+      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      enabled,
+    ),
+  );
+
+/** The verdict each round stage closed with, in transcript order. */
+function roundStageOutcomes(store: StreamLog): unknown[] {
+  return store
+    .getRange(0)
+    .flatMap((entry) =>
+      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+      isObject(entry.data) &&
+      entry.data.kind === 'round'
+        ? [entry.data.status]
+        : [],
+    );
+}
+
+const REJECTED = 'previous workflow round was rejected';
+const CUT_OFF_PROMPT = 'Your response got cut off';
 
 /** The plain text of every user message the run recorded. */
 function userTexts(state: RunState): string[] {
@@ -514,7 +587,7 @@ describe('the reflection round loop', () => {
         const { result, state } = yield* runLoop({ runId, session, rounds: 2 });
 
         const repairPrompt = userTexts(state).at(-1) ?? '';
-        expect(repairPrompt).toContain('previous workflow round was rejected');
+        expect(repairPrompt).toContain(REJECTED);
         expect(repairPrompt).toContain('! Missing $ inserted.');
         expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -572,9 +645,7 @@ describe('the reflection round loop', () => {
 
       expect(requests.map((request) => request.round)).toEqual([0, 1, 2]);
       expect(
-        userTexts(state).filter((text) =>
-          text.includes('previous workflow round was rejected'),
-        ),
+        userTexts(state).filter((text) => text.includes(REJECTED)),
       ).toHaveLength(2);
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
     }),
@@ -600,6 +671,133 @@ describe('the reflection round loop', () => {
       expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
       expect(userTexts(state).at(-1)).not.toContain('rejected');
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+    }),
+  );
+
+  it.effect(
+    'accepts a recorded rejection once the policy is turned off before a final round without a compile',
+    () =>
+      Effect.gen(function* () {
+        // Disabling rejection is an explicit acceptance decision: a repair
+        // round that reports no compile result is then a completed run, not
+        // a retroactively failed one.
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        scripted.compileResults.set(0, compileFailure(0));
+
+        const { result, requests, state } = yield* runLoop({
+          runId,
+          session,
+          rounds: 2,
+          beforeResponse: (round) =>
+            round === 1 ? setRejectOnCompileFailure(false) : Effect.void,
+        });
+
+        expect(requests.map((request) => request.round)).toEqual([0, 1]);
+        expect(userTexts(state).at(-1)).toContain(REJECTED);
+        expect(flowOf(state).compileFailureContext).toBeUndefined();
+        expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
+        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
+  );
+
+  it.effect(
+    'keeps the rejection durable when the repair round is interrupted, and repairs it on resume',
+    () =>
+      Effect.gen(function* () {
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        scripted.compileResults.set(0, compileFailure(0));
+        scripted.compileResults.set(1, { status: 'ok', round: 1 });
+
+        const halted = yield* interruptedAt({ runId, session, rounds: 2 }, 1);
+
+        // The repair prompt was consumed into the round, so the one-shot
+        // feedback is gone, while the durable rejection survives the stop.
+        expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(userTexts(halted).at(-1)).toContain(REJECTED);
+        expect(flowOf(halted).compileFailureContext).toBeUndefined();
+        expect(flowOf(halted).unresolvedCompileRejection).toBe(true);
+
+        const resumed = yield* runLoop({
+          runId,
+          session,
+          rounds: 2,
+          resume: true,
+        });
+        expect(resumed.requests.map((request) => request.round)).toEqual([1]);
+        expect(
+          flowOf(resumed.state).unresolvedCompileRejection,
+        ).toBeUndefined();
+        expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
+  );
+
+  it.effect(
+    'warns and continues when the run workspace cannot be prepared',
+    () =>
+      Effect.gen(function* () {
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const warn = vi.spyOn(logger, 'warn');
+        const prepare = vi
+          .spyOn(TaskRunFileService.prototype, 'prepareRunWorkspace')
+          .mockRejectedValueOnce(new Error('workspace unavailable'));
+
+        try {
+          const { result } = yield* runLoop({
+            runId,
+            session,
+            rounds: 1,
+            logger,
+          });
+
+          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('workspace unavailable'),
+            expect.objectContaining({ data: expect.any(Error) }),
+          );
+        } finally {
+          prepare.mockRestore();
+        }
+      }),
+  );
+
+  // #8137: every round stage closes with the round's own verdict.
+  it.effect.each([
+    {
+      name: 'completed',
+      turns: [COMPLETE, COMPLETE] as ScriptedTurn[],
+      outcomes: [RUN_OUTCOME.COMPLETED, RUN_OUTCOME.COMPLETED],
+    },
+    {
+      name: 'failed',
+      turns: [COMPLETE, { failWith: PROVIDER_FAILURE }] as ScriptedTurn[],
+      outcomes: [RUN_OUTCOME.COMPLETED, RUN_OUTCOME.FAILED],
+    },
+  ])('closes each round stage with its verdict ($name)', (scenario) =>
+    Effect.gen(function* () {
+      const session = createProcessSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const store = new StreamLog();
+      const recorder = attachTestTranscriptFold(logger, runId, store);
+
+      try {
+        const { result } = yield* runLoop({
+          runId,
+          session,
+          rounds: 2,
+          logger,
+          turns: scenario.turns,
+        });
+
+        expect(result.outcome).toBe(scenario.outcomes.at(-1));
+        expect(roundStageOutcomes(store)).toEqual(scenario.outcomes);
+      } finally {
+        recorder.unsubscribe();
+      }
     }),
   );
 });
@@ -667,6 +865,35 @@ describe('a resumed reflection run', () => {
         expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
+
+  it.effect(
+    'clears a persisted rejection before the cap fails it once the policy is off',
+    () =>
+      Effect.gen(function* () {
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        scripted.compileResults.set(0, compileFailure(0));
+
+        const stopped = yield* runLoop({ runId, session, rounds: 1 });
+        expect(stopped.result.outcome).toBe(RUN_OUTCOME.FAILED);
+        expect(flowOf(stopped.state).unresolvedCompileRejection).toBe(true);
+
+        yield* setRejectOnCompileFailure(false);
+        const resumed = yield* runLoop({
+          runId,
+          session,
+          rounds: 1,
+          resume: true,
+        });
+
+        // The policy is normalized before the round cap is consulted, so
+        // the recorded rejection is accepted rather than failed again: the
+        // halt row records the accepted run without another round.
+        expect(resumed.requests).toEqual([]);
+        expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+        expect(resumed.state.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
+  );
 });
 
 describe('the output facts a reflection round publishes', () => {
@@ -728,6 +955,26 @@ describe('the output facts a reflection round publishes', () => {
       ]);
     }),
   );
+
+  it.effect('asks the host to open the files a round summary lists', () =>
+    Effect.gen(function* () {
+      const session = createProcessSession();
+      const { events, interactions } = createRecordingHost();
+      session.interactions.use(interactions);
+      const runId = startedRun(session);
+      scripted.openFiles = true;
+
+      yield* runLoop({ runId, session, rounds: 1 });
+
+      expect(events).toContainEqual({
+        event: 'requestOpenFile',
+        payload: {
+          location: expect.objectContaining({ relativePath: 'r0/main.tex' }),
+          preserveFocus: true,
+        },
+      });
+    }),
+  );
 });
 
 describe('a token-limited reflection response', () => {
@@ -742,11 +989,102 @@ describe('a token-limited reflection response', () => {
           runId,
           session,
           rounds: 1,
-          turns: [{ finish: 'length' }, COMPLETE],
+          turns: [CUT_OFF, COMPLETE],
         });
 
         expect(requests.map((request) => request.round)).toEqual([0, 0]);
-        expect(userTexts(state).at(-1)).toContain('Your response got cut off');
+        expect(userTexts(state).at(-1)).toContain(CUT_OFF_PROMPT);
+        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
+  );
+
+  it.effect('stops continuing once the continuation limit is reached', () =>
+    Effect.gen(function* () {
+      // Reflection owns the conversation limit: a model that never finishes
+      // gets a bounded number of continuations, then the round ends with what
+      // it has.
+      const session = createProcessSession();
+      const runId = startedRun(session);
+
+      const { result, requests, state } = yield* runLoop({
+        runId,
+        session,
+        rounds: 1,
+        turns: Array.from({ length: 12 }, () => CUT_OFF),
+      });
+
+      expect(requests).toHaveLength(12);
+      expect(requests.every((request) => request.round === 0)).toBe(true);
+      expect(
+        userTexts(state).filter((text) => text.includes(CUT_OFF_PROMPT)),
+      ).toHaveLength(11);
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+    }),
+  );
+
+  it.effect('joins a continued response through the session text policy', () =>
+    Effect.gen(function* () {
+      const connectResponseText = vi.fn(async () => '\n');
+      const session = createProcessSession({
+        responseTextProcessing: {
+          normalizeResponseText: (text: string) => text,
+          postProcessResponse: (text: string) => text,
+          connectResponseText,
+        },
+      });
+      const runId = startedRun(session);
+
+      const { state } = yield* runLoop({
+        runId,
+        session,
+        rounds: 1,
+        turns: [
+          { finish: 'length', text: 'left' },
+          { finish: 'stop', text: 'right' },
+        ],
+      });
+
+      const location = flowOf(state).outputLocation;
+      if (location === null) throw new Error('The round kept no output.');
+      // Every cycle asks the policy how it joins onto what came before; the
+      // first has nothing before it, so its connector is never written.
+      expect(connectResponseText.mock.calls).toEqual([
+        ['', 'left'],
+        ['left', 'right'],
+      ]);
+      expect(
+        yield* Effect.promise(() => AbsoluteFS.read(location.absolutePath)),
+      ).toBe('left\nright');
+    }),
+  );
+
+  it.effect.each([
+    { name: 'with partial output', text: 'partial response' },
+    { name: 'with no output', text: '' },
+  ])(
+    'stops instead of retrying a context-window overflow ($name)',
+    ({ text }) =>
+      Effect.gen(function* () {
+        // No compaction is available on the reflection path, so a retry
+        // would overflow again: the round ends, loudly, with what it has.
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const warn = vi.spyOn(logger, 'warn');
+
+        const { result, requests, state } = yield* runLoop({
+          runId,
+          session,
+          rounds: 1,
+          logger,
+          turns: [{ finish: 'context-window-exceeded', text }],
+        });
+
+        expect(requests).toHaveLength(1);
+        expect(userTexts(state).at(-1)).not.toContain(CUT_OFF_PROMPT);
+        expect(warn).toHaveBeenCalledExactlyOnceWith(
+          expect.stringContaining('context window exceeded'),
+        );
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
@@ -757,27 +1095,9 @@ describe('an interrupted reflection run', () => {
     Effect.gen(function* () {
       const session = createProcessSession();
       const runId = startedRun(session);
-      const reached = yield* Deferred.make<void>();
-      const requests: InvokeRequest[] = [];
-      const fiber = yield* Effect.forkDetach(
-        loopProgram(
-          {
-            runId,
-            session,
-            rounds: 2,
-            beforeResponse: () =>
-              Deferred.succeed(reached, undefined).pipe(
-                Effect.andThen(Effect.never),
-              ),
-          },
-          requests,
-        ),
-      );
 
-      yield* Deferred.await(reached);
-      yield* Fiber.interrupt(fiber);
+      const state = yield* interruptedAt({ runId, session, rounds: 2 }, 0);
 
-      const state = yield* loadState({ runId, session, rounds: 2 });
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens.
@@ -791,5 +1111,46 @@ describe('an interrupted reflection run', () => {
       });
       expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
     }),
+  );
+
+  it.effect(
+    'keeps a completed round when the next one is interrupted, and resumes after it',
+    () =>
+      Effect.gen(function* () {
+        const session = createProcessSession();
+        const runId = startedRun(session);
+        const logger = new TraceEmitter();
+        const store = new StreamLog();
+        const recorder = attachTestTranscriptFold(logger, runId, store);
+
+        try {
+          const halted = yield* interruptedAt(
+            { runId, session, rounds: 2, logger },
+            1,
+          );
+
+          // The first round's stage closed with its own verdict; only the
+          // interrupted one is cancelled, and its outputs stay on the
+          // snapshot a resume continues from.
+          expect(roundStageOutcomes(store)).toEqual([
+            RUN_OUTCOME.COMPLETED,
+            RUN_OUTCOME.CANCELLED,
+          ]);
+          expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
+          expect(flowOf(halted).currentRound).toBe(1);
+          expect(flowOf(halted).roundOutputs[0]?.outputs).toHaveLength(1);
+        } finally {
+          recorder.unsubscribe();
+        }
+
+        const resumed = yield* runLoop({
+          runId,
+          session,
+          rounds: 2,
+          resume: true,
+        });
+        expect(resumed.requests.map((request) => request.round)).toEqual([1]);
+        expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      }),
   );
 });
