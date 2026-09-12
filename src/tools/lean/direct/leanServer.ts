@@ -158,7 +158,7 @@ interface OpenedFile {
 interface ServerEnd {
   readonly status: 'stopped' | 'error';
   readonly message?: string;
-  /** The spawn errno (EMFILE, ENOENT, ...), when that is what ended it. */
+  /** The errno the exit carried, when that is what ended it. */
   readonly cause?: unknown;
 }
 
@@ -187,11 +187,9 @@ function describeEnd(
           message: `Server exited with code ${result.success}`,
         };
   }
+  // A spawn errno (ENOENT, EMFILE, ...) never reaches here: the spawner
+  // fails the spawn itself, so `spawnFailure` reports it at the start below.
   const { reason } = result.failure;
-  if (reason._tag !== 'BadArgument' && reason.syscall?.startsWith('spawn')) {
-    const start = spawnFailure(result.failure);
-    return { status: 'error', message: start.message, cause: start.cause };
-  }
   return {
     status: 'error',
     message: `Server ended: ${reason.description ?? result.failure.message}`,
