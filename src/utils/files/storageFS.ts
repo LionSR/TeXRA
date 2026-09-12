@@ -7,7 +7,7 @@ import { RelativeFS } from './relativeFS';
 /**
  * A `RelativeFS` rooted at one of the calling session's storage roots
  * (`WorkspaceRoots`). Both roots come from the same read, resolved per call so
- * a run writes under its own paper's root. Default: ~/.texra/ paths.
+ * a run writes under its own project's root. Default: ~/.texra/ paths.
  */
 abstract class SessionStorageFS extends RelativeFS {
   /** Which of the session's roots this facade resolves paths against. */
