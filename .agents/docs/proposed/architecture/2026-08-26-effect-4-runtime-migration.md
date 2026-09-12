@@ -1429,7 +1429,7 @@ unreachable, or the foundation is reverted under the rollback rule.
 
 **Implementation order clarified from current main, 2026-09-06:** first
 complete the joint runtime/LLM contract in
-[`agent-runtime-on-effect` §0.1](./2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
+[`agent-runtime-on-effect` §0.1](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
 The canonical request, prepared invocation, remote acceptance, continuation
 and tool-settlement boundaries govern the ledger schemas below. Preserve
 both reflection and tool-use as full consumers; do not freeze new rows around

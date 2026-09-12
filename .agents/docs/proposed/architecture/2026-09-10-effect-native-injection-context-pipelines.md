@@ -30,7 +30,7 @@ and §15 decision 8's idiom ruling (`Context.Service` + static layers, `Effect.f
 plan](./2026-09-06-effect-runtime-delivery-plan.md) (the tree's only `accepted-direction`
 doc) owns the work order and two binding negatives: **no second runtime/session registry**
 and **no tag per existing class**. [The agent runtime
-proposal](./2026-09-04-agent-runtime-on-effect.md) §2.4 owns the only concrete tag roster.
+proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) §2.4 owns the only concrete tag roster.
 [The promise-boundary audit](./2026-09-07-promise-boundary-audit.md) §6 forbids a new lint
 rule, a `tryPromise` ratchet row, and any adapter. [The observability
 plane](./2026-09-09-observability-plane.md) owns fiber-derived identity and therefore owns

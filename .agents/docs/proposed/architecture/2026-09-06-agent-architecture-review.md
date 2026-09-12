@@ -66,7 +66,7 @@ This work belongs within the existing runtime/LLM cutover and its ownership boun
 
 ## Findings
 
-The [joint runtime/LLM implementation contract](./2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+The [joint runtime/LLM implementation contract](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
 now records the required revisions below in the runtime proposal. This resolves
 where the contract is specified; it does not close R1–R4's implementation
 acceptance scenarios or claim provider parity.
@@ -97,7 +97,7 @@ For example, [TodoTool](../../../../src/tools/todo/TodoTool.ts) updates `workPla
 
 Attachments make the same gap visible for model input. [ToolFileAttachment](../../../../src/shared/schemas/toolResult.ts) can contain a `Uint8Array` (23–29); [loadAttachmentBuffer](../../../../src/agent/modelHandlers/utils/toolAttachmentUtils.ts) can read the current workspace path (133–145). A path-only result resumed after the file changes is not the original tool observation.
 
-The [September 4 runtime proposal](./2026-09-04-agent-runtime-on-effect.md) already states the stronger contract: per-call mutations, terminal display facts and results commit together; attachments are captured as immutable bytes or explicit omissions before settlement; pending delivery never rereads the workspace path (151–198). The new studies must carry that contract forward explicitly. They should not read as a simpler replacement that silently omits it.
+The [September 4 runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) already states the stronger contract: per-call mutations, terminal display facts and results commit together; attachments are captured as immutable bytes or explicit omissions before settlement; pending delivery never rereads the workspace path (151–198). The new studies must carry that contract forward explicitly. They should not read as a simpler replacement that silently omits it.
 
 **Required revision:** define a durable tool settlement containing the response/call/attempt identity, outcome, relevant state operations, immutable attachment payloads or explicit omissions, and display correlation. Commit final state effects and terminal facts atomically. Model intermediate state such as a plan awaiting approval as a named durable transition rather than postponing everything until return. Do not record a whole shared-state copy while other calls can change it.
 

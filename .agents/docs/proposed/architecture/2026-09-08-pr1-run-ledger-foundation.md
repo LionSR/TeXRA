@@ -2,7 +2,7 @@
 
 Status: this is a **proposal, adversarially reviewed once**, not a ratified
 plan. It specifies PR 1 of lane D of the runtime cutover
-([the agent runtime on Effect](./2026-09-04-agent-runtime-on-effect.md), §5
+([the agent runtime on Effect](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md), §5
 PR plan), stacked on `cutover/native-runtime-llm-20260907`. The review found
 real defects and this document carries their corrections rather than the
 original text: five of the six §0.1 boundary values came back **partial**,
@@ -1484,7 +1484,7 @@ Decisions 10 to 12 are new, added by the review; the rest carry forward.
 declares every row on one `run` aggregate keyed by the run id, which is what
 removes the two-key deviation earlier drafts carried. That shape is the
 recommendation of the
-[one run model](2026-09-10-one-run-model.md), not yet a ruling: its §7 item 1
+[one run model](../../implemented/architecture/2026-09-10-one-run-model.md), not yet a ruling: its §7 item 1
 still puts it to the owner, and it is the one place that note departs from a
 ratified detail, the one-fold PRD's per-kind sequence. If the owner instead
 keeps two aggregate kinds sharing one logical id, §2.2, §2.8, §3.1 and §4.3

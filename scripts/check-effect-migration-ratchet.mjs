@@ -117,8 +117,10 @@ const RUN_BOUNDARY_NAMES = new Set([
 
 /**
  * R1's three boundary kinds, as path predicates: (a) a host entry a host
- * framework invokes, (b) the agent tool `execute()` contract until lane D
- * converts the tool runner, (c) the SDK's public Promise API. `--update`
+ * framework invokes, (b) the agent tool `execute()` contract — retired by
+ * #12337 (tools return Effects; the dispatcher owns the one run site), the
+ * predicate is kept only so the last `*Tool.ts` runs cannot regrow silently —
+ * (c) the SDK's public Promise API. `--update`
  * admits a new `Effect.run*` file only under one of these; a run site
  * anywhere else is below the boundary and converts instead.
  */
@@ -204,7 +206,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts, until lane D), or the SDK's public API (packages/agent/src). This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts — retired by #12337, kept as a no-regrowth fence), or the SDK's public API (packages/agent/src). This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,

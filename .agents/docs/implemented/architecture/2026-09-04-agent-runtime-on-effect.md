@@ -1,7 +1,7 @@
 # The agent runtime on Effect: one ledger, two loops, no graph (2026-09-04)
 
-Status: the pure-Effect direction was ratified on 2026-09-06 in the
-[migration PRD](./2026-08-26-effect-4-runtime-migration.md). The
+Status: implemented — PR0–PR4 landed (#11843 docs, #12287 foundation, #12314 both loops, #12329 replay + one child protocol); moved from `proposed/` 2026-09-13. The pure-Effect direction was ratified on 2026-09-06 in the
+[migration PRD](../../proposed/architecture/2026-08-26-effect-4-runtime-migration.md). The
 implementation contract in §0.1 below incorporates the current-main runtime/LLM
 study and review. Detailed implementation and acceptance evidence remain pending.
 The PRD's later boundary, privacy and 0.41 compatibility rulings supersede the
@@ -50,7 +50,7 @@ extra coordinate rather than a second framework.
 
 Refreshed from `origin/main` at `542aea6e8425ec574ffa0fa9fd4fd05a878feb03`.
 The [agent architecture study](../../proposed/architecture/2026-09-06-agent-architecture-study.md) and
-[review](./2026-09-06-agent-architecture-review.md) add a necessary dependency:
+[review](../../proposed/architecture/2026-09-06-agent-architecture-review.md) add a necessary dependency:
 settle the canonical LLM turn/continuation contract with the runtime before
 implementing its durable message rows. This section is the common contract;
 the studies' API sketches and the provider-native sketches below are inputs
@@ -1001,7 +1001,7 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    rule.
 1. Foundation: `RunLedger` service over `SessionEvents`, the Zod row
    vocabulary and `SessionEventDraftSchema` placement specified by the
-   [PR 1 foundation proposal](./2026-09-08-pr1-run-ledger-foundation.md#28-the-arms-in-sessioneventts),
+   [PR 1 foundation proposal](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md#28-the-arms-in-sessioneventts),
    `foldRunState` in `src/shared`, the
    in-memory ledger layer, one ledger test and one fold test. Nothing
    deleted yet; nothing in production calls it yet.
