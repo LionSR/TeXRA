@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
 import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
@@ -18,6 +18,8 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+
+import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
 
@@ -1561,5 +1563,77 @@ describe('assignByContentSimilarity', () => {
     expect(assigned.filter(Boolean)).toHaveLength(1);
     expect(assigned[0]?.name).toBe('main.tex');
     expect(assigned[1]).toBeNull();
+  });
+});
+
+describe('extractFilesFromXml', () => {
+  it.each([
+    {
+      name: 'when extraction throws',
+      failure: new Error('invalid xml'),
+      round: 3,
+    },
+    { name: 'when extraction yields no files', failure: null, round: 4 },
+  ])(
+    'publishes the run-wide missing-output map $name',
+    async ({ failure, round }) => {
+      const logger = new TraceEmitter();
+      const { events } = recordTraceEvents(logger);
+      const state = createOutputState();
+      // An earlier round already reported a missing file: the row this round
+      // publishes carries the run's whole map, since a cold fold keeps only
+      // the newest row of the type.
+      ensureRoundData(state, round - 1).missingOutputs = ['earlier.tex'];
+      const manager = createXmlManager(['paper.tex'], {
+        logger,
+        outputState: state,
+      });
+      const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
+      if (failure) split.mockRejectedValueOnce(failure);
+      else split.mockResolvedValueOnce([]);
+      await AbsoluteFS.write('/tmp/run/empty-output.xml', '');
+
+      await extractFilesFromXml(
+        state,
+        processorDeps({ logger }),
+        manager,
+        createExternalLocation('/tmp/run/empty-output.xml'),
+        round,
+      );
+
+      expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
+        { filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } },
+      ]);
+      expect(state.rounds.get(round)?.outputs).toEqual([]);
+    },
+  );
+
+  it('warns when a non-empty response yields zero extracted files', async () => {
+    // A run where the model returned content but nothing could be extracted
+    // (it did not wrap files in <documents>) must surface a warning rather
+    // than completing silently with only the raw output.
+    const logger = new TraceEmitter();
+    const warn = vi.spyOn(logger, 'warn');
+    const manager = createXmlManager(['paper.tex'], { logger });
+    vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockResolvedValueOnce(
+      [],
+    );
+    await AbsoluteFS.write(
+      '/tmp/run/untagged-output.xml',
+      '% chunk.tex\n\\section{Untagged content}\n',
+    );
+
+    await extractFilesFromXml(
+      createOutputState(),
+      processorDeps({ logger }),
+      manager,
+      createExternalLocation('/tmp/run/untagged-output.xml'),
+      5,
+    );
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('no files could be extracted'),
+      expect.objectContaining({ data: expect.objectContaining({ round: 5 }) }),
+    );
   });
 });

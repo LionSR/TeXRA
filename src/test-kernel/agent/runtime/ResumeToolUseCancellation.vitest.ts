@@ -134,6 +134,9 @@ const NO_USAGE = {
   totalServerToolRequests: 0,
 };
 
+/** The artifact flush the lane's lease release drains; a case may fail it. */
+const flushArtifacts = vi.fn(async () => {});
+
 /**
  * The session whose run lane admits the resume. No competing generation
  * exists in this fixture, so the lane is a passthrough.
@@ -154,7 +157,7 @@ const LANE_SESSION = {
       catch: ensureError,
     }),
   status: {},
-  flushArtifacts: vi.fn(async () => {}),
+  flushArtifacts,
   settlePublications: vi.fn(async () => {}),
   releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;
@@ -187,6 +190,17 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     usageMonitor: { recordUsage: vi.fn() },
     interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
+}
+
+/** A turn that completed with nothing to report. */
+function completedTurn() {
+  return {
+    outcome: RUN_OUTCOME.COMPLETED,
+    response: '',
+    files: [],
+    usage: NO_USAGE,
+    structured: undefined,
+  };
 }
 
 /** Handle stub for tests that only need the flow to run to completion. */
@@ -352,6 +366,45 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       'take',
       'detach',
     ]);
+  });
+
+  it('surfaces a teardown failure after an otherwise successful turn', async () => {
+    const runId = 'e8050' as RunId;
+    const teardownFailure = new Error('final artifacts could not be flushed');
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+      buildResumeContext(runId),
+    );
+    mocks.runToolUse.mockImplementationOnce(() =>
+      Effect.succeed(completedTurn()),
+    );
+    flushArtifacts.mockRejectedValueOnce(teardownFailure);
+
+    await expect(
+      resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
+    ).rejects.toBe(teardownFailure);
+  });
+
+  it('reports the turn failure and the teardown failure together', async () => {
+    // The run's own failure is not replaced by the teardown's: both reach
+    // the caller, the run's first.
+    const runId = 'e8051' as RunId;
+    const turnFailure = new Error('turn failed');
+    const teardownFailure = new Error('final artifacts could not be flushed');
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+      buildResumeContext(runId),
+    );
+    mocks.runToolUse.mockImplementationOnce(() => Effect.fail(turnFailure));
+    flushArtifacts.mockRejectedValueOnce(teardownFailure);
+
+    await expect(
+      resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof AggregateError &&
+        error.message.includes('could not be persisted') &&
+        error.errors[0] === turnFailure &&
+        error.errors[1] === teardownFailure,
+    );
   });
 
   it('mirrors a mid-run model switch onto the persisted config only', async () => {

@@ -3,6 +3,9 @@ import pDefer from 'p-defer';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import { noopTrace } from '@agent/trace';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -18,6 +21,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type OpenAI from 'openai';
+import type { Model, TurnResult } from '@llm/turn';
 
 function initFakePlatformWithSubscription(): Promise<void> {
   return installPlatform({
@@ -84,6 +88,55 @@ function setCumulativeInputTokens(
 function expectOnSubscription(handler: ModelHandlerCodex): void {
   expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
 }
+
+/** Pricing reads the binding's config and route; the model is never called. */
+const unusedModel = new Proxy({} as Model, {
+  get(_target, property) {
+    throw new Error(`The pricing fixture has no ${String(property)}.`);
+  },
+});
+
+/** The run's binding of the model above, on the route the run settled on. */
+function codexBinding(usageRoute: BoundModel['usageRoute']): BoundModel {
+  return {
+    modelId: config.name,
+    config,
+    compatibilityKey: 'ModelHandlerOpenAIResponse',
+    model: unusedModel,
+    origin: {
+      protocol: 'openai-responses',
+      codecVersion: 1,
+      requestedModel: config.fullName,
+      deployment: {
+        endpoint:
+          usageRoute === 'chatgpt-subscription'
+            ? CODEX_BACKEND_BASE_URL
+            : 'https://api.openai.com/v1',
+        credentialScope: 'openai',
+      },
+    },
+    usageProvider: 'openai-response',
+    usageRoute,
+    contextWindow: config.contextWindow,
+    supportsVision: false,
+    supportsNativePdf: false,
+    supportsNativeAudio: false,
+    supportsReasoning: true,
+    supportsForcedToolChoice: true,
+    wireRouteKey: `openai:${usageRoute}`,
+    modelRetryRouteKey: `openai:${usageRoute}/${config.name}`,
+    routedOnKimiCode: false,
+    backgroundCapable: false,
+  };
+}
+
+const ONE_MILLION_EACH_WAY: TurnResult['usage'] = {
+  inputTokens: 1_000_000,
+  outputTokens: 1_000_000,
+  totalTokens: 2_000_000,
+  cachedInputTokens: null,
+  reasoningTokens: null,
+};
 
 describe('ModelHandlerCodex subscription fallback', () => {
   beforeEach(() => {
@@ -223,6 +276,35 @@ describe('ModelHandlerCodex subscription fallback', () => {
     );
     // The settled attempt still reports the route it was billed on.
     expect(handler.getLastCredentialUsageRoute()).toBe('chatgpt-subscription');
+  });
+
+  it('zero-rates a turn on the subscription route and tags it as such', () => {
+    const usage = priceTurnUsage(
+      codexBinding('chatgpt-subscription'),
+      ONE_MILLION_EACH_WAY,
+      1000,
+      noopTrace,
+    );
+
+    // Recorded (tokens present) but free and routed, so logging/UI can tell
+    // it apart from any other zero-cost row.
+    expect(usage).toMatchObject({
+      usageRoute: 'chatgpt-subscription',
+      cost: 0,
+      inputTokens: 1_000_000,
+    });
+  });
+
+  it('bills the registry rates on the API-key route after falling back', () => {
+    const usage = priceTurnUsage(
+      codexBinding('api-key'),
+      ONE_MILLION_EACH_WAY,
+      1000,
+      noopTrace,
+    );
+
+    expect(usage?.usageRoute).toBe('api-key');
+    expect(usage?.cost).toBe(config.inputPrice + config.outputPrice);
   });
 
   it('constructs a personal candidate without publishing the preference', async () => {
