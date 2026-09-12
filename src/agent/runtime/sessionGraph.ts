@@ -228,7 +228,12 @@ export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
 }
 
 function resolveRoots(init: SessionHandleInit): SessionOpen {
-  return { ...init, roots: init.roots ?? processWorkspaceRoots() };
+  // The owner keys and releases a session by this root, so neither a live
+  // process-root view nor a caller's mutable root record may change it later.
+  return {
+    ...init,
+    roots: { ...(init.roots ?? processWorkspaceRoots()) },
+  };
 }
 
 /**

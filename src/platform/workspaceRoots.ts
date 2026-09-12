@@ -79,12 +79,8 @@ function requireProcessRoots(): WorkspaceRoots {
   return processRoots;
 }
 
-/**
- * The process roots, read at each access rather than copied: a session built
- * without roots of its own is rooted in the process, and stays so if the
- * process roots are installed after it (test suites swap the fake platform
- * per test around one process-default session).
- */
+/** The current process roots for unscoped callers. Session opening snapshots
+ * this view so its owner key and storage root stay stable for its lifetime. */
 const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   get workspace() {
     return requireProcessRoots().workspace;
@@ -106,7 +102,7 @@ const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   },
 });
 
-/** The live process roots, for a session that names no folder of its own. */
+/** The live process roots for callers that need the current process root. */
 export function processWorkspaceRoots(): WorkspaceRoots {
   return PROCESS_ROOTS_VIEW;
 }

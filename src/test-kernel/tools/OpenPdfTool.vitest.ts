@@ -1,4 +1,4 @@
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 // Node imports
 import * as path from 'node:path';
@@ -8,11 +8,15 @@ import { Effect } from 'effect';
 // Test composition imports
 
 // Third-party imports
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  initializeDefaultSession,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -36,10 +40,27 @@ describe('OpenPdfTool', () => {
   });
 
   let detachHostInteractions = (): void => {};
+  let sessionRoot: string | undefined;
 
-  afterEach(() => {
+  beforeEach(() => {
+    const session = initializeDefaultSession({
+      transcriptMode: { kind: 'ephemeral', reason: 'OpenPdfTool test' },
+    });
+    sessionRoot = session.roots.storage;
+  });
+
+  afterEach(async () => {
     detachHostInteractions();
     detachHostInteractions = () => undefined;
+    const root = sessionRoot;
+    sessionRoot = undefined;
+    if (root === undefined) return;
+    const report = await Effect.runPromise(closeSession(root));
+    if (!report.settled || report.abandoned.length > 0) {
+      throw new Error(
+        `OpenPdfTool test session did not close: ${report.abandoned.join(', ')}`,
+      );
+    }
   });
 
   /** Attach a PDF viewer the way a host does: as a session capability. */

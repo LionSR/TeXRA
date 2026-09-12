@@ -1,4 +1,4 @@
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 import * as path from 'node:path';
 import { Effect } from 'effect';
@@ -14,7 +14,11 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
 import {
@@ -40,6 +44,7 @@ import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
  * reaches the host through `presentToolEdit`.
  */
 const stagedToolEdits = new Map<string, ToolEditApprovalRequest>();
+let session: SessionHandle;
 let detachHostInteractions = (): void => {};
 let detachDecider = (): void => {};
 
@@ -50,7 +55,7 @@ let detachDecider = (): void => {};
 function decideToolEdits(
   decide: (request: ToolEditApprovalRequest) => RequestDecision,
 ): void {
-  detachDecider = autoDecideRequests(defaultSession(), (opened) => {
+  detachDecider = autoDecideRequests(session, (opened) => {
     if (opened.payload.kind !== 'toolEdit') return null;
     const preview = stagedToolEdits.get(opened.payload.data.requestId);
     if (!preview) {
@@ -70,13 +75,19 @@ function installTestPlatform(): Promise<void> {
     storagePath,
     globalStoragePath: '/global/.texra/storage',
   }).then(() => {
+    session = initializeDefaultSession({
+      transcriptMode: {
+        kind: 'ephemeral',
+        reason: 'accept files test session',
+      },
+    });
     detachHostInteractions();
-    detachHostInteractions = defaultSession().interactions.use({
+    detachHostInteractions = session.interactions.use({
       presentToolEdit: (request) => {
         stagedToolEdits.set(request.permission.requestId, request);
       },
     });
-    publishTestRunStart(defaultSession(), runId);
+    publishTestRunStart(session, runId);
   });
 }
 
@@ -125,7 +136,7 @@ function runAccept(
     Effect.provide(
       nativeToolTestLayer({
         tracker,
-        run: { runId, session: defaultSession(), toolPolicy: {} },
+        run: { runId, session: session, toolPolicy: {} },
       }),
     ),
   );
@@ -147,7 +158,7 @@ describe('accept_run_files progress events', () => {
   beforeEach(async () => {
     stagedToolEdits.clear();
     await installTestPlatform();
-    defaultSession().approvals.clearAll();
+    session.approvals.clearAll();
     // Shared by every test below that stubs the run/workspace paths;
     // the test that doesn't need it (missing runtime host) fails before
     // reaching either function.
@@ -161,14 +172,15 @@ describe('accept_run_files progress events', () => {
     }));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
     detachDecider();
     detachDecider = () => {};
     detachHostInteractions();
     detachHostInteractions = () => {};
     stagedToolEdits.clear();
-    defaultSession().approvals.clearAll();
+    session.approvals.clearAll();
+    await Effect.runPromise(closeSession(session.roots.storage));
   });
 
   it.live('publishes accepted workspace files through app signals', () =>
@@ -372,7 +384,7 @@ describe('accept_run_files progress events', () => {
             Effect.provide(
               nativeToolTestLayer({
                 tracker,
-                run: { runId, session: defaultSession(), toolPolicy: {} },
+                run: { runId, session: session, toolPolicy: {} },
                 inScope: (operation) =>
                   runWithWorkspaceRoots(projectRoots, operation),
               }),

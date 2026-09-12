@@ -1,13 +1,18 @@
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import {
@@ -29,6 +34,7 @@ import {
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 const runId = '7154decade01' as RunId;
+let session: SessionHandle;
 const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
@@ -105,12 +111,6 @@ function strategyParams(
   };
 }
 
-// The checkpoint aggregate hangs under the run that invoked the workflow, so
-// that run has to exist before a script row can name it.
-beforeAll(async () => {
-  publishTestRunStart(currentSession(), runId);
-  await currentSession().settlePublications();
-});
 function launchStrategy(
   strategy: ReturnType<typeof createWorkflowScriptStrategy>,
   ports = fakePorts(),
@@ -121,9 +121,23 @@ function launchStrategy(
     .pipe(Effect.provide(nativeToolTestLayer()));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // The suite host is installed by `setupPlatform` before this hook. Keep its
+  // roots on this test's session instead of borrowing the setup file host.
+  session = initializeDefaultSession({
+    transcriptMode: {
+      kind: 'ephemeral',
+      reason: 'workflow script strategy test session',
+    },
+  });
+  publishTestRunStart(session, runId);
+  await session.settlePublications();
   workflowControls = new WorkflowControlRegistry();
   checkpointGeneration += 1;
+});
+
+afterEach(async () => {
+  await Effect.runPromise(closeSession(session.roots.storage));
 });
 
 describe('createWorkflowScriptStrategy', () => {

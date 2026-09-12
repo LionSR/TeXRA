@@ -1,8 +1,8 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import '@test/support/defaultSessionTestSetup';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import '@test/support/sessionGraphTestSetup';
 
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -11,7 +11,12 @@ import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { getRunRecords } from '@agent/storage';
 import { RunLeaseActiveError } from '@agent/storage/runLease';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -140,6 +145,7 @@ import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 const parentRunId = '7154c4700700' as RunId;
+let session: SessionHandle;
 const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',
@@ -247,14 +253,18 @@ function callToolInput(
     .pipe(Effect.provide(toolLayer(stopAfterCycle)));
 }
 
-// The tool runs under a registered parent run, and a checkpoint aggregate
-// hangs under it, so that run has to exist before a script row names it.
-beforeAll(async () => {
-  publishTestRunStart(currentSession(), parentRunId);
-  await currentSession().settlePublications();
-});
-
 beforeEach(async () => {
+  // `setupPlatform` installs this suite's host first. Open the default session
+  // only after that final root exists, rather than retaining the setup file's
+  // host through the per-test platform swap.
+  session = initializeDefaultSession({
+    transcriptMode: {
+      kind: 'ephemeral',
+      reason: 'workflow script tool test session',
+    },
+  });
+  publishTestRunStart(session, parentRunId);
+  await session.settlePublications();
   vi.clearAllMocks();
   mocks.recordStores.clear();
   await WorkspaceFS.ensureDir('.');
@@ -296,6 +306,10 @@ beforeEach(async () => {
       };
     }),
   );
+});
+
+afterEach(async () => {
+  await Effect.runPromise(closeSession(session.roots.storage));
 });
 
 describe('WorkflowScriptTool', () => {

@@ -15,9 +15,9 @@ import {
 } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId, TodoItem } from '@shared/schemas';
 import {
-  createFakeHost,
   fakeProcessServices,
   installFakeHost,
+  installedHost,
 } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -342,10 +342,9 @@ function mockCancelledOutcome(): void {
   });
 }
 
-/** Loads executeCliRequest against a fresh fake platform for shutdown tests. */
-async function installFakePlatform() {
-  const host = createFakeHost();
-  await installFakeHost(host);
+/** Loads executeCliRequest against the session-owning host for shutdown tests. */
+async function loadExecuteCliOnInstalledHost() {
+  const host = installedHost();
   const { executeCliRequest } = await loadExecuteCli();
   return { platform: host.platform, executeCliRequest };
 }
@@ -661,7 +660,8 @@ describe('executeCliRequest', () => {
   ] as const)(
     'marks $label owned runs interrupted during platform shutdown',
     async ({ kind }) => {
-      const { platform, executeCliRequest } = await installFakePlatform();
+      const { platform, executeCliRequest } =
+        await loadExecuteCliOnInstalledHost();
       const { flushSpy } = await spyOnArtifactFlush();
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const killSpy = vi.spyOn(defaultSession().runs, 'kill');
@@ -743,7 +743,8 @@ describe('executeCliRequest', () => {
   );
 
   it('does not advertise signal recovery before a flow checkpoint exists', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     mocks.deriveResumability.mockResolvedValueOnce({
       kind: 'none',
       outcome: RUN_OUTCOME.CANCELLED,
@@ -780,7 +781,8 @@ describe('executeCliRequest', () => {
   // join-with-deadline; its regression pin lives in LifecycleHost.vitest.ts.
 
   it('forwards a failed shutdown drain to the runtime release hook', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const drainError = new Error('snapshot drain failed');
     mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
     let leaseOptions: LeaseOptions | undefined;
@@ -800,7 +802,8 @@ describe('executeCliRequest', () => {
   });
 
   it('cancels launch preparation when shutdown precedes run registration', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     let launchSignal: AbortSignal | undefined;
     mocks.runAgent.mockImplementationOnce(
       async (_request: unknown, options: LeaseOptions) => {
@@ -829,7 +832,8 @@ describe('executeCliRequest', () => {
   });
 
   it('preserves a terminal outcome when shutdown cannot interrupt the finished run', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     vi.spyOn(defaultSession().runs, 'kill').mockReturnValue({
       accepted: false,
@@ -854,7 +858,8 @@ describe('executeCliRequest', () => {
   });
 
   it('denies workflow output publication after shutdown interruption commits', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
       leaseOptions = options;
@@ -890,7 +895,8 @@ describe('executeCliRequest', () => {
   });
 
   it('preserves the workflow verdict after output publication commits', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const killSpy = vi.spyOn(defaultSession().runs, 'kill');
     let leaseOptions: LeaseOptions | undefined;
@@ -923,7 +929,8 @@ describe('executeCliRequest', () => {
   });
 
   it('does not convert a committed output failure to cancelled by a later shutdown', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     // Imported dynamically (like the lease test below) so the `instanceof`
     // check in executeCli.ts sees the same module instance even after an
@@ -985,7 +992,8 @@ describe('executeCliRequest', () => {
   });
 
   it('does not report a shutdown drain that fails because the lease is already lost', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in executeCli.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
@@ -1010,7 +1018,8 @@ describe('executeCliRequest', () => {
   });
 
   it('closes the runtime host when shutdown finalization fails', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const persistenceError = new Error('terminal metadata disk full');
     mocks.finalizeRun.mockImplementation(async (input) => {
       input.report?.(
@@ -1057,7 +1066,8 @@ describe('executeCliRequest', () => {
   });
 
   it('removes the shutdown status hook after owned runs finish', async () => {
-    const { platform, executeCliRequest } = await installFakePlatform();
+    const { platform, executeCliRequest } =
+      await loadExecuteCliOnInstalledHost();
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {});
@@ -1097,7 +1107,7 @@ describe('executeCliConfig', () => {
   }
 
   it('prints a complete resume command after interrupted tool-use recovery is available', async () => {
-    const { platform } = await installFakePlatform();
+    const { platform } = await loadExecuteCliOnInstalledHost();
     const { executeCliToolUseConfig } = await loadExecuteCli();
     const context = cliContext({
       approvalPolicy: 'yolo',
@@ -1150,7 +1160,7 @@ describe('executeCliConfig', () => {
   });
 
   it('does not advertise recovery for invocation-owned temporary inputs', async () => {
-    const { platform } = await installFakePlatform();
+    const { platform } = await loadExecuteCliOnInstalledHost();
     const { executeCliToolUseConfig } = await loadExecuteCli();
     let publishLeaseScope: LeaseOptions['onRunLeaseAcquired'];
     let publishRun: LeaseOptions['onRun'];
