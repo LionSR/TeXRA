@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGE_TYPES, STREAM_LOG_ENTRY_TYPES } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  RUN_PHASE,
+  STREAM_LOG_ENTRY_TYPES,
+} from '@shared/schemas';
 import {
   compactionActivityRow,
   elideText,
@@ -131,7 +135,8 @@ describe('projectTranscriptRow', () => {
       ...base,
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       text: 'Reduce',
-      data: { kind: 'phase', index: 1, total: 3 },
+      messageType: MESSAGE_TYPES.DEFAULT,
+      data: { status: RUN_PHASE.RUNNING, kind: 'phase', index: 1, total: 3 },
     });
     if (start?.kind !== 'phase') throw new Error('bad');
     expect(start.heading).toBe('Reduce (2/3)');
@@ -140,7 +145,8 @@ describe('projectTranscriptRow', () => {
         ...base,
         type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
         text: 'Reduce',
-        data: { kind: 'phase' },
+        messageType: MESSAGE_TYPES.DEFAULT,
+        data: { status: RUN_PHASE.COMPLETED, kind: 'phase' },
       },
       { previousRow: start },
     );

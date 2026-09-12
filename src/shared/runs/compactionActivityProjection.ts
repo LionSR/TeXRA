@@ -54,7 +54,7 @@ function interruptRunningBlocks(
   entry: StreamLogEntry,
   changedIndices: Set<number>,
 ): void {
-  if (!STREAM_ADVANCING_MESSAGE_TYPES.has(entry.messageType ?? '')) return;
+  if (!STREAM_ADVANCING_MESSAGE_TYPES.has(entry.messageType)) return;
   for (const [index, block] of projection.blocks.entries()) {
     if (block.status !== 'running' || entry.seqNo <= block.startPosition) {
       continue;

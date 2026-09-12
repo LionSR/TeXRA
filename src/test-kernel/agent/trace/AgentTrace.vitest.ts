@@ -147,7 +147,7 @@ describe('logFileCategory', () => {
   });
 
   function capturedMessages(): any[] {
-    return store.getRange(0, store.head);
+    return store.toJSON();
   }
 
   it('handles empty file array gracefully (no-op)', () => {

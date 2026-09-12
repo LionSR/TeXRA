@@ -130,7 +130,7 @@ describe('StreamLogStore event reads', () => {
         store.requestEviction(RUN);
         yield* Deferred.succeed(release, undefined);
         const writer = yield* Fiber.join(loading);
-        expect(store.get(RUN)?.head).toBeGreaterThan(0);
+        expect(store.get(RUN)?.toJSON().length).toBeGreaterThan(0);
         const successor = yield* store.acquireRunResidency(RUN);
         writer.close();
         expect(store.get(RUN)).toBeDefined();

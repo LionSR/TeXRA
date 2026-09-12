@@ -72,7 +72,7 @@ export function showCliWorkPlan(): void {
 
 function activeSkillNamesFor(runId: RunId | undefined): readonly string[] {
   if (runId === undefined) return [];
-  const entries = defaultSession().transcripts.get(runId)?.getRange(0) ?? [];
+  const entries = defaultSession().transcripts.get(runId)?.toJSON() ?? [];
   const latest = entries.findLast(
     (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
   );

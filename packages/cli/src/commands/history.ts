@@ -5,7 +5,6 @@ import { defineCommand } from 'citty';
 import { formatChatAsMarkdown } from '@agent/export';
 import { openSessionEffect } from '@agent/runtime';
 import { listRuns } from '@agent/storage';
-import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { effectRuntime } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
@@ -161,18 +160,13 @@ export async function runHistoryExport(
     return CliExitCode.Usage;
   }
   const { trace } = traceResult;
-  const exportTrace = {
-    ...trace,
-    entries: projectWorkflowCallEntries(trace.entries),
-  };
-
   if (options.assetsDir) {
     const destDir = path.resolve(context.cwd, options.assetsDir);
     const staged = await stageCliHistoryTraceViewerAssets({
       resourcesPath: context.resourcesPath,
       destDir,
     });
-    writeRawStdout(JSON.stringify(exportTrace));
+    writeRawStdout(JSON.stringify(trace));
     if (staged === 'missing') {
       writeTextStderr(
         'Note: the bundled trace-viewer assets were not found in this CLI ' +
@@ -202,7 +196,7 @@ export async function runHistoryExport(
     );
     return CliExitCode.Usage;
   }
-  writeRawStdout(injectStandaloneTrace(template, exportTrace));
+  writeRawStdout(injectStandaloneTrace(template, trace));
   return CliExitCode.Success;
 }
 

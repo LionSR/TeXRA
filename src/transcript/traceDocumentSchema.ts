@@ -41,12 +41,7 @@ export const TraceDocumentSchema = z.object({
   /** The run's honest record: AgentConfig for agent runs, minimal otherwise. */
   config: RunRecordSchema,
   meta: TraceRunFactsSchema,
-  /**
-   * Transcript entries. Workflow-call entries have their `data.model` already
-   * projected to the runtime display label (via `projectWorkflowCallEntry`) at
-   * export time, so an exported trace cannot recover the canonical
-   * `WorkflowCallProgress.model` id from that field.
-   */
+  /** Transcript entries, exactly as the run recorded them. */
   entries: z.array(StreamLogEntrySchema),
 });
 

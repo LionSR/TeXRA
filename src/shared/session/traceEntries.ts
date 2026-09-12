@@ -1,13 +1,14 @@
 // Shared contracts and utilities
 import {
   MESSAGE_TYPES,
+  RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   STREAMING_TEXT_MESSAGE_TYPES,
   isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type WorkflowCallLiveProgress,
 } from '@shared/schemas';
-import { clamp, isObject } from '@utils/core';
+import { isObject } from '@utils/core';
 
 export type StreamLogAppendInput = Omit<
   StreamLogEntry,
@@ -18,23 +19,22 @@ export type StreamLogUpdatePatch = Partial<
 >;
 
 export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
-  if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) return false;
-  const data = isObject(entry.data) ? entry.data : {};
-  const status = typeof data.status === 'string' ? data.status : 'running';
-  return status === 'running';
+  return (
+    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+    entry.data.status === RUN_PHASE.RUNNING
+  );
 }
 
 /**
  * True while a thinking/scratchpad/model-response entry is at
  * `data.status: 'running'`, either still streaming or orphaned
  * because its stream never got a `stream.end` (run cancelled, crashed, or
- * the host reloaded mid-stream). Used both for live in-memory tracking
- * (`hasRunningStreamingText`) and, by the same predicate, to identify
- * orphaned entries at load time in `StreamLogStore`'s recovery sweep.
+ * the host reloaded mid-stream). Its consumers are `SessionHandle`'s
+ * host-exit settlement and its status sweep.
  */
 export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) return false;
-  if (!STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
+  if (!STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType)) return false;
   const data = isObject(entry.data) ? entry.data : {};
   return data.status === 'running';
 }
@@ -67,49 +67,6 @@ export class StreamLog {
   private pendingAppendedIds: string[] = [];
   private readonly pendingDirtiedIds = new Set<string>();
   private settlementSeqCounter = 0;
-  private runningGroupCount = 0;
-  private runningStreamingTextCount = 0;
-  private nonterminalWorkflowCallCount = 0;
-
-  constructor(entries: readonly StreamLogEntry[] = []) {
-    this.entries = [...entries];
-    // The settlement head is never below the entry count; one pass over the
-    // entries raises it to the highest order already allocated on disk while
-    // building the id index and the running-state counters.
-    this.settlementSeqCounter = this.entries.length;
-
-    for (const [i, entry] of this.entries.entries()) {
-      this.indexById.set(entry.id, i);
-      this.countEntry(entry, 1);
-      const settlementSeqNo = entry.settlementSeqNo ?? 0;
-      if (settlementSeqNo > this.settlementSeqCounter) {
-        this.settlementSeqCounter = settlementSeqNo;
-      }
-    }
-  }
-
-  /** Fold an entry into (`1`) or out of (`-1`) the running-state counters. */
-  private countEntry(entry: StreamLogEntry, delta: 1 | -1): void {
-    if (isRunningGroupEntry(entry)) {
-      this.runningGroupCount += delta;
-    }
-    if (isRunningStreamingTextEntry(entry)) {
-      this.runningStreamingTextCount += delta;
-    }
-    if (nonterminalWorkflowCall(entry) !== undefined) {
-      this.nonterminalWorkflowCallCount += delta;
-    }
-  }
-
-  /** Entry count, which is also the next seqNo minus one: entries are never removed. */
-  get head(): number {
-    return this.entries.length;
-  }
-
-  /** Latest durable append-only transcript order allocated by this stream. */
-  get settlementHead(): number {
-    return this.settlementSeqCounter;
-  }
 
   /**
    * Drain the entries changed since the previous drain. Entry values are the
@@ -147,27 +104,6 @@ export class StreamLog {
     return resolved;
   }
 
-  get firstTimestamp(): number | undefined {
-    return this.entries[0]?.timestamp;
-  }
-
-  get lastTimestamp(): number | undefined {
-    return this.entries.at(-1)?.timestamp;
-  }
-
-  get hasRunningGroup(): boolean {
-    return this.runningGroupCount > 0;
-  }
-
-  /** True while any thinking/scratchpad/model-response entry is still at `data.status: 'running'`. */
-  get hasRunningStreamingText(): boolean {
-    return this.runningStreamingTextCount > 0;
-  }
-
-  get hasNonterminalWorkflowCall(): boolean {
-    return this.nonterminalWorkflowCallCount > 0;
-  }
-
   /** Fold a canonical recorded entry without allocating new entry coordinates. */
   record(entry: StreamLogEntry): void {
     const index = this.indexById.get(entry.id);
@@ -176,11 +112,9 @@ export class StreamLog {
       this.entries.push(entry);
       this.pendingAppendedIds.push(entry.id);
     } else {
-      this.countEntry(this.entries[index], -1);
       this.entries[index] = entry;
       this.pendingDirtiedIds.add(entry.id);
     }
-    this.countEntry(entry, 1);
     this.settlementSeqCounter = Math.max(
       this.settlementSeqCounter,
       entry.settlementSeqNo ?? 0,
@@ -208,7 +142,6 @@ export class StreamLog {
     if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
-    this.countEntry(fullEntry, 1);
     this.pendingAppendedIds.push(fullEntry.id);
     return fullEntry;
   }
@@ -257,28 +190,9 @@ export class StreamLog {
       this.settlementSeqCounter += 1;
     }
 
-    this.countEntry(current, -1);
-    this.countEntry(updated, 1);
-
     this.entries[index] = updated;
     this.pendingDirtiedIds.add(id);
     return updated;
-  }
-
-  getRange(
-    fromSeq: number,
-    toSeq: number = this.entries.length,
-  ): StreamLogEntry[] {
-    const safeFrom = Math.max(0, fromSeq);
-    const safeTo = clamp(toSeq, safeFrom, this.entries.length);
-    if (safeFrom >= safeTo) return [];
-    return this.entries.slice(safeFrom, safeTo);
-  }
-
-  /** The current (immutable, post-mutation) entry object for `id`, if any. */
-  getById(id: string): StreamLogEntry | undefined {
-    const index = this.indexById.get(id);
-    return index === undefined ? undefined : this.entries[index];
   }
 
   toJSON(): StreamLogEntry[] {

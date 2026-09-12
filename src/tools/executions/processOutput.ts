@@ -73,8 +73,7 @@ export function projectProcessOutput(
 
   for (const entry of entries) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
-    if ((entry.messageType ?? MESSAGE_TYPES.DEFAULT) !== MESSAGE_TYPES.DEFAULT)
-      continue;
+    if (entry.messageType !== MESSAGE_TYPES.DEFAULT) continue;
     const text = entry.text;
     if (!text) continue;
 

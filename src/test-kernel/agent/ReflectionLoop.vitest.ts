@@ -527,7 +527,7 @@ const setRejectOnCompileFailure = (enabled: boolean) =>
 /** The verdict each round stage closed with, in transcript order. */
 function roundStageOutcomes(store: StreamLog): unknown[] {
   return store
-    .getRange(0)
+    .toJSON()
     .flatMap((entry) =>
       entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
       isObject(entry.data) &&
