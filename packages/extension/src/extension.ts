@@ -70,6 +70,7 @@ import { setLogSink } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -187,6 +188,7 @@ async function initVscodePlatform(
   // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  installLongRunningModelDispatcher();
   // Both process stores exist before the runtime here: VS Code hands the
   // extension its SecretStorage and Memento at activation.
   const secrets = new VscodeSecrets(context);

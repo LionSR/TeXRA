@@ -2,6 +2,18 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
+import {
+  CODEX_BACKEND_BASE_URL,
+  CodexAuthError,
+  codexCoordinator,
+  formatCodexAuthUnavailableMessage,
+  isCodexSessionRoutable,
+} from '@auth/codex';
+import {
+  XaiAuthError,
+  formatXaiAuthUnavailableMessage,
+  xaiCoordinator,
+} from '@auth/xai';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { createLog } from '@logger/logUtils';
@@ -11,6 +23,12 @@ import {
   type CopilotRouteOverride,
 } from '@model/copilotRouting';
 import { isGpt5ModelName } from '@model/modelNames';
+import {
+  codexBackendModelId,
+  resolveCodexSubscriptionCapabilities,
+  resolveXaiSubscriptionCapabilities,
+} from '@model/providerCapabilities';
+import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import {
   resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
@@ -24,6 +42,12 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 
 const log = createLog('ModelFactory');
+
+/**
+ * The Grok subscription's OAuth token is accepted by xAI's own API surface
+ * only; it is never sent to a dashboard custom endpoint or OpenRouter.
+ */
+const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
@@ -83,13 +107,148 @@ function getPreferShortModelNames(globalState: StateStore): boolean {
   );
 }
 
-/** The credential and endpoint of one model route, resolved together. */
-export interface RouteCredential {
+/** The API-key credential and endpoint of one model route, resolved together. */
+export interface ApiKeyRouteCredential {
   readonly apiKey: string;
   readonly endpoint: string;
   readonly provider: ApiProvider;
   readonly route: 'api-key' | 'openrouter';
   readonly usageRoute: UsageRoute;
+}
+
+/**
+ * An OAuth subscription session standing in for the provider's API key: the
+ * ChatGPT (Codex) session on the Responses protocol, the Grok session on the
+ * xAI Chat protocol. The token is the bearer the package sends; `@auth/*`
+ * owns its refresh, so a binding always carries a fresh one.
+ */
+export type SubscriptionRouteCredential =
+  | {
+      readonly route: 'chatgpt-subscription';
+      readonly accessToken: string;
+      readonly accountId: string | null;
+      /** The Codex backend's bare model id, which differs from the API's. */
+      readonly requestedModel: string;
+      readonly endpoint: string;
+      readonly provider: ApiProvider;
+      readonly usageRoute: 'chatgpt-subscription';
+    }
+  | {
+      readonly route: 'xai-subscription';
+      readonly accessToken: string;
+      readonly endpoint: string;
+      readonly provider: ApiProvider;
+      readonly usageRoute: 'xai-subscription';
+    };
+
+export type RouteCredential =
+  ApiKeyRouteCredential | SubscriptionRouteCredential;
+
+/** The bearer secret of a route, whichever credential kind carries it. */
+export function routeBearer(credential: RouteCredential): string {
+  switch (credential.route) {
+    case 'api-key':
+    case 'openrouter':
+      return credential.apiKey;
+    case 'chatgpt-subscription':
+    case 'xai-subscription':
+      return credential.accessToken;
+  }
+}
+
+/**
+ * The subscription route a model binds under, if the user prefers one, the
+ * model is eligible on it, and a session is signed in. Decided above
+ * {@link resolveRouteCredential}: an eligible model with the preference on
+ * but no routable session falls back to the API key, and says so, because
+ * the preference is a preference (the model list already shows which route
+ * serves the model), while a signed-in session that fails to refresh is a
+ * failure and surfaces as one. The returned config is the route's own: the
+ * subscription's context ceiling and its zero per-token price.
+ */
+export async function resolveSubscriptionCredential(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): Promise<{
+  readonly credential: SubscriptionRouteCredential;
+  readonly config: ModelConfig;
+} | null> {
+  const provider = resolveDirectModelApiKeyProvider(config);
+  if (provider === undefined) return null;
+  if (config.provider === ModelProvider.OPENAI) {
+    const profile = resolveCodexSubscriptionCapabilities(config, useOpenRouter);
+    if (profile === null) return null;
+    let routable: boolean;
+    try {
+      routable = await isCodexSessionRoutable();
+    } catch (error) {
+      throw error instanceof CodexAuthError
+        ? new AgentError(formatCodexAuthUnavailableMessage(error), {
+            cause: error,
+          })
+        : error;
+    }
+    if (!routable) {
+      log.warn(
+        `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
+      );
+      return null;
+    }
+    const coordinator = codexCoordinator();
+    return {
+      credential: {
+        route: 'chatgpt-subscription',
+        accessToken: await coordinator.getFreshAccessToken(),
+        accountId: (await coordinator.getAccountId()) ?? null,
+        requestedModel: codexBackendModelId(config),
+        endpoint: CODEX_BACKEND_BASE_URL,
+        provider,
+        usageRoute: 'chatgpt-subscription',
+      },
+      config: {
+        ...config,
+        contextWindow: profile.contextWindow,
+        inputPrice: profile.inputPrice,
+        outputPrice: profile.outputPrice,
+      },
+    };
+  }
+  if (config.provider === ModelProvider.XAI) {
+    const profile = resolveXaiSubscriptionCapabilities(config, useOpenRouter);
+    if (profile === null) return null;
+    if (!(await isXaiSignedIn())) {
+      log.warn(
+        `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,
+      );
+      return null;
+    }
+    let accessToken: string;
+    try {
+      accessToken = await xaiCoordinator().getFreshAccessToken();
+    } catch (error) {
+      throw error instanceof XaiAuthError
+        ? new AgentError(formatXaiAuthUnavailableMessage(error), {
+            cause: error,
+          })
+        : error;
+    }
+    return {
+      credential: {
+        route: 'xai-subscription',
+        accessToken,
+        endpoint: XAI_SUBSCRIPTION_ENDPOINT,
+        provider,
+        usageRoute: 'xai-subscription',
+      },
+      config: {
+        ...config,
+        contextWindow: profile.contextWindow,
+        inputPrice: profile.inputPrice,
+        outputPrice: profile.outputPrice,
+      },
+    };
+  }
+  return null;
 }
 
 /**
@@ -105,7 +264,7 @@ export async function resolveRouteCredential(
   config: ModelConfig,
   useOpenRouter: boolean,
   secrets: PlatformSecrets,
-): Promise<RouteCredential> {
+): Promise<ApiKeyRouteCredential> {
   const provider = useOpenRouter
     ? 'openRouter'
     : resolveDirectModelApiKeyProvider(config);

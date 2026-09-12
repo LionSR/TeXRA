@@ -12,11 +12,13 @@
 import { createHash } from 'node:crypto';
 
 import { Context, Effect, Option, type Scope } from 'effect';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
   resolveModelHandlerCompatibilityKey,
   resolveRouteCredential,
+  resolveSubscriptionCredential,
+  routeBearer,
   type RouteCredential,
 } from '@agent/runtime/ModelFactory';
 import { anthropicMessagesModel } from '@llm/anthropicMessages';
@@ -240,6 +242,79 @@ function anthropicThinking(
   };
 }
 
+/**
+ * Moonshot API `fullName`s shared by a reasoning and a non-reasoning registry
+ * entry (`kimi26`/`kimi26T` both wire to `kimi-k2.6`), distinguished only by
+ * TeXRA's `supportsReasoning`. Moonshot defaults these wire names to thinking
+ * on, so both entries send the toggle explicitly; every other Kimi model
+ * leaves thinking to the wire default. Computed from the live catalog so a
+ * later shared-name family needs no new literal.
+ */
+const AMBIGUOUS_MOONSHOT_FULL_NAMES: ReadonlySet<string> = (() => {
+  const supportsReasoningByFullName = new Map<string, boolean>();
+  const ambiguous = new Set<string>();
+  for (const config of Object.values(MODEL_CONFIGS)) {
+    if (config.provider !== ModelProvider.MOONSHOT) continue;
+    const seen = supportsReasoningByFullName.get(config.fullName);
+    if (seen !== undefined && seen !== config.capabilities.supportsReasoning) {
+      ambiguous.add(config.fullName);
+    }
+    supportsReasoningByFullName.set(
+      config.fullName,
+      config.capabilities.supportsReasoning,
+    );
+  }
+  return ambiguous;
+})();
+
+type KimiThinkingControl = Extract<
+  ModelConfiguration,
+  { protocol: 'kimi-chat' }
+>['thinkingControl'];
+
+function kimiThinkingControl(config: ModelConfig): KimiThinkingControl {
+  if (AMBIGUOUS_MOONSHOT_FULL_NAMES.has(config.fullName)) return 'toggle';
+  return config.capabilities.supportsReasoning ? 'always' : 'toggle';
+}
+
+/**
+ * Sampling Moonshot fixes per wire name, thinking on and off: `null` is a
+ * temperature the API requires omitted. Applies to direct requests and to
+ * requests forwarded through OpenRouter alike.
+ */
+const KIMI_FIXED_TEMPERATURES: ReadonlyMap<
+  string,
+  { readonly enabled: number | null; readonly disabled: number | null }
+> = new Map([
+  ['kimi-k2.5', { enabled: 1, disabled: 0.6 }],
+  ['kimi-k2.7-code', { enabled: 1, disabled: 1 }],
+  ['kimi-for-coding', { enabled: 1, disabled: 1 }],
+  ['kimi-for-coding-highspeed', { enabled: 1, disabled: 1 }],
+  ['kimi-k3', { enabled: null, disabled: null }],
+  ['k3', { enabled: null, disabled: null }],
+]);
+
+function kimiTemperatureByThinking(
+  config: ModelConfig,
+  temperature: number,
+): { readonly enabled: number | null; readonly disabled: number | null } {
+  return (
+    KIMI_FIXED_TEMPERATURES.get(config.fullName) ?? {
+      enabled: 1,
+      disabled: temperature,
+    }
+  );
+}
+
+/** Instructions the Codex backend requires when the request carries none. */
+const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
+
+/**
+ * The Codex backend runs every turn synchronously on one connection, so an
+ * effort above medium risks the client timing out before it answers.
+ */
+const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = ['low', 'medium'];
+
 function configurationFor(
   protocol: HttpProtocol,
   config: ModelConfig,
@@ -293,6 +368,45 @@ function configurationFor(
         },
       };
     case 'openai-responses':
+      if (credential.route === 'chatgpt-subscription') {
+        let codexEffort: RouteEffort | null = effort;
+        if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
+          codexEffort = 'medium';
+        }
+        return {
+          ...base,
+          requestedModel: credential.requestedModel,
+          protocol,
+          background: 'unsupported',
+          supportsInputTokenEstimation: false,
+          supportsTemperature,
+          supportsMaxOutputTokens: false,
+          supportsStorage: false,
+          supportsResponseChaining: false,
+          webSocketStreamParameter: 'required',
+          allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
+          instructions: {
+            kind: 'required',
+            fallback: CODEX_DEFAULT_INSTRUCTIONS,
+          },
+          defaults: {
+            maxOutputTokens: null,
+            temperature: supportsTemperature ? input.temperature : null,
+            store: false,
+            parallelToolCalls: true,
+            reasoning: capabilities.supportsReasoning
+              ? {
+                  effort: capabilities.supportsReasoningEffort
+                    ? codexEffort
+                    : null,
+                  mode: capabilities.reasoningMode ?? null,
+                  summary: 'auto',
+                }
+              : null,
+            serviceTier: null,
+          },
+        };
+      }
       return {
         ...base,
         protocol,
@@ -355,11 +469,18 @@ function configurationFor(
         ...base,
         protocol,
         supportsImageInput: capabilities.supportsVision,
-        supportsInputTokenEstimation: capabilities.supportsTokenCounting,
-        thinkingControl: 'toggle',
+        // Moonshot's own endpoint counts tokens; a managed coding endpoint
+        // opts in through the catalog.
+        supportsInputTokenEstimation:
+          !isKimiCodeExclusiveModel(config) ||
+          capabilities.supportsTokenCounting,
+        thinkingControl: kimiThinkingControl(config),
         supportedEfforts: [...supportedEfforts],
         supportsForcedToolChoice: true,
-        temperatureByThinking: { enabled: 1, disabled: input.temperature },
+        temperatureByThinking: kimiTemperatureByThinking(
+          config,
+          input.temperature,
+        ),
         defaults: {
           maxOutputTokens,
           thinking: { mode: thinkingMode },
@@ -448,27 +569,33 @@ function configurationFor(
   }
 }
 
+/**
+ * One constructor per protocol; a subscription token is the bearer where an
+ * API key would be, and the Codex session additionally names its account.
+ */
 function constructModel(
   configuration: HttpConfiguration,
   credential: RouteCredential,
 ): Model {
+  const apiKey = routeBearer(credential);
   switch (configuration.protocol) {
     case 'anthropic-messages':
-      return anthropicMessagesModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return anthropicMessagesModel(configuration, { apiKey });
     case 'openai-responses':
       return openaiResponsesModel(configuration, {
-        authentication: { kind: 'api-key', apiKey: credential.apiKey },
+        authentication:
+          credential.route === 'chatgpt-subscription'
+            ? {
+                kind: 'codex',
+                accessToken: credential.accessToken,
+                accountId: credential.accountId,
+              }
+            : { kind: 'api-key', apiKey },
       });
     case 'google-interactions':
-      return googleInteractionsModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return googleInteractionsModel(configuration, { apiKey });
     case 'openrouter-chat':
-      return openrouterChatModel(configuration, {
-        apiKey: credential.apiKey,
-      });
+      return openrouterChatModel(configuration, { apiKey });
     case 'openai-chat':
     case 'deepseek-chat':
     case 'kimi-chat':
@@ -476,7 +603,7 @@ function constructModel(
     case 'xai-chat':
     case 'dashscope-chat':
     case 'minimax-chat':
-      return openaiChatModel(configuration, { apiKey: credential.apiKey });
+      return openaiChatModel(configuration, { apiKey });
   }
 }
 
@@ -649,13 +776,33 @@ export const bindModel = Effect.fn('bindModel')(function* (
       backgroundCapable: false,
     };
   }
-  const credential = yield* Effect.tryPromise({
-    try: () =>
-      input.inScope(() =>
-        resolveRouteCredential(config, onOpenRouter, input.stores.secrets),
-      ),
-    catch: ensureError,
-  });
+  // The ChatGPT session serves the Responses protocol and the Grok session
+  // the xAI Chat protocol, so the subscription route is asked only there;
+  // `constructModel` can then hand a subscription token to no other
+  // protocol's constructor.
+  const subscription =
+    protocol === 'openai-responses' || protocol === 'xai-chat'
+      ? yield* Effect.tryPromise({
+          try: () =>
+            input.inScope(() =>
+              resolveSubscriptionCredential(config, useOpenRouter),
+            ),
+          catch: ensureError,
+        })
+      : null;
+  let credential: RouteCredential;
+  if (subscription !== null) {
+    config = subscription.config;
+    credential = subscription.credential;
+  } else {
+    credential = yield* Effect.tryPromise({
+      try: () =>
+        input.inScope(() =>
+          resolveRouteCredential(config, onOpenRouter, input.stores.secrets),
+        ),
+      catch: ensureError,
+    });
+  }
   const built = yield* Effect.try({
     try: () => {
       const configuration = configurationFor(
@@ -681,7 +828,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     config.provider,
     credential.route,
     credential.endpoint,
-    credentialFingerprint(credential.route, credential.apiKey),
+    credentialFingerprint(credential.route, routeBearer(credential)),
   ]);
   return {
     modelId: config.name,

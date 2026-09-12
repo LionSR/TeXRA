@@ -15,6 +15,7 @@ import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   bootstrapNodeAgentDirectories,
@@ -277,6 +278,7 @@ export async function initCliPlatform(
     // adopts that one rather than building a second and leaving the first
     // undisposed.
     await installCliProcessRuntime(context.storageRoot);
+    installLongRunningModelDispatcher();
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
     // chatDefaults reads) backs the global target — the same pair of stores
