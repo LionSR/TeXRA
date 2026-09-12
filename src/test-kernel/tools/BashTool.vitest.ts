@@ -14,10 +14,7 @@ import { getRunRecords } from '@agent/storage';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import {
-  formatToolResultAsText,
-  MAX_TOOL_RESULT_TEXT_LENGTH,
-} from '@agent/runtime/run/toolResultText';
+import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -43,6 +40,9 @@ import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
 import { recordSessionEvents } from '../agent/progressTestUtils';
+
+/** The formatter's cap: a result longer than this is truncated head+tail. */
+const TOOL_RESULT_TEXT_CAP = 200_000;
 
 type ExecuteCommandOptions = NonNullable<
   Parameters<typeof execUtils.executeCommand>[1]
@@ -320,7 +320,7 @@ describe('BashTool', () => {
     // at the tail (where LaTeX/build errors cluster), filler in between.
     const hugeStderr =
       'ENGINE_HEADER '.repeat(400) +
-      'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) +
+      'x'.repeat(TOOL_RESULT_TEXT_CAP) +
       'TAIL_ERROR_DETAIL '.repeat(5000);
 
     mockStreamingCommand((options) => options.onStderr?.(hugeStderr), {

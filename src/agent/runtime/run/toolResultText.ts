@@ -10,7 +10,7 @@ import { isNonEmptyString } from '@utils/core';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
-export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
+const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
 /**
  * Head and tail kept when a tool result exceeds the cap, rather than dropping

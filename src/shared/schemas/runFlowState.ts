@@ -9,7 +9,6 @@
  */
 import { z } from 'zod';
 
-import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import {
@@ -332,7 +331,6 @@ export const StateSlicesSchema = z.object({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   userChannels: UserVariableChannelsSchema,
 });
-export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 
 /**
  * The message-free core of one tool-use flow's shared state: every field of
@@ -382,9 +380,6 @@ export const ReflectionSnapshotStateSchema = z.object({
 
   continueRounds: z.boolean(),
   endTurn: z.boolean(),
-
-  /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
 
   /** Provider-message format used by the persisted `context` messages.
    *  Absent for an untagged handler. */
