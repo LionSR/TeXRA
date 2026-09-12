@@ -31,8 +31,12 @@ export function subscribeStatusBarSessionEvents({
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
-  let activeRuns = tracker.activeRunCount;
-  let usage = tracker.totalUsage;
+  // Unseeded on purpose: `viewChanges` replays the current view on subscribe,
+  // and that first emission must paint both projections (a run already
+  // RUNNING when the bar subscribes would otherwise read Idle until the count
+  // next changes).
+  let activeRuns: number | undefined;
+  let usage: StatusBarUsageTracker['totalUsage'] | undefined;
   const fiber = effectRuntime().runFork(
     Stream.runForEach(session.viewChanges, () =>
       Effect.sync(() => {
@@ -43,6 +47,7 @@ export function subscribeStatusBarSessionEvents({
         }
         const nextUsage = tracker.totalUsage;
         if (
+          usage === undefined ||
           nextUsage.cost !== usage.cost ||
           nextUsage.inputTokens !== usage.inputTokens ||
           nextUsage.outputTokens !== usage.outputTokens
