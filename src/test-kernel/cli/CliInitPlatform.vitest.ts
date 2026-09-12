@@ -61,7 +61,6 @@ function spyOnSignalRegistration(): {
 const mocks = vi.hoisted(() => ({
   consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
-  bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
     custom: vi.fn(),
     builtIn: vi.fn(),
@@ -127,7 +126,6 @@ vi.mock('@platform/platform', () => ({
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
 vi.mock('@platform/defaults/nodeHost', () => ({
-  bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
   createNodeWorkspaceRoots: mocks.createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
@@ -254,7 +252,6 @@ describe('CLI platform init', () => {
     mocks.cliGlobalState.update.mockReset();
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
-    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
     mocks.openTexraConfigStores.mockReturnValue(
       Effect.succeed({ workspace: {}, global: {} }),
     );
@@ -389,7 +386,6 @@ describe('CLI platform interactive signal ownership', () => {
     mocks.tryPlatform.mockReturnValue({
       globalState: stubGlobalState(() => undefined),
     });
-    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {

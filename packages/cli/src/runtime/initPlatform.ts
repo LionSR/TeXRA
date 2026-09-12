@@ -18,7 +18,6 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
-  bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -319,6 +318,9 @@ export async function initCliPlatform(
     });
     const agentDirectories = createPlatformAgentDirectories({
       channel: 'cli',
+      // Built-in agents are read straight out of the CLI package's shipped
+      // `dist/resources`, never copied into the shared `~/.texra` root.
+      resourcesPath: context.resourcesPath,
       customDirectoryStore: { get: () => undefined },
     });
     services = createNodePlatform({
@@ -346,16 +348,11 @@ export async function initCliPlatform(
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
     installTexraAccountProbes();
 
-    // Seed first-install defaults (e.g. disabled tools) before anything
-    // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
-    // below), so upgrading users are not affected. Mirrors the
-    // extension/desktop ordering — same seeding function, CLI's own version
-    // key since the CLI tracks its bundled-agent version independently.
+    // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
+    // whose DISABLED_TOOLS list already exists, so upgrading users keep the
+    // tools they enabled.
     await effectRuntime().runPromise(
-      seedDisabledToolDefaults(
-        stateStores.globalState,
-        GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-      ),
+      seedDisabledToolDefaults(stateStores.globalState),
     );
 
     if (context.installSignalHandlers !== false) {
@@ -407,15 +404,6 @@ export async function initCliPlatform(
     initializeCliSupabaseAuth(services.secrets, cliPlatformLog);
     supabaseAuthInitialized = true;
   }
-
-  await effectRuntime().runPromise(
-    bootstrapNodeAgentDirectories({
-      channel: 'cli',
-      resourcesPath: context.resourcesPath,
-      currentVersion: context.version,
-      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-    }),
-  );
 
   initializeNodeRuntimeSkills({
     resourcesPath: context.resourcesPath,

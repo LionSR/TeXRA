@@ -15,17 +15,12 @@
  * adapter stays out of hosts that only need the composition helpers.
  */
 
-// Third-party imports
-import { Effect } from 'effect';
-
 // Local imports
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   defaultSkillSources,
   type SkillSourceOptions,
 } from '@skills/skillSources';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
@@ -105,20 +100,10 @@ export function createNodeWorkspaceRoots(
   };
 }
 
-export interface NodeAgentDirectoryBootstrapOptions {
-  readonly channel: string;
-  readonly resourcesPath: string;
-  readonly currentVersion: string | undefined;
-  readonly versionStateKey: string;
-}
-
 export interface NodeRuntimeSkillOptions {
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
-
-const bootstrappedAgentDirectoryResources = new Map<string, string>();
-const agentDirectoryBootstrapLanes = new Map<string, PerKeyLane>();
 
 /**
  * Assemble the platform services for a Node-family host (CLI, desktop,
@@ -163,40 +148,3 @@ export function initializeNodeRuntimeSkills(
     ),
   );
 }
-
-/**
- * Reconcile packaged agent directories for a host after `initPlatform`.
- *
- * Hosts use different version-state keys, but the resources-path re-entry rule
- * is the same: after a successful reconcile, a process only reconciles a given
- * host channel again when its active packaged resources path changes. Failures
- * are reported and answered `false` by `bootstrapPlatformAgentDirectories` so a
- * broken agent directory does not abort startup, and a later call can retry.
- *
- * Concurrent calls for one channel take the channel's in-process lane in call
- * order, so the second sees the first's recorded resources path and skips.
- */
-export const bootstrapNodeAgentDirectories = Effect.fn(
-  'nodeHost.bootstrapNodeAgentDirectories',
-)(function* (options: NodeAgentDirectoryBootstrapOptions) {
-  const guardKey = `${options.channel}:${options.versionStateKey}`;
-  yield* withPerKeyLane(
-    agentDirectoryBootstrapLanes,
-    guardKey,
-  )(
-    Effect.gen(function* () {
-      if (
-        bootstrappedAgentDirectoryResources.get(guardKey) ===
-        options.resourcesPath
-      ) {
-        return;
-      }
-      if (yield* bootstrapPlatformAgentDirectories(options)) {
-        bootstrappedAgentDirectoryResources.set(
-          guardKey,
-          options.resourcesPath,
-        );
-      }
-    }),
-  );
-});

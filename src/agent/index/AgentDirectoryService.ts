@@ -31,6 +31,12 @@ export interface AgentDirectoryIssueReporter {
 
 export interface AgentDirectoryServiceOptions {
   channel: string;
+  /**
+   * Packaged resources root holding the bundled agent directories. Hosts read
+   * their built-in agents straight out of the bundle they shipped with, so one
+   * host's install can never overwrite another's built-ins.
+   */
+  resourcesPath: string;
   customDirectoryStore: CustomAgentDirectoryStore;
   issueReporter: AgentDirectoryIssueReporter;
 }
@@ -43,11 +49,11 @@ export class AgentDirectoryService {
   }
 
   async builtIn(): Promise<string> {
-    return this.ensureBuiltInDir(BUILTIN_WORKFLOW_AGENTS_DIR);
+    return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
   }
 
   async builtInToolUse(): Promise<string> {
-    return this.ensureBuiltInDir(BUILTIN_TOOL_USE_AGENTS_DIR);
+    return this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR);
   }
 
   async custom(): Promise<string> {
@@ -87,9 +93,12 @@ export class AgentDirectoryService {
     ];
   }
 
-  private async ensureBuiltInDir(dirName: string): Promise<string> {
-    await GlobalStorageFS.ensureDir(dirName);
-    const basePath = GlobalStorageFS.fullPath(dirName);
+  /**
+   * The packaged directory itself. It ships read-only with the host and every
+   * consumer registers it `writable: false`, so there is nothing to create.
+   */
+  private packagedDir(dirName: string): string {
+    const basePath = path.join(this.options.resourcesPath, dirName);
     this.log.debug(`Using built-in ${dirName} directory: ${basePath}`);
     return basePath;
   }

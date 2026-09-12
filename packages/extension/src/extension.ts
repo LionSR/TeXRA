@@ -74,7 +74,6 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
@@ -464,7 +463,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // opening a folder reloads the window into that path (welcomeView.ts).
     const lifecycle = createLifecycleHost();
     lifecycleHost = lifecycle;
-    agentDirectories.initialize(context.globalState);
+    agentDirectories.initialize(
+      context.globalState,
+      path.join(context.extensionPath, 'resources'),
+    );
     const secrets = await initVscodePlatform(
       context,
       lifecycle,
@@ -515,7 +517,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  agentDirectories.initialize(context.globalState);
+  agentDirectories.initialize(
+    context.globalState,
+    path.join(context.extensionPath, 'resources'),
+  );
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
@@ -604,43 +609,21 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // the runtime it was handed instead of reading the global back.
   const runtime = effectRuntime();
 
-  // Seed first-install defaults (e.g. disabled tools) before anything writes
-  // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await runtime.runPromise(
-    seedDisabledToolDefaults(
-      context.globalState,
-      GlobalStateKey.LAST_KNOWN_VERSION,
-    ),
-  );
+  // Seed first-install defaults (e.g. disabled tools). No-ops once
+  // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
+  await runtime.runPromise(seedDisabledToolDefaults(context.globalState));
 
-  // The following startup steps touch independent state, so they run
-  // concurrently to shorten activation. Within the agent branch the order
-  // still matters: the bundled-agent reconciliation populates the built-in
-  // directories, registerAgentDirectoryRoots exposes them, and loadAgents
-  // scans them.
-  await Promise.all([
-    (async () => {
-      await effectRuntime().runPromise(
-        bootstrapNodeAgentDirectories({
-          channel: 'extension',
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-          currentVersion: context.extension.packageJSON?.version,
-          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-        }),
-      );
-      await registerAgentDirectoryRoots(context);
-      try {
-        await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
-        void effectRuntime()
-          .runPromise(loadAgents())
-          .catch((err) => {
-            log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
-          });
-      } catch (err) {
-        log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
-      }
-    })(),
-  ]);
+  // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
+  // directories, and loadAgents scans them.
+  await registerAgentDirectoryRoots(context);
+  try {
+    await runtime.runPromise(loadAgents({ includeRemote: false }));
+    void runtime.runPromise(loadAgents()).catch((err) => {
+      log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
+    });
+  } catch (err) {
+    log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
+  }
 
   registerSupabaseAuth(context, secrets);
 
