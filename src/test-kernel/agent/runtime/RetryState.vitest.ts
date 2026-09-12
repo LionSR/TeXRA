@@ -423,6 +423,28 @@ describe('model failure classification', () => {
     expect(classifyModelFailure(abort).autoRetryable).toBe(false);
   });
 
+  it('carries the text streamed before the failure onto the retry surface', () => {
+    // The one producer of `partialText`: the loop hands `classifyModelFailure`
+    // the tail it had already received, and the retry panel reads it back off
+    // the classified error rather than from a provider handler.
+    const error = new OpenAIAPIError(
+      500,
+      { message: 'stream dropped' },
+      'stream dropped',
+      undefined,
+    );
+
+    const failure = classifyModelFailure(error, 'api-key', 'partial answer');
+
+    expect(failure.formatted.partialText).toBe('partial answer');
+    expect(failure.info.partialText).toBe('partial answer');
+    // A failure with nothing streamed carries no tail at all.
+    expect(
+      classifyModelFailure(statuslessServerError('nothing streamed')).formatted
+        .partialText,
+    ).toBeUndefined();
+  });
+
   it('reports a retryable provider failure with its formatted message', () => {
     const error = new OpenAIAPIError(
       503,

@@ -172,16 +172,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
         `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 
-    const diag = details.streamDiagnostics;
-    if (diag && (diag.eventsProcessed > 0 || diag.messageStartReceived)) {
-      const entries = Object.entries(diag).map(([k, v]) =>
-        k === 'blockTypesSeen'
-          ? `  ${k}: [${(v as string[])?.join(', ') || ''}]`
-          : `  ${k}: ${v ?? 'null'}`,
-      );
-      lines.push('--- Stream Diagnostics ---', ...entries);
-    }
-
     // Show the tail of text that was generated before the failure — useful
     // both for diagnostics and for letting the user see progress wasn't lost.
     const partialText = details.partialText;

@@ -66,11 +66,15 @@ import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
-import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
-import { bindModel, type BoundModel } from './run/modelBinding';
+import {
+  backgroundDelivery,
+  bindModel,
+  type BoundModel,
+} from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import { priceTurnUsage } from './run/pricing';
 import { dispatchFactsFor } from './run/tools';
@@ -110,6 +114,13 @@ const BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000;
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
+
+/**
+ * How much of a failed attempt's streamed output the failure carries. The
+ * retry surface shows the tail so the user sees the work was not lost; the
+ * bound keeps a long generation out of the error and off the ledger row.
+ */
+const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 /**
  * One initial attempt plus the configured number of automatic retries. The
@@ -280,30 +291,40 @@ export const modelInvokerLayer: Layer.Layer<
 
     /**
      * Whether a turn runs as background work: a workflow turn on a binding
-     * that supports it, under the provider's toggle. Tool-use turns stream
-     * (per-step output); the OpenAI toggle applies to GPT models as its
-     * description says, the Google one to any route with server-side state.
+     * that supports it, under the provider's toggle. The binding owns the
+     * rule (it decides the Responses transport by the same answer); this
+     * asks it per turn with the run's category.
      */
-    const backgroundRequested = (bound: BoundModel): boolean => {
-      if (!bound.backgroundCapable) return false;
-      if (run.config.agentCategory !== AgentCategory.Workflow) return false;
-      if (bound.origin.protocol === 'google-interactions') {
-        return getConfig<boolean>('texra.model.useGoogleBackgroundResponses');
-      }
-      return (
-        bound.config.name.toLowerCase().startsWith('gpt') &&
-        getConfig<boolean>('texra.model.useBackgroundResponses')
-      );
-    };
+    const backgroundRequested = (bound: BoundModel): boolean =>
+      backgroundDelivery({
+        backgroundCapable: bound.backgroundCapable,
+        protocol: bound.origin.protocol,
+        modelName: bound.config.name,
+        agentCategory: run.config.agentCategory,
+      });
 
-    const failAttempt = (cause: unknown, at: RunState, bound: BoundModel) =>
+    const failAttempt = (
+      cause: unknown,
+      at: RunState,
+      bound: BoundModel,
+      partialText?: string,
+    ) =>
       Effect.fail(
-        new AttemptFailed(classifyModelFailure(cause, bound.usageRoute), at),
+        new AttemptFailed(
+          classifyModelFailure(cause, bound.usageRoute, partialText),
+          at,
+        ),
       );
 
     interface AttemptTrace {
       readonly thinking: StreamHandle;
       readonly output: StreamHandle;
+    }
+    /** What one attempt's events leave behind: the completed turn if it
+     *  arrived, and the tail of the output text seen so far. */
+    interface AttemptOutcome {
+      value: TurnResult | null;
+      streamedText: string;
     }
     const openTrace = (): AttemptTrace => ({
       thinking: logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true }),
@@ -324,7 +345,7 @@ export const modelInvokerLayer: Layer.Layer<
         invocation: InvocationRef,
         stateRef: Ref.Ref<RunState>,
         trace: AttemptTrace,
-        completed: { value: TurnResult | null },
+        completed: AttemptOutcome,
       ) =>
       (event: TurnEvent | BackgroundEvent) =>
         Effect.gen(function* () {
@@ -353,8 +374,16 @@ export const modelInvokerLayer: Layer.Layer<
               return;
             }
             case 'delta':
-              if (event.part === 'reasoning') trace.thinking.append(event.text);
-              else trace.output.append(event.text);
+              if (event.part === 'reasoning') {
+                trace.thinking.append(event.text);
+              } else {
+                trace.output.append(event.text);
+                // Kept for the failure path only: a completed turn reports its
+                // own text, so this tail is read when the stream dies.
+                completed.streamedText = (
+                  completed.streamedText + event.text
+                ).slice(-PARTIAL_TEXT_TAIL_MAX);
+              }
               return;
             case 'phase':
             case 'cursor':
@@ -380,7 +409,7 @@ export const modelInvokerLayer: Layer.Layer<
       trace: AttemptTrace,
       started: number,
       streamed: Exit.Exit<void, unknown>,
-      completed: { value: TurnResult | null },
+      completed: AttemptOutcome,
     ): Effect.fn.Return<InvocationResponse, AttemptFailed | InvokeError> {
       if (Exit.isFailure(streamed)) {
         trace.thinking.finalize(undefined);
@@ -396,7 +425,7 @@ export const modelInvokerLayer: Layer.Layer<
         logRetryLifecycle(operationId, 'attempt_failed', bound, {
           attempt: invocation.attempt,
         });
-        return yield* failAttempt(cause, state, bound);
+        return yield* failAttempt(cause, state, bound, completed.streamedText);
       }
       const responseTimeMs = Date.now() - started;
       const turn = completed.value;
@@ -410,6 +439,7 @@ export const modelInvokerLayer: Layer.Layer<
           }),
           state,
           bound,
+          completed.streamedText,
         );
       }
       const text = turnText(turn);
@@ -475,7 +505,7 @@ export const modelInvokerLayer: Layer.Layer<
       bound: BoundModel,
       stateRef: Ref.Ref<RunState>,
       onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
-      completed: { value: TurnResult | null },
+      completed: AttemptOutcome,
     ): Effect.fn.Return<void, ModelError | InvokeError> {
       const background = bound.model.background;
       if (background === undefined) {
@@ -673,7 +703,7 @@ export const modelInvokerLayer: Layer.Layer<
       const trace = openTrace();
       const stateRef = yield* Ref.make(state);
       const started = Date.now();
-      const completed: { value: TurnResult | null } = { value: null };
+      const completed: AttemptOutcome = { value: null, streamedText: '' };
       const onEvent = eventSink(invocation, stateRef, trace, completed);
       const streamed = yield* Effect.exit(
         resolved.mode === 'foreground'
@@ -736,7 +766,7 @@ export const modelInvokerLayer: Layer.Layer<
         const trace = openTrace();
         const stateRef = yield* Ref.make(initial);
         const started = Date.now();
-        const completed: { value: TurnResult | null } = { value: null };
+        const completed: AttemptOutcome = { value: null, streamedText: '' };
         const streamed = yield* Effect.exit(
           Stream.runForEach(
             background.observe(accepted.operation, {

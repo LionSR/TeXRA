@@ -195,11 +195,27 @@ export async function resolveSubscriptionCredential(
       return null;
     }
     const coordinator = codexCoordinator();
+    let session: { accessToken: string; accountId: string | null };
+    try {
+      session = {
+        accessToken: await coordinator.getFreshAccessToken(),
+        accountId: (await coordinator.getAccountId()) ?? null,
+      };
+    } catch (error) {
+      // Same conversion as the routability check above: a refresh that fails
+      // must reach the user with the "sign in again, or turn off the
+      // preference" instruction, not as a raw auth error.
+      throw error instanceof CodexAuthError
+        ? new AgentError(formatCodexAuthUnavailableMessage(error), {
+            cause: error,
+          })
+        : error;
+    }
     return {
       credential: {
         route: 'chatgpt-subscription',
-        accessToken: await coordinator.getFreshAccessToken(),
-        accountId: (await coordinator.getAccountId()) ?? null,
+        accessToken: session.accessToken,
+        accountId: session.accountId,
         requestedModel: codexBackendModelId(config),
         endpoint: CODEX_BACKEND_BASE_URL,
         provider,
@@ -294,6 +310,29 @@ export async function resolveRouteCredential(
       endpoint.usageRoute ??
       (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
   };
+}
+
+/**
+ * The config a binding sends on the wire under the user's "prefer short model
+ * names" setting: the unpinned `shortName` in place of the date-pinned
+ * `fullName`, for gateways that accept only the unpinned identifier. Applied
+ * to the bound config, not only to the route decision, so the request carries
+ * the identifier the preference promises.
+ */
+export function withShortModelName(
+  config: ModelConfig,
+  globalState: StateStore,
+): ModelConfig {
+  const resolved = applyShortModelNamePreference(
+    config,
+    getPreferShortModelNames(globalState),
+  );
+  if (resolved !== config) {
+    log.debug(
+      `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
+    );
+  }
+  return resolved;
 }
 
 function applyShortModelNamePreference(

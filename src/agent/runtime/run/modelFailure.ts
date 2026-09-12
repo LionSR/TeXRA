@@ -50,10 +50,14 @@ function isPackageContextOverflow(error: ModelError): boolean {
  * bound to: SuperGrok and Kimi Code share their API-key host, so the bound
  * route is the only signal that separates a subscription quota failure from a
  * key rate limit, and the subscription detectors read it back off the error.
+ * `partialText` is the tail of the text the attempt had already streamed: the
+ * one producer of the field the retry surface shows, now that the loop rather
+ * than a provider handler is what watches the stream.
  */
 export function classifyModelFailure(
   cause: unknown,
   usageRoute?: UsageRoute,
+  partialText?: string,
 ): ModelFailure {
   const packageError = cause instanceof ModelError ? cause : null;
   const error =
@@ -78,6 +82,7 @@ export function classifyModelFailure(
     formatted.requestId === undefined
       ? { requestId: packageError.requestId }
       : {}),
+    ...(partialText !== undefined && partialText !== '' ? { partialText } : {}),
   };
   // Seed the runtime's error cache so every later reader (the run lifecycle's
   // terminal classification included) recovers this same shape.

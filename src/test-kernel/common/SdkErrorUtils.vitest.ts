@@ -720,21 +720,6 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     provider: 'anthropic',
     classification: { kind: 'upstream-credit' },
     requestId: 'req_abc123',
-    streamDiagnostics: {
-      thinkingChars: 100,
-      textChars: 200,
-      toolInputChars: 0,
-      blockTypesSeen: ['text', 'thinking'],
-      eventsProcessed: 15,
-      lastEventType: 'content_block_stop',
-      elapsedSecs: 2.5,
-      secsSinceLastEvent: 0.1,
-      finalized: false,
-      messageStartReceived: true,
-      messageStopReceived: false,
-      stopReason: null,
-      anthropicMessageId: 'msg_01ABC',
-    },
     partialText: 'Here is the analysis of the',
   };
 

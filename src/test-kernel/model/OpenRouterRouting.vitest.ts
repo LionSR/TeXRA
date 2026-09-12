@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { Cause, Effect, Exit } from 'effect';
+import { MODEL_CONFIGS } from 'llm-zoo';
+import { beforeEach, describe, expect, it } from 'vitest';
 
+import { bindModel } from '@agent/runtime/run/modelBinding';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   isOpenRouterRoutingUnsupported,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
+import { AgentCategory } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
 describe('shouldRouteModelThroughOpenRouter', () => {
   it.each([
@@ -61,5 +68,62 @@ describe('isOpenRouterRoutingUnsupported', () => {
         true,
       ),
     ).toBe(true);
+  });
+});
+
+describe('bindModel', () => {
+  setupPlatform({
+    globalState: {
+      [GlobalStateKey.USE_OPENROUTER]: true,
+      [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: true,
+    },
+    secrets: { [apiKeySecretName('openai')]: 'openai-key' },
+  });
+
+  beforeEach(() => {
+    invalidateApiKeyCache();
+  });
+
+  const bind = (config: (typeof MODEL_CONFIGS)[string]) =>
+    Effect.runPromise(
+      Effect.exit(
+        Effect.scoped(
+          bindModel({
+            config,
+            stores: hostStores(),
+            compatibilityKey: null,
+            agentCategory: AgentCategory.Workflow,
+            temperature: 0,
+            inScope: (operation) => operation(),
+          }),
+        ),
+      ),
+    );
+
+  it('rejects a reasoning-mode model the live OpenRouter choice would discard', async () => {
+    // The route the picker already reports as unavailable: a saved agent or a
+    // CLI config must fail with the instruction, not run without the mode.
+    const exit = await bind(MODEL_CONFIGS['gpt56pro']);
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (!Exit.isFailure(exit)) return;
+    const message = String(Cause.squash(exit.cause));
+    expect(message).toContain('requires reasoning mode pro');
+    expect(message).toContain('Disable OpenRouter');
+  });
+
+  it('sends the short model name when the preference is on', async () => {
+    await hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+
+    const exit = await bind(MODEL_CONFIGS['gpt4o']);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(MODEL_CONFIGS['gpt4o'].fullName).not.toBe(
+      MODEL_CONFIGS['gpt4o'].shortName,
+    );
+    expect(exit.value.origin.requestedModel).toBe(
+      MODEL_CONFIGS['gpt4o'].shortName,
+    );
   });
 });

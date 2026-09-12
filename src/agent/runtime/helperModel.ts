@@ -102,7 +102,12 @@ export const helperCompletion = Effect.fn('helperCompletion')(function* (
     Effect.retry({
       schedule: HELPER_RETRY,
       times: HELPER_RETRIES,
-      while: (error) => classifyModelFailure(error).autoRetryable,
+      // Stamped with the bound route, as the loop stamps its own attempts:
+      // SuperGrok and Kimi Code share their API-key host, so without it an
+      // exhausted plan's 429 reads as an ordinary rate limit and the helper
+      // repeats a request that cannot succeed.
+      while: (error) =>
+        classifyModelFailure(error, bound.usageRoute).autoRetryable,
     }),
   );
   // The assistant text of the turn: message parts, in order. Derived here

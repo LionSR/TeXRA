@@ -546,7 +546,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
               kind,
               message,
               userRetryable: providerErrorInfo.userRetryable,
-              streamDiagnostics: providerErrorInfo.streamDiagnostics,
               partialText: providerErrorInfo.partialText,
             }
           : {

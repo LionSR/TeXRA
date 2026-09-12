@@ -17,10 +17,17 @@ import {
   useChinaRegion,
 } from '@utils/config/providerConfig';
 
+/**
+ * OpenAI's own endpoint. Named because a route that lands on it is the one
+ * the Responses WebSocket transport is known to serve: a per-model or
+ * dashboard endpoint may not speak it at all.
+ */
+export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
+
 /** Provider default base URLs; region-dependent ones resolve at read time. */
 const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   [ModelProvider.GOOGLE]: 'https://generativelanguage.googleapis.com',
-  [ModelProvider.OPENAI]: 'https://api.openai.com/v1',
+  [ModelProvider.OPENAI]: OPENAI_DEFAULT_ENDPOINT,
   [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com',
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',

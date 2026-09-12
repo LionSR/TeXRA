@@ -188,8 +188,10 @@ export async function stopRecordingAndTranscribe(
     }
 
     // The transcription endpoint is an OpenAI SDK operation the llm package
-    // does not model, so the client is built here under the same OpenAI
-    // route and credential the run loop binds gpt-4o under.
+    // does not model, so the client is built here. The direct OpenAI route is
+    // deliberate and does not follow the global OpenRouter preference the run
+    // loop applies to gpt-4o: `gpt-4o-transcribe` is an OpenAI-only endpoint
+    // model with no OpenRouter route, so a proxied client could only fail.
     const credential = await resolveRouteCredential(
       MODEL_CONFIGS['gpt4o'],
       false,
