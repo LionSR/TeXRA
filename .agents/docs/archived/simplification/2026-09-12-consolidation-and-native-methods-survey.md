@@ -8,14 +8,20 @@ one Effect leaf per memory file operation; delete the duplicated tryPromise
 wrappers`, #12317). Scheduled routine re-ran the standing question — "find
 > duplicate/similar logic to consolidate, and hand-rolled code that a native
 > method or the standard library already covers" — six days after
-> `2026-09-06-consolidation-and-native-methods-survey.md`. **Verdict: two
-> small, isolated candidates clear the bar and are fixed in this pass; both
-> outside the churning "1.0 clean slate" run-model surface.**
+> `2026-09-06-consolidation-and-native-methods-survey.md`. **Verdict: one
+> small, isolated candidate clears the bar and is fixed in this pass, outside
+> the churning "1.0 clean slate" run-model surface; a second candidate was
+> reverted after review because deduping it costs more than it saves.**
 > `src/tools/memory/memoryUtils.ts`'s `displayToStoragePath` hand-rolled
 > absolute-path containment instead of calling the shared symlink-aware
-> `relativeToRoot` helper, and
-> `supabase/functions/github-app-token-exchange/index.ts` reimplemented the
-> `bearerToken` helper already exported by `supabase/functions/_shared/auth.ts`.
+> `relativeToRoot` helper — fixed. A `bearerToken` helper duplicated in
+> `supabase/functions/github-app-token-exchange/index.ts` looked like a
+> straightforward dedup against `supabase/functions/_shared/auth.ts`'s
+> export, but that shared module also pulls in `@supabase/supabase-js` at
+> module scope for its (unrelated, unused-here) `authenticateJwt` export —
+> importing `bearerToken` from it would have added a full Supabase-client
+> dependency to an OIDC-only, Supabase-free endpoint. Reverted to the local
+> three-line copy; see "Correction" below.
 
 ## 0. Window covered
 
@@ -80,14 +86,18 @@ behavioral gap, not just style: a memory storage root reached through a
 symlink would fail `memoryUtils.ts`'s check while succeeding through
 `pathResolution.ts`'s.
 
-**Duplicate `bearerToken` helper in a Supabase edge function.**
+**Duplicate `bearerToken` helper in a Supabase edge function — proposed,
+then reverted (see "Correction" below).**
 `supabase/functions/_shared/auth.ts:11-14` exports `bearerToken(req)`.
 `supabase/functions/github-app-token-exchange/index.ts:50-53` defined an
-identical local copy, in a file that already imports three other helpers
-from that same `./auth.ts` module (`parseRepositoryClaim`,
-`validateWorkflowIdentity`, `verifyGitHubActionsToken`) — so the shared
-module was already a normal dependency for this file, just not used for
-this one function.
+identical local copy. At first glance this looked like a normal dependency
+already in use: the file imports three other helpers
+(`parseRepositoryClaim`, `validateWorkflowIdentity`,
+`verifyGitHubActionsToken`) from a module named `./auth.ts` — but that
+import is from this directory's own **local** `auth.ts` (GitHub
+OIDC-claim helpers only), a different file from the **shared**
+`supabase/functions/_shared/auth.ts` that exports `bearerToken`. The two
+same-named modules were conflated in the first pass.
 
 ## 3. Fix
 
@@ -99,39 +109,46 @@ this one function.
   `@platform/defaults/nodeWorkspace`. Error message and return value are
   unchanged for every non-symlink case; a symlinked storage root now
   resolves instead of being rejected.
-- `supabase/functions/github-app-token-exchange/index.ts`: the local
-  `bearerToken` function is deleted; the file imports `bearerToken` from
-  `../_shared/auth.ts` (the module that actually exports it — see
-  "Correction" below) alongside its existing imports from the local
-  `./auth.ts`.
+- `supabase/functions/github-app-token-exchange/index.ts`: unchanged from
+  before this pass — the local `bearerToken` stays. See "Correction".
 
-Verified: `npm run typecheck` (all seven workspace/package checks) passes
-clean; `npx eslint` on both touched files reports zero errors (the Supabase
-function is outside the ESLint project's configured scope, so it only
-carries the expected "no matching configuration" notice, unrelated to this
-change); `npx prettier --check` passes on both files; `npx vitest run
-memory` (26 tests, 6 files) passes; `npm run test:pure` (2335 tests) passes;
-`npm run check:dead-code-ratchet` reports no new findings; the full `npm
-test` (6295 tests, 591 files) passes.
+Verified (for the `memoryUtils.ts` fix that shipped): `npm run typecheck`
+(all seven workspace/package checks) passes clean; `npx eslint` reports
+zero errors; `npx prettier --check` passes; `npx vitest run memory` (26
+tests, 6 files) passes; `npm run test:pure` (2335 tests) passes; `npm run
+check:dead-code-ratchet` reports no new findings; the full `npm test`
+(6295 tests, 591 files) passes.
 
 **Correction (PR #12319 review):** the first pushed commit (`c356c80`)
-imported `bearerToken` from `./auth.ts` — the wrong module. This
-`github-app-token-exchange/` directory has its own local `auth.ts` (GitHub
-OIDC-claim helpers only: `verifyGitHubActionsToken`, `parseRepositoryClaim`,
-`validateWorkflowIdentity`), separate from the shared
-`supabase/functions/_shared/auth.ts` that actually exports `bearerToken`.
-None of the checks listed above catch this: Supabase edge functions are
-Deno projects outside the pnpm workspace's `tsc`/ESLint scope, validated
-instead by CI's dedicated `deno check` step, which this session could not
-run locally (no `deno` binary available, and the sandboxed network policy
-blocked fetching one). Both Codex and the repo's own `texra-ai` PR review
-caught the dangling import independently; fixed in commit `df663c1` by
-importing `bearerToken` from `../_shared/auth.ts` instead, matching the
-three other edge functions (`auth-device`, `get-agent-config`,
-`log-usage`) that already import it that way. Lesson for this series: a
-proposed consolidation in a directory with a same-named local module
-(`auth.ts` here) needs the import path double-checked against a same-stack
-type checker, not just visual similarity to the target export.
+imported `bearerToken` from `./auth.ts` — the local module, which doesn't
+export it — a straight-up broken import, caught independently by both
+Codex and the repo's own `texra-ai` PR review. The obvious fix looked like
+pointing the import at the real owner, `../_shared/auth.ts`, and commit
+`df663c1` did that. But CI's `static checks` job then failed `deno check`
+for a different reason: `_shared/auth.ts` imports `@supabase/supabase-js`
+at module scope for its `authenticateJwt` export, so importing anything
+from that module — even just `bearerToken` — pulls the Supabase client SDK
+into `deno check`'s dependency resolution, and this function's
+`deno.json` never declared it (unlike `auth-device`, `get-agent-config`,
+and `log-usage`, which already need `@supabase/supabase-js` for their own
+`authenticateJwt` calls and declare it accordingly). Adding that
+declaration would have "worked", but it means giving a Supabase-free,
+GitHub-OIDC-only endpoint a transitive dependency on a full Supabase
+client just to reuse a three-line header parse — a worse trade than the
+duplication it removes for a function that is deliberately minimal
+(`deno.json` only lists `@octokit/auth-app` and `jose` today). Reverted
+instead: the local `bearerToken` copy stays, now with a comment recording
+why it isn't deduped against the shared one. Net result for this
+candidate: no code change, caught before merge.
+
+Lessons for this series: (1) a same-named local module in the target
+directory (`auth.ts` here, colliding with `_shared/auth.ts`) needs the
+import path checked against a same-stack compiler, not visual similarity
+to the export name; (2) "the export already exists in a module we import
+from" is not sufficient evidence for a safe dedup when the target module
+has other exports with their own dependencies — check what else the
+target module pulls in at module scope before proposing the merge,
+especially for a deliberately dependency-light edge function.
 
 ## 4. What was checked and ruled out
 
@@ -209,10 +226,17 @@ initializeBundledPrompts` (#12297) just touched — deferred to a
 
 Six days after the 2026-09-06 entry, and against a window dominated by the
 large in-flight run-ledger/run-loop rewrite, the standing sweep found two
-genuine, isolated, low-risk consolidation candidates outside that churning
-surface — both fixed and verified in this pass (typecheck, lint, format,
-targeted tests, the full suite, and the dead-code ratchet all clean). Three
-further candidates (the webview listener-set duplication, the prompt YAML
+candidates outside that churning surface. One — `memoryUtils.ts`'s path
+containment — was genuine, isolated, and low-risk, and is fixed and
+verified in this pass (typecheck, lint, format, targeted tests, the full
+suite, and the dead-code ratchet all clean). The other — the Supabase
+`bearerToken` dedup — looked equally safe but, once PR review forced a
+same-stack `deno check` against the actual dependency graph, turned out to
+trade a three-line duplication for a real cost (an unwanted transitive
+`@supabase/supabase-js` dependency on a deliberately Supabase-free
+function); it was reverted rather than shipped, which is the correct
+outcome for a consolidation series that only wants net wins. Three further
+candidates (the webview listener-set duplication, the prompt YAML
 macro/style-block duplication) are real but were deliberately left for a
 follow-up pass because they sit inside actively-changing surfaces this
 window is still rewriting; two more (the flag-parser inconsistency, the
