@@ -20,7 +20,6 @@ import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
-  type CopilotRouteOverride,
 } from '@model/copilotRouting';
 import {
   codexBackendModelId,
@@ -35,7 +34,11 @@ import {
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { ModelCompatibilityKey, UsageRoute } from '@shared/schemas';
+import type {
+  DeclinableUsageRoute,
+  ModelCompatibilityKey,
+  UsageRoute,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -156,11 +159,14 @@ export function routeBearer(credential: RouteCredential): string {
  * the preference is a preference (the model list already shows which route
  * serves the model), while a signed-in session that fails to refresh is a
  * failure and surfaces as one. The returned config is the route's own: the
- * subscription's context ceiling and its zero per-token price.
+ * subscription's context ceiling and its zero per-token price. A run that
+ * declined this route (a retry the user answered with their own API key)
+ * never reaches it, whatever the stored preference says.
  */
 export async function resolveSubscriptionCredential(
   config: ModelConfig,
   useOpenRouter: boolean,
+  declinedRoutes: readonly DeclinableUsageRoute[] = [],
 ): Promise<{
   readonly credential: SubscriptionRouteCredential;
   readonly config: ModelConfig;
@@ -168,6 +174,7 @@ export async function resolveSubscriptionCredential(
   const provider = resolveDirectModelApiKeyProvider(config);
   if (provider === undefined) return null;
   if (config.provider === ModelProvider.OPENAI) {
+    if (declinedRoutes.includes('chatgpt-subscription')) return null;
     const profile = resolveCodexSubscriptionCapabilities(config, useOpenRouter);
     if (profile === null) return null;
     let routable: boolean;
@@ -222,6 +229,7 @@ export async function resolveSubscriptionCredential(
     };
   }
   if (config.provider === ModelProvider.XAI) {
+    if (declinedRoutes.includes('xai-subscription')) return null;
     const profile = resolveXaiSubscriptionCapabilities(config, useOpenRouter);
     if (profile === null) return null;
     if (!(await isXaiSignedIn())) {
@@ -272,6 +280,7 @@ export async function resolveRouteCredential(
   config: ModelConfig,
   useOpenRouter: boolean,
   secrets: PlatformSecrets,
+  declinedRoutes?: readonly DeclinableUsageRoute[],
 ): Promise<ApiKeyRouteCredential> {
   const provider = useOpenRouter
     ? 'openRouter'
@@ -292,7 +301,7 @@ export async function resolveRouteCredential(
     attachMissingApiKeyError(error);
     throw error;
   }
-  const endpoint = resolveRouteEndpoint(config, useOpenRouter);
+  const endpoint = resolveRouteEndpoint(config, useOpenRouter, declinedRoutes);
   return {
     apiKey,
     endpoint: endpoint.baseUrl,
@@ -345,7 +354,7 @@ export function resolveModelCompatibilityKey(
   originalConfig: ModelConfig,
   globalState: StateStore,
   useOpenRouter = getUseOpenRouter(),
-  copilotRouteOverride?: CopilotRouteOverride,
+  ownApiKeyFallback = false,
 ): ModelCompatibilityKey | undefined {
   if (shouldUseInternalValidationModel()) {
     return 'Validation';
@@ -358,7 +367,7 @@ export function resolveModelCompatibilityKey(
   // the editor cannot serve it right now, report the route state instead of
   // silently consuming a provider key or subscription (#9635).
   if (
-    copilotRouteOverride !== 'direct' &&
+    !ownApiKeyFallback &&
     prefersCopilotRoute(originalConfig.name, globalState)
   ) {
     const unavailableReason = copilotRouteUnavailableReason(

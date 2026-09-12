@@ -24,7 +24,7 @@ const WrappedExecuteInputSchema = z.object({
   runId: RunIdSchema.optional(),
   preferHelperModel: z.boolean().optional(),
   modelCompatibilityKey: ModelCompatibilityKeySchema.nullish(),
-  copilotRouteOverride: z.literal('direct').optional(),
+  ownApiKeyFallback: z.boolean().optional(),
 });
 
 /**
@@ -59,7 +59,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         // keeps the user's selected model.
         preferHelperModel: wrapped?.preferHelperModel ?? false,
         modelCompatibilityKey: wrapped?.modelCompatibilityKey,
-        copilotRouteOverride: wrapped?.copilotRouteOverride,
+        ownApiKeyFallback: wrapped?.ownApiKeyFallback,
         onRun,
         onRunResolved: presentLaunchedProgressRun,
       }),

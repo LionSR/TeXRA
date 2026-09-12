@@ -21,6 +21,7 @@
 import { type ModelConfig } from 'llm-zoo';
 
 import type { PlatformSecrets } from '@platform/secrets';
+import type { DeclinableUsageRoute } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -85,16 +86,21 @@ export function isKimiCodeRoute(
  * used to duplicate this assembly inline.
  *
  * `secrets` is the process secret store the caller holds (the `Secrets`
- * service, or the store a host root threaded down).
+ * service, or the store a host root threaded down). `declinedRoutes` are the
+ * routes the asking run declines: a declined coding subscription reads as
+ * "prefer off" for that run without touching the user's switch.
  */
 export async function resolveKimiCodeRoutingFacts(
   secrets: PlatformSecrets,
   useOpenRouter: boolean,
+  declinedRoutes?: readonly DeclinableUsageRoute[],
 ): Promise<KimiCodeRoutingFacts> {
   return {
     useOpenRouter,
     keySet: await hasUsableApiKey(secrets, 'kimiCode'),
-    preferKimiCode: getPreferKimiCode(),
+    preferKimiCode:
+      getPreferKimiCode() &&
+      !declinedRoutes?.includes('kimi-code-subscription'),
   };
 }
 

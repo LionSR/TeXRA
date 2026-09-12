@@ -207,6 +207,7 @@ const freshState = (): RunState => ({
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
   messages: [],
   continuation: null,
   openAttempt: null,
@@ -261,6 +262,7 @@ function agentRun(
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
+    declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(

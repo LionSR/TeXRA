@@ -39,7 +39,7 @@ export interface RunAgentOptions extends Pick<
   | 'runtimeUnavailableTools'
   | 'tools'
   | 'modelCompatibilityKey'
-  | 'copilotRouteOverride'
+  | 'ownApiKeyFallback'
   | 'onRun'
   | 'onRunResolved'
   | 'onIdle'

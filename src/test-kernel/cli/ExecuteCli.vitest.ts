@@ -267,6 +267,7 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       modelCompatibilityKey: null,
       lastError: null,
       pendingRetry: null,
+      declinedRoutes: [],
     },
     references: { pendingIntents: [], pendingResponse: null },
     state: {

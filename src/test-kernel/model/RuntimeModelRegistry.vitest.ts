@@ -160,17 +160,14 @@ describe('runtime model registry', () => {
     expect(getRuntimeModelDirectFallback('gemini31p', false)).toEqual({
       model: 'gemini31p',
       provider: 'google',
-      chatGptSubscriptionEligible: false,
     });
     expect(getRuntimeModelDirectFallback('gemini31p', true)).toEqual({
       model: 'gemini31p',
       provider: 'openRouter',
-      chatGptSubscriptionEligible: false,
     });
     expect(getRuntimeModelDirectFallback('gpt56', false)).toEqual({
       model: 'gpt56',
       provider: 'openai',
-      chatGptSubscriptionEligible: true,
     });
   });
 

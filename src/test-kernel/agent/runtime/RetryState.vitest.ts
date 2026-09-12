@@ -272,6 +272,7 @@ function agentRun(
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
+    declinedRoutes: [],
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
@@ -299,6 +300,7 @@ const freshState = (): RunState => ({
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
   messages: [],
   continuation: null,
   openAttempt: null,
@@ -751,7 +753,6 @@ describe('ModelInvoker retry', () => {
           runId,
           operation: 'Model request',
           model: 'gpt54',
-          kimiCodeRoutedOnFailure: false,
         }),
       });
       // The permit is retired by the response it admitted: a resumed run
@@ -765,6 +766,43 @@ describe('ModelInvoker retry', () => {
       requests.detach();
       session.dispose();
     }),
+  );
+
+  it.effect(
+    'declines the exhausted subscription route for the run, not in settings',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        );
+        const session = sessionWithInteractions(undefined);
+        const requests = autoDecideRequests(session, () => ({
+          action: 'retry',
+          credentials: 'personal',
+        }));
+        const stub = stubModel([
+          { fail: httpError('subscription quota exhausted', 429) },
+          { ok: completedTurn('recovered') },
+        ]);
+
+        const kit = yield* openRun(session, stub.model, {
+          usageRoute: 'chatgpt-subscription',
+        });
+        yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+        const outcome = yield* invokeOn(kit);
+
+        expect(outcome.kind).toBe('response');
+        // The route the failed attempt billed is declined on this run's own
+        // ledger, so a resume rebinds the same way and a concurrent run keeps
+        // the subscription the user still prefers.
+        if (outcome.kind === 'response') {
+          expect(outcome.state.declinedRoutes).toStrictEqual([
+            'chatgpt-subscription',
+          ]);
+        }
+        requests.detach();
+        session.dispose();
+      }),
   );
 
   // A denial does not retry and — crucially — is NOT a user cancel, so the

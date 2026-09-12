@@ -13,7 +13,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
   type ModelCompatibilityKey,
@@ -455,8 +454,9 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelCompatibilityKey?: ModelCompatibilityKey | null;
-  /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
-  copilotRouteOverride?: CopilotRouteOverride;
+  /** This launch is the user's own-API-key fallback for a quota-exhausted
+   *  retry: it declines the Copilot route and every subscription route. */
+  ownApiKeyFallback?: boolean;
 }
 
 // A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
@@ -515,7 +515,7 @@ export function executeAgent(
       onRunResolved: options.onRunResolved,
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
-      copilotRouteOverride: options.copilotRouteOverride,
+      ownApiKeyFallback: options.ownApiKeyFallback,
       signal: options.launchSignal,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,

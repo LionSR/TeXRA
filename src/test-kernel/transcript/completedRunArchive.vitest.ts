@@ -529,6 +529,7 @@ describe('completedRunArchive facade', () => {
                 modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,
                 pendingRetry: null,
+                declinedRoutes: [],
               },
               references: { pendingIntents: [], pendingResponse: null },
               state: { shouldSkipCycle: false, stateSlices: null },

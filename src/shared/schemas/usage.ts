@@ -12,6 +12,18 @@ export const UsageRouteSchema = z.enum([
 
 export type UsageRoute = z.infer<typeof UsageRouteSchema>;
 
+/**
+ * The subscription routes a run can decline. A retry the user answered with
+ * their own API key declines the route that ran out of quota, for that run
+ * only: the choice is a fact of the run, not of the user's settings, so no
+ * preference is rewritten and two concurrent runs cannot cancel each other's
+ * fallback. `api-key` is excluded because it is the route a decline falls
+ * back to.
+ */
+export const DeclinableUsageRouteSchema = UsageRouteSchema.exclude(['api-key']);
+
+export type DeclinableUsageRoute = z.infer<typeof DeclinableUsageRouteSchema>;
+
 export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,

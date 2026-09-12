@@ -85,7 +85,9 @@ export interface HostRunActionPorts {
     request: RunRequest,
     options?: {
       preferHelperModel?: boolean;
-      copilotRouteOverride?: 'direct';
+      /** This launch replaces a quota-exhausted retry the user answered
+       *  with their own API key. */
+      ownApiKeyFallback?: boolean;
       onRun?: () => void;
     },
   ): Promise<void>;
@@ -342,35 +344,26 @@ export const createHostRunActions = (
           return;
         }
         const model = fallback.model;
-        const started = yield* apiKeyRetry.runCopilotFallbackWithRouting(
-          {
-            stream: runId,
-            requestId,
-            provider: fallback.provider,
-            model,
-            exhaustionReason,
-            chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
-          },
-          (copilotRouteOverride) =>
-            Effect.suspend(() => {
-              if (!isRetryPending(runId, requestId)) {
-                return Effect.succeed(false);
-              }
-              // Start acknowledges ownership of the replacement run. Settlement
-              // without an onRun callback means no replacement was launched.
-              return hostPort(
-                () =>
-                  new Promise<boolean>((resolve, reject) => {
-                    void ports
-                      .runAgentRequest(
-                        { config: { ...config, model } },
-                        { copilotRouteOverride, onRun: () => resolve(true) },
-                      )
-                      .then(() => resolve(false), reject);
-                  }),
-              );
-            }),
-        );
+        // The replacement run carries the user's choice itself: it declines
+        // the Copilot route and every subscription route for its own
+        // bindings. No standing preference is rewritten, so a concurrent run
+        // keeps the routes its own user chose.
+        const started = yield* Effect.suspend(() => {
+          if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
+          // Start acknowledges ownership of the replacement run. Settlement
+          // without an onRun callback means no replacement was launched.
+          return hostPort(
+            () =>
+              new Promise<boolean>((resolve, reject) => {
+                void ports
+                  .runAgentRequest(
+                    { config: { ...config, model } },
+                    { ownApiKeyFallback: true, onRun: () => resolve(true) },
+                  )
+                  .then(() => resolve(false), reject);
+              }),
+          );
+        });
         if (!started) return;
         yield* settleRetry(runId, requestId, { action: 'cancel' });
       },
@@ -563,7 +556,6 @@ export const createHostRunActions = (
           model: request.model ?? undefined,
           provider,
           exhaustionReason: exhaustionReasonOf(request),
-          kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure ?? undefined,
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {

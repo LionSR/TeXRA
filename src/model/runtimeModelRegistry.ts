@@ -28,7 +28,6 @@ export interface CopilotModelRoute {
 interface RuntimeModelDirectFallback {
   readonly model: string;
   readonly provider: ApiProvider;
-  readonly chatGptSubscriptionEligible: boolean;
 }
 
 /**
@@ -241,11 +240,5 @@ export function getRuntimeModelDirectFallback(
   const config = MODEL_CONFIGS[model];
   if (!config) return undefined;
   const provider = resolveModelApiKeyProvider(config, useOpenRouter);
-  return provider
-    ? {
-        model,
-        provider,
-        chatGptSubscriptionEligible: Boolean(config.codexSubscription),
-      }
-    : undefined;
+  return provider ? { model, provider } : undefined;
 }

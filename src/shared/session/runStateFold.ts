@@ -181,6 +181,9 @@ export type RunState = {
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   readonly lastError: RetryErrorInfo | null;
   readonly pendingRetry: SnapshotRuntime['pendingRetry'];
+  /** Subscription routes this run declines: the retries the user answered
+   *  with their own API key, plus the launch's seed. */
+  readonly declinedRoutes: SnapshotRuntime['declinedRoutes'];
   /** Canonical provider history, in order. The pending response's assistant
    *  message enters only with its delivering `append`. */
   readonly messages: readonly Message[];
@@ -289,6 +292,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   modelCompatibilityKey: null,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
   messages: [],
   continuation: null,
   openAttempt: null,

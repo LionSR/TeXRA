@@ -65,6 +65,7 @@ const SNAPSHOT_RUNTIME = {
   modelCompatibilityKey: null,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
 };
 const SNAPSHOT_REFERENCES = { pendingIntents: [], pendingResponse: null };
 

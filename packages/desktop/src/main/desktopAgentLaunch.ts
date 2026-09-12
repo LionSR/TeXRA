@@ -18,7 +18,7 @@ interface DesktopAgentLaunchContext {
 
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
-  | 'copilotRouteOverride'
+  | 'ownApiKeyFallback'
   | 'modelCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'
@@ -40,7 +40,7 @@ export async function launchDesktopAgent(
       session: context.session,
       runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
       modelCompatibilityKey: options.modelCompatibilityKey,
-      copilotRouteOverride: options.copilotRouteOverride,
+      ownApiKeyFallback: options.ownApiKeyFallback,
       ...(options.preferHelperModel && { preferHelperModel: true }),
       onRun: options.onRun,
       onRunResolved: options.onRunResolved,

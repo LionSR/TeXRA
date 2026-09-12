@@ -56,6 +56,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
   toRetryErrorInfo,
+  type DeclinableUsageRoute,
   type InvocationRef,
   type NormalizedUsage,
   type ProviderError,
@@ -299,7 +300,9 @@ export const modelInvokerLayer: Layer.Layer<
      *  written family state, references from the folded rows. */
     const retrySnapshot = (
       state: RunState,
-      runtime: Pick<SnapshotRuntime, 'pendingRetry' | 'lastError'>,
+      runtime: Partial<
+        Pick<SnapshotRuntime, 'pendingRetry' | 'lastError' | 'declinedRoutes'>
+      >,
     ): RunLedgerDraft => runtimeSnapshotRow(runId, state, runtime);
 
     /**
@@ -889,8 +892,32 @@ export const modelInvokerLayer: Layer.Layer<
         }),
       );
 
+    /**
+     * The routes the run declines after this decision. Answering a retry
+     * with the user's own API key turns this run away from the subscription
+     * route the failed attempt billed — for this run only, on its own
+     * ledger, so a concurrent run's fallback is untouched and the user's
+     * stored preference stays theirs to change in settings.
+     */
+    const declinedAfter = (
+      state: RunState,
+      selection: RetryCredentials,
+      failed: BoundModel,
+    ): readonly DeclinableUsageRoute[] => {
+      if (selection !== 'personal' || failed.usageRoute === 'api-key') {
+        return state.declinedRoutes;
+      }
+      return state.declinedRoutes.includes(failed.usageRoute)
+        ? state.declinedRoutes
+        : [...state.declinedRoutes, failed.usageRoute];
+    };
+
     /** Rebuild the model binding a retry runs on. */
-    const rebind = (selection: RetryCredentials, failed: BoundModel) =>
+    const rebind = (
+      selection: RetryCredentials,
+      failed: BoundModel,
+      declinedRoutes: readonly DeclinableUsageRoute[],
+    ) =>
       SynchronizedRef.updateEffect(run.model, (current) =>
         Effect.gen(function* () {
           // A switch may have landed while the panel waited; never undo it.
@@ -909,6 +936,7 @@ export const modelInvokerLayer: Layer.Layer<
             config,
             stores: run.stores,
             compatibilityKey: failed.compatibilityKey,
+            declinedRoutes,
             agentCategory: run.config.agentCategory,
             temperature: run.setting.temperature,
             inScope: run.inScope,
@@ -949,7 +977,6 @@ export const modelInvokerLayer: Layer.Layer<
         model: failed.modelId,
         errorMessage: info.message,
         errorDetails: info,
-        kimiCodeRoutedOnFailure: failed.routedOnKimiCode,
       };
       const pendingRetry = (substate: 'waiting' | 'authorized' | 'started') =>
         ({
@@ -1032,10 +1059,14 @@ export const modelInvokerLayer: Layer.Layer<
       });
       if (decision.action === 'retry') {
         logger.debug('Manual retry triggered');
+        const selection = decision.credentials ?? 'configured';
+        const declinedRoutes = declinedAfter(state, selection, failed);
         // Always rebuild the binding on a manual retry: the user may have set
-        // a new key or toggled a route preference while the panel waited. A
-        // rebind that fails leaves the run on the binding it has, loudly.
-        yield* rebind(decision.credentials ?? 'configured', failed).pipe(
+        // a new key or toggled a route preference while the panel waited, and
+        // a personal-credentials answer declines the exhausted route for the
+        // rest of this run. A rebind that fails leaves the run on the binding
+        // it has, loudly.
+        yield* rebind(selection, failed, declinedRoutes).pipe(
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.warn('Failed to refresh the model binding before retry', {
@@ -1049,6 +1080,7 @@ export const modelInvokerLayer: Layer.Layer<
             retrySnapshot(state, {
               pendingRetry: pendingRetry('authorized'),
               lastError: info,
+              declinedRoutes,
             }),
           ]),
         );

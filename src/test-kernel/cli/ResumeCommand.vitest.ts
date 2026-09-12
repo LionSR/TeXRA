@@ -107,6 +107,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     modelCompatibilityKey: null,
     lastError: null,
     pendingRetry: null,
+    declinedRoutes: [],
   },
   references: { pendingIntents: [], pendingResponse: null },
   state: { shouldSkipCycle: false, stateSlices: null },

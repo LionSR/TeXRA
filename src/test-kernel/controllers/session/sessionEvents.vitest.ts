@@ -2019,6 +2019,7 @@ describe('RunLedger', () => {
         modelCompatibilityKey: null,
         lastError: null,
         pendingRetry: null,
+        declinedRoutes: [],
       },
       references,
       state: { shouldSkipCycle: false, stateSlices: null },

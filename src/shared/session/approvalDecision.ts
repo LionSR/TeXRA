@@ -154,7 +154,6 @@ export function approvalDecisionArms(
             model: data.model,
             provider: data.errorDetails?.provider ?? null,
             exhaustionReason: getExhaustionReason(data.errorDetails),
-            kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure ?? null,
           },
         },
       ];

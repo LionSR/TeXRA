@@ -253,6 +253,7 @@ function agentRunTestLayer(init: HarnessInit) {
         structured: { value: undefined },
         model,
         scope,
+        declinedRoutes: [],
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),

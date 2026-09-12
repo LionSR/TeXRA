@@ -44,7 +44,6 @@ import {
   type VscodeLanguageModelConfiguration,
 } from '@llm/turn';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -58,6 +57,7 @@ import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategory,
+  type DeclinableUsageRoute,
   type ModelCompatibilityKey,
   type UsageRoute,
 } from '@shared/schemas';
@@ -152,7 +152,18 @@ export interface BindModelInput {
   readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
   readonly compatibilityKey?: ModelCompatibilityKey | null;
-  readonly copilotRouteOverride?: CopilotRouteOverride;
+  /**
+   * This launch is the user's own-API-key fallback: they answered a quota
+   * prompt with "use my own API key", so the editor's Copilot route is not
+   * taken for it either. Seeds {@link BindModelInput.declinedRoutes}.
+   */
+  readonly ownApiKeyFallback?: boolean;
+  /**
+   * Subscription routes this run declines. Run-scoped: the route the user
+   * turned away from on a retry, carried on the run's ledger state instead
+   * of rewritten into their stored preference.
+   */
+  readonly declinedRoutes?: readonly DeclinableUsageRoute[];
   readonly agentCategory: AgentCategory;
   /** The route default's temperature; the request may override per turn. */
   readonly temperature: number;
@@ -778,7 +789,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
           requested,
           input.stores.globalState,
           useOpenRouter,
-          input.copilotRouteOverride,
+          input.ownApiKeyFallback,
         ),
       catch: ensureError,
     }));
@@ -820,6 +831,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
             await resolveKimiCodeRoutingFacts(
               input.stores.secrets,
               onOpenRouter,
+              input.declinedRoutes,
             ),
           ),
         ),
@@ -865,7 +877,11 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ? yield* Effect.tryPromise({
           try: () =>
             input.inScope(() =>
-              resolveSubscriptionCredential(config, selectedOpenRouter),
+              resolveSubscriptionCredential(
+                config,
+                selectedOpenRouter,
+                input.declinedRoutes,
+              ),
             ),
           catch: ensureError,
         })
@@ -878,7 +894,12 @@ export const bindModel = Effect.fn('bindModel')(function* (
     credential = yield* Effect.tryPromise({
       try: () =>
         input.inScope(() =>
-          resolveRouteCredential(config, onOpenRouter, input.stores.secrets),
+          resolveRouteCredential(
+            config,
+            onOpenRouter,
+            input.stores.secrets,
+            input.declinedRoutes,
+          ),
         ),
       catch: ensureError,
     });
