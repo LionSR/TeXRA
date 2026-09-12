@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Layer, type Effect } from 'effect';
+import { Context, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
@@ -171,25 +171,6 @@ export interface FileSystemProvider {
 export interface StorageProvider {
   /** Cross-workspace global storage root path. */
   getGlobalStoragePath(): string;
-}
-
-// ---------------------------------------------------------------------------
-// Cross-process file locks
-// ---------------------------------------------------------------------------
-
-/**
- * Serialize work by a canonical absolute path shared by every host process.
- *
- * The port is the Effect combinator itself: `withFileLock(path)(self)` holds
- * the lock around `self` and releases it on success, failure, and
- * interruption. Lock acquisition failures reach the caller as `Error` (the
- * implementation's own instances — `proper-lockfile`'s carry `code`
- * ELOCKED / ECOMPROMISED, which callers match on) added to `self`'s own `E`.
- */
-export interface FileLockProvider {
-  withFileLock(
-    path: string,
-  ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E | Error, R>;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Clock, Effect, Result, Schedule } from 'effect';
+import { Clock, Effect, Result } from 'effect';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
@@ -19,20 +19,6 @@ import { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 const SYNC_MARKER_FILE = '.bundled-agent-sync.json';
 const RECENT_EXTERNAL_SYNC_MS = 5 * 60 * 1000;
-
-/**
- * Ownership retry policy: exponential backoff from 100ms capped at 1s (the
- * `min` of the two schedules is the shorter delay, so the exponential stops
- * growing once it passes the spaced one), jittered, and bounded by 20
- * recurrences or 30 seconds total — whichever comes first.
- */
-const LOCK_RETRY_POLICY = Schedule.min([
-  Schedule.exponential('100 millis', 1.5),
-  Schedule.spaced('1 second'),
-]).pipe(
-  Schedule.jittered,
-  Schedule.upTo({ duration: '30 seconds', times: 20 }),
-);
 
 type Log = ReturnType<typeof createLog>;
 
@@ -61,10 +47,6 @@ export function createPlatformAgentDirectories(
 // ============================================================================
 // Bundled agent reconciliation
 // ============================================================================
-
-function isLockContentionError(error: unknown): boolean {
-  return (error as { code?: string })?.code === 'ELOCKED';
-}
 
 const AgentDirectorySyncMarkerSchema = z.object({
   completedAt: z.number().nonnegative(),
@@ -163,86 +145,65 @@ const hasRecentExternalSync = Effect.fn(
   return now - marker.completedAt < RECENT_EXTERNAL_SYNC_MS;
 });
 
-const reconcileUnlocked = Effect.fn('platformAgentDirectories.reconcile')(
-  function* (options: BundledAgentReconcileOptions, log: Log) {
-    const globalState = yield* AppState;
-    // `StateStore` mirrors `vscode.Memento`, so its writes stay Promises;
-    // this is the single wrap of that port, not a Promise lane of its own.
-    const recordVersion = Effect.tryPromise({
-      try: async () =>
-        globalState.update(options.versionStateKey, options.currentVersion),
+const reconcile = Effect.fn('platformAgentDirectories.reconcile')(function* (
+  options: BundledAgentReconcileOptions,
+  log: Log,
+) {
+  const globalState = yield* AppState;
+  // `StateStore` mirrors `vscode.Memento`, so its writes stay Promises;
+  // this is the single wrap of that port, not a Promise lane of its own.
+  const recordVersion = Effect.tryPromise({
+    try: async () =>
+      globalState.update(options.versionStateKey, options.currentVersion),
+    catch: (cause) => cause as Error,
+  });
+  if (yield* hasRecentExternalSync(options.currentVersion, log)) {
+    yield* recordVersion;
+    return;
+  }
+
+  for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
+    yield* Effect.tryPromise({
+      try: async () => {
+        await GlobalStorageFS.ensureDir(directoryName);
+        await platform().fs.copy(
+          path.join(options.resourcesPath, directoryName),
+          GlobalStorageFS.fullPath(directoryName),
+          { overwrite: true },
+        );
+      },
       catch: (cause) => cause as Error,
     });
-    if (yield* hasRecentExternalSync(options.currentVersion, log)) {
-      yield* recordVersion;
-      return;
-    }
+  }
 
-    for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
-      yield* Effect.tryPromise({
-        try: async () => {
-          await GlobalStorageFS.ensureDir(directoryName);
-          await platform().fs.copy(
-            path.join(options.resourcesPath, directoryName),
-            GlobalStorageFS.fullPath(directoryName),
-            { overwrite: true },
-          );
-        },
-        catch: (cause) => cause as Error,
-      });
-    }
-
-    yield* recordVersion;
-    yield* writeSyncMarker(options.currentVersion, log);
-  },
-);
+  yield* recordVersion;
+  yield* writeSyncMarker(options.currentVersion, log);
+});
 
 /**
- * Copy the packaged agent directories into global storage, coordinating with
- * any other process that shares it through an on-disk lock plus a sync marker.
+ * Copy the packaged agent directories into global storage, recording the
+ * result in the sync marker so a sibling process that reconciled the same
+ * version moments ago is adopted instead of re-copying.
  *
- * Ownership contention retries on {@link LOCK_RETRY_POLICY} while the lock is
- * still held elsewhere and the operation has not started; a live or stale
- * owner that outlasts the policy leaves the shared cache untouched (answered
- * `false`) rather than failing startup. Every other failure — an unreadable or
- * partially written agent directory included — is reported at `error` and
- * answered `false`, so no host's activation can abort on it.
+ * Nothing excludes concurrent hosts: two processes starting together may both
+ * copy the same bundled directories over each other. The copy is idempotent —
+ * the source is immutable packaged content, so both writers write the same
+ * bytes to the same destinations and converge on the same result — and the
+ * marker only spares the redundant work when the timing allows. Any failure —
+ * an unreadable or partially written agent directory included — is reported at
+ * `error` and answered `false`, so no host's activation can abort on it.
  */
 export const bootstrapPlatformAgentDirectories = Effect.fn(
   'platformAgentDirectories.bootstrap',
 )(function* (options: BundledAgentReconcileOptions) {
   const log = createLog(options.channel);
-  // Whether the critical section ran: a failure after it started is a real
-  // reconcile failure, never contention to retry or to skip quietly.
-  let operationStarted = false;
-  // Suspended so every retry re-resolves the port and takes the lock again,
-  // rather than replaying one already-built acquisition.
-  const reconciled = yield* Effect.suspend(() =>
-    platform().fileLocks.withFileLock(
-      GlobalStorageFS.fullPath(SYNC_MARKER_FILE),
-    )(
-      Effect.sync(() => {
-        operationStarted = true;
-      }).pipe(Effect.andThen(reconcileUnlocked(options, log))),
-    ),
-  ).pipe(
-    Effect.retry({
-      schedule: LOCK_RETRY_POLICY,
-      while: (error) => !operationStarted && isLockContentionError(error),
-    }),
+  return yield* reconcile(options, log).pipe(
     Effect.as(true),
     Effect.catch((error) =>
       Effect.sync(() => {
-        if (!operationStarted && isLockContentionError(error)) {
-          log.warn(
-            'Skipping bundled agent refresh because another process still owns the sync lock',
-          );
-        } else {
-          log.error(`Error copying default agents: ${toErrorMessage(error)}`);
-        }
+        log.error(`Error copying default agents: ${toErrorMessage(error)}`);
         return false;
       }),
     ),
   );
-  return reconciled;
 });
