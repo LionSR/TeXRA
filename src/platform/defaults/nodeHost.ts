@@ -31,7 +31,6 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
-import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
@@ -41,8 +40,6 @@ import type {
   ConfigProvider,
   LifecycleHost,
   StateStore,
-  StorageProvider,
-  ToolAvailabilityHost,
   ToolMissingHandler,
 } from '../interfaces';
 import type { LanguageModelPort } from '../languageModel';
@@ -51,20 +48,16 @@ import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem and the no-op tool-availability host) are
- * filled in by the helper. The
+ * shared Node default (the filesystem) is filled in by the helper. The
  * per-workspace services are not here: hosts build them with
  * {@link createNodeWorkspaceRoots}.
  */
 export interface NodePlatformServices {
   readonly globalState: StateStore;
-  readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Host-specific availability overrides merged over the no-op defaults. */
-  readonly toolAvailability?: Partial<ToolAvailabilityHost>;
   /** Editor-host subscription models; defaults to the unavailable port. */
   readonly languageModel?: LanguageModelPort;
   /** Optional process-host capability; absent means no-op (see `Platform`). */
@@ -76,6 +69,8 @@ export interface NodeWorkspaceRootsInit {
   readonly workspacePath: string | undefined;
   /** The storage root opened for this workspace (`WorkspaceStorageProvider.getStoragePath()`). */
   readonly storage: string;
+  /** The cross-workspace global storage root (`getGlobalStoragePath()`). */
+  readonly globalStorage: string;
   /**
    * Config source: the workspace + global stores to build the file-backed
    * provider from, or an already-constructed provider for hosts that resolve
@@ -101,6 +96,7 @@ export function createNodeWorkspaceRoots(
         ? undefined
         : canonicalizeWorkspacePath(init.workspacePath),
     storage: init.storage,
+    globalStorage: init.globalStorage,
     config:
       'workspace' in init.config
         ? new JsonConfigProvider(init.config)
@@ -129,24 +125,18 @@ const agentDirectoryBootstrapLanes = new Map<string, PerKeyLane>();
  * extension) or an SDK embedder.
  *
  * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`, the no-op
- * tool-availability host) while preserving the rule that only
- * composition roots call `initPlatform(...)`.
+ * in its own `initPlatform` literal (`nodeFilesystem`) while preserving the
+ * rule that only composition roots call `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
     globalState: services.globalState,
     fs: nodeFilesystem,
-    storage: services.storage,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,
     languageModel: services.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    toolAvailability: {
-      ...NO_TOOL_AVAILABILITY_HOST,
-      ...services.toolAvailability,
-    },
     // Missing-tool reporting remains an optional process-host capability;
     // omitting it is the no-op, which is what both Node hosts want.
     toolMissingHandler: services.toolMissingHandler,

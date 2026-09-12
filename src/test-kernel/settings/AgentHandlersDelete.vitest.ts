@@ -9,7 +9,7 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   fakeProcessServices,
@@ -151,14 +151,14 @@ const APPLY_AGENT_MODE_PRESET = {
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const storage = createFakePlatform().storage;
+    const { globalStorage } = createFakeWorkspaceRoots();
     initProcessRuntime(
       ManagedRuntime.make(
         Layer.mergeAll(
           testHttpClientLayer,
           Layer.mock(UpdateCheckRecords, {}),
           fakeProcessServices(),
-          inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+          inquiryRecordsLayer(() => globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
           ),
         ),

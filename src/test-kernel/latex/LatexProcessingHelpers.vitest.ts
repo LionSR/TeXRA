@@ -194,8 +194,12 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
 
     const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     await installPlatform(
-      { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
-      { fs: nodeFilesystem, storage },
+      {
+        workspacePath: workspaceDir,
+        storagePath: storage.getStoragePath(),
+        globalStoragePath: storage.getGlobalStoragePath(),
+      },
+      { fs: nodeFilesystem },
     );
     return { texPath, figurePath };
   }

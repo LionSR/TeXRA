@@ -1,9 +1,11 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import { SetupPlatform } from '@tools/setup/platform';
+import { createFakeSetupPlatform } from './setup/fixtures';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -18,6 +20,12 @@ const secretsLayer = Secrets.layer((): PlatformSecrets => ({
   listStoredKeys: unreadSecret,
   getEnv: unreadSecret,
 }));
+
+/** The services a group's availability callbacks may read. */
+const probeServices = Layer.mergeAll(
+  secretsLayer,
+  SetupPlatform.layer(createFakeSetupPlatform()),
+);
 
 afterEach(() => {
   vi.doUnmock('@tools/externalToolDefs');
@@ -56,7 +64,7 @@ describe('tool availability app signals', () => {
       } finally {
         dispose();
       }
-    }).pipe(Effect.provide(secretsLayer)),
+    }).pipe(Effect.provide(probeServices)),
   );
 
   it.effect(
@@ -93,7 +101,7 @@ describe('tool availability app signals', () => {
         // external dependencies only — so there is nothing to rebuild after a
         // toggle, which is why the availability answer is derived on read.
         expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
-      }).pipe(Effect.provide(secretsLayer)),
+      }).pipe(Effect.provide(probeServices)),
   );
 
   it.effect(
@@ -145,6 +153,6 @@ describe('tool availability app signals', () => {
             statusDetail: undefined,
           }),
         ]);
-      }).pipe(Effect.provide(secretsLayer)),
+      }).pipe(Effect.provide(probeServices)),
   );
 });

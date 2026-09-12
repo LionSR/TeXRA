@@ -34,6 +34,7 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
     roots: init.roots ?? {
       workspace: process.workspace,
       storage: `${process.storage}/test-sessions/${opened}`,
+      globalStorage: process.globalStorage,
       config: process.config,
       workspaceState: process.workspaceState,
     },

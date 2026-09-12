@@ -8,7 +8,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AgentDirectoryService } from '@agent/index';
 import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -49,7 +49,7 @@ describe('AgentDirectoryService', () => {
   setupPlatform(() => createTempDirPlatform('texra-agent-dirs-', tempDirs));
 
   function storageBase(): string {
-    return platform().storage.getGlobalStoragePath();
+    return workspaceRoots().globalStorage;
   }
 
   it('resolves built-in directories from writable storage', async () => {

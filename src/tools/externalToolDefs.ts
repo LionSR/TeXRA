@@ -17,7 +17,6 @@ import { Effect } from 'effect';
 // Local imports
 import { hostPort } from '@common/hostPort';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { Secrets } from '@platform/secrets';
 import type { ToolCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -40,6 +39,7 @@ import {
   listLeanServers,
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
+import { SetupPlatform } from '@tools/setup/platform';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
@@ -72,6 +72,13 @@ const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 // Type
 // ============================================================
 
+/**
+ * The process services a group's availability callbacks read: provider
+ * credentials, and the host's setup capabilities for the one group whose
+ * availability depends on the editor host (Lean 4's VS Code extension).
+ */
+export type ToolProbeServices = Secrets | SetupPlatform;
+
 /** Full definition for an external tool group. */
 export interface ExternalToolDef {
   /** Unique group identifier (matches ToolDashboardItem.id). */
@@ -79,19 +86,19 @@ export interface ExternalToolDef {
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
   /** Optional shared probe result passed to check/status/detail callbacks. */
-  readonly probe?: () => Effect.Effect<unknown, unknown, Secrets>;
+  readonly probe?: () => Effect.Effect<unknown, unknown, ToolProbeServices>;
   /** Returns true if the external dependency is available. */
   readonly check: (
     probeResult?: unknown,
-  ) => Effect.Effect<boolean, unknown, Secrets>;
+  ) => Effect.Effect<boolean, unknown, ToolProbeServices>;
   /** Optional detailed status string resolved at check time (shown below description). */
   readonly detailCheck?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown, Secrets>;
+  ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>;
   /** Optional short status label for the dashboard badge. */
   readonly statusLabel?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown, Secrets>;
+  ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -287,8 +294,10 @@ function probeSdkBinaryStatus(config: {
  * callbacks, and those callbacks stay pure functions of the resolved value.
  */
 function prerequisitesChecks<T>(config: {
-  probe: () => Effect.Effect<T, unknown, Secrets>;
-  resolve: (probeResult: unknown) => Effect.Effect<T, unknown, Secrets>;
+  probe: () => Effect.Effect<T, unknown, ToolProbeServices>;
+  resolve: (
+    probeResult: unknown,
+  ) => Effect.Effect<T, unknown, ToolProbeServices>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
@@ -450,11 +459,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
     ...prerequisitesChecks({
       probe: () =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          const setup = yield* SetupPlatform;
           const extensionAvailable =
-            platform().toolAvailability.isVscodeExtensionInstalled(
-              LEAN4_EXTENSION_ID,
-            );
+            setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
           const lakeAvailable = BinaryResolver.findPath('lake') !== null;
           const requiresExtension = getProcessSettingHost() === 'vscode';
           return { extensionAvailable, lakeAvailable, requiresExtension };

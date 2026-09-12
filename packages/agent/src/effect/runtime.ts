@@ -178,8 +178,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // entry's build waits.
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
-      globalStorage: () => platform.storage.getGlobalStoragePath(),
-      updateCheckStorage: () => platform.storage.getGlobalStoragePath(),
+      globalStorage: () => platform.roots.globalStorage,
+      updateCheckStorage: () => platform.roots.globalStorage,
       ...processServices,
     });
     if (!active) {

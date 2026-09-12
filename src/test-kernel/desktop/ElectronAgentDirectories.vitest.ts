@@ -10,12 +10,9 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 // Local imports
-import { AppState, NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
+import { AppState } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import type {
-  AgentDirectoriesPort,
-  StorageProvider,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { NodeAgentDirectoryBootstrapOptions } from '@platform/defaults/nodeHost';
@@ -45,7 +42,7 @@ interface AgentDirectoryHarness {
   agentDirectories: AgentDirectoriesPort;
   globalStateStore: JsonStore;
   resourcesPath: string;
-  storage: StorageProvider;
+  storage: WorkspaceStorageProvider;
 }
 
 describe('desktop agent directory bootstrap', () => {
@@ -124,7 +121,6 @@ describe('desktop agent directory bootstrap', () => {
       initPlatform({
         globalState: globalStateStore,
         fs: nodeFilesystem,
-        storage,
         secrets: new FakeSecrets(),
         lifecycle: createLifecycleHost(),
         agentResume: { tryResumeRun: async () => false },
@@ -136,12 +132,12 @@ describe('desktop agent directory bootstrap', () => {
           },
         }),
         languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-        toolAvailability: NO_TOOL_AVAILABILITY_HOST,
         toolMissingHandler: () => {},
       });
       initProcessWorkspaceRoots({
         workspace: workspacePath,
         storage: storage.getStoragePath(),
+        globalStorage: storage.getGlobalStoragePath(),
         config: new FakeConfigProvider(),
         workspaceState: workspaceStateStore,
       });

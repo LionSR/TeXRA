@@ -23,7 +23,10 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import type { CliPlatformServices } from '@cli/runtime/initPlatform';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  createFakePlatform,
+  createFakeWorkspaceRoots,
+} from '@test/support/FakePlatform';
 
 const { maybeRunCliOnboarding } = await import('@cli/onboarding/runOnboarding');
 
@@ -44,7 +47,10 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
-    services = createFakePlatform();
+    services = {
+      ...createFakePlatform(),
+      globalStorage: createFakeWorkspaceRoots().globalStorage,
+    };
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
       value: true,

@@ -161,19 +161,6 @@ export interface FileSystemProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Storage
-// ---------------------------------------------------------------------------
-
-/**
- * Process-wide storage path provider. The per-workspace storage root is not
- * here: it is `WorkspaceRoots.storage`, carried by each session.
- */
-export interface StorageProvider {
-  /** Cross-workspace global storage root path. */
-  getGlobalStoragePath(): string;
-}
-
-// ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
@@ -205,23 +192,6 @@ export interface LifecycleHost {
    */
   readonly shutdownRan: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Tool availability
-// ---------------------------------------------------------------------------
-
-/**
- * Host-owned availability checks for integrations that cannot be detected from
- * host-agnostic core code alone.
- */
-export interface ToolAvailabilityHost {
-  /** True when a VS Code extension is installed in the active extension host. */
-  isVscodeExtensionInstalled(extensionId: string): boolean;
-}
-
-export const NO_TOOL_AVAILABILITY_HOST: ToolAvailabilityHost = Object.freeze({
-  isVscodeExtensionInstalled: () => false,
-});
 
 // ---------------------------------------------------------------------------
 // Tool notifications

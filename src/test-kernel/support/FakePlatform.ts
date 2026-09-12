@@ -9,14 +9,12 @@ import { createFsFromVolume, Volume, type IFs } from 'memfs';
 // Local imports
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
-  NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
   type FileSystemProvider,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
   type StateStore,
-  type StorageProvider,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -453,19 +451,17 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 
 // A real directory: instance-presence sockets are genuine OS objects that
 // live under the global storage root even when everything else is faked.
-// Lazy and worker-shared so the thousands of per-test FakePlatform instances
-// that never touch presence do not litter os.tmpdir() with empty directories.
+// Worker-shared so the thousands of per-test fake roots that never touch
+// presence do not litter os.tmpdir() with empty directories.
 let sharedFakeGlobalStoragePath: string | undefined;
 
-class FakeStorageProvider implements StorageProvider {
-  constructor(private globalStoragePath?: string) {}
-
-  getGlobalStoragePath(): string {
-    this.globalStoragePath ??= sharedFakeGlobalStoragePath ??= mkdtempSync(
+function fakeGlobalStoragePath(override?: string): string {
+  return (
+    override ??
+    (sharedFakeGlobalStoragePath ??= mkdtempSync(
       path.join(os.tmpdir(), 'texra-fake-global-'),
-    );
-    return this.globalStoragePath;
-  }
+    ))
+  );
 }
 
 export class FakeSecrets implements PlatformSecrets {
@@ -550,6 +546,7 @@ export function createFakeWorkspaceRoots(
       ? options.workspacePath
       : '/workspace',
     storage: options.storagePath ?? '/workspace/.texra/storage',
+    globalStorage: fakeGlobalStoragePath(options.globalStoragePath),
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
@@ -569,13 +566,11 @@ export function createFakePlatform(
   return {
     globalState: new FakeStateStore(options.globalState),
     fs: new FakeFileSystemProvider(options.files),
-    storage: new FakeStorageProvider(options.globalStoragePath),
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeRun: async () => false },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    toolAvailability: NO_TOOL_AVAILABILITY_HOST,
     toolMissingHandler: () => {},
     ...overrides,
   };

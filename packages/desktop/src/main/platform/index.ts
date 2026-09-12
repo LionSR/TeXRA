@@ -166,7 +166,6 @@ export async function initializeElectronPlatform(
   initPlatform(
     createNodePlatform({
       globalState: globalStateStore,
-      storage,
       secrets,
       lifecycle,
       agentResume,
@@ -176,6 +175,7 @@ export async function initializeElectronPlatform(
   const processRoots = createNodeWorkspaceRoots({
     workspacePath: undefined,
     storage: storage.getStoragePath(),
+    globalStorage: storage.getGlobalStoragePath(),
     config: configStores,
     workspaceState: workspaceStateStore,
   });

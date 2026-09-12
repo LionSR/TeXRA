@@ -124,8 +124,8 @@ import { registerCommands } from './commands';
 
 const log = createLog('extension');
 
-// Shared by the `Platform` tool-availability port and the setup platform's
-// extensions port, which both answer the same question.
+// The setup platform's extensions port: also what the Lean 4 availability
+// probe reads to see whether the editor host has the extension installed.
 const isVscodeExtensionInstalled = (id: string) =>
   vscode.extensions.getExtension(id) !== undefined;
 
@@ -181,7 +181,7 @@ async function initVscodePlatform(
   workspaceState: NodeWorkspaceRootsInit['workspaceState'],
   extras: Pick<
     NodePlatformServices,
-    'toolAvailability' | 'languageModel' | 'toolMissingHandler'
+    'languageModel' | 'toolMissingHandler'
   > = {},
 ): Promise<PlatformSecrets> {
   // The process runtime comes first: the config stores below are opened as
@@ -219,7 +219,6 @@ async function initVscodePlatform(
   initPlatform(
     createNodePlatform({
       globalState: context.globalState,
-      storage,
       secrets,
       lifecycle,
       agentDirectories,
@@ -233,6 +232,7 @@ async function initVscodePlatform(
     createNodeWorkspaceRoots({
       workspacePath: workspaceRoot,
       storage: storage.getStoragePath(),
+      globalStorage: storage.getGlobalStoragePath(),
       config,
       workspaceState,
     }),
@@ -539,7 +539,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     workspaceRoot,
     workspaceState,
     {
-      toolAvailability: { isVscodeExtensionInstalled },
       languageModel,
       toolMissingHandler: async (message, openDocsCommand) => {
         const actions = openDocsCommand ? ['View Installation Guide'] : [];
