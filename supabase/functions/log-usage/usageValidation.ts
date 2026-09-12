@@ -16,6 +16,11 @@ const UsageRouteSchema = z.enum([
   'kimi-code-subscription',
   'xai-subscription',
   'api-key',
+  // LEGACY: relay wire tolerance. Released 0.40.x clients still post
+  // `usageRoute: 'relay'` alongside `usedRelay: true`. Retirement is owned
+  // by #10921: after 2026-11, and only once the ops drain (#10920) has
+  // completed.
+  'relay',
 ]);
 
 const UsageLogEntryInputSchema = z.object({

@@ -107,6 +107,18 @@ Deno.test('rejects invalid present optional fields', () => {
   );
 });
 
+Deno.test('accepts a mixed batch with a legacy relay entry', () => {
+  const parsed = UsageBatchSchema.safeParse({
+    batchId: VALID_BATCH_ID,
+    entries: [
+      usageEntry(),
+      { ...usageEntry(), usageRoute: 'relay', usedRelay: true },
+    ],
+  });
+
+  equal(parsed.success, true);
+});
+
 Deno.test('rejects a whole batch when any entry is invalid', () => {
   const parsed = UsageBatchSchema.safeParse({
     batchId: VALID_BATCH_ID,
