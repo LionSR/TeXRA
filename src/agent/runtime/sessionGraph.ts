@@ -234,9 +234,18 @@ export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
 function resolveRoots(init: SessionHandleInit): SessionOpen {
   // The owner keys and releases a session by this root, so neither a live
   // process-root view nor a caller's mutable root record may change it later.
+  // Read the structural fields so inherited or non-enumerable getters work too.
+  const roots = init.roots ?? processWorkspaceRoots();
   return {
     ...init,
-    roots: { ...(init.roots ?? processWorkspaceRoots()) },
+    roots: {
+      workspace: roots.workspace,
+      storage: roots.storage,
+      globalStorage: roots.globalStorage,
+      config: roots.config,
+      workspaceState: roots.workspaceState,
+      globalState: roots.globalState,
+    },
   };
 }
 

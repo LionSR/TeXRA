@@ -3,6 +3,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
@@ -140,9 +142,12 @@ describe('default session lifecycle', () => {
     expect(tryDefaultSession()).toBeUndefined();
   });
 
-  it.live(
-    'retains its opening roots until the owner closes it after a host swap',
-    () =>
+  it.live.each([
+    { label: 'implicit process roots', rootKind: 'implicit' },
+    { label: 'inherited explicit roots', rootKind: 'inherited' },
+  ] as const)(
+    'retains its opening $label until the owner closes it after a host swap',
+    ({ rootKind }) =>
       Effect.gen(function* () {
         const { initializeDefaultSession } = yield* Effect.promise(() =>
           importSessionRuntime(),
@@ -158,8 +163,29 @@ describe('default session lifecycle', () => {
         yield* Effect.promise(() =>
           installPlatform({ storagePath: originalStorage }),
         );
+        const processRoots = yield* Effect.promise(async () => {
+          const { processWorkspaceRoots } =
+            await import('@platform/workspaceRoots');
+          return processWorkspaceRoots();
+        });
+        const originalRoots = {
+          workspace: processRoots.workspace,
+          storage: processRoots.storage,
+          globalStorage: processRoots.globalStorage,
+          config: processRoots.config,
+          workspaceState: processRoots.workspaceState,
+          globalState: processRoots.globalState,
+        } satisfies WorkspaceRoots;
+        const roots =
+          rootKind === 'inherited'
+            ? (Object.create(processRoots) as WorkspaceRoots)
+            : undefined;
+        if (roots) {
+          expect(Object.keys(roots)).toEqual([]);
+        }
         const session = initializeDefaultSession({
           transcriptMode: { kind: 'ephemeral', reason: 'root snapshot test' },
+          ...(roots && { roots }),
         });
         try {
           yield* Effect.promise(() =>
@@ -168,7 +194,7 @@ describe('default session lifecycle', () => {
             }),
           );
 
-          expect(session.roots.storage).toBe(originalStorage);
+          expect(session.roots).toEqual(originalRoots);
           expect(yield* listSessions()).toEqual([session]);
           expect(yield* closeSession(originalStorage)).toEqual({
             settled: true,
