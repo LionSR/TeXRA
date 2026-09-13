@@ -113,7 +113,13 @@ function seedTarget(key: string): string {
       `Seed key ${key} is a real path under the harness temp home; seed keys are paths inside the fake root (use fakePath).`,
     );
   }
-  return fakePath(key);
+  const target = path.resolve(root, `.${path.sep}${key}`);
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(
+      `Seed key ${key} resolves outside the fake root; seed keys must stay inside it.`,
+    );
+  }
+  return target;
 }
 
 /** Empties the {@link fakeRoot} and writes the seeded files into it. */
