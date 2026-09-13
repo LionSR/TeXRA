@@ -95,6 +95,13 @@ test('opens with a permanent task conversation and no workbench', async () => {
     'data-workbench-open',
     'false',
   );
+  // The split re-reads its size from `position-in-pixels` on resize, and
+  // `positionInPixels` is not reflected: a property binding leaves the
+  // attribute unset.
+  await expect(page.locator('.task-shell')).toHaveAttribute(
+    'position-in-pixels',
+    '288',
+  );
   await expect(page.locator('.task-conversation')).toBeVisible();
   await expect(
     page.locator('.task-conversation-pane[data-pane="conversation"]'),
