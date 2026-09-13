@@ -913,7 +913,6 @@ describe('BashTool', () => {
               nativeToolTestLayer({
                 tracker: new FileInteractionState(),
                 hooks: {
-                  onRunReady: () => hookCalls.push('ready'),
                   onToolOutput: (chunk) => hookCalls.push(`output:${chunk}`),
                 },
                 run: {
@@ -926,7 +925,7 @@ describe('BashTool', () => {
           ),
         );
         yield* Effect.promise(() => started.promise);
-        assert.deepEqual(hookCalls, ['ready', 'output:started\n']);
+        assert.deepEqual(hookCalls, ['output:started\n']);
         assert.equal(receivedSignal?.aborted, false);
         yield* Fiber.interrupt(fiber);
         const exit = yield* Fiber.await(fiber);

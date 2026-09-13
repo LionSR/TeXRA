@@ -72,9 +72,9 @@ export function parseCallArguments(
 }
 
 /**
- * The dispatch facts of one completed turn, stamped at append time. A
- * `logId` is minted here only for a slow tool, whose card opens before the
- * call runs; a fast tool's card opens and closes with its settlement.
+ * The dispatch facts of one completed turn, stamped at append time. Every
+ * call gets its card id here: a slow tool's card opens under it before the
+ * call runs; a fast tool's opens and closes with its settlement.
  */
 export function dispatchFactsFor(
   turn: TurnResult,
@@ -114,10 +114,7 @@ export function dispatchFactsFor(
       partition,
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
-      logId:
-        tool?.slow === true && tool.deferLogUntilApproval !== true
-          ? mintLogId()
-          : null,
+      logId: mintLogId(),
       stageId,
     };
   });

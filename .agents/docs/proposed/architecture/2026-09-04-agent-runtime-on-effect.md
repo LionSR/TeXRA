@@ -296,8 +296,19 @@ is durable, and a durable result cannot leave a running card behind.
 Each call's card correlation (`logId` and stage) is saved with the pending
 response, so a resumed settlement closes the same card. If no start card
 was published, the settlement batch includes its `tool.start` as well.
-Turn snapshots include the resulting state, pending intents, and references
-to any pending response and its already-settled calls.
+
+> **Amendment 2026-09-13 (loop-owned cards).** The loop is the one author of
+> a call's card. A slow tool's `tool.start` commits in the batch that admits
+> the attempt (the `tool.intent` for a barrier, its own batch for a
+> parallel-safe call, the re-run intent after an outcome-unknown decision); a
+> fast tool's opens and closes in its settlement batch. No tool publishes a
+> start card of its own (`deferLogUntilApproval` and the `onRunReady` hook
+> are deleted: a denied approval is a card that closes failed, not a card
+> that never opened), and what a tool prints while it runs is transient text
+> keyed by the card id, the same channel as a response's chunks (C3), never a
+> `tool.end in_progress` row.
+> Turn snapshots include the resulting state, pending intents, and references
+> to any pending response and its already-settled calls.
 
 Attachment settlement uses a JSON-safe representation rather than persisting
 `ToolFileAttachment` directly: its `bytes` field is a `Uint8Array`, which

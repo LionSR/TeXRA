@@ -56,7 +56,10 @@ type StageMetadata = Pick<
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
-  writer: Pick<StreamLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
+  writer: Pick<
+    StreamLog,
+    'append' | 'appendSettled' | 'has' | 'update' | 'settle'
+  >,
 ) {
   /** Stream rows opened by `stream.start` that nothing has settled yet. */
   const runs = new Set<string>();
@@ -155,6 +158,12 @@ export function createTranscriptFold(
         return;
       }
 
+      // A card is a monotone machine: it opens once, takes progress while
+      // it is open, and closes once. A second start reopens a running card
+      // (a re-run attempt) and is a no-op on a closed one; progress after
+      // the close and a close without an open are dropped. Under the one
+      // publisher those rows cannot arrive out of order, so nothing here
+      // compensates for a race; the shape is the card's definition.
       case 'tool.start': {
         if (transcriptBoundaryClosed) return;
         pendingModelResponseId = undefined;
@@ -166,6 +175,16 @@ export function createTranscriptFold(
           input: event.input,
           status: TOOL_CALL_STATUS.IN_PROGRESS,
         } satisfies ToolUseLog;
+        if (writer.has(event.logId)) {
+          if (activeToolEntries.has(event.logId)) {
+            writer.update(event.logId, {
+              messageType: MESSAGE_TYPES.TOOL_USE,
+              data,
+            });
+            activeToolEntries.set(event.logId, data);
+          }
+          return;
+        }
         writer.append({
           id: event.logId,
           type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -183,9 +202,8 @@ export function createTranscriptFold(
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
         const result = (event.result ?? {}) as Partial<ToolUseLog>;
-        // Omit groupId on update: undefined would clobber the canonical
-        // value stamped at tool.start (deferred tools never copy the
-        // resolved id back into their ref).
+        // Omit groupId on update: undefined would clobber the value stamped
+        // at tool.start.
         const patch = {
           messageType: MESSAGE_TYPES.TOOL_USE,
           data: {
@@ -194,6 +212,7 @@ export function createTranscriptFold(
           } as ToolUseLog,
         } satisfies StreamLogUpdatePatch;
         if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
+          if (!activeToolEntries.has(event.logId)) return;
           writer.update(event.logId, patch);
           activeToolEntries.set(event.logId, patch.data);
         } else {

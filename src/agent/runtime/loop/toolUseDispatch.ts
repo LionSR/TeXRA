@@ -27,7 +27,7 @@ import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { endToolUseCard, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   type DispatchFacts,
@@ -70,8 +70,9 @@ import {
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
-/** Maximum size of the streaming output buffer sent to the UI (bytes). */
-const STREAM_BUFFER_MAX = 50_000;
+/** How much of a running tool's output streams to its card as transient
+ *  text; the settlement carries the bounded capture whatever streamed. */
+const STREAMED_OUTPUT_MAX = 50_000;
 
 const SKIPPED_AFTER_END_TURN =
   'Tool call skipped: an earlier tool call ended the turn.';
@@ -324,6 +325,26 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ...cards,
     ]);
 
+  /** The row that opens a call's card. A slow tool's is committed with the
+   *  row that admits the attempt, so a resume finds the card its settlement
+   *  closes; a fast tool's rides the settlement batch itself. */
+  const cardStart = (fact: DispatchFacts, input: unknown): RunLedgerDraft =>
+    displayRow(runId, {
+      type: 'tool.start',
+      logId: fact.logId,
+      toolName: fact.toolName,
+      input,
+      ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
+    });
+  /** The card rows an admitted attempt opens: a slow tool's, before it runs. */
+  const admittedCards = (
+    fact: DispatchFacts,
+    call: LocalCall,
+  ): RunLedgerDraft[] =>
+    run.tools.get(fact.toolName)?.slow === true
+      ? [cardStart(fact, parseCallArguments(call, logger))]
+      : [];
+
   const syntheticSettlement = (error: string): Settlement => ({
     disposition: 'skipped',
     duplicateOf: null,
@@ -342,42 +363,27 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const tool: ITool | undefined = run.tools.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
-    const isDeferred = tool?.deferLogUntilApproval === true;
-    let logId = fact.logId;
-    if (logId !== null) {
-      logger.toolStart(
-        { logId, toolName: fact.toolName, input: parsedInput },
-        { stageId },
-      );
-    }
-    const onRunReady = isDeferred
-      ? () => {
-          if (logId === null) {
-            logId = generateShortId();
-            logger.toolStart(
-              { logId, toolName: fact.toolName, input: parsedInput },
-              { stageId },
-            );
-          }
-        }
-      : undefined;
-    let onToolOutput: ((chunk: string) => void) | undefined;
-    if (tool?.streamsOutput === true) {
-      let outputBuffer = '';
-      onToolOutput = (chunk: string) => {
-        outputBuffer += chunk;
-        if (outputBuffer.length > STREAM_BUFFER_MAX) {
-          outputBuffer = outputBuffer.slice(-STREAM_BUFFER_MAX);
-        }
-        if (logId === null) return;
-        endToolUseCard(
-          logger,
-          { logId, groupId: stageId },
-          { toolName: fact.toolName, input: parsedInput, output: outputBuffer },
-          'in_progress',
-        );
-      };
-    }
+    // A slow tool's card is open: `dispatchCall` committed its `tool.start`
+    // with the row that admitted this attempt. What the tool prints while it
+    // runs streams to that card as transient text, the way a response's
+    // chunks reach a streaming row (C3): never a row of its own, capped, and
+    // refused once the call has returned, so no chunk can be enqueued after
+    // the settlement that closes the card.
+    const cardOpen = tool?.slow === true;
+    let accepting = cardOpen;
+    let streamed = 0;
+    const onToolOutput = (chunk: string): void => {
+      if (!accepting) return;
+      const text = chunk.slice(0, STREAMED_OUTPUT_MAX - streamed);
+      if (text.length === 0) return;
+      streamed += text.length;
+      run.session.publishRunEvent(runId, {
+        type: 'stream.chunk',
+        id: fact.logId,
+        text,
+        ...(stageId !== undefined ? { stageId } : {}),
+      });
+    };
     let subagentCost = 0;
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
@@ -403,7 +409,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 run.config.rootUserInstruction ?? turn.userInstruction,
               toolCallId: fact.callId,
               hooks: {
-                onRunReady,
                 onToolOutput,
                 recordSubagentCost: (costUsd) => {
                   if (costUsd > 0) subagentCost += costUsd;
@@ -413,6 +418,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ),
         ),
       );
+      accepting = false;
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
@@ -516,29 +522,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
     // The whole card commits with the settlement: a slow tool's card is
     // already open and only closes here, and a fast tool's opens and closes
-    // in this same batch under a log id minted for it. Publishing a terminal
-    // card outside the batch would tell the transcript the call completed
-    // while recovery still sees an unsettled call.
-    const cardId = logId ?? generateShortId();
-    const stage = stageId !== undefined ? { stageId } : {};
+    // in this same batch under the id its dispatch facts carry. Publishing a
+    // terminal card outside the batch would tell the transcript the call
+    // completed while recovery still sees an unsettled call.
     const cards: RunLedgerDraft[] = [
-      ...(logId === null
-        ? [
-            displayRow(runId, {
-              type: 'tool.start',
-              logId: cardId,
-              toolName: fact.toolName,
-              input: parsedInput,
-              ...stage,
-            }),
-          ]
-        : []),
+      ...(cardOpen ? [] : [cardStart(fact, parsedInput)]),
       displayRow(runId, {
         type: 'tool.end',
-        logId: cardId,
+        logId: fact.logId,
         status,
         result: toolUseLog,
-        ...stage,
+        ...(stageId !== undefined ? { stageId } : {}),
       }),
     ];
     yield* settle(
@@ -601,7 +595,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (bound !== undefined && bound.resolved && bound.decision !== null) {
       const answer = decided(bound.decision);
       if (answer !== null)
-        return yield* recordOutcomeDecision(fact, intent, answer);
+        return yield* recordOutcomeDecision(fact, call, intent, answer);
     }
     // A request the run committed and nobody answered is asked again under
     // its own id, so one barrier never accumulates requests. Anything else
@@ -695,12 +689,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     });
     const answer = decided(row.decision);
     if (answer === null) return yield* Effect.interrupt;
-    return yield* recordOutcomeDecision(fact, intent, answer);
+    return yield* recordOutcomeDecision(fact, call, intent, answer);
   });
 
-  /** A rerun admits a new attempt with its `tool.intent`; a skip records nothing further, the decision row is the fact. */
+  /** A rerun admits a new attempt with its `tool.intent` and reopens the
+   *  card; a skip records nothing further, the decision row is the fact. */
   const recordOutcomeDecision = Effect.fn('toolUse.outcomeDecision')(function* (
     fact: DispatchFacts,
+    call: LocalCall,
     intent: { readonly attempt: number },
     decision: 'rerun' | 'skip',
   ): Effect.fn.Return<'rerun' | 'skip', never> {
@@ -715,6 +711,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             attempt: intent.attempt + 1,
           },
         },
+        ...admittedCards(fact, call),
       ]).pipe(Effect.orDie);
     }
     return decision;
@@ -741,6 +738,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       return;
     }
     if (fact.parallelSafe) {
+      const cards = admittedCards(fact, call);
+      if (cards.length > 0) yield* append(cards).pipe(Effect.orDie);
       yield* execute(fact, call, 1);
       return;
     }
@@ -759,13 +758,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* execute(fact, call, intent.attempt + 1);
       return;
     }
-    // The intent precedes every barrier call, unconditionally.
+    // The intent precedes every barrier call, unconditionally, and a slow
+    // tool's card opens in the same batch.
     yield* append([
       {
         type: 'tool.intent',
         aggregateId,
         payload: { responseId, callIds: [fact.callId], attempt: 1 },
       },
+      ...admittedCards(fact, call),
     ]).pipe(Effect.orDie);
     yield* execute(fact, call, 1);
   });

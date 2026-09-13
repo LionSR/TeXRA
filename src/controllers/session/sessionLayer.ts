@@ -70,6 +70,7 @@ import {
   aggregateTarget,
   isDisplaySessionEvent,
   ownerIdentity,
+  TOOL_CALL_STATUS,
   type CommitOrdinal,
   type OwnerId,
   type SessionCloseReport,
@@ -95,6 +96,7 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
+  type InflightTextChunk,
 } from './sessionSources';
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
@@ -457,17 +459,42 @@ const sessionHandleLayer = (
                   })
                 : Effect.void;
             }),
-            Effect.andThen(
-              event.type === 'stream.end'
-                ? SubscriptionRef.update(chunks.ref, (held) => {
-                    const next = new Map(held);
-                    next.delete(
-                      `${aggregateTarget(event.aggregateId).id}/${event.id}`,
-                    );
-                    return next;
-                  })
-                : Effect.void,
-            ),
+            Effect.andThen(() => {
+              // A row that closes live text drops the held chunks: a
+              // stream's final text or a card's terminal result drop their
+              // own; the run's transcript boundary (the park, the end, the
+              // removal) drops every chunk of the run, the same rule the
+              // fold applies to its in-flight text, so a card an
+              // interrupted run closed without a terminal row holds nothing.
+              const runId = aggregateTarget(event.aggregateId).id;
+              let drop: ((key: string) => boolean) | null = null;
+              if (event.type === 'stream.end') {
+                drop = (key) => key === `${runId}/${event.id}`;
+              } else if (
+                event.type === 'tool.end' &&
+                event.status !== TOOL_CALL_STATUS.IN_PROGRESS
+              ) {
+                drop = (key) => key === `${runId}/${event.logId}`;
+              } else if (
+                event.type === 'run.end' ||
+                event.type === 'run.removed' ||
+                (event.type === 'flow.step' && event.payload.step === 'waiting')
+              ) {
+                drop = (key) => key.startsWith(`${runId}/`);
+              }
+              const dropping = drop;
+              return dropping === null
+                ? Effect.void
+                : SubscriptionRef.update(chunks.ref, (held) => {
+                    let next: Map<string, InflightTextChunk> | null = null;
+                    for (const key of held.keys()) {
+                      if (!dropping(key)) continue;
+                      next ??= new Map(held);
+                      next.delete(key);
+                    }
+                    return next ?? held;
+                  });
+            }),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
