@@ -178,18 +178,17 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
   );
 });
 
-export class WebSearchTool extends defineTool({
+export const WebSearchTool = defineTool({
   name: 'web_search',
   slow: true,
   parallelSafe: true,
   description:
     'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
-}) {
-  protected execute(input: WebSearchInput): Effect.Effect<ToolResult, unknown> {
+  execute: (input: WebSearchInput): Effect.Effect<ToolResult, unknown> => {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out searches (and their
     // retries) that only observe the internal timeout.
     return searchWeb(input);
-  }
-}
+  },
+});

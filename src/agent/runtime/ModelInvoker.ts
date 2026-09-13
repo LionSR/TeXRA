@@ -90,6 +90,7 @@ import {
   runtimeSnapshotRow,
   stepRow,
 } from './loop/rows';
+import type { RoutePolicy } from './ModelRetryGate';
 
 /**
  * Credential source a retry decision picked: the account the run is already
@@ -807,10 +808,10 @@ export const modelInvokerLayer: Layer.Layer<
     );
 
     /**
-     * One attempt under the session's route gate. The gate is Promise-tier
-     * session state by design (sibling runs share cooling); the attempt runs
-     * inside its permit on this fiber's services, and the fiber's abort
-     * signal is the one the gate waits and the request abort on.
+     * One attempt under the session's route gate: the gate is session state
+     * by design (sibling runs share cooling), and the attempt runs inside its
+     * permits on this fiber. Cancelling the run interrupts the fiber, which
+     * the gate reads as the waiting or in-flight attempt being abandoned.
      */
     const gatedAttempt = (
       state: RunState,
@@ -818,79 +819,39 @@ export const modelInvokerLayer: Layer.Layer<
       request: InvokeRequest,
       bound: BoundModel,
       operationId: string,
-    ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const signal = yield* Effect.abortSignal;
-          const gate = session.modelRetries;
-          const verdictFor = (error: Error) =>
-            error instanceof AttemptFailed
-              ? error.failure.verdict
-              : classifyModelFailure(error).verdict;
-          const routes = [
-            {
-              key: bound.modelRetryRouteKey,
-              classifyFailure: (error: Error) => {
-                const verdict = verdictFor(error);
-                return verdict.rateLimitScope === 'model'
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-            },
-            {
-              key: bound.wireRouteKey,
-              classifyFailure: (error: Error) => {
-                const verdict = verdictFor(error);
-                return verdict.wireRouteFailure
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-              isReachableFailure: (error: Error) =>
-                verdictFor(error).rateLimitScope === 'model',
-            },
-          ];
-          // The permits: an abort or a disposed gate while waiting rejects,
-          // which is this fiber being stopped or the session torn down, and
-          // only those two reasons become an interrupt. Any other rejection
-          // is a bug in the gate and dies with its cause rather than reading
-          // to the user as a stop.
-          const acquired = yield* Effect.tryPromise({
-            try: () =>
-              gate.acquireAll(routes, {
-                signal,
-                onWait: (delayMs) =>
-                  logger.debug(
-                    `Waiting ${delayMs}ms for the model recovery probe.`,
-                  ),
-              }),
-            catch: (cause) => cause,
-          }).pipe(
-            Effect.catchIf(
-              (cause) => isUserAbort(cause) || cause === signal.reason,
-              () => Effect.interrupt,
-            ),
-            Effect.catch((cause) => Effect.die(ensureError(cause))),
-          );
-          const exit = yield* Effect.exit(
-            attemptOnce(state, invocation, request, bound, operationId),
-          );
-          if (Exit.isSuccess(exit)) {
-            gate.settle(acquired, { kind: 'success' }, RETRY_BACKOFF_MS);
-            return exit.value;
-          }
-          if (Cause.hasInterrupts(exit.cause)) {
-            gate.settle(acquired, { kind: 'abandoned' }, RETRY_BACKOFF_MS);
-            return yield* Effect.interrupt;
-          }
-          const error = Cause.squash(exit.cause);
-          gate.settle(
-            acquired,
-            { kind: 'failure', error: ensureError(error) },
-            RETRY_BACKOFF_MS,
-          );
-          return yield* exit;
-        }),
-      );
+    ): Effect.Effect<InvocationResponse, AttemptFailed | InvokeError> => {
+      const verdictFor = (error: Error) =>
+        error instanceof AttemptFailed
+          ? error.failure.verdict
+          : classifyModelFailure(error).verdict;
+      const routes: [RoutePolicy, RoutePolicy] = [
+        {
+          key: bound.modelRetryRouteKey,
+          classifyFailure: (error: Error) => {
+            const verdict = verdictFor(error);
+            return verdict.rateLimitScope === 'model'
+              ? { retryAfterMs: verdict.retryAfterMs }
+              : undefined;
+          },
+        },
+        {
+          key: bound.wireRouteKey,
+          classifyFailure: (error: Error) => {
+            const verdict = verdictFor(error);
+            return verdict.wireRouteFailure
+              ? { retryAfterMs: verdict.retryAfterMs }
+              : undefined;
+          },
+          isReachableFailure: (error: Error) =>
+            verdictFor(error).rateLimitScope === 'model',
+        },
+      ];
+      return session.modelRetries.withRoutes(routes, {
+        baseBackoffMs: RETRY_BACKOFF_MS,
+        onWait: (delayMs) =>
+          logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
+      })(attemptOnce(state, invocation, request, bound, operationId));
+    };
 
     /**
      * The routes the run declines after this decision. Answering a retry

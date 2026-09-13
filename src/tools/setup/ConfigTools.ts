@@ -70,15 +70,14 @@ const ReadConfigInputSchema = z.strictObject({
 
 type ReadConfigInput = z.infer<typeof ReadConfigInputSchema>;
 
-export class ReadConfigTool extends defineTool({
+export const ReadConfigTool = defineTool({
   name: 'read_config',
   description: `Read the effective value of a TeXRA configuration key.
 
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
-}) {
-  protected execute(input: ReadConfigInput) {
-    return Effect.gen(function* () {
+  execute: (input: ReadConfigInput) =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       const value = call.roots.config.get(input.key);
       const json = JSON.stringify(value, null, 2) ?? 'undefined';
@@ -87,9 +86,8 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
         `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
         `Read ${input.key}`,
       );
-    });
-  }
-}
+    }),
+});
 
 const UpdateConfigInputSchema = z.strictObject({
   key: z
@@ -145,7 +143,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   );
 });
 
-export class UpdateConfigTool extends defineTool({
+export const UpdateConfigTool = defineTool({
   name: 'update_config',
   requiresApproval: true,
   description: `Update a TeXRA configuration value (allowlisted keys only).
@@ -157,8 +155,5 @@ ${ALLOWLIST_TEXT}
 
 Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
-}) {
-  protected execute(input: UpdateConfigInput) {
-    return updateConfig(input);
-  }
-}
+  execute: updateConfig,
+});

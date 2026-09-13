@@ -30,11 +30,10 @@ import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget'
 import { createLog } from '@logger/logUtils';
 import type {
   RunId,
-  WorkflowRunSnapshot,
   WorkflowScriptDeliverySummary,
   WorkflowScriptFiles,
 } from '@shared/schemas';
-import { deriveWorkflowCounts, RunEndSchema } from '@shared/schemas';
+import { RunEndSchema, WORKFLOW_CALL_STATUS } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -49,22 +48,13 @@ import {
 import {
   createWorkflowAttemptCostTracker,
   projectWorkflowScriptProgress,
+  type WorkflowScriptProgressProjection,
 } from './workflowScriptRun';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
 const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
 const summaryLog = createLog(SUMMARY_CHANNEL);
-
-/**
- * What the delivery line needs from a settled run: the canonical run
- * snapshot the engine terminalizes (phase and task tallies) and the durable
- * journal (delivered files). A run that died before the engine published any
- * snapshot has none, and reports zero work.
- */
-type SettledWorkflowRun = Pick<WorkflowScriptRunResult, 'journal'> & {
-  readonly snapshot: WorkflowScriptRunResult['snapshot'] | undefined;
-};
 
 /** One model-facing reference for editing and rerunning a persisted script. */
 export function formatWorkflowScriptReference(scriptPath: string): string {
@@ -135,12 +125,6 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /** Snapshot read from the detached run metadata that receives subsequent writes. */
-  readonly initialSnapshot?: WorkflowRunSnapshot;
-  /** Persist the canonical snapshot on the detached run metadata. */
-  readonly onSnapshot?: (
-    snapshot: WorkflowRunSnapshot,
-  ) => Effect.Effect<void, Error>;
   /** Persist-only when a headless caller awaits and returns the report itself. */
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
@@ -179,9 +163,12 @@ export function createWorkflowScriptStrategy(
    * skips included. The two answer different questions, so the delivery line
    * labels its count "succeeded".
    *
-   * Every task and phase number is read off the engine's own terminal snapshot —
-   * the canonical record of what ran — so this line can never disagree with
-   * `/executions/{id}` about the same run.
+   * Every task and phase number is read off the same cards the boards paint
+   * (`projection.board()`): `phaseCount` is every declared phase plus every
+   * dynamically entered one, `taskDone` the cards that settled completed or
+   * cached, so this line can never disagree with the board about the same
+   * run. A run that died before the engine constructed its state has no
+   * cards, and reports zero work.
    */
   const summaryFiles = new Map<
     string,
@@ -193,12 +180,23 @@ export function createWorkflowScriptStrategy(
   let taskTotal = 0;
   let settledCostUsd = 0;
 
-  const settleSummary = (run: SettledWorkflowRun, costUsd: number) => {
+  const settleSummary = (
+    run: {
+      readonly journal: readonly WorkflowJournalEntry[];
+      readonly board: ReturnType<
+        WorkflowScriptProgressProjection<never>['board']
+      >;
+    },
+    costUsd: number,
+  ) => {
     settledCostUsd = costUsd;
-    const counts = deriveWorkflowCounts(run.snapshot?.calls ?? []);
-    phaseCount = run.snapshot?.stages.length ?? 0;
-    taskDone = counts.completed + counts.cached;
-    taskTotal = counts.total;
+    phaseCount = run.board.phaseCount;
+    taskDone = run.board.calls.filter(
+      (call) =>
+        call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
+        call.status === WORKFLOW_CALL_STATUS.CACHED,
+    ).length;
+    taskTotal = run.board.calls.length;
     for (const entry of run.journal) {
       const parsed = RunEndSchema.safeParse(entry.result);
       if (!parsed.success) {
@@ -263,17 +261,6 @@ export function createWorkflowScriptStrategy(
           [...attemptJournalByKey.values()].toSorted(
             (left, right) => left.index - right.index,
           );
-        // Settle only entries consumed by this invocation: the durable union may
-        // hold superseded or malformed untouched recovery history, and baseline
-        // history is irrelevant to this invocation's cost and delivered files.
-        const settleAttempt = (
-          snapshot: WorkflowRunSnapshot | undefined,
-        ): void => {
-          const journal = attemptJournal();
-          const costUsd = attemptCost.total(journal);
-          ports.recordCost(costUsd);
-          settleSummary({ journal, snapshot }, costUsd);
-        };
         const runAgent = params.createRunAgent({
           onCost: (invocation, costUsd) => {
             ports.recordCost(attemptCost.record(invocation, costUsd ?? 0));
@@ -281,20 +268,12 @@ export function createWorkflowScriptStrategy(
         });
 
         let unregisterControls: (() => void) | undefined;
-        // The engine flushes its terminal snapshot before it rethrows, so the
-        // last one *persisted* is the run's own final account of what ran; the
-        // only source the failure path has for phase and task tallies, and by
-        // construction never newer than the durable run record.
-        let lastSnapshot: WorkflowRunSnapshot | undefined;
         const projection = projectWorkflowScriptProgress<AgentRunServices>(
           params.logger,
           {
             session: params.session,
             checkpointId: params.checkpointId,
             parentRunId: params.parentRunId,
-            ...(params.initialSnapshot !== undefined && {
-              initialSnapshot: params.initialSnapshot,
-            }),
             script: params.script,
             ...(params.args != null && { args: params.args }),
             ...(params.files !== undefined && {
@@ -336,16 +315,6 @@ export function createWorkflowScriptStrategy(
             onJournalEntryConsumed: (entry) => {
               attemptJournalByKey.set(entry.key, entry);
             },
-            onSnapshot: (snapshot) =>
-              Effect.gen(function* () {
-                // Persist first: only a durably written snapshot may feed the
-                // delivery summary, otherwise a failed write leaves the summary
-                // reporting a newer state than /executions/{id} keeps.
-                if (params.onSnapshot) {
-                  yield* params.onSnapshot(snapshot);
-                }
-                lastSnapshot = snapshot;
-              }),
             // The engine's control is already keyed by the grandchild run
             // id a host targets, so the run registers it as-is.
             onControl: (control) => {
@@ -353,11 +322,20 @@ export function createWorkflowScriptStrategy(
             },
           },
         );
+        // Settle only entries consumed by this invocation: the durable union may
+        // hold superseded or malformed untouched recovery history, and baseline
+        // history is irrelevant to this invocation's cost and delivered files.
+        const settleAttempt = (): void => {
+          const journal = attemptJournal();
+          const costUsd = attemptCost.total(journal);
+          ports.recordCost(costUsd);
+          settleSummary({ journal, board: projection.board() }, costUsd);
+        };
         const result = yield* Effect.exit(
           runPersistedWorkflowScript(projection.options).pipe(
             Effect.onExit((exit) =>
               Effect.sync(() => {
-                projection.settle(Exit.isSuccess(exit));
+                projection.settle(exit);
                 unregisterControls?.();
               }),
             ),
@@ -365,10 +343,7 @@ export function createWorkflowScriptStrategy(
         );
         if (Exit.isFailure(result)) {
           const settlement = yield* Effect.exit(
-            Effect.try({
-              try: () => settleAttempt(lastSnapshot),
-              catch: ensureError,
-            }),
+            Effect.try({ try: settleAttempt, catch: ensureError }),
           );
           if (Exit.isFailure(settlement)) {
             const settlementError = Cause.squash(settlement.cause);
@@ -379,10 +354,7 @@ export function createWorkflowScriptStrategy(
           }
           return yield* Effect.failCause(result.cause);
         }
-        yield* Effect.try({
-          try: () => settleAttempt(result.value.snapshot),
-          catch: ensureError,
-        });
+        yield* Effect.try({ try: settleAttempt, catch: ensureError });
         return result.value;
       }),
 

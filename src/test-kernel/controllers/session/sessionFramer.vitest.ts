@@ -211,37 +211,40 @@ describe('session framer', () => {
     ).toBe(true);
   });
 
-  it('preserves run subscription keys across the webview bridge', async () => {
-    const session = createTestSession();
-    const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
-    const bridge = new SessionBridge({
-      session,
-      onPortClosed: () => {},
-      handleHostRequest: async () => {
-        throw new Error('No host request is expected.');
-      },
-    });
-    const keys = [
-      qualifyAggregateId('run', RUN),
-      qualifyAggregateId('run', SECOND),
-    ];
-    try {
-      bridge.attach({ id: PORT, send: () => {} }).receive({
+  it.live('preserves run subscription keys across the webview bridge', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      // Registered first, so it runs last: the bridge's ports release their
+      // transcript sets through the session before it goes.
+      yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+      const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed: () => {},
+        handleHostRequest: async () => {
+          throw new Error('No host request is expected.');
+        },
+      });
+      const keys = [
+        qualifyAggregateId('run', RUN),
+        qualifyAggregateId('run', SECOND),
+      ];
+      const port = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* port.receive({
         ...subscribe,
         session: session.roots.storage,
         aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
       });
-      await vi.waitFor(() => {
-        expect(setSubscriptions).toHaveBeenCalledWith(
-          PORT,
-          keys.map((id) => ({ id, fromSeq: 0 })),
-        );
-      });
-    } finally {
-      bridge.dispose();
-      session.dispose();
-    }
-  });
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(setSubscriptions).toHaveBeenCalledWith(
+            PORT,
+            keys.map((id) => ({ id, fromSeq: 0 })),
+          );
+        }),
+      );
+    }),
+  );
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>

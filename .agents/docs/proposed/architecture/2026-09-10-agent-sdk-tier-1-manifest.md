@@ -18,7 +18,7 @@ Status: proposed
 > substantive claim it makes is the `/effect` correction in §2.
 >
 > **S0 amendment.** Step S0 of the
-> [one run model](./2026-09-10-one-run-model.md) §6 drops `StreamTabId` and
+> [one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §6 drops `StreamTabId` and
 > `StreamTabIdSchema` from every entry here. That type is the run id with a
 > label glued on, and it is deleted rather than aliased in S1 (§3.1 of that
 > note), so naming it here would freeze retired vocabulary as public surface.
@@ -319,7 +319,7 @@ not by this inventory:
 4. **The `AgentPlatform extends Platform` roots coupling**, which `2026-09-05`
    §4 proposes removing as consumers move to explicit sessions.
 5. **Re-derivation under the Effect-4 re-platform.** The ratified direction
-   ([`2026-09-04`](./2026-09-04-agent-runtime-on-effect.md),
+   ([`2026-09-04`](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md),
    [`2026-09-06` delivery plan](./2026-09-06-effect-runtime-delivery-plan.md))
    retires PocketFlow and the `IModelHandler` port. This manifest is the
    before-picture that change should be diffed against, and should be

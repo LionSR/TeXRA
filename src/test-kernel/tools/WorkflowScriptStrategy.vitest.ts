@@ -464,37 +464,6 @@ throw new Error('current revision failed')`,
       }),
   );
 
-  it.effect(
-    'keeps the delivery summary at the last persisted snapshot when snapshot writes fail',
-    () =>
-      Effect.gen(function* () {
-        const ports = fakePorts();
-        const strategy = createWorkflowScriptStrategy(
-          strategyParams({
-            name: 'snapshot-write-failure',
-            script,
-            createRunAgent: billingRunAgent,
-            onSnapshot: () => Effect.fail(new Error('snapshot disk full')),
-          }),
-        );
-
-        const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
-        expect(launchError.message).toContain(
-          'Failed to persist workflow run snapshot',
-        );
-
-        // No snapshot was ever durably written, so the failure summary must
-        // report the durable view (nothing ran) rather than the newer in-memory
-        // snapshot the rejected write carried.
-        const errText = yield* Effect.promise(() =>
-          Promise.resolve(strategy.formatError(null, new Error('boom'))),
-        );
-        expect(errText).toContain('"outcome":"failed"');
-        expect(errText).toContain('"taskDone":0');
-        expect(errText).toContain('"taskTotal":0');
-      }),
-  );
-
   it.effect('retains live spend when the agent() result is malformed', () =>
     Effect.gen(function* () {
       const malformedScript = `export const meta = {

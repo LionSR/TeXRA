@@ -200,7 +200,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   return executed(lines.join('\n'), summary);
 });
 
-export class ApplyTeamTool extends defineTool({
+export const ApplyTeamTool = defineTool({
   name: 'apply_team',
   description: `Apply an agent team (a discipline roster) to this workspace and record it as the user's default team.
 
@@ -209,8 +209,5 @@ Sets which workflow agents and assistants appear in this workspace's pickers, an
 Teams:
 ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
-}) {
-  protected execute(input: ApplyTeamInput) {
-    return applyTeam(input);
-  }
-}
+  execute: applyTeam,
+});

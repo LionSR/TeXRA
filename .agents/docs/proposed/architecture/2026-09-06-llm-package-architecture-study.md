@@ -58,7 +58,7 @@ The supplied [Effect v3 introduction](https://effect.website/docs/v3/ai/introduc
 
 ## 3. Proposed package contract
 
-The [joint runtime/LLM implementation contract](./2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+The [joint runtime/LLM implementation contract](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
 refines the sketch below with separate preparation, remote submission and
 observation boundaries. In particular, a completed-only `generateTurn` signature
 does not describe the durable caller's acceptance barrier. That contract also

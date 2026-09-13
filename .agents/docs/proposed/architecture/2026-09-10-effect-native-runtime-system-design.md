@@ -891,8 +891,14 @@ Recommended options are taken and stated, per the owner's 2026-09-10 rule.
    already carry; the reflection state PR1 §2.6 could not fit becomes rows.
 4. **`RunContext` ALS retires with the loops**; `workspaceRoots` waits for the filesystem
    ruling (injection §6 steps 6 and 10).
-5. **Injection Q1:** adopt Effect's `FileSystem` + `Path`, with the [findings][findings]
-   §2 gaps closed inside TeXRA's thin rooted-filesystem functions first.
+5. **Injection Q1 — RULED twice.** Revision 4 recommended adopting Effect's `FileSystem` +
+   `Path`. On 2026-09-11 the owner declined it for now (#12247; measured 7.1–9.7× slower
+   `readDirectory`, no `lstat`, no working core layer — [injection note][injection] §9). On
+   2026-09-13 the owner ruled for candidate B after all (#12073 R-1): `Platform` shrinks
+   onto the Effect-native services — #12364, #12372, #12373, #12374 landed; slices 4b
+   onward convert the filesystem consumers, the fs port last. Carrier 5 (`workspaceRoots`)
+   and the `inScope` re-entry on `AgentRun`/`ToolCall` retire with those slices, keeping
+   thin TeXRA helpers wherever `lstat` type bits or typed directory walks are load-bearing.
 6. **Injection Q2:** the three provision points in §3.1 are the topology.
 7. **Injection Q3:** `ModelInvoker`, `FollowUps`, `OutputPipeline` sit outside `Run` at
    run lifetime; `ToolCall` at call lifetime; `ToolRegistry` at process lifetime;
@@ -915,6 +921,22 @@ Recommended options are taken and stated, per the owner's 2026-09-10 rule.
 The [delivery plan][plan] §7 packages and the [injection note][injection] §6 steps order
 the work. The one-run-model S1 (identity) has landed, so nothing gates `RunLedger`'s
 aggregate arm.
+
+**Amendment, 2026-09-13 (what landed).** Slice 3 was written as one atomic cut and slice 2
+as "cannot land alone". In practice the cut landed as five reviewed merges on `main` —
+#12287 (PR1, ledger foundation), #12314 (both loops, PocketFlow deleted), #12320 (L3, the
+model-handler hierarchy retired onto the llm `Model`), #12329 (PR3+PR4, one request
+protocol, the phase as a fold, one child protocol; its squash carries the post-cutover sweep
+#12338 and review rounds 6–7) — and slice 2 landed **last and alone** as #12337 (54 tool
+executors return Effects, `ToolCall` service, `ToolFileInteractionContext` deleted), which the
+ratchet admitted because the dispatcher already carried the run site. Not landed from the
+slice tables: `Runs`/`Requests` as tags (§7.11's ≈4,500 LoC session tier: `runRegistry.ts`,
+`RunHandle.ts`, `runLanes.ts`, `waitingTermination.ts`, `runApprovalQueue.ts` survive),
+`followup.*` rows + the seeded `Queue` (§7.8; `FollowUpQueue.ts` still imports `p-defer`),
+the SDK on session services (§7.13), and **the file lease** — `runLease.ts` survived the
+KV cutover it was pinned to (§9 item 9; lease note D1), so its deletion is now its own
+item under #12082. `ModelRetryGate` remains the automatic retry owner inside
+`ModelInvoker` (AGENTS.md "Run loop architecture") pending its Effect rewrite.
 
 | Slice | Content                                                                                                                                                                                                                                                                                                                                                                                                                              | Deletes (symbols that cease to exist)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Rows                                                                                                                                                                                  | Alone?                          |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
@@ -942,33 +964,33 @@ per family recorded from a real run (§6.7).
 ## 11. Collapse ledger
 
 Everything the surveys found duplicated, and the one thing it becomes. Rows marked
-**banked** landed between revisions 3 and 4.
+**banked** have landed on `main` (re-marked 2026-09-13 against #12337).
 
-| Today                                                                                                  | Becomes                                                                   |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `StreamTabId` + `ExecutionId` + `RunId`, `execution*`/`stream*` names                                  | one branded `RunId`, one word (**banked**, #12222)                        |
-| four run-event vocabularies, two terminal facts                                                        | one `sessionEvent.ts` vocabulary, one `run.end` (**banked**, #12246)      |
-| several tool-call and workflow-call status enums                                                       | `TOOL_CALL_STATUS`, `WORKFLOW_CALL_STATUS` (**banked**, #12249)           |
-| per-host approval decision shapes                                                                      | `approvalDecision.ts` (**banked**, #12215); `Requests` finishes the route |
-| six liveness authorities + the `liveSessions` set                                                      | `Runs` (`FiberMap` + C5 claim)                                            |
-| three pending-request registries (interactions set, controller map, view list) and two decision routes | `Requests` + `decision.*` arms                                            |
-| two command vocabularies (`RuntimeRequest` 13 arms, `HostRequest` 41) + CLI slash duplicates           | one `RuntimeRequest` for session operations                               |
-| four folds over the same rows                                                                          | two: the view fold and `foldRunState`                                     |
-| seven publication entry methods, four fire-and-forget                                                  | `RunLedger.append`, awaited                                               |
-| three redaction sites                                                                                  | one, at the durable boundary                                              |
-| five KV families beside the event table                                                                | rows on the run aggregate                                                 |
-| two ownership authorities (lease file, `owner_id`)                                                     | `owner_id` (the lease deletes)                                            |
-| four durable records per workflow `agent()` call                                                       | `child.launched` + `child.result`                                         |
-| six child-launch entry paths, two primitives, in-band vs detached as four flags                        | `Runs.launch(spec)` with `mode`; `childRun.ts` as one spec variant        |
-| two concurrency limiters with entangled meanings on child launches                                     | two `Semaphore`s with distinct meanings; in-band inherits                 |
-| three in-memory follow-up layers + a third resume channel                                              | `followup.*` rows + one seeded `Queue` per run                            |
-| five retry layers on one model call (SDK, batch, gate, manual, auxiliary)                              | `Effect.retry` + `ModelRoutes` + `Requests` (SDK stays at 0)              |
-| five `AsyncLocalStorage` carriers + 13 `bind` re-entry sites                                           | three services + one reference                                            |
-| 54 tool preludes, 7 `Ports` interfaces, 62 run sites in `src/tools`                                    | `execute(): Effect`                                                       |
-| three CLI view adapters + `getUnsafe` pokes on hosts                                                   | one `SessionBridge` frame stream                                          |
-| three `ManagedRuntime` owners reached through 398 `effectRuntime()` reads                              | one per host root, in a local; the webview's is a root too                |
-| two `LifecycleHost`s per extension activation                                                          | one                                                                       |
-| the node graph, the cursor, the flow record, the round flow, the response-cycle fan-in                 | `Stream.unfold` over `turn` / `round`                                     |
+| Today                                                                                                  | Becomes                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StreamTabId` + `ExecutionId` + `RunId`, `execution*`/`stream*` names                                  | one branded `RunId`, one word (**banked**, #12222)                                                                                                                                                                                                 |
+| four run-event vocabularies, two terminal facts                                                        | one `sessionEvent.ts` vocabulary, one `run.end` (**banked**, #12246)                                                                                                                                                                               |
+| several tool-call and workflow-call status enums                                                       | `TOOL_CALL_STATUS`, `WORKFLOW_CALL_STATUS` (**banked**, #12249)                                                                                                                                                                                    |
+| per-host approval decision shapes                                                                      | `approvalDecision.ts` (**banked**, #12215); `Requests` finishes the route                                                                                                                                                                          |
+| six liveness authorities + the `liveSessions` set                                                      | `Runs` (`FiberMap` + C5 claim)                                                                                                                                                                                                                     |
+| three pending-request registries (interactions set, controller map, view list) and two decision routes | `request.opened`/`request.decided` rows (**banked**, #12329); `Requests` tag open                                                                                                                                                                  |
+| two command vocabularies (`RuntimeRequest` 13 arms, `HostRequest` 41) + CLI slash duplicates           | one `RuntimeRequest` for session operations                                                                                                                                                                                                        |
+| four folds over the same rows                                                                          | two: the view fold and `foldRunState`                                                                                                                                                                                                              |
+| seven publication entry methods, four fire-and-forget                                                  | `RunLedger.append`, awaited                                                                                                                                                                                                                        |
+| three redaction sites                                                                                  | one, at the durable boundary                                                                                                                                                                                                                       |
+| five KV families beside the event table                                                                | rows on the run aggregate (**banked**, #12329)                                                                                                                                                                                                     |
+| two ownership authorities (lease file, `owner_id`)                                                     | `owner_id` (the lease deletes)                                                                                                                                                                                                                     |
+| four durable records per workflow `agent()` call                                                       | landed as `child.turn` on the run aggregate plus `workflow.script`/`workflow.journal` on a `workflow-checkpoint` aggregate (#12329); the single `child.launched`/`child.result` pair this row proposed is **not** what shipped — design delta open |
+| six child-launch entry paths, two primitives, in-band vs detached as four flags                        | `Runs.launch(spec)` with `mode`; `childRun.ts` as one spec variant                                                                                                                                                                                 |
+| two concurrency limiters with entangled meanings on child launches                                     | two `Semaphore`s with distinct meanings; in-band inherits                                                                                                                                                                                          |
+| three in-memory follow-up layers + a third resume channel                                              | `followup.*` rows + one seeded `Queue` per run                                                                                                                                                                                                     |
+| five retry layers on one model call (SDK, batch, gate, manual, auxiliary)                              | `Effect.retry` + `ModelRoutes` + `Requests` (SDK stays at 0)                                                                                                                                                                                       |
+| five `AsyncLocalStorage` carriers + 13 `bind` re-entry sites                                           | three services + one reference                                                                                                                                                                                                                     |
+| 54 tool preludes, 7 `Ports` interfaces, 62 run sites in `src/tools`                                    | `execute(): Effect` (**banked**, #12337)                                                                                                                                                                                                           |
+| three CLI view adapters + `getUnsafe` pokes on hosts                                                   | one `SessionBridge` frame stream                                                                                                                                                                                                                   |
+| three `ManagedRuntime` owners reached through 398 `effectRuntime()` reads                              | one per host root, in a local; the webview's is a root too                                                                                                                                                                                         |
+| two `LifecycleHost`s per extension activation                                                          | one                                                                                                                                                                                                                                                |
+| the node graph, the cursor, the flow record, the round flow, the response-cycle fan-in                 | `Stream.unfold` over `turn` / `round` (**banked**, #12314)                                                                                                                                                                                         |
 
 ## 12. What this design refuses
 
@@ -1037,12 +1059,21 @@ Everything the surveys found duplicated, and the one thing it becomes. Rows mark
 | ended follow-up queue leaves the unfold spinning on `waiting` (rev 4 review)                                                                | yes     | §5.2                                                  |
 | `forkDetach`, `Semaphore.makeUnsafe` and `LayerMap.make` counts; merge-base anchors; the tag count; the `Stream.unfold` seed (rev 4 review) | yes     | §1, §2, §3.4, §7.11, §10                              |
 
+## 15. Revision 5 log (2026-09-13): reconciliation against `main` at #12337
+
+| Correction                                                                                                    | Where           |
+| ------------------------------------------------------------------------------------------------------------- | --------------- |
+| Q1 was ruled against adoption 23 minutes after revision 4's last commit; §9 item 5 said the opposite          | §9 item 5       |
+| Slice 3 landed as five merges, slice 2 last and alone; the lease survived the KV cutover                      | §10 amendment   |
+| Five more collapse rows are banked                                                                            | §11             |
+| Row counts in §1 are stale by a factor (`platform()` 19/41, six rows deleted, pin rc.115); re-measure at HEAD | §1 (not edited) |
+
 [prd]: ./2026-08-26-effect-4-runtime-migration.md
-[runtime]: ./2026-09-04-agent-runtime-on-effect.md
+[runtime]: ../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md
 [substrate]: ./2026-09-03-persistence-substrate-decision.md
 [plan]: ./2026-09-06-effect-runtime-delivery-plan.md
 [injection]: ./2026-09-10-effect-native-injection-context-pipelines.md
-[onerun]: ./2026-09-10-one-run-model.md
+[onerun]: ../../implemented/architecture/2026-09-10-one-run-model.md
 [pr1]: ./2026-09-08-pr1-run-ledger-foundation.md
 [findings]: ./2026-09-08-effect-4-interface-findings.md
 [loop]: ./2026-09-06-agent-loop-architecture-study.md

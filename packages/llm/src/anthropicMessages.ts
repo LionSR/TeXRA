@@ -12,8 +12,10 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   parseInboundToolArguments,
   parseOutboundToolArguments,
+  pullStream,
   ResolvedTurnSchema,
   sameModelOrigin,
   TurnRequestSchema,
@@ -520,10 +522,7 @@ export function anthropicMessagesModel(
       let responseId: string | undefined;
       let returnedModel: string | null = null;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? origin.requestedModel,
         });
@@ -563,20 +562,7 @@ export function anthropicMessagesModel(
           let stopped = false;
           let stop: z.infer<typeof StopSchema> = {};
           let usage: z.infer<typeof UsageSchema> = {};
-          const chunks = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => iterator.next(),
-                catch: sdkFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const chunks = pullStream(() => iterator.next(), sdkFailure);
           const progress = chunks.pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* (): Effect.fn.Return<
@@ -972,9 +958,7 @@ export function anthropicMessagesModel(
       let requestId: string | undefined;
       const failure = (cause: unknown) => {
         const error = sdkFailure(cause);
-        return new ModelError({
-          ...error,
-          message: error.message,
+        return enrichModelError(error, {
           cause,
           requestId: error.requestId ?? requestId,
           model: origin.requestedModel,

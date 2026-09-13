@@ -38,6 +38,7 @@ import type { StateStore } from '@platform/interfaces';
 import { tryProcessRuntime } from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { getCliSecrets } from './cliSecrets';
@@ -66,6 +67,7 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
       secrets: () => getCliSecrets(storageRoot),
       appState: () => cliGlobalState(),
       setup: cliSetupPlatform,
+      lean: directLeanLanguageServices(),
     });
   })().finally(() => {
     pending = null;

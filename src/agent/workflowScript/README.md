@@ -67,14 +67,19 @@ return await parallel(
   Scripts whose call set is data-dependent may omit the plan.
   A plan entry is a **label, not a call**: it carries no agent, model, files,
   or result contract, and nothing guarantees the script reaches it. Status is
-  what keeps the two apart in `WorkflowRunSnapshot` — a `declared` call is a
-  plan label the script has not issued, and every other status is an issued
+  what keeps the two apart on the `workflow.call` card — a `declared` card is
+  a plan label the script has not issued, and every other status is an issued
   call, carrying the invocation facts (`kind`, plus the declared `model`,
   agent, and file basenames) the script supplied when it called `agent()`. A
   plan entry the run never reaches stays `declared` and settles as
   not-reached. Hosts must not present plan entries as resolved calls, nor
-  infer parallelism or dependencies from shared phase membership — the run
-  snapshot's `queued`/`running` calls are the only source of real concurrency.
+  infer parallelism or dependencies from shared phase membership — the
+  `queued`/`running` cards are the only source of real concurrency.
+  The engine publishes its plan, phase and call transitions once, through
+  `onEvent`; the host adapter records them as `workflow.plan`, `stage.start`
+  / `stage.end` and `workflow.call` rows. Nothing else persists board state,
+  and `/executions/{id}` reads the same `workflowRunModel` fold the boards
+  paint.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host's
   script-facing envelope (the host's `toScriptValue` over the runner's typed
   result: in production the child's output plus `outcome` and `cost`, so a
@@ -185,9 +190,9 @@ structured, cost }`), `null` on failure, or the truthy
   duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
-  `parallel()` call, and a wall-clock timeout. The cap and
-  timeout raise `WorkflowRunAbortError`, which `parallel()` does
-  not convert to `null` — the whole run fails. On timeout guest execution is
+  `parallel()` call, and a wall-clock timeout. The cap raises
+  `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
+  whole run fails. The timeout is the sandbox's own error: guest execution is
   interrupted, the run's `AbortSignal` (on every
   `runAgent` invocation) fires, and new `agent()` calls are refused; runners
   should cancel in-flight work on it.

@@ -17,7 +17,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { aggregateId } from '@shared/schemas';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -438,19 +437,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
       );
       if (declined) return withScriptReference(declined, scriptPath);
 
-      // Preserve the committed workflow snapshot when reopening this named run.
       const runStore = getRunRecords(session, runId);
-      const initialSnapshot = yield* runStore.readWorkflow().pipe(
-        Effect.map((snapshot) => snapshot ?? undefined),
-        Effect.mapError((error) =>
-          workflowScriptToolError(
-            new ToolError(
-              `Failed to launch workflow script '${meta.name}': prior workflow run snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
-            ),
-            scriptPath,
-          ),
-        ),
-      );
       const runResult = Effect.gen(function* () {
         const launched = yield* Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
@@ -570,21 +557,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                       files,
                       name: meta.name,
                       workflowControls: session.workflowControls,
-                      initialSnapshot,
-                      onSnapshot: (snapshot) =>
-                        Effect.gen(function* () {
-                          session.publish([
-                            {
-                              type: 'run.workflow',
-                              aggregateId: aggregateId('run', runId),
-                              workflow: snapshot,
-                            },
-                          ]);
-                          yield* Effect.tryPromise({
-                            try: () => session.settlePublications(),
-                            catch: ensureError,
-                          });
-                        }),
                       ...((parent.stopAfterCycle ??
                         parent.run.toolPolicy.stopAfterCycle) && {
                         deliveryMode: 'persistOnly' as const,

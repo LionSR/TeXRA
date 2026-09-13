@@ -12,7 +12,11 @@ import type {
   WorkflowScriptControl,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type WorkflowCallProgress,
+} from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -84,10 +88,14 @@ describe('workflow attempt cost', () => {
       Effect.gen(function* () {
         let control!: WorkflowScriptControl;
         let attempt = 0;
+        let lastCard: WorkflowCallProgress | undefined;
         const started = yield* Deferred.make<void>();
         const run = runWorkflowScript({
           script: `${meta}
 return await agent('retry cost')`,
+          onEvent: (event) => {
+            if (event.type === 'call') lastCard = event.call;
+          },
           runAgent: (invocation) =>
             Effect.gen(function* () {
               attempt += 1;
@@ -109,14 +117,17 @@ return await agent('retry cost')`,
         const fiber = yield* run.pipe(Effect.forkScoped);
         yield* Deferred.await(started);
         control('retry-cost-1' as RunId, 'retry');
-        const result = yield* Fiber.join(fiber);
+        yield* Fiber.join(fiber);
         expect(attempt).toBe(2);
 
-        expect(result.snapshot.calls[0]?.attempts).toMatchObject([
-          { number: 1, costUsd: 0.2 },
-          { number: 2, costUsd: 0.3 },
-        ]);
-        expect(result.snapshot.calls[0]?.costUsd).toBeCloseTo(0.5);
+        // The settled card sums both physical attempts.
+        expect(lastCard).toMatchObject({
+          status: 'completed',
+          attemptNumber: 2,
+        });
+        expect(
+          lastCard?.status === 'completed' && lastCard.costUsd,
+        ).toBeCloseTo(0.5);
       }),
   );
 

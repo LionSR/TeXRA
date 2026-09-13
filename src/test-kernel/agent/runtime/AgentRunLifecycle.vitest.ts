@@ -226,7 +226,7 @@ describe('runFlowWithLifecycle', () => {
 
   it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
     const { runId, ctx } = lifecycleFixture();
-    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
+    const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
 
     const result = await Effect.runPromise(
       runFlow(ctx, () => Effect.succeed(waitingResult(runId)), {
@@ -607,7 +607,7 @@ describe('runFlowWithLifecycle', () => {
 
   it('runs run-end cleanup when waiting stage publication fails', async () => {
     const { runId, ctx } = lifecycleFixture();
-    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
+    const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
     seedOpenRunGroup(ctx, runId);
     await ctx.runScope.session.settlePublications();
     vi.spyOn(ctx.runScope.session, 'settlePublications').mockRejectedValueOnce(

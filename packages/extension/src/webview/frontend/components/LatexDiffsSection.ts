@@ -15,9 +15,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import type { LatexDiffsActionDetail } from '@shared/schemas';
 import { compactFormControlStyles, designTokens } from '@shared/styles';
 import { buttonStyles } from '@shared/styles/controlStyles';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { SurfaceAction } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { readSelectValue } from '@shared/wa/selectTemplates';
 import {
   renderIconActionButton,
@@ -25,10 +27,9 @@ import {
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { byString } from '@utils/core';
-import { MainViewEvents } from '../events';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
-type LatexDiffsAction = LatexDiffsActionDetail['action'];
+type LatexDiffsAction = Extract<HostRequest, { kind: 'latexdiffs' }>['action'];
 
 /** A labeled diff operation button rendered inside a wa-button-group. */
 interface DiffActionSpec {
@@ -173,30 +174,32 @@ export class LatexDiffsSection extends LitElement {
   /** Whether this is a git repo */
   @property({ attribute: false }) isGitRepo = true;
 
+  /** A selection change on one of the three selectors: the launcher field it
+   *  names, patched on the surface the Tools sheet reads back. */
+  private patchLaunch(
+    patch: Extract<SurfaceAction, { kind: 'launch' }>['patch'],
+  ): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
+  }
+
   private handleBaseSelectChange(event: Event): void {
-    this.dispatchEvent(
-      MainViewEvents.baseFileChange({ value: readSelectValue(event) }),
-    );
+    this.patchLaunch({ baseFile: readSelectValue(event) });
   }
 
   private handleEditedSelectChange(event: Event): void {
-    this.dispatchEvent(
-      MainViewEvents.editedFileChange({ value: readSelectValue(event) }),
-    );
+    this.patchLaunch({ editedFile: readSelectValue(event) });
   }
 
   private handleCommitSelectChange(event: Event): void {
-    this.dispatchEvent(
-      MainViewEvents.commitChange({ value: readSelectValue(event) }),
-    );
+    this.patchLaunch({ commit: readSelectValue(event) });
   }
 
   private handleRefreshEditedFiles(): void {
-    this.dispatchEvent(MainViewEvents.refreshEditedFiles());
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'refreshFiles' }));
   }
 
   private handleRefreshCommits(): void {
-    this.dispatchEvent(MainViewEvents.refreshCommits());
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'refreshCommits' }));
   }
 
   /**
@@ -220,7 +223,13 @@ export class LatexDiffsSection extends LitElement {
         appearance: 'outlined',
         onClick: () =>
           this.dispatchEvent(
-            MainViewEvents.latexDiffsAction({ action: action.action }),
+            SessionUiEvents.host({
+              kind: 'latexdiffs',
+              action: action.action,
+              baseFile: this.baseFile,
+              editedFile: this.editedFile || null,
+              commit: this.commit,
+            }),
           ),
       }),
     }));
@@ -284,7 +293,10 @@ export class LatexDiffsSection extends LitElement {
                 tooltip: 'Set current file as base',
                 onClick: () =>
                   this.dispatchEvent(
-                    MainViewEvents.getCurrentFile({ type: 'base' }),
+                    SessionUiEvents.host({
+                      kind: 'useCurrentFile',
+                      fileType: 'base',
+                    }),
                   ),
               })}
               ${renderIconActionButton({
@@ -292,10 +304,7 @@ export class LatexDiffsSection extends LitElement {
                 icon: 'xmark',
                 label: 'Clear base file',
                 tooltip: 'Clear base file',
-                onClick: () =>
-                  this.dispatchEvent(
-                    MainViewEvents.emptyFile({ type: 'base' }),
-                  ),
+                onClick: () => this.patchLaunch({ baseFile: '' }),
               })}
             </div>
           </div>
@@ -331,7 +340,10 @@ export class LatexDiffsSection extends LitElement {
                 tooltip: 'Set current file as edited',
                 onClick: () =>
                   this.dispatchEvent(
-                    MainViewEvents.getCurrentFile({ type: 'edited' }),
+                    SessionUiEvents.host({
+                      kind: 'useCurrentFile',
+                      fileType: 'edited',
+                    }),
                   ),
               })}
               ${renderIconActionButton({
@@ -339,10 +351,7 @@ export class LatexDiffsSection extends LitElement {
                 icon: 'xmark',
                 label: 'Clear edited file',
                 tooltip: 'Clear edited file',
-                onClick: () =>
-                  this.dispatchEvent(
-                    MainViewEvents.emptyFile({ type: 'edited' }),
-                  ),
+                onClick: () => this.patchLaunch({ editedFile: '' }),
               })}
             </div>
           </div>

@@ -77,22 +77,20 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
   );
 });
 
-export class ZoteroExportTool extends defineTool({
+export const ZoteroExportTool = defineTool({
   name: 'zotero_export',
   description:
     'Export BibTeX/BibLaTeX entries from Zotero by citation keys. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroExportInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: ZoteroExportInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    return Effect.gen(function* () {
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       return yield* exportEntries(
         input,
         readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
       );
-    });
-  }
-}
+    }),
+});

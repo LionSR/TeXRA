@@ -27,7 +27,6 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   nodeProcesses,
   processOwnerId,
@@ -45,6 +44,7 @@ import {
 import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 
@@ -131,6 +131,7 @@ export async function initializeElectronPlatform(
     secrets: () => secrets,
     appState: () => globalStateStore,
     setup: desktopSetupPlatform,
+    lean: directLeanLanguageServices(),
   });
   // The Promise face of `StateStore.update`, run on this process's runtime:
   // the store itself is below the boundary and never runs an Effect.
@@ -223,9 +224,6 @@ export async function initializeElectronPlatform(
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   await effectRuntime().runPromise(seedDisabledToolDefaults(globalStateStore));
 
-  // Register the shared Node-host agent runtime: the direct Lean language
-  // services (lake env lean --server).
-  initNodeAgentRuntime(lifecycle);
   // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
 

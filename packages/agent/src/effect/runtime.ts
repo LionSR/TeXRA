@@ -37,8 +37,8 @@ import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
@@ -172,22 +172,18 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       initPlatform(platform);
       initProcessWorkspaceRoots(platform.roots);
     }
-    // The runtime is installed before the agent runtime, as the CLI and
-    // desktop roots do: registering the direct Lean language services
-    // builds their layer graph on it, so a registration ahead of the
-    // install throws before any agent work begins. The identity stays a
-    // pending read: the owner's map builds synchronously over it, so an
-    // open registers its root before the opener's first await and only the
-    // entry's build waits.
+    // The identity stays a pending read: the owner's map builds
+    // synchronously over it, so an open registers its root before the
+    // opener's first await and only the entry's build waits. The direct Lean
+    // language services are a layer of this runtime, as on the CLI and
+    // desktop roots.
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: () => platform.roots.globalStorage,
       updateCheckStorage: () => platform.roots.globalStorage,
       ...processServices,
+      lean: directLeanLanguageServices(),
     });
-    if (!active) {
-      initNodeAgentRuntime(platform.lifecycle);
-    }
     installedHere = true;
   }
   if (!processRuntime) {

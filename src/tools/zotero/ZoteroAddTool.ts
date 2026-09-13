@@ -418,19 +418,17 @@ const addItems = Effect.fn('ZoteroAddTool.execute')(function* (
   return executed(output, summary);
 });
 
-export class ZoteroAddTool extends defineTool({
+export const ZoteroAddTool = defineTool({
   name: 'zotero_add',
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: ZoteroAddInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    return Effect.gen(function* () {
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       const port = readConfig<number>(call.roots.config, ZOTERO_PORT_KEY);
       return yield* addItems(input, port);
-    });
-  }
-}
+    }),
+});

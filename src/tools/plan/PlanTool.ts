@@ -410,7 +410,7 @@ function planCommand(
   }
 }
 
-export class PlanTool extends defineTool({
+export const PlanTool = defineTool({
   name: 'plan',
   requiresApproval: true,
   description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
@@ -422,9 +422,8 @@ Commands:
 
 pause/complete only affect autonomous goals; with no goal running they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
-}) {
-  protected execute(input: PlanToolInput) {
-    return Effect.gen(function* () {
+  execute: (input: PlanToolInput) =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       const run = call.run;
       if (!run) {
@@ -433,6 +432,5 @@ pause/complete only affect autonomous goals; with no goal running they return gu
         );
       }
       return yield* planCommand({ call, session: run.session }, input);
-    });
-  }
-}
+    }),
+});

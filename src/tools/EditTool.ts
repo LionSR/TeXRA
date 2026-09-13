@@ -33,7 +33,7 @@ const EditInputSchema = z.strictObject({
     ),
 });
 
-export type EditInput = z.infer<typeof EditInputSchema>;
+type EditInput = z.infer<typeof EditInputSchema>;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,
@@ -91,14 +91,11 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   });
 });
 
-export class EditFileTool extends defineTool({
+export const EditFileTool = defineTool({
   name: 'edit_file',
   requiresApproval: true,
   description:
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,
-}) {
-  protected execute(input: EditInput) {
-    return edit(input);
-  }
-}
+  execute: edit,
+});

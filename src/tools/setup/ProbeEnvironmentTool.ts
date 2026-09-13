@@ -187,12 +187,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
  * origins, broader usable credential status, and TeXRA account status.
  * No approval gate — purely read-only, akin to `ls` / `glob`.
  */
-export class ProbeEnvironmentTool extends defineTool({
+export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
   description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
-}) {
-  protected execute(_input: ProbeInput) {
-    return probe();
-  }
-}
+  execute: (_input: ProbeInput) => probe(),
+});

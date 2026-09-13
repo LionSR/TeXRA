@@ -1,7 +1,7 @@
 /**
- * MainView state and data schemas (option rows, banners,
- * file state, and event detail shapes). Kept free of any IPC message wrappers
- * so the message modules can compose these without circular dependencies.
+ * MainView state and data schemas (option rows, banners, and file state).
+ * Kept free of any IPC message wrappers so the message modules can compose
+ * these without circular dependencies.
  */
 import { z } from 'zod';
 
@@ -11,12 +11,7 @@ import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,
 } from '@shared/wa/iconNames';
-import { requiredFileListFields } from '../fileFields';
-import {
-  CurrentFileTypeSchema,
-  DocumentFileTypeSchema,
-  MultipleDocumentFileTypeSchema,
-} from '../fileTypes';
+import { DocumentFileTypeSchema } from '../fileTypes';
 import { ToolConfigFieldsSchema } from '../toolConfig';
 
 // ============================================================
@@ -286,77 +281,6 @@ export const FileOptionsSchema = z.object({
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
-// Enumerates the four multi-file keys so listId fields below name a file list.
-const MultiFilesKeySchema = z.object(requiredFileListFields).keyof();
-
-const StringValueDetailSchema = z.object({
-  value: z.string(),
-});
-type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
-
-export type BaseFileChangeDetail = StringValueDetail;
-export type EditedFileChangeDetail = StringValueDetail;
-export type CommitChangeDetail = StringValueDetail;
-
-const FileActionDetailSchema = z.object({
-  type: CurrentFileTypeSchema,
-});
-export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
-
-const MultipleFilesActionDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-});
-export type MultipleFilesActionDetail = z.infer<
-  typeof MultipleFilesActionDetailSchema
->;
-
-const MultipleFilesTypeActionDetailSchema = z.object({
-  type: MultipleDocumentFileTypeSchema,
-});
-export type MultipleFilesTypeActionDetail = z.infer<
-  typeof MultipleFilesTypeActionDetailSchema
->;
-
-const RemoveFileDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-  file: z.string(),
-});
-export type RemoveFileDetail = z.infer<typeof RemoveFileDetailSchema>;
-
-const ReorderFilesDetailSchema = z.object({
-  listId: MultiFilesKeySchema,
-  files: z.array(z.string()),
-});
-export type ReorderFilesDetail = z.infer<typeof ReorderFilesDetailSchema>;
-
-const CheckboxChangeDetailSchema = z.object({
-  id: z.string(),
-  checked: z.boolean(),
-});
-export type CheckboxChangeDetail = z.infer<typeof CheckboxChangeDetailSchema>;
-
-/**
- * Per-banner action details. Each banner's detail carries its own action
- * literal set plus only the fields that banner fills, so handlers receive a
- * closed union instead of a shared loose `{ action: string }` type that
- * required casts at every dispatch site.
- */
-const ApiKeyBannerActionDetailSchema = z.object({
-  action: z.enum(['set', 'guide']),
-  provider: z.string().nullish(),
-});
-export type ApiKeyBannerActionDetail = z.infer<
-  typeof ApiKeyBannerActionDetailSchema
->;
-
-const AgentConfigBannerActionDetailSchema = z.object({
-  action: z.enum(['edit', 'dir', 'docs']),
-  customDirSet: z.boolean().nullish(),
-});
-export type AgentConfigBannerActionDetail = z.infer<
-  typeof AgentConfigBannerActionDetailSchema
->;
-
 export const GettingStartedActionSchema = z.enum([
   'runSetup',
   'createSampleProject',
@@ -398,31 +322,4 @@ export const GETTING_STARTED_ACTION_PRESENTATION = {
 } as const satisfies Record<
   GettingStartedAction,
   { readonly label: string; readonly icon: TeXRAIconName }
->;
-
-const GettingStartedActionDetailSchema = z.object({
-  action: GettingStartedActionSchema,
-});
-export type GettingStartedActionDetail = z.infer<
-  typeof GettingStartedActionDetailSchema
->;
-
-const InstallGuideDetailSchema = z.object({
-  tool: z.string(),
-});
-export type InstallGuideDetail = z.infer<typeof InstallGuideDetailSchema>;
-
-const LatexDiffsActionDetailSchema = z.object({
-  action: z.enum([
-    'latexdiff',
-    'latexdiffvc',
-    'packLatexdiffvc',
-    'cleanLatexdiffvc',
-    'merge',
-    'compare',
-    'accept',
-  ]),
-});
-export type LatexDiffsActionDetail = z.infer<
-  typeof LatexDiffsActionDetailSchema
 >;
