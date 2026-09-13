@@ -247,46 +247,54 @@ describe('agent registry load state', () => {
     );
   });
 
-  it('runs a single scan for loads that start together', async () => {
-    const counter = { scans: 0 };
-    await installDirectories(countingDirectories(counter));
-    await Effect.runPromise(refresh({ includeRemote: false }));
-    counter.scans = 0;
+  it.effect('runs a single scan for loads that start together', () =>
+    Effect.gen(function* () {
+      const counter = { scans: 0 };
+      yield* Effect.promise(() =>
+        installDirectories(countingDirectories(counter)),
+      );
+      yield* refresh({ includeRemote: false });
+      counter.scans = 0;
 
-    await Promise.all([
-      Effect.runPromise(loadAgents({ includeRemote: true })),
-      Effect.runPromise(loadAgents({ includeRemote: true })),
-    ]);
+      yield* Effect.all(
+        [
+          loadAgents({ includeRemote: true }),
+          loadAgents({ includeRemote: true }),
+        ],
+        { concurrency: 'unbounded' },
+      );
 
-    assert.strictEqual(counter.scans, 1);
-    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
-  });
+      assert.strictEqual(counter.scans, 1);
+      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+    }),
+  );
 
-  it('keeps serving the published catalog when a refresh fails', async () => {
-    const counter = { scans: 0 };
-    await installDirectories(countingDirectories(counter));
-    await Effect.runPromise(refresh({ includeRemote: false }));
-    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+  it.effect('keeps serving the published catalog when a refresh fails', () =>
+    Effect.gen(function* () {
+      const counter = { scans: 0 };
+      yield* Effect.promise(() =>
+        installDirectories(countingDirectories(counter)),
+      );
+      yield* refresh({ includeRemote: false });
+      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
-    const scanFailure = new Error('agent directory unavailable');
-    await installDirectories({
-      custom: async () => {
-        throw scanFailure;
-      },
-      builtIn: async () => agentDir,
-      builtInToolUse: async () => agentDir,
-    });
+      const scanFailure = new Error('agent directory unavailable');
+      yield* Effect.promise(() =>
+        installDirectories({
+          custom: async () => {
+            throw scanFailure;
+          },
+          builtIn: async () => agentDir,
+          builtInToolUse: async () => agentDir,
+        }),
+      );
 
-    await assert.rejects(
-      Effect.runPromise(refresh({ includeRemote: false })),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.strictEqual(error.message, scanFailure.message);
-        return true;
-      },
-    );
+      const error = yield* Effect.flip(refresh({ includeRemote: false }));
+      assert.ok(error instanceof Error);
+      assert.strictEqual(error.message, scanFailure.message);
 
-    // A failed rebuild leaves the previously published catalog in place.
-    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
-  });
+      // A failed rebuild leaves the previously published catalog in place.
+      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+    }),
+  );
 });

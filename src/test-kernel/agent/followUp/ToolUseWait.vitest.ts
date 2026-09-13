@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -352,22 +352,46 @@ const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
   return { exit, requests, state };
 });
 
-/** Start a run that parks, for scenarios that drive it while it waits. */
+/**
+ * Start a run that parks, for scenarios that drive it while it waits. The
+ * loop calls `attachment.detach()` on its own fiber immediately before it
+ * blocks for input, after the batch carrying the `waiting` step has
+ * committed, so one Deferred per park is the loop's own 'parked for the Nth
+ * time' signal: `park(n)` is what those scenarios wait on. The wait resumes
+ * inside that callback, before the loop enters `followUps.wait`, so input a
+ * scenario enqueues after `park` lands on the queue rather than on a waiting
+ * consumer; `waitAndDrainAll` drains what is queued first, so both orders
+ * deliver the same batch.
+ */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
-  const fiber = yield* Effect.forkDetach(loopProgram(init, requests));
-  return { fiber, requests };
+  const parks = yield* Effect.forEach(init.script, () => Deferred.make<void>());
+  let parked = 0;
+  const fiber = yield* Effect.forkChild(
+    loopProgram(
+      {
+        ...init,
+        attachment: {
+          attach: (context) => init.attachment?.attach(context),
+          detach: (context) => {
+            init.attachment?.detach(context);
+            const park = parks[parked];
+            parked += 1;
+            if (park) Deferred.doneUnsafe(park, Effect.void);
+          },
+        },
+      },
+      requests,
+    ),
+  );
+  /** Wait for the loop's `n`-th park; the n-th invocation precedes it. */
+  const park = (n: number) => {
+    const deferred = parks[n];
+    if (!deferred) throw new Error(`The script has no park ${n}.`);
+    return Deferred.await(deferred);
+  };
+  return { fiber, requests, park };
 });
-
-/** Poll a real-time condition the parked loop settles on its own fiber. */
-const waitFor = (condition: () => boolean, label: string) =>
-  Effect.promise(async () => {
-    for (let attempt = 0; attempt < 1000; attempt += 1) {
-      if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 2));
-    }
-    throw new Error(`Timed out waiting for ${label}.`);
-  });
 
 /**
  * A session over the process roots: a goal is its run's own row, so a goal
@@ -573,18 +597,13 @@ describe('a parked root run', () => {
         const onIdle = vi.fn();
         enqueue(session, runId, [{ text: 'keep going', origin: 'user' }]);
 
-        const { fiber, requests } = yield* forkLoop({
+        const { fiber, park } = yield* forkLoop({
           runId,
           session,
           onIdle,
           script: [textTurn('first'), textTurn('second')],
         });
-        yield* waitFor(
-          () =>
-            requests.length >= 2 &&
-            session.runView(runId)?.status === RUN_PHASE.WAITING,
-          'the second turn and the park after it',
-        );
+        yield* park(1);
         yield* Fiber.interrupt(fiber);
 
         // Idle is a notification, not a suspension: the queued input still
@@ -664,22 +683,14 @@ describe('a parked root run', () => {
       const runId = startedRun(session);
       const recorded = recordSessionEvents(session);
 
-      const { fiber, requests } = yield* forkLoop({
+      const { fiber, park } = yield* forkLoop({
         runId,
         session,
         script: [textTurn('first'), textTurn('second')],
       });
-      yield* waitFor(
-        () => session.runView(runId)?.status === RUN_PHASE.WAITING,
-        'the parked run',
-      );
+      yield* park(0);
       enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
-      yield* waitFor(
-        () =>
-          requests.length >= 2 &&
-          session.runView(runId)?.status === RUN_PHASE.WAITING,
-        'the second turn and the park after it',
-      );
+      yield* park(1);
       yield* Fiber.interrupt(fiber);
 
       // The phase is the loop's own step on the session's plane, the single
@@ -705,15 +716,12 @@ describe('a parked root run', () => {
       );
       const recorded = recordSessionEvents(session);
 
-      const { fiber } = yield* forkLoop({
+      const { fiber, park } = yield* forkLoop({
         runId,
         session,
         script: [textTurn('first')],
       });
-      yield* waitFor(
-        () => session.runView(runId)?.status === RUN_PHASE.WAITING,
-        'the parked run',
-      );
+      yield* park(0);
       yield* Fiber.interrupt(fiber);
 
       // The loop's steps carry the run out of its cancelled terminal: it runs
@@ -748,18 +756,13 @@ describe('the batch a parked run consumes', () => {
           { text: 'please revise the theorem', origin: 'user' },
         ]);
 
-        const { fiber, requests } = yield* forkLoop({
+        const { fiber, park } = yield* forkLoop({
           runId,
           session,
           logger,
           script: [textTurn('first'), textTurn('second')],
         });
-        yield* waitFor(
-          () =>
-            requests.length >= 2 &&
-            session.runView(runId)?.status === RUN_PHASE.WAITING,
-          'the second turn and the park after it',
-        );
+        yield* park(1);
         yield* Fiber.interrupt(fiber);
         const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
 
@@ -821,18 +824,13 @@ describe('the batch a parked run consumes', () => {
         },
       ]);
 
-      const { fiber, requests } = yield* forkLoop({
+      const { fiber, park } = yield* forkLoop({
         runId,
         session,
         logger,
         script: [textTurn('first'), textTurn('second')],
       });
-      yield* waitFor(
-        () =>
-          requests.length >= 2 &&
-          session.runView(runId)?.status === RUN_PHASE.WAITING,
-        'the second turn and the park after it',
-      );
+      yield* park(1);
       yield* Fiber.interrupt(fiber);
 
       expect(info).toHaveBeenCalledWith(
@@ -859,19 +857,14 @@ describe('the batch a parked run consumes', () => {
           },
         ]);
 
-        const { fiber, requests } = yield* forkLoop({
+        const { fiber, park } = yield* forkLoop({
           runId,
           session,
           logger,
           supportsVision: false,
           script: [textTurn('first'), textTurn('second')],
         });
-        yield* waitFor(
-          () =>
-            requests.length >= 2 &&
-            session.runView(runId)?.status === RUN_PHASE.WAITING,
-          'the second turn and the park after it',
-        );
+        yield* park(1);
         yield* Fiber.interrupt(fiber);
 
         expect(warn).toHaveBeenCalledWith(
