@@ -21,11 +21,12 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  getZoteroPort,
+  ZOTERO_PORT_KEY,
   BbtLibrarySchema,
   type BbtCollection,
 } from './bbtClient';
@@ -226,7 +227,10 @@ export class ZoteroCollectionsTool extends defineTool({
   ): Effect.Effect<ToolResult, unknown, ToolServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      return yield* listCollections(input, call.inScope(getZoteroPort));
+      return yield* listCollections(
+        input,
+        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
+      );
     });
   }
 }

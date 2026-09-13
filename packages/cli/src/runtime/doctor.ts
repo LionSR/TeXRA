@@ -13,10 +13,7 @@ import {
 } from '@latex/latexToolchain';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
-import {
-  usageLoggingOptOut,
-  type UsageLoggingOptOut,
-} from '@telemetry/UsageLogService';
+import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -396,6 +393,16 @@ const missingModelAccessProbe = (): Promise<never> =>
     ),
   );
 
+/**
+ * Same contract for the telemetry consent read: the CLI root passes the
+ * opt-out over its platform roots' config, or a platform init error.
+ */
+const missingUsageLoggingOptOut = (): never => {
+  throw new Error(
+    'Telemetry consent needs the workspace configuration the CLI root holds; doctor was given neither a consent probe nor a platform init error.',
+  );
+};
+
 export async function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
@@ -408,7 +415,7 @@ export async function buildDoctorReport(
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,
     pathAccess: deps.pathAccess ?? access,
-    usageLoggingOptOut: deps.usageLoggingOptOut ?? usageLoggingOptOut,
+    usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,
   };
   // A platform-init failure takes out every dependency-based check
   // (auth/models/telemetry), so surface it once here rather than as N

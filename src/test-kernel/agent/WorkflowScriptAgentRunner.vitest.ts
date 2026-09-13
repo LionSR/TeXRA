@@ -11,7 +11,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
@@ -167,7 +167,7 @@ const structuredResult: RunEnd = {
 function parentContext(): DelegationParent {
   const session = { id: 'session' } as never;
   return {
-    config: new FakeConfigProvider(),
+    roots: createFakeWorkspaceRoots(),
     model: 'parent-model',
     tracker: new FileInteractionState(),
     workingDirectory: WORKSPACE_PATH,

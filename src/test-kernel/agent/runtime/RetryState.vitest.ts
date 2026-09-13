@@ -56,6 +56,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@llm/turn';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   AgentRunStateSnapshotSchema,
@@ -276,7 +277,7 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },

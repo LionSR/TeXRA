@@ -32,12 +32,13 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
   callZoteroConnector,
   checkZoteroRunning,
-  getZoteroPort,
+  ZOTERO_PORT_KEY,
   type ConnectorResult,
 } from './bbtClient';
 
@@ -428,7 +429,7 @@ export class ZoteroAddTool extends defineTool({
   ): Effect.Effect<ToolResult, unknown, ToolServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const port = call.inScope(getZoteroPort);
+      const port = readConfig<number>(call.roots.config, ZOTERO_PORT_KEY);
       return yield* addItems(input, port);
     });
   }

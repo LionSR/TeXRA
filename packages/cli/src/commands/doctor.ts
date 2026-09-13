@@ -1,3 +1,4 @@
+import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -7,6 +8,7 @@ import {
   initCliPlatform,
   type CliPlatformServices,
 } from '../runtime/initPlatform';
+
 import { getCliModelAccessList } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -27,11 +29,19 @@ async function runDoctor(context: CliContext): Promise<number> {
   // A const, so the probe closure below sees the initialized value rather
   // than the reassignable binding's `| undefined`.
   const services = initialized;
+  // Consent is read from the workspace configuration the init installed;
+  // without it the telemetry check reports the gap.
+  const roots = services?.roots;
   const report = await suppressCliFetchStackLogs(() =>
     buildDoctorReport(
       context,
       services
-        ? { modelAccessList: () => getCliModelAccessList({ stores: services }) }
+        ? {
+            modelAccessList: () => getCliModelAccessList({ stores: services }),
+            ...(roots && {
+              usageLoggingOptOut: () => usageLoggingOptOut(roots.config),
+            }),
+          }
         : {},
       initError,
     ),

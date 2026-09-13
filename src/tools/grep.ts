@@ -11,7 +11,7 @@ import { hostPort } from '@common/hostPort';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
+import { resolveAndFormat } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { executeCommand } from '@utils/system/execUtils';

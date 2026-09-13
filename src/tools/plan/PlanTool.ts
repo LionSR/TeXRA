@@ -125,7 +125,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
-  if (!isGoalEnabled(ports.call.config)) {
+  if (!isGoalEnabled(ports.call.roots.config)) {
     logger.warn(
       'Run as Goal requested but goal feature flag is off; ' +
         'continuing without an autonomous goal.',
@@ -230,7 +230,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   workPlanState: WorkPlanState,
 ) {
   const requestId = `plan-${generateShortId()}`;
-  const goalEnabled = isGoalEnabled(ports.call.config);
+  const goalEnabled = isGoalEnabled(ports.call.roots.config);
 
   logger.info('Requesting approval for plan objective');
 

@@ -596,6 +596,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         logger: agentLogger,
         runId,
         runStageId: parentStage.id,
+        config: session.roots.config,
       },
       {
         agentName: config.agent,

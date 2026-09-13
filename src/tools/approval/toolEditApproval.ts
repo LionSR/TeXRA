@@ -21,7 +21,7 @@ import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
 import {
@@ -187,8 +187,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const call = yield* ToolCall;
-    const approvalsEnabled = call.inScope(() =>
-      getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY),
+    const approvalsEnabled = readConfig<boolean>(
+      call.roots.config,
+      TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
     const run = call.run;
     if (!run) {

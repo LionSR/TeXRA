@@ -16,9 +16,10 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
+import { readConfig } from '@utils/config/configUtils';
 
 // Local imports - zotero
-import { callBetterBibTeX, getZoteroPort } from './bbtClient';
+import { callBetterBibTeX, ZOTERO_PORT_KEY } from './bbtClient';
 
 const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
@@ -88,7 +89,10 @@ export class ZoteroExportTool extends defineTool({
   ): Effect.Effect<ToolResult, unknown, ToolServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      return yield* exportEntries(input, call.inScope(getZoteroPort));
+      return yield* exportEntries(
+        input,
+        readConfig<number>(call.roots.config, ZOTERO_PORT_KEY),
+      );
     });
   }
 }

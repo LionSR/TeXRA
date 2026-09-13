@@ -15,7 +15,7 @@ function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {
     } as AgentPrompt,
     {},
     undefined,
-    { resolvedToolNames: ['memory'] },
+    { workspace: undefined, resolvedToolNames: ['memory'] },
   );
 }
 
@@ -27,7 +27,7 @@ describe('PromptBuilder', () => {
       userRequest: ['initial {{ value }}', 'reflect {{ value }}'],
     } as AgentPrompt;
 
-    const builder = new PromptBuilder(prompt, { value: 'test' });
+    const builder = new PromptBuilder(prompt, { value: 'test' }, undefined);
     const initial = await builder.buildInitialPrompts();
     expect(initial.userRequest).toBe('initial test');
 
@@ -45,7 +45,7 @@ describe('PromptBuilder', () => {
       userRequest: 'initial only',
     } as AgentPrompt;
 
-    const builder = new PromptBuilder(prompt, {});
+    const builder = new PromptBuilder(prompt, {}, undefined);
     const initial = await builder.buildInitialPrompts();
     expect(initial.userRequest).toBe('initial only');
 
