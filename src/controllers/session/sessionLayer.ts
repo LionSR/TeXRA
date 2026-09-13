@@ -46,6 +46,7 @@ import { EditorModel } from '@agent/runtime/run/modelBinding';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
@@ -411,6 +412,9 @@ const sessionHandleLayer = (
         initialListing,
         key.open.transcriptMode,
       ).pipe(Effect.orDie);
+      // The gate's probe fibers and waiting calls end with this scope, after
+      // the handle below has unwound its runs.
+      const modelRetries = yield* ModelRetryGate.make;
       const session = yield* Effect.acquireRelease(
         Effect.sync(
           () =>
@@ -418,6 +422,7 @@ const sessionHandleLayer = (
               ...key.open,
               transcripts,
               graph,
+              modelRetries,
             }),
         ),
         (session) =>
