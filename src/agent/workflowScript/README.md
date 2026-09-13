@@ -137,29 +137,33 @@ structured, cost }`), `null` on failure, or the truthy
   attempt mark before each launch, and recovery probes the derived ids in
   order from there, so a deleted attempt whose tombstone has since been
   collected cannot read as an id that never started. An attempt that never
-  reached `run.start` simply launches, and an attempt no live owner holds that
-  opened no `child.turn` and can no longer record an outcome frees the next
-  id (a settled turn under no outcome is unrepeatable work: the manifest
-  beside it is written for a failed delivery too, so nothing says whether the
-  turn succeeded) — a decision taken while holding that attempt's run claim,
-  so a resume starting one instant later is refused instead of running beside
-  the id this frees. An accepted turn that never settled is refused the same
-  way, with an outcome or without one: acceptance commits immediately before
-  the turn dispatches, so a child cancelled in that window ends CANCELLED with
-  no manifest over tool edits that already landed, and the open turn is what
-  says so. A FAILED or CANCELLED `run.end` frees the next id only
-  when no `run.result` manifest sits under it: the manifest commits ahead of
-  the turn's settle, so a failed row beside one says the delivery landed and
-  the work behind it is durable. What that row then means is the settled turn's
-  to say — a settled `child.turn` under it is an ordinary failed child (the
-  manifest is written for `isError` too), replayed as the call's own failure,
-  the same one a live child of that outcome raises and the same `null` the
-  engine journals nothing for, while a manifest whose turn never settled lost
-  its bookkeeping between the delivery and the settle and is refused for
-  operator attention. A parent execution has one
-  active runtime owner; the execution KV store is durable state, not a
-  cross-process lock. Checkpoints use the strict version-4 schema; malformed or
-  older records fail instead of being translated into the current journal.
+  reached `run.start` simply launches. What an existing attempt did is its own
+  bookkeeping to say, and the terminal row beside it says only what that came
+  to: acceptance commits immediately before a turn dispatches, so an accepted
+  `child.turn` is where model work and file edits begin, and the `run.result`
+  manifest commits ahead of the turn's settle, so a settled turn is where the
+  delivery that records them ended. An active turn refuses, with an outcome or
+  without one — a child cancelled in that window ends CANCELLED with no
+  manifest over tool edits that already landed. A settled turn with no
+  manifest refuses too, whether or not the run recorded an outcome: the
+  delivery can roll back after the model and the tools have finished, leaving
+  the settle, a FAILED (or, under a stop, CANCELLED) `run.end`, and no record
+  of what was delivered, and finished work is not repeated because its record
+  was lost. A settled turn with a manifest is durable work the terminal row
+  labels: a FAILED or CANCELLED row is an ordinary failed child (the manifest
+  is written for `isError` too), replayed as the call's own failure, the same
+  one a live child of that outcome raises and the same `null` the engine
+  journals nothing for; a COMPLETED row recovers the manifest. Only a run that
+  opened no turn and delivered no manifest frees the next id — a decision
+  taken while holding that attempt's run claim, so a resume starting one
+  instant later is refused instead of running beside the id this frees. A
+  manifest whose turn never settled lost its bookkeeping between the delivery
+  and the settle, and a COMPLETED row with no manifest lost the delivery its
+  post-drain row claims; both are refused for operator attention. A parent
+  execution has one active runtime owner; the execution KV store is durable
+  state, not a cross-process lock. Checkpoints use the strict version-4
+  schema; malformed or older records fail instead of being translated into the
+  current journal.
   Deliberately NOT an append-only started/result journal (the shape Claude
   Code's Workflow tool uses): such a log cannot distinguish "never
   finished" from a `null` result, and beside the checkpoint, the commit

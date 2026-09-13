@@ -1002,6 +1002,14 @@ describe('createWorkflowScriptAgentRunner', () => {
           runEnd: { ...result, usage: spent(0.25) },
           resultMeta: { producer: 'subagent', output: result.output },
         });
+        // The child ran its turn to a settled row before its manifest and its
+        // terminal row: that pair is what a recovered result is read from.
+        mocks.readChildTurnState.mockReturnValue(
+          Effect.succeed({
+            active: null,
+            lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+          }),
+        );
         const runner = defaultRunner({ onCost });
 
         yield* runner({ ...invocation(), index: 3, report });
@@ -1029,6 +1037,14 @@ describe('createWorkflowScriptAgentRunner', () => {
         resultMeta: { producer: 'subagent', output: result.output },
         activations: 2,
       });
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
 
       const error = yield* Effect.flip(defaultRunner()(invocation()));
 
@@ -1288,6 +1304,36 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
+  it.effect('refuses a settled turn whose manifest write rolled back', () =>
+    Effect.gen(function* () {
+      // The delivery rolled back after the model and the tools had finished:
+      // the turn settled anyway and the loop recorded FAILED, so the row
+      // beside the settle describes the rollback rather than the work. The
+      // manifest that would have said what was delivered is gone, and work
+      // that finished is not repeated for want of its record.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'failed' } },
+        { exists: false },
+      );
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'settled a turn whose result manifest is missing',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
   it.effect('refuses a delivered child whose turn never settled', () =>
     Effect.gen(function* () {
       // The manifest commits ahead of the settle, so a delivery with no
@@ -1378,6 +1424,14 @@ describe('createWorkflowScriptAgentRunner', () => {
         runEnd: result,
         resultMeta: { producer: 'subagent', output: result.output },
       });
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
       const report = reportSpy();
 
       yield* defaultRunner()({ ...invocation(), report });
@@ -1415,6 +1469,14 @@ describe('createWorkflowScriptAgentRunner', () => {
               Effect.succeed({ producer: 'subagent', output: result.output }),
           };
         },
+      );
+      // The child ran its turn to a settled row before its manifest and its
+      // terminal row: that pair is what a recovered result is read from.
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
       );
       const report = reportSpy();
 

@@ -479,8 +479,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     yield* failIfAborted(input.signal);
     const isRemote = isRemoteAgent(config.agent);
-    // Registration committed creation, configuration and initial activation.
-    // A resumed turn appends only its new activation.
+    // Registration committed creation, configuration and initial activation,
+    // each awaited; a resumed turn appends only its new activation, awaited
+    // here. Both are durable before the run resolves, so this path drains
+    // nothing: a barrier over the run's publications would answer for facts
+    // the run's own fibers queued, and their loss is the terminal drain's to
+    // report on the row it decides.
     if (input.resumed) {
       yield* session.commit([
         {
@@ -492,10 +496,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       ]);
     }
 
-    yield* Effect.tryPromise({
-      try: () => session.settlePublications(runId),
-      catch: ensureError,
-    });
     input.onRunResolved?.(runId, runTrace.trace);
 
     // Log the initial instruction as a user message so both workflow and
@@ -661,19 +661,14 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             outcome: RUN_OUTCOME.FAILED,
             error: { kind: classifyAgentError(err), message },
           });
+          // `finalizeRun` commits the terminal row awaited and reports its
+          // own refusal, so this path has nothing left queued to wait on. A
+          // drain here would take the run's other in-flight facts out of the
+          // tracked set and warn over them, which is how a lost run fact
+          // stops reaching the row that should carry it.
           if (!finalization.ok)
             logger.warn('Failed to persist the launch failure', {
               data: finalization.error,
-            });
-          const publication = yield* Effect.exit(
-            Effect.tryPromise({
-              try: () => launchSession.settlePublications(runId),
-              catch: ensureError,
-            }),
-          );
-          if (Exit.isFailure(publication))
-            logger.warn('Failed to publish launch failure', {
-              data: Cause.squash(publication.cause),
             });
           const failures: unknown[] = [];
           for (const dispose of resources.toReversed()) {

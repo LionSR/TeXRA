@@ -353,14 +353,14 @@ const closeSuspendedTranscriptGroup = Effect.fn(function* (
   parentStageId: string | undefined,
 ): Effect.fn.Return<void, Error> {
   if (!parentStageId) return;
-  session.publishRunEvent(runId, {
+  // The stage close is this path's own fact, so it is committed awaited: a
+  // drain would wait on the run's other publications and report their loss
+  // here, where the terminal row that should carry it is not this call's to
+  // write.
+  yield* session.commitRunEvent(runId, {
     type: 'stage.end',
     id: parentStageId,
     status: RUN_OUTCOME.CANCELLED,
-  });
-  yield* Effect.tryPromise({
-    try: () => session.settlePublications(runId),
-    catch: ensureError,
   });
 });
 

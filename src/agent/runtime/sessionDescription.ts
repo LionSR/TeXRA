@@ -16,7 +16,6 @@ import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const log = createLog('SessionDescription');
@@ -87,7 +86,7 @@ export function getDisplayedInstruction(
  * the rows a workflow script's `agent()` calls create, and the ones a reader
  * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
- * On success, publishes the run's `run.description` row, which the meta fold
+ * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
  * `stores` are the process secret store and global state the run already
@@ -115,17 +114,20 @@ export const generateSessionDescription = Effect.fn(
     const description = cleanSessionDescription(text);
     if (!description) return;
 
-    session.publish([
+    // The description's own row, committed awaited rather than queued behind
+    // a drain of the run's publications: this fiber runs beside the run's own
+    // (`executeAgent` forks it), so a barrier here would report — and clear —
+    // a transcript or trace rollback of the run's, which the catch below
+    // would then turn into a warning, leaving the terminal drain to write a
+    // COMPLETED row over a fact nobody hears about. A refused commit is this
+    // path's own failure and the one thing the warning is for.
+    yield* session.commit([
       {
         type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),
         description,
       },
     ]);
-    yield* Effect.tryPromise({
-      try: () => session.settlePublications(runId),
-      catch: ensureError,
-    });
     log.info(`Generated session description for ${runId}`);
   }).pipe(
     Effect.scoped,

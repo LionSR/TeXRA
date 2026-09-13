@@ -564,28 +564,54 @@ export class SessionHandle {
       );
       return;
     }
-    // The call fixes the row's place in the publication order; the draft is
-    // built when the job runs, after every chunk detached before it has
-    // reached the text source, so a `stream.end` with no final text of its
-    // own closes on the complete streamed text.
-    this.detachPublication(runId, (append) => {
-      const draft = runEventDraft(
-        runId,
-        event.type === 'stream.end'
-          ? {
-              ...event,
-              finalText:
-                event.finalText ?? this.graph.readText(runId, event.id),
-            }
-          : event,
-      );
-      if (draft === null) return Effect.void;
-      return append([
-        isTranscriptEvent(draft)
-          ? { ...draft, transcriptDebug: isDebugModeEnabled() }
-          : draft,
-      ]);
-    });
+    // The call fixes the row's place in the publication order; the job
+    // builds the draft when it runs.
+    this.detachPublication(runId, (append) =>
+      this.runEventPublication(runId, event, append),
+    );
+  }
+
+  /**
+   * The awaited twin of {@link publishRunEvent}, for a caller whose own trace
+   * fact this is: the row takes its place in the publication order at this
+   * call like any other, and the refusal comes back typed, like
+   * {@link commit}'s, so the caller hears its own write fail instead of
+   * asking a drain that answers for every other fact the run has in flight.
+   */
+  commitRunEvent(
+    runId: RunId,
+    event: AgentEvent,
+  ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
+    return this.graph
+      .exclusive((append) => this.runEventPublication(runId, event, append))
+      .pipe(Effect.asVoid);
+  }
+
+  /** The row one run-scoped trace event commits, on whichever publisher path
+   *  the caller took. The draft is built when the publisher runs the job,
+   *  after every chunk enqueued before it has reached the text source, so a
+   *  `stream.end` with no final text of its own closes on the complete
+   *  streamed text. */
+  private runEventPublication(
+    runId: RunId,
+    event: AgentEvent,
+    append: Append,
+  ): Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed> {
+    const draft = runEventDraft(
+      runId,
+      event.type === 'stream.end'
+        ? {
+            ...event,
+            finalText: event.finalText ?? this.graph.readText(runId, event.id),
+          }
+        : event,
+    );
+    if (draft === null) return Effect.void;
+    return append([
+      isTranscriptEvent(draft)
+        ? { ...draft, transcriptDebug: isDebugModeEnabled() }
+        : draft,
+    ]);
   }
 
   /**

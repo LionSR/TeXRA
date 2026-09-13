@@ -421,38 +421,41 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * past it, and once deletion collects that tombstone the mark is what still
  * says the call got that far.
  *
- * A run with no `run.end` for the lifecycle in flight, whose lease no live
- * owner still holds, frees the next attempt id in one shape only: it opened
- * no `child.turn` at all, so it never reached side-effectful work. A settled
- * turn under a run with no outcome is the irreconcilable shape, whatever else
- * that attempt recorded: the child reached model work and file edits, and
- * nothing left behind says whether the turn succeeded, because the
- * `run.result` manifest is committed for a failed delivery exactly as for a
- * successful one and the `run.end` that would have said which was lost.
- * Ambiguous is non-repeatable, so such an attempt is refused rather than
- * advanced past, and a live owner always refuses too.
+ * What an existing attempt did is the child's own bookkeeping to say, and the
+ * terminal row beside it says only what that came to. `childRunLoop` commits
+ * a turn's acceptance row immediately before the turn dispatches, so an
+ * accepted `child.turn` is where model work and file edits begin;
+ * `persistChildRunDelivery` commits the `run.result` manifest ahead of the
+ * turn's settle, so a settled turn is where the delivery that records them
+ * ended. Those two facts decide every existing id, in this order:
  *
- * An accepted turn that never settled is the same verdict from the other
- * side of the same window, and it is the shape a stop leaves: `childRunLoop`
- * commits the acceptance row immediately before the turn dispatches, so the
- * turn's tools may already have edited files when the run is cancelled, and
- * the CANCELLED row it ends with carries no manifest. The open turn, not the
- * row beside it, is the evidence that work began, so no attempt with one
- * advances — with an outcome or without one.
+ * - An active turn refuses. Its tools may already have edited files and
+ *   nothing recorded what they did — the shape a stop leaves, a CANCELLED row
+ *   with no manifest — so no attempt with one advances, with an outcome or
+ *   without one.
+ * - A settled turn with no manifest refuses, whether or not the run recorded
+ *   an outcome. The delivery can roll back after the model and the tools have
+ *   finished: the turn still settles, the loop still records a FAILED — or, a
+ *   stop having landed, a CANCELLED — `run.end`, and the manifest that would
+ *   have said what was delivered is gone. Work that finished is not repeated
+ *   because its record was lost; a settled turn under no `run.end` at all is
+ *   the same verdict with the other fact missing.
+ * - A settled turn with a manifest is durable work, and the terminal row says
+ *   what it counted as. A FAILED or CANCELLED row is the whole of an ordinary
+ *   failed child — the delivery strategy writes a manifest for `isError`
+ *   exactly as for a success — so it is replayed as this call's own failure,
+ *   the failure the live path raises from the same row, and the engine
+ *   journals nothing for it. A COMPLETED row recovers the manifest, once the
+ *   aggregate's single `run.activate` proves the two belong to the lifecycle
+ *   this workflow launched.
+ * - No turn and no manifest frees the next attempt id: the attempt reached no
+ *   side-effectful work. It advances past an id whose lease no live owner
+ *   holds, and launches into one that never started.
  *
- * A FAILED or CANCELLED `run.end` frees the next attempt id only when no
- * `run.result` manifest sits under it. The manifest is committed by
- * `persistChildRunDelivery`, ahead of the turn's settle, so a failed row
- * beside one says the delivery landed: the model work and the file edits are
- * durable, and repeating them is out either way. What the two facts under
- * that row mean is the settled turn's to say. A settled `child.turn` is the
- * whole of an ordinary failed child — the delivery strategy writes a manifest
- * for `isError` exactly as for a success, and the turn settles after it — so
- * that attempt is replayed as this call's own failure, the same failure the
- * live path raises from the same row, and the engine journals nothing for it.
- * A manifest with no settled turn is the shape that lost its bookkeeping
- * between the delivery and the settle, and that stays refused for operator
- * attention.
+ * A manifest with no settled turn lost its bookkeeping between the delivery
+ * and the settle, and a COMPLETED row with no manifest lost the delivery its
+ * post-drain row claims; both stay refused for operator attention, as every
+ * refusal above does. A live owner always refuses too.
  *
  * One rule covers every id that already exists, whatever it recorded: it is
  * inspected while this call holds the attempt's own run lane and run claim,
@@ -620,42 +623,48 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           ),
         );
       }
-      // The turn bookkeeping, read once under the same fence as the terminal
-      // row: `childRunLoop` commits a turn's `accepted` row immediately
-      // before it dispatches, so an accepted turn is where side-effectful
-      // work begins and its settle is where the delivery that records it
-      // ends. Every decision below reads this one fenced answer.
+      // The attempt's own bookkeeping, both facts read once under the same
+      // fence as the terminal row, because the rule that follows is theirs
+      // rather than the row's. `childRunLoop` commits a turn's `accepted` row
+      // immediately before it dispatches, so an accepted turn is where
+      // side-effectful work begins; `persistChildRunDelivery` commits the
+      // `run.result` manifest ahead of the turn's settle, so a settled turn
+      // is where the delivery that records that work ended.
       const turns = yield* probeChild(
         runId,
         readChildTurnState(session, runId),
       );
-      if (end === null) {
-        if (turns.lastCompleted !== null) {
-          // The turn's settle path ran, so the child reached model work and
-          // file edits. Whether that turn succeeded is the `run.end` row's
-          // fact alone, and it was lost: a `run.result` manifest is committed
-          // for a failed delivery exactly as for a successful one, so its
-          // presence says a result was written, never that the work counted.
-          // The state is ambiguous either way, and ambiguous work is not
-          // repeated.
+      const meta = yield* probeChild(runId, records.readResultMeta());
+      const delivered = meta?.producer === 'subagent';
+      if (turns.active !== null) {
+        // A turn accepted and never settled: the acceptance row commits
+        // immediately before the turn dispatches, so its tools may already
+        // have edited files, and a stop that landed in that window leaves
+        // exactly this shape — a CANCELLED row with no manifest. Work that
+        // began is not repeated, whatever the row beside it says.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
+          ),
+        );
+      }
+      if (turns.lastCompleted !== null) {
+        // A settled turn: the child reached model work and file edits, and
+        // what they amounted to is the manifest and the terminal row
+        // together. The manifest says the delivery landed; the row says what
+        // it landed as. Either one missing leaves durable work nothing
+        // accounts for — a delivery that rolled back after the model and the
+        // tools had finished still settles its turn and still ends the run
+        // FAILED, and an outcome lost under a manifest says as little the
+        // other way round — and ambiguous work is never repeated.
+        if (!delivered || end === null) {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
-              `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it. That run needs operator attention.`,
+              `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
             ),
           );
         }
-      } else {
-        // The manifest is the delivery fact, read under the same fence as the
-        // terminal row beside it, and it decides both outcomes below.
-        const meta = yield* probeChild(runId, records.readResultMeta());
         if (end.outcome === RUN_OUTCOME.COMPLETED) {
-          if (meta?.producer !== 'subagent') {
-            return yield* Effect.fail(
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
-              ),
-            );
-          }
           // The manifest carries no lifecycle of its own. `run.result` is
           // written by child delivery alone, while a host that resumes a
           // completed child appends `run.activate` and, at its end, a second
@@ -689,48 +698,41 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             recovered: true,
           };
         }
-        if (meta?.producer === 'subagent') {
-          // The delivery landed: `persistChildRunDelivery` commits the
-          // manifest ahead of the turn's settle, so the child's model work and
-          // its file edits are durable and this attempt is not repeatable
-          // however the row reads. Which of the two shapes it is, the turn
-          // says. A settled one is an ordinary failed child: the strategy
-          // builds a manifest for `isError` too, and the turn settles after
-          // it, so the row, the manifest and the settle are the whole of a
-          // failure the live path would have raised here as well. Report it as
-          // that failure, from the same terminal row, and the engine records
-          // the call as failed exactly as it does live — no journal entry, so
-          // no lifecycle correlation to make: the output under it never
-          // reaches the script.
-          if (turns.lastCompleted === null) {
-            // Delivered and then nothing: the settle that follows the manifest
-            // never ran, so what the outcome describes is the bookkeeping
-            // rather than the work, and no fact here says the child stopped
-            // where the row claims.
-            return yield* Effect.fail(
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} recorded a ${end.outcome} outcome after delivering its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
-              ),
-            );
-          }
-          return { runId, result: end, recovered: true };
-        }
+        // A settled turn under a manifest and a FAILED or CANCELLED row is
+        // the whole of an ordinary failed child: the delivery strategy builds
+        // a manifest for `isError` exactly as for a success, and the turn
+        // settles after it. Report it as this call's own failure, from the
+        // same terminal row the live path raises from, and the engine records
+        // the call as failed exactly as it does live — no journal entry, so
+        // no lifecycle correlation to make: the output under it never reaches
+        // the script.
+        return { runId, result: end, recovered: true };
       }
-      if (turns.active !== null) {
-        // Nothing delivered, but a turn was accepted and never settled: the
-        // acceptance row commits immediately before the turn dispatches, so
-        // its tools may already have edited files, and a stop that landed in
-        // that window leaves exactly this shape — a CANCELLED row with no
-        // manifest. Work that began is not repeated, whatever the row beside
-        // it says.
+      if (delivered) {
+        // Delivered and then nothing: the settle that follows the manifest
+        // never ran, so what the outcome describes is the bookkeeping rather
+        // than the work, and no fact here says the child stopped where the
+        // row claims.
         return yield* Effect.fail(
           new WorkflowRunAbortError(
-            `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
+            `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
           ),
         );
       }
-      // Nothing delivered, no turn still accepted, and the attempt's facts
-      // intact: it is closed and repeating it is safe.
+      if (end?.outcome === RUN_OUTCOME.COMPLETED) {
+        // A completed row is the post-drain fact, so it cannot outlive the
+        // manifest its own delivery committed: without one, the row describes
+        // a completion nothing recorded.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
+          ),
+        );
+      }
+      // No turn and no manifest: the attempt opened nothing side-effectful,
+      // so it is closed and repeating it is safe — whether it recorded no
+      // outcome at all (a dead lease) or ended FAILED or CANCELLED before it
+      // reached a turn.
     }
     return yield* Effect.fail(
       new WorkflowRunAbortError(

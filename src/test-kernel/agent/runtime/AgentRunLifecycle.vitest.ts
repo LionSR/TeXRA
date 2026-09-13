@@ -33,6 +33,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -610,8 +611,13 @@ describe('runFlowWithLifecycle', () => {
     const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
     seedOpenRunGroup(ctx, runId);
     await ctx.runScope.session.settlePublications();
-    vi.spyOn(ctx.runScope.session, 'settlePublications').mockRejectedValueOnce(
-      new Error('stage publication failed'),
+    vi.spyOn(ctx.runScope.session, 'commitRunEvent').mockReturnValueOnce(
+      Effect.fail(
+        new DatabaseWriteFailed({
+          path: 'session.db',
+          cause: new Error('stage publication failed'),
+        }),
+      ),
     );
 
     try {

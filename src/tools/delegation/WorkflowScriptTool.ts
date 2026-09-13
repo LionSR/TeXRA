@@ -571,20 +571,20 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                       name: meta.name,
                       workflowControls: session.workflowControls,
                       initialSnapshot,
+                      // The snapshot's own row, committed awaited: what this
+                      // write owes the caller is its own durability, and a
+                      // drain of the run's publications would answer for
+                      // every other fact the run has in flight instead.
                       onSnapshot: (snapshot) =>
-                        Effect.gen(function* () {
-                          session.publish([
+                        session
+                          .commit([
                             {
                               type: 'run.workflow',
                               aggregateId: aggregateId('run', runId),
                               workflow: snapshot,
                             },
-                          ]);
-                          yield* Effect.tryPromise({
-                            try: () => session.settlePublications(runId),
-                            catch: ensureError,
-                          });
-                        }),
+                          ])
+                          .pipe(Effect.asVoid),
                       ...((parent.stopAfterCycle ??
                         parent.run.toolPolicy.stopAfterCycle) && {
                         deliveryMode: 'persistOnly' as const,
