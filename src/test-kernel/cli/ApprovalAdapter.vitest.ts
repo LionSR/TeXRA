@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
@@ -665,13 +665,16 @@ describe('buildToolEditApprovalContent', () => {
       const decisionAnswer = new Promise<string>((resolve) => {
         resolveDecision = resolve;
       });
+      const secondFirstPrompt = yield* Deferred.make<void>();
       stubStderrWrites();
       const cliContext = context({
         approvalPrompt: async (request) => {
           summaries.push(request.summary);
           if (request.summary !== 'first') return 'y';
           firstPromptCount += 1;
-          return firstPromptCount === 1 ? viewAnswer : decisionAnswer;
+          if (firstPromptCount === 1) return viewAnswer;
+          Deferred.doneUnsafe(secondFirstPrompt, Effect.void);
+          return decisionAnswer;
         },
       });
 
@@ -686,9 +689,8 @@ describe('buildToolEditApprovalContent', () => {
       );
 
       resolveView('v');
-      yield* Effect.promise(() =>
-        vi.waitFor(() => expect(summaries).toEqual(['first', 'first'])),
-      );
+      yield* Deferred.await(secondFirstPrompt);
+      expect(summaries).toEqual(['first', 'first']);
 
       resolveDecision('y');
       expect(yield* Fiber.join(first)).toEqual({ action: 'approve' });
