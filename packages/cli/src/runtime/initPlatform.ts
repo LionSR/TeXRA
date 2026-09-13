@@ -292,11 +292,15 @@ export async function initCliPlatform(
     // the extension and desktop hosts open, including the fallback to the
     // internal workspace store when the project file cannot be read or its
     // directory cannot be written.
-    const { stateStores, configStores } = await effectRuntime().runPromise(
+    // This entry's runtime, in a local: the state stores' Promise-facing
+    // `update` runs on it, and the store itself never runs an Effect.
+    const runtime = effectRuntime();
+    const { stateStores, configStores } = await runtime.runPromise(
       Effect.gen(function* () {
         const stores = yield* createCliStateStores({
           storageRoot: context.storageRoot,
           workspacePath: context.cwd,
+          runWrite: (write) => runtime.runPromise(write),
         });
         return {
           stateStores: stores,
