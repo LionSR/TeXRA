@@ -33,7 +33,7 @@ const EditInputSchema = z.strictObject({
     ),
 });
 
-export type EditInput = z.infer<typeof EditInputSchema>;
+type EditInput = z.infer<typeof EditInputSchema>;
 
 const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,

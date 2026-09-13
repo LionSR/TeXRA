@@ -30,7 +30,7 @@ const ArxivMetadataInputSchema = z.strictObject({
     .describe('Maximum number of authors to include before truncating.'),
 });
 
-export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
+type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
 
 const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
   input: ArxivMetadataInput,

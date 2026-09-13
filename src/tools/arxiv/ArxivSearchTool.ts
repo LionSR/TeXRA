@@ -55,7 +55,7 @@ const ArxivSearchInputSchema = z.strictObject({
   sortOrder: SortOrderSchema.nullish().describe('Sort direction for results.'),
 });
 
-export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
+type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 
 const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   input: ArxivSearchInput,

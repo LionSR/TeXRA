@@ -63,7 +63,7 @@ const ArxivDownloadInputSchema = z.strictObject({
   ).describe('Where to extract the source: workspace root or References/.'),
 });
 
-export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
+type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
 const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,

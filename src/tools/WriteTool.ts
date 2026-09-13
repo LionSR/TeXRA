@@ -23,7 +23,7 @@ const WriteInputSchema = z.strictObject({
   content: z.string().describe('The full file contents to write.'),
 });
 
-export type WriteInput = z.infer<typeof WriteInputSchema>;
+type WriteInput = z.infer<typeof WriteInputSchema>;
 
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
