@@ -92,7 +92,7 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
   readonly globalState: StateStore;
   readonly secrets: PlatformSecrets;
   /**
-   * The process roots this init installed: one process, one paper (the
+   * The process roots this init installed: one process, one project (the
    * `--cwd` workspace). Undefined only when another root installed the
    * platform before this init ran (a test harness's fake host), so the
    * caller that needs them reports their absence rather than reading the
