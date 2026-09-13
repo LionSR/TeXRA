@@ -54,6 +54,7 @@ const runtimeOf = (
   modelCompatibilityKey: compatibilityKey,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
 });
 
 const references = { pendingIntents: [], pendingResponse: null } as const;

@@ -1,26 +1,16 @@
-import { Effect, Equal, Exit, Redacted, Semaphore } from 'effect';
+import { Effect, Equal, Redacted } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import { hostPort } from '@common/hostPort';
-import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
-import {
-  quotaFallbackRuntimes,
-  type QuotaFallbackRuntime,
-} from '@model/quotaFallbackRoutes';
-import { AppState } from '@platform/interfaces';
 import type { ExhaustionReason, RunId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
   isKimiCodeSubscriptionRetryBlocked,
-  isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-const log = createLog('ProgressApiKeyRetryController');
+import { quotaFallbackRouteForExhaustion } from '@shared/quotaFallbackRoutes';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;
@@ -29,11 +19,6 @@ interface ProgressApiKeyRetryRequest {
   /** Canonical base model the fallback run will launch with, when known. */
   model?: string;
   exhaustionReason?: ExhaustionReason;
-  /** True when the failed handler's effective config was pinned to the Kimi
-   * Code coding endpoint, captured from the persisted handler before the
-   * retry panel opened. */
-  kimiCodeRoutedOnFailure?: boolean;
-  chatGptSubscriptionEligible?: boolean;
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -43,9 +28,6 @@ export interface ProgressApiKeyRetryControllerDeps {
   ): Promise<Redacted.Redacted<string> | undefined>;
   hasUsableKey(provider: ApiProvider): Promise<boolean>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
-  /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
-   *  shared runtime catalog. Tests inject a local table. */
-  quotaFallbackRuntimes?: readonly QuotaFallbackRuntime[];
   isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(
     stream: RunId,
@@ -61,10 +43,6 @@ export interface ProgressApiKeyRetryControllerDeps {
  * the credential/retry rules testable without depending on VS Code APIs.
  */
 export class ProgressApiKeyRetryController {
-  /** One permit: a routing commit holds it from its pending re-check through
-   *  the retry launch, so two runs cannot interleave their switches. */
-  private readonly routingLane = Semaphore.makeUnsafe(1);
-
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
 
   private credentialProviderFor(
@@ -81,26 +59,6 @@ export class ProgressApiKeyRetryController {
     return isKimiCodeExclusiveModel(config)
       ? resolveDirectModelApiKeyProvider(config)
       : request.provider;
-  }
-
-  /**
-   * Whether `model` is a dual-backend Kimi model (`kimi3`): eligible for the
-   * Kimi Code coding endpoint but also served by the Moonshot open platform.
-   * Exclusive coding-only aliases pin their `baseUrl`, so they must be kept
-   * out of this branch.
-   */
-  private isDualBackendKimiCodeModel(model: string | undefined): boolean {
-    if (model === undefined) return false;
-    const config = MODEL_CONFIGS[model];
-    return (
-      config !== undefined &&
-      isKimiSubscriptionEligible(config) &&
-      !isKimiCodeExclusiveModel(config)
-    );
-  }
-
-  private get fallbackRuntimes(): readonly QuotaFallbackRuntime[] {
-    return this.deps.quotaFallbackRuntimes ?? quotaFallbackRuntimes;
   }
 
   /** Switch this retry onto the user's own key and relaunch it. The host
@@ -131,9 +89,11 @@ export class ProgressApiKeyRetryController {
       return;
     }
 
-    yield* this.commitOwnApiKeyRouting(request, () =>
-      this.deps.triggerRetry(request.stream, request.requestId),
-    );
+    // The decision is the whole switch: the run reads `credentials:
+    // 'personal'` off its own ledger and declines the exhausted route for
+    // itself when it rebinds. No preference of the user's is rewritten, so
+    // two runs falling back at once cannot undo each other's choice.
+    yield* this.deps.triggerRetry(request.stream, request.requestId);
   });
 
   /** Whether the user has (or has just entered) a usable key for this
@@ -169,153 +129,13 @@ export class ProgressApiKeyRetryController {
     return yield* this.hasAnyUsableKey(providersToCheck);
   });
 
-  /**
-   * Serialize one own-API-key routing commit: switch the routing for `action`
-   * and restore it when `action` fails or reports it never used the
-   * switches. Returns whether the action used the routing, or false without
-   * running the action when the retry identity is no longer pending.
-   *
-   * The request may have been dismissed or replaced while this callback
-   * waited behind another stream's routing commit. The pending identity is
-   * re-checked once inside the lane, before touching global routing, so a
-   * stale switch cannot briefly rebind credentials.
-   */
-  private commitOwnApiKeyRouting(
-    request: ProgressApiKeyRetryRequest,
-    action: () => Effect.Effect<boolean, unknown>,
-  ): Effect.Effect<boolean, unknown, AppState> {
-    return this.routingLane.withPermit(
-      Effect.scoped(this.routingTransaction(request, action)),
-    );
-  }
-
-  private readonly routingTransaction = Effect.fn(
-    'ProgressApiKeyRetryController.commitOwnApiKeyRouting',
-  )(function* (
-    this: ProgressApiKeyRetryController,
-    request: ProgressApiKeyRetryRequest,
-    action: () => Effect.Effect<boolean, unknown>,
-  ) {
-    if (!this.deps.isRetryPending(request.stream, request.requestId)) {
-      return false;
-    }
-    // The rollback below writes a captured preference back to the process
-    // global state, so the store is read once here, where the transaction
-    // starts, rather than from inside a finalizer.
-    const globalState = yield* AppState;
-    const before = new Map(
-      this.fallbackRuntimes.map(
-        (runtime) =>
-          [runtime.descriptor.exhaustionReason, runtime.getEnabled()] as const,
-      ),
-    );
-    // One chain: turn off every matching quota-fallback preference so the
-    // retry rebuilds onto the fallback credential. Remark: prefer-off sticks
-    // after the quota resets — users may forget to re-enable it.
-    for (const runtime of this.fallbackRuntimes) {
-      if (
-        !runtime.getEnabled() ||
-        !this.shouldDisableRuntime(runtime, request)
-      ) {
-        continue;
-      }
-      const reason = runtime.descriptor.exhaustionReason;
-      // The compensation is registered before its setter runs: a setter can
-      // mutate in memory and then reject on persistence, so a throw midway
-      // must roll back every switch that may have landed instead of
-      // stranding global toggles the retry never uses. Finalizers run last
-      // registered first, so the rollback is in reverse application order
-      // and every restore is attempted. A restore that fails is logged here,
-      // where the rollback is owned, then dies: when a switch or the action
-      // failed, the caller sees that failure and the restore's defect stays
-      // behind it in the Cause; when the action reported no retry, the first
-      // restore to fail (the last switch applied) reaches the caller as its
-      // own error.
-      yield* Effect.addFinalizer((exit) =>
-        Exit.isSuccess(exit) && exit.value === true
-          ? Effect.void
-          : hostPort(() =>
-              runtime.restoreEnabled(before.get(reason) ?? false, globalState),
-            ).pipe(
-              Effect.tapError((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Failed to restore the ${reason} quota-fallback preference after the retry did not use it: ${toErrorMessage(error)}`,
-                  );
-                }),
-              ),
-              Effect.orDie,
-            ),
-      );
-      yield* hostPort(() => runtime.setEnabled(false));
-    }
-
-    return yield* action();
-  });
-
   // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
   // Grok → xai) so a mislabeled SDK provider cannot prompt for the wrong key.
   private resolveProvider(
     request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
   ): ApiProvider | undefined {
-    const route = this.fallbackRuntimes.find(
-      (candidate) =>
-        candidate.descriptor.exhaustionReason === request.exhaustionReason,
-    );
-    return route?.descriptor.fallbackApiProvider ?? request.provider;
-  }
-
-  /** Whether this route should turn off for `request`. Catalog match plus
-   *  the two request-specific extras that are not their own exhaustion
-   *  reason: Copilot→ChatGPT, and a dual-backend Kimi credit reroute. */
-  private shouldDisableRuntime(
-    runtime: QuotaFallbackRuntime,
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): boolean {
-    if (request.exhaustionReason === runtime.descriptor.exhaustionReason) {
-      return true;
-    }
-    if (
-      runtime.descriptor.exhaustionReason === 'chatgpt-subscription' &&
-      request.exhaustionReason === 'copilot-subscription' &&
-      request.chatGptSubscriptionEligible === true
-    ) {
-      return true;
-    }
-    // An `upstream-credit` failure on a dual-backend Kimi model means the
-    // broken credential is the `kimiCode` key, but the forwarded SDK
-    // provider is `moonshot`. The coding-plan quota reason does not match,
-    // so without this branch the "Prefer Kimi Code" switch would stay on
-    // and the retry rebuild would re-select the exhausted coding endpoint
-    // instead of the newly entered Moonshot key.
-    //
-    // Deliberately conservative: do not consult the live route resolver
-    // here. The failed handler was dispatched under the persisted
-    // `Kimi` compatibility key, and the retry rebuild pins that
-    // same key, so a later OpenRouter preference change cannot make the
-    // rebuild take a non-coding route. The request's
-    // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
-    // so unrelated `kimi3` failures through OpenRouter or Moonshot leave
-    // the preference untouched.
-    return (
-      runtime.descriptor.exhaustionReason === 'kimi-code-subscription' &&
-      request.exhaustionReason === 'upstream-credit' &&
-      request.kimiCodeRoutedOnFailure === true &&
-      this.isDualBackendKimiCodeModel(request.model)
-    );
-  }
-
-  /** Apply Copilot fallback routing only for the duration of a launch attempt. */
-  runCopilotFallbackWithRouting(
-    request: ProgressApiKeyRetryRequest,
-    start: (
-      copilotRouteOverride: CopilotRouteOverride,
-    ) => Effect.Effect<boolean, unknown>,
-  ): Effect.Effect<boolean, unknown, AppState> {
-    // The user chose "use own API key" for this retry. The direct-route
-    // override travels only with the replacement launch; the standing
-    // preference remains visible to concurrent and future runs.
-    return this.commitOwnApiKeyRouting(request, () => start('direct'));
+    const route = quotaFallbackRouteForExhaustion(request.exhaustionReason);
+    return route?.fallbackApiProvider ?? request.provider;
   }
 
   private hasAnyUsableKey(

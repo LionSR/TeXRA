@@ -11,7 +11,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { resolveGlmRoute } from '@model/glmRouting';
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
-import type { UsageRoute } from '@shared/schemas';
+import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   getProviderEndpoint,
   useChinaRegion,
@@ -60,9 +60,14 @@ export interface RouteEndpoint {
 export function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
   useOpenRouter: boolean,
+  declinedRoutes?: readonly DeclinableUsageRoute[],
 ): RouteEndpoint {
   if (config.provider === ModelProvider.GLM) {
-    const route = resolveGlmRoute({ baseUrl: config.baseUrl, useOpenRouter });
+    const route = resolveGlmRoute({
+      baseUrl: config.baseUrl,
+      useOpenRouter,
+      declinedRoutes,
+    });
     return route.route === 'official-coding-plan'
       ? { baseUrl: route.baseUrl, usageRoute: route.usageRoute }
       : { baseUrl: route.baseUrl };

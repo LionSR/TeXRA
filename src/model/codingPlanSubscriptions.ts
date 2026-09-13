@@ -9,7 +9,6 @@ import {
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
@@ -30,15 +29,6 @@ export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
-  /**
-   * Restore a captured preference without changing a newer competing route.
-   * `state` is the process global state the caller holds, for the plans that
-   * write the preference straight to it.
-   */
-  readonly restoreEnabled: (
-    enabled: boolean,
-    state: StateStore,
-  ) => Promise<void>;
 }
 
 async function isGlmCodingPlanActive(
@@ -82,19 +72,12 @@ const RUNTIME_BY_ID = {
   glmCodingPlan: {
     getEnabled: getGLMCodingPlan,
     setEnabled: setGLMCodingPlan,
-    restoreEnabled: setGLMCodingPlan,
     isActiveForModel: isGlmCodingPlanActive,
   },
   kimiCode: {
     getEnabled: getPreferKimiCode,
     setEnabled: (enabled) =>
       writePlatformSetting(GlobalStateKey.KIMI_CODE_PREFER, enabled),
-    // Restore writes the stored value directly: the catalog row's OpenRouter
-    // exclusion is a *user intent* rule, and re-applying it here would clear a
-    // newer competing route the user chose after the capture.
-    restoreEnabled: async (enabled, state) => {
-      await state.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
-    },
     isActiveForModel: isKimiCodeSubscriptionActive,
   },
 } as const satisfies Record<

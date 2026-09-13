@@ -5,7 +5,6 @@
 
 import '@test/support/defaultSessionTestSetup';
 
-import pDefer from 'p-defer';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
@@ -36,7 +35,6 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 
 vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
-  setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
 }));
 
 vi.mock('@utils/config/providerConfig', async (importActual) => {
@@ -78,10 +76,7 @@ vi.mock('@platform/platform', async () => {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
-import {
-  codexPreferenceVersion,
-  resetCliState,
-} from '@cli/chat/tui/state/cliState';
+import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -136,13 +131,10 @@ function tui(
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   // The suite's own fake stores, mocked above: the credential work takes them
   // directly, and the key-check expectations name exactly these objects.
-  const { secrets, globalState } = platform();
+  const { secrets } = platform();
   detachHost();
   detachHost = defaultSession().interactions.use(
-    createTuiHostInteractions(presentationHost, cliContext, {
-      secrets,
-      state: globalState,
-    }),
+    createTuiHostInteractions(presentationHost, cliContext, { secrets }),
   );
   return {
     presentationHost,
@@ -325,8 +317,12 @@ function expectChatGptSubscriptionRoute(): void {
   expect(mocks.preferSubscription).toBe(true);
 }
 
+/** The retry writes no access setting: the run declines the exhausted route
+ *  on its own ledger and the user's switches stay theirs. */
 function expectNoPreferenceWrites(): void {
   expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
+  expect(mocks.setCliCodingPlanSubscription).not.toHaveBeenCalled();
+  expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
 }
 
 function expectNoCredentialChange(): void {
@@ -376,8 +372,6 @@ beforeEach(() => {
   mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
   mocks.hasUsableApiKey.mockResolvedValue(false);
-  // `restoreEnabled` for Kimi Code writes the stored key directly so the
-  // catalog row's OpenRouter exclusion does not fire on a restore.
   mocks.updateGlobalState.mockImplementation(
     async (key: string, value: unknown) => {
       if (key === GlobalStateKey.USE_OPENROUTER) {
@@ -394,10 +388,6 @@ beforeEach(() => {
       return { effective: enabled, target: 'global' };
     },
   );
-  mocks.setCliCodingPlanSubscription.mockImplementation(async (id, enabled) => {
-    if (id === 'kimiCode') mocks.preferKimiCode = enabled;
-    if (id === 'glmCodingPlan') mocks.glmCodingPlan = enabled;
-  });
   mocks.setGLMCodingPlan.mockImplementation(async (enabled) => {
     mocks.glmCodingPlan = enabled;
   });
@@ -755,10 +745,10 @@ describe('TUI request decisions', () => {
         decideRetry(PERSONAL_KEY_RETRY);
 
         expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
-        expect(mocks.setCliSubscriptionPreference).toHaveBeenCalledWith(
-          'chatgpt',
-          false,
-        );
+        // The decision is the whole switch: the run declines the exhausted
+        // route on its own ledger, so the user's stored preference is not
+        // rewritten on their behalf.
+        expectNoPreferenceWrites();
         expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
         expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
           mocks.secrets,
@@ -785,18 +775,12 @@ describe('TUI request decisions', () => {
         );
 
         expect(decision).toEqual(PERSONAL_KEY_RETRY);
-        expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
-          'kimiCode',
-          false,
-        );
-        // The plan is off before the run reads the decision: endpoint and
-        // credential resolution read the live preference, so deciding first
-        // would rebind onto the exhausted coding route again.
-        expect(
-          mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
-        ).toBeLessThan(mocks.notify.mock.invocationCallOrder[0] ?? 0);
+        // The run declines the exhausted coding route for itself when it
+        // reads the decision; the user's plan preference stays on, so a
+        // concurrent run keeps the route it is still entitled to.
+        expectNoPreferenceWrites();
         // The modal's quota warning was skipped, so the terminal notification
-        // is the only signal that a persisted preference was flipped.
+        // is the only signal that the retry changed credentials.
         expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
         yield* waitForNoApproval();
       }),
@@ -875,94 +859,10 @@ describe('TUI request decisions', () => {
       const decision = yield* openRetry(glmCodingPlanRetry('glm-limit'));
 
       expect(decision).toEqual(PERSONAL_KEY_RETRY);
-      expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledWith(
-        'glmCodingPlan',
-        false,
-      );
+      expectNoPreferenceWrites();
       expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
       yield* waitForNoApproval();
     }),
-  );
-
-  it.effect('restores Kimi without overwriting a newer OpenRouter choice', () =>
-    Effect.gen(function* () {
-      mocks.preferKimiCode = true;
-      mocks.hasUsableApiKey.mockImplementation(
-        async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-      );
-      mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
-        mocks.preferKimiCode = false;
-        mocks.openRouter = true;
-        throw new Error('Kimi preference write failed');
-      });
-      tui();
-      const previousPreferenceVersion = codexPreferenceVersion.get();
-
-      const decision = yield* openRetry(
-        kimiCodeSubscriptionRetry('kimi-rollback'),
-      );
-
-      expect(decision).toEqual({
-        action: 'deny',
-        reason: expect.stringContaining('Kimi preference write failed'),
-      });
-      // A switch that rolled back is never announced.
-      expect(mocks.notify).not.toHaveBeenCalled();
-      expect(mocks.preferKimiCode).toBe(true);
-      expect(mocks.openRouter).toBe(true);
-      expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-        GlobalStateKey.KIMI_CODE_PREFER,
-        true,
-      );
-      expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
-    }),
-  );
-
-  it.effect(
-    'serializes coding-plan rollback ahead of a newer coding-plan switch',
-    () =>
-      Effect.gen(function* () {
-        mocks.preferKimiCode = true;
-        mocks.hasUsableApiKey.mockImplementation(
-          async (_secrets, provider: ApiProvider) => provider === 'moonshot',
-        );
-        const firstDisable = pDefer<void>();
-        mocks.setCliCodingPlanSubscription.mockImplementationOnce(async () => {
-          mocks.preferKimiCode = false;
-          await firstDisable.promise;
-        });
-        tui();
-
-        const first = yield* Effect.forkChild(
-          openRetry(kimiCodeSubscriptionRetry('plan-race-first')),
-        );
-        yield* waitFor(() =>
-          expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1),
-        );
-        const second = yield* Effect.forkChild(
-          openRetry(kimiCodeSubscriptionRetry('plan-race-second')),
-        );
-        yield* settle();
-        // The second switch waits behind the first switch's commit slot: only
-        // the first disable has run so far.
-        expect(mocks.setCliCodingPlanSubscription).toHaveBeenCalledTimes(1);
-
-        firstDisable.reject(new Error('first coding-plan write failed'));
-        expect(yield* Fiber.join(first)).toEqual({
-          action: 'deny',
-          reason: expect.stringContaining('first coding-plan write failed'),
-        });
-        expect(yield* Fiber.join(second)).toEqual(PERSONAL_KEY_RETRY);
-        // The stale rollback restores the plan before the newer switch
-        // disables it again, so the second retry still runs on the personal
-        // route.
-        expect(
-          mocks.updateGlobalState.mock.invocationCallOrder[0] ?? 0,
-        ).toBeLessThan(
-          mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[1] ?? 0,
-        );
-        expect(mocks.preferKimiCode).toBe(false);
-      }),
   );
 
   it.effect(
@@ -984,37 +884,6 @@ describe('TUI request decisions', () => {
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'reject' });
         expectNoCredentialChange();
-      }),
-  );
-
-  it.effect(
-    'reports any preference that cannot be restored after commit fails',
-    () =>
-      Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockResolvedValue(true);
-        mocks.setCliSubscriptionPreference
-          .mockImplementationOnce(async (_id: string, enabled: boolean) => {
-            mocks.preferSubscription = enabled;
-            throw new Error('subscription write failed');
-          })
-          .mockRejectedValueOnce(new Error('settings storage unavailable'));
-        tui();
-        const pending = yield* Effect.forkChild(
-          openRetry(chatGptSubscriptionRetry('rollback-failure')),
-        );
-
-        yield* waitForApproval('retry', {
-          runId: runIdFor('rollback-failure'),
-        });
-        decideRetry(PERSONAL_KEY_RETRY);
-
-        expect(yield* Fiber.join(pending)).toEqual({
-          action: 'deny',
-          reason: expect.stringContaining(
-            'Previous access settings could not be fully restored: Could not restore the ChatGPT subscription preference: settings storage unavailable',
-          ),
-        });
-        expect(mocks.preferSubscription).toBe(false);
       }),
   );
 

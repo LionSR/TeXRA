@@ -270,6 +270,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         config: nextConfig,
         stores: run.stores,
         compatibilityKey: current.compatibilityKey,
+        declinedRoutes: state.declinedRoutes,
         agentCategory: run.config.agentCategory,
         temperature: run.setting.temperature,
         inScope: run.inScope,
@@ -397,6 +398,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     family: 'toolUse',
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
+    // The launch's own-API-key choice enters the ledger with the opening
+    // snapshot, so every later binding and every resume reads it back.
+    declinedRoutes: run.declinedRoutes,
   });
 
   const restore = (state: RunState): void => {

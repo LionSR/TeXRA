@@ -77,6 +77,7 @@ export function createTestLaunchContext({
     config,
     setting,
     prompt: AgentPromptSchema.parse({}),
+    ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { secrets: new FakeSecrets(), globalState: new FakeStateStore() },
     runScope: createRunScope({

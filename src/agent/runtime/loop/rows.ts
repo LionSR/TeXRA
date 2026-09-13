@@ -129,7 +129,11 @@ interface SnapshotCoordinates {
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
-      'modelId' | 'modelCompatibilityKey' | 'lastError' | 'pendingRetry'
+      | 'modelId'
+      | 'modelCompatibilityKey'
+      | 'lastError'
+      | 'pendingRetry'
+      | 'declinedRoutes'
     >
   >;
   /**
@@ -183,6 +187,7 @@ function buildSnapshot(
       patch.runtime !== undefined && 'pendingRetry' in patch.runtime
         ? (patch.runtime.pendingRetry ?? null)
         : state.pendingRetry,
+    declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
   };
   const pending = state.pendingResponse;
   const references = {

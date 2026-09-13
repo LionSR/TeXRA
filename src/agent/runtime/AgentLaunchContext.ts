@@ -29,7 +29,6 @@ import {
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -95,6 +94,13 @@ export interface AgentLaunchContext {
    * whose route the binding resolves from today's settings.
    */
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
+  /**
+   * This launch is the user's own-API-key fallback: the retry they answered
+   * that way relaunched the run here, so it declines the editor's Copilot
+   * route and every subscription route the run's bindings could take. The
+   * user's stored preferences are not touched; the choice is the run's.
+   */
+  readonly ownApiKeyFallback: boolean;
   /** Immutable per-run tool policy; the loop reads it instead of the ambient RunContext. */
   readonly toolPolicy: ToolPolicy;
   /**
@@ -168,8 +174,9 @@ interface AgentLaunchInput {
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelCompatibilityKey?: ModelCompatibilityKey | null;
-  /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
-  copilotRouteOverride?: CopilotRouteOverride;
+  /** This launch is the user's own-API-key fallback for a quota-exhausted
+   *  retry: it declines the Copilot route and every subscription route. */
+  ownApiKeyFallback?: boolean;
   /** Cancel launch preparation and the resulting live run. */
   signal?: AbortSignal;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
@@ -602,6 +609,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       prompt,
       modelConfig,
       modelCompatibilityKey,
+      ownApiKeyFallback: input.ownApiKeyFallback ?? false,
       // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
       // the nested tool-name array gets its own frozen copy rather than
       // aliasing the caller's (still mutable) array.

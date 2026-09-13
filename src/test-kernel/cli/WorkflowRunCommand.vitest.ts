@@ -358,6 +358,7 @@ function reflectionSnapshot(
       modelCompatibilityKey: null,
       lastError: null,
       pendingRetry: null,
+      declinedRoutes: [],
       ...runtime,
     },
     references: { pendingIntents: [], pendingResponse: null },

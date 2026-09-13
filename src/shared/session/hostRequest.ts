@@ -49,7 +49,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     model: z.string().nullish(),
     provider: z.string().nullish(),
     exhaustionReason: z.string().nullish(),
-    kimiCodeRoutedOnFailure: z.boolean().nullish(),
   }),
   z.object({ kind: z.literal('latexdiff'), ...runScoped }),
   z.object({ kind: z.literal('pack'), ...runScoped }),

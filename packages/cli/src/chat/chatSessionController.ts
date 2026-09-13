@@ -492,7 +492,6 @@ export function createChatSessionController(
     runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext, {
         secrets,
-        state,
       }),
     ),
   );

@@ -41,6 +41,7 @@ import {
   ExecutedToolResultSchema,
   ToolFileAttachmentSchema,
 } from './toolResult';
+import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
 
@@ -533,6 +534,13 @@ const SnapshotRuntimeSchema = z.strictObject({
    */
   lastError: RetryErrorInfoSchema.nullable(),
   pendingRetry: PendingRetrySchema.nullable(),
+  /**
+   * Subscription routes this run must not bind again: one per retry the user
+   * answered with their own API key, plus the launch's own seed. Durable so a
+   * resume rebinds under the same choice; run-scoped so the user's stored
+   * preference is never rewritten on their behalf.
+   */
+  declinedRoutes: z.array(DeclinableUsageRouteSchema).readonly(),
 });
 export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 

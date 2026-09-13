@@ -163,6 +163,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                 runtimeSnapshotRow(run.runId, state, {
                   lastError: scripted.failWith,
                   pendingRetry: null,
+                  declinedRoutes: [],
                 }),
               ]);
               return {
@@ -281,6 +282,7 @@ function agentRunTestLayer(init: LoopInit) {
         structured: { value: undefined },
         model,
         scope,
+        declinedRoutes: [],
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),
@@ -405,6 +407,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       modelCompatibilityKey: 'DeepSeek',
       lastError: null,
       pendingRetry: null,
+      declinedRoutes: [],
       messages: [],
       continuation: null,
       openAttempt: null,

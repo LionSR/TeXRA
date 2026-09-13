@@ -344,6 +344,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
                 runtimeSnapshotRow(run.runId, state, {
                   lastError: turnScript.failWith,
                   pendingRetry: null,
+                  declinedRoutes: [],
                 }),
               ]);
               return {
@@ -438,6 +439,7 @@ function agentRunTestLayer(init: LoopInit) {
         structured: { value: undefined },
         model,
         scope,
+        declinedRoutes: [],
         pendingModelSwitch: { value: null },
         inScope: <A>(operation: () => A): A =>
           withRunContext(createRunContext({ runScope }), operation),

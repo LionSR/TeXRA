@@ -172,18 +172,23 @@ describe('coding-plan subscription runtime', () => {
     },
   );
 
-  it('restores Kimi preference without overwriting newer OpenRouter state', async () => {
-    const kimi = codingPlanSubscriptionRuntimes.find(
-      (runtime) => runtime.descriptor.id === 'kimiCode',
+  it('leaves the stored preference alone for a run that declined the plan', async () => {
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    await platform().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
+
+    expect(resolveGlmRoute({ useOpenRouter: false }).route).toBe(
+      'official-coding-plan',
     );
-
-    await kimi?.restoreEnabled(true, platform().globalState);
-
     expect(
-      platform().globalState.get(GlobalStateKey.KIMI_CODE_PREFER, false),
-    ).toBe(true);
+      resolveGlmRoute({
+        useOpenRouter: false,
+        declinedRoutes: ['glm-coding-plan-subscription'],
+      }).route,
+    ).toBe('official');
+    // The decline is the asking run's, so the user's switch is untouched and
+    // a concurrent run still routes through the plan.
     expect(
-      platform().globalState.get(GlobalStateKey.USE_OPENROUTER, false),
+      platform().globalState.get(GlobalStateKey.GLM_CODING_PLAN, false),
     ).toBe(true);
   });
 });

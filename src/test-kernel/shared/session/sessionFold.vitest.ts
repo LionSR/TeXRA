@@ -1115,6 +1115,7 @@ const RUNTIME = {
   modelCompatibilityKey: null,
   lastError: null,
   pendingRetry: null,
+  declinedRoutes: [],
 };
 const toolUseSnapshot = (
   references: Record<string, unknown> = {

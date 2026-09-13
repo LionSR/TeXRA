@@ -333,6 +333,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     family: 'reflection',
     modelId: bound.modelId,
     modelCompatibilityKey: bound.compatibilityKey,
+    // The launch's own-API-key choice enters the ledger with the opening
+    // snapshot, so every later binding and every resume reads it back.
+    declinedRoutes: run.declinedRoutes,
   });
 
   // -------------------------------------------------------------- opening
