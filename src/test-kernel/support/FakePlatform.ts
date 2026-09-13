@@ -52,59 +52,75 @@ function workerTempHome(): string {
 }
 
 /**
+ * A directory under the worker temp home, created on first use and remembered
+ * per worker so the thousands of per-test fake hosts do not each pay for a
+ * `mkdir`. Nothing here runs at module load: importing this module must stay
+ * free of process-wide side effects, so the pure test tier can reach it.
+ */
+function workerDir(name: 'root' | 'global-storage'): string {
+  const globals = globalThis as { __texraFakeDirs__?: Set<string> };
+  const dir = path.join(workerTempHome(), name);
+  const created = (globals.__texraFakeDirs__ ??= new Set<string>());
+  if (!created.has(dir)) {
+    mkdirSync(dir, { recursive: true });
+    created.add(dir);
+  }
+  return dir;
+}
+
+/**
  * The real directory every fake host's files live in: what `/` meant to the
  * in-memory filesystem this replaced. Emptied whenever a fake platform is
  * built, so a host starts from the files it seeds and nothing else.
  */
-const FAKE_ROOT = path.join(workerTempHome(), 'root');
+function fakeRoot(): string {
+  return workerDir('root');
+}
 
 /**
- * A real path inside {@link FAKE_ROOT}. `fakePath('workspace/a.tex')` is the
+ * A real path inside the {@link fakeRoot}. `fakePath('workspace/a.tex')` is the
  * path a `files` seed keyed `'/workspace/a.tex'` writes to, and is what a
  * suite asserting on an absolute path compares against.
  */
 export function fakePath(...segments: string[]): string {
-  return path.join(FAKE_ROOT, ...segments);
+  return path.join(fakeRoot(), ...segments);
 }
 
-// A real directory: instance-presence sockets are genuine OS objects that
-// live under the global storage root even when everything else is faked.
-// Worker-shared so the thousands of per-test fake hosts that never touch
-// presence do not each pay for a directory.
-const FAKE_GLOBAL_STORAGE = path.join(workerTempHome(), 'global-storage');
-
-mkdirSync(FAKE_ROOT, { recursive: true });
-mkdirSync(FAKE_GLOBAL_STORAGE, { recursive: true });
+/**
+ * A real directory: instance-presence sockets are genuine OS objects that live
+ * under the global storage root even when everything else is faked.
+ * Worker-shared so the hosts that never touch presence share the one directory.
+ */
+function fakeGlobalStorage(): string {
+  return workerDir('global-storage');
+}
 
 /**
- * The real file a seed key names. Keys are paths inside {@link FAKE_ROOT}, so
- * `'/workspace/a.tex'` and `fakePath('workspace/a.tex')` name the same file:
+ * The real file a seed key names. Keys are paths inside the {@link fakeRoot},
+ * so `'/workspace/a.tex'` and `fakePath('workspace/a.tex')` name the same file:
  * the first is the spelling a suite writes by hand, the second the one a path
  * helper built on the installed roots produces.
  */
 function seedTarget(key: string): string {
-  if (key.startsWith(FAKE_ROOT)) return key;
-  // Seed keys are paths inside the fake root ('/workspace/a.tex' and
-  // fakePath('workspace/a.tex') name the same file). A real temp path built
-  // outside this module would otherwise be nested under the root silently.
-  const home = workerTempHome();
-  const realTmp = realpathSync(os.tmpdir());
-  if (
-    key.startsWith(home) ||
-    key.startsWith(realTmp) ||
-    key.startsWith(os.tmpdir())
-  ) {
+  const root = fakeRoot();
+  if (key.startsWith(root)) return key;
+  // A path this harness handed out but from outside the fake root -- the
+  // worker temp home itself, or a sibling of the root under it -- would be
+  // nested under the root silently. Every other absolute key ('/tmp/run/x'
+  // included) is a path inside the fake root, not a real one.
+  if (key.startsWith(workerTempHome())) {
     throw new Error(
-      `Seed key ${key} is a real temp path; seed keys are paths inside the fake root (use fakePath).`,
+      `Seed key ${key} is a real path under the harness temp home; seed keys are paths inside the fake root (use fakePath).`,
     );
   }
   return fakePath(key);
 }
 
-/** Empties {@link FAKE_ROOT} and writes the seeded files into it. */
+/** Empties the {@link fakeRoot} and writes the seeded files into it. */
 function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
-  rmSync(FAKE_ROOT, { recursive: true, force: true });
-  mkdirSync(FAKE_ROOT, { recursive: true });
+  const root = fakeRoot();
+  rmSync(root, { recursive: true, force: true });
+  mkdirSync(root, { recursive: true });
   for (const [key, content] of Object.entries(files)) {
     const file = seedTarget(key);
     mkdirSync(path.dirname(file), { recursive: true });
@@ -367,7 +383,7 @@ export interface FakePlatformOptions {
   globalState?: Record<string, unknown>;
   workspaceState?: Record<string, unknown>;
   /**
-   * Files seeded into {@link FAKE_ROOT} before the host is installed. Keys
+   * Files seeded into the fake root before the host is installed. Keys
    * are paths inside that root: `'/workspace/a.tex'` and
    * `fakePath('workspace/a.tex')` both name the same file, under the default
    * workspace root.
@@ -413,7 +429,7 @@ export function createFakeWorkspaceRoots(
       ? options.workspacePath
       : fakePath('workspace'),
     storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
-    globalStorage: options.globalStoragePath ?? FAKE_GLOBAL_STORAGE,
+    globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
