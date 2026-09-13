@@ -62,7 +62,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId, generateShortId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
@@ -364,8 +364,8 @@ const waitFor = (condition: () => boolean, label: string) =>
   });
 
 /**
- * A session over the process roots: the goal store writes under the roots a
- * run's own scope installs, so a goal scenario and the loop must share them.
+ * A session over the process roots: a goal is its run's own row, so a goal
+ * scenario and the loop must share the session that carries it.
  */
 function goalSession(overrides: Record<string, unknown> = {}): SessionHandle {
   const session = createProcessSession();
@@ -929,9 +929,7 @@ describe('an active goal at the wait', () => {
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
       const onFollowUpConsumed = vi.fn();
-      yield* Effect.promise(() =>
-        GoalStore.start(runId, 'Finish the autonomous proof audit.'),
-      );
+      yield* startGoal(session, runId, 'Finish the autonomous proof audit.');
 
       try {
         const { requests, state } = yield* runUntilSpent({
@@ -957,7 +955,7 @@ describe('an active goal at the wait', () => {
           expect.anything(),
         );
       } finally {
-        yield* Effect.promise(() => GoalStore.forget(runId));
+        yield* clearGoal(session, runId);
       }
     }),
   );
@@ -966,9 +964,7 @@ describe('an active goal at the wait', () => {
     Effect.gen(function* () {
       const session = goalSession();
       const runId = startedRun(session);
-      yield* Effect.promise(() =>
-        GoalStore.start(runId, 'Keep going autonomously.'),
-      );
+      yield* startGoal(session, runId, 'Keep going autonomously.');
       enqueue(session, runId, [{ text: 'user correction', origin: 'user' }]);
 
       try {
@@ -982,7 +978,7 @@ describe('an active goal at the wait', () => {
         // goal's; the continuation only speaks for a queue with nothing in it.
         expect(userTexts(state).at(1)).toBe('user correction');
       } finally {
-        yield* Effect.promise(() => GoalStore.forget(runId));
+        yield* clearGoal(session, runId);
       }
     }),
   );
@@ -994,9 +990,7 @@ describe('an active goal at the wait', () => {
         const setApprovalBypassState = vi.fn();
         const session = goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
-        yield* Effect.promise(() =>
-          GoalStore.start(runId, 'finish the refactor'),
-        );
+        yield* startGoal(session, runId, 'finish the refactor');
 
         try {
           const { result } = yield* runLoop({
@@ -1009,7 +1003,7 @@ describe('an active goal at the wait', () => {
           });
 
           expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-          expect(GoalStore.getForRun(runId)?.status).toBe('paused');
+          expect(goalOf(session, runId)?.status).toBe('paused');
           for (const kind of ['bash', 'toolEdit', 'superYolo']) {
             expect(setApprovalBypassState).toHaveBeenCalledWith({
               runId,
@@ -1018,7 +1012,7 @@ describe('an active goal at the wait', () => {
             });
           }
         } finally {
-          yield* Effect.promise(() => GoalStore.forget(runId));
+          yield* clearGoal(session, runId);
           releaseRunResources(runId);
         }
       }),
@@ -1035,9 +1029,7 @@ describe('an active goal at the wait', () => {
         const session = goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
         const parentRunId = generateRunId();
-        yield* Effect.promise(() =>
-          GoalStore.start(runId, 'finish the autonomous proof'),
-        );
+        yield* startGoal(session, runId, 'finish the autonomous proof');
 
         try {
           yield* runLoop({
@@ -1066,10 +1058,10 @@ describe('an active goal at the wait', () => {
 
           expect(result.outcome).toBe(RUN_PHASE.WAITING);
           expect(userTexts(state)).toContain('try the other lemma');
-          expect(GoalStore.getForRun(runId)?.status).toBe('active');
+          expect(goalOf(session, runId)?.status).toBe('active');
           expect(setApprovalBypassState).not.toHaveBeenCalled();
         } finally {
-          yield* Effect.promise(() => GoalStore.forget(runId));
+          yield* clearGoal(session, runId);
           releaseRunResources(runId);
         }
       }),

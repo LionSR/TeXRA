@@ -341,8 +341,11 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
-  /** Goal is per run; the fact carries the state so the fold never reads
-   *  `GoalStore`. */
+  /** Goal is per run, and this row is the goal: it carries the whole
+   *  pursuit, so the fold's `RunView.goal` is what every reader reads and
+   *  no store holds a second copy. A listing key (`listingTypeOf`'s
+   *  default), so a cold read hydrates each run's goal without replaying
+   *  the run. */
   durable('goalStateChanged', { state: GoalStateSchema }),
   /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
   durable(

@@ -4,12 +4,14 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
-import { workspaceRoots } from '@platform/workspaceRoots';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { effectRuntime } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunId } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost, setupPlatform } from '@test/support/setupPlatform';
-import { GoalStore } from '@tools/goal';
+import { startGoal } from '@tools/goal';
 
 // The shared vscode stub predates workspace-folder listeners; the handler's
 // constructor subscribes to folder changes to re-register its history watcher.
@@ -25,7 +27,6 @@ vi.mock('vscode', async (importOriginal) => {
 });
 
 const RUN_ID = 'a5e77105' as RunId;
-const GOAL_KEY = `goals:byRun:${RUN_ID}`;
 
 /**
  * The real constructor wires channel/viewName and the history watcher from
@@ -71,8 +72,12 @@ describe('settings goal list', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('posts valid goals unchanged', async () => {
-    const goal = await GoalStore.start(RUN_ID, 'Finish the settings fix.');
+  it("posts the goal the run's row states", async () => {
+    const session = defaultSession();
+    publishTestRunStart(session, RUN_ID);
+    const goal = await effectRuntime().runPromise(
+      startGoal(session, RUN_ID, 'Finish the settings fix.'),
+    );
     const webview = createWebview();
 
     await createHandler().sendGoalList(webview);
@@ -81,23 +86,6 @@ describe('settings goal list', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
       items: [goal],
     });
-  });
-
-  it('reports a malformed goal without posting a fallback list', async () => {
-    const malformed = { goalId: 'not-valid' };
-    await workspaceRoots().workspaceState.update('goals:index', [RUN_ID]);
-    await workspaceRoots().workspaceState.update(GOAL_KEY, malformed);
-    const webview = createWebview();
-
-    await expectSendGoalListFailure(
-      webview,
-      expect.stringContaining(
-        `Failed to load goals: Failed to parse persisted goal for run "${RUN_ID}"`,
-      ),
-    );
-
-    expect(webview.postMessage).not.toHaveBeenCalled();
-    expect(workspaceRoots().workspaceState.get(GOAL_KEY)).toEqual(malformed);
   });
 
   it.each([

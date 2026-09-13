@@ -29,7 +29,6 @@ import {
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -113,7 +112,10 @@ export async function showCliSessionStatus(
           : view.policy.get(activeRunId)?.bypasses,
       statusLabel: run?.statusLabel,
       activeChildSessions,
-      goal: activeRunId ? GoalStore.getForRun(activeRunId) : undefined,
+      goal:
+        run?.category === AgentCategory.ToolUse && run.goal.active
+          ? run.goal
+          : undefined,
       activeSkills: activeSkillNamesFor(activeRunId),
       sessionId: run ? context.session.runId : undefined,
       commandName: context.cliContext.commandName,

@@ -87,7 +87,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { GoalStore } from '@tools/goal';
+import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
@@ -1253,7 +1253,9 @@ async function appendHarnessPlanDecision(
   result: RequestDecision,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    await GoalStore.start(HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE);
+    await effectRuntime().runPromise(
+      startGoal(defaultSession(), HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE),
+    );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
@@ -1765,7 +1767,10 @@ function appendHarnessStatus(): void {
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
-      goal: GoalStore.getForRun(runId),
+      goal:
+        run?.category === AgentCategory.ToolUse && run.goal.active
+          ? run.goal
+          : undefined,
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
       queuedFollowUpMessages: view.queuedFollowUps.get(runId) ?? [],
@@ -1777,7 +1782,7 @@ function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   cancelHarnessRequests('Session interrupted.');
   harnessFollowUpQueue.drainItems();
-  void GoalStore.forget(HARNESS_RUN_ID);
+  void effectRuntime().runPromise(clearGoal(defaultSession(), HARNESS_RUN_ID));
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }

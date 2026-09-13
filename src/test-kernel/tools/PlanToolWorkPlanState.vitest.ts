@@ -8,16 +8,20 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { platform, type Platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import type { Plan, RequestDecision, RunId } from '@shared/schemas';
+import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { GoalStore } from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { proposalApprovals, releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
@@ -92,9 +96,15 @@ function planSession(runId: RunId) {
   return { events, session, awaitPlanRequest };
 }
 
-function startPlanUpdate(runId: RunId, objective: string) {
+function startPlanUpdate(
+  runId: RunId,
+  objective: string,
+  /** Seed the run's session before the tool reads it (an in-flight goal). */
+  seed?: (session: SessionHandle) => Promise<void>,
+) {
   return Effect.gen(function* () {
     const { events, session, awaitPlanRequest } = planSession(runId);
+    if (seed) yield* Effect.promise(() => seed(session));
     const workPlanState = new WorkPlanState();
     const tool = new PlanTool();
 
@@ -249,7 +259,7 @@ describe('PlanTool — update (plan approval)', () => {
             const outcome = yield* result;
             expect(outcome.status).toBe('executed');
 
-            const goal = GoalStore.getForRun(runId);
+            const goal = goalOf(session, runId);
             expect(goal).not.toBeNull();
             expect(goal!.status).toBe('active');
             // The approved plan document seeds the goal verbatim.
@@ -277,7 +287,7 @@ describe('PlanTool — update (plan approval)', () => {
               },
             ]);
           } finally {
-            yield* Effect.tryPromise(() => GoalStore.forget(runId));
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -326,7 +336,7 @@ describe('PlanTool — update (plan approval)', () => {
               },
             ]);
           } finally {
-            yield* Effect.tryPromise(() => GoalStore.forget(runId));
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -341,12 +351,15 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           yield* Effect.tryPromise(() => installPlatform(true));
 
-          const existing = yield* Effect.tryPromise(() =>
-            GoalStore.start(runId, 'Old objective'),
-          );
+          let existing: Goal | undefined;
           const { result, session, decide } = yield* startPlanUpdate(
             runId,
             followUpPlan.objective,
+            async (planned) => {
+              existing = await effectRuntime().runPromise(
+                startGoal(planned, runId, 'Old objective'),
+              );
+            },
           );
           try {
             decide({ action: 'approve_and_goal' });
@@ -355,9 +368,9 @@ describe('PlanTool — update (plan approval)', () => {
             expect(outcome.status).toBe('executed');
             expect(outcome.summary).toMatch(/retargeted/i);
 
-            const goal = GoalStore.getForRun(runId);
+            const goal = goalOf(session, runId);
             expect(goal).not.toBeNull();
-            expect(goal!.goalId).toBe(existing.goalId);
+            expect(goal!.goalId).toBe(existing?.goalId);
             expect(goal!.status).toBe('active');
             expect(goal!.objective).toBe(followUpPlan.objective);
             expect(goal!.objective).not.toContain('Old objective');
@@ -366,7 +379,7 @@ describe('PlanTool — update (plan approval)', () => {
               false,
             );
           } finally {
-            yield* Effect.tryPromise(() => GoalStore.forget(runId));
+            yield* clearGoal(session, runId);
             releaseRunResources(runId, session);
           }
         }),
@@ -381,12 +394,9 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           yield* Effect.tryPromise(() => installPlatform(true));
 
+          const { result, permission, decide, session } =
+            yield* startPlanUpdate(runId, plan.objective);
           try {
-            const { result, permission, decide } = yield* startPlanUpdate(
-              runId,
-              plan.objective,
-            );
-
             expect(permission.goalEnabled).toBe(true);
 
             (workspaceRoots().config as FakeConfigProvider).set(
@@ -401,9 +411,10 @@ describe('PlanTool — update (plan approval)', () => {
             expect(outcome.output).toContain(
               'feature flag is currently disabled',
             );
-            expect(GoalStore.getForRun(runId)).toBeNull();
+            yield* Effect.promise(() => session.settlePublications());
+            expect(goalOf(session, runId)).toBeNull();
           } finally {
-            yield* Effect.tryPromise(() => GoalStore.forget(runId));
+            releaseRunResources(runId, session);
           }
         }),
       ),
@@ -411,14 +422,15 @@ describe('PlanTool — update (plan approval)', () => {
 });
 
 describe('PlanTool — pause/complete (goal lifecycle)', () => {
-  const RUN_ID = generateRunId();
+  // A run of its own per case: the default session's plane outlives the test,
+  // and a run begins with exactly one `run.start`.
+  let RUN_ID: RunId;
 
   beforeEach(async () => {
     await installPlatform(true);
-  });
-
-  afterEach(async () => {
-    await GoalStore.forget(RUN_ID);
+    RUN_ID = generateRunId();
+    publishTestRunStart(defaultSession(), RUN_ID);
+    await defaultSession().settlePublications();
   });
 
   function callTool(input: unknown) {
@@ -432,34 +444,37 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     );
   }
 
+  /** Put a goal on the run: its committed row folds before the tool reads it. */
+  const seedGoal = Effect.fn('test.seedGoal')(function* () {
+    yield* startGoal(defaultSession(), RUN_ID, 'Drive the plan to completion.');
+  });
+
   it.effect('pauses an active goal with a reason', () =>
     Effect.gen(function* () {
-      yield* Effect.tryPromise(() =>
-        GoalStore.start(RUN_ID, 'Drive the plan to completion.'),
-      );
+      yield* seedGoal();
       const result = yield* callTool({
         command: 'pause',
         reason: 'Need API credentials from the user.',
       });
       expect(result.status).toBe('executed');
-      expect(GoalStore.getForRun(RUN_ID)?.status).toBe('paused');
+      yield* Effect.promise(() => defaultSession().settlePublications());
+      expect(goalOf(defaultSession(), RUN_ID)?.status).toBe('paused');
     }),
   );
 
-  it.effect('completes an active goal by forgetting the record', () =>
+  it.effect('completes an active goal by ending the pursuit', () =>
     Effect.gen(function* () {
-      yield* Effect.tryPromise(() =>
-        GoalStore.start(RUN_ID, 'Drive the plan to completion.'),
-      );
+      yield* seedGoal();
       const result = yield* callTool({
         command: 'complete',
         reason: 'Ran pnpm test; all 142 tests pass.',
       });
       expect(result.status).toBe('executed');
       expect(result.output).toContain('all 142 tests pass');
-      // Completing is `forget()` — a finished goal is not archived, so no
-      // record remains and the wait-node loop has nothing to continue.
-      expect(GoalStore.getForRun(RUN_ID)).toBeNull();
+      // A finished goal is not archived: the run's next row states that none
+      // is in flight, so the wait-node loop has nothing to continue.
+      yield* Effect.promise(() => defaultSession().settlePublications());
+      expect(goalOf(defaultSession(), RUN_ID)).toBeNull();
     }),
   );
 });

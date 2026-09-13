@@ -3,7 +3,7 @@ import { Context, Layer } from 'effect';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
-// Deliberately not the `@tools/goal` barrel: it also loads goalStore, whose
+// Deliberately not the `@tools/goal` barrel: it also loads goalRows, whose
 // session graph must not sit behind tool resolution (see the barrel's note).
 import { isGoalEnabled } from '@tools/goal/goalFeatureFlag';
 import { readPlatformSetting } from '@utils/config/platformSettings';

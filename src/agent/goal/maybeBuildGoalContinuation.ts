@@ -1,5 +1,5 @@
 import { goalElapsedMs, type RunId } from '@shared/schemas';
-import { GoalStore, isGoalEnabled } from '@tools/goal';
+import { goalOf, isGoalEnabled, type GoalReader } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -15,20 +15,20 @@ import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
  * Queue and subagent checks belong to the wait-node caller because it owns the
  * blocking wait. This helper is pure: no side effects, no counter, no audit
  * log. The autonomous loop runs until the model completes
- * (`plan(command="complete")` → forget) or the user stops it.
+ * (`plan(command="complete")` -> the goal is cleared) or the user stops it.
  *
  * Called from the tool-use loop BEFORE its follow-up wait — the
  * wait blocks indefinitely on an empty queue, so the continuation cannot run
  * after it.
  */
 export async function maybeBuildGoalContinuation(
+  session: GoalReader,
   runId: RunId,
 ): Promise<string | null> {
-  // Read the store first — it is bootstrap-tolerant (returns null before
-  // platform init), so the flag check below (which needs `platform()`) is only
-  // reached when an active record actually exists on disk.
-  const goal = GoalStore.getForRun(runId);
-  if (!goal || goal.status !== 'active') return null;
+  // Read the fold first: it never throws, so the flag check below (which
+  // needs `platform()`) is only reached when the run actually has a goal.
+  const goal = goalOf(session, runId);
+  if (goal?.status !== 'active') return null;
 
   if (!isGoalEnabled()) return null;
 

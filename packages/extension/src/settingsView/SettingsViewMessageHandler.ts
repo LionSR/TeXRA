@@ -86,7 +86,7 @@ import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
-import { GoalStore } from '@tools/goal';
+import { goalList } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
@@ -376,7 +376,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         try: () =>
           webview.postMessage({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-            items: GoalStore.list(),
+            items: goalList(defaultSession()),
           }),
         catch: (error) => error,
       }).pipe(
