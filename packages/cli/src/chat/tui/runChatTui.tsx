@@ -5,6 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
+import { Effect } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
@@ -496,7 +497,18 @@ export async function runChat(
         const stop = runtimeSession.runs.kill(runId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
-        effectRuntime().runFork(stop.settlement);
+        // A refused detach commit leaves the run alive: the parent's
+        // interrupt runs only after the detach batch commits. Surface that
+        // failure instead of discarding the forked settlement's exit.
+        effectRuntime().runFork(
+          stop.settlement.pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                appendLocalAssistantTranscript(toErrorMessage(error));
+              }),
+            ),
+          ),
+        );
       }}
       onWorkflowControl={(runId, action) => {
         runtimeSession.workflowControls.control(runId, action);
