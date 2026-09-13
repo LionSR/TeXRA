@@ -35,22 +35,34 @@ export function secretBackedSessionStorage(
 /**
  * Lazily-built process-wide coordinator over one key of the secret store its
  * caller holds. The store is process-wide, so the first `get` fixes the
- * instance; `reset` drops it (test seam).
+ * instance and every later `get` must pass that same store: a different one
+ * is a wiring error and throws rather than silently answering from the
+ * first. `reset` drops the instance (test seam).
  */
 export function createSecretBackedCoordinator<C>(init: {
   secretKey: string;
   makeCoordinator: (storage: SubscriptionSessionStorage) => C;
 }): { get(secrets: SessionSecretStore): C; reset(): void } {
-  let singleton: C | null = null;
+  let materialized: { secrets: SessionSecretStore; coordinator: C } | null =
+    null;
   return {
     get(secrets) {
-      singleton ??= init.makeCoordinator(
-        secretBackedSessionStorage(secrets, init.secretKey),
-      );
-      return singleton;
+      if (materialized === null) {
+        materialized = {
+          secrets,
+          coordinator: init.makeCoordinator(
+            secretBackedSessionStorage(secrets, init.secretKey),
+          ),
+        };
+      } else if (materialized.secrets !== secrets) {
+        throw new Error(
+          `The ${init.secretKey} coordinator was built over a different secret store; reset it before switching stores.`,
+        );
+      }
+      return materialized.coordinator;
     },
     reset() {
-      singleton = null;
+      materialized = null;
     },
   };
 }
