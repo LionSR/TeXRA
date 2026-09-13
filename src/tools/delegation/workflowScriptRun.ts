@@ -233,9 +233,6 @@ export function projectWorkflowScriptProgress<R>(
         emitCall(call);
         if (call.status === previous) return;
         if (call.status === 'running') onActivity?.(`Running: ${call.label}`);
-        if (call.status === 'cached') {
-          onActivity?.(`Using saved result: ${call.label}`);
-        }
         if (isTerminalWorkflowCallProgress(call)) {
           onActivity?.(formatWorkflowCallLine(call));
         }
