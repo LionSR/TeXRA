@@ -78,6 +78,7 @@ import {
   activeRunId as activeRunIdSignal,
   resetCliState,
   patchSessionMeta,
+  sessionViewFailure as sessionViewFailureSignal,
   rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
@@ -328,7 +329,19 @@ export async function runChat(
   // set is the view's stream set. Bound before anything reads the view:
   // the terminal title below derives its attention state from it on
   // install.
-  const unbindSessionView = bindSessionView(runtimeSession.view);
+  const session = new TuiSession();
+  // A dead fold (`viewChanges` failing) is the end of this session: the
+  // composer closes on the reason, Ctrl-C still exits, and the exit is a
+  // failure on every exit path, since they all read `session.runExitCode`.
+  const unbindSessionView = bindSessionView(runtimeSession.view, {
+    changes: runtimeSession.viewChanges,
+    onFailure: (error) => {
+      sessionViewFailureSignal.set(
+        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit.`,
+      );
+      session.runExitCode = CliExitCode.AgentError;
+    },
+  });
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
@@ -352,8 +365,6 @@ export async function runChat(
     subscribeToSignalChanges([sessionView()], syncTranscriptSubscriptions),
   );
   syncTranscriptSubscriptions();
-
-  const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const rootRunStatus = (): RunPhase | undefined =>

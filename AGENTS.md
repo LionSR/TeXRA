@@ -456,7 +456,12 @@ exceptions are formats with consumers outside TeXRA and wire protocols TeXRA
 still supports; normalize those once at their boundary, and reject any other
 unsupported state with a clear error. `trace.json` is **not** such an exception:
 the owner ruled that 1.0's exports start fresh, so a document from an older
-build fails loudly at the parse boundary (#12359).
+build fails loudly at the parse boundary (#12359). The session database is
+the same stance made mechanical: `SESSION_EVENT_FORMAT`
+(`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
+clears a store of any other version at open, and
+`sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
+cannot land without bumping the version.
 
 ### ES2023+ Patterns
 

@@ -6,6 +6,8 @@ import {
 } from '@agent/runtime';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
+import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
+import { writeTextStderr } from './logSinks';
 
 function persistentSession(session: SessionHandle): SessionHandle {
   if (session.transcripts.mode.kind !== 'persistent') {
@@ -39,5 +41,10 @@ export async function initializeCliTranscriptSession(
       ),
     }),
   );
+  // The one fact about the store the user must hear: said on stderr before
+  // any UI mounts, on the open that cleared it and never again.
+  if (session.storeCleared) {
+    writeTextStderr(sessionStoreClearedMessage(session.storeCleared));
+  }
   return session;
 }

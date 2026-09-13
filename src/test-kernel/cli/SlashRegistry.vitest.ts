@@ -24,6 +24,7 @@ import {
 import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessForm';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
+  CLI_LOCAL_RUN_ID,
   activeForm,
   formProgress,
   resetCliState,
@@ -31,11 +32,7 @@ import {
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import {
-  CLI_LOCAL_RUN_ID,
-  notices,
-  noticesFor,
-} from '@cli/chat/tui/state/transcript';
+import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';

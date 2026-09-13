@@ -97,9 +97,23 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   override readonly message = toErrorMessage(this.cause);
 }
 
+/**
+ * What opening a store of another event format left behind: the file, the
+ * rows it held, and the format they were written under. Null when the store
+ * was this build's or empty. The one fact a host presents about it; the
+ * database keeps no other memory of the rows.
+ */
+export interface SessionStoreCleared {
+  readonly path: string;
+  readonly rows: number;
+  readonly storedFormat: number;
+}
+
 export class Database extends Context.Service<
   Database,
   {
+    /** Set when this open cleared a store of another event format. */
+    readonly cleared: SessionStoreCleared | null;
     /**
      * C6: append an ordered batch, possibly across several aggregates, in one
      * `BEGIN IMMEDIATE` under the process's single permit. Each target's

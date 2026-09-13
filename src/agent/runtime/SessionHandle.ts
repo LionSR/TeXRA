@@ -209,6 +209,9 @@ export class SessionHandle {
    * instead of hanging it.
    */
   readonly viewChanges: Stream.Stream<SessionView>;
+  /** Set when opening this session's store cleared another build's rows;
+   *  the host that opened the session presents it once. */
+  readonly storeCleared: SessionGraph['storeCleared'];
   /**
    * Per-run run handles: registration, lookup, change listeners, and
    * subagent lineage. Hears every phase-moving row this process committed
@@ -309,6 +312,7 @@ export class SessionHandle {
     this.ledger = graph.ledger;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
+    this.storeCleared = graph.storeCleared;
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;

@@ -41,11 +41,13 @@ import { z } from 'zod';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { createLog } from '@logger/logUtils';
 import {
   AggregateIdSchema,
   RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
+  SESSION_EVENT_FORMAT,
   SessionEventSchema,
   ownerIdentity,
   aggregateTarget,
@@ -73,11 +75,13 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  type SessionStoreCleared,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
+const log = createLog('sessionDatabase');
 /**
  * Event history and bounded current application records.
  *
@@ -183,20 +187,36 @@ WHERE s.aggregate_id IN (SELECT value FROM json_each(?))
 `;
 const PayloadSchema = z.record(z.string(), z.unknown());
 const StoredTypeSchema = z.string().endsWith('.1');
-/** Stored versions are checked before reconstructing the typed event. */
+/**
+ * Stored versions are checked before reconstructing the typed event. A row
+ * that no longer matches the current vocabulary (there are no legacy
+ * readers) fails naming itself: the aggregate, seq, and type a reader can
+ * act on, not the union's whole discriminator list.
+ */
 function decodeEvent(row: Record<string, unknown>): SessionEvent {
   const payload = Result.getOrThrow(
     parseJsonWith(z.string().parse(row.data), PayloadSchema),
   );
-  return SessionEventSchema.parse({
+  const type = StoredTypeSchema.parse(row.type).slice(0, -2);
+  const parsed = SessionEventSchema.safeParse({
     ...payload,
     aggregateId: row.aggregateId,
     seq: row.seq,
     commit: row.commit,
     ownerId: row.ownerId,
     at: row.at,
-    type: StoredTypeSchema.parse(row.type).slice(0, -2),
+    type,
   });
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0];
+  const at = issue?.path.join('.');
+  const reason =
+    at === 'type'
+      ? `unknown event type "${type}"`
+      : `${type} at ${at || 'event'}: ${issue?.message ?? parsed.error.message}`;
+  throw new Error(
+    `Stored row ${String(row.aggregateId)} seq ${String(row.seq)} does not match the current event format (${reason})`,
+  );
 }
 /** First append claims the aggregate; later appends require that same claim. */
 const NEXT_SEQ = `
@@ -252,7 +272,9 @@ export const databaseLayer = (
         disableWAL: mode === 'ephemeral',
         busyTimeout: '5 seconds',
       }).pipe(mapDatabaseFailure(openFailed));
-      yield* configure(sql, mode).pipe(mapDatabaseFailure(openFailed));
+      const cleared = yield* configure(sql, mode, path).pipe(
+        mapDatabaseFailure(openFailed),
+      );
       const level = yield* SubscriptionRef.make(0);
       const observedCommit = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
@@ -837,6 +859,7 @@ export const databaseLayer = (
         });
       return {
         observedCommit,
+        cleared,
         level,
         currentCommit: query(currentCommit),
         readAll: (fromCommit, throughCommit) =>
@@ -1217,7 +1240,15 @@ export const databaseLayer = (
             const at = yield* Clock.currentTimeMillis;
             // The ownership refusal leaves typed (D6 b); the transaction
             // wrapper carried it as the write failure's cause.
-            return yield* transact(appendPrepared(prepared, at)).pipe(
+            // A write from a process whose build no longer matches the store's
+            // stamp (another build cleared and re-stamped it under this one)
+            // fails here instead of appending rows of a vocabulary the store
+            // no longer holds.
+            return yield* transact(
+              assertStoreFormat(sql, path).pipe(
+                Effect.andThen(appendPrepared(prepared, at)),
+              ),
+            ).pipe(
               Effect.mapError((failure) =>
                 failure.cause instanceof DatabaseNotOwner
                   ? failure.cause
@@ -1271,6 +1302,7 @@ function payloadOf(draft: {
 const configure = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
+  path: string,
 ) {
   yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
   yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
@@ -1280,6 +1312,93 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
+  // A store holds one vocabulary, stamped in SQLite's own slot for it. One
+  // written under another version is unsupported state: there are no legacy
+  // readers, so its tables are dropped here, at the boundary that owns the
+  // file, before this build's schema touches them, and a row of another
+  // vocabulary never reaches a fold. The stamp is read before the tables are
+  // created, so a layout this schema cannot extend is dropped rather than
+  // failing the open; and the reset runs under the write lock, re-reading
+  // the stamp inside it, so two processes opening the same store clear it
+  // once. The stamp is written last, inside the same transaction.
+  const cleared =
+    (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
+      ? null
+      : yield* resetStore(sql, path);
+  yield* applySchema(sql);
+  if (cleared !== null) {
+    log.warn(
+      `Session store ${path} held ${cleared.rows} rows of format ${cleared.storedFormat}; this build reads format ${SESSION_EVENT_FORMAT} and keeps no compatibility with earlier persisted data, so the store was cleared.`,
+    );
+  }
+  return cleared;
+});
+
+/**
+ * Clear a store stamped with another format, under the write lock and in
+ * one transaction with the stamp: the stamp is re-read inside it, so of two
+ * processes opening the same store only the first clears it, and the
+ * second reads this build's stamp and keeps the tables. Returns what was
+ * cleared, or null when the store held no rows (a new file) or was already
+ * this build's by the time the lock was held.
+ */
+const resetStore = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  path: string,
+) {
+  yield* sql.unsafe('BEGIN IMMEDIATE', []);
+  const cleared = yield* Effect.gen(function* () {
+    const stored = yield* pragmaValue(sql, 'user_version');
+    if (stored === SESSION_EVENT_FORMAT) return null;
+    const rows = yield* storedRows(sql);
+    yield* sql.unsafe('DROP TABLE IF EXISTS event', []);
+    yield* sql.unsafe('DROP TABLE IF EXISTS event_sequence', []);
+    yield* applySchema(sql);
+    yield* sql.unsafe(`PRAGMA user_version = ${SESSION_EVENT_FORMAT}`, []);
+    return rows > 0
+      ? ({
+          path,
+          rows,
+          storedFormat: Number(stored),
+        } satisfies SessionStoreCleared)
+      : null;
+  }).pipe(Effect.onError(() => sql.unsafe('ROLLBACK', []).pipe(Effect.ignore)));
+  yield* sql.unsafe('COMMIT', []);
+  return cleared;
+});
+
+/** The event rows a store holds, or none when it has no event table yet. */
+const storedRows = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
+  const table = (yield* sql.unsafe<Record<string, unknown>>(
+    "SELECT count(*) AS present FROM sqlite_master WHERE type = 'table' AND name = 'event'",
+    [],
+  ))[0];
+  if (Number(table?.present ?? 0) === 0) return 0;
+  const counted = (yield* sql.unsafe<Record<string, unknown>>(
+    'SELECT count(*) AS rows FROM event',
+    [],
+  ))[0];
+  return Number(counted?.rows ?? 0);
+});
+
+/** Refuse a write once another build has re-stamped the store under this
+ *  process; read inside the write transaction, so the check and the append
+ *  see one stamp. */
+const assertStoreFormat = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  path: string,
+) {
+  const stored = yield* pragmaValue(sql, 'user_version');
+  if (stored !== SESSION_EVENT_FORMAT) {
+    return yield* Effect.fail(
+      new Error(
+        `Session store ${path} is stamped with event format ${String(stored)}; this process writes format ${SESSION_EVENT_FORMAT} and stops writing to it.`,
+      ),
+    );
+  }
+});
+
+const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
   // The official driver prepares one statement at a time. This fixed schema
   // contains only DDL statements, with no semicolons inside SQL literals.
   for (const statement of SCHEMA.split(';')
@@ -1289,16 +1408,23 @@ const configure = Effect.fnUntraced(function* (
   }
 });
 
-const verifyPragma = Effect.fnUntraced(function* (
+const pragmaValue = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   pragma: string,
-  expected: string | number,
 ) {
   const row = (yield* sql.unsafe<Record<string, unknown>>(
     `PRAGMA ${pragma}`,
     [],
   ))[0];
-  const value = row?.[pragma];
+  return row?.[pragma];
+});
+
+const verifyPragma = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  pragma: string,
+  expected: string | number,
+) {
+  const value = yield* pragmaValue(sql, pragma);
   if (value !== expected) {
     return yield* Effect.fail(
       new Error(

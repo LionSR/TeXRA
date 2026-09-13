@@ -9,23 +9,17 @@
  */
 import { signal } from '@lit-labs/signals';
 
-import { RunIdSchema, type RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { RequestError } from '@shared/session/requestErrors';
 import {
+  CLI_LOCAL_RUN_ID,
   activeRunId,
   focusRun,
   rootRunId,
   registerCliStateResetHook,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-
-/**
- * Where notices land before the root run exists. A reserved 8-hex id: real
- * run ids are 12 hex (generated) or 24 (derived), so it can never collide,
- * and it is minted through the schema rather than forged with a cast.
- */
-export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
 
 export interface LocalNotice {
   readonly runId: RunId;

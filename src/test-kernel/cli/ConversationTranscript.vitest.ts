@@ -39,7 +39,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
-import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/transcript';
+import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/cliState';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
