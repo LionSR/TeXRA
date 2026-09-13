@@ -247,7 +247,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
@@ -284,7 +284,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
