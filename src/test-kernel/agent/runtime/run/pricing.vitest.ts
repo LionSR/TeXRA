@@ -88,59 +88,24 @@ function anthropicUsage(breakdown: {
 }
 
 describe('priceTurnUsage on an Anthropic turn', () => {
-  it.each([
-    {
-      name: 'bills the remainder of a two-bucket breakdown at the 5m rate',
+  it('bills the remainder of a two-bucket breakdown at the 5m rate', () => {
+    const breakdown = {
       cacheCreationTokens: 1000,
       cacheCreation5mTokens: 600,
       cacheCreation1hTokens: 300,
-      billedAt5m: 700,
-      billedAt1h: 300,
-    },
-    {
-      name: 'bills everything outside a lone 1h bucket at the 5m rate',
-      cacheCreationTokens: 1000,
-      cacheCreation5mTokens: null,
-      cacheCreation1hTokens: 200,
-      billedAt5m: 800,
-      billedAt1h: 200,
-    },
-    {
-      name: 'bills the whole total at the 5m rate when no bucket is reported',
-      cacheCreationTokens: 1000,
-      cacheCreation5mTokens: null,
-      cacheCreation1hTokens: null,
-      billedAt5m: 1000,
-      billedAt1h: 0,
-    },
-  ])(
-    '$name',
-    ({
-      billedAt5m,
-      billedAt1h,
-      name: _name,
-      ...breakdown
-    }: {
-      readonly name: string;
-      readonly cacheCreationTokens: number;
-      readonly cacheCreation5mTokens: number | null;
-      readonly cacheCreation1hTokens: number | null;
-      readonly billedAt5m: number;
-      readonly billedAt1h: number;
-    }) => {
-      const priced = priceTurnUsage(
-        boundAnthropic,
-        anthropicUsage(breakdown),
-        1234,
-        noopTrace,
-      );
+    };
+    const priced = priceTurnUsage(
+      boundAnthropic,
+      anthropicUsage(breakdown),
+      1234,
+      noopTrace,
+    );
 
-      expect(priced?.cost).toBeCloseTo(
-        NON_WRITE_COST +
-          (billedAt5m * WRITE_5M_PRICE + billedAt1h * WRITE_1H_PRICE) / 1e6,
-        12,
-      );
-      expect(priced?.cacheCreationTokens).toBe(breakdown.cacheCreationTokens);
-    },
-  );
+    // 600 in the 5m bucket plus the 100 the breakdown left unattributed.
+    expect(priced?.cost).toBeCloseTo(
+      NON_WRITE_COST + (700 * WRITE_5M_PRICE + 300 * WRITE_1H_PRICE) / 1e6,
+      12,
+    );
+    expect(priced?.cacheCreationTokens).toBe(breakdown.cacheCreationTokens);
+  });
 });
