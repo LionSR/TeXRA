@@ -83,7 +83,22 @@ mkdirSync(FAKE_GLOBAL_STORAGE, { recursive: true });
  * helper built on the installed roots produces.
  */
 function seedTarget(key: string): string {
-  return key.startsWith(FAKE_ROOT) ? key : fakePath(key);
+  if (key.startsWith(FAKE_ROOT)) return key;
+  // Seed keys are paths inside the fake root ('/workspace/a.tex' and
+  // fakePath('workspace/a.tex') name the same file). A real temp path built
+  // outside this module would otherwise be nested under the root silently.
+  const home = workerTempHome();
+  const realTmp = realpathSync(os.tmpdir());
+  if (
+    key.startsWith(home) ||
+    key.startsWith(realTmp) ||
+    key.startsWith(os.tmpdir())
+  ) {
+    throw new Error(
+      `Seed key ${key} is a real temp path; seed keys are paths inside the fake root (use fakePath).`,
+    );
+  }
+  return fakePath(key);
 }
 
 /** Empties {@link FAKE_ROOT} and writes the seeded files into it. */
