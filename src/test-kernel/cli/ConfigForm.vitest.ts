@@ -1,9 +1,12 @@
+import '@test/support/defaultSessionTestSetup';
+
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   buildConfigListItems,
   coerceSettingInput,
@@ -215,6 +218,7 @@ async function openConfigFormProps(
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
     state: stores.globalState,
+    runtimeSession: defaultSession(),
     getConfigStores: () => stores,
   });
   openCliSlashCommandForm('config', '');
@@ -474,6 +478,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtimeSession: defaultSession(),
       getConfigStores: () => stores,
     });
     openCliSlashCommandForm('config', '');
@@ -502,6 +507,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtimeSession: defaultSession(),
       getConfigStores: () => stores,
     });
     expect(openCliSlashCommandForm('config', '')).toBe(true);
@@ -525,6 +531,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtimeSession: defaultSession(),
       getConfigStores: () => stores,
       onApprovalPolicySelect: (policy) => {
         applied.push(policy);
@@ -558,6 +565,7 @@ describe('/config slash command wiring', () => {
     registerBuiltinSlashCommands({
       secrets: new FakeSecrets(),
       state: stores.globalState,
+      runtimeSession: defaultSession(),
       getConfigStores: () => stores,
       onError: () => {
         events.push('error');

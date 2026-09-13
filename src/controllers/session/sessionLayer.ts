@@ -887,13 +887,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * composition root is its first run (the package): the map itself never
  * waits for it, so an open registers its root with the owner before the
  * caller's first await, and only the entry's build does. The owner it
- * installs answers in Effect except for the synchronous face the
- * unconverted hosts still take: `openSync` builds under `runSync`, so
- * everything a root's graph does at build time (opening the database,
- * reading the startup listing, opening the transcript store) must complete
- * inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps
- * per yield) or the open reads as asynchronous and throws; an opener whose
- * identity is still pending opens through the Effect face.
+ * installs answers in Effect, on the opener's own fiber; its one
+ * synchronous face, `current`, reads the held map and runs nothing.
  *
  * The process services (injection plan §3.1, the one process provide point)
  * are merged here from what the root hands over: `Secrets` and `AppState`
@@ -985,8 +980,9 @@ export function installProcessRuntime({
   // The map's services on the caller's own fiber: an Effect-native opener
   // (the SDK) runs these where it stands, so the owner adds no run site of
   // its own. Supply only the owned session family: the caller retains its
-  // tracer, logger, and other independently provided services. `openSync`
-  // stays synchronous for the three hosts; `current` reads the held map.
+  // tracer, logger, and other independently provided services. `current`,
+  // the owner's one synchronous face, reads the held map instead.
+
   const onThisRuntime = <A, E>(
     effect: Effect.Effect<A, E, Sessions>,
   ): Effect.Effect<A, E> =>
@@ -1022,7 +1018,6 @@ export function installProcessRuntime({
   );
   initProcessRuntime(runtime);
   initSessionOwner({
-    openSync: (open) => runtime.runSync(openSession(open)),
     open: (open) => onThisRuntime(openSession(open)),
     current: (root) => heldSessionSync(held, root),
     list: () => onThisRuntime(listSessions),

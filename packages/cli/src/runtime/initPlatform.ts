@@ -2,12 +2,19 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { teardownDefaultSession, tryDefaultSession } from '@agent/runtime';
+import {
+  createAgentResponseTextConnector,
+  defaultSession,
+  initializeDefaultSession,
+  teardownDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
+import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import {
@@ -99,6 +106,9 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> & {
    * ambient roots.
    */
   readonly roots?: WorkspaceRoots;
+  /** The process-default session over the process roots, opened once by the
+   *  first init: one CLI process, one paper, one persistent session. */
+  readonly session: SessionHandle;
 };
 
 function logAt(
@@ -377,6 +387,20 @@ export async function initCliPlatform(
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
     installTexraAccountProbes(cliSecrets);
+    // The one session of this process, over the roots just installed, opened
+    // here rather than by whichever command first needs it. The latex text
+    // connector asks a helper model how to join two strings; that model is
+    // resolved against the stores this root opened.
+    const session = await runtime.runPromise(
+      initializeDefaultSession({
+        responseTextProcessing: createTexraResponseTextProcessing(
+          createAgentResponseTextConnector({
+            secrets: cliSecrets,
+            globalState: stateStores.globalState,
+          }),
+        ),
+      }),
+    );
 
     // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
     // whose DISABLED_TOOLS list already exists, so upgrading users keep the
@@ -395,9 +419,7 @@ export async function initCliPlatform(
     // hosts' ordering.
     registerRuntimeShutdownHandlers(lifecycle, {
       runSettlement: (settlement) => runtime.runPromise(settlement),
-      // The default session is installed later by whichever entry point opens
-      // transcripts, so its shutdown lookup remains lazy.
-      flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+      flushArtifacts: () => session.flushArtifacts(),
       afterFlushArtifacts: [
         () => runtime.runPromise(UsageLogService.dispose()),
       ],
@@ -431,6 +453,10 @@ export async function initCliPlatform(
     ),
     globalState: cliGlobalState(),
     secrets: getCliSecrets(context.storageRoot),
+    // The session the first init opened above; read through its owner, like
+    // the global state through its binder, so a later init hands back the
+    // same one.
+    session: defaultSession(),
     lifecycle: services.lifecycle,
     roots: installedRoots,
   };

@@ -1,5 +1,6 @@
 // Registers the slash commands the input palette surfaces.
 
+import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
@@ -270,6 +271,8 @@ export function registerBuiltinSlashCommands(options: {
    */
   secrets: PlatformSecrets;
   state: StateStore;
+  /** The process-default session `/resume` lists history from. */
+  runtimeSession: SessionHandle;
   onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
@@ -503,10 +506,12 @@ export function registerBuiltinSlashCommands(options: {
     MemoryListForm,
     (value: string) => options.onMemorySelect?.(value),
   );
-  // `/resume` reads history through the process stores; bind them here so the
+  // `/resume` reads history from the process session; bind it here so the
   // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
-    (formProps) => <ResumeListForm stores={modelStores} {...formProps} />,
+    (formProps) => (
+      <ResumeListForm session={options.runtimeSession} {...formProps} />
+    ),
     (id: RunId) => options.onResumeSelect?.(id),
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(

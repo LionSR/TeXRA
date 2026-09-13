@@ -298,12 +298,7 @@ describe('completedRunArchive facade', () => {
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const { secrets, roots } = installedHost();
-    const { globalState } = roots;
-    const details = await readCliHistoryDetails(
-      { secrets, globalState },
-      runId,
-    );
+    const details = await readCliHistoryDetails(taskSession, runId);
     expect(details).not.toBeNull();
     if (!details) throw new Error('Expected history details');
     const publicRows = await Effect.runPromise(
@@ -478,7 +473,7 @@ describe('completedRunArchive facade', () => {
 
         yield* Effect.promise(() => stampRun(runId));
         yield* closeTestSession(taskSession);
-        const session = initializeDefaultSession({});
+        const session = yield* initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* Effect.promise(() => session.settlePublications());

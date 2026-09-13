@@ -575,14 +575,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  const runtimeSession = initializeDefaultSession({
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({
-        secrets,
-        globalState: context.globalState,
-      }),
-    ),
-  });
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  const runtime = effectRuntime();
+  const runtimeSession = await runtime.runPromise(
+    initializeDefaultSession({
+      responseTextProcessing: createTexraResponseTextProcessing(
+        createAgentResponseTextConnector({
+          secrets,
+          globalState: context.globalState,
+        }),
+      ),
+    }),
+  );
   if (runtimeSession.storeCleared) {
     void vscode.window.showWarningMessage(
       sessionStoreClearedMessage(runtimeSession.storeCleared),
@@ -592,10 +598,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
-    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+    runSettlement: (settlement) => runtime.runPromise(settlement),
     afterAgentShutdown: [
       () => killActiveRecording(),
-      () => effectRuntime().runPromise(UsageLogService.dispose()),
+      () => runtime.runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
     afterRunSettlement: [() => disposeDiffRefresh()],
@@ -612,11 +618,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   });
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
-
-  // The host entry holds the process runtime in a local and threads it to the
-  // surfaces registered below, so code under `activate` settles its Effects on
-  // the runtime it was handed instead of reading the global back.
-  const runtime = effectRuntime();
 
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.

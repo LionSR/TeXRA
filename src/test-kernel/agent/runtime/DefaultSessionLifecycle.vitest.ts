@@ -69,9 +69,11 @@ describe('default session lifecycle', () => {
       initializeDefaultSession,
       teardownDefaultSession,
     } = await importSessionRuntime();
-    const processDefault = initializeDefaultSession({
-      transcriptMode: { kind: 'ephemeral', reason: 'process default' },
-    });
+    const processDefault = await Effect.runPromise(
+      initializeDefaultSession({
+        transcriptMode: { kind: 'ephemeral', reason: 'process default' },
+      }),
+    );
 
     try {
       expect(defaultSession()).toBe(processDefault);
@@ -113,13 +115,15 @@ describe('default session lifecycle', () => {
       kind: 'ephemeral',
       reason: 'default session lifecycle test',
     } as const;
-    const session = initializeDefaultSession({ transcriptMode });
+    const session = await Effect.runPromise(
+      initializeDefaultSession({ transcriptMode }),
+    );
     try {
       expect(defaultSession()).toBe(session);
       expect(defaultSession().transcripts.mode).toEqual(transcriptMode);
-      expect(() => initializeDefaultSession({ transcriptMode })).toThrow(
-        'already been initialized',
-      );
+      await expect(
+        Effect.runPromise(initializeDefaultSession({ transcriptMode })),
+      ).rejects.toThrow('already been initialized');
     } finally {
       await Effect.runPromise(teardownDefaultSession());
     }
@@ -218,14 +222,21 @@ describe('default session lifecycle', () => {
         tryDefaultSession,
       } = yield* Effect.promise(() => importSessionRuntime());
 
-      const first = initializeDefaultSession({
+      const first = yield* initializeDefaultSession({
         transcriptMode: { kind: 'ephemeral', reason: 'first activation' },
       });
-      expect(() =>
-        initializeDefaultSession({
-          transcriptMode: { kind: 'ephemeral', reason: 'replacement attempt' },
-        }),
-      ).toThrow('already been initialized');
+      yield* Effect.promise(() =>
+        expect(
+          Effect.runPromise(
+            initializeDefaultSession({
+              transcriptMode: {
+                kind: 'ephemeral',
+                reason: 'replacement attempt',
+              },
+            }),
+          ),
+        ).rejects.toThrow('already been initialized'),
+      );
 
       const disposeSpy = vi.spyOn(first, 'dispose');
 
@@ -234,7 +245,7 @@ describe('default session lifecycle', () => {
       expect(disposeSpy).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
 
-      const second = initializeDefaultSession({
+      const second = yield* initializeDefaultSession({
         transcriptMode: { kind: 'ephemeral', reason: 'second activation' },
       });
       try {

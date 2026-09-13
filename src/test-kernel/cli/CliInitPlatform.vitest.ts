@@ -1,8 +1,21 @@
 // Third-party imports
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 // Local imports
+import { teardownDefaultSession } from '@agent/runtime';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   initCliPlatform,
@@ -69,7 +82,7 @@ const mocks = vi.hoisted(() => ({
   createNodePlatform: vi.fn(() => ({})),
   createNodeWorkspaceRoots: vi.fn(() => ({
     workspace: '/workspace',
-    storage: '/workspace/.texra/storage',
+    storage: sessionStorageDir,
     config: { get: (_key: string, def: unknown) => def },
     workspaceState: {},
   })),
@@ -174,7 +187,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
       globalState: mocks.cliGlobalState,
       workspaceState: {},
       storage: {
-        getStoragePath: () => '/workspace/.texra/storage',
+        getStoragePath: () => sessionStorageDir,
         getGlobalStoragePath: () => '/tmp/texra-global',
       },
     }),
@@ -187,6 +200,14 @@ vi.mock('@cli/runtime/cliSecrets', () => ({
 
 // Installed so startup never reaches a real auth check.
 const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
+
+// The init opens the process session over the roots it installs, and a
+// persistent session's database lives under the storage root, so the mocked
+// roots above name a real directory rather than a fixed fake path.
+const sessionStorageDir = mkdtempSync(join(tmpdir(), 'texra-cli-init-'));
+afterAll(() => {
+  rmSync(sessionStorageDir, { recursive: true, force: true });
+});
 
 function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
@@ -247,6 +268,12 @@ describe('CLI platform init', () => {
       Effect.succeed({ workspace: {}, global: {} }),
     );
     isAuthenticatedSpy.mockResolvedValue(false);
+  });
+
+  // A case that never ran the shutdown handlers leaves the process session
+  // open; the next first-init would then find one already initialized.
+  afterEach(async () => {
+    await Effect.runPromise(teardownDefaultSession());
   });
 
   it('wires usage logging on first platform init', async () => {
@@ -338,6 +365,9 @@ describe('CLI platform init', () => {
     isAuthenticatedSpy.mockResolvedValue(true);
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
+    // The first init: a later one hands back the session the first opened,
+    // and no first init has run in this case.
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
     await initCliPlatform(cliContext());
 
     const setup = await effectRuntime().runPromise(

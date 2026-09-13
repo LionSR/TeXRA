@@ -17,7 +17,6 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   RunIdSchema,
@@ -42,7 +41,6 @@ import {
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { initializeCliTranscriptSession } from './transcriptSession';
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
@@ -157,9 +155,8 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 }
 
 export async function listCliHistoryEntries(
-  stores: ModelOptionStores,
+  session: SessionHandle,
 ): Promise<CliHistoryEntry[]> {
-  const session = await initializeCliTranscriptSession(stores);
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
@@ -180,11 +177,10 @@ export async function listCliHistoryEntries(
 }
 
 export async function readCliHistoryDetails(
-  stores: ModelOptionStores,
+  session: SessionHandle,
   id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
-  const session = await initializeCliTranscriptSession(stores);
   const store = getRunRecords(session, id);
   const [
     run,
@@ -324,10 +320,9 @@ type CliHistoryExportInputResult =
  * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
-  stores: ModelOptionStores,
+  session: SessionHandle,
   id: RunId,
 ): Promise<CliHistoryExportInputResult> {
-  const session = await initializeCliTranscriptSession(stores);
   const { run, config, conversation, hasTranscriptEvidence, exportInput } =
     await effectRuntime().runPromise(loadChatExportInput(id, session));
   if (exportInput) return { status: 'ok', exportInput };

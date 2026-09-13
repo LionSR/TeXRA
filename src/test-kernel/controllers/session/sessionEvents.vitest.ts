@@ -65,7 +65,7 @@ import {
   forEachLiveSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { closeSession, openSession } from '@agent/runtime/sessionGraph';
+import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { databaseLayer } from '@controllers/session/Database';
@@ -652,7 +652,7 @@ describe('session events and view', () => {
 
 /**
  * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
- * is how a session the `Sessions` map holds behind `openSession` ends.
+ * is how a session the `Sessions` map holds behind `openSessionEffect` ends.
  */
 describe('Sessions owner', () => {
   it.effect(
@@ -711,7 +711,7 @@ describe('Sessions owner', () => {
   );
 
   const open = (storagePath: string) =>
-    openSession({
+    openSessionEffect({
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
@@ -743,7 +743,7 @@ describe('Sessions owner', () => {
     'delivers committed runtime facts and never announces a rejected write',
     () =>
       Effect.gen(function* () {
-        const session = open('/workspace/owner/committed-status');
+        const session = yield* open('/workspace/owner/committed-status');
         const handleStatus = vi.spyOn(session.runs, 'handleStatus');
         const onResult = vi.fn();
         const detachResult = session.onResult(onResult);
@@ -850,7 +850,7 @@ describe('Sessions owner', () => {
     "a failed publication outlives every barrier until its run's drain takes it, once",
     () =>
       Effect.gen(function* () {
-        const session = open('/workspace/owner/retained-failure');
+        const session = yield* open('/workspace/owner/retained-failure');
         try {
           session.publish([runStart]);
           yield* Effect.promise(() => session.settlePublications(RUN));
@@ -896,7 +896,7 @@ describe('Sessions owner', () => {
     "accepts another process's committed facts without firing local side effects",
     () =>
       Effect.gen(function* () {
-        const session = open('/workspace/owner/foreign-fold');
+        const session = yield* open('/workspace/owner/foreign-fold');
         const onResult = vi.fn();
         const detachResult = session.onResult(onResult);
         const foreign = RunIdSchema.parse('cd34ef');
@@ -950,7 +950,7 @@ describe('Sessions owner', () => {
     'close reports settled once the run ended, and releases the session',
     () =>
       Effect.gen(function* () {
-        const session = open('/workspace/owner/settled');
+        const session = yield* open('/workspace/owner/settled');
         session.publish([runStart]);
         yield* Effect.promise(() => session.settlePublications());
         // A request nobody answers: the fold lists it while the fiber that
@@ -1014,7 +1014,7 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const root = '/workspace/owner/waiting-teardown';
-        const session = open(root);
+        const session = yield* open(root);
         const handle = testRunHandle({
           runId: RunIdSchema.parse('aa0004'),
           agent: 'chat',
@@ -1050,7 +1050,7 @@ describe('Sessions owner', () => {
   it.live('close releases the session after a stop settlement defect', () =>
     Effect.gen(function* () {
       const root = '/workspace/owner/stop-defect';
-      const session = open(root);
+      const session = yield* open(root);
       const runId = RunIdSchema.parse('aa0005');
       track(session, runId);
       const stopFailure = new Error('terminal write refused');
@@ -1077,7 +1077,7 @@ describe('Sessions owner', () => {
     'close reports a run still live past the budget as abandoned, and releases the session at its settlement',
     () =>
       Effect.gen(function* () {
-        const session = open('/workspace/owner/abandoned');
+        const session = yield* open('/workspace/owner/abandoned');
         // A run that ignores its interrupt: no handler, no driver to unwind it.
         const slow = RunIdSchema.parse('aa0003');
         track(session, slow);

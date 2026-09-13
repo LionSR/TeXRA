@@ -30,7 +30,6 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -169,7 +168,7 @@ export async function runChat(
     quietLogs: true,
   });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession(services);
+  const runtimeSession = services.session;
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
@@ -468,6 +467,7 @@ export async function runChat(
   registerBuiltinSlashCommands({
     secrets: services.secrets,
     state: services.globalState,
+    runtimeSession,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),

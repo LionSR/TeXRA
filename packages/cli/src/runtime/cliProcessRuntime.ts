@@ -20,9 +20,9 @@
  * install itself, so a second caller joins the first rather than racing it to
  * build a second runtime, and it is cleared once that install settles.
  *
- * The process identity is read before installing: the CLI's default session
- * opens through the synchronous `open`, which a pending identity would turn
- * into an asynchronous layer build.
+ * The process identity is read before installing, so the map's entries
+ * never wait on it and `initCliPlatform`'s open of the default session is
+ * the first thing built on the runtime.
  *
  * The process services every entry provides the same way: `Secrets` over the
  * one `CliSecrets` of this storage root, `SetupPlatform` over the CLI's

@@ -11,7 +11,7 @@
  * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
- * process's session owner (the `Sessions` map behind `openSession`): the
+ * process's session owner (the `Sessions` map behind `openSessionEffect`): the
  * extension and the CLI open one over the process roots, the desktop one
  * per paper, the SDK one per platform. The default instance is installed
  * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
@@ -107,7 +107,7 @@ import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import {
   defaultRootSession,
-  openSession,
+  openSessionEffect,
   type SessionGraph,
 } from './sessionGraph';
 import {
@@ -173,7 +173,7 @@ function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
 }
 
 /**
- * What opening a session supplies (`openSession`): persistence mode and
+ * What opening a session supplies (`openSessionEffect`): persistence mode and
  * host-owned policies. The graph constructs its store over its event
  * database. `interactions` is a presentation host the session is born with,
  * attached for its whole life, for an opener with no later attach step of its
@@ -293,7 +293,7 @@ export class SessionHandle {
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
    * request handler admits on the session, so the graph is bound to the
-   * handle it serves. Every other caller opens through `openSession`.
+   * handle it serves. Every other caller opens through `openSessionEffect`.
    */
   constructor(
     init: SessionHandleInit &
@@ -1389,15 +1389,18 @@ let defaultSessionFallbackWarned = false;
  * Open the process-default session, the session of the process roots, after
  * its transcript store is valid. Its owner holds it, as it holds every
  * session: {@link defaultSession} reads it from there on each call, so no
- * second reference to it exists to go stale when the root is closed.
+ * second reference to it exists to go stale when the root is closed. A
+ * second initialization while one is open is a lifecycle error and dies.
  */
 export function initializeDefaultSession(
   init: SessionHandleInit,
-): SessionHandle {
-  if (defaultRootSession()) {
-    throw new Error('The default session has already been initialized.');
-  }
-  return openSession(init);
+): Effect.Effect<SessionHandle> {
+  return Effect.suspend(() => {
+    if (defaultRootSession()) {
+      throw new Error('The default session has already been initialized.');
+    }
+    return openSessionEffect(init);
+  });
 }
 
 /** Inspect whether the host has installed its process-default session. */

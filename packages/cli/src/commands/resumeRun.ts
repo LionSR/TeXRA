@@ -26,7 +26,6 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
-import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -69,7 +68,7 @@ export async function runResumeCommand(
     quietLogs: true,
   });
 
-  const session = await initializeCliTranscriptSession(stores);
+  const { session } = stores;
   return effectRuntime().runPromise(
     Effect.gen(function* () {
       const store = getRunRecords(session, id);
@@ -185,6 +184,7 @@ export async function runResumeCommand(
                 workflowConfig,
                 buildHeadlessRunContext(context),
                 {
+                  session,
                   runId,
                   modelCompatibilityKey,
                   recoveryInputIsDurable:

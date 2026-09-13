@@ -10,8 +10,9 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
-  initializeDefaultSession,
   currentSession,
+  defaultSession,
+  initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import {
@@ -28,7 +29,7 @@ import {
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -53,7 +54,7 @@ setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
 beforeEach(async () => {
   await Effect.runPromise(teardownDefaultSession());
-  initializeDefaultSession({});
+  await Effect.runPromise(initializeDefaultSession({}));
 });
 
 const SNAPSHOT_RUNTIME = {
@@ -200,7 +201,7 @@ describe('CLI history status formatting', () => {
     const id = 'bad-f10' as RunId;
     await seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse');
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(defaultSession(), id);
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -214,7 +215,7 @@ describe('CLI history status formatting', () => {
     const id = 'c0ffee-f10' as RunId;
     await seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection');
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(defaultSession(), id);
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
@@ -250,7 +251,7 @@ describe('CLI history status formatting', () => {
       ]),
     );
 
-    const details = await readCliHistoryDetails(hostStores(), id);
+    const details = await readCliHistoryDetails(defaultSession(), id);
 
     expect(details?.hasFlowRecord).toBe(true);
     expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);

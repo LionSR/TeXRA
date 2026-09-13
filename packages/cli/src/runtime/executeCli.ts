@@ -3,6 +3,7 @@ import { Cause, Deferred, Effect, Result } from 'effect';
 import {
   attachTerminalResultToast,
   runAgent,
+  type SessionHandle,
   trackTerminalResultPresentation,
   validateRunRequest,
   type AgentConfigPayload,
@@ -19,9 +20,8 @@ import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
-import { AppState, SHUTDOWN_PHASE } from '@platform/interfaces';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -42,7 +42,6 @@ import {
 } from './interruptedResumeHint';
 import { attachWorkflowPlainOutput } from './runProgressRenderer';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
-import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -68,6 +67,9 @@ type CliWorkflowOutputHandler = (
 ) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
 interface CliExecuteOptions {
+  /** The process session the run executes under: the one `initCliPlatform`
+   *  opened, threaded from the command that holds its services. */
+  readonly session: SessionHandle;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -130,7 +132,7 @@ export function executeCliConfig<
 >(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions<C> = {},
+  options: CliConfigExecuteOptions<C>,
 ): Effect.Effect<CliConfigExecuteResult<C>, Error, CliRunServices> {
   return Effect.gen(function* () {
     const {
@@ -185,7 +187,7 @@ export function executeCliToolUseConfig(
   options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> & {
     /** False when invocation-owned temporary inputs will not survive exit. */
     readonly recoveryInputIsDurable?: boolean;
-  } = {},
+  },
 ) {
   return Effect.gen(function* () {
     const { recoveryInputIsDurable = true, ...executeOptions } = options;
@@ -246,7 +248,7 @@ export function executeCliToolUseConfig(
 export function executeCliRequest(
   request: RunAgentRequest,
   runContext: CliContext,
-  options: CliExecuteOptions = {},
+  options: CliExecuteOptions,
 ): Effect.Effect<
   | {
       ok: true;
@@ -258,13 +260,7 @@ export function executeCliRequest(
   CliRunServices
 > {
   return Effect.gen(function* () {
-    // Transcript persistence is a launch prerequisite for every headless run.
-    // This executes before runtime-host construction and before runAgent.
-    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
-    const session = yield* Effect.tryPromise({
-      try: () => initializeCliTranscriptSession(stores),
-      catch: ensureError,
-    });
+    const { session } = options;
     session.setApprovalPolicy(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     let failurePresented = false;

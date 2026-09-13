@@ -184,7 +184,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launcher, which is the same outcome the navigation kinds used to spell
   // out.
   launcher: while (true) {
-    const history = await listCliHistoryEntries(services);
+    const history = await listCliHistoryEntries(services.session);
     const presets = readCliMultiAgentPresets();
     const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
     const presetLaunchBlockReason =

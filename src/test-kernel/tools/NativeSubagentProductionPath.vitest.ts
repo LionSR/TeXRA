@@ -551,7 +551,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     await Effect.runPromise(teardownDefaultSession());
-    session = initializeDefaultSession({});
+    session = await Effect.runPromise(initializeDefaultSession({}));
     publishTestRunStart(session, OUTER_RUN_ID);
     await session.settlePublications();
     childId = undefined;

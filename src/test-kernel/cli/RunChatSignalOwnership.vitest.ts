@@ -8,7 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
-import { defaultSession } from '@agent/runtime';
+import {
+  defaultSession,
+  initializeDefaultSession,
+  teardownDefaultSession,
+} from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -257,6 +261,10 @@ describe('runChat signal ownership wiring', () => {
     await installFakeHost(await createTempDirPlatform('texra-chat-', tempDirs));
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
+    // The init opens the process session over the roots it installed; here
+    // the suite opens it over the fake host's roots, once per test.
+    await Effect.runPromise(teardownDefaultSession());
+    const session = await Effect.runPromise(initializeDefaultSession({}));
     // Both inits now hand back the services the composition root holds; the
     // fake host installed above owns those stores here.
     const cliServices = () => ({
@@ -264,6 +272,7 @@ describe('runChat signal ownership wiring', () => {
       globalStorage: installedHost().roots.globalStorage,
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
+      session,
     });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');

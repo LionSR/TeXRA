@@ -2,7 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
-import { openSession } from '@agent/runtime/sessionGraph';
+import { openSessionEffect } from '@agent/runtime/sessionGraph';
 import {
   forEachLiveSession,
   type SessionHandle,
@@ -30,21 +30,24 @@ let opened = 0;
 export function createTestSession(init: TestSessionInit = {}): SessionHandle {
   const process = processWorkspaceRoots();
   opened += 1;
-  return openSession({
-    ...init,
-    roots: init.roots ?? {
-      workspace: process.workspace,
-      storage: `${process.storage}/test-sessions/${opened}`,
-      globalStorage: process.globalStorage,
-      config: process.config,
-      workspaceState: process.workspaceState,
-      globalState: process.globalState,
-    },
-    transcriptMode: init.transcriptMode ?? {
-      kind: 'ephemeral',
-      reason: 'isolated test session',
-    },
-  });
+  // An ephemeral session's graph builds synchronously.
+  return Effect.runSync(
+    openSessionEffect({
+      ...init,
+      roots: init.roots ?? {
+        workspace: process.workspace,
+        storage: `${process.storage}/test-sessions/${opened}`,
+        globalStorage: process.globalStorage,
+        config: process.config,
+        workspaceState: process.workspaceState,
+        globalState: process.globalState,
+      },
+      transcriptMode: init.transcriptMode ?? {
+        kind: 'ephemeral',
+        reason: 'isolated test session',
+      },
+    }),
+  );
 }
 
 /**
@@ -60,14 +63,16 @@ export function createProcessSession(
   forEachLiveSession((live) => {
     if (live.roots.storage === roots.storage) Effect.runFork(live.dispose());
   });
-  return openSession({
-    ...init,
-    roots,
-    transcriptMode: init.transcriptMode ?? {
-      kind: 'ephemeral',
-      reason: 'process test session',
-    },
-  });
+  return Effect.runSync(
+    openSessionEffect({
+      ...init,
+      roots,
+      transcriptMode: init.transcriptMode ?? {
+        kind: 'ephemeral',
+        reason: 'process test session',
+      },
+    }),
+  );
 }
 
 /**

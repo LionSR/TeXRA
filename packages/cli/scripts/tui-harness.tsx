@@ -25,14 +25,9 @@ import {
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
-import { createAgentResponseTextConnector } from '@agent/runtime';
-import {
-  defaultSession,
-  initializeDefaultSession,
-} from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
@@ -381,15 +376,8 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-const harnessRuntimeSession = initializeDefaultSession({
-  transcriptMode: { kind: 'persistent' },
-  responseTextProcessing: createTexraResponseTextProcessing(
-    createAgentResponseTextConnector({
-      secrets: HARNESS_PLATFORM_SERVICES.secrets,
-      globalState: HARNESS_PLATFORM_SERVICES.globalState,
-    }),
-  ),
-});
+// The persistent session `initLocalCliPlatform` opened over the harness roots.
+const harnessRuntimeSession = HARNESS_PLATFORM_SERVICES.session;
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
   HARNESS_RUN_ID,
@@ -1855,6 +1843,7 @@ function handleHarnessSlashCommand(line: string): boolean {
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   state: HARNESS_PLATFORM_SERVICES.globalState,
+  runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending, the same fact the status bar's `/agent` hint derives from.
   canSelectAgent: () => !rootRunPending.get(),
