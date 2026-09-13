@@ -114,7 +114,7 @@
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "src/agent/index/agentRegistry.ts": 1,
-      "src/agent/runtime/AgentLaunchContext.ts": 5,
+      "src/agent/runtime/AgentLaunchContext.ts": 4,
       "src/agent/runtime/RunContext.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 6,
       "src/agent/runtime/childRunBudget.ts": 1,

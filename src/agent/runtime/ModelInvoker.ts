@@ -925,10 +925,7 @@ export const modelInvokerLayer: Layer.Layer<
           const config =
             selection === 'personal' && failed.routedOnKimiCode
               ? ((yield* Effect.tryPromise({
-                  try: () =>
-                    run.inScope(() =>
-                      resolveRuntimeModelConfig(failed.modelId),
-                    ),
+                  try: () => resolveRuntimeModelConfig(failed.modelId),
                   catch: ensureError,
                 })) ?? failed.config)
               : failed.config;

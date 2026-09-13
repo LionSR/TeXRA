@@ -3,7 +3,6 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import { hostPort } from '@common/hostPort';
@@ -119,10 +118,9 @@ export class WolframTool extends defineTool({
     this: WolframTool,
     input: WolframInput,
   ) {
-    const call = yield* ToolCall;
     const ports: WolframPorts = {
       requestApproval: requestBashApproval,
-      runTool: (...args) => call.inScope(() => runToolWithCheck(...args)),
+      runTool: runToolWithCheck,
     };
     return yield* runWolfram(ports, input);
   });

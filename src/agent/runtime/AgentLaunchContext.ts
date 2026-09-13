@@ -387,10 +387,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // Validated before registration, so a typo'd model name registers no
     // FAILED execution and surfaces only its targeted instruction.
     const modelConfig = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(input.session, () =>
-          validateModelExists(fullConfig.model, interactions),
-        ),
+      try: () => validateModelExists(fullConfig.model, interactions),
       catch: ensureError,
     });
     yield* failIfAborted(input.signal);
