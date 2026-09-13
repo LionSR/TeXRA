@@ -239,6 +239,9 @@ const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     return yield* Fiber.join(fiber);
   });
 
+// The process-global registry flips on the real child's handshake and exit
+// (one survivor waits for the server to come up, the others for it to close);
+// no Effect-side settle covers that.
 const eventually = (assertion: () => void) =>
   Effect.promise(() => vi.waitFor(assertion, { timeout: 3000, interval: 10 }));
 
@@ -672,8 +675,10 @@ describe('LeanServerPool', () => {
         releaseInitialize = resolve;
       });
       let spawnCount = 0;
+      const spawned = yield* Deferred.make<void>();
       spawnOverride.current = () => {
         spawnCount += 1;
+        Deferred.doneUnsafe(spawned, Effect.void);
         return createFakeLeanChild({ initializeGate });
       };
       const { pool } = yield* openPool();
@@ -683,7 +688,8 @@ describe('LeanServerPool', () => {
       const request = yield* Effect.forkChild(
         pool.fetchDiagnosticsForFile(filePath, run('e00002')),
       );
-      yield* eventually(() => expect(spawnCount).toBe(1));
+      yield* Deferred.await(spawned);
+      expect(spawnCount).toBe(1);
       yield* pool.stopSessionsForRun(run('e00002'));
       expect(activeServerRoots()).toEqual([projectRoot]);
 
@@ -796,6 +802,7 @@ describe('directLeanLanguageServices', () => {
           lakeCommand: fakeLakePath,
         });
         let spawnCount = 0;
+        const spawned = yield* Deferred.make<void>();
         // The handshake never answers, so every request below is still
         // waiting on the server's build when the dispose closes the scope
         // under it. The interruption that follows is not a failure the pool
@@ -803,6 +810,7 @@ describe('directLeanLanguageServices', () => {
         // recovers it.
         spawnOverride.current = () => {
           spawnCount += 1;
+          Deferred.doneUnsafe(spawned, Effect.void);
           return createFakeLeanChild({
             initializeGate: new Promise<void>(() => {}),
           });
@@ -816,7 +824,8 @@ describe('directLeanLanguageServices', () => {
         const hover = yield* Effect.forkChild(
           adapter.getHoverInfo(filePath, 0, 0),
         );
-        yield* eventually(() => expect(spawnCount).toBe(1));
+        yield* Deferred.await(spawned);
+        expect(spawnCount).toBe(1);
 
         yield* dispose;
 
