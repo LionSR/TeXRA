@@ -1,32 +1,39 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runPackSingle, runPackMultiple } from '@housekeeping/pack';
 import { runPackRunDir } from '@housekeeping/runDirOps';
+import { WorkspaceFs } from '@platform/rootedFs';
 
 import {
   mergeRunDirAndWorkspaceResult,
   type FileOpResult,
 } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { type PackConfig } from './fileOpSchemas';
 
 const CHANNEL = 'packCommands';
 
-function showPackResult(result: FileOpResult, inputFile: string): void {
+/** `folderPath` is the packed folder's absolute path, resolved by the
+ *  session's workspace filesystem rather than an ambient root. */
+function showPackResult(
+  result: FileOpResult,
+  inputFile: string,
+  folderPath: string | undefined,
+): void {
   switch (result.status) {
     case 'success': {
       const folder = result.outputFolder;
-      if (!folder) return;
+      if (!folder || !folderPath) return;
       vscode.window
         .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
         .then((sel) => {
           if (sel === 'Open Folder') {
             void vscode.commands.executeCommand(
               'revealFileInOS',
-              vscode.Uri.file(WorkspaceFS.fullPath(folder)),
+              vscode.Uri.file(folderPath),
             );
           }
         });
@@ -48,20 +55,26 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export async function handlePack(config: PackConfig): Promise<void> {
+export const handlePack = Effect.fn('packCommands.handlePack')(function* (
+  config: PackConfig,
+) {
   const { agent, model, inputFile, outputFiles, runId } = config;
-  const packWorkspace = (): Promise<FileOpResult> =>
+  const workspaceFs = yield* WorkspaceFs;
+  const packWorkspace =
     outputFiles.length > 0
       ? runPackMultiple(model, inputFile, agent, outputFiles)
       : runPackSingle(model, inputFile, agent);
 
   // Toolbar invocations pass a runId: pack the run's storage AND the source
   // document's own files beside it in the workspace.
-  const result = runId
+  const result: FileOpResult = runId
     ? mergeRunDirAndWorkspaceResult(
-        await runPackRunDir(runId, agent, model, inputFile),
-        await packWorkspace(),
+        yield* runPackRunDir(runId, agent, model, inputFile),
+        yield* packWorkspace,
       )
-    : await packWorkspace();
-  showPackResult(result, inputFile);
-}
+    : yield* packWorkspace;
+
+  const folder = result.status === 'success' ? result.outputFolder : undefined;
+  const folderPath = folder ? yield* workspaceFs.resolve(folder) : undefined;
+  yield* Effect.sync(() => showPackResult(result, inputFile, folderPath));
+});

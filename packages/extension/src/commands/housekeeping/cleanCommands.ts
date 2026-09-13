@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -34,10 +35,12 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
 }
 
 /** Clean removes a run's own storage; without a run there is nothing to clean. */
-export async function handleClean(config: CleanConfig): Promise<void> {
+export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
+  config: CleanConfig,
+) {
   log.debug(`Clean command called with config: ${JSON.stringify(config)}`);
   const result: FileOpResult = config.runId
-    ? await runCleanRunDir(config.runId)
+    ? yield* runCleanRunDir(config.runId)
     : { status: 'noFiles' };
-  showCleanResult(result, config.inputFile);
-}
+  yield* Effect.sync(() => showCleanResult(result, config.inputFile));
+});

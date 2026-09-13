@@ -11,6 +11,13 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import { Layer } from 'effect';
 
+// Local imports
+import {
+  sessionFsLayer,
+  type StorageFs,
+  type WorkspaceFs,
+} from '@platform/rootedFs';
+
 /**
  * The `FileSystem` and `Path` services `installProcessRuntime` provides once
  * per process, for a suite that runs a real-filesystem program on
@@ -20,6 +27,18 @@ export const nodePlatformLayer = Layer.mergeAll(
   NodeFileSystem.layer,
   NodePath.layer,
 );
+
+/**
+ * The session's rooted filesystems over real temp roots, complete with the
+ * Node `FileSystem` and `Path` beneath them — what a suite running a
+ * `WorkspaceFs` / `StorageFs` consumer on `it.effect`'s own runtime provides.
+ */
+export function rootedFsLayer(roots: {
+  readonly workspace: string | undefined;
+  readonly storage: string;
+}): Layer.Layer<WorkspaceFs | StorageFs> {
+  return Layer.provide(sessionFsLayer(roots), nodePlatformLayer);
+}
 
 /**
  * Whether `path` exists on disk. Non-ENOENT stat failures (permissions,

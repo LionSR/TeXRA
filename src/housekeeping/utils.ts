@@ -2,15 +2,45 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Data, Effect } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
+import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
 
 const log = createLog(CHANNEL);
+
+/**
+ * A workspace listing that did not complete. The `glob` package rejects, and
+ * a housekeeping command reports that as an error result rather than as a
+ * defect, so the rejection is typed here instead of caught raw.
+ */
+export class GlobFailed extends Data.TaggedError('GlobFailed')<{
+  readonly pattern: string;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `Failed to list ${this.pattern}: ${String(this.cause)}`;
+  }
+}
+
+/**
+ * A copy whose destination name is already taken. `FileSystem.copy` without
+ * `overwrite` silently skips an existing destination; the pack commands must
+ * report it, because a skipped copy means the packed folder is missing a file
+ * the user was told it contains.
+ */
+export class DestinationExists extends Data.TaggedError('DestinationExists')<{
+  readonly destination: string;
+}> {
+  override get message(): string {
+    return `Destination already exists: ${this.destination}`;
+  }
+}
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
@@ -21,13 +51,12 @@ export function generateTimestamp(): string {
 }
 
 /**
- * Yield matching workspace files as they are discovered.
- *
- * Overlapping patterns may yield the same path more than once. Consumers that
- * retain the complete result set must deduplicate it; cleanup consumers delete
- * each yielded file before advancing, so later patterns cannot rediscover it.
+ * Matching workspace files, as paths relative to `workspaceRoot` — the root
+ * of the caller's `WorkspaceFs`, passed in rather than read from an ambient
+ * store, so a listing and the deletions it feeds name the same workspace.
  */
-export async function* findFilesFromPatterns(
+async function* findFilesFromPatterns(
+  workspaceRoot: string,
   inputDir: string,
   patterns: string[],
   extensions: string[],
@@ -36,18 +65,13 @@ export async function* findFilesFromPatterns(
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
   );
 
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return;
-  }
-
   // `resolve`, not `join`: an inputDir that is already absolute names the
   // directory it says, while a workspace-relative one is taken from the
   // workspace root. Joining an absolute path onto the root duplicated the
   // prefix and found nothing.
-  const searchDirs = [path.resolve(workspacePath, inputDir)];
+  const searchDirs = [path.resolve(workspaceRoot, inputDir)];
   if (!inputDir.includes('build')) {
-    searchDirs.push(path.resolve(workspacePath, inputDir, 'build'));
+    searchDirs.push(path.resolve(workspaceRoot, inputDir, 'build'));
   }
 
   for (const pattern of patterns) {
@@ -59,7 +83,9 @@ export async function* findFilesFromPatterns(
           path.join(dir, `${pattern}${ext}`),
           { nodir: true },
         )) {
-          const relativePath = WorkspaceFS.relativePath(match);
+          const relativePath = normalizeFilePath(
+            relativeToRoot(workspaceRoot, match) ?? match,
+          );
           log.debug(`Found file: ${relativePath}`);
           yield relativePath;
 
@@ -79,19 +105,33 @@ export async function* findFilesFromPatterns(
   }
 }
 
-/** Collect {@link findFilesFromPatterns} matches, deduplicated. */
-export async function collectFilesFromPatterns(
+/**
+ * The workspace-relative files matching `patterns` × `extensions` under
+ * `inputDir`, deduplicated — overlapping patterns match the same path more
+ * than once.
+ */
+export const collectFilesFromPatterns = Effect.fn(
+  'housekeeping.collectFilesFromPatterns',
+)(function* (
+  workspaceRoot: string,
   inputDir: string,
   patterns: string[],
   extensions: string[],
-): Promise<Set<string>> {
-  const files = new Set<string>();
-  for await (const file of findFilesFromPatterns(
-    inputDir,
-    patterns,
-    extensions,
-  )) {
-    files.add(file);
-  }
-  return files;
-}
+) {
+  return yield* Effect.tryPromise({
+    try: async () => {
+      const files = new Set<string>();
+      for await (const file of findFilesFromPatterns(
+        workspaceRoot,
+        inputDir,
+        patterns,
+        extensions,
+      )) {
+        files.add(file);
+      }
+      return files;
+    },
+    catch: (cause) =>
+      new GlobFailed({ pattern: `${inputDir}: ${patterns.join(', ')}`, cause }),
+  });
+});

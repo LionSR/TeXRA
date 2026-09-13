@@ -1,21 +1,28 @@
 // Third-party imports
-import { globIterate } from 'glob';
+import { Effect } from 'effect';
+import { glob } from 'glob';
 
 // Internal imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { CHANNEL } from './constants';
+import { GlobFailed } from './utils';
 
-const log = createLog(CHANNEL);
+/**
+ * Delete every `build/` directory under the session's workspace. The
+ * workspace filesystem comes from context and is already rooted, so the
+ * listing and the deletions cannot name different workspaces.
+ */
+export const runCleanBuild = Effect.gen(function* () {
+  yield* Effect.logDebug('Starting build directory cleanup').pipe(
+    withLogChannel(CHANNEL),
+  );
 
-export async function runCleanBuild(): Promise<void> {
-  log.debug('Starting build directory cleanup');
-
-  const workspacePath = WorkspaceFS.getPath();
+  const workspaceFs = yield* WorkspaceFs;
+  const workspacePath = workspaceFs.root;
   if (!workspacePath) {
     return;
   }
@@ -24,20 +31,33 @@ export async function runCleanBuild(): Promise<void> {
     .filter((dir) => dir !== 'build')
     .map((dir) => `**/${dir}/**`);
 
-  for await (const dir of globIterate('**/build', {
-    cwd: workspacePath,
-    ignore: ignorePatterns,
-    nodir: false,
-  })) {
-    try {
-      await WorkspaceFS.delete(dir, { recursive: true, useTrash: false });
-      log.debug(`Removed build directory: ${dir}`);
-    } catch (err) {
-      log.error(
-        `Error removing build directory ${dir}: ${toErrorMessage(err)}`,
-      );
-    }
+  const directories = yield* Effect.tryPromise({
+    try: () =>
+      glob('**/build', {
+        cwd: workspacePath,
+        ignore: ignorePatterns,
+        nodir: false,
+      }),
+    catch: (cause) => new GlobFailed({ pattern: '**/build', cause }),
+  });
+
+  for (const dir of directories) {
+    yield* workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
+      Effect.tap(() =>
+        Effect.logDebug(`Removed build directory: ${dir}`).pipe(
+          withLogChannel(CHANNEL),
+        ),
+      ),
+      Effect.catch((error) =>
+        Effect.logError(`Error removing build directory ${dir}`).pipe(
+          withLogData(error),
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
   }
 
-  log.info('Build directories cleaned');
-}
+  yield* Effect.logInfo('Build directories cleaned').pipe(
+    withLogChannel(CHANNEL),
+  );
+});

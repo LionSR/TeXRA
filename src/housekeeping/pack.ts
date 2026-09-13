@@ -1,10 +1,13 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Internal imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
+import { WorkspaceFs } from '@platform/rootedFs';
 import { getCleanAgentName, type FileOpResult } from '@shared/schemas';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -15,12 +18,18 @@ import {
   CHANNEL,
 } from './constants';
 import {
+  DestinationExists,
   generateTimestamp,
   collectFilesFromPatterns,
-  findFilesFromPatterns,
 } from './utils';
 
-const log = createLog(CHANNEL);
+/** Every pack failure reaches the host as the same result shape. */
+const asErrorResult = (error: unknown) =>
+  Effect.logError('Error during file operations').pipe(
+    withLogData(error),
+    withLogChannel(CHANNEL),
+    Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
+  );
 
 /**
  * Pack the source document's own files (`<base>.<ext>`, e.g. its PDF) into a
@@ -28,122 +37,149 @@ const log = createLog(CHANNEL);
  * artifacts. Workflow outputs live in run storage and are packed by
  * `runPackRunDir`; no workspace filename is parsed for them here.
  */
-export async function runPackSingle(
+export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
   model: string,
   inputFile: string,
   agent: string,
   outputFolder?: string,
-): Promise<FileOpResult> {
-  log.info(
+) {
+  yield* Effect.logInfo(
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
-  );
+  ).pipe(withLogChannel(CHANNEL));
 
   if (!inputFile || !model || !agent) {
-    log.error(
+    yield* Effect.logError(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
-    return { status: 'missingParams' };
+    ).pipe(withLogChannel(CHANNEL));
+    return { status: 'missingParams' } satisfies FileOpResult;
   }
+
+  const workspaceFs = yield* WorkspaceFs;
+  const workspaceRoot = workspaceFs.root;
+  if (!workspaceRoot) return { status: 'noFiles' } satisfies FileOpResult;
+
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
 
-  const copiedFiles = [
-    ...(await collectFilesFromPatterns(inputDir, [baseName], PACK_EXTENSIONS)),
-  ];
+  return yield* Effect.gen(function* () {
+    const copiedFiles = [
+      ...(yield* collectFilesFromPatterns(
+        workspaceRoot,
+        inputDir,
+        [baseName],
+        PACK_EXTENSIONS,
+      )),
+    ];
 
-  // Nothing to pack when the only match (if any) is the input document itself.
-  if (copiedFiles.every((file) => file === inputFile)) {
-    log.warn(`No files found to pack for ${inputFile}`);
-    return { status: 'noFiles' };
-  }
+    // Nothing to pack when the only match (if any) is the input document.
+    if (copiedFiles.every((file) => file === inputFile)) {
+      yield* Effect.logWarning(`No files found to pack for ${inputFile}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      return { status: 'noFiles' } satisfies FileOpResult;
+    }
 
-  log.debug(`Files to copy:\n${copiedFiles.join('\n')}`);
-
-  const cleanAgent = getCleanAgentName(agent);
-  const resolvedOutputFolder =
-    outputFolder ||
-    path.join(
-      inputDir,
-      HISTORY_DIR,
-      `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
+    yield* Effect.logDebug(`Files to copy:\n${copiedFiles.join('\n')}`).pipe(
+      withLogChannel(CHANNEL),
     );
-  log.debug(`Output folder: ${resolvedOutputFolder}`);
 
-  try {
-    await WorkspaceFS.createDir(resolvedOutputFolder);
-    log.debug(`Created output directory: ${resolvedOutputFolder}`);
+    const cleanAgent = getCleanAgentName(agent);
+    const resolvedOutputFolder =
+      outputFolder ||
+      path.join(
+        inputDir,
+        HISTORY_DIR,
+        `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
+      );
+
+    yield* workspaceFs.makeDirectory(resolvedOutputFolder, {
+      recursive: true,
+    });
+    yield* Effect.logDebug(
+      `Created output directory: ${resolvedOutputFolder}`,
+    ).pipe(withLogChannel(CHANNEL));
 
     for (const file of copiedFiles) {
       const destination = path.join(resolvedOutputFolder, path.basename(file));
-      log.debug(`Copying: ${file} -> ${destination}`);
-      await WorkspaceFS.copy(file, destination);
+      yield* Effect.logDebug(`Copying: ${file} -> ${destination}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      if (yield* workspaceFs.exists(destination)) {
+        return yield* Effect.fail(new DestinationExists({ destination }));
+      }
+      yield* workspaceFs.copy(file, destination);
     }
-    log.info(`Files packed into ${resolvedOutputFolder}`);
+    yield* Effect.logInfo(`Files packed into ${resolvedOutputFolder}`).pipe(
+      withLogChannel(CHANNEL),
+    );
 
     // The source's own `<base>.bib` and `<base>.bak*` are the user's files,
     // not build artifacts: only sweep the source basename's generated ones.
     const packed = new Set(copiedFiles);
-    for await (const file of findFilesFromPatterns(
+    const sweepable = yield* collectFilesFromPatterns(
+      workspaceRoot,
       inputDir,
       [baseName],
       TEMP_EXTENSIONS.filter((ext) => ext !== '.bib' && ext !== '.bak*'),
-    )) {
+    );
+    for (const file of sweepable) {
       if (!packed.has(file)) {
-        await WorkspaceFS.delete(file);
+        yield* workspaceFs.remove(file, { force: true });
       }
     }
 
-    return { status: 'success', outputFolder: resolvedOutputFolder };
-  } catch (err) {
-    const message = toErrorMessage(err);
-    log.error(`Error during file operations: ${message}`);
-    return { status: 'error', error: message };
-  }
-}
+    return {
+      status: 'success',
+      outputFolder: resolvedOutputFolder,
+    } satisfies FileOpResult;
+  }).pipe(Effect.catch(asErrorResult));
+});
 
-export async function runPackMultiple(
-  model: string,
-  inputFile: string,
-  agent: string,
-  inputFiles: string[],
-): Promise<FileOpResult> {
-  log.debug(
-    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}`,
-  );
-  log.debug(`Additional files: ${inputFiles.join(', ')}`);
+export const runPackMultiple = Effect.fn('housekeeping.runPackMultiple')(
+  function* (
+    model: string,
+    inputFile: string,
+    agent: string,
+    inputFiles: string[],
+  ) {
+    yield* Effect.logDebug(
+      `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}; additional files: ${inputFiles.join(', ')}`,
+    ).pipe(withLogChannel(CHANNEL));
 
-  const baseName = path.parse(inputFile).name;
-  const outputDir = path.dirname(inputFile);
-  const cleanAgent = getCleanAgentName(agent);
-  const commonOutputFolder = path.join(
-    outputDir,
-    HISTORY_DIR,
-    `${generateTimestamp()}_${baseName}_multiple_${cleanAgent}_${model}`,
-  );
-  log.debug(`Common output folder: ${commonOutputFolder}`);
-
-  try {
-    const allFilesToPack = [inputFile, ...inputFiles];
-    const results = await Promise.all(
-      allFilesToPack.map((file) =>
-        runPackSingle(model, file, agent, commonOutputFolder),
-      ),
+    const baseName = path.parse(inputFile).name;
+    const outputDir = path.dirname(inputFile);
+    const cleanAgent = getCleanAgentName(agent);
+    const commonOutputFolder = path.join(
+      outputDir,
+      HISTORY_DIR,
+      `${generateTimestamp()}_${baseName}_multiple_${cleanAgent}_${model}`,
     );
+
+    const allFilesToPack = [inputFile, ...inputFiles];
+    const results = yield* Effect.forEach(
+      allFilesToPack,
+      (file) => runPackSingle(model, file, agent, commonOutputFolder),
+      { concurrency: 'unbounded' },
+    );
+
     // A per-file error takes precedence over partial success, so a failed
     // pack is never misreported as success or as 'noFiles'.
-    const errored = results.find((r) => r.status === 'error');
+    const errored = results.find((result) => result.status === 'error');
     if (errored) return errored;
 
-    if (results.some((r) => r.status === 'success')) {
-      log.info(`All files packed into ${commonOutputFolder}`);
-      return { status: 'success', outputFolder: commonOutputFolder };
+    if (results.some((result) => result.status === 'success')) {
+      yield* Effect.logInfo(`All files packed into ${commonOutputFolder}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      return {
+        status: 'success',
+        outputFolder: commonOutputFolder,
+      } satisfies FileOpResult;
     }
 
-    log.warn(`No files found to pack for ${inputFile}`);
-    return { status: 'noFiles' };
-  } catch (err) {
-    const message = toErrorMessage(err);
-    log.error(`Error during multiple pack operation: ${message}`);
-    return { status: 'error', error: message };
-  }
-}
+    yield* Effect.logWarning(`No files found to pack for ${inputFile}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    return { status: 'noFiles' } satisfies FileOpResult;
+  },
+);
