@@ -64,6 +64,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
+  TOOL_CALL_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
@@ -977,6 +978,26 @@ function isStreamingEntry(entry: StreamLogEntry): boolean {
   );
 }
 
+/** A tool card still running: what it prints reaches the fold as live text
+ *  keyed by the card id, like a streaming row's chunks, and projects as the
+ *  card's output until the terminal row replaces it (C3: never a row). */
+function isRunningToolEntry(entry: StreamLogEntry): boolean {
+  return (
+    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+    entry.messageType === MESSAGE_TYPES.TOOL_USE &&
+    isObject(entry.data) &&
+    entry.data.status === TOOL_CALL_STATUS.IN_PROGRESS
+  );
+}
+
+/** The card's entry with its live output in place of the durable one. */
+function withToolOutput(entry: StreamLogEntry, output: string): StreamLogEntry {
+  return {
+    ...entry,
+    data: { ...(isObject(entry.data) ? entry.data : {}), output },
+  } as StreamLogEntry;
+}
+
 type StreamingTextRow = Extract<
   TranscriptRow,
   { kind: 'assistant' | 'thinking' | 'scratchpad' }
@@ -1056,15 +1077,19 @@ function applyEntry(
   // from offset zero (the bridge seeds one for every running row it
   // publishes) ends within the length held and is dropped (5.2, "In-flight
   // text").
-  if (isStreamingEntry(entry) && entry.text && !inflight.has(key)) {
+  const streamingText = isStreamingEntry(entry);
+  const runningTool = isRunningToolEntry(entry);
+  if (streamingText && entry.text && !inflight.has(key)) {
     inflight.set(key, entry.text);
   }
-  const live = isStreamingEntry(entry) ? inflight.get(key) : undefined;
-  projectRow(
-    next,
-    live === undefined ? entry : { ...entry, text: live },
-    lifecycleToTaskGroups(run),
-  );
+  const live = streamingText || runningTool ? inflight.get(key) : undefined;
+  let projected = entry;
+  if (live !== undefined) {
+    projected = streamingText
+      ? { ...entry, text: live }
+      : withToolOutput(entry, live);
+  }
+  projectRow(next, projected, lifecycleToTaskGroups(run));
   const row = rowById(next, entry.id);
   if (row?.kind === 'thinking') {
     const newest = indexes.thinkingRowId;
@@ -1073,13 +1098,17 @@ function applyEntry(
       indexes.thinkingRowId = row.id;
     }
   }
-  if (isStreamingEntry(entry)) {
+  if (streamingText) {
     const text = live ?? '';
     indexes.streaming.set(entry.id, {
       entry,
       // The projected row already measured the text; a blank entry has none.
       text: row && isStreamingTextRow(row) ? row.text : transcriptText(text),
     });
+  } else if (runningTool) {
+    // A card's cursor holds the entry alone: its output projects from the
+    // held text, never from a measured cursor.
+    indexes.streaming.set(entry.id, { entry, text: transcriptText('') });
   } else {
     indexes.streaming.delete(entry.id);
     inflight.delete(key);
@@ -1296,6 +1325,16 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   inflight.set(key, text);
   // The row projects when its entry folds, joined with this entry.
   if (!cursor) return true;
+  if (isRunningToolEntry(cursor.entry)) {
+    const transcript = replaceTranscript(run.transcript, {});
+    projectRow(
+      transcript,
+      withToolOutput(cursor.entry, text),
+      lifecycleToTaskGroups(run),
+    );
+    setRun(view, { ...run, transcript });
+    return true;
+  }
   cursor.text =
     chunk.from === held.length
       ? appendTranscriptText(cursor.text, chunk.text, held.at(-1) ?? '')

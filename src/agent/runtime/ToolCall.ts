@@ -23,7 +23,7 @@ export interface ToolCallShape {
   readonly userInstruction?: string;
   readonly workPlanState?: WorkPlanState;
   readonly hooks?: {
-    readonly onRunReady?: () => void;
+    /** What the tool prints while it runs, for its card's transient output. */
     readonly onToolOutput?: (chunk: string) => void;
     readonly recordSubagentCost?: (costUsd: number) => void;
   };

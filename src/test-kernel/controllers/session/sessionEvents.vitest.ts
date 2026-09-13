@@ -2022,7 +2022,7 @@ describe('RunLedger', () => {
       parallelSafe: false,
       partition: 0,
       duplicateOf: null,
-      logId: null,
+      logId: 'card-a',
       stageId: null,
     },
     {
@@ -2032,7 +2032,7 @@ describe('RunLedger', () => {
       parallelSafe: false,
       partition: 0,
       duplicateOf: 'call-a',
-      logId: null,
+      logId: 'card-b',
       stageId: null,
     },
   ] as const;

@@ -389,7 +389,6 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
       return buildBashApprovalRejectedResult(approvalLabel, approval);
     }
 
-    toolCall.hooks?.onRunReady?.();
     return yield* run(toolCall.run);
   },
 );

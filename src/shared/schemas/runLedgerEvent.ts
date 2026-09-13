@@ -127,9 +127,10 @@ const DispatchFactsSchema = z.strictObject({
   /** The primary this call duplicates. A duplicate never executes and never
    *  reapplies its primary's effects. */
   duplicateOf: CallIdSchema.nullable(),
-  /** Card correlation, so a resumed settlement closes the same card. Null for
-   *  a fast tool: `logId` is set only for slow tools. */
-  logId: z.string().min(1).nullable(),
+  /** The call's card id, minted with the response: a slow tool's card opens
+   *  under it before the call runs, a fast tool's opens and closes with the
+   *  settlement, and a resumed settlement closes the same card. */
+  logId: z.string().min(1),
   stageId: z.string().min(1).nullable(),
 });
 export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;

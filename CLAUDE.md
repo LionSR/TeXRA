@@ -149,6 +149,15 @@ emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `appSignals.emit(...)` on the separate `AppSignals` bus within its documented
 scope.
 
+**One publisher, loop-owned cards.** Every write to a session's event table
+is a job on the `SessionEvents` inbox (`publish`, `exclusive`, `detach`,
+`settle`); commit order is enqueue order, and nothing appends around it. A
+tool call's card belongs to the run loop: a slow tool's `tool.start` commits
+with the row that admits the attempt, a fast tool's opens and closes in its
+settlement batch, and what a tool prints while it runs is transient text on
+the card id (`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add
+a tool-side start card, a durable progress row, or a second append path.
+
 ## Schemas (Zod v4)
 
 Schemas are the single source of truth: define the schema, derive types with

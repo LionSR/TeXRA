@@ -58,12 +58,11 @@ type WolframInput = z.infer<typeof WolframInputSchema>;
  * The calling turn's ambient collaborators, taken in `execute` rather than
  * read from the program's fiber: the approval prompt and the command runner
  * both resolve the session, its bypass state and its workspace roots from
- * ambient storage, and the in-progress card belongs to this tool call.
+ * ambient storage.
  */
 interface WolframPorts {
   readonly requestApproval: typeof requestBashApproval;
   readonly runTool: typeof runToolWithCheck;
-  readonly onRunReady: (() => void) | undefined;
 }
 
 const runWolfram = Effect.fn('WolframTool.execute')(function* (
@@ -75,8 +74,6 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(command, approval);
   }
-
-  ports.onRunReady?.();
 
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   const result = yield* hostPort(() =>
@@ -115,7 +112,6 @@ export class WolframTool extends defineTool({
   name: 'wolfram',
   requiresApproval: true,
   slow: true,
-  deferLogUntilApproval: true,
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
 }) {
@@ -127,7 +123,6 @@ export class WolframTool extends defineTool({
     const ports: WolframPorts = {
       requestApproval: requestBashApproval,
       runTool: (...args) => call.inScope(() => runToolWithCheck(...args)),
-      onRunReady: call.hooks?.onRunReady,
     };
     return yield* runWolfram(ports, input);
   });
