@@ -9,7 +9,7 @@
  * case to paper over with an empty view.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { SubscriptionRef } from 'effect';
+import { Cause, Stream, SubscriptionRef } from 'effect';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -41,14 +41,33 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
  * Bridge a session's view level into the TUI's signal; returns the unbind.
  * The only meeting point between Effect and the components (PRD 7.5): the
  * view's change run bridged onto the process runtime by `toSignal`.
+ *
+ * A session binds `changes` to `SessionHandle.viewChanges`, the level stream
+ * that fails when the fold dies: the ref's own changes never fail, so a TUI
+ * reading only those would freeze on a dead fold with nothing to say.
+ * `onFailure` is that word, as the one error the cause squashes to, so the
+ * entry that binds needs no Effect vocabulary; a fixture that binds a bare
+ * ref needs neither.
  */
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
+  options: {
+    readonly changes?: Stream.Stream<SessionView>;
+    readonly onFailure?: (error: unknown) => void;
+  } = {},
 ): () => void {
   bound.get()?.dispose();
+  const changes = (options.changes ?? SubscriptionRef.changes(view)).pipe(
+    Stream.catchCause((cause) => {
+      if (!Cause.hasInterruptsOnly(cause)) {
+        options.onFailure?.(Cause.squash(cause));
+      }
+      return Stream.empty;
+    }),
+  );
   const bridgedBound = toSignal(
     effectRuntime(),
-    SubscriptionRef.changes(view),
+    changes,
     SubscriptionRef.getUnsafe(view),
   );
   bound.set(bridgedBound);

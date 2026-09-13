@@ -41,6 +41,7 @@ import type {
   SessionEventReads,
   SessionEventsShape,
 } from '@shared/session/sessionEvents';
+import type { SessionStoreCleared } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
@@ -95,6 +96,9 @@ export interface SessionGraph {
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
    *  defect when the fold died, so a reader waiting on a view never hangs. */
   readonly viewChanges: Stream.Stream<SessionView>;
+  /** The store this graph opened held another build's rows and was
+   *  cleared (`Database.cleared`): the one fact a host tells the user. */
+  readonly storeCleared: SessionStoreCleared | null;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
    *  and local reconciliation has completed, for a reader that queries the

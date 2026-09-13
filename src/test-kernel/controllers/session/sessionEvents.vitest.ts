@@ -88,6 +88,7 @@ import {
   LocalRuntimeStateSchema,
   RUN_PHASE,
   RunIdSchema,
+  SESSION_EVENT_FORMAT,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -1164,6 +1165,52 @@ describe('the C1 event table and the C6 publisher', () => {
         }),
       ),
     );
+  });
+
+  it.effect('clears a store written under another event format at open', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      yield* Database.pipe(
+        Effect.flatMap((database) => database.appendAll([runStart])),
+        Effect.provide(substrate(storage)),
+      );
+      const connection = reader(storage);
+      try {
+        expect(connection.prepare('PRAGMA user_version').get()).toEqual({
+          user_version: SESSION_EVENT_FORMAT,
+        });
+        // Another build's stamp: the rows are its, whatever they decode to.
+        connection.exec(`PRAGMA user_version = ${SESSION_EVENT_FORMAT + 1}`);
+      } finally {
+        connection.close();
+      }
+      const reopenedStore = yield* Database.pipe(
+        Effect.flatMap((database) =>
+          Effect.map(database.readListing(), (listing) => ({
+            listing,
+            cleared: database.cleared,
+          })),
+        ),
+        Effect.provide(substrate(storage)),
+      );
+      expect(reopenedStore.listing).toEqual([]);
+      expect(reopenedStore.cleared).toEqual({
+        path: join(storage, 'texra.db'),
+        rows: 1,
+        storedFormat: SESSION_EVENT_FORMAT + 1,
+      });
+      const reopened = reader(storage);
+      try {
+        expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
+          user_version: SESSION_EVENT_FORMAT,
+        });
+        expect(
+          reopened.prepare('SELECT count(*) AS rows FROM event').get(),
+        ).toEqual({ rows: 0 });
+      } finally {
+        reopened.close();
+      }
+    });
   });
 
   it.effect('rolls back a failed commit before reusing the connection', () => {

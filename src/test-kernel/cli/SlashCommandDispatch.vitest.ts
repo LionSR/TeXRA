@@ -38,12 +38,9 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
+import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
-  notices,
-  noticesFor,
-} from '@cli/chat/tui/state/transcript';
-import {
   activeForm,
   activeRunId,
   closeForegroundReader,

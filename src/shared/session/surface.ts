@@ -315,24 +315,17 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * The PRD 9 selection rule: `selected` if the view still has that run,
  * else the first top-level run, else `null`. The fallback applies only to
  * a non-null id that has disappeared; an explicit `null` resolves to
- * itself.
- *
- * `keepWhenViewEmpty` covers the CLI's pre-run local conversation (a
- * Surface-only id that predates any run in the view): when set, a `selected`
- * the view has never heard of is kept as-is rather than falling back, but
- * only while the view holds no runs at all — once any run exists, a
- * `selected` absent from it still falls back to the first one. Extension
- * and desktop never carry such an id (their `selected` is only ever set to
- * a run the view already knows) and leave this at the default.
+ * itself. A Surface-only id the view never holds (the CLI's pre-run local
+ * conversation) is the caller's to keep out of this rule: the view lists
+ * every run of the workspace, so a fallback from it would land on an
+ * unrelated run.
  */
 export function resolveSelectedId(
   view: SessionView,
   selected: RunId | null,
-  options: { readonly keepWhenViewEmpty?: boolean } = {},
 ): RunId | null {
   if (selected === null) return null;
   if (view.runs.has(selected)) return selected;
-  if (options.keepWhenViewEmpty && view.runs.size === 0) return selected;
   return view.order.at(0) ?? null;
 }
 

@@ -88,6 +88,7 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { sessionStoreClearedMessage } from '@shared/copy/sessionStore';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -580,6 +581,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
       }),
     ),
   });
+  if (runtimeSession.storeCleared) {
+    void vscode.window.showWarningMessage(
+      sessionStoreClearedMessage(runtimeSession.storeCleared),
+    );
+  }
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.

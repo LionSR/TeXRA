@@ -554,6 +554,18 @@ export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
     .map((schema) => schema.extend(envelope)),
 ]);
 export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
+/**
+ * The version of the stored vocabulary: the shape of every row a session
+ * database holds. TeXRA keeps no compatibility with earlier persisted data
+ * (AGENTS.md "Compatibility and format retirement"), so a store written
+ * under any other version is unsupported state: `Database` clears it at
+ * open, the one boundary that owns the file, and stamps this version, so a
+ * row of another vocabulary never reaches a fold. Bump it with any change
+ * to the stored shape of `SessionEventSchema`; `sessionEventFormat.vitest.ts`
+ * pins that shape and fails a change that leaves the version alone.
+ */
+export const SESSION_EVENT_FORMAT = 1;
+
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),

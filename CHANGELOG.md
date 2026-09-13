@@ -8,7 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
-  documents and research files are unchanged.
+  documents and research files are unchanged. History a different build
+  wrote is cleared the first time this build opens that workspace, and
+  TeXRA says so when it happens.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.
