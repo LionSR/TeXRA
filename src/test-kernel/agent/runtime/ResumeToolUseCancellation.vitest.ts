@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   releaseClaims: vi.fn(),
 }));
 
-vi.mock('@agent/storage/runLease', () => ({
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  // The lease verbs are inert here, but the release choreography runs for
+  // real and reads the module's error types.
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
   acquireResumedRunLease: mocks.acquireResumedRunLease,
   assertOwnedRunLease: vi.fn(),
   releaseOwnedRunLease: mocks.releaseOwnedRunLease,
@@ -95,7 +98,10 @@ import {
   ResumeSessionUnavailableError,
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  RunArtifactDrainError,
+  SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -387,9 +393,14 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
     flushArtifacts.mockRejectedValueOnce(teardownFailure);
 
+    // A failed drain rolled back facts the run had queued, so it reaches the
+    // caller typed, carrying what threw.
     await expect(
       resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
-    ).rejects.toBe(teardownFailure);
+    ).rejects.toMatchObject({
+      name: 'RunArtifactDrainError',
+      cause: teardownFailure,
+    });
   });
 
   it('reports the turn failure and the teardown failure together', async () => {
@@ -411,7 +422,8 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         error instanceof AggregateError &&
         error.message.includes('could not be persisted') &&
         error.errors[0] === turnFailure &&
-        error.errors[1] === teardownFailure,
+        error.errors[1] instanceof RunArtifactDrainError &&
+        error.errors[1].cause === teardownFailure,
     );
   });
 

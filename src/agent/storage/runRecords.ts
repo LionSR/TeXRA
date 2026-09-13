@@ -158,6 +158,22 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
+    /**
+     * The run is closed by its tombstone. This is the fact {@link exists}
+     * cannot report: the listing drops a closed run entirely, so an id the
+     * user deleted and one that never started read alike there. A
+     * `run.removed` row is the aggregate's last row and is final, so the id
+     * can never start again; deletion later collects the aggregate outright,
+     * and an id with nothing behind it is free to start. Reads the aggregate,
+     * because a closed run's records are no longer listed.
+     */
+    isRemoved: (): Effect.Effect<boolean, Error> =>
+      session.readAggregate(id).pipe(
+        Effect.map((rows) => rows.some((row) => row.type === 'run.removed')),
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      ),
     readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
     readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
       read((rows) => {

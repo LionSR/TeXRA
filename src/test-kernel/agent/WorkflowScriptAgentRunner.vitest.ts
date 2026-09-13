@@ -248,6 +248,9 @@ function probeAnswers(...children: ProbedChild[]): void {
     mocks.probedRunIds.push(id);
     return {
       exists: () => Effect.succeed(child.exists),
+      // No probed id here is deleted: a tombstone closes an id for good, and
+      // the probe reads that apart from an id that never started.
+      isRemoved: () => Effect.succeed(false),
       readRunEnd: () => Effect.succeed(child.runEnd ?? null),
       readResultMeta: () => Effect.succeed(child.resultMeta ?? null),
     };

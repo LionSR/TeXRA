@@ -289,6 +289,10 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * has been through the child's artifact drain, which is the ordered
  * publisher).
  *
+ * An id the user deleted is closed, not free: its tombstone is final, so the
+ * probe advances past it to the attempt that may have answered the call after
+ * it.
+ *
  * A run with no `run.end` for the lifecycle in flight, whose lease no live
  * owner still holds, frees the next attempt id in either of two shapes: it
  * settled no `child.turn`, so it never reached side-effectful work; or it
@@ -316,6 +320,12 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       });
       const records = getRunRecords(session, runId);
       if (!(yield* probeChild(runId, records.exists()))) {
+        // `exists()` is false for an id that never started AND for one the
+        // user deleted, and a tombstone is final: launching a deleted id is
+        // refused by its own sequence, and the attempt that answered this call
+        // after it would never be probed. A deleted attempt is therefore
+        // closed like any other terminal one and the probe moves on.
+        if (yield* probeChild(runId, records.isRemoved())) continue;
         // Publish the attempt id before resolving mutable launch state: a host
         // targets the in-flight child by this id.
         call.onLaunch(runId);

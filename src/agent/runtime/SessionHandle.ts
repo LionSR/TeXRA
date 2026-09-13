@@ -39,6 +39,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import {
   ownsRunLease,
   releaseOwnedRunLease,
+  RunLeaseLostError,
   validateOwnedRunLease,
 } from '@agent/storage/runLease';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -116,6 +117,28 @@ import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
+
+/**
+ * Facts a run had queued did not commit before its lease ended: the artifact
+ * drain (`flushArtifacts`, which settles the ordered publisher), the
+ * post-drain step, or the settle after them failed, so those rows were rolled
+ * back. Deliberately distinct from a claim or lease-file release that failed,
+ * which happens once every fact is already committed and leaves the record
+ * whole: only a drain failure can leave a caller journaling work whose rows
+ * are gone, so the two are told apart by identity rather than by message.
+ */
+export class RunArtifactDrainError extends Error {
+  constructor(
+    readonly runId: RunId,
+    cause: unknown,
+  ) {
+    super(
+      `Run ${runId}: the facts it queued did not commit before its lease ended.`,
+      { cause },
+    );
+    this.name = 'RunArtifactDrainError';
+  }
+}
 
 /**
  * What opening a session supplies (`openSession`): persistence mode and
@@ -352,8 +375,10 @@ export class SessionHandle {
    * The claim is unlinked whatever the drain did: resumability is the
    * checkpoint, so a failed flush is logged and rethrown but never changes
    * who owns the run. A release failure never masks a drain failure: the
-   * drain's error is the one the caller sees, and the release's is logged.
-   * This is the one exit choreography every run driver calls.
+   * drain's error is the one the caller sees, as a
+   * {@link RunArtifactDrainError} so a caller can tell rolled-back facts from
+   * a release that failed with everything already committed; the release's is
+   * logged. This is the one exit choreography every run driver calls.
    */
   releaseRunLease(
     runId: RunId,
@@ -368,7 +393,15 @@ export class SessionHandle {
                 await validateOwnedRunLease(runId);
                 await this.flushArtifacts();
               }),
-            catch: ensureError,
+            // The drain is the ordered publisher's settle, so anything that
+            // fails here left facts this run had queued uncommitted. The one
+            // exception is a lost lease, which keeps its own identity: it
+            // says this process no longer owns the run, and the callers that
+            // treat shutdown contention as expected read that type.
+            catch: (cause) =>
+              cause instanceof RunLeaseLostError
+                ? cause
+                : new RunArtifactDrainError(runId, cause),
           });
           yield* afterArtifactsDrained;
         }),
@@ -381,7 +414,7 @@ export class SessionHandle {
       const published = yield* Effect.exit(
         Effect.tryPromise({
           try: () => this.settlePublications(),
-          catch: ensureError,
+          catch: (cause) => new RunArtifactDrainError(runId, cause),
         }),
       );
       const claimRelease = yield* Effect.exit(

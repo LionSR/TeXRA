@@ -714,6 +714,28 @@ describe('headless delegation', () => {
     expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
   });
 
+  it('does not return a typed result when the final artifact drain fails', async () => {
+    const drainFailure = new Error('artifact flush failed');
+    const drain = vi
+      .spyOn(inBandSession, 'flushArtifacts')
+      .mockRejectedValue(drainFailure);
+
+    try {
+      // The drain is the ordered publisher's settle, so its failure rolled
+      // back facts the child had queued: unlike the lease unlink above, the
+      // call is not durably answered and the caller must not journal it.
+      await expect(runInBand(delegationOptions())).rejects.toMatchObject({
+        name: 'SubagentDurabilityError',
+        message: expect.stringContaining(
+          'failed to commit its final artifacts',
+        ),
+        cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
+      });
+    } finally {
+      drain.mockRestore();
+    }
+  });
+
   it('records a failed child cost once for durable in-band run', async () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {

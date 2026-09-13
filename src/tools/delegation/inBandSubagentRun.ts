@@ -26,7 +26,10 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  RunArtifactDrainError,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
 import {
@@ -148,9 +151,12 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  *   terminal error message is the thrown message.
  * - terminal row says completed/cancelled → returned typed.
  *
- * A loop failure after the turn settled (a lease release or artifact cleanup
- * that threw once the child's rows were already committed) does not rewrite
- * the outcome: the committed rows are the fact.
+ * A loop failure after the turn settled does not rewrite the outcome when the
+ * child's rows were already committed: the committed rows are the fact, and a
+ * claim or lease-file release that threw afterwards leaves them whole. A
+ * failed artifact drain is the exception (`RunArtifactDrainError`): it rolled
+ * back facts the run had queued, so a required-result caller must not journal
+ * the call as answered.
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
@@ -298,6 +304,26 @@ const executeInBand = Effect.fn('executeInBand')(
             readFailure !== undefined ? { cause: readFailure } : undefined,
           );
         }
+      }
+
+      // The child's own rows are committed, but the drain that follows them
+      // rolled back facts this run had queued, so the call is not durably
+      // answered: a required-result caller journals from those rows. The
+      // failure reaches here as the loop's, wrapped with the loop's other
+      // cleanup failures when there are several.
+      if (
+        mode === 'required-result' &&
+        !childFailed &&
+        (loopFailure instanceof RunArtifactDrainError ||
+          (loopFailure instanceof AggregateError &&
+            loopFailure.errors.some(
+              (error: unknown) => error instanceof RunArtifactDrainError,
+            )))
+      ) {
+        throw new SubagentDurabilityError(
+          `Subagent ${runId} failed to commit its final artifacts.`,
+          { cause: loopFailure },
+        );
       }
 
       if (childFailed) throw childError();
