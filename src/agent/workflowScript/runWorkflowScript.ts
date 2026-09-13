@@ -140,41 +140,20 @@ const ORCHESTRATION_PRELUDE = `
 `;
 
 /**
- * What stopped the run. `settlement-cleanup` is the abort the engine raises
- * itself once the sandbox has settled, and `timeout` mirrors a wall clock the
- * sandbox already reports with a more precise error; both leave the script
- * outcome authoritative. Every other kind is a fault the run must report.
- */
-type WorkflowAbortKind =
-  | 'cap'
-  | 'checkpoint'
-  | 'contract'
-  | 'runner'
-  | 'settlement-cleanup'
-  | 'timeout';
-
-/**
  * Thrown when the whole run must stop, and the reason every run-level abort
  * carries. The realm-side agent() primitive recognizes it by name and rethrows
  * instead of converting it to null; parallel() then propagates that rejected
  * call through Promise.all.
  *
- * `kind` is host-only. The error crosses the sandbox realm boundary as a
- * realm-local copy carrying just name and message, so anything classifying an
- * error that may have crossed uses the name (isWorkflowAbort) and only reads
- * `kind` off a reason this host minted. Errors a host runner mints to surface
- * its own fatal condition take the default `runner` kind.
+ * The first fault a run records is the run's outcome; every later abort is a
+ * consequence of it and keeps the first. The error crosses the sandbox realm
+ * boundary as a realm-local copy carrying just name and message, so anything
+ * classifying an error that may have crossed uses the name (isWorkflowAbort).
  */
 export class WorkflowRunAbortError extends Error {
-  readonly kind: WorkflowAbortKind;
-
-  constructor(
-    message: string,
-    options?: ErrorOptions & { readonly kind?: WorkflowAbortKind },
-  ) {
+  constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'WorkflowRunAbortError';
-    this.kind = options?.kind ?? 'runner';
   }
 }
 
@@ -185,20 +164,6 @@ function isWorkflowAbort(error: unknown): boolean {
     typeof error === 'object' &&
     error !== null &&
     (error as { name?: unknown }).name === 'WorkflowRunAbortError'
-  );
-}
-
-/**
- * Whether an abort reason is the run's own outcome. A parent abort keeps the
- * caller's reason and the sandbox rethrows it, a timeout reaches the caller as
- * the sandbox's timeout error, and a settlement cleanup follows a script that
- * already settled, so those three leave the sandbox outcome in place.
- */
-function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
-  return (
-    reason instanceof WorkflowRunAbortError &&
-    reason.kind !== 'timeout' &&
-    reason.kind !== 'settlement-cleanup'
   );
 }
 
@@ -256,7 +221,7 @@ function makeSnapshotWriter<R>(
     const failAll = (cause: unknown): void => {
       failure ??= new WorkflowRunAbortError(
         `Failed to persist workflow run snapshot: ${toErrorMessage(cause)}`,
-        { kind: 'checkpoint', cause },
+        { cause },
       );
       for (const acknowledged of acknowledgements.values()) {
         Deferred.doneUnsafe(acknowledged, Effect.fail(failure));
@@ -364,16 +329,13 @@ export function runWorkflowScript<R = never>(
       const fatalFault = yield* Deferred.make<never, WorkflowRunAbortError>();
       let firstFatalFault: WorkflowRunAbortError | undefined;
       const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
-        if (isRunFatalAbort(fault)) firstFatalFault ??= fault;
-        Deferred.doneUnsafe(fatalFault, Effect.fail(firstFatalFault ?? fault));
-        return firstFatalFault ?? fault;
+        firstFatalFault ??= fault;
+        Deferred.doneUnsafe(fatalFault, Effect.fail(firstFatalFault));
+        return firstFatalFault;
       };
       const contractFault = (error: unknown): WorkflowRunAbortError =>
         failRun(
-          new WorkflowRunAbortError(toErrorMessage(error), {
-            kind: 'contract',
-            cause: error,
-          }),
+          new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
         );
 
       const agentFibers = yield* FiberSet.make<string | undefined, Error>();
@@ -481,7 +443,7 @@ export function runWorkflowScript<R = never>(
             return Effect.fail(
               new WorkflowRunAbortError(
                 `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`,
-                { kind: 'checkpoint', cause: error },
+                { cause: error },
               ),
             );
           }),
@@ -521,7 +483,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     'Every agent() call must reference a task from meta.tasks with a non-empty "id" option.',
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -532,7 +493,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     `agent() references undeclared task id "${callOptions.id}".`,
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -547,7 +507,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     `Task "${callOptions.id}" must use the label and phase declared in meta.tasks.`,
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -583,7 +542,6 @@ export function runWorkflowScript<R = never>(
               failRun(
                 new WorkflowRunAbortError(
                   'The workflow host must fingerprint agent() file dependencies before they can be resumed safely.',
-                  { kind: 'runner' },
                 ),
               ),
             );
@@ -600,7 +558,6 @@ export function runWorkflowScript<R = never>(
                 Effect.fail(
                   new WorkflowRunAbortError(
                     'The workflow host returned no fingerprint for agent() file dependencies.',
-                    { kind: 'runner' },
                   ),
                 ),
             ).pipe(
@@ -610,7 +567,6 @@ export function runWorkflowScript<R = never>(
                   : Effect.fail(
                       new WorkflowRunAbortError(
                         'The workflow host returned no fingerprint for agent() file dependencies.',
-                        { kind: 'runner' },
                       ),
                     ),
               ),
@@ -625,7 +581,7 @@ export function runWorkflowScript<R = never>(
                       ? error
                       : new WorkflowRunAbortError(
                           `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
-                          { kind: 'runner', cause: error },
+                          { cause: error },
                         ),
                   ),
                 );
@@ -703,7 +659,6 @@ export function runWorkflowScript<R = never>(
               failRun(
                 new WorkflowRunAbortError(
                   'Repeated agent() calls with the same prompt and run options require distinct non-empty "id" options for restart-safe identity.',
-                  { kind: 'contract' },
                 ),
               ),
             );
@@ -733,7 +688,6 @@ export function runWorkflowScript<R = never>(
                       failRun(
                         new WorkflowRunAbortError(
                           'A changed agent() file dependency now conflicts with another call identity; rerun the workflow from its saved script.',
-                          { kind: 'contract' },
                         ),
                       ),
                     );
@@ -791,7 +745,6 @@ export function runWorkflowScript<R = never>(
                     error instanceof WorkflowRunAbortError
                       ? error
                       : new WorkflowRunAbortError(toErrorMessage(error), {
-                          kind: 'runner',
                           cause: error,
                         });
                   // Persist the call's real bridge failure before waking the
@@ -836,7 +789,6 @@ export function runWorkflowScript<R = never>(
                 if (liveCallCounter > maxAgentCalls) {
                   const fault = new WorkflowRunAbortError(
                     `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-                    { kind: 'cap' },
                   );
                   // Record the refused call before waking the run-level fatal
                   // race, which immediately interrupts the guest-call fiber.
@@ -923,7 +875,6 @@ export function runWorkflowScript<R = never>(
                   error instanceof WorkflowRunAbortError
                     ? error
                     : new WorkflowRunAbortError(toErrorMessage(error), {
-                        kind: 'runner',
                         cause: error,
                       }),
                 );

@@ -185,9 +185,9 @@ structured, cost }`), `null` on failure, or the truthy
   duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
-  `parallel()` call, and a wall-clock timeout. The cap and
-  timeout raise `WorkflowRunAbortError`, which `parallel()` does
-  not convert to `null` — the whole run fails. On timeout guest execution is
+  `parallel()` call, and a wall-clock timeout. The cap raises
+  `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
+  whole run fails. The timeout is the sandbox's own error: guest execution is
   interrupted, the run's `AbortSignal` (on every
   `runAgent` invocation) fires, and new `agent()` calls are refused; runners
   should cancel in-flight work on it.

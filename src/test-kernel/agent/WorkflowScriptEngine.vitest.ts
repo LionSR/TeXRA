@@ -2161,7 +2161,6 @@ return 'incorrect success'`,
 
       expect(fault).toBeInstanceOf(WorkflowRunAbortError);
       expect(fault).toMatchObject({
-        kind: 'runner',
         message: 'durable manifest unavailable',
         cause: surfaced,
       });
