@@ -377,7 +377,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 // The persistent session `initLocalCliPlatform` opened over the harness roots.
-const harnessRuntimeSession = HARNESS_PLATFORM_SERVICES.session;
+const harnessRuntimeSession = await effectRuntime().runPromise(
+  HARNESS_PLATFORM_SERVICES.session,
+);
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
   HARNESS_RUN_ID,

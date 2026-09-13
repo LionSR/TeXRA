@@ -596,7 +596,7 @@ describe('cross-process run leases', () => {
     await expect(inspectRunLease(runId)).resolves.toMatchObject({
       status: 'owned',
     });
-    const session = createProcessSession();
+    const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(

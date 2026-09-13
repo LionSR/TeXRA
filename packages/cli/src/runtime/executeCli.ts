@@ -67,9 +67,9 @@ type CliWorkflowOutputHandler = (
 ) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
 interface CliExecuteOptions {
-  /** The process session the run executes under: the one `initCliPlatform`
-   *  opened, threaded from the command that holds its services. */
-  readonly session: SessionHandle;
+  /** The process session the run executes under: `initCliPlatform`'s one
+   *  memoized open, threaded from the command that holds its services. */
+  readonly session: Effect.Effect<SessionHandle>;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -260,7 +260,7 @@ export function executeCliRequest(
   CliRunServices
 > {
   return Effect.gen(function* () {
-    const { session } = options;
+    const session = yield* options.session;
     session.setApprovalPolicy(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(runContext);
     let failurePresented = false;

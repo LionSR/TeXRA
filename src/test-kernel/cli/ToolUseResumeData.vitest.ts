@@ -95,8 +95,8 @@ const TERMINAL_REJECTION: Partial<ReflectionState> = {
 
 describe('CLI listing resumability', () => {
   let session: SessionHandle;
-  beforeEach(() => {
-    session = createProcessSession();
+  beforeEach(async () => {
+    session = await Effect.runPromise(createProcessSession());
   });
 
   function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {

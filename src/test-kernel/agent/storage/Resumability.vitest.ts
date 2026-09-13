@@ -42,9 +42,9 @@ describe('deriveResumability', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
   let session: SessionHandle;
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.restoreAllMocks();
-    session = createProcessSession();
+    session = await Effect.runPromise(createProcessSession());
   });
 
   /** Open the run aggregate the way the loop does: claim, then snapshot. */

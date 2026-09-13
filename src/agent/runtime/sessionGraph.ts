@@ -198,7 +198,7 @@ function sessions(): SessionOwner {
  * open there: one session per storage root in a process, built on the
  * caller's own fiber. Process roots unless the opener names a folder: the
  * extension, the CLI, and the SDK open exactly one session over the process
- * roots; the desktop opens one session per paper and passes that paper's
+ * roots; the desktop opens one session per project and passes that project's
  * roots. What `init` supplies beyond the roots (the transcript store, the
  * sidecar store, the response text policy) is read only when the root's
  * session is built: a later opener of the same root gets the session the

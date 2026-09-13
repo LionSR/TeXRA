@@ -170,6 +170,10 @@ async function runHistoryDelete(
   options: { id?: RunId; all: boolean; yes: boolean },
 ): Promise<number> {
   const stores = await initLocalCliPlatform(context);
+  // Both deletion paths read the same session: opened once here, on the
+  // runtime they then run on.
+  const runtime = effectRuntime();
+  const session = await runtime.runPromise(stores.session);
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
@@ -178,8 +182,7 @@ async function runHistoryDelete(
     // stored run, including `isUserVisibleRun`-hidden
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
-    const count = (await effectRuntime().runPromise(listRuns(stores.session)))
-      .length;
+    const count = (await runtime.runPromise(listRuns(session))).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored run')}. Re-run with --yes to confirm.`,
     );
@@ -188,9 +191,7 @@ async function runHistoryDelete(
 
   let result: CliHistoryDeleteResult;
   try {
-    result = await effectRuntime().runPromise(
-      deleteCliHistory(stores.session, options),
-    );
+    result = await runtime.runPromise(deleteCliHistory(session, options));
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.Usage;

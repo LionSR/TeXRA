@@ -3,6 +3,8 @@
 
 import { Text } from 'ink';
 
+import { Effect } from 'effect';
+
 import type { SessionHandle } from '@agent/runtime';
 import {
   listCliHistoryEntries,
@@ -36,7 +38,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       loadingLabel="Loading history..."
       load={async () =>
         listResumableCliHistoryEntries(
-          await listCliHistoryEntries(props.session),
+          await listCliHistoryEntries(Effect.succeed(props.session)),
         )
       }
       items={(entries) =>

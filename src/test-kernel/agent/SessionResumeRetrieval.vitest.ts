@@ -94,8 +94,8 @@ describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
   let session: SessionHandle;
-  beforeEach(() => {
-    session = createProcessSession();
+  beforeEach(async () => {
+    session = await Effect.runPromise(createProcessSession());
   });
 
   /** Open the run aggregate the way a loop does: claim, then snapshot. */

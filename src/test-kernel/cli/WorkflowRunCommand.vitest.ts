@@ -684,7 +684,7 @@ describe('CLI run command, workflow agents', () => {
         // The command reads the session off the services its init returns.
         cliInitPlatformMock.initLocalCliPlatform.mockResolvedValueOnce({
           ...installedHost().platform,
-          session,
+          session: Effect.succeed(session),
         });
         const records = storage.getRunRecords(session, runId);
         vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
@@ -1228,7 +1228,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session },
+      { session: Effect.succeed(session) },
     ).finally(() => Effect.runPromise(session.dispose()));
 
     expect(exitCode).toBe(CliExitCode.Interrupted);
@@ -1270,7 +1270,7 @@ describe('CLI run command, workflow agents', () => {
         agentCategory: AgentCategory.Workflow,
       },
       context,
-      { session },
+      { session: Effect.succeed(session) },
     ).finally(() => Effect.runPromise(session.dispose()));
     await expect(result).resolves.toBe(CliExitCode.Interrupted);
     expect(cwdSpy).toHaveBeenCalledOnce();

@@ -272,7 +272,7 @@ describe('runChat signal ownership wiring', () => {
       globalStorage: installedHost().roots.globalStorage,
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
-      session,
+      session: Effect.succeed(session),
     });
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');

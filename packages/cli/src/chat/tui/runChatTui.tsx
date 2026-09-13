@@ -168,14 +168,17 @@ export async function runChat(
     quietLogs: true,
   });
   const initialResume = init.initialResume;
-  const runtimeSession = services.session;
+  // The entry's runtime, in a local: the chat is the first thing that opens
+  // the process session, and the Effects below settle on the same runtime.
+  const runtime = effectRuntime();
+  const runtimeSession = await runtime.runPromise(services.session);
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
-  const onboarding = await effectRuntime().runPromise(
+  const onboarding = await runtime.runPromise(
     maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
@@ -197,7 +200,7 @@ export async function runChat(
   });
   // The visible agent list only exists once the registry has loaded, so the
   // load and the defaults resolution are one program rather than two runs.
-  const defaults = await effectRuntime().runPromise(
+  const defaults = await runtime.runPromise(
     Effect.flatMap(loadAgents(), () =>
       resolveChatDefaults({
         cwd: context.cwd,

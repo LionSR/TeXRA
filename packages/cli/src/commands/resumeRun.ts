@@ -68,9 +68,9 @@ export async function runResumeCommand(
     quietLogs: true,
   });
 
-  const { session } = stores;
   return effectRuntime().runPromise(
     Effect.gen(function* () {
+      const session = yield* stores.session;
       const store = getRunRecords(session, id);
       const configResult = yield* Effect.result(store.readConfig());
       if (Result.isFailure(configResult)) {
@@ -184,7 +184,7 @@ export async function runResumeCommand(
                 workflowConfig,
                 buildHeadlessRunContext(context),
                 {
-                  session,
+                  session: stores.session,
                   runId,
                   modelCompatibilityKey,
                   recoveryInputIsDurable:

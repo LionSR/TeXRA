@@ -186,7 +186,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliRequest(request, context, {
-          session: defaultSession(),
+          session: Effect.succeed(defaultSession()),
           ...options,
         }),
         fakeProcessServices(),
@@ -200,7 +200,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliConfig(config, context, {
-          session: defaultSession(),
+          session: Effect.succeed(defaultSession()),
           ...options,
         }),
         fakeProcessServices(),
@@ -214,7 +214,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
-          session: defaultSession(),
+          session: Effect.succeed(defaultSession()),
           ...options,
         }),
         fakeProcessServices(),

@@ -309,14 +309,15 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      /** The process session the run executes under (`initCliPlatform`'s). */
-      readonly session: SessionHandle;
+      /** The process session the run executes under: `initCliPlatform`'s one
+       *  memoized open. */
+      readonly session: Effect.Effect<SessionHandle>;
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
-    const { session } = options;
+    const session = yield* options.session;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
     let resumeHintWritten = false;
@@ -369,7 +370,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         }
       });
     const run = yield* executeCliConfig(config, runContext, {
-      session,
+      session: options.session,
       runId: options.runId,
       modelCompatibilityKey: options.modelCompatibilityKey,
       onInterruptedRunFinalized: recoveryInputIsDurable

@@ -201,7 +201,7 @@ async function gateWorkflowResume(): Promise<{
 
 describe('desktop process resume owner', () => {
   beforeEach(async () => {
-    testSession = createProcessSession();
+    testSession = await Effect.runPromise(createProcessSession());
     publishTestRunStart(testSession, runId);
     await testSession.settlePublications();
     retrieveSessionResumeData.mockReset();

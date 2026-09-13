@@ -143,7 +143,7 @@ function historyDetails(
   id: RunId,
   options?: { includeFullConversation?: boolean },
 ) {
-  return readCliHistoryDetails(defaultSession(), id, options);
+  return readCliHistoryDetails(Effect.succeed(defaultSession()), id, options);
 }
 
 // An internal tool-use agent config with no input/output files, built from
@@ -291,7 +291,9 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
 
     expect(formatCliHistoryText(entries)).toBe(
       'a1a1a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
@@ -334,7 +336,9 @@ describe('CLI history runtime', () => {
       ),
     );
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
     expect(entries.map((entry) => entry.status)).toEqual([
       'cancelled',
       'failed',
@@ -383,7 +387,9 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries.map((entry) => entry.id)).toEqual(['visible']);
   });
@@ -399,7 +405,9 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries.map((entry) => entry.id)).toEqual(['root']);
   });
@@ -421,7 +429,9 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
 
     expect(entries[0]?.agent).toBe('engineer');
     expect(entries[0]?.teamPresetId).toBe('software-engineer');
@@ -445,7 +455,9 @@ describe('CLI history runtime', () => {
       ]),
     );
 
-    const entries = await listCliHistoryEntries(defaultSession());
+    const entries = await listCliHistoryEntries(
+      Effect.succeed(defaultSession()),
+    );
 
     expect(formatCliHistoryText(entries)).toBe(
       'chat1\t2026-05-18T11:00:00.000Z\tassistant\tresumable\tSketch a proof outline',
@@ -944,7 +956,10 @@ describe('CLI history runtime', () => {
         await Effect.runPromise(session.readView([]))
       ).runs.get(runId)?.launchedAt;
 
-      const result = await readCliHistoryExportInput(defaultSession(), runId);
+      const result = await readCliHistoryExportInput(
+        Effect.succeed(defaultSession()),
+        runId,
+      );
 
       expect(result).toEqual({
         status: 'ok',
@@ -975,7 +990,10 @@ describe('CLI history runtime', () => {
       mockNothingPersisted();
 
       await expect(
-        readCliHistoryExportInput(defaultSession(), 'facade' as RunId),
+        readCliHistoryExportInput(
+          Effect.succeed(defaultSession()),
+          'facade' as RunId,
+        ),
       ).resolves.toEqual({ status: 'not_found' });
     });
 
@@ -985,7 +1003,10 @@ describe('CLI history runtime', () => {
       // the id not resolving to anything at all. This is the beforeEach
       // baseline: stored config, no conversation, no meta.
       await expect(
-        readCliHistoryExportInput(defaultSession(), 'a1a1a1' as RunId),
+        readCliHistoryExportInput(
+          Effect.succeed(defaultSession()),
+          'a1a1a1' as RunId,
+        ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -996,7 +1017,10 @@ describe('CLI history runtime', () => {
       ]);
 
       await expect(
-        readCliHistoryExportInput(defaultSession(), 'a1a1a1' as RunId),
+        readCliHistoryExportInput(
+          Effect.succeed(defaultSession()),
+          'a1a1a1' as RunId,
+        ),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1010,7 +1034,10 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue([]);
 
       await expect(
-        readCliHistoryExportInput(defaultSession(), 'facade' as RunId),
+        readCliHistoryExportInput(
+          Effect.succeed(defaultSession()),
+          'facade' as RunId,
+        ),
       ).resolves.toEqual({ status: 'not_found' });
       await expect(historyDetails('facade' as RunId)).resolves.toBeNull();
     });

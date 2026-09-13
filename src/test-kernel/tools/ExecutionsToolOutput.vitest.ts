@@ -227,8 +227,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     config: { 'texra.toolUse.requireBashApproval': false },
   });
 
-  beforeEach(() => {
-    createProcessSession();
+  beforeEach(async () => {
+    await Effect.runPromise(createProcessSession());
   });
   afterEach(() => {
     vi.restoreAllMocks();

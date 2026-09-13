@@ -113,9 +113,11 @@ async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
 }): Promise<void> {
-  const session = createProcessSession();
+  const session = await Effect.runPromise(createProcessSession());
   // `runResumeCommand` reads the session off the services the init returns.
-  mocks.initInteractiveCliPlatform.mockResolvedValue({ session });
+  mocks.initInteractiveCliPlatform.mockResolvedValue({
+    session: Effect.succeed(session),
+  });
   await Effect.runPromise(
     session.commit([
       {

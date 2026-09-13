@@ -168,8 +168,8 @@ function launchBackgroundBash(parentRunId: RunId) {
 
 describe('BashTool', () => {
   setupPlatform(BASH_PLATFORM_OPTIONS);
-  beforeEach(() => {
-    createProcessSession();
+  beforeEach(async () => {
+    await Effect.runPromise(createProcessSession());
   });
 
   afterEach(() => {

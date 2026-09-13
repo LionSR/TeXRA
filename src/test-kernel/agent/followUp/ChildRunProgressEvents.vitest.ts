@@ -109,7 +109,7 @@ function startCodexChild(runId: RunId, description: string) {
 
 describe('child run progress events', () => {
   beforeEach(async () => {
-    const session = createProcessSession();
+    const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, parentRunId);
     await session.settlePublications();
   });

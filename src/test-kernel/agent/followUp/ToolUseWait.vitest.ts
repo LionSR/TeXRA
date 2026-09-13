@@ -396,10 +396,13 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
  * A session over the process roots: a goal is its run's own row, so a goal
  * scenario and the loop must share the session that carries it.
  */
-function goalSession(overrides: Record<string, unknown> = {}): SessionHandle {
-  const session = createProcessSession();
-  session.interactions.use({ emit: () => {}, ...overrides });
-  return session;
+function goalSession(
+  overrides: Record<string, unknown> = {},
+): Effect.Effect<SessionHandle> {
+  return Effect.map(createProcessSession(), (session) => {
+    session.interactions.use({ emit: () => {}, ...overrides });
+    return session;
+  });
 }
 
 function quietSession(overrides: Record<string, unknown> = {}): SessionHandle {
@@ -922,7 +925,7 @@ describe('the batch a parked run consumes', () => {
 describe('an active goal at the wait', () => {
   it.effect('continues the run with a synthetic turn instead of blocking', () =>
     Effect.gen(function* () {
-      const session = goalSession();
+      const session = yield* goalSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
@@ -960,7 +963,7 @@ describe('an active goal at the wait', () => {
 
   it.effect('lets queued user input win over the continuation', () =>
     Effect.gen(function* () {
-      const session = goalSession();
+      const session = yield* goalSession();
       const runId = startedRun(session);
       yield* startGoal(session, runId, 'Keep going autonomously.');
       enqueue(session, runId, [{ text: 'user correction', origin: 'user' }]);
@@ -986,7 +989,7 @@ describe('an active goal at the wait', () => {
     () =>
       Effect.gen(function* () {
         const setApprovalBypassState = vi.fn();
-        const session = goalSession({ setApprovalBypassState });
+        const session = yield* goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
 
@@ -1024,7 +1027,7 @@ describe('an active goal at the wait', () => {
         // reaches the model, so the error clears without pausing the goal or
         // dropping its unattended approvals first.
         const setApprovalBypassState = vi.fn();
-        const session = goalSession({ setApprovalBypassState });
+        const session = yield* goalSession({ setApprovalBypassState });
         const runId = startedRun(session);
         const parentRunId = generateRunId();
         yield* startGoal(session, runId, 'finish the autonomous proof');
