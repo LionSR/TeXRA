@@ -198,7 +198,7 @@ export class SessionBridge {
     }
   }
 
-  attach(port: SessionPort): Effect.Effect<AttachedPort> {
+  attach(port: SessionPort): Effect.Effect<AttachedPort, Error> {
     return Effect.gen({ self: this }, function* () {
       // `Scope.state` is the module's documented read of a scope's state
       // (its "Checking scope states" example); `Scope` exports no predicate.
@@ -206,7 +206,7 @@ export class SessionBridge {
       // an already-closed child rather than failing, so without it a closed
       // bridge would register a dead port silently.
       if (this.scope.state._tag === 'Closed') {
-        return yield* Effect.die(
+        return yield* Effect.fail(
           new Error('SessionBridge is closed; cannot attach a port'),
         );
       }
