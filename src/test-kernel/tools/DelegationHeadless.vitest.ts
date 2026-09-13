@@ -348,7 +348,7 @@ function mockExecuteAgentErrorOnce(
 function mockWaitingChildOnce(
   options: {
     memoryMisses?: ReadonlyArray<{ path: string; reason: string }>;
-    afterRun?: (handle: RunHandle) => void;
+    afterRun?: (handle: RunHandle) => Promise<void>;
   } = {},
 ): void {
   mocks.executeAgent.mockImplementationOnce(
@@ -361,7 +361,7 @@ function mockWaitingChildOnce(
       defaultSession().runs.track(handle);
       runOptions.onRunResolved?.(runId);
       runOptions.onRun?.(handle);
-      options.afterRun?.(handle);
+      await options.afterRun?.(handle);
       return {
         outcome: RUN_PHASE.WAITING,
         output: {
@@ -1263,7 +1263,7 @@ describe('headless delegation', () => {
           // same ordering a real stop-with-detach produces mid-turn.
           afterRun: (handle) => {
             capturedHandle = handle;
-            Effect.runFork(
+            return Effect.runPromise(
               defaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
             );
           },
