@@ -1,14 +1,10 @@
 <script setup>
 // API-keys product slice: the Settings Dashboard → Models tab → "API
 // Configuration" table. Mirrors ProviderKeyList.ts — a per-provider table
-// (Provider · Status · Actions) with a global streaming toggle above it. Each
+// (Provider · Status · Actions). Each
 // row exposes Set (key), Get (open key page), and Remove (only when a key is
 // stored); status is Set / Env / Not set. Tab order mirrors SettingsApp.ts.
-import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
-import MockSwitch from './MockSwitch.vue';
-
-const streaming = ref(true);
 
 const rows = [
   { name: 'Anthropic', status: 'set', label: 'Key set' },
@@ -65,15 +61,6 @@ const rows = [
         Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API
         access — you need a key from the provider's developer platform.
       </p>
-
-      <!-- Global streaming default (mirrors renderGlobalStreamingToggle). -->
-      <div class="api-stream">
-        <MockSwitch
-          v-model="streaming"
-          label="Enable streaming"
-          description="Global default for all providers"
-        />
-      </div>
 
       <table class="api-table">
         <thead>
@@ -158,16 +145,6 @@ const rows = [
   font-size: var(--mk-fs-76);
   line-height: 1.45;
   color: var(--color-text-secondary);
-}
-
-.api-stream {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-10);
-  padding: var(--mk-space-8) var(--mk-space-10);
-  background: var(--mk-bg-soft);
-  border: 1px solid var(--color-border);
-  border-radius: var(--mk-radius-lg);
 }
 
 .api-table {

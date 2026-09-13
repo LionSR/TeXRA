@@ -275,8 +275,6 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 2. **Response timeout**:
    - For large documents, the model might time out
    - Try breaking the task into smaller chunks
-   - Turn on **Enable streaming** in the **Models** tab so long responses
-     arrive incrementally instead of in a single large reply
 
 3. **Context length**:
    - Documents might exceed the model's context window
@@ -370,8 +368,6 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Incomplete generation**:
    - Check whether the AI reached the token limit
-   - Turn on **Enable streaming** in the **Models** tab for more reliable
-     completion of long outputs
 
 2. **XML parsing issues**:
    - TeXRA uses XML to structure its output (e.g., `<documents>...</documents>`).

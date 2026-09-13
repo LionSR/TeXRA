@@ -7,15 +7,10 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
-import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
 import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@shared/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import {
   renderKeyStatusIcon,
   statusCheckIconStyles,
@@ -44,8 +39,6 @@ export class ProviderKeyList extends LitElement {
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ attribute: false }) globalStreamingDefault =
-    DEFAULT_GLOBAL_STREAMING;
 
   @state() private expandedProvider: string | null = null;
 
@@ -216,15 +209,6 @@ export class ProviderKeyList extends LitElement {
           title: 'API configuration',
           description,
           icon: 'key',
-        })}
-        ${renderSettingsToggleRow({
-          label: 'Enable streaming',
-          description: 'Global default for all providers',
-          checked: this.globalStreamingDefault,
-          onChange: (e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            postStateSetting(GlobalStateKey.STREAMING_GLOBAL, checked);
-          },
         })}
         <div
           class="settings-disclosure-list"

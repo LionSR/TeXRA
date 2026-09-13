@@ -28,7 +28,6 @@ export class ModelsTab extends LitElement {
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
   @property({ attribute: false }) helperModel = '';
@@ -39,7 +38,6 @@ export class ModelsTab extends LitElement {
       <div class="models-container tab-content-container">
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
-          .globalStreamingDefault=${this.globalStreamingDefault}
         ></provider-key-list>
         <model-selection-list
           .models=${this.modelSelectionItems}

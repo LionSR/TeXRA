@@ -31,7 +31,6 @@ import {
   customPresets,
   githubTokenStatus,
   gitSettingsLoaded,
-  globalStreamingDefault,
   goalItems,
   grokAuth,
   helperModel,
@@ -98,7 +97,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     // guaranteed present by the validating dispatcher — no fallback needed.
     sessionProblem.set(data.sessionProblem);
     providerKeyStatuses.set(data.providerKeyStatuses);
-    globalStreamingDefault.set(data.globalStreamingDefault);
   },
 
   // Model selection.

@@ -328,6 +328,12 @@ function configurationFor(
   const effort = routeEffort(capabilities.reasoningEffort);
   const supportedEfforts = supportedRouteEfforts(config);
   const thinkingMode = capabilities.supportsReasoning ? 'enabled' : 'disabled';
+  // The user's parallel-tool-calls choice, honored on every OpenAI-protocol
+  // arm as the retired OpenAI handler base honored it on every request it
+  // built. The Anthropic arm never read it and keeps the provider default.
+  const parallelToolCalls = getConfig<boolean>(
+    'texra.model.openaiParallelToolCalls',
+  );
   const base = binding(config, credential);
   switch (protocol) {
     case 'anthropic-messages':
@@ -356,13 +362,23 @@ function configurationFor(
         defaults: {
           maxOutputTokens,
           temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls: true,
+          parallelToolCalls,
           effort: capabilities.supportsReasoningEffort
             ? capabilities.reasoningEffort
             : null,
         },
       };
-    case 'openai-responses':
+    case 'openai-responses': {
+      // GPT-5 asks for a reasoning summary only when the user turned the
+      // toggle on; every other reasoning-capable Responses model keeps
+      // asking, as the retired Responses handler did. `null` omits the
+      // field from the request.
+      const isGpt5 =
+        config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
+      const summary: 'auto' | null =
+        !isGpt5 || getConfig<boolean>('texra.model.gpt5ReasoningSummary')
+          ? 'auto'
+          : null;
       if (credential.route === 'chatgpt-subscription') {
         let codexEffort: RouteEffort | null = effort;
         if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
@@ -388,14 +404,14 @@ function configurationFor(
             maxOutputTokens: null,
             temperature: supportsTemperature ? input.temperature : null,
             store: false,
-            parallelToolCalls: true,
+            parallelToolCalls,
             reasoning: capabilities.supportsReasoning
               ? {
                   effort: capabilities.supportsReasoningEffort
                     ? codexEffort
                     : null,
                   mode: capabilities.reasoningMode ?? null,
-                  summary: 'auto',
+                  summary,
                 }
               : null,
             serviceTier: null,
@@ -419,18 +435,22 @@ function configurationFor(
         defaults: {
           maxOutputTokens,
           temperature: supportsTemperature ? input.temperature : null,
-          store: false,
-          parallelToolCalls: true,
+          // The route stores responses server-side, which is what
+          // `previous_response_id` chaining and background submission both
+          // read; the Codex arm above is the stateless one.
+          store: true,
+          parallelToolCalls,
           reasoning: capabilities.supportsReasoning
             ? {
                 effort: capabilities.supportsReasoningEffort ? effort : null,
                 mode: capabilities.reasoningMode ?? null,
-                summary: 'auto',
+                summary,
               }
             : null,
           serviceTier: config.serviceTier ?? null,
         },
       };
+    }
     case 'google-interactions':
       return {
         ...base,
@@ -439,7 +459,13 @@ function configurationFor(
         supportsInputTokenEstimation: capabilities.supportsTokenCounting,
         defaults: {
           maxOutputTokens,
-          store: false,
+          // Server-side conversation state is the user's choice: on, Google
+          // holds the conversation and each round sends only the new turn
+          // (and background execution becomes reachable); off, every round
+          // resends the full transcript and nothing is retained.
+          store: getConfig<boolean>(
+            'texra.model.useGoogleInteractionsServerState',
+          ),
           thinkingLevel:
             effort === 'low' || effort === 'medium' || effort === 'high'
               ? effort
@@ -513,7 +539,7 @@ function configurationFor(
         defaults: {
           maxOutputTokens,
           temperature: supportsTemperature ? input.temperature : null,
-          parallelToolCalls: true,
+          parallelToolCalls,
           effort: capabilities.supportsReasoningEffort ? xaiEffort : null,
         },
       };
@@ -525,7 +551,7 @@ function configurationFor(
         defaults: {
           maxOutputTokens,
           temperature: Math.min(1.99, input.temperature),
-          parallelToolCalls: true,
+          parallelToolCalls,
           stopSequences: [],
           thinking: { mode: 'disabled' },
         },
@@ -538,7 +564,7 @@ function configurationFor(
         defaults: {
           maxOutputTokens,
           temperature: input.temperature,
-          parallelToolCalls: true,
+          parallelToolCalls,
           stopSequences: [],
         },
       };

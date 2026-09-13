@@ -217,11 +217,6 @@ Expanding any provider's row in **API Configuration** reveals its key field plus
 
 <p class="hero-caption">Expand a provider's <strong>API configuration</strong> row to reveal its masked key field (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
 
-## Streaming
-
-Streaming is one switch for every provider: the **Enable streaming** toggle at the top of **API configuration** in the **Dashboard → Providers & Models** tab. When streaming is on, long responses
-arrive incrementally instead of in one large reply.
-
 ## Next steps
 
 - [Built-in agents](./built-in-agents.md): see which agents work with which models
