@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Result } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
@@ -104,37 +104,8 @@ function expectEffect<A, E, R>(effect: Effect.Effect<A, E, R>) {
 const sleep = (milliseconds: number): Effect.Effect<void> =>
   Effect.sleep(milliseconds);
 
-const waitFor = (assertion: () => void): Effect.Effect<void> =>
-  Effect.suspend(() =>
-    Result.isSuccess(Result.try(assertion))
-      ? Effect.void
-      : Effect.yieldNow.pipe(Effect.andThen(waitFor(assertion))),
-  );
-
 const fromPromise = <A>(promise: () => Promise<A>): Effect.Effect<A, Error> =>
   Effect.tryPromise({ try: promise, catch: ensureError });
-
-/** Native callback effect for runner doubles controlled by the test. */
-const controlledEffect = <A>(
-  register: (succeed: (value: A) => void, fail: (error: Error) => void) => void,
-): Effect.Effect<A, Error> =>
-  Effect.callback((resume) =>
-    register(
-      (value) => resume(Effect.succeed(value)),
-      (error) => resume(Effect.fail(error)),
-    ),
-  );
-
-function rejectOnAbort(
-  invocation: WorkflowAgentInvocation,
-  reject: (error: Error) => void,
-): void {
-  invocation.signal.addEventListener(
-    'abort',
-    () => reject(new Error('aborted')),
-    { once: true },
-  );
-}
 
 /**
  * The child run id one attempt runs under. Interactive control is keyed
@@ -744,19 +715,9 @@ return await parallel([
     'parallel(): keeps a thunk error before launching queued siblings',
     () =>
       Effect.gen(function* () {
-        const runner = vi.fn((invocation: WorkflowAgentInvocation) =>
-          controlledEffect<never>((_resolve, reject) => {
-            invocation.signal.addEventListener(
-              'abort',
-              () => {
-                const error = new Error('runner observed cleanup abort');
-                error.name = 'WorkflowRunAbortError';
-                reject(error);
-              },
-              { once: true },
-            );
-          }),
-        );
+        // The thunk throws before any sibling launches, so this runner is never
+        // invoked; it only has to park if it ever were.
+        const runner = vi.fn(() => Effect.never);
 
         yield* expectEffect(
           runScript(
@@ -1102,6 +1063,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
   () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
 ])`;
         const firstBlocked = yield* Deferred.make<void>();
+        const blockerStarted = yield* Deferred.make<void>();
         let fingerprint = 'old-proof';
         const invocations: WorkflowAgentInvocation[] = [];
         const runFiber = yield* runWorkflowScript({
@@ -1112,13 +1074,15 @@ return await agent('Inspect src', { id: 'inspect' })`,
             Effect.gen(function* () {
               invocations.push(invocation);
               if (invocation.options.id === 'blocker') {
+                yield* Deferred.succeed(blockerStarted, undefined);
                 yield* Deferred.await(firstBlocked);
               }
               return invocation.options.id ?? 'missing-id';
             }),
         }).pipe(Effect.forkChild);
 
-        yield* waitFor(() => expect(invocations).toHaveLength(1));
+        yield* Deferred.await(blockerStarted);
+        expect(invocations).toHaveLength(1);
         fingerprint = 'new-proof';
         yield* Deferred.succeed(firstBlocked, undefined);
         const run = yield* Fiber.join(runFiber);
@@ -1142,14 +1106,19 @@ return await agent('Inspect src', { id: 'inspect' })`,
       let control!: WorkflowScriptControl;
       let fingerprint = 'old-proof';
       const invocations: WorkflowAgentInvocation[] = [];
+      const firstAttempt = yield* Deferred.make<void>();
       const runner = (invocation: WorkflowAgentInvocation) =>
-        controlledEffect<string>((resolve, reject) => {
+        Effect.gen(function* () {
           invocations.push(invocation);
           invocation.report({
             childRunId: childRunIdFor(invocation.index, invocations.length),
           });
-          if (invocations.length === 2) resolve('fresh result');
-          rejectOnAbort(invocation, reject);
+          if (invocations.length === 1) {
+            yield* Deferred.succeed(firstAttempt, undefined);
+            // Park until the interactive retry interrupts this attempt.
+            return yield* Effect.never;
+          }
+          return 'fresh result';
         });
       const runFiber = yield* runWorkflowScript({
         script: `${META}return await agent('review', {
@@ -1162,7 +1131,8 @@ return await agent('Inspect src', { id: 'inspect' })`,
         },
       }).pipe(Effect.forkChild);
 
-      yield* waitFor(() => expect(invocations).toHaveLength(1));
+      yield* Deferred.await(firstAttempt);
+      expect(invocations).toHaveLength(1);
       const firstKey = invocations[0]?.key;
       fingerprint = 'new-proof';
       control(childRunIdFor(0), 'retry');
@@ -1868,7 +1838,9 @@ return await agent('one')`,
     }),
   );
 
-  it.effect.each([
+  // Live: the sandbox deadline is raw performance.now plus setTimeout, and the
+  // assertion is a wall-clock delta.
+  it.live.each([
     { reachedVia: 'an agent await', body: `await agent('one')` },
     {
       reachedVia: 'the guest microtask queue',
@@ -2046,8 +2018,9 @@ while (true) values.push(new Uint8Array(1024 * 1024))`,
           invocation.signal.addEventListener('abort', () => {
             sawAbort = true;
           });
-          yield* sleep(30);
-          return invocation.prompt;
+          // Park until the cap trips: concurrency 4 admits the fourth permit in
+          // the same scheduler pass, so nothing here waits on a clock.
+          return yield* Effect.never;
         });
       yield* expectEffect(
         runScript(
@@ -2187,22 +2160,17 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
   it.effect('aborts guest run and the active child from a parent signal', () =>
     Effect.gen(function* () {
       const controller = new AbortController();
-      let childSignal: AbortSignal | undefined;
+      const childSignalGate = yield* Deferred.make<AbortSignal>();
       const runFiber = yield* runWorkflowScript({
         script: `${META}return await agent('wait')`,
         signal: controller.signal,
-        runAgent: (invocation) => {
-          childSignal = invocation.signal;
-          return controlledEffect<unknown>((_resolve, reject) => {
-            invocation.signal.addEventListener(
-              'abort',
-              () => reject(invocation.signal.reason),
-              { once: true },
-            );
-          });
-        },
+        runAgent: (invocation) =>
+          Deferred.succeed(childSignalGate, invocation.signal).pipe(
+            Effect.andThen(Effect.never),
+          ),
       }).pipe(Effect.forkChild);
-      yield* waitFor(() => expect(childSignal).toBeDefined());
+      const childSignal = yield* Deferred.await(childSignalGate);
+      expect(childSignal).toBeDefined();
 
       controller.abort(new DOMException('parent stopped', 'AbortError'));
 
@@ -2210,7 +2178,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         name: 'AbortError',
         message: 'parent stopped',
       });
-      expect(childSignal?.aborted).toBe(true);
+      expect(childSignal.aborted).toBe(true);
     }),
   );
 
@@ -2219,19 +2187,22 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     () =>
       Effect.gen(function* () {
         const started = new Set<number>();
-        const release = new Map<number, () => void>();
+        const gates = yield* Effect.all(
+          Array.from({ length: 3 }, () => Deferred.make<void>()),
+        );
+        const release = yield* Effect.all(
+          Array.from({ length: 3 }, () => Deferred.make<string>()),
+        );
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
-          controlledEffect<string>((resolve, reject) => {
+          Effect.gen(function* () {
             started.add(invocation.index);
             invocation.report({
               model: 'skip-model',
               childRunId: childRunIdFor(invocation.index),
             });
-            release.set(invocation.index, () =>
-              resolve(`done:${invocation.index}`),
-            );
-            rejectOnAbort(invocation, reject);
+            yield* Deferred.succeed(gates[invocation.index]!, undefined);
+            return yield* Deferred.await(release[invocation.index]!);
           });
 
         const recorded = recordCalls();
@@ -2249,11 +2220,12 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           onEvent: recorded.onEvent,
         }).pipe(Effect.forkChild);
 
-        yield* waitFor(() => expect(started.size).toBe(3));
+        yield* Effect.forEach(gates, Deferred.await);
+        expect(started.size).toBe(3);
         control(childRunIdFor(1), 'skip');
         // Siblings settle normally; only index 1 is cancelled.
-        release.get(0)?.();
-        release.get(2)?.();
+        yield* Deferred.succeed(release[0]!, 'done:0');
+        yield* Deferred.succeed(release[2]!, 'done:2');
 
         const run = yield* Fiber.join(runFiber);
         const result = run.result as string[];
@@ -2287,13 +2259,14 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         // still early enough to cancel the attempt before it produces a result.
         let control!: WorkflowScriptControl;
         const runner = vi.fn((invocation: WorkflowAgentInvocation) =>
-          controlledEffect<string>((_resolve, reject) => {
-            rejectOnAbort(invocation, reject);
+          Effect.sync(() => {
             invocation.report({
               childRunId: childRunIdFor(invocation.index),
             });
             control(childRunIdFor(invocation.index), 'skip');
-          }),
+            // The interrupt lands at this fiber's next yield, so the runner has
+            // to park rather than finish synchronously.
+          }).pipe(Effect.andThen(Effect.never)),
         );
         const run = yield* runWorkflowScript({
           script: `${META}return await agent('skip immediately')`,
@@ -2314,17 +2287,24 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     () =>
       Effect.gen(function* () {
         const attemptByIndex = new Map<number, number>();
-        const releases: Array<() => void> = [];
+        const gates = yield* Effect.all([
+          Deferred.make<void>(),
+          Deferred.make<void>(),
+        ]);
+        const release = yield* Effect.all([
+          Deferred.make<string>(),
+          Deferred.make<string>(),
+        ]);
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
-          controlledEffect<string>((resolve, reject) => {
+          Effect.gen(function* () {
             const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
             attemptByIndex.set(invocation.index, attempt);
             invocation.report({
               childRunId: childRunIdFor(invocation.index, attempt),
             });
-            releases.push(() => resolve(`attempt-${attempt}`));
-            rejectOnAbort(invocation, reject);
+            yield* Deferred.succeed(gates[attempt - 1]!, undefined);
+            return yield* Deferred.await(release[attempt - 1]!);
           });
 
         const runFiber = yield* runWorkflowScript({
@@ -2335,11 +2315,13 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           },
         }).pipe(Effect.forkChild);
 
-        yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
+        yield* Deferred.await(gates[0]);
+        expect(attemptByIndex.get(0)).toBe(1);
         control(childRunIdFor(0, 1), 'retry');
         // The aborted first attempt is discarded; a fresh attempt starts.
-        yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
-        releases.at(-1)?.();
+        yield* Deferred.await(gates[1]);
+        expect(attemptByIndex.get(0)).toBe(2);
+        yield* Deferred.succeed(release[1], 'attempt-2');
 
         const run = yield* Fiber.join(runFiber);
         expect(run.result).toBe('attempt-2');
@@ -2359,17 +2341,24 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     () =>
       Effect.gen(function* () {
         const attemptByIndex = new Map<number, number>();
-        const releases: Array<() => void> = [];
+        const gates = yield* Effect.all([
+          Deferred.make<void>(),
+          Deferred.make<void>(),
+        ]);
+        const release = yield* Effect.all([
+          Deferred.make<string>(),
+          Deferred.make<string>(),
+        ]);
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
-          controlledEffect<string>((resolve, reject) => {
-            rejectOnAbort(invocation, reject);
+          Effect.gen(function* () {
             const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
             attemptByIndex.set(invocation.index, attempt);
             invocation.report({
               childRunId: childRunIdFor(invocation.index, attempt),
             });
-            releases.push(() => resolve(`attempt-${attempt}`));
+            yield* Deferred.succeed(gates[attempt - 1]!, undefined);
+            return yield* Deferred.await(release[attempt - 1]!);
           });
 
         const runFiber = yield* runWorkflowScript({
@@ -2380,13 +2369,15 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           },
         }).pipe(Effect.forkChild);
 
-        yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
+        yield* Deferred.await(gates[0]);
+        expect(attemptByIndex.get(0)).toBe(1);
         control(childRunIdFor(0, 1), 'retry');
-        yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
+        yield* Deferred.await(gates[1]);
+        expect(attemptByIndex.get(0)).toBe(2);
         // The retried attempt runs under a new id; the abandoned one is dead and
         // must not reach the fresh attempt that now owns the call.
         control(childRunIdFor(0, 1), 'skip');
-        releases.at(-1)?.();
+        yield* Deferred.succeed(release[1], 'attempt-2');
 
         const run = yield* Fiber.join(runFiber);
         expect(run.result).toBe('attempt-2');
@@ -2396,18 +2387,21 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
   it.effect('never registers a recovered child id as a skip/retry target', () =>
     Effect.gen(function* () {
       let control!: WorkflowScriptControl;
-      let releaseCall!: () => void;
+      const gate = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<string>();
+      const reported: RunId[] = [];
       const recoveredId = childRunIdFor(0, 1);
       const runner = (invocation: WorkflowAgentInvocation) =>
-        controlledEffect<string>((resolve, reject) => {
-          rejectOnAbort(invocation, reject);
+        Effect.gen(function* () {
           // A durable-recovery runner re-attaches the known child id for
           // navigation, then keeps resolving asynchronously (readMeta gap).
           invocation.report({
             childRunId: recoveredId,
             recovered: true,
           });
-          releaseCall = () => resolve('recovered-result');
+          reported.push(recoveredId);
+          yield* Deferred.succeed(gate, undefined);
+          return yield* Deferred.await(release);
         });
 
       const runFiber = yield* runWorkflowScript({
@@ -2418,11 +2412,12 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         },
       }).pipe(Effect.forkChild);
 
-      yield* waitFor(() => expect(releaseCall).toBeDefined());
+      yield* Deferred.await(gate);
+      expect(reported).toEqual([recoveredId]);
       // The skip lands inside the recovery window; a recovered result is
       // authoritative, so the request must no-op instead of discarding it.
       control(recoveredId, 'skip');
-      releaseCall();
+      yield* Deferred.succeed(release, 'recovered-result');
 
       const run = yield* Fiber.join(runFiber);
       expect(run.result).toBe('recovered-result');
@@ -2471,15 +2466,19 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       let control!: WorkflowScriptControl;
       const recorded = recordCalls();
       let attempts = 0;
+      const gates = yield* Effect.all([
+        Deferred.make<void>(),
+        Deferred.make<void>(),
+      ]);
       const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
         attempts += 1;
         invocation.report({
           model: 'retry-model',
           childRunId: childRunIdFor(invocation.index, attempts),
         });
-        return controlledEffect<never>((_resolve, reject) => {
-          rejectOnAbort(invocation, reject);
-        });
+        return Deferred.succeed(gates[attempts - 1]!, undefined).pipe(
+          Effect.andThen(Effect.never),
+        );
       });
       const runFiber = yield* runWorkflowScript({
         script: `${META}return await agent('retry until refused')`,
@@ -2491,9 +2490,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         onEvent: recorded.onEvent,
       }).pipe(Effect.forkChild);
 
-      yield* waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
+      yield* Deferred.await(gates[0]);
+      expect(runner).toHaveBeenCalledTimes(1);
       control(childRunIdFor(0, 1), 'retry');
-      yield* waitFor(() => expect(runner).toHaveBeenCalledTimes(2));
+      yield* Deferred.await(gates[1]);
+      expect(runner).toHaveBeenCalledTimes(2);
       control(childRunIdFor(0, 2), 'retry');
 
       yield* expectEffect(Fiber.join(runFiber)).rejects.toThrow(
@@ -2522,17 +2523,22 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const started = new Set<number>();
         const aborted = new Set<number>();
         const parent = new AbortController();
+        const gates = yield* Effect.all([
+          Deferred.make<void>(),
+          Deferred.make<void>(),
+        ]);
         const runner = (invocation: WorkflowAgentInvocation) =>
-          controlledEffect<string>((_resolve, reject) => {
+          Effect.gen(function* () {
             started.add(invocation.index);
             invocation.signal.addEventListener(
               'abort',
               () => {
                 aborted.add(invocation.index);
-                reject(new Error('aborted'));
               },
               { once: true },
             );
+            yield* Deferred.succeed(gates[invocation.index]!, undefined);
+            return yield* Effect.never;
           });
 
         const recorded = recordCalls();
@@ -2550,7 +2556,8 @@ return await parallel([
           },
         ).pipe(Effect.forkChild);
 
-        yield* waitFor(() => expect(started.size).toBe(2));
+        yield* Effect.forEach(gates, Deferred.await);
+        expect(started.size).toBe(2);
         parent.abort(new DOMException('parent stopped', 'AbortError'));
 
         yield* expectEffect(Fiber.join(runFiber)).rejects.toMatchObject({
