@@ -1631,6 +1631,14 @@ export const sseEvents = <E>(
 };
 
 /**
+ * The value a pull source yields while it is not done: the `value` of the
+ * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
+ * it from that member alone is what keeps the done member's `undefined` out
+ * of the stream's element type.
+ */
+type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
+
+/**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
  * iterator — that ends when the source reports `done`.
  *
@@ -1639,14 +1647,6 @@ export const sseEvents = <E>(
  * ladder. Only the source and the failure classifier ever differed, so those
  * are the parameters.
  */
-/**
- * The value a pull source yields while it is not done: the `value` of the
- * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
- * it from that member alone is what keeps the done member's `undefined` out
- * of the stream's element type.
- */
-type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
-
 export const pullStream = <
   R extends { readonly done?: boolean; readonly value?: unknown },
   E,

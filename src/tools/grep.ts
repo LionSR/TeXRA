@@ -220,17 +220,13 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   return executed(output, summary);
 });
 
-export class GrepTool extends defineTool({
+export const GrepTool = defineTool({
   name: 'grep',
   parallelSafe: true,
   description:
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',
   schema: GrepInputSchema,
-}) {
-  protected readonly execute = Effect.fn('GrepTool.call')(function* (
-    this: GrepTool,
-    input: GrepInput,
-  ) {
+  execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
     const call = yield* ToolCall;
     const ports: GrepPorts = {
       signal: yield* Effect.abortSignal,
@@ -238,5 +234,5 @@ export class GrepTool extends defineTool({
       inScope: call.inScope,
     };
     return yield* runGrep(ports, input);
-  });
-}
+  }),
+});

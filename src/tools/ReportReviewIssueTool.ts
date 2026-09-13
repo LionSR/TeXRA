@@ -55,17 +55,16 @@ const report = Effect.fn('ReportReviewIssueTool.execute')(function* (
   return executed(summary, summary);
 });
 
-export class ReportReviewIssueTool extends defineTool({
+export const ReportReviewIssueTool = defineTool({
   name: 'report_review_issue',
   description:
     'Report one finding from an agent review of the current change set. The issue appears in the Agent Review panel and as an editor diagnostic with quick fixes. Only accepted while an agent review session is collecting issues.',
   schema: NormalizedReportReviewIssueSchema.zodSchema,
-}) {
-  protected readonly execute = Effect.fn('ReportReviewIssueTool.call')(
-    function* (this: ReportReviewIssueTool, input: ReviewIssueReport) {
-      const call = yield* ToolCall;
-      const sink = call.run?.session.interactions.reportReviewIssue;
-      return yield* report(sink, input);
-    },
-  );
-}
+  execute: Effect.fn('ReportReviewIssueTool.call')(function* (
+    input: ReviewIssueReport,
+  ) {
+    const call = yield* ToolCall;
+    const sink = call.run?.session.interactions.reportReviewIssue;
+    return yield* report(sink, input);
+  }),
+});

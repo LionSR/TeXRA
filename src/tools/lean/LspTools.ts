@@ -236,7 +236,7 @@ Tips:
   );
 }
 
-export class LeanFileTool extends defineTool({
+export const LeanFileTool = defineTool({
   name: 'lean_file',
   description: `Execute Lean 4 language-server commands on a specific file.
 
@@ -245,10 +245,9 @@ ${FILE_COMMAND_PROSE}
 
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanFileInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
@@ -272,10 +271,10 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
         'Command failed',
       ),
     );
-  }
-}
+  },
+});
 
-export class LeanProjectTool extends defineTool({
+export const LeanProjectTool = defineTool({
   name: 'lean_project',
   description: `Execute global Lean 4 language-server commands (no file required).
 
@@ -283,10 +282,9 @@ ${PROJECT_COMMAND_PROSE}
 
 In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanProjectInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
@@ -308,8 +306,8 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
         'Command failed',
       ),
     );
-  }
-}
+  },
+});
 
 export class LeanInspectTool extends defineTool({
   name: 'lean_inspect',

@@ -58,16 +58,13 @@ const texcount = Effect.fn('TexcountTool.execute')(function* (
   );
 });
 
-export class TexcountTool extends defineTool({
+export const TexcountTool = defineTool({
   name: 'texcount',
   parallelSafe: true,
   description:
     'Run texcount on one or more LaTeX files. Use mode="separate" (default) for individual files, "include" to follow \\input/\\include, or "sum" to aggregate independent sources.',
   schema: TexcountInputSchema,
-}) {
-  protected execute(input: TexcountInput): Effect.Effect<ToolResult, unknown> {
-    // Cancelling a parallel batch interrupts this fiber, and the texcount
-    // subprocesses abort with it — no signal is threaded through by hand.
-    return texcount(input);
-  }
-}
+  // Cancelling a parallel batch interrupts this fiber, and the texcount
+  // subprocesses abort with it — no signal is threaded through by hand.
+  execute: texcount,
+});

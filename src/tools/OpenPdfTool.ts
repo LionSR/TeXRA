@@ -99,16 +99,12 @@ const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
   return executed(message, message);
 });
 
-export class OpenPdfTool extends defineTool({
+export const OpenPdfTool = defineTool({
   name: 'open_pdf',
   description:
     'Open a PDF file in the host PDF viewer. The tool accepts workspace-relative paths, working-directory-relative paths, and absolute run-storage paths.',
   schema: OpenPdfInputSchema,
-}) {
-  protected readonly execute = Effect.fn('OpenPdfTool.call')(function* (
-    this: OpenPdfTool,
-    input: OpenPdfInput,
-  ) {
+  execute: Effect.fn('OpenPdfTool.call')(function* (input: OpenPdfInput) {
     const call = yield* ToolCall;
     const runId = call.run?.runId;
     const trimmedPath = input.path.trim();
@@ -124,8 +120,8 @@ export class OpenPdfTool extends defineTool({
           : undefined,
     };
     return yield* openPdfProgram(ports, input);
-  });
-}
+  }),
+});
 
 const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
   function* (
