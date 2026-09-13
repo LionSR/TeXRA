@@ -216,7 +216,7 @@ describe('codex tool - atomic resume fallback', () => {
       Effect.gen(function* () {
         const sdkImportStarted = yield* Deferred.make<void>();
         const sdkReady = yield* Deferred.make<unknown>();
-        const secondDispatching = yield* Deferred.make<void>();
+        const secondApproved = yield* Deferred.make<void>();
         const thread = {
           id: 'stale-thread',
           runStreamed: vi.fn(),
@@ -241,7 +241,7 @@ describe('codex tool - atomic resume fallback', () => {
         mocks.requestBashApproval
           .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
           .mockImplementationOnce(() =>
-            Deferred.succeed(secondDispatching, undefined).pipe(
+            Deferred.succeed(secondApproved, undefined).pipe(
               Effect.as({ action: 'approve' }),
             ),
           );
@@ -263,7 +263,7 @@ describe('codex tool - atomic resume fallback', () => {
             thread_id: 'stale-thread',
           }),
         );
-        yield* Deferred.await(secondDispatching);
+        yield* Deferred.await(secondApproved);
 
         expect(mocks.importCodexClass).toHaveBeenCalledTimes(1);
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
