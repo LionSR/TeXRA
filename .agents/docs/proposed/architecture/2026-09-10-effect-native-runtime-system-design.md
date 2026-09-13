@@ -906,7 +906,11 @@ Recommended options are taken and stated, per the owner's 2026-09-10 rule.
 8. **Injection Q4:** the dispatcher retires R1 kind (b).
 9. **The file lease is deleted at the KV cutover**, not kept as a fence (ownership note
    F2 read to its conclusion; revision 3 had it backwards). The database claim is the
-   only write authority.
+   only write authority. **Status 2026-09-13: the cutover (#12329) landed and the lease
+   did not go with it** — `src/agent/storage/runLease.ts` is still imported across the
+   runtime paths and still admits writes beside the database claim. The reading stands as
+   the target; its execution is the open deletion item under #12082 (see the §10
+   amendment), and until it lands the lease, not the claim alone, gates writes.
 10. **`Runs` and `Requests` are one implementation with two tags**: a run is either
     executing or parked, and `interrupt` must handle both states with one code path.
     Streamless requests carry `Option<RunId>`.
