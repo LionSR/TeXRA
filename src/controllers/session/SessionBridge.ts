@@ -211,13 +211,11 @@ export class SessionBridge {
         );
       }
       // A port re-attaching under a live id supersedes the previous one.
-      // Started at once so its release runs before the new entry registers;
-      // the interruption of its replay finishes on its own.
+      // Close it to completion before installing the replacement so the old
+      // entry's cleanup cannot be skipped by the new map entry.
       const previous = this.ports.get(port.id);
       if (previous) {
-        yield* Effect.forkIn(previous.close, this.scope, {
-          startImmediately: true,
-        });
+        yield* previous.close;
       }
       const scope = yield* Scope.fork(this.scope);
       const framers = yield* Scope.fork(scope);
