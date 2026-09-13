@@ -644,6 +644,10 @@ export function createChatSessionController(
         effectRuntime().runPromise(Deferred.await(claimedRun)),
       )
     ) {
+      // The slot is taken, so nothing downstream will ever complete the
+      // deferred the claim attempt already forked an awaiting fiber on.
+      // Settle it here so that fiber ends with this call.
+      Deferred.doneUnsafe(claimedRun, Effect.void);
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -823,6 +827,9 @@ export function createChatSessionController(
     // any `await` below, see tryClaimRootRunSlot and the matching comment
     // in resume().
     if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
+      // Same as in resume(): settle the deferred the forked awaiting fiber
+      // is parked on, since no resume path will complete it now.
+      Deferred.doneUnsafe(autoResumeRun, Effect.succeed(false));
       return Promise.resolve(false);
     }
     const attemptCancellation = { cancellationRequested: false };

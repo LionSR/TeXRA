@@ -5,6 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
+import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
@@ -26,7 +27,6 @@ import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
-  type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
@@ -195,18 +195,20 @@ export async function runChat(
     firstRunDone: getFirstRunDone(services.globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  await effectRuntime().runPromise(loadAgents());
-  const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
+  // The visible agent list only exists once the registry has loaded, so the
+  // load and the defaults resolution are one program rather than two runs.
   const defaults = await effectRuntime().runPromise(
-    resolveChatDefaults({
-      cwd: context.cwd,
-      agentOverride: explicitAgent ?? setupAgentOverride,
-      modelOverride: initialResume?.config.model ?? init.modelOverride,
-      envAgent: context.envAgent,
-      envModel: context.envModel,
-      visibleToolUseAgents,
-      quiet: context.quietLogs,
-    }),
+    Effect.flatMap(loadAgents(), () =>
+      resolveChatDefaults({
+        cwd: context.cwd,
+        agentOverride: explicitAgent ?? setupAgentOverride,
+        modelOverride: initialResume?.config.model ?? init.modelOverride,
+        envAgent: context.envAgent,
+        envModel: context.envModel,
+        visibleToolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+        quiet: context.quietLogs,
+      }),
+    ),
   );
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
@@ -217,20 +219,31 @@ export async function runChat(
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
-  let modelSelection: CliRunnableModelResolution;
-  try {
-    modelSelection = await selectCliRunnableModel(defaults.model, {
-      stores: services,
-      fallbackReason: defaults.modelSource,
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        CHAT_STARTUP_MODEL_RECOVERY,
+  const modelSelectionExit = await effectRuntime().runPromiseExit(
+    Effect.tryPromise({
+      try: () =>
+        selectCliRunnableModel(defaults.model, {
+          stores: services,
+          fallbackReason: defaults.modelSource,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            CHAT_STARTUP_MODEL_RECOVERY,
+          ),
+        }),
+      catch: (error: unknown) => error,
+    }).pipe(
+      Effect.tap((selection) =>
+        Effect.tryPromise({
+          try: () => setCliHelperModel(services.globalState, selection.model),
+          catch: (error: unknown) => error,
+        }),
       ),
-    });
-    await setCliHelperModel(services.globalState, modelSelection.model);
-  } catch (error: unknown) {
-    writeTextStderr(toErrorMessage(error));
+    ),
+  );
+  if (Exit.isFailure(modelSelectionExit)) {
+    writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
     return { exitCode: CliExitCode.Usage };
   }
+  const modelSelection = modelSelectionExit.value;
   const { agent } = defaults;
   const model = modelSelection.model;
   const version = await readCliVersion();
@@ -496,7 +509,18 @@ export async function runChat(
         const stop = runtimeSession.runs.kill(runId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
-        effectRuntime().runFork(stop.settlement);
+        // A refused detach commit leaves the run alive: the parent's
+        // interrupt runs only after the detach batch commits. Surface that
+        // failure instead of discarding the forked settlement's exit.
+        effectRuntime().runFork(
+          stop.settlement.pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                appendLocalAssistantTranscript(toErrorMessage(error));
+              }),
+            ),
+          ),
+        );
       }}
       onWorkflowControl={(runId, action) => {
         runtimeSession.workflowControls.control(runId, action);
