@@ -799,11 +799,17 @@ export const modelInvokerLayer: Layer.Layer<
         // An accepted background operation was admitted stored; the
         // reconstruction keeps that fact even if the storage setting has
         // changed since, so the provider can still observe the running job.
+        // The prior continuation stays out: observing needs no anchor, and
+        // its fingerprint check would reject the turn before observe can
+        // compare the admitted fingerprint and deliver the result.
+        const { continuation: _prior, ...admitted } = turnRequestFor(
+          initial,
+          request,
+          bound,
+          'background',
+        );
         const prepared = yield* Effect.exit(
-          bound.model.prepareTurn({
-            ...turnRequestFor(initial, request, bound, 'background'),
-            store: true,
-          }),
+          bound.model.prepareTurn({ ...admitted, store: true }),
         );
         if (Exit.isFailure(prepared)) {
           if (Cause.hasInterrupts(prepared.cause))
