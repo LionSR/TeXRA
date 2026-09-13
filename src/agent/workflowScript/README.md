@@ -124,7 +124,14 @@ structured, cost }`), `null` on failure, or the truthy
   `producer: 'subagent'` `run.result` manifest is durable completion, because
   the terminal row is the post-drain fact: the run settles its ordered
   publisher before committing that row and records a lost drain as a FAILED
-  outcome, so a COMPLETED row can never outlive facts the child queued. Which
+  outcome, so a COMPLETED row can never outlive facts the child queued. That
+  completion belongs to a lifecycle, not to the aggregate: the manifest is
+  written by child delivery alone, so a host that resumed a completed child
+  leaves the launch's manifest under the resume's terminal row, where the two
+  can no longer be correlated. Every result the parent journals, recovered or
+  just launched, therefore comes from a child whose aggregate carries exactly
+  one `run.activate`; a second one is refused for operator attention rather
+  than reported. Which
   ids to probe comes from the parent's own journal, the one thing that
   outlives every child it launches: a `workflow.attempt` row moves the call's
   attempt mark before each launch, and recovery probes the derived ids in

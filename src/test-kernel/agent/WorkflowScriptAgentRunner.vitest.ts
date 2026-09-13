@@ -266,7 +266,7 @@ interface ProbedChild {
   readonly runEnd?: RunEnd;
   readonly resultMeta?: { readonly producer: string; readonly output: unknown };
   /** Activations behind this id: one per lifecycle, so more than one means a
-   *  resume opened a lifecycle after the one a launch here answered on. */
+   *  resume opened a lifecycle after the one this call would report on. */
   readonly activations?: number;
 }
 
@@ -1003,6 +1003,30 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
   );
 
+  it.effect('refuses a completed child a host resumed after it delivered', () =>
+    Effect.gen(function* () {
+      // A host resume of a completed child appends `run.activate` and, at its
+      // end, a second `run.end`; it never rewrites `run.result`. The manifest
+      // read beside the terminal row can therefore be the launch's while the
+      // row is the resume's, and the activation count is what separates them
+      // at this exit exactly as at the launch's.
+      probeAnswers({
+        exists: true,
+        runEnd: result,
+        resultMeta: { producer: 'subagent', output: result.output },
+        activations: 2,
+      });
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining('was resumed after it completed'),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+    }),
+  );
+
   it.effect('rejects a tool-use default agent used as a workflow agent', () =>
     Effect.gen(function* () {
       const runner = createWorkflowScriptAgentRunner(
@@ -1270,11 +1294,11 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('recovers an older attempt below the mark', () =>
     Effect.gen(function* () {
-      // This process journaled the mark for attempt 1 and died before
-      // launching it, which freed attempt 0's fence for another host to
-      // resume; that host carried attempt 0 to a completed result. The mark
-      // says only what an absent id means, so the probe still inspects 0 and
-      // recovers the child rather than repeating its work under attempt 1.
+      // The mark says what an absent id means, not where the probe starts:
+      // this process journaled the mark for attempt 1 and died, and attempt 0
+      // still reads back as the single completed lifecycle that answered this
+      // call. So the probe inspects 0 and recovers it rather than repeating
+      // its work under attempt 1.
       mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(1));
       probeAnswers({
         exists: true,
@@ -1313,6 +1337,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             isRemoved: () => Effect.succeed(false),
             readRunEnd: () =>
               Effect.succeed(terminalReads++ === 0 ? null : result),
+            countActivations: () => Effect.succeed(1),
             readResultMeta: () =>
               Effect.succeed({ producer: 'subagent', output: result.output }),
           };

@@ -394,7 +394,13 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * COMPLETED `run.end` is durable completion, because the terminal row is the
  * post-drain fact — `finalizeRunTerminal` settles the ordered publisher
  * before committing it and marks a lost drain on the row it decided, so a
- * COMPLETED row can never outlive facts the child queued.
+ * COMPLETED row can never outlive facts the child queued. Completion is a
+ * lifecycle's, not an aggregate's: the manifest is written by child delivery
+ * alone, so a host that resumed a completed child leaves the launch's
+ * manifest under the resume's terminal row. Every result this call journals,
+ * recovered or just launched, therefore comes from an aggregate carrying
+ * exactly one `run.activate` — the lifecycle the workflow launched; a second
+ * one is refused at both exits.
  *
  * The probe starts at attempt 0 always, and every id that exists is inspected
  * in order: this process can have journaled a mark for `n` and died before
@@ -584,11 +590,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // copy read before the claim was observed can predate a child that ended
       // — or started again — in between. Reading it here — under the fence, so
       // no new owner can be starting — is what makes it the row this call
-      // recovers, advances past, or refuses on. It needs no activation count
-      // beside it, unlike the launch exit above: the result recovered here is
-      // built from this reading and the manifest read under the same fence,
-      // never from a lifecycle observed before it, so there is no earlier
-      // result a later row of the same outcome could be mistaken for.
+      // recovers, advances past, or refuses on.
       const end = yield* probeChild(runId, records.readRunEnd());
       if (end?.error?.kind === 'artifact-drain') {
         // The row says the attempt's queued facts rolled back, so what it did
@@ -635,6 +637,29 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           return yield* Effect.fail(
             new WorkflowRunAbortError(
               `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
+            ),
+          );
+        }
+        // The manifest carries no lifecycle of its own. `run.result` is
+        // written by child delivery alone, while a host that resumes a
+        // completed child appends `run.activate` and, at its end, a second
+        // `run.end` — leaving the first lifecycle's manifest in place under a
+        // row that describes newer model work and newer edits. Reading both
+        // under one fence pairs them in time, not in lifetime, so the same
+        // count that identifies the launch exit's lifecycle identifies this
+        // one: exactly one `run.activate` means the aggregate still holds the
+        // single lifecycle the workflow launched, and the row and the manifest
+        // are that run's. More than one is uncorrelatable, and the manifest is
+        // not repeatable either, so the attempt is refused rather than
+        // journaled or run again.
+        const activations = yield* probeChild(
+          runId,
+          records.countActivations(),
+        );
+        if (activations !== 1) {
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
             ),
           );
         }
