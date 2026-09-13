@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, type Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -17,7 +17,11 @@ import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { AppState } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
-import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  AgentCategory,
+  RUN_OUTCOME,
+} from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
@@ -288,6 +292,54 @@ function probeJournal<A>(
   );
 }
 
+/**
+ * Fence one interrupted attempt against a resume for the rest of this call.
+ *
+ * `acquireClaims` is the same admission a dead-owner takeover uses
+ * (`SessionRequests.decide`, `resumeRun`): it proves the prior owner dead
+ * before moving the claim, so a host that reached this child first holds the
+ * claim and this acquire is refused, while a host that arrives afterwards
+ * finds the claim held here and refuses in its turn. That is what makes the
+ * terminal re-read under it final — without it a resume can append
+ * `run.activate` between the free-lease reading and the launch, and the probe
+ * starts a second child beside a running one.
+ *
+ * The claim is released with the call's scope, after the attempt it advanced
+ * to has run: a superseded attempt stays fenced for as long as its
+ * replacement is live. A release that fails leaves every fact committed and
+ * only the claim behind, so it is logged rather than failing a call whose
+ * child already answered.
+ */
+const fenceInterruptedRun = (
+  session: InBandSubagentLaunchOptions['session'],
+  runId: RunId,
+): Effect.Effect<void, Error, Scope.Scope> =>
+  Effect.asVoid(
+    Effect.acquireRelease(
+      session
+        .acquireClaims(qualifyAggregateId('run', runId))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new WorkflowRunAbortError(
+                `Workflow child ${runId} could not be claimed against a concurrent resume; refusing to repeat it.`,
+                { cause },
+              ),
+          ),
+        ),
+      (release) =>
+        release.pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              log.warn(
+                `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
+              );
+            }),
+          ),
+        ),
+    ),
+  );
+
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
 
@@ -327,13 +379,19 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * committed its `run.result` manifest and died in the one transaction before
  * `run.end`, so nothing will ever record that outcome. A settled turn without
  * a manifest is the one irreconcilable shape, and a live owner always refuses.
+ * That decision is taken while holding the attempt's own run claim, so a
+ * resume cannot start the child between the reading and the launch.
  *
  * A journal hit never reaches here: the engine consumes it before calling.
  */
 const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
   function* (
     call: WorkflowChildCall,
-  ): Effect.fn.Return<WorkflowChildOutcome, Error, AgentRunServices> {
+  ): Effect.fn.Return<
+    WorkflowChildOutcome,
+    Error,
+    AgentRunServices | Scope.Scope
+  > {
     const { session } = call;
     yield* Effect.try({
       try: () => call.signal?.throwIfAborted(),
@@ -405,11 +463,16 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             ),
           );
         }
+        // Take the claim before deciding anything: a free lease says only
+        // that nobody owned the run when it was read, and the decision below
+        // has to hold against a resume that starts one instant later.
+        yield* fenceInterruptedRun(session, runId);
         // One read order, terminal row last: a child commits `run.end` before
         // it releases its claim, so a free claim makes that row final, while
         // the copy read before the claim was observed can predate a child that
-        // ended in between. Reading it again here is what stops a run that
-        // finished mid-probe from being repeated.
+        // ended in between. Reading it again here — under the claim, so no new
+        // owner can be starting — is what stops a run that finished mid-probe
+        // from being repeated.
         end = yield* probeChild(runId, records.readRunEnd());
       }
       if (end === null) {
@@ -462,6 +525,9 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       ),
     );
   },
+  // Every claim this probe took over a superseded attempt is released here,
+  // once the attempt that answered the call has run.
+  Effect.scoped,
 );
 
 /** Build the production `agent()` adapter for one workflow-script run. */

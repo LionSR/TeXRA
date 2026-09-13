@@ -126,12 +126,13 @@ interface FinalizeRunTerminalResult {
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
  * arms below, the agent-CLI session loop, and child runs
- * (`finalizeChildRun`): the artifact drain, transcript stage end, the
+ * (`finalizeChildRun`): the transcript stage end, the artifact drain, the
  * `run.end` row (through `finalizeRun`, its one writer), the delivery hook,
- * then registry untrack + terminal run phase — in that order. The drain comes
- * first because the row is the post-drain fact: a run whose queued facts
- * rolled back ends FAILED carrying that cause, so a reader that can read the
- * terminal row can trust everything behind it. Exactly-once
+ * then registry untrack + terminal run phase — in that order. The row is the
+ * post-drain fact: a run whose queued facts rolled back ends FAILED carrying
+ * that cause, so a reader that can read the terminal row can trust everything
+ * behind it — which is why the stage closes first, as the last fact the run
+ * queues, inside the drain that attests it. Exactly-once
  * per handle: the claim below flips synchronously in the same tick as the
  * check, so a second call (e.g. the lifecycle catch arm after the success arm
  * already finalized, or a concurrent finalize racing across this function's
@@ -144,14 +145,44 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
   const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
+  // The handle's stop latch, read once: a stop that landed before the run's
+  // exit outranks a child whose process then exits non-zero, on the stage
+  // here as on the row below, so no caller cross-checks the latch itself.
+  const stopped = handle.stopRequested;
+  // Close the transcript stage before the drain, not after it: `stage.end`
+  // queues one more publication, and a terminal row that called itself the
+  // post-drain fact while the run's last queued fact was still unsettled
+  // would say COMPLETED over a transcript closure that rolled back. What the
+  // stage carries is the run's own report, since the drain's verdict is not
+  // knowable until the publication this queues has settled; the `run.end` row
+  // is where that verdict lands.
+  if (params.stage) {
+    const stage = params.stage;
+    const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
+    yield* Effect.try({
+      try: () => stage.end(stageOutcome),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((stageErr) =>
+        Effect.sync(() => {
+          logger.warn('Failed to end parent stage', {
+            data: { agentIdentifier: handle.agentName, error: stageErr },
+          });
+        }),
+      ),
+    );
+  }
   // The `run.end` row is the run's post-drain fact, and this is the drain:
-  // settling the ordered publisher, so a failure here rolled back facts the
-  // run had queued. A terminal row committed after it that still said
-  // COMPLETED would tell every later reader — the workflow attempt probe
-  // above all — that the run is durably done while its final facts are gone,
-  // so the drain decides the outcome rather than being logged past.
+  // settling the ordered publisher for this run, so a failure here rolled
+  // back facts the run had queued — the stage closure above included. A
+  // terminal row committed after it that still said COMPLETED would tell
+  // every later reader — the workflow attempt probe above all — that the run
+  // is durably done while its final facts are gone, so the drain decides the
+  // outcome rather than being logged past. The run id is what keeps that
+  // decision this run's own: a sibling run's rolled-back fact is that run's
+  // terminal outcome, never this one's.
   const drainFailure = yield* Effect.tryPromise({
-    try: () => session.flushArtifacts(),
+    try: () => session.flushArtifacts(handle.runId),
     catch: (cause) => new RunArtifactDrainError(handle.runId, cause),
   }).pipe(
     Effect.as(undefined),
@@ -172,32 +203,14 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
           kind: classifyAgentError(drainFailure),
           message: toErrorMessage(drainFailure),
         };
-  // The `run.end` row written below is the run's terminal fact; the handle's
-  // stop latch supplies the stop precedence read here, so the report above is
-  // not yet the verdict: a stop that landed before the run's exit outranks a
-  // child whose process then exits non-zero. Resolving once here is what lets
-  // every projection below (stage end, the `run.end` row) read one value, so
-  // no caller has to cross-check the latch for itself.
-  const outcome = handle.stopRequested ? RUN_OUTCOME.CANCELLED : reported;
+  // The `run.end` row written below is the run's terminal fact, and the stop
+  // latch read above is not yet spent: the report is only the verdict for a
+  // run no stop reached.
+  const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
   const error = outcome === reported ? reportedError : undefined;
   const output = params.output ?? emptyRunEndOutput(handle.category);
-  if (params.stage) {
-    const stage = params.stage;
-    yield* Effect.try({
-      try: () => stage.end(outcome),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((stageErr) =>
-        Effect.sync(() => {
-          logger.warn('Failed to end parent stage', {
-            data: { agentIdentifier: handle.agentName, error: stageErr },
-          });
-        }),
-      ),
-    );
-  }
   // Write the terminal row BEFORE untrack so the registry's terminal listener
   // event never precedes it. The row carries the classified error `kind`
   // (when any), the run usage totals (present once a round recorded usage,

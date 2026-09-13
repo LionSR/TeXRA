@@ -90,6 +90,7 @@ import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
+import { throwAggregated } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunContextSession,
@@ -138,6 +139,33 @@ export class RunArtifactDrainError extends Error {
     );
     this.name = 'RunArtifactDrainError';
   }
+}
+
+/**
+ * One publication in flight and the run whose fact it carries, so a settle
+ * can answer for one run's facts rather than for whatever the session
+ * happened to have queued. `runId` is `null` for a fact no single run owns:
+ * every settle answers for those.
+ */
+interface TrackedPublication {
+  readonly runId: RunId | null;
+  readonly settled: Promise<
+    Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
+  >;
+}
+
+/** The run one published batch belongs to, read off the aggregates it
+ *  targets; `null` when the batch is not one run's (a session-scoped fact,
+ *  or a batch spanning runs, which no run may be failed for alone). */
+function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
+  let runId: RunId | null = null;
+  for (const event of events) {
+    const target = aggregateTarget(event.aggregateId);
+    if (target.kind !== 'run') return null;
+    if (runId !== null && runId !== target.id) return null;
+    runId = target.id;
+  }
+  return runId;
 }
 
 /**
@@ -231,6 +259,7 @@ export class SessionHandle {
   readonly followUps: ToolUseFollowUpQueue;
   private readonly graph: SessionGraph;
   private disposed = false;
+  private readonly publications = new Set<TrackedPublication>();
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -391,7 +420,7 @@ export class SessionHandle {
             try: () =>
               runInSession(this, async () => {
                 await validateOwnedRunLease(runId);
-                await this.flushArtifacts();
+                await this.flushArtifacts(runId);
               }),
             // The drain is the ordered publisher's settle, so anything that
             // fails here left facts this run had queued uncommitted. The one
@@ -413,7 +442,7 @@ export class SessionHandle {
       // `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
         Effect.tryPromise({
-          try: () => this.settlePublications(),
+          try: () => this.settlePublications(runId),
           catch: (cause) => new RunArtifactDrainError(runId, cause),
         }),
       );
@@ -477,10 +506,12 @@ export class SessionHandle {
    * The host-facing name for "everything this session owes storage has
    * landed": a session's durable artifacts are the facts it publishes, so
    * this is exactly {@link settlePublications}. Hosts call it on shutdown and
-   * every run driver reaches it through {@link releaseRunLease}.
+   * every run driver reaches it through {@link releaseRunLease}. A run id
+   * narrows whose failure the caller is asking about, exactly as it does
+   * there.
    */
-  flushArtifacts(): Promise<void> {
-    return this.settlePublications();
+  flushArtifacts(runId?: RunId): Promise<void> {
+    return this.settlePublications(runId);
   }
 
   /**
@@ -525,14 +556,16 @@ export class SessionHandle {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
       const text = redactSecrets(event.text);
-      this.graph.detach(() => this.graph.publishText(runId, event.id, text));
+      this.detachPublication(runId, () =>
+        this.graph.publishText(runId, event.id, text),
+      );
       return;
     }
     // The call fixes the row's place in the publication order; the draft is
     // built when the job runs, after every chunk detached before it has
     // reached the text source, so a `stream.end` with no final text of its
     // own closes on the complete streamed text.
-    this.graph.detach((append) => {
+    this.detachPublication(runId, (append) => {
       const draft = runEventDraft(
         runId,
         event.type === 'stream.end'
@@ -652,7 +685,7 @@ export class SessionHandle {
       Effect.onInterrupt(() =>
         Effect.sync(() => {
           if (this.disposed) return;
-          this.graph.detach((append) =>
+          this.detachPublication(runId, (append) =>
             this.decisionRow(
               runId,
               requestId,
@@ -726,7 +759,7 @@ export class SessionHandle {
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    this.graph.detach((append) => append(events));
+    this.detachPublication(draftedRun(events), (append) => append(events));
   }
 
   /** Native metadata publication through the same ordered publisher,
@@ -837,15 +870,77 @@ export class SessionHandle {
   }
 
   /**
-   * Await every detached publication enqueued so far and the view's fold of
-   * what they committed. A refused batch wrote nothing and is never retried
-   * (D6 b, R7): `DatabaseNotOwner` says this process no longer holds the
-   * aggregate, and `DatabaseWriteFailed` says the transaction rolled back;
-   * the publisher logs each as itself and this throws them, aggregated, at
-   * the caller waiting for the session's facts to settle.
+   * Enqueue one publication on the graph's publisher, tagged with the run
+   * whose fact it carries. The publisher fixes the commit order; this
+   * remembers who the fact belongs to, so a drain can answer for one run's
+   * facts rather than for whatever the session happened to have queued. A
+   * refused batch wrote nothing and is never retried here (D6 b, R7): the
+   * cause is logged as itself and kept on the publication's Exit for the
+   * settle that answers for it, and the job itself returns quietly so the
+   * publisher's own settle stays a barrier rather than a second reporter.
    */
-  settlePublications(): Promise<void> {
-    return effectRuntime().runPromise(this.graph.settle);
+  private detachPublication(
+    runId: RunId | null,
+    job: (
+      append: Append,
+    ) => Effect.Effect<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+  ): void {
+    let settle: (
+      exit: Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>,
+    ) => void = () => {};
+    const settled = new Promise<
+      Exit.Exit<unknown, DatabaseNotOwner | DatabaseWriteFailed>
+    >((resolve) => {
+      settle = resolve;
+    });
+    const publication: TrackedPublication = { runId, settled };
+    this.publications.add(publication);
+    this.graph.detach((append) =>
+      job(append).pipe(
+        Effect.tapCause((cause) =>
+          Effect.sync(() => {
+            logger.error('Session publication failed', { data: cause });
+          }).pipe(Effect.ignoreCause),
+        ),
+        Effect.exit,
+        Effect.tap((exit) => Effect.sync(() => settle(exit))),
+        Effect.asVoid,
+      ),
+    );
+    void settled.finally(() => {
+      this.publications.delete(publication);
+    });
+  }
+
+  /** Await every detached publication enqueued so far and the view's fold
+   *  of what they committed, then report the refusals this caller owns. A
+   *  refused batch wrote nothing and is never retried (D6 b, R7):
+   *  `DatabaseNotOwner` says this process no longer holds the aggregate and
+   *  `DatabaseWriteFailed` says the transaction rolled back. Failures belong
+   *  to those Exits, not a session-wide leftover array a later settler would
+   *  drain.
+   *
+   *  Every publication settles whoever asks, but a run id narrows whose
+   *  rollback the caller hears: its own facts and the session's, never a
+   *  sibling run's — a run's terminal outcome is decided by this settle, and
+   *  another run's lost fact is that run's outcome, not this one's. */
+  async settlePublications(runId?: RunId): Promise<void> {
+    await effectRuntime().runPromise(this.graph.settle);
+    const settled = await Promise.all(
+      [...this.publications].map(async (publication) => ({
+        owner: publication.runId,
+        exit: await publication.settled,
+      })),
+    );
+    throwAggregated(
+      settled.flatMap(({ owner, exit }) =>
+        Exit.isFailure(exit) &&
+        (runId === undefined || owner === null || owner === runId)
+          ? [Cause.squash(exit.cause)]
+          : [],
+      ),
+      'Session publication failed',
+    );
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */

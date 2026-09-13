@@ -53,6 +53,7 @@ function fingerprintWorkflowAgentDependencies(
 
 const mocks = vi.hoisted(() => ({
   executeSubagentInBand: vi.fn(),
+  acquireClaims: vi.fn(),
   getRunRecords: vi.fn(),
   resolveRunLiveness: vi.fn(),
   readWorkflowCallAttempt: vi.fn(),
@@ -188,7 +189,12 @@ const structuredResult: RunEnd = {
 };
 
 function parentContext(): DelegationParent {
-  const session = { id: 'session' } as never;
+  // The probe fences an interrupted attempt on its run claim before it may
+  // advance past it, so the stub session answers that admission.
+  const session = {
+    id: 'session',
+    acquireClaims: mocks.acquireClaims,
+  } as never;
   return {
     config: new FakeConfigProvider(),
     model: 'parent-model',
@@ -314,6 +320,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.resolveRunLiveness.mockReturnValue(
       Effect.succeed({ kind: 'interrupted' }),
     );
+    // Nothing holds a probed run's claim unless a case says so: the fence
+    // hands back the release the call's scope runs.
+    mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
     // No attempt journaled yet: the probe starts at 0 unless a case says the
     // parent already launched further.
     mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(0));
@@ -1218,6 +1227,30 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       expect(reported(report, 'recovered')).toEqual([true]);
     }),
+  );
+
+  it.effect(
+    'refuses an interrupted child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A free lease only says nobody owned the run when it was read. The
+        // claim is what the resume takes, so an acquire it refuses is the
+        // fact that a new owner is starting this child right now.
+        probeAnswers({ exists: true }, { exists: false });
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
   );
 
   it.effect(

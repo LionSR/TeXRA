@@ -857,12 +857,12 @@ function finalizeFixture(): {
   session: SessionHandle;
   handle: ReturnType<typeof testRunHandle>;
   untrack: Mock<(runId: RunId) => void>;
-  flushArtifacts: Mock<() => Promise<void>>;
+  flushArtifacts: Mock<(runId?: RunId) => Promise<void>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   const untrack = vi.fn<(runId: RunId) => void>();
-  const flushArtifacts = vi.fn(async () => {});
+  const flushArtifacts = vi.fn(async (_runId?: RunId) => {});
   return {
     runId,
     session: {
@@ -949,6 +949,39 @@ describe('finalizeRunTerminal', () => {
 
     expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
     expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
+  });
+
+  it('ends the transcript stage inside the drain that attests it', async () => {
+    const { session, handle, flushArtifacts } = finalizeFixture();
+    const stage = { end: vi.fn() };
+
+    await Effect.runPromise(
+      finalizeRunTerminal({
+        session,
+        handle,
+        outcome: RUN_OUTCOME.COMPLETED,
+        stage,
+      }),
+    );
+
+    // `stage.end` queues one more publication, so a row that calls itself the
+    // post-drain fact has to be written after a drain that already has it.
+    expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.COMPLETED);
+    expect(stage.end.mock.invocationCallOrder[0]).toBeLessThan(
+      flushArtifacts.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("attests the facts this run queued and no other run's", async () => {
+    const { runId, session, handle, flushArtifacts } = finalizeFixture();
+
+    await Effect.runPromise(
+      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+    );
+
+    // Another run's rolled-back fact is that run's terminal outcome, so the
+    // drain this row is the post-drain fact of answers for this run alone.
+    expect(flushArtifacts).toHaveBeenCalledExactlyOnceWith(runId);
   });
 
   it('records a failed drain as the terminal outcome', async () => {
