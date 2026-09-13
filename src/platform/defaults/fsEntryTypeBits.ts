@@ -1,32 +1,22 @@
 /**
- * Shared fs-entry-type bitmask resolution for FileSystemProvider.stat/readDirectory
- * implementations, parameterized on a minimal duck-typed stat-capable fs handle so
- * both node:fs and memfs's IFs (used by the test-kernel fake platform) can share it.
+ * Shared fs-entry-type bitmask resolution for the FileSystemProvider
+ * `stat` / `readDirectory` implementations.
  */
+import * as fs from 'node:fs';
+
 import { FileType } from '../interfaces';
 
-export type FileTypeProbe = {
+type FileTypeProbe = {
   isSymbolicLink(): boolean;
   isFile(): boolean;
   isDirectory(): boolean;
-};
-
-type StatCapableFs = {
-  promises: {
-    stat(
-      target: string,
-    ): Promise<Pick<FileTypeProbe, 'isFile' | 'isDirectory'>>;
-  };
 };
 
 /**
  * Resolve the target type of a symlink, producing combined bitmasks
  * (e.g. SymbolicLink | File = 65) matching vscode.FileType behavior.
  */
-async function resolveSymlinkType(
-  fs: StatCapableFs,
-  target: string,
-): Promise<number> {
+async function resolveSymlinkType(target: string): Promise<number> {
   let targetType: number = FileType.Unknown;
   try {
     const stats = await fs.promises.stat(target);
@@ -47,11 +37,10 @@ async function resolveSymlinkType(
  * entry's own path; for readDirectory, join the parent dir with the entry name.
  */
 export async function fileTypeFor(
-  fs: StatCapableFs,
   entry: FileTypeProbe,
   target: string,
 ): Promise<number> {
-  if (entry.isSymbolicLink()) return resolveSymlinkType(fs, target);
+  if (entry.isSymbolicLink()) return resolveSymlinkType(target);
   if (entry.isFile()) return FileType.File;
   if (entry.isDirectory()) return FileType.Directory;
   return FileType.Unknown;

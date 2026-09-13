@@ -21,7 +21,7 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
 });
 
 /**
- * The memfs platform, with debug mode on: the Effect logger drops `Debug`
+ * The fake platform, with debug mode on: the Effect logger drops `Debug`
  * entries otherwise, and these assertions are about which channel an entry
  * lands on, not about that gate.
  */

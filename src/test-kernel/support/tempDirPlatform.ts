@@ -11,7 +11,6 @@ import { afterEach } from 'vitest';
 // Local imports
 import { closeSession, listSessions } from '@agent/runtime/sessionGraph';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local file imports
@@ -37,7 +36,7 @@ export async function makeTempDir(
 }
 
 /**
- * Creates a node-backed fake host rooted in a fresh temp directory
+ * Creates a fake host rooted in a fresh temp directory of its own
  * (`<tempDir>/workspace` and `<tempDir>/storage`), and records the temp
  * directory on `tempDirs` for later cleanup via `cleanupTempDirs`.
  */
@@ -56,7 +55,6 @@ export async function createTempDirPlatform(
       globalStoragePath: storage.getGlobalStoragePath(),
     },
     {
-      fs: nodeFilesystem,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },
