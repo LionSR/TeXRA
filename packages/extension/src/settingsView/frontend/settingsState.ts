@@ -1,12 +1,13 @@
 /**
  * Module-level reactive state for the Settings view.
  *
- * Each signal is an independent, flat piece of state, so slices import and set
- * the ones they need directly rather than going through a get/set context.
+ * Each signal is an independent, flat piece of state, so the outbound handlers
+ * import and set the ones they need directly rather than going through a
+ * get/set context.
  *
  * SettingsApp has no persistence/restore path: every signal here is written
- * only by the composed `messageHandlers` registry (see `messageDispatcher.ts`
- * + `slices/`) in response to backend SETTINGS_VIEW_COMMANDS messages — the
+ * only by the `settingsViewHandlers` registry (see `messageDispatcher.ts`)
+ * in response to backend SETTINGS_VIEW_COMMANDS messages — the
  * backend configuration is the actual source of truth, this file is a pure
  * receiver.
  *

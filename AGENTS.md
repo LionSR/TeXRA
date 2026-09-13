@@ -221,7 +221,7 @@ subset of the same files under the same options.
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/slices/` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
+- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/messageDispatcher.ts` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
 - Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
@@ -626,10 +626,10 @@ default to reach for, it's `settingsView`'s pattern specifically:
   `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
   literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
-  (`trackedSignal`); `settingsView/frontend/slices/` holds the domain-grouped
-  outbound message-handler registries (`agentSelectionSlice.ts`,
-  `latexSlice.ts`, etc., each `satisfies Partial<SettingsViewOutboundHandlerRegistry>`)
-  that mutate those signals — there is no Redux store or reducer.
+  (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
+  outbound message-handler registry (`settingsViewHandlers`, typed
+  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive) that mutates
+  those signals — there is no Redux store or reducer.
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
   event-fold, not request/response: `ProgressViewProvider` implements
   `vscode.WebviewViewProvider` directly — composed with
