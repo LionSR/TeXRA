@@ -1,4 +1,4 @@
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 // Test composition imports
 
@@ -15,8 +15,10 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   defaultSession,
+  initializeDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
@@ -35,6 +37,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import {
+  createProcessSession,
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
@@ -169,7 +172,15 @@ function withTempStorage(
             { fs: nodeFilesystem },
           ),
         );
-        yield* run();
+        const session = createProcessSession();
+        yield* run().pipe(
+          Effect.provide(
+            nativeToolTestLayer({
+              run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
+            }),
+          ),
+          Effect.ensuring(closeSession(session.roots.storage)),
+        );
       }),
     );
   });
@@ -179,6 +190,9 @@ describe('ExecutionsTool', () => {
   setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
   beforeEach(() => {
+    initializeDefaultSession({
+      transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
+    });
     vi.clearAllMocks();
     mocks.listRuns.mockResolvedValue([]);
     mocks.readChildren.mockResolvedValue([]);

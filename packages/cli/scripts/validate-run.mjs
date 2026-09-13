@@ -899,12 +899,20 @@ function validateWorkflowScriptAgentRunCommand() {
     const customAgents = path.join(globalStorage, 'custom_agents');
     const validationFlagPath = path.join(cwd, validationFlagName);
     mkdirSync(customAgents, { recursive: true });
-    // Pre-seed the tool list so first-install seeding leaves every toggleable
-    // tool enabled for the validation run.
-    writeFileSync(
-      path.join(globalStorage, 'state.json'),
-      JSON.stringify({ 'texra.tools.disabled': [] }),
+    const enableWorkflow = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tools',
+        'enable',
+        'workflow-script',
+        '--cwd',
+        cwd,
+        '--print',
+      ],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
     );
+    assertSuccess(enableWorkflow, 'texra tools enable workflow-script');
     writeFileSync(
       path.join(customAgents, 'workflow-script-validation.yaml'),
       `name: workflow_script_validation

@@ -140,6 +140,47 @@ describe('default session lifecycle', () => {
     expect(tryDefaultSession()).toBeUndefined();
   });
 
+  it.live(
+    'retains its opening roots until the owner closes it after a host swap',
+    () =>
+      Effect.gen(function* () {
+        const { initializeDefaultSession } = yield* Effect.promise(() =>
+          importSessionRuntime(),
+        );
+        const { installPlatform } = yield* Effect.promise(
+          () => import('@test/support/setupPlatform'),
+        );
+        const { closeSession, listSessions } = yield* Effect.promise(
+          () => import('@agent/runtime/sessionGraph'),
+        );
+        const originalStorage = '/workspace/first/.texra/storage';
+
+        yield* Effect.promise(() =>
+          installPlatform({ storagePath: originalStorage }),
+        );
+        const session = initializeDefaultSession({
+          transcriptMode: { kind: 'ephemeral', reason: 'root snapshot test' },
+        });
+        try {
+          yield* Effect.promise(() =>
+            installPlatform({
+              storagePath: '/workspace/second/.texra/storage',
+            }),
+          );
+
+          expect(session.roots.storage).toBe(originalStorage);
+          expect(yield* listSessions()).toEqual([session]);
+          expect(yield* closeSession(originalStorage)).toEqual({
+            settled: true,
+            abandoned: [],
+          });
+          expect(yield* listSessions()).toEqual([]);
+        } finally {
+          yield* closeSession(originalStorage);
+        }
+      }),
+  );
+
   // `closeSession` forks a real-time `Effect.sleep` deadline budget and
   // races it against settlement promises, so this test needs the live clock.
   it.live('can initialize again only after explicit teardown', () =>

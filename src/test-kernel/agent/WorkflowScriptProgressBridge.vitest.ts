@@ -1,9 +1,14 @@
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  initializeDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession } from '@agent/runtime/sessionGraph';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
@@ -31,9 +36,22 @@ setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 /** The run every checkpoint in this file hangs under; it has to exist before
  *  a script row can name it as the aggregate's parent. */
 let parentRunId: RunId;
-beforeAll(async () => {
-  parentRunId = publishTestRunStart(currentSession());
-  await currentSession().settlePublications();
+let session: SessionHandle;
+beforeEach(async () => {
+  // `setupPlatform` supplies this suite's host first. The default session must
+  // be created after that root is in place and remain rooted there.
+  session = initializeDefaultSession({
+    transcriptMode: {
+      kind: 'ephemeral',
+      reason: 'workflow script progress bridge test session',
+    },
+  });
+  parentRunId = publishTestRunStart(session);
+  await session.settlePublications();
+});
+
+afterEach(async () => {
+  await Effect.runPromise(closeSession(session.roots.storage));
 });
 
 function recordingTrace(): {
