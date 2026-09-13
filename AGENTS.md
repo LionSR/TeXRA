@@ -452,9 +452,11 @@ agent YAML fields, or flags (see "TeXRA 1.0 direction"). Do not add legacy
 readers, aliases, migrations, dual-format unions, or compatibility writers, and
 there is no retirement window to wait out: delete existing ones on sight, with
 their schemas, transforms, fixtures, and compatibility-specific tests. The only
-exceptions are external export formats (for example `trace.json`) and wire
-protocols TeXRA still supports; normalize those once at their boundary, and
-reject any other unsupported state with a clear error.
+exceptions are formats with consumers outside TeXRA and wire protocols TeXRA
+still supports; normalize those once at their boundary, and reject any other
+unsupported state with a clear error. `trace.json` is **not** such an exception:
+the owner ruled that 1.0's exports start fresh, so a document from an older
+build fails loudly at the parse boundary (#12359).
 
 ### ES2023+ Patterns
 
