@@ -35,7 +35,7 @@ Effect supplies typed effects, scopes, streams, interruption, and bounded concur
 
 ## Why the current direction still feels unclear
 
-The [September 4 runtime proposal](../../proposed/architecture/2026-09-04-agent-runtime-on-effect.md) already contains substantial crash-recovery design. It specifies initial persistence, completed responses, compaction replacement, tool intent/results, output reconciliation, and snapshot-based replay. Calling it merely “replace PocketFlow with a while loop” would be inaccurate.
+The [September 4 runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md) already contains substantial crash-recovery design. It specifies initial persistence, completed responses, compaction replacement, tool intent/results, output reconciliation, and snapshot-based replay. Calling it merely “replace PocketFlow with a while loop” would be inaccurate.
 
 The unresolved coherence is elsewhere:
 
@@ -77,7 +77,7 @@ The issue/PR state below was read on September 6. It is coordination evidence, n
 | Pure Effect, no PocketFlow, no pass-through adapters | [PR #11919](https://github.com/LionSR/TeXRA/pull/11919), open at `b20530ac80607c41fe8eb325d75fd7273072f688`; records the owner's ruling | Follow this direction; do not restart the graph-versus-Effect debate                                                                 |
 | SQLite persistence substrate                         | [#11867](https://github.com/LionSR/TeXRA/issues/11867), explicitly owned by another session                                             | Supply the required atomic transition and fencing contract; do not create a competing database layer                                 |
 | Runtime loops and recovery, lane D                   | [#11868](https://github.com/LionSR/TeXRA/issues/11868), part of the same cutover                                                        | Give that lane the phase/command matrix and integrate the LLM boundary into its scope                                                |
-| Durable continuation representation                  | [September runtime proposal](../../proposed/architecture/2026-09-04-agent-runtime-on-effect.md), with corrections recorded in #11919    | Replace “provider-native message array” as a permanent runtime API with the package's canonical message plus typed continuation data |
+| Durable continuation representation                  | [September runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md), with corrections recorded in #11919 | Replace “provider-native message array” as a permanent runtime API with the package's canonical message plus typed continuation data |
 | Model-handler package design                         | This study; not established as an unassigned GitHub implementation lane                                                                 | Agree the contract with lane D, then allocate a concrete provider/package slice against the current file ownership list              |
 
 The clean independent deliverable is this design and its evidence. Production work on `ModelInvocationNode`, flow code, transcript/storage, or handler Effect conversions would intersect active work. “Few assigned issues” would not establish that those files are free.

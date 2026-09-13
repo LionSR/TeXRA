@@ -16,7 +16,8 @@
 // pass-throughs nor adapters"; PRD R1 and execution rule 3 as amended) shapes
 // the `Effect.run*` row: it counts only runs below R1's three boundary kinds
 // (a host entry under packages/extension, packages/desktop, or packages/cli;
-// a tool `execute()` contract; the SDK's public API under packages/agent/src),
+// the SDK's public API under packages/agent/src -- the tool `execute()`
+// contract was the third kind until #12337 made every tool return an Effect),
 // so it only ever shrinks, and `--update` never adds a file to any row, so
 // new debt fails instead of being admitted (owner ruling 2026-09-06: never
 // widen a ratchet in config/ratchets/). The ruling's other half, that no
@@ -116,11 +117,13 @@ const RUN_BOUNDARY_NAMES = new Set([
 ]);
 
 /**
- * R1's three boundary kinds, as path predicates: (a) a host entry a host
- * framework invokes, (b) the agent tool `execute()` contract until lane D
- * converts the tool runner, (c) the SDK's public Promise API. `--update`
- * admits a new `Effect.run*` file only under one of these; a run site
- * anywhere else is below the boundary and converts instead.
+ * R1's boundary kinds, as path predicates: (a) a host entry a host framework
+ * invokes, (c) the SDK's public Promise API. Kind (b), the agent tool
+ * `execute()` contract, was retired by #12337: tools return Effects and the
+ * dispatcher owns the one run site, so a run inside `src/tools/**` is debt
+ * like any other below-boundary run and counts here. `--update` admits a new
+ * `Effect.run*` file only under (a) or (c); a run site anywhere else is below
+ * the boundary and converts instead.
  */
 const BOUNDARY_HOST_ROOTS = [
   'packages/extension/src/',
@@ -141,31 +144,17 @@ const BOUNDARY_HOST_EXCLUSIONS = [
   'packages/extension/src/settingsView/frontend/',
 ];
 
-const BOUNDARY_TOOL_ROOT = 'src/tools/';
-const BOUNDARY_TOOL_SUFFIX = 'Tool.ts';
 const BOUNDARY_PATHS_TEXT =
-  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts';
+  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**';
 
-function isBoundaryPath(file, toolExecuteFiles) {
+function isBoundaryPath(file) {
   if (BOUNDARY_HOST_EXCLUSIONS.some((root) => file.startsWith(root))) {
     return false;
   }
-  return (
-    BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root)) ||
-    (file.startsWith(BOUNDARY_TOOL_ROOT) &&
-      (file.endsWith(BOUNDARY_TOOL_SUFFIX) ||
-        (toolExecuteFiles?.has(file) ?? false)))
-  );
+  return BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root));
 }
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
-
-/** Module specifiers that export the tool contract factory. */
-const TOOL_DEFINE_MODULES = new Set([
-  '@tools/core/define',
-  './core/define',
-  '../core/define',
-]);
 
 const ROW_PLATFORM = 'platform()';
 const ROW_EFFECT_RUNTIME = 'effectRuntime()';
@@ -204,7 +193,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts, until lane D), or the SDK's public API (packages/agent/src). This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -221,79 +210,12 @@ const SEMANTICS =
   `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
   "'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, or packages/agent/src/**; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-
-/** The import every real tool file carries, prefixed onto the cases below. */
-const IMPORT_DEFINE = "import { defineTool } from '@tools/core/define';\n";
-
-/** Sources whose `runsOnlyInExecute` the survey must report exactly. */
-const EXECUTE_CASES = [
-  // The run sits inside `execute()` on the class that declares the tool
-  // contract: this is boundary kind (b), and the only shape that is.
-  [
-    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    true,
-  ],
-  // The same method on a class that is not a tool: a helper's `execute` is
-  // its own method, not the tool's run edge.
-  [
-    `${IMPORT_DEFINE}class H { execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    false,
-  ],
-  // A tool class, but the run is elsewhere in the file.
-  [
-    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { execute() {} }\nrt().runPromise(program);\n`,
-    false,
-  ],
-  // An object literal's `execute` shorthand is not a tool edge.
-  [
-    `${IMPORT_DEFINE}const o = { execute() { return rt().runPromise(p); } };\n`,
-    false,
-  ],
-  // A free function named execute is not a tool edge.
-  [
-    `${IMPORT_DEFINE}function execute() { return rt().runPromise(p); }\n`,
-    false,
-  ],
-  // No run at all: nothing to admit.
-  [
-    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n`,
-    false,
-  ],
-  // The two-step shape structuredOutput.ts uses: the base is bound to a name
-  // first, so the heritage clause is an identifier, not a call.
-  [
-    `${IMPORT_DEFINE}const G = defineTool({ name: "t" });\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    true,
-  ],
-  // The same shape over a name that is not a tool base.
-  [
-    `${IMPORT_DEFINE}const G = makeThing();\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    false,
-  ],
-  // A name bound twice, once to something else: not resolved lexically, so
-  // not trusted — the run counts as debt rather than gaining boundary status.
-  [
-    `${IMPORT_DEFINE}const G = makeOtherBase();\nfunction f() { const G = defineTool({ name: "t" }); return G; }\nclass H extends G { execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    false,
-  ],
-  // `defineTool` declared locally rather than imported from the tool core: an
-  // unrelated function of the same name cannot present a helper as the tool.
-  [
-    'function defineTool(x) { return class {}; }\nclass H extends defineTool({ name: "t" }) { execute(i) { return rt().runPromise(this.run(i)); } }\n',
-    false,
-  ],
-  // Imported under an alias: the binding is what counts, not the spelling.
-  [
-    `import { defineTool as make } from '@tools/core/define';\nclass T extends make({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
-    true,
-  ],
-];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
 function productionFiles() {
@@ -572,8 +494,6 @@ function surveySource(text, fileName) {
       callsBoundExport(callee, bindings, readers),
     );
   const effect = effectBindings(sourceFile);
-  const toolFactory = definedToolFactory(sourceFile);
-  const generatedBases = generatedToolBases(sourceFile, toolFactory);
   const isEffectCombinator = (callee) =>
     ts.isPropertyAccessExpression(callee) &&
     ((ts.isIdentifier(callee.expression) &&
@@ -584,10 +504,8 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
-  let runsInExecute = 0;
-  let runsOutsideExecute = 0;
 
-  const visit = (node, inExecute) => {
+  const visit = (node) => {
     const specifier = moduleSpecifier(node);
     if (specifier != null) {
       if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
@@ -599,11 +517,7 @@ function surveySource(text, fileName) {
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
       if (isAmbientRead(callee)) bump(ROW_AMBIENT);
-      if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
-        bump(ROW_RUN_BOUNDARY);
-        if (inExecute) runsInExecute += 1;
-        else runsOutsideExecute += 1;
-      }
+      if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
@@ -620,125 +534,12 @@ function surveySource(text, fileName) {
     } else if (ts.isCatchClause(node)) {
       catches += 1;
     }
-    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
-      // A tool's run edge is `execute()` on the tool class, and the tool
-      // class is the one that extends `defineTool(...)` — every tool in the
-      // repo is declared that way, so the contract is checkable rather than
-      // guessed from a method name. Recurse with the flag set only through
-      // that member's subtree, so a run elsewhere in the file is still
-      // counted as below the boundary: in a sibling helper class, and in a
-      // helper's own `execute` too, since a helper is not the tool. An
-      // object literal's `execute` shorthand is the same AST node kind and
-      // never sets the flag, because it is not a class member.
-      const isTool = extendsDefineTool(node, generatedBases, toolFactory);
-      ts.forEachChild(node, (child) =>
-        visit(
-          child,
-          inExecute ||
-            (isTool &&
-              ts.isMethodDeclaration(child) &&
-              ts.isIdentifier(child.name) &&
-              child.name.text === 'execute'),
-        ),
-      );
-      return;
-    }
-    ts.forEachChild(node, (child) => visit(child, inExecute));
-  };
-  visit(sourceFile, false);
-
-  if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  // A file is a tool run edge when it runs Effects and every one of them sits
-  // inside an `execute()` class method — not merely when such a method exists.
-  const runsOnlyInExecute = runsInExecute > 0 && runsOutsideExecute === 0;
-  return { counts, runsOnlyInExecute };
-}
-
-/**
- * Names bound in this file to a `defineTool(...)` call, so the two-step shape
- * `const GeneratedTool = defineTool({ ... })` followed by `class X extends
- * GeneratedTool` is recognised as the tool contract too. `structuredOutput.ts`
- * builds its terminal tool that way, and a heritage clause that is a bare
- * identifier is otherwise indistinguishable from extending any other class.
- */
-/**
- * The local name `defineTool` is bound to under an import from the tool core
- * (`@tools/core/define`, or the relative forms of the same module). Matching
- * the identifier text alone would let a file that declares its own unrelated
- * `defineTool` present a helper class as the tool contract, which filters its
- * runs out of the ratchet entirely -- the one direction this check must never
- * be wrong in. Returns null when the file imports no such binding.
- */
-function definedToolFactory(sourceFile) {
-  let local = null;
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !TOOL_DEFINE_MODULES.has(statement.moduleSpecifier.text)
-    ) {
-      continue;
-    }
-    const named = statement.importClause?.namedBindings;
-    if (named == null || !ts.isNamedImports(named)) continue;
-    for (const element of named.elements) {
-      const imported = (element.propertyName ?? element.name).text;
-      if (imported === 'defineTool') local = element.name.text;
-    }
-  }
-  return local;
-}
-
-function generatedToolBases(sourceFile, factory) {
-  const fromDefineTool = new Set();
-  const shadowed = new Set();
-  if (factory == null) return fromDefineTool;
-  const visit = (node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const name = node.name.text;
-      const init = node.initializer;
-      const isBase =
-        init != null &&
-        ts.isCallExpression(init) &&
-        ts.isIdentifier(init.expression) &&
-        init.expression.text === factory;
-      // A name bound more than once in the file is not resolved lexically
-      // here, so it is not trusted at all: if any binding of it is something
-      // other than defineTool(...), the name stops counting as a tool base.
-      // That fails closed -- the class is treated as a helper and its runs
-      // count as debt -- which is the safe direction for a check whose whole
-      // job is refusing to widen.
-      if (isBase) fromDefineTool.add(name);
-      else shadowed.add(name);
-    }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  for (const name of shadowed) fromDefineTool.delete(name);
-  return fromDefineTool;
-}
 
-/**
- * Whether a class declares the tool contract: `class X extends defineTool({
- * ... })` directly, or `extends <a local name bound to defineTool(...)>`.
- * Every tool in `src/tools/` is written one of those two ways, which is what
- * makes "is this the tool class?" a question the AST can answer instead of a
- * guess from the name of a method.
- */
-function extendsDefineTool(node, generatedBases, factory) {
-  if (factory == null) return false;
-  return (node.heritageClauses ?? []).some(
-    (clause) =>
-      clause.token === ts.SyntaxKind.ExtendsKeyword &&
-      clause.types.some(
-        (type) =>
-          (ts.isCallExpression(type.expression) &&
-            ts.isIdentifier(type.expression.expression) &&
-            type.expression.expression.text === factory) ||
-          (ts.isIdentifier(type.expression) &&
-            (generatedBases?.has(type.expression.text) ?? false)),
-      ),
-  );
+  if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
+  return { counts };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -866,13 +667,12 @@ function sortObject(object) {
   );
 }
 
-/** Survey the tree: { rows: { rowId: { file: count } }, toolExecuteFiles }. */
+/** Survey the tree: { rows: { rowId: { file: count } } }. */
 function surveyTree(files) {
   const rows = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
-  const toolExecuteFiles = new Set();
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
-    const { counts, runsOnlyInExecute } = surveySource(text, file);
+    const { counts } = surveySource(text, file);
     for (const [row, count] of counts) {
       const entries = rows[row];
       // A row retired from ROWS whose counting site survives in surveySource
@@ -887,9 +687,6 @@ function surveyTree(files) {
       }
       entries[file] = count;
     }
-    if (runsOnlyInExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
-      toolExecuteFiles.add(file);
-    }
   }
   // The `Effect.run*` row is the debt, and a run at one of R1's boundary kinds
   // is not debt -- it is the destination. Counting those too is what made
@@ -899,10 +696,10 @@ function surveyTree(files) {
   // by construction instead of by exception.
   rows[ROW_RUN_BOUNDARY] = Object.fromEntries(
     Object.entries(rows[ROW_RUN_BOUNDARY]).filter(
-      ([file]) => !isBoundaryPath(file, toolExecuteFiles),
+      ([file]) => !isBoundaryPath(file),
     ),
   );
-  return { rows, toolExecuteFiles };
+  return { rows };
 }
 
 /** Fail the ratchet itself if the boundary gate regresses. */
@@ -912,19 +709,14 @@ function selfTestBoundary() {
     ['packages/desktop/src/main/ipc.ts', true],
     ['packages/cli/src/chat/tui/App.tsx', true],
     ['packages/agent/src/index.ts', true],
-    ['src/tools/EditTool.ts', true],
-    ['src/tools/arxiv/SearchTool.ts', true],
+    // Kind (b) retired by #12337: a run inside src/tools/** is below the
+    // boundary whatever the file is called and whatever class it declares.
+    ['src/tools/EditTool.ts', false],
+    ['src/tools/arxiv/SearchTool.ts', false],
+    ['src/tools/claudeAgent.ts', false],
     ['src/tools/goal/goalRows.ts', false],
     ['src/tools/bash.ts', false],
-    // A tool class whose file is not named *Tool.ts is still boundary (b):
-    // the survey reports that it declares an execute() method.
-    ['src/tools/claudeAgent.ts', true, new Set(['src/tools/claudeAgent.ts'])],
-    // The same set never promotes a file outside src/tools/.
-    [
-      'src/controllers/session/sessionLayer.ts',
-      false,
-      new Set(['src/controllers/session/sessionLayer.ts']),
-    ],
+    ['src/controllers/session/sessionLayer.ts', false],
     ['src/agent/runtime/SessionHandle.ts', false],
     ['src/controllers/session/SessionBridge.ts', false],
     ['packages/trace-viewer/src/main.ts', false],
@@ -937,21 +729,10 @@ function selfTestBoundary() {
     // stays a boundary — the two are easy to confuse, so both are pinned.
     ['packages/extension/src/frontend/auth/subscriptionSignIn.ts', true],
   ];
-  for (const [file, expected, executeFiles] of boundaryCases) {
-    if (isBoundaryPath(file, executeFiles) !== expected) {
+  for (const [file, expected] of boundaryCases) {
+    if (isBoundaryPath(file) !== expected) {
       console.error(
         `isBoundaryPath self-test failed: ${file} expected ${expected}`,
-      );
-      process.exit(1);
-    }
-  }
-
-  for (const [text, expected] of EXECUTE_CASES) {
-    if (
-      surveySource(text, 'src/tools/probe.ts').runsOnlyInExecute !== expected
-    ) {
-      console.error(
-        `runsOnlyInExecute self-test failed for ${JSON.stringify(text)}`,
       );
       process.exit(1);
     }
@@ -1109,7 +890,7 @@ function main() {
   selfTestSurvey();
   selfTestBoundary();
   const files = productionFiles();
-  const { rows, toolExecuteFiles } = surveyTree(files);
+  const { rows } = surveyTree(files);
   let failed = false;
 
   if (options.update) {
@@ -1217,10 +998,7 @@ function main() {
     for (const { row, file, was, now, kind } of failures) {
       console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
       console.error(`      ${row.rule}`);
-      if (
-        row.id === ROW_RUN_BOUNDARY &&
-        !isBoundaryPath(file, toolExecuteFiles)
-      ) {
+      if (row.id === ROW_RUN_BOUNDARY && !isBoundaryPath(file)) {
         console.error(`      This file is ${BELOW_BOUNDARY}.`);
       }
     }
