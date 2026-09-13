@@ -345,7 +345,9 @@ describe('Tool edit approval gating', () => {
   it.effect('releases the staged preview when its request cannot open', () =>
     Effect.gen(function* () {
       // The commit that would list the request is refused, so no
-      // `request.decided` will ever release the preview staged before it.
+      // `request.decided` will ever release the preview staged before it:
+      // `openRequest`, the one call that knows the row never landed, runs
+      // the release the staging handed it.
       const session = defaultSession();
       const commit = session.commit.bind(session);
       vi.spyOn(session, 'commit').mockImplementation((events) =>
@@ -380,8 +382,8 @@ describe('Tool edit approval gating', () => {
     () =>
       Effect.gen(function* () {
         // The `request.opened` commit never settles, so the interrupt lands
-        // with no row written: the cancellation finds nothing open and
-        // writes no decision, which is the only other release.
+        // with no row written: the cancellation finds nothing open, writes
+        // no decision, and releases what the open never listed.
         const session = defaultSession();
         const commit = session.commit.bind(session);
         vi.spyOn(session, 'commit').mockImplementation((events) =>
@@ -408,9 +410,51 @@ describe('Tool edit approval gating', () => {
 
         yield* Fiber.interrupt(request);
 
+        // The cancellation is a job of the session's publisher, so the
+        // release it finds necessary lands with it, not with the interrupt.
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => releasedPreviews.length === 1, {
+            timeoutMessage: 'Timed out waiting for the preview to be released',
+          }),
+        );
         assert.deepStrictEqual(releasedPreviews, [
           approvalRequests[0]?.permission.requestId,
         ]);
+      }),
+  );
+
+  it.live(
+    'leaves a committed request its decision when the open is interrupted',
+    () =>
+      Effect.gen(function* () {
+        // The row landed, so the interrupt's cancellation is a decision like
+        // any other and every host releases on that. Releasing here too
+        // would strand the request the fold still lists whenever that
+        // cancellation is itself refused: nothing left to render, nothing
+        // left to answer.
+        nextDecision = () => null;
+        const session = defaultSession();
+
+        const request = yield* Effect.forkChild(
+          inRun(
+            requestToolEditApproval({
+              path: 'doc.txt',
+              originalContent: 'old content',
+              proposedContent: 'new content',
+              sourceTool: 'write_file',
+            }),
+          ),
+        );
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => decisions?.opened.length === 1, {
+            timeoutMessage: 'Timed out waiting for the request to open',
+          }),
+        );
+
+        yield* Fiber.interrupt(request);
+        yield* Effect.promise(() => session.settlePublications());
+
+        assert.deepStrictEqual(releasedPreviews, []);
       }),
   );
 

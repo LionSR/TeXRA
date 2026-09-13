@@ -185,11 +185,11 @@ export function createDesktopAgentRun(
         'Failed to stage the tool-edit preview',
       );
     },
-    // A refused `request.opened` leaves the staged preview with no decision
-    // to release it; this is that release.
-    releaseToolEdit: (requestId) => {
-      void toolEditApprovals.release(requestId);
-    },
+    // An open that never committed leaves the staged preview with no
+    // decision to release it; this is that release, returned rather than
+    // dropped so the session waits for the diff view and the temp files
+    // behind it to go.
+    releaseToolEdit: (requestId) => toolEditApprovals.release(requestId),
   });
 
   function runValidated(

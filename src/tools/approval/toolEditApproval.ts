@@ -1,4 +1,4 @@
-import { Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
@@ -242,14 +242,24 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // The preview is staged before the request opens, and stays staged
       // until that request's `request.decided` releases it on every host:
       // a surface reading the committed row must never find the request
-      // listed with nothing to show for it. An interrupted open that did
-      // commit closes the request as cancelled, which is that release; an
-      // open that never committed has no decision at all, which the
-      // finalizer below covers.
+      // listed with nothing to show for it. Staging hands back the release
+      // for what it staged, bound to the host it staged on; the one case no
+      // decision ever reaches is an open that never committed, which
+      // `openRequest` owns and runs this for.
       prompt: Effect.suspend(() => {
-        call.inScope(() => session.interactions.presentToolEdit(staged));
+        const releaseStaged = call.inScope(() =>
+          session.interactions.presentToolEdit(staged),
+        );
         return session
-          .openRequest(runId, { kind: 'toolEdit', data: permission })
+          .openRequest(
+            runId,
+            { kind: 'toolEdit', data: permission },
+            {
+              onNeverCommitted: Effect.promise(() =>
+                call.inScope(releaseStaged),
+              ),
+            },
+          )
           .pipe(
             Effect.map((decided): ToolEditApprovalResult => {
               if (decided.action !== 'approve') {
@@ -265,27 +275,6 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
                 preparedRequest,
               );
             }),
-            // A refused commit (the run lost its claim, the database write
-            // failed) wrote no `request.opened`, and an interruption taken
-            // while that append is still outstanding ends the same way: the
-            // cancellation finds no open request and writes nothing. Either
-            // way no `request.decided` will ever release what was just
-            // staged, so release on every exit but a success, in a
-            // finalizer that an interrupt cannot cut short. Releasing after
-            // an open that did commit is harmless: every host releases by
-            // deleting the entry the decision would delete anyway, and that
-            // decision-driven release still runs.
-            Effect.onExit((exit) =>
-              Exit.isSuccess(exit)
-                ? Effect.void
-                : Effect.sync(() => {
-                    call.inScope(() =>
-                      session.interactions.releaseToolEdit(
-                        permission.requestId,
-                      ),
-                    );
-                  }),
-            ),
           );
       }),
       bypassed: Effect.sync(acceptProposedAsIs),

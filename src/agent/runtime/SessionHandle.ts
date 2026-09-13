@@ -710,14 +710,33 @@ export class SessionHandle {
    * run stopped, the session unwound) closes the request as cancelled, so a
    * pending set is never left behind in the fold; a cancel for a request
    * this call never opened writes nothing.
+   *
+   * This call is also the one place that knows whether the open committed,
+   * so it owns `onNeverCommitted`: whatever the caller staged for a request
+   * the fold never listed is released from here, and from nowhere else.
    */
   openRequest(
     runId: RunId,
     payload: PermissionPayload,
-    thread: string | null = null,
+    options: {
+      readonly thread?: string | null;
+      /**
+       * Cleanup for what the caller staged before the request opened, run
+       * once and uninterruptibly in the two cases that leave no row behind:
+       * the `request.opened` append was refused, or an interruption's
+       * cancellation found nothing open. An open that did commit always
+       * ends in a `request.decided` — the release every surface already
+       * follows — so a committed request is never released here, not even
+       * when its cancellation is itself refused and it stays pending.
+       */
+      readonly onNeverCommitted?: Effect.Effect<void>;
+    } = {},
   ): Effect.Effect<RequestDecision, DatabaseNotOwner | DatabaseWriteFailed> {
     const requestId = payload.data.requestId;
     const aggregateId = qualifyAggregateId('run', runId);
+    const releaseUncommitted = Effect.uninterruptible(
+      options.onNeverCommitted ?? Effect.void,
+    );
     return Effect.gen({ self: this }, function* () {
       const from = this.now();
       yield* this.commit([
@@ -726,9 +745,9 @@ export class SessionHandle {
           aggregateId,
           requestId,
           payload: redactedForFact(payload),
-          thread,
+          thread: options.thread ?? null,
         },
-      ]);
+      ]).pipe(Effect.tapError(() => releaseUncommitted));
       return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
@@ -750,6 +769,13 @@ export class SessionHandle {
               requestId,
               { action: 'cancel', cause: 'Run interrupted.' },
               append,
+            ).pipe(
+              // `false` is the interruption that landed before the open
+              // committed: no row exists, so this cancellation writes none
+              // either and the caller's staging has no decision coming.
+              Effect.tap((cancelled) =>
+                cancelled ? Effect.void : releaseUncommitted,
+              ),
             ),
           );
         }),

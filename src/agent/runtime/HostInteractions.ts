@@ -94,20 +94,23 @@ export interface HostInteractions {
    * lists under `request.permission.requestId`. The decision comes back as
    * that request's `request.decide`; a host that stages nothing leaves the
    * request answerable from its payload alone.
+   *
+   * The session's own {@link SessionHostInteractions.presentToolEdit} hands
+   * its caller the release for what this staged; a host implements the
+   * staging alone.
    */
   presentToolEdit?(request: ToolEditApprovalRequest): void;
   /**
-   * Release the preview staged for a request whose `request.opened` never
-   * committed (the append was refused, or the fiber was interrupted while it
-   * was outstanding): no row was written, so the `request.decided` that
-   * releases every other staged preview will never arrive. It pairs with
-   * `presentToolEdit` — every host that stages implements both, and a host
-   * that stages nothing implements neither, which is why this port is
-   * optional like the rest of this surface. Releasing a request that did
-   * open is harmless: each implementation is an idempotent delete of what
-   * the decision would drop anyway.
+   * Drop what {@link presentToolEdit} staged for one request, for the single
+   * case no `request.decided` ever reaches: a request whose `request.opened`
+   * never committed. It pairs with `presentToolEdit` — every host that
+   * stages implements both, and a host that stages nothing implements
+   * neither, which is why this port is optional like the rest of this
+   * surface. A host whose release is asynchronous (a diff view to close,
+   * temp files to delete) returns that promise, the way `openPdf` does, so
+   * the session can wait for the cleanup it asked for.
    */
-  releaseToolEdit?(requestId: string): void;
+  releaseToolEdit?(requestId: string): Promise<void> | void;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
   dispose?(): void;
 }
@@ -202,19 +205,35 @@ export class SessionHostInteractions implements HostInteractions {
     return this.activeAttachment?.interactions.reportReviewIssue;
   }
 
-  presentToolEdit(request: ToolEditApprovalRequest): void {
+  /**
+   * Stage a preview on the attached host and hand back the release for it,
+   * bound to the attachment that staged: the stack may have changed by the
+   * time the release runs, and a release sent to whichever host is newest
+   * then would be a no-op on a host that staged nothing while the one that
+   * did kept its diff and temp files. The handle awaits an asynchronous
+   * release and warn-logs a failure rather than propagating it, so the
+   * caller's own outcome is never masked by cleanup.
+   */
+  presentToolEdit(request: ToolEditApprovalRequest): () => Promise<void> {
+    const { requestId } = request.permission;
     const active = this.activeAttachment;
     if (!active?.interactions.presentToolEdit) {
       logger.info(
-        `No attached host stages tool-edit previews: request ${request.permission.requestId} is answerable from its payload alone.`,
+        `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
       );
-      return;
+      return () => Promise.resolve();
     }
     active.interactions.presentToolEdit(request);
-  }
-
-  releaseToolEdit(requestId: string): void {
-    this.activeAttachment?.interactions.releaseToolEdit?.(requestId);
+    return async () => {
+      try {
+        await active.interactions.releaseToolEdit?.(requestId);
+      } catch (error) {
+        logger.warn(
+          `Failed to release the tool-edit preview staged for request ${requestId}`,
+          { data: error },
+        );
+      }
+    };
   }
 
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
