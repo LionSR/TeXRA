@@ -549,7 +549,7 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
   },
 );
 
-export class GitHubSubscriptionTool extends defineTool({
+export const GitHubSubscriptionTool = defineTool({
   name: 'github_subscription',
   description: [
     'Manage GitHub activity subscriptions for the current agent run.',
@@ -564,9 +564,8 @@ export class GitHubSubscriptionTool extends defineTool({
     `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${GITHUB_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it via /config → GitHub token (CLI), the settings Git tab (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
-}) {
-  protected execute(input: GitHubSubscriptionInput) {
-    return Effect.gen(function* () {
+  execute: (input: GitHubSubscriptionInput) =>
+    Effect.gen(function* () {
       const toolCall = yield* ToolCall;
       const runId = toolCall.run?.runId;
       if (!runId) {
@@ -586,6 +585,5 @@ export class GitHubSubscriptionTool extends defineTool({
         case 'find_current':
           return yield* execFindCurrent(input, toolCall.workingDirectory);
       }
-    });
-  }
-}
+    }),
+});
