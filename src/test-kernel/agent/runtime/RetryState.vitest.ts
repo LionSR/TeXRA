@@ -207,7 +207,6 @@ function boundModel(
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
     modelRetryRouteKey: JSON.stringify([

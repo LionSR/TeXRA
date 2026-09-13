@@ -97,7 +97,6 @@ function testBoundModel(): BoundModel {
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: false,
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
