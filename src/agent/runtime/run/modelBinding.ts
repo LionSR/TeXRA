@@ -132,9 +132,10 @@ export interface BoundModel {
   readonly usageRoute: UsageRoute;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
+  /** Structural {@link MediaCapabilities}: a bound model is passed as one to
+   *  the media-input pipeline, so these two mirror `config.capabilities`. */
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
-  readonly supportsReasoning: boolean;
   readonly supportsForcedToolChoice: boolean;
   /** One wire route: provider, credential route, endpoint, key fingerprint. */
   readonly wireRouteKey: string;
@@ -730,7 +731,6 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     supportsVision: routed.capabilities.supportsVision,
     supportsNativePdf: false,
     supportsNativeAudio: false,
-    supportsReasoning: routed.capabilities.supportsReasoning,
     supportsForcedToolChoice: false,
     wireRouteKey: JSON.stringify([
       'vscode-lm',
@@ -851,7 +851,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
       supportsVision: false,
       supportsNativePdf: false,
       supportsNativeAudio: false,
-      supportsReasoning: false,
       supportsForcedToolChoice: true,
       wireRouteKey: JSON.stringify([config.provider, 'validation']),
       modelRetryRouteKey: JSON.stringify([
@@ -954,7 +953,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     supportsVision: config.capabilities.supportsVision,
     supportsNativePdf: config.capabilities.supportsNativePdf,
     supportsNativeAudio: config.capabilities.supportsNativeAudio,
-    supportsReasoning: config.capabilities.supportsReasoning,
     supportsForcedToolChoice:
       protocol !== 'google-interactions' ||
       config.capabilities.supportsFunctionCalling,
