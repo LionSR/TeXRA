@@ -15,7 +15,7 @@
  * refusal at session disposal ({@link RunLanes.disposeAll}).
  */
 
-import { Data, Deferred, Effect } from 'effect';
+import { Data, Deferred, Effect, type Scope } from 'effect';
 
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -93,23 +93,57 @@ export class RunLanes {
     runId: string,
     termination: Effect.Effect<void>,
   ): Effect.Effect<void> {
+    const close = this.openGeneration(runId);
+    return termination.pipe(
+      Effect.ensuring(Effect.sync(close)),
+      Effect.uninterruptible,
+    );
+  }
+
+  /**
+   * Hold `runId` against local ownership for the caller's scope, refusing
+   * when a generation, a step, or a retained handle already owns it here —
+   * {@link withInactiveStep}'s admission, for a decision whose validity has
+   * to outlive the step that took it. The hold is a generation like any
+   * other: {@link isHeld} reports it, so a resume refuses on it, a launch of
+   * the same run waits for it, and a competing step is refused.
+   */
+  holdInactive(
+    runId: string,
+    hasRetainedOwner: () => boolean,
+  ): Effect.Effect<void, RunBusy, Scope.Scope> {
+    return Effect.asVoid(
+      Effect.acquireRelease(
+        // The test and the registration are one synchronous step, as the
+        // conditional lane claim is: nothing can take the run in between.
+        Effect.suspend(() =>
+          this.isHeld(runId) || hasRetainedOwner()
+            ? Effect.fail(new RunBusy({ runId }))
+            : Effect.sync(() => this.openGeneration(runId)),
+        ),
+        (close) => Effect.sync(close),
+      ),
+    );
+  }
+
+  /**
+   * Register a live generation of `runId` and hand back its close. The
+   * registration is synchronous with the call, and the close is idempotent
+   * against a disposal that dropped the whole gate underneath it.
+   */
+  private openGeneration(runId: string): () => void {
     const completion = Deferred.makeUnsafe<void>();
     const generations =
       this.live.get(runId) ?? new Set<Deferred.Deferred<void>>();
     this.live.set(runId, generations);
     generations.add(completion);
-    return termination.pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          Deferred.doneUnsafe(completion, Effect.void);
-          generations.delete(completion);
-          if (generations.size === 0 && this.live.get(runId) === generations) {
-            this.live.delete(runId);
-          }
-        }),
-      ),
-      Effect.uninterruptible,
-    );
+    return () => {
+      Deferred.doneUnsafe(completion, Effect.void);
+      generations.delete(completion);
+      if (generations.size === 0 && this.live.get(runId) === generations) {
+        this.live.delete(runId);
+      }
+    };
   }
 
   /** Refuse every admitted-but-unstarted step and drop all lanes. */

@@ -5,7 +5,7 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -243,10 +243,27 @@ export class RunRegistry {
       this.assertActive();
       return this.lanes.withInactiveStep(
         runId,
-        () => this.handles.has(runId) || this.childActivations.has(runId),
+        () => this.hasRetainedOwner(runId),
         operation,
       );
     });
+  }
+
+  /**
+   * Hold an inactive run for the caller's scope, refusing a live owner:
+   * {@link withInactiveRunStep}'s admission, for a caller whose decision has
+   * to keep holding after the step that took it returned.
+   */
+  holdInactiveRun(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
+    return Effect.suspend(() => {
+      this.assertActive();
+      return this.lanes.holdInactive(runId, () => this.hasRetainedOwner(runId));
+    });
+  }
+
+  /** A handle or a child activation this session still retains for `runId`. */
+  private hasRetainedOwner(runId: RunId): boolean {
+    return this.handles.has(runId) || this.childActivations.has(runId);
   }
 
   /** Run a generation after earlier work and retain its lane through cleanup. */

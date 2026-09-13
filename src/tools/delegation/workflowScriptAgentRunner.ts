@@ -297,29 +297,53 @@ function probeJournal<A>(
  * the rest of the call. Whether that attempt recorded no outcome or ended
  * failed/cancelled is not a difference the fence makes: a resumable snapshot
  * outlives a terminal row (`run.activate` after `run.end` means the run
- * started again), so every advance is decided under the claim.
+ * started again), so every advance is decided under the fence.
  *
- * `acquireClaims` is the same admission a dead-owner takeover uses
- * (`SessionRequests.decide`, `resumeRun`): it proves the prior owner dead
- * before moving the claim, so a host that reached this child first holds the
- * claim and this acquire is refused, while a host that arrives afterwards
- * finds the claim held here and refuses in its turn. That is what makes the
- * terminal re-read under it final — without it a resume can append
- * `run.activate` between the reading and the launch, and the probe starts a
- * second child beside a running one.
+ * A resume has two owners to be fenced against, so the fence has two halves
+ * and neither is redundant.
  *
- * The claim is released with the call's scope, after the attempt it advanced
- * to has run: a superseded attempt stays fenced for as long as its
- * replacement is live. A release that fails leaves every fact committed and
- * only the claim behind, so it is logged rather than failing a call whose
- * child already answered.
+ * `acquireClaims` answers another process. It is the same admission a
+ * dead-owner takeover uses (`SessionRequests.decide`, `resumeRun`): it proves
+ * the prior owner dead before moving the claim, so a host that reached this
+ * child first holds the claim and this acquire is refused, while a host that
+ * arrives afterwards finds the claim held here and refuses in its turn. It
+ * cannot answer this process: the claim is keyed by owner, and a row this
+ * owner already holds is reclaimable, so a resume started in this session
+ * takes the same claim without conflict.
+ *
+ * `holdInactiveRun` answers this one. The run lane is the single in-process
+ * authority for "a generation of this run is live here" — the one
+ * `resumeRun` consults through `isActiveOrResuming` — so a resume already
+ * under way holds it and this hold is refused, and a resume that starts after
+ * it finds the run held and refuses in its turn.
+ *
+ * Together they are what makes the terminal re-read under them final:
+ * without them a resume can append `run.activate` between the reading and the
+ * launch, and the probe starts a second child beside a running one.
+ *
+ * Both are released with the call's scope, after the attempt they advanced to
+ * has run: a superseded attempt stays fenced for as long as its replacement is
+ * live. A claim release that fails leaves every fact committed and only the
+ * claim behind, so it is logged rather than failing a call whose child already
+ * answered.
  */
 const fenceSupersededRun = (
   session: InBandSubagentLaunchOptions['session'],
   runId: RunId,
 ): Effect.Effect<void, Error, Scope.Scope> =>
-  Effect.asVoid(
-    Effect.acquireRelease(
+  Effect.gen(function* () {
+    yield* session.runs
+      .holdInactiveRun(runId)
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} is live in this session; refusing to repeat it.`,
+              { cause },
+            ),
+        ),
+      );
+    yield* Effect.acquireRelease(
       session
         .acquireClaims(qualifyAggregateId('run', runId))
         .pipe(
@@ -341,8 +365,8 @@ const fenceSupersededRun = (
             }),
           ),
         ),
-    ),
-  );
+    );
+  });
 
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
@@ -385,10 +409,11 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * a manifest is the one irreconcilable shape, and a live owner always refuses.
  * Advancing past an attempt — that one, and one whose row says failed or
  * cancelled, since a resumable snapshot outlives that row — is a single
- * decision taken while holding the attempt's own run claim, so a resume cannot
- * start the child between the reading and the launch. A row marked
- * `artifact-drain` is the one terminal outcome no attempt advances past: what
- * that child did is unrecorded rather than failed.
+ * decision taken while holding the attempt's own run lane and run claim, so
+ * neither a local resume nor one in another process can start the child
+ * between the reading and the launch. A row marked `artifact-drain` is the one
+ * terminal outcome no attempt advances past: what that child did is unrecorded
+ * rather than failed.
  *
  * A journal hit never reaches here: the engine consumes it before calling.
  */
@@ -478,16 +503,16 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             );
           }
         }
-        // Take the claim before deciding anything: a free lease, and a
+        // Fence the attempt before deciding anything: a free lease, and a
         // terminal row, each say only what was true when they were read, and
         // the decision below has to hold against a resume that starts one
-        // instant later.
+        // instant later, here or in another process.
         yield* fenceSupersededRun(session, runId);
         // One read order, terminal row last: a child commits `run.end` before
         // it releases its claim, so a free claim makes that row final, while
         // the copy read before the claim was observed can predate a child that
         // ended — or started again — in between. Reading it again here — under
-        // the claim, so no new owner can be starting — is what stops a run
+        // the fence, so no new owner can be starting — is what stops a run
         // that finished mid-probe from being repeated.
         end = yield* probeChild(runId, records.readRunEnd());
       }
@@ -553,7 +578,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       ),
     );
   },
-  // Every claim this probe took over a superseded attempt is released here,
+  // Every fence this probe took over a superseded attempt is released here,
   // once the attempt that answered the call has run.
   Effect.scoped,
 );

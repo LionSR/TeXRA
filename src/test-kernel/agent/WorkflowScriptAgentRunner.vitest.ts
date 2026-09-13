@@ -3,11 +3,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { RunLanes } from '@agent/runtime/runLanes';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
@@ -188,12 +189,21 @@ const structuredResult: RunEnd = {
   },
 };
 
+// The in-process half of the fence, real: a case makes a run live here by
+// taking its lane, exactly as a launch or a resume of that run would. One
+// registry stub for every stub session, so sessions compare equal.
+let lanes = new RunLanes();
+const runs = {
+  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId, () => false),
+};
+
 function parentContext(): DelegationParent {
-  // The probe fences an interrupted attempt on its run claim before it may
-  // advance past it, so the stub session answers that admission.
+  // The probe fences an interrupted attempt on its run lane and its run claim
+  // before it may advance past it, so the stub session answers both.
   const session = {
     id: 'session',
     acquireClaims: mocks.acquireClaims,
+    runs,
   } as never;
   return {
     config: new FakeConfigProvider(),
@@ -312,6 +322,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    lanes = new RunLanes();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     probeAnswers();
@@ -1279,6 +1290,41 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
+  );
+
+  it.effect(
+    'refuses an interrupted child whose lane a same-session resume holds',
+    () =>
+      Effect.gen(function* () {
+        // The claim cannot see a resume started here: it is keyed by owner,
+        // and a row this owner already holds is reclaimable. The run lane is
+        // the authority that does see it.
+        probeAnswers({ exists: true }, { exists: false });
+        const resumed = deriveRunId({
+          attempt: 0,
+          checkpointId: 'tool-call-7',
+          key: '0123456789abcdef',
+          parentRunId: runId,
+        });
+        const holding = yield* Deferred.make<void>();
+        yield* Effect.forkScoped(
+          lanes.launch(
+            resumed,
+            Deferred.succeed(holding, undefined).pipe(
+              Effect.andThen(Effect.never),
+            ),
+          ),
+        );
+        yield* Deferred.await(holding);
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining('is live in this session'),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }).pipe(Effect.scoped),
   );
 
   it.effect(
