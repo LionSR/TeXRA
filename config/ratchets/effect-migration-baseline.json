@@ -142,7 +142,6 @@
       "src/tools/delegation/stableSubagentAttempt.ts": 1,
       "src/tools/executions/runGeneratedFiles.ts": 3,
       "src/tools/executions/runLiveness.ts": 1,
-      "src/tools/goal/goalFeatureFlag.ts": 1,
       "src/tools/memory/MemoryTool.ts": 1,
       "src/tools/pathResolution.ts": 2,
       "src/tools/support/enumConfig.ts": 1,

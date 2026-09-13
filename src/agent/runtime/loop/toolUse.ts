@@ -678,10 +678,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
     if (goalOf(session, runId)?.status !== 'active') return;
     yield* pauseGoal(session, runId);
-    yield* Effect.tryPromise({
-      try: () => setGoalSessionAutoApproval(runId, false, { session }),
-      catch: ensureError,
-    });
+    setGoalSessionAutoApproval(session, runId, false);
   });
 
   // ------------------------------------------------------------- the loop
@@ -757,8 +754,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
             if (!afterError && !followUps.hasQueued()) {
               const continuation = yield* Effect.tryPromise({
-                try: () =>
-                  run.inScope(() => maybeBuildGoalContinuation(session, runId)),
+                try: () => maybeBuildGoalContinuation(session, runId),
                 catch: ensureError,
               });
               if (continuation && !followUps.hasQueued()) {

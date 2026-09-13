@@ -478,16 +478,14 @@ describe('TUI request decisions', () => {
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
-        yield* Effect.promise(() =>
-          setGoalSessionAutoApproval(runId, 'commands'),
-        );
+        setGoalSessionAutoApproval(defaultSession(), runId, 'commands');
         expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
           runId,
           kind: 'bash',
           bypassActive: true,
         });
 
-        yield* Effect.promise(() => setGoalSessionAutoApproval(runId, false));
+        setGoalSessionAutoApproval(defaultSession(), runId, false);
         expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
           runId,
           kind: 'bash',

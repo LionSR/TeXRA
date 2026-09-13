@@ -204,6 +204,7 @@ export const agentRunLayer = (
                 ctx.toolPolicy.approvalPromptsUnavailable,
               runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
               toolInjections: input.toolInjections,
+              config: session.roots.config,
               stores: ctx.stores,
             }),
           ),

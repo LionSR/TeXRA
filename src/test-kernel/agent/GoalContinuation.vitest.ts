@@ -44,7 +44,7 @@ describe('isGoalEnabled', () => {
   ])('$name', async ({ config, expected }) => {
     await installPlatformWithConfig(config);
 
-    expect(isGoalEnabled()).toBe(expected);
+    expect(isGoalEnabled(workspaceRoots().config)).toBe(expected);
   });
 });
 
