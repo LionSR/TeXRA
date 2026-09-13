@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -97,12 +96,11 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
  * Returns a `<workspace_info>` XML block with key environment details
  * that help the LLM understand the user's workspace context.
  *
- * @param workspacePath - Workspace root path override. Defaults to VS Code workspace.
+ * @param wsPath - The run's workspace root, or undefined when no folder is open.
  */
 export async function buildWorkspaceInfoBlock(
-  workspacePath?: string,
+  wsPath: string | undefined,
 ): Promise<string> {
-  const wsPath = workspacePath ?? WorkspaceFS.getPath();
   const platform = getPlatformLabel();
   const shell = detectShell();
   const date = isoDateOnly();
