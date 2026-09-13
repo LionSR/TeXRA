@@ -25,7 +25,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import {
   fakeProcessServices,
   installPlatform,
@@ -88,34 +88,36 @@ describe('session isolation', () => {
 
   it('two sessions in one process write under their own roots', async () => {
     const paperA = createFakeWorkspaceRoots({
-      workspacePath: '/papers/a',
-      storagePath: '/storage/a',
+      workspacePath: fakePath('papers/a'),
+      storagePath: fakePath('storage/a'),
     });
     const paperB = createFakeWorkspaceRoots({
-      workspacePath: '/papers/b',
-      storagePath: '/storage/b',
+      workspacePath: fakePath('papers/b'),
+      storagePath: fakePath('storage/b'),
     });
     const sessionA = createTestSession({ roots: paperA });
     const sessionB = createTestSession({ roots: paperB });
     try {
       await runInSession(sessionA, async () => {
-        expect(WorkspaceFS.getPath()).toBe('/papers/a');
+        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/a'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from a');
       });
       await runInSession(sessionB, async () => {
-        expect(WorkspaceFS.getPath()).toBe('/papers/b');
+        expect(WorkspaceFS.getPath()).toBe(fakePath('papers/b'));
         await StorageFS.ensureDir('.');
         await StorageFS.write('note.txt', 'from b');
       });
       const read = async (file: string) =>
         Buffer.from(await platform().fs.readFile(file)).toString('utf8');
-      expect(await read('/storage/a/note.txt')).toBe('from a');
-      expect(await read('/storage/b/note.txt')).toBe('from b');
+      expect(await read(fakePath('storage/a/note.txt'))).toBe('from a');
+      expect(await read(fakePath('storage/b/note.txt'))).toBe('from b');
       // Outside both scopes the process roots answer, not either paper.
-      expect(workspaceRoots().workspace).toBe('/workspace');
-      expect(WorkspaceFS.getPath()).toBe('/workspace');
-      expect(workspaceRoots().storage).toBe('/workspace/.texra/storage');
+      expect(workspaceRoots().workspace).toBe(fakePath('workspace'));
+      expect(WorkspaceFS.getPath()).toBe(fakePath('workspace'));
+      expect(workspaceRoots().storage).toBe(
+        fakePath('workspace/.texra/storage'),
+      );
     } finally {
       sessionA.dispose();
       sessionB.dispose();
@@ -125,14 +127,14 @@ describe('session isolation', () => {
   it('the host-exit drain settles each session under its own root, outside any scope', async () => {
     const sessionA = createTestSession({
       roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/a',
-        storagePath: '/storage/a',
+        workspacePath: fakePath('papers/a'),
+        storagePath: fakePath('storage/a'),
       }),
     });
     const sessionB = createTestSession({
       roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/b',
-        storagePath: '/storage/b',
+        workspacePath: fakePath('papers/b'),
+        storagePath: fakePath('storage/b'),
       }),
     });
     const live = [
@@ -178,8 +180,12 @@ describe('session isolation', () => {
           status: RUN_OUTCOME.CANCELLED,
         });
       }
-      expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
-      expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
+      expect(storageMocks.settledUnder.get('a0da01')).toBe(
+        fakePath('storage/a'),
+      );
+      expect(storageMocks.settledUnder.get('b0db01')).toBe(
+        fakePath('storage/b'),
+      );
       for (const [session, runId] of live) {
         expect(runInSession(session, () => ownsRunLease(runId))).toBe(false);
       }

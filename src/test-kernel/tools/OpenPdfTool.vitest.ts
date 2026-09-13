@@ -16,6 +16,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { OpenPdfTool } from '@tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
@@ -23,8 +24,8 @@ type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
 
 describe('OpenPdfTool', () => {
   setupPlatform({
-    workspacePath: '/workspace',
-    storagePath: '/storage',
+    workspacePath: fakePath('workspace'),
+    storagePath: fakePath('storage'),
     files: {
       '/workspace/paper.pdf': '%PDF-1.4\n',
       '/workspace/figures/result.pdf': '%PDF-1.4\n',
@@ -102,12 +103,7 @@ describe('OpenPdfTool', () => {
       expect(openPdf).toHaveBeenCalledWith({
         location: {
           kind: 'workspace',
-          absolutePath: path.join(
-            path.sep,
-            'workspace',
-            'figures',
-            'result.pdf',
-          ),
+          absolutePath: fakePath('workspace', 'figures', 'result.pdf'),
           relativePath: 'figures/result.pdf',
         },
         preserveFocus: true,
@@ -132,7 +128,7 @@ describe('OpenPdfTool', () => {
 
       const result = yield* tool
         .call({
-          path: '/storage/executions/run-1/output.pdf',
+          path: fakePath('storage/executions/run-1/output.pdf'),
           preserve_focus: true,
         })
         .pipe(
@@ -151,7 +147,7 @@ describe('OpenPdfTool', () => {
       expect(openPdf).toHaveBeenCalledWith({
         location: {
           kind: 'runStorage',
-          absolutePath: '/storage/executions/run-1/output.pdf',
+          absolutePath: fakePath('storage/executions/run-1/output.pdf'),
           relativePath: 'output.pdf',
           runId: 'run-1',
         },
@@ -178,7 +174,7 @@ describe('OpenPdfTool', () => {
         const tool = new OpenPdfTool();
 
         const result = yield* tool
-          .call({ path: '/storage/executions/run-1/output.pdf' })
+          .call({ path: fakePath('storage/executions/run-1/output.pdf') })
           .pipe(
             Effect.provide(
               nativeToolTestLayer({
@@ -212,10 +208,10 @@ describe('OpenPdfTool', () => {
       const openPdf = installOpener();
       const tool = new OpenPdfTool();
 
-      const result = yield* tool.call({ path: '/run/paper.pdf' }).pipe(
+      const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
         Effect.provide(
           nativeToolTestLayer({
-            workingDirectory: '/workspace',
+            workingDirectory: fakePath('workspace'),
             run: {
               session: defaultSession(),
               runId: 'tool-test' as RunId,

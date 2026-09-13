@@ -15,6 +15,7 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
+import { fakePath } from '@test/support/FakePlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
@@ -31,7 +32,7 @@ interface FakeCompileOptions {
 
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.
-const COMPILED_PDF = '/build/main.pdf';
+const COMPILED_PDF = fakePath('build/main.pdf');
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(

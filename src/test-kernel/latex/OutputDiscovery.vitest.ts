@@ -240,7 +240,7 @@ describe('outputDiscovery diagnostics', () => {
           );
           return { runDir: dir, unreadable: path.join(dir, 'r0') };
         });
-        // Hand-rolled because FakeFileSystemProvider cannot inject a per-path
+        // Hand-rolled because the fake host's filesystem cannot inject a per-path
         // readDirectory failure — it seeds files, not fault rules.
         yield* Effect.promise(() =>
           installPlatform(

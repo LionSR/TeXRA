@@ -17,6 +17,7 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
   createExternalLocation,
@@ -136,7 +137,7 @@ describe('workflow LaTeX compile input directories', () => {
     );
   });
 
-  it.each(['', '/external/source/main.tex'])(
+  it.each(['', fakePath('external/source/main.tex')])(
     'falls back to the output location for source %j',
     async (source) => {
       const runId =
@@ -203,7 +204,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
-        createExternalLocation('/external/project/main.tex'),
+        createExternalLocation(fakePath('external/project/main.tex')),
       ),
     ).toBeUndefined();
   });
@@ -251,7 +252,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     await compileDiff(
       runId,
-      createExternalLocation('/external/project/main.tex'),
+      createExternalLocation(fakePath('external/project/main.tex')),
       1,
       createWorkspaceLocation(
         path.join(workspacePath, 'Draft', 'main.tex'),
@@ -262,7 +263,7 @@ describe('workflow LaTeX compile input directories', () => {
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        extraInputDirs: ['/external/project'],
+        extraInputDirs: [fakePath('external/project')],
       }),
     );
   });

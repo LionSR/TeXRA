@@ -14,6 +14,7 @@ import {
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import type { FileLocation, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
@@ -88,14 +89,14 @@ async function writeAndSplitDocuments(
   options: XmlManagerOptions = {},
 ): ReturnType<XmlOutputManager['splitScratchpadMultipleOutputXml']> {
   await AbsoluteFS.write(
-    '/tmp/run/output.xml',
+    fakePath('tmp/run/output.xml'),
     typeof output === 'string' ? output : output.join('\n'),
   );
   return createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
-    createExternalLocation('/tmp/run/output.xml'),
+    createExternalLocation(fakePath('tmp/run/output.xml')),
     0,
     options.baseFiles?.map((name) =>
-      createExternalLocation(`/tmp/run/${name}`),
+      createExternalLocation(fakePath('tmp/run', name)),
     ),
   );
 }
@@ -116,11 +117,15 @@ function expectSources(
 }
 
 async function expectWritten(path: string, content: string): Promise<void> {
-  await expect(AbsoluteFS.read(`/tmp/run/${path}`)).resolves.toBe(content);
+  await expect(AbsoluteFS.read(fakePath('tmp/run', path))).resolves.toBe(
+    content,
+  );
 }
 
 async function expectAbsent(path: string): Promise<void> {
-  await expect(AbsoluteFS.exists(`/tmp/run/${path}`)).resolves.toBe(false);
+  await expect(AbsoluteFS.exists(fakePath('tmp/run', path))).resolves.toBe(
+    false,
+  );
 }
 
 async function assertRecoveredDocuments(
@@ -819,7 +824,7 @@ describe('XmlOutputManager', () => {
     formatterMocks.runLatexFormatter.mockReset();
     await installPlatform({
       files: { '/tmp/run/output.xml': '<documents />' },
-      workspacePath: '/workspace',
+      workspacePath: fakePath('workspace'),
     });
   });
 
@@ -834,7 +839,7 @@ describe('XmlOutputManager', () => {
             '\n\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n\n',
         },
       ],
-      createExternalLocation('/tmp/run/output.xml'),
+      createExternalLocation(fakePath('tmp/run/output.xml')),
       0,
     );
 
@@ -854,7 +859,7 @@ describe('XmlOutputManager', () => {
           content: '\nBody only.\n\\end{document}\n\n',
         },
       ],
-      createExternalLocation('/tmp/run/output.xml'),
+      createExternalLocation(fakePath('tmp/run/output.xml')),
       0,
     );
 
@@ -866,7 +871,7 @@ describe('XmlOutputManager', () => {
 
     await manager.processMultipleLatexDocuments(
       [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
-      createExternalLocation('/tmp/run/output.xml'),
+      createExternalLocation(fakePath('tmp/run/output.xml')),
       0,
     );
 
@@ -909,7 +914,7 @@ describe('XmlOutputManager', () => {
 
   it('does not auto-format extracted workflow outputs', async () => {
     await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+      fakePath('tmp/run/output.xml'),
       `<documents><document name="main.tex">
 \\[
   f(x)=x^4-2x^2+1.
@@ -924,7 +929,7 @@ Appendix.
       state,
       processorDeps({ logger: spiedTrace() }),
       manager,
-      createExternalLocation('/tmp/run/output.xml'),
+      createExternalLocation(fakePath('tmp/run/output.xml')),
       0,
     );
 
@@ -997,11 +1002,11 @@ Appendix.
 
   it('falls back to content-similarity matching for unlabeled fenced blocks against the original inputs', async () => {
     await AbsoluteFS.write(
-      '/tmp/run/appendices.tex',
+      fakePath('tmp/run/appendices.tex'),
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with a shared Lean repository.\n',
     );
     await AbsoluteFS.write(
-      '/tmp/run/cost_section.tex',
+      fakePath('tmp/run/cost_section.tex'),
       '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
     );
 
@@ -1259,8 +1264,8 @@ Appendix.
 
   it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
     const stub = '\\section{Stub}\nShared template content.\n';
-    await AbsoluteFS.write('/tmp/run/a.tex', stub);
-    await AbsoluteFS.write('/tmp/run/b.tex', stub);
+    await AbsoluteFS.write(fakePath('tmp/run/a.tex'), stub);
+    await AbsoluteFS.write(fakePath('tmp/run/b.tex'), stub);
 
     const outputs = await writeAndSplitDocuments(
       [
@@ -1280,11 +1285,11 @@ Appendix.
 
   it('routes the revision, not the echoed original, when the model quotes both', async () => {
     await AbsoluteFS.write(
-      '/tmp/run/cost.tex',
+      fakePath('tmp/run/cost.tex'),
       '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
     );
     await AbsoluteFS.write(
-      '/tmp/run/arch.tex',
+      fakePath('tmp/run/arch.tex'),
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
     );
 
@@ -1327,20 +1332,23 @@ Appendix.
     // being revised; only the previous round's outputs do. The similarity
     // fallback must compare against those, or every later-round recovery
     // would score below the threshold and drop the round.
-    await AbsoluteFS.ensureDir('/tmp/run/r0');
-    await AbsoluteFS.ensureDir('/tmp/run/r1');
-    await AbsoluteFS.write('/tmp/run/appendices.tex', 'placeholder A');
-    await AbsoluteFS.write('/tmp/run/cost_section.tex', 'placeholder B');
+    await AbsoluteFS.ensureDir(fakePath('tmp/run/r0'));
+    await AbsoluteFS.ensureDir(fakePath('tmp/run/r1'));
+    await AbsoluteFS.write(fakePath('tmp/run/appendices.tex'), 'placeholder A');
     await AbsoluteFS.write(
-      '/tmp/run/r0/appendices.tex',
+      fakePath('tmp/run/cost_section.tex'),
+      'placeholder B',
+    );
+    await AbsoluteFS.write(
+      fakePath('tmp/run/r0/appendices.tex'),
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture with shared memory.\n',
     );
     await AbsoluteFS.write(
-      '/tmp/run/r0/cost_section.tex',
+      fakePath('tmp/run/r0/cost_section.tex'),
       '% !TEX root = Draft3SM.tex\n\\section{Computational cost}\nPreliminary numbers from the interactive logs.\n',
     );
     await AbsoluteFS.write(
-      '/tmp/run/r1/output.xml',
+      fakePath('tmp/run/r1/output.xml'),
       [
         '```latex',
         '% !TEX root = Draft3SM.tex',
@@ -1362,14 +1370,16 @@ Appendix.
       {
         source: 'appendices.tex',
         round: 0,
-        location: createExternalLocation('/tmp/run/r0/appendices.tex'),
+        location: createExternalLocation(fakePath('tmp/run/r0/appendices.tex')),
         lineage: null,
         diff: null,
       },
       {
         source: 'cost_section.tex',
         round: 0,
-        location: createExternalLocation('/tmp/run/r0/cost_section.tex'),
+        location: createExternalLocation(
+          fakePath('tmp/run/r0/cost_section.tex'),
+        ),
         lineage: null,
         diff: null,
       },
@@ -1379,12 +1389,12 @@ Appendix.
       processorDeps({
         logger: spiedTrace(),
         baseFiles: [
-          createExternalLocation('/tmp/run/appendices.tex'),
-          createExternalLocation('/tmp/run/cost_section.tex'),
+          createExternalLocation(fakePath('tmp/run/appendices.tex')),
+          createExternalLocation(fakePath('tmp/run/cost_section.tex')),
         ],
       }),
       manager,
-      createExternalLocation('/tmp/run/r1/output.xml'),
+      createExternalLocation(fakePath('tmp/run/r1/output.xml')),
       1,
     );
 
@@ -1403,11 +1413,11 @@ Appendix.
   it('reports input files left unmatched by content-similarity recovery', async () => {
     const logger = spiedTrace();
     await AbsoluteFS.write(
-      '/tmp/run/cost.tex',
+      fakePath('tmp/run/cost.tex'),
       '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
     );
     await AbsoluteFS.write(
-      '/tmp/run/arch.tex',
+      fakePath('tmp/run/arch.tex'),
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n',
     );
 
@@ -1459,8 +1469,8 @@ Appendix.
 
   it('logs discarded unclosed latex fences during similarity recovery', async () => {
     const logger = spiedTrace();
-    await AbsoluteFS.write('/tmp/run/a.tex', 'Original A.');
-    await AbsoluteFS.write('/tmp/run/b.tex', 'Original B.');
+    await AbsoluteFS.write(fakePath('tmp/run/a.tex'), 'Original A.');
+    await AbsoluteFS.write(fakePath('tmp/run/b.tex'), 'Original B.');
 
     const outputs = await writeAndSplitDocuments(
       ['```latex', 'Unclosed revised content.'],
@@ -1591,13 +1601,13 @@ describe('extractFilesFromXml', () => {
       const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
       if (failure) split.mockRejectedValueOnce(failure);
       else split.mockResolvedValueOnce([]);
-      await AbsoluteFS.write('/tmp/run/empty-output.xml', '');
+      await AbsoluteFS.write(fakePath('tmp/run/empty-output.xml'), '');
 
       await extractFilesFromXml(
         state,
         processorDeps({ logger }),
         manager,
-        createExternalLocation('/tmp/run/empty-output.xml'),
+        createExternalLocation(fakePath('tmp/run/empty-output.xml')),
         round,
       );
 
@@ -1619,7 +1629,7 @@ describe('extractFilesFromXml', () => {
       [],
     );
     await AbsoluteFS.write(
-      '/tmp/run/untagged-output.xml',
+      fakePath('tmp/run/untagged-output.xml'),
       '% chunk.tex\n\\section{Untagged content}\n',
     );
 
@@ -1627,7 +1637,7 @@ describe('extractFilesFromXml', () => {
       createOutputState(),
       processorDeps({ logger }),
       manager,
-      createExternalLocation('/tmp/run/untagged-output.xml'),
+      createExternalLocation(fakePath('tmp/run/untagged-output.xml')),
       5,
     );
 

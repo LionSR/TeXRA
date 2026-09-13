@@ -1,16 +1,17 @@
 // Node imports
-import { mkdtempSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-
-// Third-party imports
-import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
 // Local imports
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
-  type FileStat,
-  type FileSystemProvider,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
@@ -22,41 +23,124 @@ import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import {
-  fileTypeFor,
-  type FileTypeProbe,
-} from '@platform/defaults/fsEntryTypeBits';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { getCoreSettingDefault } from '@shared/schemas';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
-function fakeFsError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
-
-function normalizePath(target: string): string {
-  return path.posix.resolve('/', target.replaceAll('\\', '/'));
-}
-
-function relativeChildPath(
-  parent: string,
-  candidate: string,
-): string | undefined {
-  const relative = path.posix.relative(parent, candidate);
-  if (
-    relative === '' ||
-    relative.startsWith('..') ||
-    path.posix.isAbsolute(relative)
-  ) {
-    return undefined;
+/**
+ * One real temporary directory per worker process, holding both the fake
+ * filesystem root and the shared global-storage directory. Cached on
+ * `globalThis` so a suite that resets its module registry keeps the same
+ * directories, and removed when the worker exits.
+ *
+ * The realpath is resolved so the paths handed out are canonical: on macOS
+ * `os.tmpdir()` traverses the `/tmp` to `/private/tmp` symlink and on Windows
+ * CI the 8.3 short name differs from the long form, so production code that
+ * resolves either would otherwise never produce the string a suite compares
+ * against.
+ */
+function workerTempHome(): string {
+  const globals = globalThis as { __texraFakeHome__?: string };
+  if (globals.__texraFakeHome__ === undefined) {
+    const home = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
+    );
+    globals.__texraFakeHome__ = home;
+    process.on('exit', () => rmSync(home, { recursive: true, force: true }));
   }
-  return relative;
+  return globals.__texraFakeHome__;
 }
 
-function hasChildPath(parent: string, candidate: string): boolean {
-  return relativeChildPath(parent, candidate) !== undefined;
+/**
+ * A directory under the worker temp home, created on first use and remembered
+ * per worker so the thousands of per-test fake hosts do not each pay for a
+ * `mkdir`. Nothing here runs at module load: importing this module must stay
+ * free of process-wide side effects, so the pure test tier can reach it.
+ */
+function workerDir(name: 'root' | 'global-storage'): string {
+  const globals = globalThis as { __texraFakeDirs__?: Set<string> };
+  const dir = path.join(workerTempHome(), name);
+  const created = (globals.__texraFakeDirs__ ??= new Set<string>());
+  if (!created.has(dir)) {
+    mkdirSync(dir, { recursive: true });
+    created.add(dir);
+  }
+  return dir;
 }
 
-type DirectoryEntryProbe = FileTypeProbe & { name: string };
+/**
+ * The real directory every fake host's files live in: what `/` meant to the
+ * in-memory filesystem this replaced. Emptied whenever a fake platform is
+ * built, so a host starts from the files it seeds and nothing else.
+ */
+function fakeRoot(): string {
+  return workerDir('root');
+}
+
+/**
+ * A real path inside the {@link fakeRoot}. `fakePath('workspace/a.tex')` is the
+ * path a `files` seed keyed `'/workspace/a.tex'` writes to, and is what a
+ * suite asserting on an absolute path compares against.
+ */
+export function fakePath(...segments: string[]): string {
+  return path.join(fakeRoot(), ...segments);
+}
+
+/**
+ * A real directory: instance-presence sockets are genuine OS objects that live
+ * under the global storage root even when everything else is faked.
+ * Worker-shared so the hosts that never touch presence share the one directory.
+ */
+function fakeGlobalStorage(): string {
+  return workerDir('global-storage');
+}
+
+/**
+ * The real file a seed key names. Keys are paths inside the {@link fakeRoot},
+ * so `'/workspace/a.tex'` and `fakePath('workspace/a.tex')` name the same file:
+ * the first is the spelling a suite writes by hand, the second the one a path
+ * helper built on the installed roots produces.
+ */
+function seedTarget(key: string): string {
+  const root = fakeRoot();
+  if (key.startsWith(root)) {
+    // A key this harness handed out (fakePath(...)) or built from one: it is
+    // still confined below, a prefix match alone is not containment.
+    return confineToRoot(root, path.resolve(key), key);
+  }
+  // A path this harness handed out but from outside the fake root -- the
+  // worker temp home itself, or a sibling of the root under it -- would be
+  // nested under the root silently. Every other absolute key ('/tmp/run/x'
+  // included) is a path inside the fake root, not a real one.
+  if (key.startsWith(workerTempHome())) {
+    throw new Error(
+      `Seed key ${key} is a real path under the harness temp home; seed keys are paths inside the fake root (use fakePath).`,
+    );
+  }
+  return confineToRoot(root, path.resolve(root, `.${path.sep}${key}`), key);
+}
+
+/** The resolved target, or a throw when it is not the root or a descendant. */
+function confineToRoot(root: string, target: string, key: string): string {
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(
+      `Seed key ${key} resolves outside the fake root; seed keys must stay inside it.`,
+    );
+  }
+  return target;
+}
+
+/** Empties the {@link fakeRoot} and writes the seeded files into it. */
+function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
+  const root = fakeRoot();
+  rmSync(root, { recursive: true, force: true });
+  mkdirSync(root, { recursive: true });
+  for (const [key, content] of Object.entries(files)) {
+    const file = seedTarget(key);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  }
+}
 
 export class FakeConfigProvider implements ConfigProvider {
   private readonly values = new Map<string, unknown>();
@@ -260,210 +344,6 @@ export class FakeStateStore implements StateStore {
   }
 }
 
-export class FakeFileSystemProvider implements FileSystemProvider {
-  private readonly fs: IFs;
-
-  constructor(files: Record<string, string | Uint8Array> = {}) {
-    this.fs = createFsFromVolume(new Volume());
-    this.fs.mkdirSync('/', { recursive: true });
-    for (const [target, content] of Object.entries(files)) {
-      this.setFile(target, content);
-    }
-  }
-
-  async stat(target: string): Promise<FileStat> {
-    const normalized = normalizePath(target);
-    const lstats = await this.fs.promises.lstat(normalized);
-    const type = await fileTypeFor(this.fs, lstats, normalized);
-    const stats = lstats.isSymbolicLink()
-      ? await this.fs.promises.stat(normalized).catch(() => lstats)
-      : lstats;
-    return {
-      type,
-      ctime: Number(stats.ctimeMs),
-      mtime: Number(stats.mtimeMs),
-      size: Number(stats.size),
-    };
-  }
-
-  async isSymlink(target: string): Promise<boolean> {
-    const stats = await this.fs.promises.lstat(normalizePath(target));
-    return stats.isSymbolicLink();
-  }
-
-  async realPath(target: string): Promise<string> {
-    const resolved = await this.fs.promises.realpath(normalizePath(target));
-    return resolved.toString();
-  }
-
-  async readFile(target: string): Promise<Uint8Array> {
-    const content = await this.fs.promises.readFile(normalizePath(target));
-    return typeof content === 'string' ? Buffer.from(content) : content;
-  }
-
-  async writeFile(target: string, content: Uint8Array): Promise<void> {
-    await this.fs.promises.writeFile(
-      normalizePath(target),
-      Buffer.from(content),
-    );
-  }
-
-  async writeFileAtomic(target: string, content: Uint8Array): Promise<void> {
-    // In-memory: the temp+rename of a real atomic write has no observable
-    // intermediate state here, so a direct write is equivalent.
-    await this.writeFile(target, content);
-  }
-
-  async publishFile(target: string, content: Uint8Array): Promise<void> {
-    // Mirror the production stage-then-rename so a test observes the same
-    // directory contents (the staged sibling never outlives the publish).
-    const normalized = normalizePath(target);
-    const staging = `${normalized}.tmp`;
-    await this.fs.promises.writeFile(staging, Buffer.from(content));
-    await this.fs.promises.rename(staging, normalized);
-  }
-
-  async removeEmptyDirectory(target: string): Promise<void> {
-    await this.fs.promises.rmdir(normalizePath(target));
-  }
-
-  async appendFile(target: string, content: Uint8Array): Promise<void> {
-    await this.fs.promises.appendFile(
-      normalizePath(target),
-      Buffer.from(content),
-    );
-  }
-
-  async delete(
-    target: string,
-    options?: { recursive?: boolean },
-  ): Promise<void> {
-    const normalized = normalizePath(target);
-    if (normalized === '/') {
-      throw fakeFsError('EPERM', 'Cannot delete filesystem root');
-    }
-    await this.fs.promises.rm(normalized, {
-      recursive: options?.recursive ?? false,
-      force: true,
-    });
-  }
-
-  async createDirectory(target: string): Promise<void> {
-    await this.fs.promises.mkdir(normalizePath(target), { recursive: true });
-  }
-
-  async readDirectory(target: string): Promise<[string, number][]> {
-    const normalized = normalizePath(target);
-    const entries = await this.fs.promises.readdir(normalized, {
-      withFileTypes: true,
-    });
-    const dirents = entries as DirectoryEntryProbe[];
-    const resolved = await Promise.all(
-      dirents.map(async (entry) => {
-        const type = await fileTypeFor(
-          this.fs,
-          entry,
-          path.posix.join(normalized, entry.name),
-        );
-        return [entry.name, type] as [string, number];
-      }),
-    );
-    return resolved.toSorted(([left], [right]) => left.localeCompare(right));
-  }
-
-  async copy(
-    source: string,
-    dest: string,
-    options?: { overwrite?: boolean; dereference?: boolean },
-  ): Promise<void> {
-    const normalizedSource = normalizePath(source);
-    const normalizedDest = normalizePath(dest);
-    const sourceStats = await this.fs.promises.stat(normalizedSource);
-    if (sourceStats.isDirectory()) {
-      if (normalizedSource === normalizedDest) {
-        throw fakeFsError(
-          'ERR_FS_CP_EINVAL',
-          `Cannot copy a path onto itself: ${source} -> ${dest}`,
-        );
-      }
-      if (hasChildPath(normalizedSource, normalizedDest)) {
-        throw fakeFsError(
-          'ERR_FS_CP_EINVAL',
-          `Cannot copy a directory into itself: ${source} -> ${dest}`,
-        );
-      }
-      await this.fs.promises.cp(normalizedSource, normalizedDest, {
-        recursive: true,
-        force: options?.overwrite ?? false,
-        errorOnExist: !(options?.overwrite ?? false),
-        dereference: options?.dereference ?? false,
-      });
-      return;
-    }
-
-    const flag = options?.overwrite ? 0 : this.fs.constants.COPYFILE_EXCL;
-    await this.fs.promises.copyFile(normalizedSource, normalizedDest, flag);
-  }
-
-  async rename(
-    source: string,
-    dest: string,
-    options?: { overwrite?: boolean },
-  ): Promise<void> {
-    const normalizedSource = normalizePath(source);
-    const normalizedDest = normalizePath(dest);
-    if (!options?.overwrite) {
-      try {
-        await this.fs.promises.lstat(normalizedDest);
-        throw fakeFsError('EEXIST', `Target already exists: ${dest}`);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-      }
-    }
-    const sourceStats = await this.fs.promises.lstat(normalizedSource);
-    if (
-      sourceStats.isDirectory() &&
-      hasChildPath(normalizedSource, normalizedDest)
-    ) {
-      throw fakeFsError(
-        'EINVAL',
-        `Cannot rename a directory into itself: ${source} -> ${dest}`,
-      );
-    }
-    await this.fs.promises.rename(normalizedSource, normalizedDest);
-  }
-
-  exists(target: string): boolean {
-    return this.fs.existsSync(normalizePath(target));
-  }
-
-  setFile(target: string, content: string | Uint8Array): void {
-    const normalized = normalizePath(target);
-    this.fs.mkdirSync(path.posix.dirname(normalized), { recursive: true });
-    this.fs.writeFileSync(normalized, Buffer.from(stringToBytes(content)));
-  }
-
-  getText(target: string): string {
-    const content = this.fs.readFileSync(normalizePath(target));
-    return typeof content === 'string' ? content : content.toString('utf8');
-  }
-}
-
-// A real directory: instance-presence sockets are genuine OS objects that
-// live under the global storage root even when everything else is faked.
-// Worker-shared so the thousands of per-test fake roots that never touch
-// presence do not litter os.tmpdir() with empty directories.
-let sharedFakeGlobalStoragePath: string | undefined;
-
-function fakeGlobalStoragePath(override?: string): string {
-  return (
-    override ??
-    (sharedFakeGlobalStoragePath ??= mkdtempSync(
-      path.join(os.tmpdir(), 'texra-fake-global-'),
-    ))
-  );
-}
-
 export class FakeSecrets implements PlatformSecrets {
   private readonly values = new Map<string, string>();
 
@@ -516,12 +396,25 @@ export interface FakePlatformOptions {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
   workspaceState?: Record<string, unknown>;
+  /**
+   * Files seeded into the fake root before the host is installed. Keys
+   * are paths inside that root: `'/workspace/a.tex'` and
+   * `fakePath('workspace/a.tex')` both name the same file, under the default
+   * workspace root.
+   */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
   /** Conventional env-var fallbacks (e.g. `ANTHROPIC_API_KEY`) surfaced via `PlatformSecrets.getEnv`. */
   secretsEnv?: Record<string, string>;
+  /**
+   * The workspace root, as a real path: `fakePath('workspace')` by default.
+   * A suite pointing the workspace elsewhere passes a real directory it owns
+   * (a `fakePath(...)` subdirectory, its own temp dir, or `process.cwd()`).
+   */
   workspacePath?: string | undefined;
+  /** The storage root, as a real path. Defaults under the workspace root. */
   storagePath?: string;
+  /** The global-storage root, as a real path. Worker-shared by default. */
   globalStoragePath?: string;
 }
 
@@ -548,9 +441,9 @@ export function createFakeWorkspaceRoots(
   return {
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
-      : '/workspace',
-    storage: options.storagePath ?? '/workspace/.texra/storage',
-    globalStorage: fakeGlobalStoragePath(options.globalStoragePath),
+      : fakePath('workspace'),
+    storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
+    globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
@@ -560,17 +453,18 @@ export function createFakeWorkspaceRoots(
 }
 
 const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
-  custom: async () => '/workspace/.texra/agents',
-  builtIn: async () => '/workspace/resources/agents',
-  builtInToolUse: async () => '/workspace/resources/tool_use_agents',
+  custom: async () => fakePath('workspace/.texra/agents'),
+  builtIn: async () => fakePath('workspace/resources/agents'),
+  builtInToolUse: async () => fakePath('workspace/resources/tool_use_agents'),
 };
 
 export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
 ): Platform {
+  seedFakeRoot(options.files ?? {});
   return {
-    fs: new FakeFileSystemProvider(options.files),
+    fs: nodeFilesystem,
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeRun: async () => false },
     agentDirectories: FAKE_AGENT_DIRECTORIES,
@@ -578,11 +472,4 @@ export function createFakePlatform(
     toolMissingHandler: () => {},
     ...overrides,
   };
-}
-
-function stringToBytes(content: string | Uint8Array): Uint8Array {
-  if (typeof content === 'string') {
-    return Buffer.from(content, 'utf8');
-  }
-  return content;
 }

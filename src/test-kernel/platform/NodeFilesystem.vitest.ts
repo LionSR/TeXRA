@@ -11,49 +11,30 @@ import { describe, it } from 'vitest';
 import { FileType, type FileSystemProvider } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
-// Local file imports
-import { FakeFileSystemProvider } from '../support/FakePlatform';
-
 type ProviderCase = {
   provider: FileSystemProvider;
   resolve(testPath: string): string;
   expectedRealPath(testPath: string): Promise<string>;
-  cleanup(): Promise<void>;
 };
 
-async function createProviderCase(
-  name: 'fake' | 'node',
-): Promise<ProviderCase> {
-  if (name === 'fake') {
-    return {
-      provider: new FakeFileSystemProvider(),
-      resolve: (testPath) => testPath,
-      expectedRealPath: async (testPath) => testPath,
-      cleanup: async () => {},
-    };
-  }
-
+/**
+ * Runs `run` against `nodeFilesystem` rooted in a fresh temp directory, so a
+ * test can name paths as if the provider owned `/`.
+ */
+async function withProvider(
+  run: (ctx: ProviderCase) => Promise<void>,
+): Promise<void> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-fs-'));
   const resolve = (testPath: string): string =>
     path.join(root, testPath.slice(1));
-  return {
-    provider: nodeFilesystem,
-    resolve,
-    expectedRealPath: (testPath) => fs.realpath(resolve(testPath)),
-    cleanup: () => fs.rm(root, { recursive: true, force: true }),
-  };
-}
-
-async function withProviders(
-  run: (ctx: ProviderCase) => Promise<void>,
-): Promise<void> {
-  for (const name of ['fake', 'node'] as const) {
-    const ctx = await createProviderCase(name);
-    try {
-      await run(ctx);
-    } finally {
-      await ctx.cleanup();
-    }
+  try {
+    await run({
+      provider: nodeFilesystem,
+      resolve,
+      expectedRealPath: (testPath) => fs.realpath(resolve(testPath)),
+    });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
   }
 }
 
@@ -75,9 +56,9 @@ async function rejectsWithCode(
   });
 }
 
-describe('FakePlatform', () => {
-  it('matches node filesystem semantics for file reads, writes, stats, and directories', async () => {
-    await withProviders(async ({ provider, resolve, expectedRealPath }) => {
+describe('nodeFilesystem', () => {
+  it('reads, writes, stats, and lists directories', async () => {
+    await withProvider(async ({ provider, resolve, expectedRealPath }) => {
       await provider.createDirectory(resolve('/workspace/docs'));
       await provider.writeFile(
         resolve('/workspace/docs/a.txt'),
@@ -122,8 +103,8 @@ describe('FakePlatform', () => {
     });
   });
 
-  it('matches node filesystem semantics for copy, rename, and delete', async () => {
-    await withProviders(async ({ provider, resolve }) => {
+  it('copies, renames, and deletes', async () => {
+    await withProvider(async ({ provider, resolve }) => {
       await provider.createDirectory(resolve('/workspace/source/nested'));
       await provider.writeFile(
         resolve('/workspace/source/a.txt'),
@@ -191,8 +172,8 @@ describe('FakePlatform', () => {
     });
   });
 
-  it('matches node filesystem error codes for common failures', async () => {
-    await withProviders(async ({ provider, resolve }) => {
+  it('reports errno codes for common failures', async () => {
+    await withProvider(async ({ provider, resolve }) => {
       await rejectsWithCode(
         () =>
           provider.writeFile(
@@ -249,18 +230,5 @@ describe('FakePlatform', () => {
         'ENOENT',
       );
     });
-  });
-
-  it('rejects deleting the fake filesystem root', async () => {
-    const fakeFs = new FakeFileSystemProvider({
-      '/workspace/source/a.txt': 'A',
-    });
-
-    await rejectsWithCode(
-      () => fakeFs.delete('/', { recursive: true }),
-      'EPERM',
-    );
-
-    assert.equal(fakeFs.getText('/workspace/source/a.txt'), 'A');
   });
 });

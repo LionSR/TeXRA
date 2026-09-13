@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { listRunWorkspaceFiles } from '@agent/storage';
 import { platform } from '@platform/platform';
+import { fakePath } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-const WORKSPACE_PATH = path.resolve(path.sep, 'workspace');
+const WORKSPACE_PATH = fakePath('workspace');
 const CONFIG = { workingDirectory: WORKSPACE_PATH };
 
 function statError(code: string, message: string): Error {
@@ -42,7 +43,8 @@ describe('listRunWorkspaceFiles', () => {
         path: 'z-dir',
         displayPath: 'workspace/z-dir',
         absolutePath: path.join(WORKSPACE_PATH, 'z-dir'),
-        size: 0,
+        // A real directory's size is the filesystem's own bookkeeping.
+        size: expect.any(Number),
         isDirectory: true,
       },
     ]);
