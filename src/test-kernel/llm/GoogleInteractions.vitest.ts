@@ -6,7 +6,10 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { googleInteractionsModel } from '@llm/googleInteractions';
+import {
+  googleInteractionsAdmittedFingerprint,
+  googleInteractionsModel,
+} from '@llm/googleInteractions';
 import { RemoteOperationSchema } from '@llm/turn';
 import type { ModelError, TurnRequest, TurnResult } from '@llm/turn';
 
@@ -59,6 +62,8 @@ function backgroundFixture() {
       },
       providerResponseId: 'int_1',
       afterSequence: null,
+      admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+      store: turn.controls.store,
     });
     return { configured, turn, background: configured.background, operation };
   });
@@ -350,7 +355,7 @@ describe('canonical Google Interactions protocol', () => {
           }),
         );
         const observation = yield* Stream.runCollect(
-          background.observe(operation, { deadlineAtMs: 10_000 }),
+          background.observe(turn, operation, { deadlineAtMs: 10_000 }),
         ).pipe(Effect.forkChild);
         yield* TestClock.adjust('5 seconds');
         const events = yield* Fiber.join(observation);
@@ -375,12 +380,18 @@ describe('canonical Google Interactions protocol', () => {
             providerUsage: { kind: 'google', toolUsePromptTokens: 5 },
           },
         });
-        expect(completed.result.continuation).toBeUndefined();
+        expect(completed.result.continuation).toMatchObject({
+          coveredMessages: 2,
+          anchor: { interactionId: 'int_1', coveredSteps: 5 },
+        });
         const replay = yield* configured.prepareTurn(
           exchange(completed.result),
         );
         assert(replay.mode === 'foreground');
         yield* configured.generateTurn(replay);
+        // The observed turn anchors the next round: its steps are the ones
+        // the interaction already holds, so the replay sends only what
+        // follows them.
         expect(
           yield* Effect.promise(() =>
             (fetchModel.mock.calls[3][0] as Request).json(),
@@ -388,25 +399,29 @@ describe('canonical Google Interactions protocol', () => {
         ).toMatchObject({
           background: false,
           stream: true,
-          input: expect.arrayContaining([
+          previous_interaction_id: 'int_1',
+          input: [
             {
-              type: 'thought',
-              summary: [{ type: 'text', text: 'plan' }],
-              signature: 'sig_b',
-            },
-            {
-              type: 'function_call',
-              id: 'call_1',
+              type: 'function_result',
+              call_id: 'call_1',
               name: 'search',
-              arguments: { q: 'one' },
+              result: [
+                { type: 'text', text: 'a' },
+                {
+                  type: 'image',
+                  data: 'AQ==',
+                  mime_type: 'image/png',
+                  resolution: 'ultra_high',
+                },
+              ],
             },
             {
-              type: 'function_call',
-              id: 'call_2',
+              type: 'function_result',
+              call_id: 'call_2',
               name: 'fetch',
-              arguments: { u: 'two' },
+              result: [{ type: 'text', text: 'b' }],
             },
-          ]),
+          ],
         });
         expect(
           fetchModel.mock.calls
@@ -416,6 +431,50 @@ describe('canonical Google Interactions protocol', () => {
             ),
         ).toBe(true);
         expect(fetchModel).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  it.effect(
+    'delivers an observation the admitted system text no longer matches, without an anchor',
+    () =>
+      Effect.gen(function* () {
+        const { configured, background, operation } =
+          yield* backgroundFixture();
+        // What a resume rebuilds after the agent prompt changed under it.
+        const rebuilt = yield* configured.prepareTurn({
+          ...request(),
+          system: 'Use neither tool.',
+          mode: 'background',
+        });
+        assert(rebuilt.mode === 'background');
+        fetchModel.mockImplementationOnce(async () =>
+          Response.json({
+            id: 'int_1',
+            status: 'completed',
+            model: 'gemini-returned',
+            steps: [
+              { type: 'model_output', content: [{ type: 'text', text: 'ok' }] },
+            ],
+            usage: {
+              total_input_tokens: 3,
+              total_output_tokens: 1,
+              total_tokens: 4,
+            },
+          }),
+        );
+        const observation = yield* Stream.runCollect(
+          background.observe(rebuilt, operation, { deadlineAtMs: 10_000 }),
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust('5 seconds');
+        const completed = (yield* Fiber.join(observation)).at(-1);
+        assert(completed?.kind === 'completed');
+        // The answer is delivered; the next round resends its transcript
+        // rather than chaining on instructions the answer never saw.
+        expect(completed.result).toMatchObject({
+          providerResponseId: 'int_1',
+          finishReason: 'stop',
+        });
+        expect(completed.result.continuation).toBeUndefined();
       }),
   );
 
@@ -481,7 +540,9 @@ describe('canonical Google Interactions protocol', () => {
         );
         expect(
           yield* Effect.flip(
-            Stream.runDrain(background.observe(operation, { deadlineAtMs: 0 })),
+            Stream.runDrain(
+              background.observe(turn, operation, { deadlineAtMs: 0 }),
+            ),
           ),
         ).toMatchObject({ kind: 'observation-deadline', operation });
         const invalidForeground = JSON.parse(JSON.stringify(turn));
@@ -554,7 +615,7 @@ describe('canonical Google Interactions protocol', () => {
             );
           const observation = yield* Effect.flip(
             Stream.runDrain(
-              background.observe(operation, { deadlineAtMs: 10_000 }),
+              background.observe(turn, operation, { deadlineAtMs: 10_000 }),
             ),
           ).pipe(Effect.forkChild);
           if (failure === 'changed-model') yield* TestClock.adjust('5 seconds');
@@ -627,7 +688,7 @@ describe('canonical Google Interactions protocol', () => {
         else if (kind === 'cancel') action = background.cancel(operation);
         else
           action = Stream.runDrain(
-            background.observe(operation, {
+            background.observe(turn, operation, {
               deadlineAtMs: timedOut ? 1_000 : 60_000,
             }),
           );
