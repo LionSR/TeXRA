@@ -47,22 +47,35 @@ import { StorageFS } from '@utils/files/storageFS';
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
  * one fact the fold derives a live phase from (one run model, 3.3).
  */
-async function foldRunPhase(
+function foldRunPhase(
   session: SessionHandle,
   runId: RunId,
   step: 'waiting' | 'turn.begin',
   expected: RunPhase,
-): Promise<void> {
-  session.publish([
-    {
-      type: 'flow.step',
-      aggregateId: aggregateId('run', runId),
-      payload: { family: 'toolUse', step },
-    },
-  ]);
-  await vi.waitFor(() => {
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    session.publish([
+      {
+        type: 'flow.step',
+        aggregateId: aggregateId('run', runId),
+        payload: { family: 'toolUse', step },
+      },
+    ]);
+    yield* Effect.promise(() => session.settlePublications());
     expect(session.runView(runId)?.status).toBe(expected);
   });
+}
+
+/** Own an isolated session for the complete Effect and its finalizers: the
+ *  `finally` this replaces is skipped when the test fiber is interrupted. */
+function withSession<A, E, R>(
+  fn: (session: SessionHandle) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> {
+  return Effect.acquireUseRelease(
+    Effect.sync(createTestSession),
+    fn,
+    (session) => Effect.sync(() => session.dispose()),
+  );
 }
 
 const tempDirs = useTempDirs();
@@ -212,23 +225,25 @@ describe('ExecutionsTool', () => {
   it.live(
     'does not duplicate auto-delivered live subagent reports for the parent run',
     () =>
-      Effect.gen(function* () {
-        const session = createTestSession();
-        const parentRunId = RunIdSchema.parse('ba5e0000000a');
-        const childRunId = RunIdSchema.parse('c41d0000000a');
-        const otherRunId = RunIdSchema.parse('0f1e0000000a');
-        const handle = testRunHandle({
-          runId: childRunId,
-          parent: parentRunId,
-          agent: 'review',
-        });
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000a');
+          const childRunId = RunIdSchema.parse('c41d0000000a');
+          const otherRunId = RunIdSchema.parse('0f1e0000000a');
+          const handle = testRunHandle({
+            runId: childRunId,
+            parent: parentRunId,
+            agent: 'review',
+          });
 
-        try {
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
           session.runs.track(handle);
-          yield* Effect.promise(() =>
-            foldRunPhase(session, childRunId, 'waiting', RUN_PHASE.WAITING),
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'waiting',
+            RUN_PHASE.WAITING,
           );
           mocks.readReport.mockResolvedValue(
             '<subagent-result>full report</subagent-result>',
@@ -274,10 +289,8 @@ describe('ExecutionsTool', () => {
           expect(crossTreeWaitResult.output).not.toContain(
             'delivered automatically',
           );
-        } finally {
-          session.dispose();
-        }
-      }).pipe(
+        }),
+      ).pipe(
         Effect.provide(
           nativeToolTestLayer({
             run: {
@@ -292,23 +305,25 @@ describe('ExecutionsTool', () => {
 
   it.live('reads running task lists from session snapshot state', () =>
     withTempStorage(() =>
-      Effect.gen(function* () {
-        const session = createTestSession();
-        const parentRunId = RunIdSchema.parse('ba5e0000000b');
-        const childRunId = RunIdSchema.parse('c41d0000000b');
-        const handle = testRunHandle({
-          runId: childRunId,
-          parent: parentRunId,
-          agent: 'review',
-        });
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000b');
+          const childRunId = RunIdSchema.parse('c41d0000000b');
+          const handle = testRunHandle({
+            runId: childRunId,
+            parent: parentRunId,
+            agent: 'review',
+          });
 
-        try {
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
           yield* Effect.promise(() => session.settlePublications());
           session.runs.track(handle);
-          yield* Effect.promise(() =>
-            foldRunPhase(session, childRunId, 'turn.begin', RUN_PHASE.RUNNING),
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'turn.begin',
+            RUN_PHASE.RUNNING,
           );
           session.publish([
             {
@@ -341,10 +356,8 @@ describe('ExecutionsTool', () => {
 
           expect(summary.output).toContain('Read live snapshot state');
           expect(todos.output).toContain('Read live snapshot state');
-        } finally {
-          session.dispose();
-        }
-      }),
+        }),
+      ),
     ).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -365,12 +378,11 @@ describe('ExecutionsTool', () => {
     'keeps completed wait summary reports inline when parent delivery cannot be confirmed',
     () =>
       withTempStorage(() =>
-        Effect.gen(function* () {
-          const session = createTestSession();
-          const runId = 'abc123' as RunId;
-          const callerRunId = RunIdSchema.parse('ca11e0000001');
+        withSession((session) =>
+          Effect.gen(function* () {
+            const runId = 'abc123' as RunId;
+            const callerRunId = RunIdSchema.parse('ca11e0000001');
 
-          try {
             publishTestRunStart(session, runId);
             yield* Effect.promise(() => session.settlePublications());
             mocks.readConfig.mockResolvedValue(config);
@@ -401,10 +413,8 @@ describe('ExecutionsTool', () => {
             expect(reportResult.output).toBe(
               '<subagent-result>full report</subagent-result>',
             );
-          } finally {
-            session.dispose();
-          }
-        }),
+          }),
+        ),
       ).pipe(
         Effect.provide(
           nativeToolTestLayer({
@@ -522,37 +532,38 @@ describe('ExecutionsTool', () => {
     ({ toolPath }) =>
       Effect.gen(function* () {
         yield* withTempStorage(() =>
-          Effect.gen(function* () {
-            const runId = 'abc123' as RunId;
-            const session = createTestSession();
-            publishTestRunStart(session, runId);
-            session.publish([
-              {
-                type: 'updateTodos',
-                aggregateId: aggregateId('run', runId),
-                todos: [
-                  {
-                    content: 'Read the committed task list',
-                    status: 'in_progress',
-                    activeForm: 'Reading the committed task list',
-                  },
-                ],
-              },
-            ]);
-            yield* Effect.promise(() => session.settlePublications());
-            mocks.readConfig.mockResolvedValue(config);
-            const result = yield* new ExecutionsTool()
-              .call({ path: toolPath })
-              .pipe(
-                Effect.provide(
-                  nativeToolTestLayer({
-                    run: { session: session, runId: runId, toolPolicy: {} },
-                  }),
-                ),
-              );
+          withSession((session) =>
+            Effect.gen(function* () {
+              const runId = 'abc123' as RunId;
+              publishTestRunStart(session, runId);
+              session.publish([
+                {
+                  type: 'updateTodos',
+                  aggregateId: aggregateId('run', runId),
+                  todos: [
+                    {
+                      content: 'Read the committed task list',
+                      status: 'in_progress',
+                      activeForm: 'Reading the committed task list',
+                    },
+                  ],
+                },
+              ]);
+              yield* Effect.promise(() => session.settlePublications());
+              mocks.readConfig.mockResolvedValue(config);
+              const result = yield* new ExecutionsTool()
+                .call({ path: toolPath })
+                .pipe(
+                  Effect.provide(
+                    nativeToolTestLayer({
+                      run: { session: session, runId: runId, toolPolicy: {} },
+                    }),
+                  ),
+                );
 
-            expect(result.output).toContain('Read the committed task list');
-          }),
+              expect(result.output).toContain('Read the committed task list');
+            }),
+          ),
         );
       }).pipe(
         Effect.provide(

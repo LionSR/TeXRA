@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream';
 
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { makeJsonRpcConnection } from '@tools/lean/direct/jsonRpc';
 
@@ -27,20 +27,16 @@ const chunksOf = (stream: PassThrough) =>
   );
 
 const makePair = Effect.gen(function* () {
-  const serverIn = new PassThrough(); // what the client writes (i.e. the server reads)
   const serverOut = new PassThrough(); // what the server writes (i.e. the client reads)
-  const notifications: Array<[method: string, params: unknown]> = [];
+  const clientBytes = yield* Queue.make<Uint8Array>();
+  const notifications = yield* Queue.make<readonly [string, unknown]>();
   const connection = yield* makeJsonRpcConnection({
     input: chunksOf(serverOut),
     output: Sink.forEach((chunk: Uint8Array) =>
-      Effect.sync(() => {
-        serverIn.write(chunk);
-      }),
+      Queue.offer(clientBytes, chunk),
     ),
     onNotification: (method, params) =>
-      Effect.sync(() => {
-        notifications.push([method, params]);
-      }),
+      Queue.offer(notifications, [method, params]),
   });
   let clientFrameBuffer = '';
 
@@ -50,51 +46,45 @@ const makePair = Effect.gen(function* () {
     serverOut.write(body);
   };
 
-  /** Wait until serverIn has data, then parse and return all LSP frames. */
-  const collectClientFrames = Effect.promise(() =>
-    vi.waitFor(
-      (): Record<string, unknown>[] => {
-        let raw = serverIn.read() as Buffer | string | null;
-        while (raw) {
-          clientFrameBuffer += Buffer.isBuffer(raw)
-            ? raw.toString('utf8')
-            : raw;
-          raw = serverIn.read() as Buffer | string | null;
-        }
-        if (!clientFrameBuffer) throw new Error('no data in serverIn yet');
-        const frames: Record<string, unknown>[] = [];
-        let offset = 0;
-        while (offset < clientFrameBuffer.length) {
-          const headerEnd = clientFrameBuffer.indexOf('\r\n\r\n', offset);
-          if (headerEnd < 0) break;
-          const header = clientFrameBuffer.slice(offset, headerEnd);
-          const lengthMatch = header.match(/Content-Length: (\d+)/i);
-          if (!lengthMatch) break;
-          const length = Number.parseInt(lengthMatch[1]!, 10);
-          const bodyStart = headerEnd + 4;
-          const bodyEnd = bodyStart + length;
-          if (clientFrameBuffer.length < bodyEnd) break;
-          const body = clientFrameBuffer.slice(bodyStart, bodyEnd);
-          frames.push(JSON.parse(body) as Record<string, unknown>);
-          offset = bodyEnd;
-        }
-        if (frames.length === 0) throw new Error('no complete frames yet');
-        clientFrameBuffer = clientFrameBuffer.slice(offset);
-        return frames;
-      },
-      { timeout: 500, interval: 5 },
-    ),
-  );
+  /** Parse as many complete LSP frames as the buffer currently holds. */
+  function parseFrames(): Record<string, unknown>[] {
+    const frames: Record<string, unknown>[] = [];
+    let offset = 0;
+    while (offset < clientFrameBuffer.length) {
+      const headerEnd = clientFrameBuffer.indexOf('\r\n\r\n', offset);
+      if (headerEnd < 0) break;
+      const header = clientFrameBuffer.slice(offset, headerEnd);
+      const lengthMatch = header.match(/Content-Length: (\d+)/i);
+      if (!lengthMatch) break;
+      const length = Number.parseInt(lengthMatch[1]!, 10);
+      const bodyStart = headerEnd + 4;
+      const bodyEnd = bodyStart + length;
+      if (clientFrameBuffer.length < bodyEnd) break;
+      const body = clientFrameBuffer.slice(bodyStart, bodyEnd);
+      frames.push(JSON.parse(body) as Record<string, unknown>);
+      offset = bodyEnd;
+    }
+    clientFrameBuffer = clientFrameBuffer.slice(offset);
+    return frames;
+  }
+
+  /** Take client bytes until at least one complete LSP frame parses out. */
+  const collectClientFrames = Effect.gen(function* () {
+    for (;;) {
+      const frames = parseFrames();
+      if (frames.length > 0) return frames;
+      clientFrameBuffer += Buffer.from(yield* Queue.take(clientBytes)).toString(
+        'utf8',
+      );
+    }
+  });
 
   const notified = (expected: Array<[string, unknown]>) =>
-    Effect.promise(() =>
-      vi.waitFor(
-        () => {
-          expect(notifications).toEqual(expected);
-        },
-        { timeout: 2000, interval: 5 },
-      ),
-    );
+    Effect.gen(function* () {
+      expect(
+        yield* Effect.forEach(expected, () => Queue.take(notifications)),
+      ).toEqual(expected);
+    });
 
   return { connection, serverOut, serverSends, collectClientFrames, notified };
 });

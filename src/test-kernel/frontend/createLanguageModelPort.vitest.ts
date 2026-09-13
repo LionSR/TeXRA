@@ -1,7 +1,7 @@
 // Third-party imports
-import { it as effectIt } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Scope, Stream } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { TurnRequest, VscodeLanguageModelConfiguration } from '@llm/turn';
 import { LANGUAGE_MODEL_PORT_ERROR_CODE } from '@platform/languageModel';
@@ -465,7 +465,7 @@ describe('native editor model', () => {
     mocks.canSendRequest.mockReturnValue(true);
   });
 
-  effectIt.effect(
+  it.effect(
     'captures the exact model and preserves ordered text, images and complete tool exchanges without invented metadata',
     () =>
       Effect.scoped(
@@ -645,7 +645,7 @@ describe('native editor model', () => {
       ),
   );
 
-  effectIt.effect.each([
+  it.effect.each([
     [false, false, 'require-granted', false],
     [false, false, 'request-on-send', false],
     [undefined, undefined, 'require-granted', false],
@@ -691,7 +691,7 @@ describe('native editor model', () => {
       }),
   );
 
-  effectIt.effect(
+  it.effect(
     'rejects foreign and retired acquisitions without reselecting or sending',
     () =>
       Effect.gen(function* () {
@@ -724,7 +724,7 @@ describe('native editor model', () => {
       }),
   );
 
-  effectIt.effect.each([
+  it.effect.each([
     { ...nativeRequest, temperature: 0.2 },
     {
       messages: [
@@ -774,7 +774,7 @@ describe('native editor model', () => {
       }),
   );
 
-  effectIt.effect.each(['NoPermissions', 'Blocked', 'NotFound'] as const)(
+  it.effect.each(['NoPermissions', 'Blocked', 'NotFound'] as const)(
     'retains actual native %s evidence without a synthetic HTTP status',
     (code) =>
       Effect.gen(function* () {
@@ -813,14 +813,12 @@ describe('native editor model', () => {
       }),
   );
 
-  effectIt.effect.each(['headers', 'body'] as const)(
+  it.effect.each(['headers', 'body'] as const)(
     'cancels before joining the exposed pending %s operation',
     (stage) =>
       Effect.gen(function* () {
-        let entered!: () => void;
-        const ready = new Promise<void>((resolve) => {
-          entered = resolve;
-        });
+        const ready = yield* Deferred.make<void>();
+        const cancelled = yield* Deferred.make<void>();
         let finish!: () => void;
         const order: string[] = [];
         const sendRequest = vi.fn(
@@ -831,6 +829,7 @@ describe('native editor model', () => {
           ) => {
             token.onCancellationRequested(() => {
               order.push('cancel');
+              Deferred.doneUnsafe(cancelled, Effect.void);
             });
             const pending = new Promise<never>((_resolve, reject) => {
               finish = () => {
@@ -839,14 +838,14 @@ describe('native editor model', () => {
               };
             });
             if (stage === 'headers') {
-              entered();
+              Deferred.doneUnsafe(ready, Effect.void);
               return pending;
             }
             return {
               stream: {
                 [Symbol.asyncIterator]: () => ({
                   next: () => {
-                    entered();
+                    Deferred.doneUnsafe(ready, Effect.void);
                     return pending;
                   },
                   return: async () => {
@@ -873,11 +872,10 @@ describe('native editor model', () => {
             }),
           ),
         );
-        yield* Effect.promise(() => ready);
+        yield* Deferred.await(ready);
         const cancellation = yield* Effect.forkChild(Fiber.interrupt(fiber));
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(order).toEqual(['cancel'])),
-        );
+        yield* Deferred.await(cancelled);
+        expect(order).toEqual(['cancel']);
         expect(cancellation.pollUnsafe()).toBeUndefined();
         finish();
         yield* Fiber.join(cancellation);
@@ -891,7 +889,7 @@ describe('native editor model', () => {
       }),
   );
 
-  effectIt.effect(
+  it.effect(
     'preserves a primary malformed response and a distinct iterator cleanup defect',
     () =>
       Effect.gen(function* () {

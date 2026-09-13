@@ -331,74 +331,85 @@ describe('completedRunArchive facade', () => {
     }
   });
 
-  it('keeps concurrent exports of the same run isolated by session roots', async () => {
-    const runId = 'abc456abc456' as RunId;
-    const papers = ['first-paper', 'second-paper'].map((label) => ({
-      label,
-      session: createTestSession(),
-    }));
-    try {
-      await Promise.all(
-        papers.map(async ({ session, label }) => {
-          publishTestRunStart(session, runId);
-          await session.settlePublications();
-          await Effect.runPromise(
-            getRunRecords(session, runId).writeRunRecord({
-              ...runConfig(label),
-              instruction: label,
+  // it.live: the release at the end of this test closes both sessions through
+  // `closeSession`, whose settlement budget is
+  // `Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS)`. With no active runs that arm
+  // is never awaited today, so the happy path would also pass on the test
+  // clock. The live clock is kept for the regression case: under TestClock
+  // nothing advances that sleep, so a session that stopped settling could
+  // never reach the `Test session did not close` failure and would surface as
+  // a suite timeout instead of a named assertion.
+  effectIt.live(
+    'keeps concurrent exports of the same run isolated by session roots',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'abc456abc456' as RunId;
+        // Both sessions close on every exit of this test, interruption
+        // included; a close failure is the defect the old `finally` threw.
+        const papers = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            ['first-paper', 'second-paper'].map((label) => ({
+              label,
+              session: createTestSession(),
+            })),
+          ),
+          (open) =>
+            Effect.forEach(open, ({ session }) => closeTestSession(session), {
+              concurrency: 'unbounded',
+              discard: true,
+            }).pipe(Effect.orDie),
+        );
+        yield* Effect.forEach(
+          papers,
+          ({ session, label }) =>
+            Effect.gen(function* () {
+              publishTestRunStart(session, runId);
+              yield* Effect.promise(() => session.settlePublications());
+              yield* getRunRecords(session, runId).writeRunRecord({
+                ...runConfig(label),
+                instruction: label,
+              });
+              yield* session.commit([
+                {
+                  type: 'run.description',
+                  aggregateId: aggregateId('run', runId),
+                  description: label,
+                },
+              ]);
+              session.publish([
+                {
+                  type: 'response.finalized',
+                  aggregateId: aggregateId('run', runId),
+                  text: `Proof for ${label}.`,
+                },
+              ]);
+              yield* Effect.promise(() => session.settlePublications());
             }),
-          );
-          await Effect.runPromise(
-            session.commit([
-              {
-                type: 'run.description',
-                aggregateId: aggregateId('run', runId),
-                description: label,
-              },
-            ]),
-          );
-          session.publish([
-            {
-              type: 'response.finalized',
-              aggregateId: aggregateId('run', runId),
-              text: `Proof for ${label}.`,
-            },
-          ]);
-          await session.settlePublications();
-        }),
-      );
-      const exports = await Effect.runPromise(
-        Effect.all(
+          { concurrency: 'unbounded', discard: true },
+        );
+        const exports = yield* Effect.all(
           papers.map(({ session }) =>
             loadChatExportInputEffect(runId, session),
           ),
           { concurrency: 2 },
-        ),
-      );
-      expect(
-        exports.map((result) => ({
-          description: result.run?.description,
-          agent: result.config?.agent,
-          instruction: result.exportInput?.config.instruction,
-          nodes: result.exportInput?.nodes,
-        })),
-      ).toEqual(
-        papers.map(({ label }) => ({
-          description: label,
-          agent: label,
-          instruction: label,
-          nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
-        })),
-      );
-    } finally {
-      await Effect.runPromise(
-        Effect.forEach(papers, ({ session }) => closeTestSession(session), {
-          concurrency: 'unbounded',
-          discard: true,
-        }),
-      );
-    }
-  });
+        );
+        expect(
+          exports.map((result) => ({
+            description: result.run?.description,
+            agent: result.config?.agent,
+            instruction: result.exportInput?.config.instruction,
+            nodes: result.exportInput?.nodes,
+          })),
+        ).toEqual(
+          papers.map(({ label }) => ({
+            description: label,
+            agent: label,
+            instruction: label,
+            nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
+          })),
+        );
+      }),
+  );
 
   it('serves conversation and export from transcripts and tasks from committed events', async () => {
     const runId = 'abc123abc123' as RunId;
