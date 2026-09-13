@@ -12,7 +12,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it as effectIt } from '@effect/vitest';
-import { Effect, Result } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
@@ -36,7 +36,7 @@ import {
   type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
-import { withTempDir } from '@test/support/tempDirPlatform';
+import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
   return {
@@ -173,23 +173,29 @@ function expectedRecoveryHint(
   )}`;
 }
 
+/** The workflow command's program over the shared happy-path inputs. */
+function workflowProgram(
+  init: Partial<WorkflowRunInit> = {},
+  context: CliContext = createRunCommandCliContext(),
+): Effect.Effect<number, Error> {
+  return Effect.provide(
+    nativeRun(context, {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+      ...init,
+    }),
+    fakeProcessServices(),
+  );
+}
+
 /** Runs the workflow command with the shared happy-path inputs. */
 async function runWorkflow(
   init: Partial<WorkflowRunInit> = {},
   context: CliContext = createRunCommandCliContext(),
 ): Promise<number> {
-  return Effect.runPromise(
-    Effect.provide(
-      nativeRun(context, {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        instruction: '',
-        ...init,
-      }),
-      fakeProcessServices(),
-    ),
-  );
+  return Effect.runPromise(workflowProgram(init, context));
 }
 
 function runOutputSummary(absolutePath: string, originalPath: string) {
@@ -446,23 +452,43 @@ describe('CLI run command, workflow agents', () => {
   // The output probes `mkdir -p` their destination, so a run that can never
   // start has to be refused before them — otherwise an invalid command leaves
   // directories behind.
-  it('refuses a workflow run with no input before creating the output directory', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      await expect(
-        runWorkflow(
-          {
-            inputFiles: [],
-            instruction: 'Polish it.',
-            outputDir: path.join(root, 'missing', 'out'),
-          },
-          createRunCommandCliContext({ cwd: root }),
-        ),
-      ).rejects.toThrow('At least one workflow input file is required.');
+  effectIt.effect(
+    'refuses a workflow run with no input before creating the output directory',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const exit = yield* Effect.exit(
+            workflowProgram(
+              {
+                inputFiles: [],
+                instruction: 'Polish it.',
+                outputDir: path.join(root, 'missing', 'out'),
+              },
+              createRunCommandCliContext({ cwd: root }),
+            ),
+          );
 
-      await expect(fs.stat(path.join(root, 'missing'))).rejects.toThrow();
-      expectNoModelOrInputWork();
-    });
-  });
+          // The command reports a usage error by throwing `CliUsageError` from
+          // its `Effect.fn` body, which Effect surfaces as a defect rather than
+          // a typed failure, so the assertion reads the cause.
+          expect(Exit.isFailure(exit)).toBe(true);
+          expect(
+            Exit.isFailure(exit) &&
+              exit.cause.reasons.find(Cause.isDieReason)?.defect,
+          ).toMatchObject({
+            message: 'At least one workflow input file is required.',
+          });
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                Effect.tryPromise(() => fs.stat(path.join(root, 'missing'))),
+              ),
+            ),
+          ).toBe(true);
+          expectNoModelOrInputWork();
+        }),
+      ),
+  );
 
   it('passes instruction file contents before inline workflow instructions', async () => {
     await withTempDir('texra-workflow-', async (root) => {
