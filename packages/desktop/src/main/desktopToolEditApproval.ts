@@ -38,9 +38,9 @@ export type DesktopToolEditApprovalUi = Pick<
     previewId: string,
   ): Promise<void>;
   /**
-   * Close the Review workbench the staged diff is shown in, and only while
-   * that diff is the one it holds: settling this request must not dismiss
-   * another request's pending preview or an unrelated review.
+   * Take this request's staged diff off the Review workbench and nothing
+   * else: settling here must not dismiss another request's pending preview
+   * or an unrelated review, whichever of them the user is looking at.
    */
   closeDiff(previewId: string): Promise<void>;
 };
@@ -144,8 +144,8 @@ class DesktopToolEditPreview implements ToolEditPreview {
 
   /**
    * Close the view before the files behind it go, in that order. The close
-   * names this request's preview, so a request settling behind a newer diff
-   * leaves that diff on screen instead of dismissing it.
+   * names this request's preview, so a request settling while the user reads
+   * another diff takes only its own off the Review workbench.
    */
   async dispose(): Promise<void> {
     await this.ui.closeDiff(this.context.requestId);

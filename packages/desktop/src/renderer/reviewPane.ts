@@ -25,9 +25,10 @@ interface ReviewPaneController {
   /** Drop every retained review, whatever opened it (the window closing). */
   clear(): void;
   /**
-   * Clear the pane when `previewId` names the diff it holds, reporting
-   * whether it did. A close for a preview a later diff replaced holds
-   * nothing on screen to close, so it changes nothing.
+   * Drop the retained reviews `previewId` opened and no others, re-selecting
+   * one the pane still holds if the closed diff was the one on screen.
+   * Reports whether the pane is now empty, which is when the Review tab has
+   * nothing left to show.
    */
   close(previewId: string): boolean;
   open(payload: DesktopShowDiffMessage): void;
@@ -41,14 +42,11 @@ export function createReviewPane(): ReviewPaneController {
   diffView.className = 'desktop-review-diff';
   diffView.fill = true;
 
+  // Keyed by displayPath, one retained review per path; each entry carries
+  // the `previewId` of the diff that opened it, which is what a close names.
   const entries = new Map<string, DesktopShowDiffMessage>();
   let selectedPath: string | undefined;
   let filter = '';
-  /**
-   * The diff the pane holds: the last one opened in it. A close names the
-   * diff its sender opened, and only this one is still on screen to close.
-   */
-  let openedPreviewId: string | undefined;
 
   function visibleEntries(): readonly DesktopShowDiffMessage[] {
     const query = filter.trim().toLocaleLowerCase();
@@ -112,7 +110,6 @@ export function createReviewPane(): ReviewPaneController {
   function clearEntries(): void {
     entries.clear();
     selectedPath = undefined;
-    openedPreviewId = undefined;
     rerender();
   }
 
@@ -218,18 +215,21 @@ export function createReviewPane(): ReviewPaneController {
     element,
     clear: clearEntries,
     close(previewId) {
-      if (openedPreviewId !== previewId) {
-        console.debug(
-          `[desktop] review pane holds ${openedPreviewId ?? 'no diff'}; the close for ${previewId} leaves it open`,
-        );
-        return false;
+      for (const [path, entry] of entries) {
+        if (entry.previewId === previewId) entries.delete(path);
       }
-      clearEntries();
-      return true;
+      const remaining = [...entries.values()];
+      if (selectedPath !== undefined && !entries.has(selectedPath)) {
+        // The diff on screen went with the close. Show one the pane still
+        // holds rather than blanking a review nobody dismissed.
+        selectedPath = undefined;
+        if (remaining[0]) select(remaining[0]);
+      }
+      rerender();
+      return remaining.length === 0;
     },
     open(payload) {
       entries.set(payload.displayPath, payload);
-      openedPreviewId = payload.previewId;
       select(payload);
     },
     setTheme(nextTheme) {

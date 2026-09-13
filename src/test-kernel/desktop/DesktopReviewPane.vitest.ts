@@ -42,6 +42,23 @@ function countsText(controller: ReviewPane): string | null | undefined {
     ?.textContent;
 }
 
+/** The title of the review currently on screen. */
+function selectedTitle(controller: ReviewPane): string | null | undefined {
+  return controller.element.querySelector('.desktop-review-summary strong')
+    ?.textContent;
+}
+
+/** Click the tree entry for `path`, as the user picking a file to read. */
+function selectFile(controller: ReviewPane, path: string): void {
+  const button = controller.element.querySelector<HTMLElement>(
+    `wa-button.desktop-review-file[title="${path}"]`,
+  );
+  if (!button) throw new Error(`no review tree entry for ${path}`);
+  // Dispatched rather than `click()`: the WebAwesome button forwards that to
+  // an inner native button its shadow root has no room for here.
+  button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}
+
 describe('desktop review pane', () => {
   useLitComponentTestDom(() => import('@desktop/renderer/reviewPane'));
 
@@ -83,16 +100,27 @@ describe('desktop review pane', () => {
     expect(controller.element.textContent).toContain('No changes to review');
   });
 
-  it('closes only the diff it holds', async () => {
+  it('closes only the reviews the named preview opened', async () => {
     const controller = await newReviewPane();
     controller.open(reviewPayload('src/main.ts', 1, 1, 'request-a'));
     controller.open(reviewPayload('src/other.ts', 1, 1, 'request-b'));
+    // The user goes back to the older request's diff in the tree.
+    selectFile(controller, 'src/main.ts');
+    expect(selectedTitle(controller)).toContain('src/main.ts');
 
-    // The older request settles behind the diff that replaced its preview.
-    expect(controller.close('request-a')).toBe(false);
-    expect(fileButtons(controller)).toHaveLength(2);
+    // The newer request settles: its review goes, the one being read stays
+    // on screen, and the pane is not empty, so the Review tab stays too.
+    expect(controller.close('request-b')).toBe(false);
+    expect(fileButtons(controller)).toHaveLength(1);
+    expect(selectedTitle(controller)).toContain('src/main.ts');
 
-    expect(controller.close('request-b')).toBe(true);
+    expect(controller.close('request-a')).toBe(true);
     expect(controller.element.textContent).toContain('No changes to review');
+
+    // Closing the review on screen falls back to one the pane still holds.
+    controller.open(reviewPayload('src/main.ts', 1, 1, 'request-c'));
+    controller.open(reviewPayload('src/other.ts', 1, 1, 'request-d'));
+    expect(controller.close('request-d')).toBe(false);
+    expect(selectedTitle(controller)).toContain('src/main.ts');
   });
 });

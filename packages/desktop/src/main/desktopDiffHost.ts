@@ -56,11 +56,11 @@ interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
     previewId?: string,
   ): Promise<void>;
   /**
-   * Close the Review workbench the diff `previewId` names is shown in: the
-   * renderer's `desktop:closeDiff`, the counterpart of the
-   * `desktop:showDiff` that opened it. The Review tab is one surface per
-   * window, so the renderer closes it only while that diff is the one it
-   * holds; a preview a later diff replaced closes nothing.
+   * Close the diff `previewId` names: the renderer's `desktop:closeDiff`,
+   * the counterpart of the `desktop:showDiff` that opened it. The Review
+   * pane holds a review per path, so this takes off the ones this diff
+   * opened and leaves the rest standing; the workbench tab goes only once
+   * the pane is empty.
    */
   closeDiff(previewId: string): Promise<void>;
 }

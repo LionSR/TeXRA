@@ -47,9 +47,9 @@ export const DesktopCloseDiffMessageSchema = z.object({
   session: z.string().min(1),
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
   /**
-   * The `previewId` of the diff the sender opened. The Review tab is one
-   * surface per window, so the renderer closes it only while that diff is
-   * the one it holds: a preview another diff has replaced closes nothing.
+   * The `previewId` of the diff the sender opened. The Review pane retains
+   * one review per path, so the renderer drops the reviews this id opened
+   * and no others, and the Review tab goes only once that empties the pane.
    */
   previewId: z.string().min(1),
 });
