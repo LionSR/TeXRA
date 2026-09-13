@@ -70,6 +70,7 @@ import {
   aggregateTarget,
   isDisplaySessionEvent,
   ownerIdentity,
+  type CommitOrdinal,
   type OwnerId,
   type SessionCloseReport,
   type SessionEvent,
@@ -225,7 +226,8 @@ const sessionHandleLayer = (
   Layer.effect(
     Session,
     Effect.gen(function* () {
-      const { publish, ...reads } = yield* SessionEvents;
+      const { publish, exclusive, detach, settle, ...reads } =
+        yield* SessionEvents;
       const eventLog = yield* Database;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
@@ -241,41 +243,45 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
-      const settlePublication = (rows: readonly SessionEvent[]) =>
+      /** Wait until the tail has delivered and the view has folded every
+       *  commit up to `commit`: what "published" means to a caller that
+       *  reads the view next. */
+      const settleTo = (commit: CommitOrdinal) =>
         Effect.gen(function* () {
-          const last = rows.at(-1);
-          if (last) {
-            yield* SubscriptionRef.changes(delivered).pipe(
-              Stream.filter((commit) => commit >= last.commit),
-              Stream.runHead,
-              Effect.raceFirst(
-                Deferred.await(tailEnded).pipe(
-                  Effect.andThen(
-                    Effect.die(
-                      new Error('Session committed-event consumer stopped'),
-                    ),
+          yield* SubscriptionRef.changes(delivered).pipe(
+            Stream.filter((delivered) => delivered >= commit),
+            Stream.runHead,
+            Effect.raceFirst(
+              Deferred.await(tailEnded).pipe(
+                Effect.andThen(
+                  Effect.die(
+                    new Error('Session committed-event consumer stopped'),
                   ),
                 ),
               ),
-            );
-          }
-          if (last) {
-            yield* view.changes.pipe(
-              Stream.filter((state) => state.cursor >= last.commit),
-              Stream.runHead,
-              Effect.flatMap((state) =>
-                Option.isSome(state)
-                  ? Effect.void
-                  : Effect.die(
-                      new Error(
-                        'Session view stopped before publication settled',
-                      ),
+            ),
+          );
+          yield* view.changes.pipe(
+            Stream.filter((state) => state.cursor >= commit),
+            Stream.runHead,
+            Effect.flatMap((state) =>
+              Option.isSome(state)
+                ? Effect.void
+                : Effect.die(
+                    new Error(
+                      'Session view stopped before publication settled',
                     ),
-              ),
-            );
-          }
-          return rows;
+                  ),
+            ),
+          );
         });
+      const settlePublication = (rows: readonly SessionEvent[]) => {
+        const last = rows.at(-1);
+        return last === undefined
+          ? Effect.succeed(rows)
+          : settleTo(last.commit).pipe(Effect.as(rows));
+      };
+      const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
         ledger,
@@ -321,6 +327,33 @@ const sessionHandleLayer = (
         aggregateRows: (id) => eventLog.readAggregate(id, 1).pipe(Effect.orDie),
         publish: (events) =>
           publish(events).pipe(Effect.flatMap(settlePublication)),
+        // A job settles against the last commit it appended, never against
+        // whatever the publisher committed next: a job that appended nothing
+        // (a decision already taken, an empty update) returns at once.
+        exclusive: (job) =>
+          Effect.gen(function* () {
+            let committed: CommitOrdinal | null = null;
+            const value = yield* exclusive((append) =>
+              job((events) =>
+                append(events).pipe(
+                  Effect.tap((rows) =>
+                    Effect.sync(() => {
+                      const last = rows.at(-1);
+                      if (last !== undefined) committed = last.commit;
+                    }),
+                  ),
+                ),
+              ),
+            );
+            if (committed !== null) yield* settleTo(committed);
+            return value;
+          }),
+        detach,
+        settle: settle.pipe(
+          Effect.flatMap((committed) =>
+            committed === null ? Effect.void : settleTo(committed),
+          ),
+        ),
         publishRegistration: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
@@ -357,7 +390,7 @@ const sessionHandleLayer = (
         subscriptions,
         // The request handler admits on the root graph's log.
         requests: sessionRequests(session, eventLog, local.ref, inquiryRecords),
-        now: () => SubscriptionRef.getUnsafe(eventLog.observedCommit),
+        now,
         close: () => release(key),
       });
       // Capture before constructing the handle: constructor publications and
