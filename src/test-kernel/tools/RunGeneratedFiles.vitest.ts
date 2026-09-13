@@ -9,8 +9,8 @@ import { platform } from '@platform/platform';
 import type { RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 import { fakePath } from '@test/support/FakePlatform';
+import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
 const EXECUTION_ID = 'generated-history-test' as RunId;
 const STORAGE_PATH = fakePath('storage');

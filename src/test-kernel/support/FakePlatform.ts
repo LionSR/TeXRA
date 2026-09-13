@@ -56,7 +56,7 @@ function workerTempHome(): string {
  * in-memory filesystem this replaced. Emptied whenever a fake platform is
  * built, so a host starts from the files it seeds and nothing else.
  */
-export const FAKE_ROOT = path.join(workerTempHome(), 'root');
+const FAKE_ROOT = path.join(workerTempHome(), 'root');
 
 /**
  * A real path inside {@link FAKE_ROOT}. `fakePath('workspace/a.tex')` is the

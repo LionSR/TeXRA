@@ -15,8 +15,8 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { fakePath } from '@test/support/FakePlatform';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
 import {
