@@ -375,6 +375,45 @@ describe('Tool edit approval gating', () => {
     }),
   );
 
+  it.live(
+    'releases the staged preview when the open is interrupted mid-commit',
+    () =>
+      Effect.gen(function* () {
+        // The `request.opened` commit never settles, so the interrupt lands
+        // with no row written: the cancellation finds nothing open and
+        // writes no decision, which is the only other release.
+        const session = defaultSession();
+        const commit = session.commit.bind(session);
+        vi.spyOn(session, 'commit').mockImplementation((events) =>
+          events.some((event) => event.type === 'request.opened')
+            ? Effect.never
+            : commit(events),
+        );
+
+        const request = yield* Effect.forkChild(
+          inRun(
+            requestToolEditApproval({
+              path: 'doc.txt',
+              originalContent: 'old content',
+              proposedContent: 'new content',
+              sourceTool: 'write_file',
+            }),
+          ),
+        );
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => approvalRequests.length === 1, {
+            timeoutMessage: 'Timed out waiting for the edit to be staged',
+          }),
+        );
+
+        yield* Fiber.interrupt(request);
+
+        assert.deepStrictEqual(releasedPreviews, [
+          approvalRequests[0]?.permission.requestId,
+        ]);
+      }),
+  );
+
   it.live('rechecks session bypass between concurrent approval requests', () =>
     Effect.gen(function* () {
       // The first request stays parked so the second is enqueued behind it.

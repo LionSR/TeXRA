@@ -46,6 +46,7 @@ import {
   attentionRequests,
   currentApproval,
   decidePendingRequest,
+  dropPresentation,
   forgetSettledRequests,
   landRequestDecision,
   stagePresentation,
@@ -326,6 +327,12 @@ export function createTuiHostInteractions(
           proposedContent: request.proposedContent,
         },
       });
+    },
+    // `forgetSettledRequests` only drops a presentation whose request the
+    // fold listed at least once, so a request whose `request.opened` never
+    // committed is released by id here.
+    releaseToolEdit(requestId) {
+      dropPresentation(requestId);
     },
     // The badge reads the fold's policy snapshot; the host only mirrors the
     // change onto its NDJSON wire.

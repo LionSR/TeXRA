@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
@@ -242,8 +242,10 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // The preview is staged before the request opens, and stays staged
       // until that request's `request.decided` releases it on every host:
       // a surface reading the committed row must never find the request
-      // listed with nothing to show for it. An interrupted open closes the
-      // request as cancelled, which is the release.
+      // listed with nothing to show for it. An interrupted open that did
+      // commit closes the request as cancelled, which is that release; an
+      // open that never committed has no decision at all, which the
+      // finalizer below covers.
       prompt: Effect.suspend(() => {
         call.inScope(() => session.interactions.presentToolEdit(staged));
         return session
@@ -264,15 +266,25 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
               );
             }),
             // A refused commit (the run lost its claim, the database write
-            // failed) wrote no `request.opened`, so no `request.decided`
-            // will ever release what was just staged. Release it here and
-            // fail as before.
-            Effect.tapError(() =>
-              Effect.sync(() => {
-                call.inScope(() =>
-                  session.interactions.releaseToolEdit(permission.requestId),
-                );
-              }),
+            // failed) wrote no `request.opened`, and an interruption taken
+            // while that append is still outstanding ends the same way: the
+            // cancellation finds no open request and writes nothing. Either
+            // way no `request.decided` will ever release what was just
+            // staged, so release on every exit but a success, in a
+            // finalizer that an interrupt cannot cut short. Releasing after
+            // an open that did commit is harmless: every host releases by
+            // deleting the entry the decision would delete anyway, and that
+            // decision-driven release still runs.
+            Effect.onExit((exit) =>
+              Exit.isSuccess(exit)
+                ? Effect.void
+                : Effect.sync(() => {
+                    call.inScope(() =>
+                      session.interactions.releaseToolEdit(
+                        permission.requestId,
+                      ),
+                    );
+                  }),
             ),
           );
       }),

@@ -331,6 +331,12 @@ export function createHeadlessCliHostInteractions(
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },
+    // The prune above only reaches a request the fold has listed, so a
+    // request whose `request.opened` never committed would keep its preview
+    // for the life of the process. This is that release.
+    releaseToolEdit(requestId) {
+      previews.delete(requestId);
+    },
     dispose() {
       effectRuntime().runFork(Fiber.interrupt(fiber));
     },

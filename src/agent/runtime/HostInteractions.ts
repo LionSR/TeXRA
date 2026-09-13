@@ -98,9 +98,14 @@ export interface HostInteractions {
   presentToolEdit?(request: ToolEditApprovalRequest): void;
   /**
    * Release the preview staged for a request whose `request.opened` never
-   * committed: no row was written, so the `request.decided` that releases
-   * every other staged preview will never arrive. A host that stages nothing
-   * has nothing to release.
+   * committed (the append was refused, or the fiber was interrupted while it
+   * was outstanding): no row was written, so the `request.decided` that
+   * releases every other staged preview will never arrive. It pairs with
+   * `presentToolEdit` — every host that stages implements both, and a host
+   * that stages nothing implements neither, which is why this port is
+   * optional like the rest of this surface. Releasing a request that did
+   * open is harmless: each implementation is an idempotent delete of what
+   * the decision would drop anyway.
    */
   releaseToolEdit?(requestId: string): void;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
