@@ -17,6 +17,7 @@
 // that mocks it.
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
+import { Effect } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -28,7 +29,10 @@ import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import {
+  LeanLanguageServices,
+  type LeanLanguageServicesShape,
+} from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import {
   createFakePlatform,
@@ -53,6 +57,23 @@ export interface FakeHost {
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
+
+const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
+  executeFileCommand: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getGoalState: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getTermGoal: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  getHoverInfo: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  fetchDiagnosticsForFile: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  navigateToFirstError: () => Effect.void,
+  executeProjectCommand: () =>
+    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+  stopSessionsForRun: () => Effect.void,
+};
 
 /** Build both halves of a fake host from one option bag. */
 export function createFakeHost(
@@ -207,7 +228,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // A suite that exercises a Lean tool provides its own port innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
-    Layer.mock(LeanLanguageServices, { stopSessionsForRun: undefined }),
+    Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
     Secrets.layer(() => installedHost().secrets),
     AppState.layer(() => installedHost().roots.globalState),
     SetupPlatform.layer(fakeSetupPlatform),
