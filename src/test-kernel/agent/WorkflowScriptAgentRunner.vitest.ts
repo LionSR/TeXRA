@@ -1384,35 +1384,25 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect(
-    'advances past a journaled attempt 0 whose child was collected',
-    () =>
-      Effect.gen(function* () {
-        // The parent journaled attempt 0 and died before journaling its result,
-        // and deletion has since collected that child, so nothing of it reads
-        // back. The mark is the only fact that it ran: a mark folded to 0 would
-        // be indistinguishable from no mark, and the probe would repeat the work
-        // attempt 0 already did.
-        mocks.readWorkflowCallAttempt.mockReturnValue(
-          Effect.succeed({ attempt: 0, superseded: [] }),
-        );
-        probeAnswers({ exists: false }, { exists: false });
-        const report = reportSpy();
+  it.effect('refuses a journaled attempt whose child was collected', () =>
+    Effect.gen(function* () {
+      // The mark proves this id was selected before launch, but once the
+      // aggregate is collected it cannot distinguish a pre-start crash from
+      // a deleted child that already performed work. Repeating is unsafe.
+      mocks.readWorkflowCallAttempt.mockReturnValue(
+        Effect.succeed({ attempt: 0, superseded: [] }),
+      );
+      probeAnswers({ exists: false });
 
-        expect(yield* defaultRunner()({ ...invocation(), report })).toBe(
-          result,
-        );
-
-        expect(mocks.probedRunIds).toHaveLength(2);
-        expect(mocks.executeSubagentInBand).toHaveBeenCalledTimes(1);
-        expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
-        expect(mocks.recordWorkflowCallAttempt).toHaveBeenCalledWith(
-          expect.anything(),
-          'tool-call-7',
-          '0123456789abcdef',
-          1,
-        );
-      }),
+      expect(yield* Effect.flip(defaultRunner()(invocation()))).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'was marked as launched but no longer exists',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(mocks.recordWorkflowCallAttempt).not.toHaveBeenCalled();
+    }),
   );
 
   it.effect('recovers an older attempt below the mark', () =>

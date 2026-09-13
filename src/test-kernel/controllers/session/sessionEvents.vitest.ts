@@ -1046,6 +1046,32 @@ describe('Sessions owner', () => {
       }),
   );
 
+  it.live('close releases the session after a stop settlement defect', () =>
+    Effect.gen(function* () {
+      const root = '/workspace/owner/stop-defect';
+      const session = open(root);
+      const runId = RunIdSchema.parse('aa0005');
+      track(session, runId);
+      const stopFailure = new Error('terminal write refused');
+      vi.spyOn(session.runs, 'kill').mockReturnValue({
+        accepted: () => true,
+        settlement: Effect.fail(stopFailure),
+      });
+
+      const closed = yield* Effect.exit(closeSession(root));
+      expect(Exit.isFailure(closed)).toBe(true);
+      expect(
+        Exit.isFailure(closed) ? Cause.squash(closed.cause) : undefined,
+      ).toBe(stopFailure);
+      expect(isLive(session)).toBe(true);
+
+      session.runs.untrack(runId);
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(isLive(session)).toBe(false)),
+      );
+    }),
+  );
+
   it.effect(
     'close reports a run still live past the budget as abandoned, and releases the session at its settlement',
     () =>

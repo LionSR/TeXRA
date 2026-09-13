@@ -200,7 +200,11 @@ function workflowBoardLines(
   const derivedBoard = deriveWorkflowRunModel(view, runId);
   return Effect.succeed(
     derivedBoard
-      ? ['', 'Workflow:', JSON.stringify(workflowBoardView(derivedBoard), null, 2)]
+      ? [
+          '',
+          'Workflow:',
+          JSON.stringify(workflowBoardView(derivedBoard), null, 2),
+        ]
       : [],
   );
 }

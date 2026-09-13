@@ -518,12 +518,19 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       });
       const records = getRunRecords(session, runId);
       if (!(yield* probeChild(runId, records.exists()))) {
-        // An absent id at or below the mark is one the parent journaled a
-        // launch for and deletion has since collected outright: nothing of it
-        // reads back, but it ran, so the probe advances past it exactly as it
-        // does past a tombstone. Only an id above the mark is a free slot.
-        if (journaled.attempt !== null && attempt <= journaled.attempt)
-          continue;
+        // A marked id whose aggregate disappeared is ambiguous: the host may
+        // have died before run.start, or the user may have deleted and
+        // collected a child after it performed work. Only an explicit retry
+        // authorizes advancing past that hole; otherwise repeating the call
+        // could duplicate model work and file edits.
+        if (journaled.attempt !== null && attempt <= journaled.attempt) {
+          if (journaled.superseded.includes(runId)) continue;
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} was marked as launched but no longer exists; refusing to repeat it.`,
+            ),
+          );
+        }
         // `exists()` is false for an id that never started AND for one the
         // user deleted, and a tombstone is final: launching a deleted id is
         // refused by its own sequence, and the attempt that answered this call

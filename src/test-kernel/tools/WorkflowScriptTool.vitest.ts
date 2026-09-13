@@ -1060,72 +1060,76 @@ return null`;
       }),
   );
 
-  it.effect('keeps the committed workflow board when reopening a named run', () =>
-    Effect.gen(function* () {
-      const runId = runIdFor('tool-test');
-      const phase = 'Research';
-      const label = 'Interrupted call';
-      let reopenedTasks: unknown;
-      yield* currentSession().commit([
-        {
-          type: 'run.start',
-          aggregateId: aggregateId('run', runId),
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'tool-test',
+  it.effect(
+    'keeps the committed workflow board when reopening a named run',
+    () =>
+      Effect.gen(function* () {
+        const runId = runIdFor('tool-test');
+        const phase = 'Research';
+        const label = 'Interrupted call';
+        let reopenedTasks: unknown;
+        yield* currentSession().commit([
+          {
+            type: 'run.start',
+            aggregateId: aggregateId('run', runId),
+            identity: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'tool-test',
+            },
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            category: AgentCategory.Workflow,
+            isRemote: false,
+            parent: { id: parentRunId },
+            checkpointId: checkpointIdFor('tool-test'),
           },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          category: AgentCategory.Workflow,
-          isRemote: false,
-          parent: { id: parentRunId },
-          checkpointId: checkpointIdFor('tool-test'),
-        },
-        {
-          type: 'run.launchLabel',
-          aggregateId: aggregateId('run', runId),
-          label: 'tool-test',
-        },
-        {
-          type: 'run.activate',
-          aggregateId: aggregateId('run', runId),
-          category: AgentCategory.Workflow,
-        },
-      ]);
-      yield* publishWorkflowBoard(runId, phase, label);
+          {
+            type: 'run.launchLabel',
+            aggregateId: aggregateId('run', runId),
+            label: 'tool-test',
+          },
+          {
+            type: 'run.activate',
+            aggregateId: aggregateId('run', runId),
+            category: AgentCategory.Workflow,
+          },
+        ]);
+        yield* publishWorkflowBoard(runId, phase, label);
 
-      mocks.createChildRun.mockImplementationOnce(
-        (_session: unknown, childRunId: RunId) =>
-          Effect.gen(function* () {
-            const view = yield* currentSession().readView([childRunId]);
-            reopenedTasks = view.runs.get(childRunId)?.transcript.run?.tasks;
-            const logger = new TraceEmitter();
-            vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
-            return {
-              childRunId,
-              logger,
-              waitForInput: vi.fn(),
-              beginTurn: vi.fn(),
-              failTurn: vi.fn(),
-              finalize: vi.fn(() => Effect.void),
-            };
+        mocks.createChildRun.mockImplementationOnce(
+          (_session: unknown, childRunId: RunId) =>
+            Effect.gen(function* () {
+              const view = yield* currentSession().readView([childRunId]);
+              reopenedTasks = view.runs.get(childRunId)?.transcript.run?.tasks;
+              const logger = new TraceEmitter();
+              vi.spyOn(logger, 'error').mockImplementation(
+                mocks.childLoggerError,
+              );
+              return {
+                childRunId,
+                logger,
+                waitForInput: vi.fn(),
+                beginTurn: vi.fn(),
+                failTurn: vi.fn(),
+                finalize: vi.fn(() => Effect.void),
+              };
+            }),
+        );
+
+        const result = yield* callTool();
+
+        expect(result.status).toBe('executed');
+        expect(reopenedTasks).toEqual([
+          expect.objectContaining({
+            call: expect.objectContaining({ label }),
           }),
-      );
-
-      const result = yield* callTool();
-
-      expect(result.status).toBe('executed');
-      expect(reopenedTasks).toEqual([
-        expect.objectContaining({
-          call: expect.objectContaining({ label }),
-        }),
-      ]);
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
-        currentSession(),
-        runId,
-        expect.anything(),
-        expect.anything(),
-      );
-    }),
+        ]);
+        expect(mocks.createChildRun).toHaveBeenCalledWith(
+          currentSession(),
+          runId,
+          expect.anything(),
+          expect.anything(),
+        );
+      }),
   );
 
   it.effect(

@@ -767,9 +767,31 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const budget = yield* Effect.forkChild(
       signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
-    const didSettle = yield* Effect.race(
+    const didSettle = yield* Effect.raceFirst(
       settled.pipe(Effect.as(true)),
       Fiber.join(budget).pipe(Effect.as(false)),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        // A refused stop fact kills the detached termination fiber. The run
+        // may still be unwinding, so retain the entry until it settles, then
+        // make the same final flush and release the ordinary close path owes.
+        // Re-raise the original defect after arming that cleanup so callers
+        // still observe the failed close instead of a false success report.
+        Effect.forkDetach(
+          untilSettled(runs).pipe(
+            Effect.andThen(
+              Effect.promise(
+                () =>
+                  runInSession(session, () =>
+                    session.flushArtifacts(),
+                  ) as Promise<void>,
+              ),
+            ),
+            Effect.ensuring(sessions.invalidate(key)),
+          ),
+          { startImmediately: true },
+        ).pipe(Effect.andThen(Effect.failCause(cause))),
+      ),
     );
     const abandoned = runs.getActiveIds();
     const release = didSettle

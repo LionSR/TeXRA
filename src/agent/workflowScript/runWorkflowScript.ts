@@ -90,7 +90,7 @@ interface InFlightAgentCall {
   readonly index: number;
   /** The call's journal key: what a supersession of this attempt is filed
    *  under, which is why the controller can journal one without the loop. */
-  readonly key: string;
+  key: string;
   fiber?: Fiber.Fiber<unknown, Error>;
   action?: WorkflowControlAction;
   /** The live child the gesture named: what a retry supersedes. */
@@ -714,6 +714,11 @@ export function runWorkflowScript<R = never>(
                     }
                     workflowRunState.beginAttempt(progressId);
                     yield* refreshDependencyIdentity();
+                    // A queued file-backed call may have changed identity
+                    // while waiting for this permit. Retry authorization is
+                    // filed through the live call record, so update it before
+                    // the child can report an id and become controllable.
+                    call.key = key;
                     const signal = yield* Effect.abortSignal;
                     const runnerFiber = yield* Effect.forkChild(
                       Effect.suspend(() =>
@@ -845,7 +850,6 @@ export function runWorkflowScript<R = never>(
             if (attempt === RETRY_ATTEMPT) continue;
             return attempt;
           }
-
         });
 
       const argsJson = yield* Effect.try({

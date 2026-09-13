@@ -206,7 +206,9 @@ export class SessionBridge {
     }
   }
 
-  attach(port: SessionPort): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
+  attach(
+    port: SessionPort,
+  ): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
     return Effect.gen({ self: this }, function* () {
       // A port re-attaching under a live id supersedes the previous one.
       // Close it to completion before installing the replacement so the old
