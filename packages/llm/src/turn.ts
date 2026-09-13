@@ -1578,7 +1578,9 @@ export class ModelError extends Data.TaggedError('ModelError')<
  */
 export const enrichModelError = (
   error: ModelError,
-  patch: Partial<z.infer<typeof ModelErrorFieldsSchema>>,
+  patch: Partial<
+    z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
+  >,
 ): ModelError =>
   new ModelError({
     ...error,

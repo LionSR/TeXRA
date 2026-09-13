@@ -1107,10 +1107,7 @@ export function googleInteractionsModel(
     error: ModelError,
     returnedModel?: string,
   ) =>
-    new ModelError({
-      ...error,
-      message: error.message,
-      cause: error.cause,
+    enrichModelError(error, {
       operation,
       responseId: operation.providerResponseId,
       model: returnedModel ?? error.model ?? config.requestedModel,

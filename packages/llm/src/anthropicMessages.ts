@@ -958,9 +958,7 @@ export function anthropicMessagesModel(
       let requestId: string | undefined;
       const failure = (cause: unknown) => {
         const error = sdkFailure(cause);
-        return new ModelError({
-          ...error,
-          message: error.message,
+        return enrichModelError(error, {
           cause,
           requestId: error.requestId ?? requestId,
           model: origin.requestedModel,
