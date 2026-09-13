@@ -156,17 +156,13 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   );
 });
 
-export class GlobTool extends defineTool({
+export const GlobTool = defineTool({
   name: 'glob',
   parallelSafe: true,
   description:
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,
-}) {
-  protected readonly execute = Effect.fn('GlobTool.call')(function* (
-    this: GlobTool,
-    input: GlobInput,
-  ) {
+  execute: Effect.fn('GlobTool.call')(function* (input: GlobInput) {
     const call = yield* ToolCall;
     const ports: GlobPorts = {
       signal: yield* Effect.abortSignal,
@@ -174,5 +170,5 @@ export class GlobTool extends defineTool({
       inScope: call.inScope,
     };
     return yield* runGlob(ports, input);
-  });
-}
+  }),
+});
