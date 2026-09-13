@@ -101,6 +101,14 @@ export interface AttachedPort {
   readonly close: Effect.Effect<void>;
 }
 
+/** Expected refusal when a host attaches after the bridge has closed. */
+export class SessionBridgeClosedError extends Error {
+  constructor() {
+    super('SessionBridge is closed; cannot attach a port');
+    this.name = 'SessionBridgeClosedError';
+  }
+}
+
 function wireError(error: RequestError): RequestErrorWire {
   switch (error._tag) {
     case 'NotOwner':
@@ -198,7 +206,7 @@ export class SessionBridge {
     }
   }
 
-  attach(port: SessionPort): Effect.Effect<AttachedPort, Error> {
+  attach(port: SessionPort): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
     return Effect.gen({ self: this }, function* () {
       // `Scope.state` is the module's documented read of a scope's state
       // (its "Checking scope states" example); `Scope` exports no predicate.
@@ -206,9 +214,7 @@ export class SessionBridge {
       // an already-closed child rather than failing, so without it a closed
       // bridge would register a dead port silently.
       if (this.scope.state._tag === 'Closed') {
-        return yield* Effect.fail(
-          new Error('SessionBridge is closed; cannot attach a port'),
-        );
+        return yield* Effect.fail(new SessionBridgeClosedError());
       }
       // A port re-attaching under a live id supersedes the previous one.
       // Close it to completion before installing the replacement so the old
