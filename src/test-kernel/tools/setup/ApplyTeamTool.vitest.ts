@@ -28,7 +28,9 @@ function workspaceRoster(): AgentRosterSelection | undefined {
   );
 }
 
-function applyTeam(input: Parameters<ApplyTeamTool['call']>[0]) {
+function applyTeam(
+  input: Parameters<InstanceType<typeof ApplyTeamTool>['call']>[0],
+) {
   return new ApplyTeamTool()
     .call(input)
     .pipe(Effect.provide(nativeToolTestLayer()));

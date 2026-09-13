@@ -56,7 +56,7 @@ async function setupTool(
     timedOut: false,
   },
 ): Promise<{
-  tool: SendToTerminalTool;
+  tool: InstanceType<typeof SendToTerminalTool>;
   runs: RunRecord[];
   runId: ReturnType<typeof publishTestRunStart>;
 }> {
@@ -81,7 +81,7 @@ async function setupTool(
 }
 
 const callTool = (
-  tool: SendToTerminalTool,
+  tool: InstanceType<typeof SendToTerminalTool>,
   runId: ReturnType<typeof publishTestRunStart>,
   input: unknown,
 ) =>

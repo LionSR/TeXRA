@@ -16,9 +16,16 @@ type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
 type DefinedToolFlags = {
   readonly [K in ExecutionFlag]: boolean | undefined;
 };
-interface DefinedToolHosts {
+/**
+ * Written as an anonymous object type, not an `interface`: `defineTool` now
+ * returns the tool class rather than being subclassed, so this shape lands
+ * in the emitted type of every tool the SDK writes a `.d.ts` for. A named
+ * interface would have to be exported to be referenced there (TS4058); an
+ * anonymous type is inlined and needs no name.
+ */
+type DefinedToolHosts = {
   readonly unavailableHosts: readonly ToolHost[] | undefined;
-}
+};
 
 /**
  * The abstract class `defineTool` hands back when the definition carries no
