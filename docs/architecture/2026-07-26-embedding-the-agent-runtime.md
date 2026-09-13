@@ -627,11 +627,10 @@ how a shipped host obtains full feature parity rather than proving that every
 call is a minimum runtime requirement:
 `initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
 `lean: directLeanLanguageServices()` in its `installProcessRuntime` call, and
-`bootstrapNodeAgentDirectories` at `:324`. It also calls the optional one (`:319`). Product policy is
-not necessarily CLI-only:
-desktop also calls
-`seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION)` at
-`packages/desktop/src/main/platform/index.ts:304-307`.
+`bootstrapNodeAgentDirectories` at `:324`. It also calls the optional
+`initializeNodeRuntimeSkills` (`:228`). Product policy is not necessarily
+CLI-only: desktop also calls `seedDisabledToolDefaults(globalStateStore)` at
+`packages/desktop/src/main/platform/index.ts:225`.
 
 ---
 

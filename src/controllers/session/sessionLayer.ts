@@ -914,24 +914,29 @@ export function installProcessRuntime({
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
-    lean,
-  ).pipe(
-    Layer.provideMerge(identity),
-    // The standard library's filesystem and path services, provided once
-    // per process here rather than by each program that needs them: every
-    // root reaches this install, so a consumer (the Lean layer above
-    // included) takes `FileSystem`/`Path` from context and builds no layer
-    // of its own.
-    Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
-  );
+  ).pipe(Layer.provideMerge(identity));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   };
   const runtime = ManagedRuntime.make(
     Sessions.layer(release, services).pipe(
       Layer.provideMerge(services),
+      // The Lean port beside `services`, not among them: `services` is also
+      // each session entry's identity layer, rebuilt fresh per root, and the
+      // Lean pool is one per process — its servers are shared across roots.
+      Layer.provideMerge(lean),
       Layer.provideMerge(
-        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
+        Layer.mergeAll(
+          effectDiagnosticsLayer,
+          FetchHttpClient.layer,
+          // The standard library's filesystem and path services, provided
+          // once per process here rather than by each program that needs
+          // them: every root reaches this install, so a consumer (the Lean
+          // layer included) takes `FileSystem`/`Path` from context and
+          // builds no layer of its own.
+          NodeFileSystem.layer,
+          NodePath.layer,
+        ),
       ),
     ),
   );
