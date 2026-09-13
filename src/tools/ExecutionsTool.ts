@@ -534,8 +534,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Completed run: the view's facts beside the private records.
       const records = getRunRecords(context.session, runId);
       const run = session.runView(runId);
-      const durableView = run ? null : yield* session.readView([runId]);
-      const summaryRun = run ?? durableView?.runs.get(runId);
+      // The live projection deliberately keeps only a bounded transcript for
+      // inactive runs. Fold this completed aggregate cold so workflow cards
+      // retain their terminal statuses and board-level opened state.
+      const durableView = yield* session.readView([runId]);
+      const summaryRun = durableView.runs.get(runId) ?? run;
       const [record, children, todos, report] = yield* Effect.all(
         [
           records.readRunRecord(),
