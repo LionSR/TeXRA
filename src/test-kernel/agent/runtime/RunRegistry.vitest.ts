@@ -1036,6 +1036,10 @@ describe('runRegistry', () => {
           registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
         ),
       ).rejects.toThrow('detach batch refused');
+      // The local sever follows the commit, so a refused batch leaves the
+      // child parented here exactly as it stays parented in storage, and the
+      // retry still finds a child to detach.
+      expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
     } finally {
       registry.dispose();
     }

@@ -136,7 +136,10 @@ structured, cost }`), `null` on failure, or the truthy
   beside it is written for a failed delivery too, so nothing says whether the
   turn succeeded) — a decision taken while holding that attempt's run claim,
   so a resume starting one instant later is refused instead of running beside
-  the id this frees. A parent execution has one
+  the id this frees. A FAILED or CANCELLED `run.end` frees the next id only
+  when no `run.result` manifest sits under it: the manifest commits ahead of
+  the turn's settle, so a failed row beside one says the delivery landed and
+  only the bookkeeping after it did not. A parent execution has one
   active runtime owner; the execution KV store is durable state, not a
   cross-process lock. Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.

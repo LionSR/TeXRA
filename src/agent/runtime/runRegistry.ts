@@ -579,48 +579,64 @@ export class RunRegistry {
    * follow-up queue. Called when stopping an orchestrator without killing
    * children.
    *
-   * The local sever is synchronous, as a stop's admission is; the batch that
-   * makes it durable is the returned effect, and the caller must run it
-   * before reporting the stop done. It carries every severed child at once —
-   * activations included, which is why a caller must not re-derive the set
-   * from `getActiveChildren` (handles only) and publish `run.detach` for the
-   * difference: a native child between turns would be published twice — and
-   * a batch spanning run ids belongs to no single run, so no run's own drain
-   * would ever hear it refused. A stop that reported done over a refused
-   * batch would leave the children durably parented, and a later delete of
-   * the parent would collect the children the user chose to keep running.
+   * The durable batch comes first and the local sever follows it, on the
+   * children that batch committed: a refused commit therefore leaves both the
+   * durable parent edges and the local relationships standing, so a retry
+   * still finds the children to detach. It carries every severed child at
+   * once — activations included, which is why a caller must not re-derive the
+   * set from `getActiveChildren` (handles only) and publish `run.detach` for
+   * the difference: a native child between turns would be published twice —
+   * and a batch spanning run ids belongs to no single run, so no run's own
+   * drain would ever hear it refused. A stop that reported done over a
+   * refused batch would leave the children durably parented, and a later
+   * delete of the parent would collect the children the user chose to keep
+   * running.
    */
   detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
-    const detachedChildRunIds = this.detachChildren(parentRunId);
+    const detachedChildRunIds = this.childRunIds(parentRunId);
     if (detachedChildRunIds.length === 0) return Effect.void;
     return this.commit(
       detachedChildRunIds.map((childRunId) => ({
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', childRunId),
       })),
+    ).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          this.detachChildren(parentRunId, detachedChildRunIds);
+        }),
+      ),
     );
   }
 
-  /** Apply parent removal to local handles and approval ancestry without publishing. */
-  detachChildren(parentRunId: RunId): readonly RunId[] {
-    // A Set, not an array: a child detached mid-turn has both a per-turn
-    // handle and a ChildRunActivation under one runId, so both
-    // loops below reach the same child and it must still be published (and
-    // reported) exactly once.
-    const detachedChildRunIds = new Set<RunId>();
-    for (const activation of this.activeChildActivations(parentRunId)) {
-      activation.detach();
-      this.approvals.detachRunFromParent(activation.runId);
-      detachedChildRunIds.add(activation.runId);
-    }
-    for (const handle of this.handles.values()) {
-      if (!handle.isOwnedBy(parentRunId)) continue;
-      this.approvals.detachRunFromParent(handle.runId);
-      handle.detach();
-      detachedChildRunIds.add(handle.runId);
+  /** The children one parent's detach covers. A Set, not an array: a child
+   *  detached mid-turn has both a per-turn handle and a ChildRunActivation
+   *  under one runId, so both loops reach the same child and it must still be
+   *  published (and severed) exactly once. */
+  private childRunIds(parentRunId: RunId): readonly RunId[] {
+    const childRunIds = new Set<RunId>();
+    for (const activation of this.activeChildActivations(parentRunId))
+      childRunIds.add(activation.runId);
+    for (const handle of this.handles.values())
+      if (handle.isOwnedBy(parentRunId)) childRunIds.add(handle.runId);
+    return [...childRunIds];
+  }
+
+  /** Apply parent removal to local handles and approval ancestry without
+   *  publishing, over the children a durable detach already covers: the batch
+   *  {@link detachActiveChildren} committed, or a committed `run.removed`. */
+  detachChildren(
+    parentRunId: RunId,
+    childRunIds: readonly RunId[] = this.childRunIds(parentRunId),
+  ): void {
+    for (const childRunId of childRunIds) {
+      const activation = this.childActivations.get(childRunId);
+      if (activation?.parentRunId === parentRunId) activation.detach();
+      this.approvals.detachRunFromParent(childRunId);
+      const handle = this.handles.get(childRunId);
+      if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
     }
     this.emitChildActivity(parentRunId);
-    return [...detachedChildRunIds];
   }
 
   /**

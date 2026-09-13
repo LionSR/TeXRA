@@ -689,7 +689,11 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.runCompleted).toBe(true);
-    expect(runs.getHandle(childRun)?.isChild).toBe(false);
+    // The local sever follows the committed `run.detach` now, so the
+    // promotion lands with that batch rather than with the stop's admission.
+    await vi.waitFor(() =>
+      expect(runs.getHandle(childRun)?.isChild).toBe(false),
+    );
     expect(disposeAdapter).not.toHaveBeenCalled();
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();

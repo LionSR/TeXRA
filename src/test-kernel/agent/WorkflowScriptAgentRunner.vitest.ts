@@ -1184,6 +1184,8 @@ describe('createWorkflowScriptAgentRunner', () => {
       // The logical call identity is a journal key, never a run id: each
       // attempt derives its own, and the one the runner launches is the id its
       // child stream and roster expose, so a host's skip/retry finds the row.
+      // No `run.result` manifest under the failed row: nothing was delivered,
+      // which is the one failed shape another attempt may follow.
       probeAnswers(
         { exists: true, runEnd: { ...result, outcome: 'failed' } },
         { exists: false },
@@ -1211,6 +1213,29 @@ describe('createWorkflowScriptAgentRunner', () => {
       ).toBeLessThan(
         mocks.executeSubagentInBand.mock.invocationCallOrder[0] ?? 0,
       );
+    }),
+  );
+
+  it.effect('refuses a failed child that had already delivered', () =>
+    Effect.gen(function* () {
+      // The delivery committed its `run.result` manifest and the turn's
+      // settle right after it failed, so the row reads failed over durable
+      // model work and file edits. Advancing past it would repeat them.
+      probeAnswers({
+        exists: true,
+        runEnd: { ...result, outcome: 'failed' },
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+
+      const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+      expect(error).toMatchObject({
+        name: 'WorkflowRunAbortError',
+        message: expect.stringContaining(
+          'recorded a failed outcome after delivering its result',
+        ),
+      });
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
     }),
   );
 

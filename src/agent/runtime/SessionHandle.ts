@@ -937,8 +937,18 @@ export class SessionHandle {
    *  which no run's terminal outcome may absorb. A run's terminal outcome is
    *  decided by this settle, and another owner's lost fact is that owner's
    *  outcome, not this one's. Session-scoped failures are heard by a
-   *  session-wide settle (no run id). The failures this call reports are the
-   *  ones it clears, so each lost fact is heard exactly once by its owner. */
+   *  session-wide settle (no run id).
+   *
+   *  Reporting a failure and consuming it are separate: a session-wide settle
+   *  reports every failure it finds, but clears only the session-scoped ones.
+   *  A run-tagged failure is cleared by that run's own drain and nothing else,
+   *  because that drain is what stamps the `artifact-drain` marker on the row
+   *  it decides. `settleLiveSessionRuns` settles the session before it
+   *  releases each run's lease; a session-wide settle that consumed a live
+   *  run's lost fact would leave the run's release
+   *  ({@link releaseRunLease}, the terminal path every run driver takes and
+   *  the one that finally consumes it) reading an empty set and writing an
+   *  unmarked CANCELLED row that recovery would treat as repeatable. */
   async settlePublications(runId?: RunId): Promise<void> {
     await effectRuntime().runPromise(this.graph.settle);
     const settled = await Promise.all(
@@ -954,7 +964,8 @@ export class SessionHandle {
         : [],
     );
     for (const { publication } of reported)
-      this.publications.delete(publication);
+      if (publication.runId === (runId ?? null))
+        this.publications.delete(publication);
     throwAggregated(
       reported.map(({ error }) => error),
       'Session publication failed',

@@ -426,6 +426,14 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * non-repeatable, so such an attempt is refused rather than advanced past,
  * and a live owner always refuses too.
  *
+ * A FAILED or CANCELLED `run.end` frees the next attempt id only when no
+ * `run.result` manifest sits under it. The manifest is committed by
+ * `persistChildRunDelivery`, ahead of the turn's settle, so a failed row
+ * beside one says the delivery landed and the bookkeeping after it did not:
+ * the model work and the file edits are durable, and the outcome describes
+ * the accounting, not the work. Delivered is non-repeatable exactly as
+ * ambiguous is, so that attempt is refused too.
+ *
  * One rule covers every id that already exists, whatever it recorded: it is
  * inspected while this call holds the attempt's own run lane and run claim,
  * and its terminal row is read again under that fence before anything is
@@ -619,8 +627,10 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // record an outcome.
         continue;
       }
+      // The manifest is the delivery fact, read under the same fence as the
+      // terminal row beside it, and it decides both outcomes below.
+      const meta = yield* probeChild(runId, records.readResultMeta());
       if (end.outcome === RUN_OUTCOME.COMPLETED) {
-        const meta = yield* probeChild(runId, records.readResultMeta());
         if (meta?.producer !== 'subagent') {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
@@ -638,8 +648,21 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           recovered: true,
         };
       }
-      // Failed or cancelled with its facts intact: this attempt is closed and
-      // repeating it is safe.
+      if (meta?.producer === 'subagent') {
+        // The delivery landed: `persistChildRunDelivery` commits the manifest
+        // ahead of the turn's settle, so the outcome on this row was decided
+        // after the child's model work and its file edits were already
+        // durable — a one-shot failure of that settle, most plainly. What the
+        // outcome describes is the bookkeeping, not the work, so this attempt
+        // is not repeatable however it reads.
+        return yield* Effect.fail(
+          new WorkflowRunAbortError(
+            `Workflow child ${runId} recorded a ${end.outcome} outcome after delivering its result; refusing to repeat it. That run needs operator attention.`,
+          ),
+        );
+      }
+      // Failed or cancelled with nothing delivered and its facts intact: this
+      // attempt is closed and repeating it is safe.
     }
     return yield* Effect.fail(
       new WorkflowRunAbortError(
