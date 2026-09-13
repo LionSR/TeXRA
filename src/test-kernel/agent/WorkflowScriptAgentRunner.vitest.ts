@@ -57,6 +57,7 @@ const mocks = vi.hoisted(() => ({
   acquireClaims: vi.fn(),
   getRunRecords: vi.fn(),
   resolveRunLiveness: vi.fn(),
+  readChildTurnState: vi.fn(),
   readWorkflowCallAttempt: vi.fn(),
   recordWorkflowCallAttempt: vi.fn(),
   probedRunIds: [] as string[],
@@ -110,6 +111,13 @@ vi.mock('@agent/workflowScript/checkpoint', () => ({
 vi.mock('@agent/storage', () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
   getRunRecords: mocks.getRunRecords,
+}));
+
+// The child's own turn rows live on the same stubbed session, so the one read
+// the probe makes of them is faked beside the run records above.
+vi.mock('@agent/storage/runRecords', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runRecords')>()),
+  readChildTurnState: mocks.readChildTurnState,
 }));
 
 vi.mock('@utils/files/runStorageFs', () => ({
@@ -359,6 +367,11 @@ describe('createWorkflowScriptAgentRunner', () => {
     // No attempt journaled yet — absence, not attempt 0: the probe starts at 0
     // and may launch there, unless a case says the parent already launched.
     mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(null));
+    // No turn ever settled unless a case says so: the settle is what separates
+    // an ordinary failed child from one that lost its bookkeeping.
+    mocks.readChildTurnState.mockReturnValue(
+      Effect.succeed({ active: null, lastCompleted: null }),
+    );
     mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
@@ -1240,11 +1253,46 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('refuses a failed child that had already delivered', () =>
+  it.effect("replays a settled failed child as this call's failure", () =>
     Effect.gen(function* () {
-      // The delivery committed its `run.result` manifest and the turn's
-      // settle right after it failed, so the row reads failed over durable
-      // model work and file edits. Advancing past it would repeat them.
+      // An ordinary failed child: the strategy writes a `run.result` manifest
+      // for `isError` too and the turn settles after it, so the row, the
+      // manifest and the settle are one completed failure. Repeating it is
+      // out (its edits are durable), and so is aborting the workflow: the
+      // call fails exactly as it would have live, which the engine journals
+      // nothing for.
+      probeAnswers({
+        exists: true,
+        runEnd: { ...result, outcome: 'failed' },
+        resultMeta: { producer: 'subagent', output: result.output },
+      });
+      mocks.readChildTurnState.mockReturnValue(
+        Effect.succeed({
+          active: null,
+          lastCompleted: { attemptId: 'a0', turnIndex: 0 },
+        }),
+      );
+      const report = reportSpy();
+
+      const error = yield* Effect.flip(
+        defaultRunner()({ ...invocation(), report }),
+      );
+
+      expect(error.name).toBe('Error');
+      expect(error.message).toMatch(/ended with failed outcome/);
+      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      // Nothing ran now, so the recovered child's id is attached and the
+      // synthetic attempt is not charged.
+      expect(reported(report, 'recovered')).toEqual([true]);
+      expect(reported(report, 'costUsd')).toEqual([]);
+    }),
+  );
+
+  it.effect('refuses a delivered child whose turn never settled', () =>
+    Effect.gen(function* () {
+      // The manifest commits ahead of the settle, so a delivery with no
+      // settled turn lost its bookkeeping in between: nothing says the child
+      // stopped where the row claims, and repeating its edits is out.
       probeAnswers({
         exists: true,
         runEnd: { ...result, outcome: 'failed' },
@@ -1255,9 +1303,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
       expect(error).toMatchObject({
         name: 'WorkflowRunAbortError',
-        message: expect.stringContaining(
-          'recorded a failed outcome after delivering its result',
-        ),
+        message: expect.stringContaining('never settled its turn'),
       });
       expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
     }),

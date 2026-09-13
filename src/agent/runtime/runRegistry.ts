@@ -42,7 +42,16 @@ import {
  * a child left running has no owner to report to.
  */
 export interface RunStop {
-  readonly accepted: boolean;
+  /** Whether a live interrupt target took the stop, asked rather than read:
+   *  the two child policies decide it at different moments. A cascading stop
+   *  interrupts at admission and answers straight away. A detaching stop
+   *  interrupts only after {@link settlement} has committed the detach batch
+   *  and severed the children locally — a child completing between the
+   *  interrupt and that sever would still resolve the just-stopped parent as
+   *  its delivery target — so it answers `false` until the settlement has run.
+   *  A caller that must decide synchronously is therefore a caller that
+   *  cascades (headless shutdown, session close). */
+  readonly accepted: () => boolean;
   /** Fails when a durable fact the stop owed storage was refused: the detach
    *  batch a `detachActiveChildren` stop commits is one such fact, and a
    *  caller that reported the stop done over it would be lying about it. */
@@ -440,7 +449,9 @@ export class RunRegistry {
   /**
    * Terminate a run via its handle, or, for a native child loop
    * between turns (an activation with no turn handle), interrupt the loop
-   * itself. Admission is synchronous; the caller executes the returned
+   * itself. A cascading stop is admitted synchronously and a detaching one
+   * with its settlement, which is the order the stop itself requires
+   * ({@link RunStop.accepted}); either way the caller executes the returned
    * settlement at its Effect boundary before releasing ownership.
    */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
@@ -449,28 +460,39 @@ export class RunRegistry {
       const activation = this.childActivations.get(runId);
       activation?.interrupt();
       this.notifyWaiters(runId);
-      return { accepted: activation !== undefined, settlement: Effect.void };
+      const reached = activation !== undefined;
+      return { accepted: () => reached, settlement: Effect.void };
     }
     const visited = new Set<string>();
     const settlements: Effect.Effect<void, Error>[] = [];
-    if (options.detachActiveChildren === true) {
-      settlements.push(this.detachActiveChildren(handle.runId));
-    }
-    const result = this.terminate(
-      handle,
-      visited,
-      options.detachActiveChildren !== true,
-      settlements,
-    );
-    // Always notify waiters — even if terminate() returned false (e.g. PID not
-    // yet assigned), callers blocking on this run should be unblocked.
-    this.notifyWaiters(runId);
-    return {
-      accepted: result,
-      settlement: Effect.all(settlements, {
+    let reached = false;
+    const stopRoot = (): Effect.Effect<void, Error> => {
+      reached = this.terminate(
+        handle,
+        visited,
+        options.detachActiveChildren !== true,
+        settlements,
+      );
+      // Always notify waiters — even if terminate() returned false (e.g. PID
+      // not yet assigned), callers blocking on this run should be unblocked.
+      this.notifyWaiters(runId);
+      return Effect.all(settlements, {
         concurrency: 'unbounded',
         discard: true,
-      }),
+      });
+    };
+    return {
+      accepted: () => reached,
+      settlement:
+        options.detachActiveChildren === true
+          ? // The children leave the parent before the parent is interrupted:
+            // the sever the commit applies is what stops a child completing in
+            // this window from routing its terminal delivery to a run this
+            // stop has just ended.
+            this.detachActiveChildren(handle.runId).pipe(
+              Effect.andThen(Effect.suspend(stopRoot)),
+            )
+          : stopRoot(),
     };
   }
 
@@ -672,39 +694,54 @@ export class RunRegistry {
    * Apply one stop: the descendant policy the caller declared, the root
    * handle's own termination, and — when no live handle took it — the
    * terminal row an ownerless stop must write itself.
+   *
+   * A detaching policy is the whole first step: the children leave the parent,
+   * durably and then locally, before anything interrupts it. A child that
+   * completes while that batch is still committing would otherwise resolve
+   * the just-stopped parent as its delivery target and enqueue its terminal
+   * result there, and the sever that arrives afterwards cannot take that
+   * routing back.
    */
   private applyStop(
     runId: RunId,
     options: RunStopOptions,
   ): Effect.Effect<void, Error> {
-    const rootHandle = this.handles.get(runId);
-    // Shared across the child sweep and the root cascade so each run in
-    // the chain is interrupted exactly once.
-    const visited = new Set<string>();
-    const settlements: Effect.Effect<void, Error>[] = [];
+    const detached =
+      options.detachActiveChildren === true
+        ? this.detachActiveChildren(runId)
+        : Effect.void;
+    return detached.pipe(
+      Effect.andThen(
+        Effect.suspend(() => {
+          const rootHandle = this.handles.get(runId);
+          // Shared across the child sweep and the root cascade so each run in
+          // the chain is interrupted exactly once.
+          const visited = new Set<string>();
+          const settlements: Effect.Effect<void, Error>[] = [];
 
-    if (options.detachActiveChildren === true) {
-      settlements.push(this.detachActiveChildren(runId));
-    } else {
-      this.interruptActiveChildren(runId, visited, true, settlements);
-    }
+          if (options.detachActiveChildren !== true) {
+            this.interruptActiveChildren(runId, visited, true, settlements);
+          }
 
-    const stopped = rootHandle
-      ? this.terminate(
-          rootHandle,
-          visited,
-          options.detachActiveChildren !== true,
-          settlements,
-        )
-      : false;
-    // `terminate()` already finalizes a run it owned; an ownerless (or
-    // already-untracked) run still needs the `run.end` row, which is the
-    // run's terminal fact: without the finalize below the fold, history and
-    // every other host would keep the stopped run in flight.
-    const all: Effect.Effect<void, Error>[] = stopped
-      ? settlements
-      : [...settlements, this.finalizeOwnerlessStop(runId)];
-    return Effect.all(all, { concurrency: 'unbounded', discard: true });
+          const stopped = rootHandle
+            ? this.terminate(
+                rootHandle,
+                visited,
+                options.detachActiveChildren !== true,
+                settlements,
+              )
+            : false;
+          // `terminate()` already finalizes a run it owned; an ownerless (or
+          // already-untracked) run still needs the `run.end` row, which is the
+          // run's terminal fact: without the finalize below the fold, history
+          // and every other host would keep the stopped run in flight.
+          const all: Effect.Effect<void, Error>[] = stopped
+            ? settlements
+            : [...settlements, this.finalizeOwnerlessStop(runId)];
+          return Effect.all(all, { concurrency: 'unbounded', discard: true });
+        }),
+      ),
+    );
   }
 
   /**

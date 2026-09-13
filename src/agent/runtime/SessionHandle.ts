@@ -939,15 +939,18 @@ export class SessionHandle {
    *  outcome, not this one's. Session-scoped failures are heard by a
    *  session-wide settle (no run id).
    *
-   *  Reporting a failure and consuming it are separate: a session-wide settle
-   *  reports every failure it finds, but clears only the session-scoped ones.
-   *  A run-tagged failure is cleared by that run's own drain and nothing else,
-   *  because that drain is what stamps the `artifact-drain` marker on the row
-   *  it decides. `settleLiveSessionRuns` settles the session before it
-   *  releases each run's lease; a session-wide settle that consumed a live
-   *  run's lost fact would leave the run's release
-   *  ({@link releaseRunLease}, the terminal path every run driver takes and
-   *  the one that finally consumes it) reading an empty set and writing an
+   *  A session-wide settle is the session's own drain, not a drain of every
+   *  run at once: it awaits every publication — callers queue an operation and
+   *  wait on it as a barrier (`createChildRun`, a workflow checkpoint's
+   *  journal write) — and reports the session-scoped failures only. A run's
+   *  lost fact is that run's outcome to carry, and a barrier that reported it
+   *  would fail a child creation, or a journal entry that committed, over
+   *  another run's rollback. Whoever hears a failure is who clears it, so a
+   *  run-tagged one stays tracked until that run's own drain takes it: that
+   *  drain is what stamps the `artifact-drain` marker on the row it decides,
+   *  and `settleLiveSessionRuns` settles the session before it releases each
+   *  live run's lease ({@link releaseRunLease}, the terminal path every run
+   *  driver takes), which would otherwise read an empty set and write an
    *  unmarked CANCELLED row that recovery would treat as repeatable. */
   async settlePublications(runId?: RunId): Promise<void> {
     await effectRuntime().runPromise(this.graph.settle);
@@ -958,14 +961,12 @@ export class SessionHandle {
       })),
     );
     const reported = settled.flatMap(({ publication, exit }) =>
-      Exit.isFailure(exit) &&
-      (runId === undefined || publication.runId === runId)
+      Exit.isFailure(exit) && publication.runId === (runId ?? null)
         ? [{ publication, error: Cause.squash(exit.cause) }]
         : [],
     );
     for (const { publication } of reported)
-      if (publication.runId === (runId ?? null))
-        this.publications.delete(publication);
+      this.publications.delete(publication);
     throwAggregated(
       reported.map(({ error }) => error),
       'Session publication failed',

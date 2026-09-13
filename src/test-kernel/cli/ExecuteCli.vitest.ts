@@ -832,7 +832,7 @@ describe('executeCliRequest', () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     vi.spyOn(defaultSession().runs, 'kill').mockReturnValue({
-      accepted: false,
+      accepted: () => false,
       settlement: Effect.void,
     });
     let leaseOptions: LeaseOptions | undefined;

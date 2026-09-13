@@ -146,7 +146,13 @@ structured, cost }`), `null` on failure, or the truthy
   the id this frees. A FAILED or CANCELLED `run.end` frees the next id only
   when no `run.result` manifest sits under it: the manifest commits ahead of
   the turn's settle, so a failed row beside one says the delivery landed and
-  only the bookkeeping after it did not. A parent execution has one
+  the work behind it is durable. What that row then means is the settled turn's
+  to say — a settled `child.turn` under it is an ordinary failed child (the
+  manifest is written for `isError` too), replayed as the call's own failure,
+  the same one a live child of that outcome raises and the same `null` the
+  engine journals nothing for, while a manifest whose turn never settled lost
+  its bookkeeping between the delivery and the settle and is refused for
+  operator attention. A parent execution has one
   active runtime owner; the execution KV store is durable state, not a
   cross-process lock. Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.

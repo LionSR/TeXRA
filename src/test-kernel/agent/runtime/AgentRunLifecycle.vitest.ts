@@ -364,7 +364,7 @@ describe('runFlowWithLifecycle', () => {
 
       const stop = defaultSession().runs.kill(runId);
 
-      expect(stop.accepted).toBe(false);
+      expect(stop.accepted()).toBe(false);
 
       await Effect.runPromise(stop.settlement);
 
@@ -430,7 +430,7 @@ describe('runFlowWithLifecycle', () => {
         {
           onRun: async () => {
             const stop = defaultSession().runs.kill(runId);
-            expect(stop.accepted).toBe(true);
+            expect(stop.accepted()).toBe(true);
             await Effect.runPromise(stop.settlement);
           },
         },
@@ -456,7 +456,7 @@ describe('runFlowWithLifecycle', () => {
         {
           onRun: async () => {
             const stop = defaultSession().runs.kill(runId);
-            expect(stop.accepted).toBe(true);
+            expect(stop.accepted()).toBe(true);
             await Effect.runPromise(stop.settlement);
           },
         },
@@ -490,7 +490,7 @@ describe('runFlowWithLifecycle', () => {
       runFlow(ctx, (handle) =>
         Effect.gen(function* () {
           const stop = defaultSession().runs.kill(runId);
-          expect(stop.accepted).toBe(true);
+          expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
           expect(handle.stopRequested).toBe(true);
           return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
@@ -521,7 +521,7 @@ describe('runFlowWithLifecycle', () => {
         () =>
           Effect.gen(function* () {
             const stop = defaultSession().runs.kill(runId);
-            expect(stop.accepted).toBe(true);
+            expect(stop.accepted()).toBe(true);
             yield* stop.settlement;
             return yield* Effect.fail(new Error('child exited with code 143'));
           }),
@@ -573,7 +573,7 @@ describe('runFlowWithLifecycle', () => {
       // falls back to the teardown the WAITING branch parked and tears the
       // run down.
       const stop = defaultSession().runs.kill(runId);
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
       await Effect.runPromise(stop.settlement);
 
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
@@ -625,7 +625,7 @@ describe('runFlowWithLifecycle', () => {
 
       const stop = defaultSession().runs.kill(runId);
 
-      expect(stop.accepted).toBe(true);
+      expect(stop.accepted()).toBe(true);
 
       await Effect.runPromise(stop.settlement);
 

@@ -830,15 +830,11 @@ describe('Sessions owner', () => {
           // A sibling run's drain awaits every publication — so this one has
           // settled by the time it returns — and reports no fact of this run's.
           yield* Effect.promise(() => session.settlePublications(OLDER));
-          // A session-wide settle (host exit runs one before it releases each
-          // live run's lease) reports the failure but consumes only
-          // session-scoped facts: this one stays tracked for the run's own
-          // drain, which is what marks the row it decides.
-          yield* Effect.promise(() =>
-            expect(session.settlePublications()).rejects.toMatchObject({
-              _tag: 'DatabaseWriteFailed',
-            }),
-          );
+          // A session-wide settle is a barrier (host exit takes one before it
+          // releases each live run's lease; so does a child launch): it awaits
+          // every publication and answers for the session's own facts, so this
+          // run's stays tracked for the drain that marks the row it decides.
+          yield* Effect.promise(() => session.settlePublications());
           yield* Effect.promise(() =>
             expect(session.settlePublications(RUN)).rejects.toMatchObject({
               _tag: 'DatabaseWriteFailed',
