@@ -37,10 +37,13 @@ async function installTempWorkspace(prefix: string): Promise<string> {
 
   const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   await installFakePlatform(
-    { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
+    {
+      workspacePath: workspaceDir,
+      storagePath: storage.getStoragePath(),
+      globalStoragePath: storage.getGlobalStoragePath(),
+    },
     {
       fs: nodeFilesystem,
-      storage,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },

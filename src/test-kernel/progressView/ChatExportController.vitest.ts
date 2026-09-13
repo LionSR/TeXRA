@@ -43,10 +43,13 @@ async function installStoragePlatform(): Promise<void> {
   const storageRoot = path.join(tempDir, 'storage');
   const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   await installPlatform(
-    { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
+    {
+      workspacePath: workspaceDir,
+      storagePath: storage.getStoragePath(),
+      globalStoragePath: storage.getGlobalStoragePath(),
+    },
     {
       fs: nodeFilesystem,
-      storage,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },

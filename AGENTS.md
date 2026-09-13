@@ -540,7 +540,7 @@ For good separation of concerns and platform independence, core business logic s
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 
-4. **Use `Platform` ports for platform capabilities.** When agnostic code needs something only the host provides (e.g., checking if a VS Code extension is installed), add a typed port to `Platform` (e.g., `toolAvailability.isVscodeExtensionInstalled`) and wire it from the host composition root.
+4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). Do not add fields to `Platform`: it is shrinking onto those services (ruling 2026-09-13, #12073 R-1), and a new `Platform` port is a second home for a fact a service already owns.
 
 5. **Prefer `WorkspaceFS.getPath()` over `vscode.workspace.workspaceFolders`.** The former is already available and returns the same value.
 

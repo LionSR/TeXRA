@@ -10,7 +10,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 
 import {
   physicistCatalog,
@@ -45,14 +45,14 @@ interface ControllerFixtureOptions {
 }
 
 beforeEach(() => {
-  const storage = createFakePlatform().storage;
+  const { globalStorage } = createFakeWorkspaceRoots();
   initProcessRuntime(
     ManagedRuntime.make(
       Layer.mergeAll(
         testHttpClientLayer,
         Layer.mock(UpdateCheckRecords, {}),
         fakeProcessServices(),
-        inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+        inquiryRecordsLayer(() => globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),
       ),

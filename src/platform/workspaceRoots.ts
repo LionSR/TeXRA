@@ -33,6 +33,12 @@ export interface WorkspaceRoots {
    * hosts must keep this separate from earlier release storage directories;
    * session services use this exact root without importing previous state. */
   readonly storage: string;
+  /**
+   * Cross-workspace global storage root. Process-wide by construction — every
+   * host derives it from the one storage root it opened — and carried here
+   * rather than on `platform()` so the storage paths have a single carrier.
+   */
+  readonly globalStorage: string;
   /** Workspace-scoped configuration (project `.texra/config.json` plus global). */
   readonly config: ConfigProvider;
   /** Workspace-scoped key-value state. */
@@ -77,6 +83,9 @@ const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   },
   get storage() {
     return requireProcessRoots().storage;
+  },
+  get globalStorage() {
+    return requireProcessRoots().globalStorage;
   },
   get config() {
     return requireProcessRoots().config;

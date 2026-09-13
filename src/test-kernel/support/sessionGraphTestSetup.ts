@@ -1,5 +1,5 @@
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { createFakePlatform } from './FakePlatform';
+
 import { fakeSetupPlatform, installedHost } from './setupPlatform';
 /**
  * The test kernel's process runtime and session graph family (PRD
@@ -29,9 +29,8 @@ export function installTestSessionGraphs(): void {
   installed = true;
   installProcessRuntime({
     processStart: 'vitest',
-    globalStorage: () => createFakePlatform().storage.getGlobalStoragePath(),
-    updateCheckStorage: () =>
-      createFakePlatform().storage.getGlobalStoragePath(),
+    globalStorage: () => installedHost().roots.globalStorage,
+    updateCheckStorage: () => installedHost().roots.globalStorage,
     secrets: () => installedHost().platform.secrets,
     appState: () => installedHost().platform.globalState,
     setup: fakeSetupPlatform,

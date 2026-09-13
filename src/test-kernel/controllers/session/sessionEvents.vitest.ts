@@ -98,7 +98,6 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -644,8 +643,8 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          inquiryRecordsLayer(() =>
-            createFakePlatform().storage.getGlobalStoragePath(),
+          inquiryRecordsLayer(
+            () => createFakeWorkspaceRoots().globalStorage,
           ).pipe(Layer.provide(ProcessIdentity.layer(SELF))),
         ),
       ),

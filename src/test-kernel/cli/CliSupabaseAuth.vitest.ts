@@ -104,14 +104,15 @@ async function loadSupabaseAuth() {
       import('@tools/setup/platform'),
       import('@agent/runtime/toolInjection'),
     ]);
-  const { createFakePlatform } = await import('@test/support/FakePlatform');
-  const storage = createFakePlatform().storage;
+  const { createFakeWorkspaceRoots } =
+    await import('@test/support/FakePlatform');
+  const { globalStorage } = createFakeWorkspaceRoots();
   initProcessRuntime(
     ManagedRuntime.make(
       Layer.mergeAll(
         testHttpClientLayer,
         Layer.mock(UpdateCheckRecords, {}),
-        inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+        inquiryRecordsLayer(() => globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),
         // The process services over this suite's platform mock: the auth run

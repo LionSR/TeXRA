@@ -81,9 +81,9 @@ const PACKAGE_SETUP: SetupPlatformShape = {
   get commands(): never {
     throw new Error(NO_SETUP_PLATFORM);
   },
-  get extensions(): never {
-    throw new Error(NO_SETUP_PLATFORM);
-  },
+  // Optional on the shape: an embedder has no editor, so probes that read
+  // `extensions?.isInstalled` see the same absence a headless host reports.
+  extensions: undefined,
   get terminal(): never {
     throw new Error(NO_SETUP_PLATFORM);
   },
@@ -178,8 +178,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // entry's build waits.
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
-      globalStorage: () => platform.storage.getGlobalStoragePath(),
-      updateCheckStorage: () => platform.storage.getGlobalStoragePath(),
+      globalStorage: () => platform.roots.globalStorage,
+      updateCheckStorage: () => platform.roots.globalStorage,
       ...processServices,
     });
     if (!active) {

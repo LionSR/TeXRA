@@ -22,6 +22,11 @@ import {
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
+import {
+  createNodeStorageProvider,
+  DEFAULT_NODE_STORAGE_ROOT,
+} from '@platform/defaults/nodeStorage';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -74,8 +79,11 @@ type CliPlatformInitOptions = Pick<
  */
 export type CliPlatformServices = Pick<
   Platform,
-  'globalState' | 'secrets' | 'lifecycle' | 'storage'
->;
+  'globalState' | 'secrets' | 'lifecycle'
+> & {
+  /** The process's cross-workspace storage root, from the roots built below. */
+  readonly globalStorage: string;
+};
 
 function logAt(
   level: 'debug' | 'info' | 'warn' | 'error',
@@ -321,7 +329,6 @@ export async function initCliPlatform(
     });
     services = createNodePlatform({
       globalState: stateStores.globalState,
-      storage: stateStores.storage,
       secrets: getCliSecrets(context.storageRoot),
       lifecycle,
       agentResume: {
@@ -335,6 +342,7 @@ export async function initCliPlatform(
     const roots = createNodeWorkspaceRoots({
       workspacePath: context.cwd,
       storage: stateStores.storage.getStoragePath(),
+      globalStorage: stateStores.storage.getGlobalStoragePath(),
       config: configStores,
       workspaceState: stateStores.workspaceState,
     });
@@ -407,7 +415,12 @@ export async function initCliPlatform(
   });
 
   return {
-    storage: services.storage,
+    // The pure path calculator over this process's storage root (no mkdir),
+    // so every CLI entry, including the ones that find the platform already
+    // installed, names one root without touching the filesystem again.
+    globalStorage: resolveGlobalStoragePath(
+      context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+    ),
     globalState: services.globalState,
     secrets: services.secrets,
     lifecycle: services.lifecycle,

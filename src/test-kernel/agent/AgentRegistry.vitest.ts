@@ -18,6 +18,8 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { registerAgentDirectoryRoots } from '@frontend/setup';
 import * as logger from '@logger/logUtils';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -25,6 +27,7 @@ import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
+import type * as vscode from 'vscode';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
@@ -40,8 +43,14 @@ const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   };
 });
 
+const registerExternalRoot = vi.hoisted(() => vi.fn());
+
 vi.mock('@agent/remote/remoteAgentList', () => ({
   listRemoteAgents,
+}));
+
+vi.mock('@utils/files/externalRoots', () => ({
+  registerExternalRoot,
 }));
 
 const BUILTIN_AGENTS_DIR = resolve(
@@ -100,10 +109,19 @@ function remoteAgentFixture(id: string, name: string, description: string) {
 }
 
 describe('agent registry', () => {
+  const extensionPath = resolve(REPO_ROOT, 'packages/extension');
+  const resourcesPath = resolve(extensionPath, 'resources');
+  const globalState = {
+    keys: () => [],
+    get: (_key: string, defaultValue?: unknown) => defaultValue,
+    update: async () => {},
+  } as unknown as vscode.Memento;
+
   beforeEach(() => {
     listRemoteAgents.mockImplementation(() =>
       Effect.succeed([ORCHESTRATOR_AGENT]),
     );
+    registerExternalRoot.mockReset();
   });
 
   beforeAll(async () => {
@@ -111,6 +129,42 @@ describe('agent registry', () => {
     await initPlatformWithState({});
     useAgentDirectories();
     await Effect.runPromise(refresh({ includeRemote: false }));
+  });
+
+  it('skips root registration when called before agent directory initialization', async () => {
+    await expect(
+      registerAgentDirectoryRoots({
+        extensionPath,
+      } as vscode.ExtensionContext),
+    ).resolves.toBeUndefined();
+
+    expect(registerExternalRoot).toHaveBeenCalledTimes(1);
+    expect(registerExternalRoot).toHaveBeenCalledWith(
+      resolve(resourcesPath, 'docs', 'agent-creation'),
+      expect.objectContaining({ kind: 'agentDocs', writable: false }),
+    );
+  });
+
+  it('registers packaged roots and loads the local catalog in startup order', async () => {
+    agentDirectories.initialize(globalState, resourcesPath);
+
+    await expect(
+      registerAgentDirectoryRoots({
+        extensionPath,
+      } as vscode.ExtensionContext),
+    ).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(loadAgents({ includeRemote: false })),
+    ).resolves.toBeUndefined();
+
+    expect(registerExternalRoot).toHaveBeenCalledWith(
+      resolve(resourcesPath, 'agents'),
+      expect.objectContaining({ kind: 'builtInWorkflow', writable: false }),
+    );
+    expect(registerExternalRoot).toHaveBeenCalledWith(
+      resolve(resourcesPath, 'tool_use_agents'),
+      expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
+    );
   });
 
   it('treats lookup category as priority, not a filter', () => {

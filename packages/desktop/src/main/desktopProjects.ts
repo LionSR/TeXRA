@@ -257,10 +257,11 @@ export function openDesktopProjectRegistry(
           const existing = projects.get(root);
           if (existing) return existing;
           yield* options.records.remember(root);
-          const storage = new WorkspaceStorageProvider(
+          const storageProvider = new WorkspaceStorageProvider(
             options.dataRoot,
             root,
-          ).getStoragePath();
+          );
+          const storage = storageProvider.getStoragePath();
           const [workspaceState, workspaceConfig] = yield* Effect.all(
             [
               openNodeWorkspaceStateStore(storage),
@@ -271,6 +272,7 @@ export function openDesktopProjectRegistry(
           const roots = createNodeWorkspaceRoots({
             workspacePath: root,
             storage,
+            globalStorage: storageProvider.getGlobalStoragePath(),
             config: {
               workspace: workspaceConfig,
               global: options.globalConfigStore,

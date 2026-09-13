@@ -54,7 +54,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   return {
     ...createNodePlatform({
       globalState: new MemoryStateStore(),
-      storage,
       secrets: environmentSecrets,
       lifecycle: createLifecycleHost(),
       agentResume: {
@@ -69,6 +68,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     roots: createNodeWorkspaceRoots({
       workspacePath: workspaceDir,
       storage: storage.getStoragePath(),
+      globalStorage: storage.getGlobalStoragePath(),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),
