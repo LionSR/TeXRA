@@ -103,7 +103,11 @@ function fakeGlobalStorage(): string {
  */
 function seedTarget(key: string): string {
   const root = fakeRoot();
-  if (key.startsWith(root)) return key;
+  if (key.startsWith(root)) {
+    // A key this harness handed out (fakePath(...)) or built from one: it is
+    // still confined below, a prefix match alone is not containment.
+    return confineToRoot(root, path.resolve(key), key);
+  }
   // A path this harness handed out but from outside the fake root -- the
   // worker temp home itself, or a sibling of the root under it -- would be
   // nested under the root silently. Every other absolute key ('/tmp/run/x'
@@ -113,7 +117,11 @@ function seedTarget(key: string): string {
       `Seed key ${key} is a real path under the harness temp home; seed keys are paths inside the fake root (use fakePath).`,
     );
   }
-  const target = path.resolve(root, `.${path.sep}${key}`);
+  return confineToRoot(root, path.resolve(root, `.${path.sep}${key}`), key);
+}
+
+/** The resolved target, or a throw when it is not the root or a descendant. */
+function confineToRoot(root: string, target: string, key: string): string {
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new Error(
       `Seed key ${key} resolves outside the fake root; seed keys must stay inside it.`,
