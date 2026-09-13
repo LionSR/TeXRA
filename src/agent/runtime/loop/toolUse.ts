@@ -258,7 +258,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
       const nextConfig = yield* Effect.tryPromise({
-        try: () => run.inScope(() => resolveRuntimeModelConfig(model)),
+        try: () => resolveRuntimeModelConfig(model),
         catch: ensureError,
       });
       if (!nextConfig) {
