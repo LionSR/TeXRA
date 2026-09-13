@@ -1,6 +1,6 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import '@test/support/defaultSessionTestSetup';
 
@@ -301,28 +301,27 @@ beforeEach(async () => {
 describe('WorkflowScriptTool', () => {
   it.effect('does not register or execute the workflow before approval', () =>
     Effect.gen(function* () {
-      let approve!: () => void;
-      const decided = new Promise<{
+      const asked = yield* Deferred.make<void>();
+      const decided = yield* Deferred.make<{
         result: { action: 'approve' };
         autoApproved: boolean;
-      }>((resolve) => {
-        approve = () =>
-          resolve({ result: { action: 'approve' }, autoApproved: false });
-      });
+      }>();
       mocks.requestDelegationProposal.mockReturnValueOnce(
-        Effect.promise(() => decided),
+        Deferred.succeed(asked, undefined).pipe(
+          Effect.andThen(Deferred.await(decided)),
+        ),
       );
 
       const pending = yield* Effect.forkChild(callTool());
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce(),
-        ),
-      );
+      yield* Deferred.await(asked);
+      expect(mocks.requestDelegationProposal).toHaveBeenCalledOnce();
       expect(mocks.registerRun).not.toHaveBeenCalled();
       expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-      approve();
+      yield* Deferred.succeed(decided, {
+        result: { action: 'approve' as const },
+        autoApproved: false,
+      });
       yield* Fiber.join(pending);
       expect(mocks.registerRun).toHaveBeenCalledOnce();
       expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
@@ -424,6 +423,10 @@ return null`;
         mocks.startChildRunLoop.mockReturnValueOnce(
           Effect.forkDetach(Effect.fail(lateFailure)),
         );
+        const logged = yield* Deferred.make<void>();
+        mocks.childLoggerError.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(logged, Effect.void);
+        });
 
         const result = yield* callTool();
 
@@ -431,13 +434,10 @@ return null`;
           status: 'executed',
           summary: "Launched workflow script 'tool-test' (async)",
         });
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.childLoggerError).toHaveBeenCalledWith(
-              "Workflow script 'tool-test' run loop failed after launch",
-              { data: lateFailure },
-            );
-          }),
+        yield* Deferred.await(logged);
+        expect(mocks.childLoggerError).toHaveBeenCalledWith(
+          "Workflow script 'tool-test' run loop failed after launch",
+          { data: lateFailure },
         );
         expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
       }),

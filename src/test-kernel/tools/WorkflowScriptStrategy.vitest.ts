@@ -1,6 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
@@ -16,7 +16,6 @@ import {
   type RunEnd,
   type RunId,
 } from '@shared/schemas';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -519,20 +518,18 @@ return await agent('saved call')`;
   );
 });
 
-/** Let queued abort/skip handling settle without resolving a hung run. */
-async function drainMacrotasks(): Promise<void> {
-  for (let tick = 0; tick < 5; tick += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
+/** Let a queued control action reach the attempt fiber before asserting. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
 
 /**
  * A fake `runAgent` that stands in for the production runner. Each attempt
  * reports the run id it actually runs under to the engine — modeling how
  * the real runner reports the logical id on attempt 0 and an attempt-specific
- * id after a durable retry — and hangs until the per-call signal aborts (unless
- * it is the designated `succeedAtAttempt`), so a test can drive an interactive
- * skip/retry against a call that is genuinely in flight.
+ * id after a durable retry — and parks until the engine interrupts the attempt
+ * (unless it is the designated `succeedAtAttempt`), so a test can drive an
+ * interactive skip/retry against a call that is genuinely in flight.
  */
 function controllableRunAgent(config: {
   readonly attemptRunIds: readonly RunId[];
@@ -542,16 +539,14 @@ function controllableRunAgent(config: {
   readonly attemptCosts?: readonly number[];
 }): {
   readonly createRunAgent: WorkflowScriptStrategyParams['createRunAgent'];
-  readonly attemptStarted: (attempt: number) => Promise<void>;
+  readonly attemptStarted: (attempt: number) => Effect.Effect<void>;
   readonly attempts: () => number;
   readonly onCost: (cost: number) => void;
 } {
-  const attemptGates: ReturnType<typeof createDeferred<void>>[] = [];
-  const gateFor = (
-    attempt: number,
-  ): ReturnType<typeof createDeferred<void>> => {
+  const attemptGates: Deferred.Deferred<void>[] = [];
+  const gateFor = (attempt: number): Deferred.Deferred<void> => {
     while (attemptGates.length < attempt)
-      attemptGates.push(createDeferred<void>());
+      attemptGates.push(Deferred.makeUnsafe<void>());
     return attemptGates[attempt - 1]!;
   };
   const execIdForAttempt = (attempt: number): RunId =>
@@ -564,41 +559,31 @@ function controllableRunAgent(config: {
     hooks,
   ) => {
     return (invocation) =>
-      Effect.tryPromise({
-        try: async () => {
-          attemptCount += 1;
-          const thisAttempt = attemptCount;
-          const execId = execIdForAttempt(thisAttempt);
-          // The production runner charges both channels from one callback: the
-          // strategy's tracker (parent billing) and the engine's snapshot (per-call
-          // spend on progress surfaces). The fake mirrors that pairing.
-          reportCost = (cost) => {
-            hooks.onCost(invocation, cost);
-            invocation.report({ costUsd: cost });
-          };
-          invocation.report({ childRunId: execId });
-          gateFor(thisAttempt).resolve();
-          const attemptCost = config.attemptCosts?.[thisAttempt - 1];
-          if (attemptCost !== undefined) reportCost(attemptCost);
-          if (config.succeedAtAttempt !== thisAttempt) {
-            // Hang until a control action aborts this attempt (skip/retry).
-            await new Promise<never>((_, reject) => {
-              invocation.signal.addEventListener(
-                'abort',
-                () => reject(invocation.signal.reason),
-                { once: true },
-              );
-            });
-          }
-          return finalResult;
-        },
-        catch: (error) =>
-          error instanceof Error ? error : new Error(String(error)),
+      Effect.gen(function* () {
+        attemptCount += 1;
+        const thisAttempt = attemptCount;
+        const execId = execIdForAttempt(thisAttempt);
+        // The production runner charges both channels from one callback: the
+        // strategy's tracker (parent billing) and the engine's snapshot (per-call
+        // spend on progress surfaces). The fake mirrors that pairing.
+        reportCost = (cost) => {
+          hooks.onCost(invocation, cost);
+          invocation.report({ costUsd: cost });
+        };
+        invocation.report({ childRunId: execId });
+        yield* Deferred.succeed(gateFor(thisAttempt), undefined);
+        const attemptCost = config.attemptCosts?.[thisAttempt - 1];
+        if (attemptCost !== undefined) reportCost(attemptCost);
+        if (config.succeedAtAttempt !== thisAttempt) {
+          // Park until a control action interrupts this attempt (skip/retry).
+          return yield* Effect.never;
+        }
+        return finalResult;
       });
   };
   return {
     createRunAgent,
-    attemptStarted: (attempt) => gateFor(attempt).promise,
+    attemptStarted: (attempt) => Deferred.await(gateFor(attempt)),
     attempts: () => attemptCount,
     onCost: (cost) => reportCost?.(cost),
   };
@@ -624,7 +609,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
 
         const launch = yield* Effect.forkChild(launchStrategy(strategy));
-        yield* Effect.promise(() => fake.attemptStarted(1));
+        yield* fake.attemptStarted(1);
         // An unknown run id no-ops (the call stays in flight)...
         workflowControls.control('ddddd0000009' as RunId, 'skip');
         // ...while the right one translates execId → index → engine skip.
@@ -669,7 +654,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
 
         const launch = yield* Effect.forkChild(launchStrategy(strategy, ports));
-        yield* Effect.promise(() => fake.attemptStarted(1));
+        yield* fake.attemptStarted(1);
         workflowControls.control(grandchildRunId, 'retry');
 
         const turn = yield* Fiber.join(launch);
@@ -699,7 +684,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           attemptRunIds: [logicalRunId, attemptRunId],
         });
         const ports = fakePorts();
-        let settled = false;
+        const settled = yield* Deferred.make<void>();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'strategy-test',
@@ -709,19 +694,19 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
 
         const launch = yield* Effect.forkChild(
           launchStrategy(strategy, ports).pipe(
-            Effect.tap(() => Effect.sync(() => (settled = true))),
+            Effect.tap(() => Deferred.succeed(settled, undefined)),
           ),
         );
         // Attempt 0 runs under the logical id; retry advances to attempt 1.
-        yield* Effect.promise(() => fake.attemptStarted(1));
+        yield* fake.attemptStarted(1);
         workflowControls.control(logicalRunId, 'retry');
-        yield* Effect.promise(() => fake.attemptStarted(2));
+        yield* fake.attemptStarted(2);
 
         // The stale logical id no longer maps to the in-flight attempt: a skip on
         // it must no-op, leaving the run pending.
         workflowControls.control(logicalRunId, 'skip');
-        yield* Effect.promise(drainMacrotasks);
-        expect(settled).toBe(false);
+        yield* settle;
+        expect(yield* Deferred.isDone(settled)).toBe(false);
 
         // The attempt-specific id the roster exposes reaches the engine index.
         workflowControls.control(attemptRunId, 'skip');
@@ -747,7 +732,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
 
         const launch = yield* Effect.forkChild(launchStrategy(strategy, ports));
-        yield* Effect.promise(() => fake.attemptStarted(1));
+        yield* fake.attemptStarted(1);
         // Model tokens were spent before the user skipped the attempt.
         fake.onCost(0.42);
         workflowControls.control(grandchildRunId, 'skip');
