@@ -637,7 +637,6 @@ HARNESS_DISPOSERS.push(
   session().interactions.use(
     createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
       secrets: HARNESS_PLATFORM_SERVICES.secrets,
-      state: HARNESS_PLATFORM_SERVICES.globalState,
     }),
   ),
 );

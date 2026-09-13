@@ -34,7 +34,6 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
-import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RetryPermission } from '@shared/schemas';
 import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
@@ -55,14 +54,12 @@ import {
 import { currentView } from './sessionView';
 
 /**
- * The process stores a retry's credential work reads: the secret store its
- * key checks go through, and the global state a rolled-back coding-plan
- * preference is written straight into. Both come from the chat session's
- * caller, which holds them already.
+ * The process store a retry's credential work reads: the secret store its
+ * key checks go through. It comes from the chat session's caller, which
+ * holds it already.
  */
 interface TuiApprovalStores {
   readonly secrets: PlatformSecrets;
-  readonly state: StateStore;
 }
 
 /** The pending requests this surface watches, as a level it subscribes to. */
