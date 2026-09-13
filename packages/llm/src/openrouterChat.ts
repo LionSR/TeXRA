@@ -3,7 +3,6 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Cause, Effect, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -13,6 +12,7 @@ import {
   ModelError,
   enrichModelError,
   pullStream,
+  sseEvents,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -812,31 +812,10 @@ export function openrouterChatModel(
             number,
             { id?: string; name?: string; arguments: string }
           >();
-          let parsedEvents: Sse.Event[] = [];
-          const parser = Sse.makeParser(
-            (event) => {
-              // This one-shot operation ignores reconnect hints and never reconnects.
-              if (event._tag === 'Event') parsedEvents.push(event);
-            },
-            { maxEventSize: Number.POSITIVE_INFINITY },
-          );
-          const progress = bytes.pipe(
-            Stream.decodeText,
-            Stream.mapEffect((text) =>
-              Effect.gen(function* () {
-                parsedEvents = [];
-                const error = parser.feed(text);
-                if (error !== undefined)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'OpenRouter returned malformed SSE.',
-                    cause: error,
-                  });
-                return parsedEvents;
-              }),
-            ),
-            Stream.flattenIterable,
-            Stream.takeUntil((event) => event.data === '[DONE]'),
+          const progress = sseEvents(
+            bytes,
+            'OpenRouter returned malformed SSE.',
+          ).pipe(
             Stream.mapEffect((event) =>
               Effect.gen(function* () {
                 if (event.data === '[DONE]') {

@@ -1,5 +1,6 @@
 // Third-party imports
 import { Cause, Data, Effect, Exit, type Scope, Stream } from 'effect';
+import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -1585,6 +1586,47 @@ export const enrichModelError = (
     cause: error.cause,
     ...patch,
   });
+
+/**
+ * The server-sent events carried by a byte stream, ending at the `[DONE]`
+ * sentinel that terminates an OpenAI-compatible chat stream.
+ *
+ * The parser is fed per decoded chunk and drained into the events it
+ * completed, so an event split across chunks emits once it is whole.
+ * `maxEventSize` is uncapped to preserve the prior no-added-cap policy — it
+ * is not a bounded-memory claim — and a `retry` field is only a reconnect
+ * hint, which these one-shot operations never act on.
+ */
+export const sseEvents = <E>(
+  bytes: Stream.Stream<Uint8Array, E>,
+  malformedMessage: string,
+): Stream.Stream<Sse.Event, E | ModelError> => {
+  let parsedEvents: Sse.Event[] = [];
+  const parser = Sse.makeParser(
+    (event) => {
+      if (event._tag === 'Event') parsedEvents.push(event);
+    },
+    { maxEventSize: Number.POSITIVE_INFINITY },
+  );
+  return bytes.pipe(
+    Stream.decodeText,
+    Stream.mapEffect((text) =>
+      Effect.gen(function* () {
+        parsedEvents = [];
+        const failure = parser.feed(text);
+        if (failure !== undefined)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: malformedMessage,
+            cause: failure,
+          });
+        return parsedEvents;
+      }),
+    ),
+    Stream.flattenIterable,
+    Stream.takeUntil((event) => event.data === '[DONE]'),
+  );
+};
 
 /**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
