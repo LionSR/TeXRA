@@ -1,5 +1,6 @@
 // Third-party imports
 import { Cause, Data, Effect, Exit, type Scope, Stream } from 'effect';
+import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -1564,6 +1565,110 @@ const ModelErrorFieldsSchema = z.strictObject({
 export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
 > {}
+
+/**
+ * Rebuild a `ModelError` with `patch` applied over the fields it already
+ * carries.
+ *
+ * `message` and `cause` live on `Error` as own non-enumerable properties, so
+ * the spread that carries every other field silently drops both. Restating
+ * them is what keeps a re-thrown error's text and origin, and every adapter
+ * that annotates an error with the response/request it belongs to was
+ * restating them by hand.
+ */
+export const enrichModelError = (
+  error: ModelError,
+  patch: Partial<
+    z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
+  >,
+): ModelError =>
+  new ModelError({
+    ...error,
+    message: error.message,
+    cause: error.cause,
+    ...patch,
+  });
+
+/**
+ * The server-sent events carried by a byte stream, ending at the `[DONE]`
+ * sentinel that terminates an OpenAI-compatible chat stream.
+ *
+ * The parser is fed per decoded chunk and drained into the events it
+ * completed, so an event split across chunks emits once it is whole.
+ * `maxEventSize` is uncapped to preserve the prior no-added-cap policy — it
+ * is not a bounded-memory claim — and a `retry` field is only a reconnect
+ * hint, which these one-shot operations never act on.
+ */
+export const sseEvents = <E>(
+  bytes: Stream.Stream<Uint8Array, E>,
+  malformedMessage: string,
+): Stream.Stream<Sse.Event, E | ModelError> => {
+  let parsedEvents: Sse.Event[] = [];
+  const parser = Sse.makeParser(
+    (event) => {
+      if (event._tag === 'Event') parsedEvents.push(event);
+    },
+    { maxEventSize: Number.POSITIVE_INFINITY },
+  );
+  return bytes.pipe(
+    Stream.decodeText,
+    Stream.mapEffect((text) =>
+      Effect.gen(function* () {
+        parsedEvents = [];
+        const failure = parser.feed(text);
+        if (failure !== undefined)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: malformedMessage,
+            cause: failure,
+          });
+        return parsedEvents;
+      }),
+    ),
+    Stream.flattenIterable,
+    Stream.takeUntil((event) => event.data === '[DONE]'),
+  );
+};
+
+/**
+ * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
+ * iterator — that ends when the source reports `done`.
+ *
+ * Every streaming adapter reaches its provider through one of those two, and
+ * each had spelled out the same `Stream.fromPull` / `tryPromise` / `done`
+ * ladder. Only the source and the failure classifier ever differed, so those
+ * are the parameters.
+ */
+/**
+ * The value a pull source yields while it is not done: the `value` of the
+ * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
+ * it from that member alone is what keeps the done member's `undefined` out
+ * of the stream's element type.
+ */
+type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
+
+export const pullStream = <
+  R extends { readonly done?: boolean; readonly value?: unknown },
+  E,
+>(
+  pull: () => PromiseLike<R>,
+  onError: (cause: unknown) => E,
+): Stream.Stream<PullValue<R>, E> =>
+  Stream.fromPull(
+    Effect.succeed(
+      Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
+        Effect.flatMap((next) =>
+          next.done
+            ? Cause.done()
+            : // `done` is false here, so the result is the value-carrying
+              // member of the union `PullValue` picked the type from.
+              Effect.succeed([
+                (next as { readonly value: PullValue<R> }).value,
+              ] as const),
+        ),
+      ),
+    ),
+  );
 
 /**
  * Parses a persisted local-call's argument text back into the JSON object a

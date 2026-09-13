@@ -23,7 +23,7 @@ const WriteInputSchema = z.strictObject({
   content: z.string().describe('The full file contents to write.'),
 });
 
-export type WriteInput = z.infer<typeof WriteInputSchema>;
+type WriteInput = z.infer<typeof WriteInputSchema>;
 
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
@@ -61,14 +61,11 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   });
 });
 
-export class WriteFileTool extends defineTool({
+export const WriteFileTool = defineTool({
   name: 'write_file',
   requiresApproval: true,
   description:
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
-}) {
-  protected execute(input: WriteInput) {
-    return write(input);
-  }
-}
+  execute: write,
+});

@@ -14,8 +14,10 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   parseInboundToolArguments,
   parseOutboundToolArguments,
+  pullStream,
   readerAbortSignal,
   ResolvedTurnSchema,
   sameModelOrigin,
@@ -688,10 +690,7 @@ export function googleInteractionsModel(
       let responseId: string | undefined;
       let returnedModel: string | null = null;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId,
           model: returnedModel ?? config.requestedModel,
         });
@@ -739,20 +738,7 @@ export function googleInteractionsModel(
             }
           >();
 
-          const events = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: sdkFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          ).pipe(
+          const events = pullStream(() => body.read(), sdkFailure).pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* () {
                 const decoded = WireEventSchema.safeParse(raw);
@@ -1121,10 +1107,7 @@ export function googleInteractionsModel(
     error: ModelError,
     returnedModel?: string,
   ) =>
-    new ModelError({
-      ...error,
-      message: error.message,
-      cause: error.cause,
+    enrichModelError(error, {
       operation,
       responseId: operation.providerResponseId,
       model: returnedModel ?? error.model ?? config.requestedModel,

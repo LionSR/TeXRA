@@ -108,13 +108,10 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   },
 );
 
-export class ExtractTikzFiguresTool extends defineTool({
+export const ExtractTikzFiguresTool = defineTool({
   name: 'extract_tikz_figures',
   description:
     'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
   schema: ExtractTikzInputSchema,
-}) {
-  protected execute(input: ExtractTikzInput) {
-    return extractTikzFigures(input);
-  }
-}
+  execute: extractTikzFigures,
+});

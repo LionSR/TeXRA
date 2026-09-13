@@ -197,7 +197,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
   );
 });
 
-export class ZoteroSearchTool extends defineTool({
+export const ZoteroSearchTool = defineTool({
   name: 'zotero_search',
   parallelSafe: true,
   description:
@@ -205,13 +205,11 @@ export class ZoteroSearchTool extends defineTool({
     'Prefer the structured title/author/year fields over a single query string. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: ZoteroSearchInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    return Effect.gen(function* () {
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       return yield* searchZotero(input, call.inScope(getZoteroPort));
-    });
-  }
-}
+    }),
+});

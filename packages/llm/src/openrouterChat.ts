@@ -3,14 +3,16 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Cause, Effect, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   parseInboundToolArguments,
+  pullStream,
+  sseEvents,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -670,10 +672,7 @@ export function openrouterChatModel(
       let returnedModel: string | undefined;
       let requestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId,
           requestId,
           model: returnedModel ?? config.requestedModel,
@@ -762,20 +761,7 @@ export function openrouterChatModel(
           };
           // Reads and classification stay inside the acquired scope: primary failures
           // and distinct cleanup defects are combined by Effect, not reconstructed.
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: transportFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const bytes = pullStream(() => body.read(), transportFailure);
           if (!response.ok)
             return Stream.fromEffect(
               Effect.gen(function* () {
@@ -826,31 +812,10 @@ export function openrouterChatModel(
             number,
             { id?: string; name?: string; arguments: string }
           >();
-          let parsedEvents: Sse.Event[] = [];
-          const parser = Sse.makeParser(
-            (event) => {
-              // This one-shot operation ignores reconnect hints and never reconnects.
-              if (event._tag === 'Event') parsedEvents.push(event);
-            },
-            { maxEventSize: Number.POSITIVE_INFINITY },
-          );
-          const progress = bytes.pipe(
-            Stream.decodeText,
-            Stream.mapEffect((text) =>
-              Effect.gen(function* () {
-                parsedEvents = [];
-                const error = parser.feed(text);
-                if (error !== undefined)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'OpenRouter returned malformed SSE.',
-                    cause: error,
-                  });
-                return parsedEvents;
-              }),
-            ),
-            Stream.flattenIterable,
-            Stream.takeUntil((event) => event.data === '[DONE]'),
+          const progress = sseEvents(
+            bytes,
+            'OpenRouter returned malformed SSE.',
+          ).pipe(
             Stream.mapEffect((event) =>
               Effect.gen(function* () {
                 if (event.data === '[DONE]') {

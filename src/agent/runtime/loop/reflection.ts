@@ -1156,8 +1156,18 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     );
     normalizeCompileRejectionPolicy();
 
-    const nextRound = Effect.fn('reflection.nextRound')(function* (
+    /**
+     * Advance onto the next round: reset the per-round flow facts and
+     * workspace, then commit the `round.ready` snapshot.
+     *
+     * `closePrevious` says whether a round is actually being closed. Ending
+     * one emits `round.end` against the coordinates captured *before* the
+     * advance; relaunching a halted run enters a round without a predecessor
+     * to close, and that is the only difference between the two entries.
+     */
+    const enterRound = Effect.fn('reflection.enterRound')(function* (
       current: RunState,
+      closePrevious: boolean,
     ): Effect.fn.Return<RunState, Error> {
       const ended = coordinates(current);
       flow = {
@@ -1170,7 +1180,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       workspace = AgentWorkspaceState.create();
       return yield* commit(
         yield* ledger.appendBatch(runId, current, [
-          stepRow(runId, ended, 'round.end'),
+          ...(closePrevious ? [stepRow(runId, ended, 'round.end')] : []),
           snapshot(current, {
             phase: 'round.ready',
             round: flow.currentRound,
@@ -1210,23 +1220,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           return { state, outcome: resolveOutcome() } satisfies LoopExit;
         }
         lastError = undefined;
-        flow = {
-          ...flow,
-          currentRound: flow.currentRound + 1,
-          endTurn: false,
-          outputLocation: null,
-          rawOutputBytes: 0,
-        };
-        workspace = AgentWorkspaceState.create();
-        state = yield* commit(
-          yield* ledger.appendBatch(runId, state, [
-            snapshot(state, {
-              phase: 'round.ready',
-              round: flow.currentRound,
-              continuationIndex: 0,
-            }),
-          ]),
-        );
+        state = yield* enterRound(state, false);
       }
       // The configured total may have been lowered since the snapshot; the
       // hard round limit takes precedence over continuing that round.
@@ -1242,7 +1236,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
       }
       if (!shouldContinueNextRound()) return yield* finish(state, true);
-      state = yield* nextRound(state);
+      state = yield* enterRound(state, true);
     }
   });
 

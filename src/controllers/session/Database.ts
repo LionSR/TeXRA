@@ -270,6 +270,14 @@ export const databaseLayer = (
         read: Effect.Effect<A, unknown>,
       ): Effect.Effect<A, DatabaseReadFailed> =>
         read.pipe(mapDatabaseFailure(readFailed));
+      /** The rows a read statement returns, decoded as ledger events. */
+      const decodedRows = (
+        statement: string,
+        params: Parameters<typeof sql.unsafe>[1],
+      ): Effect.Effect<SessionEvent[], unknown> =>
+        sql
+          .unsafe<Record<string, unknown>>(statement, params)
+          .pipe(Effect.map((rows) => rows.map(decodeEvent)));
       const currentCommit = sql
         .unsafe<Record<string, unknown>>(highWater, [])
         .pipe(Effect.map(commitFromRows));
@@ -834,29 +842,16 @@ export const databaseLayer = (
         readAll: (fromCommit, throughCommit) =>
           query(
             Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(all, [
+              return yield* decodedRows(all, [
                 fromCommit,
                 throughCommit ?? (yield* currentCommit),
-              ])).map(decodeEvent);
+              ]);
             }),
           ),
         readListing: () =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(READ_LISTING, [
-                JSON.stringify(LISTING_TYPES),
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(READ_LISTING, [JSON.stringify(LISTING_TYPES)])),
         readRunRecords: (id) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(runRecords, [
-                id,
-                JSON.stringify(LISTING_TYPES),
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(runRecords, [id, JSON.stringify(LISTING_TYPES)])),
         readRunSnapshot: (id) =>
           query(
             Effect.gen(function* () {
@@ -871,16 +866,7 @@ export const databaseLayer = (
               return event;
             }),
           ),
-        readRunChildren: (id) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(runChildren, [
-                id,
-                id,
-                id,
-              ])).map(decodeEvent);
-            }),
-          ),
+        readRunChildren: (id) => query(decodedRows(runChildren, [id, id, id])),
         readAppState: () => query(readAppState),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
@@ -973,32 +959,22 @@ export const databaseLayer = (
             }),
           ),
         readAggregate: (id, fromSeq) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(aggregate, [
-                id,
-                fromSeq,
-              ])).map(decodeEvent);
-            }),
-          ),
+          query(decodedRows(aggregate, [id, fromSeq])),
         aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
-              const events = (yield* sql.unsafe<Record<string, unknown>>(
-                inputRows,
-                [
-                  inputTypes,
-                  fromCommit,
-                  cursor,
-                  JSON.stringify(ids),
-                  inputTypes,
-                  fromCommit,
-                  cursor,
-                ],
-              )).map(decodeEvent);
+              const events = yield* decodedRows(inputRows, [
+                inputTypes,
+                fromCommit,
+                cursor,
+                JSON.stringify(ids),
+                inputTypes,
+                fromCommit,
+                cursor,
+              ]);
               const checked = new Set(checkedIds);
               for (const event of events) {
                 for (const id of referencedAggregates(event)) checked.add(id);

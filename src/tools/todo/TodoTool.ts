@@ -57,15 +57,12 @@ const writeTodos = Effect.fn('TodoWriteTool.execute')(function* (
 });
 
 /** Tool for managing task lists during agent sessions. */
-export class TodoWriteTool extends defineTool({
+export const TodoWriteTool = defineTool({
   name: 'todo_write',
   description: `Create and manage a structured task list for tracking progress on complex multi-step tasks.
 Task states: pending, in_progress, completed.
 Each task needs two forms: content (imperative, e.g. "Run tests") and activeForm (present continuous shown while active, e.g. "Running tests").
 Keep the list current as you work; one task in_progress at a time.`,
   schema: TodoWriteInputSchema,
-}) {
-  protected execute(input: TodoWriteInput) {
-    return writeTodos(input);
-  }
-}
+  execute: writeTodos,
+});

@@ -211,7 +211,7 @@ const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
   );
 });
 
-export class ZoteroCollectionsTool extends defineTool({
+export const ZoteroCollectionsTool = defineTool({
   name: 'zotero_collections',
   parallelSafe: true,
   description:
@@ -220,13 +220,11 @@ export class ZoteroCollectionsTool extends defineTool({
     'To see which collections a paper belongs to, use zotero_search with include_collections instead. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
-}) {
-  protected execute(
+  execute: (
     input: ZoteroCollectionsInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    return Effect.gen(function* () {
+  ): Effect.Effect<ToolResult, unknown, ToolServices> =>
+    Effect.gen(function* () {
       const call = yield* ToolCall;
       return yield* listCollections(input, call.inScope(getZoteroPort));
-    });
-  }
-}
+    }),
+});

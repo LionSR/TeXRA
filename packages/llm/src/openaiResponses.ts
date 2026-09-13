@@ -18,6 +18,8 @@ import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
+  pullStream,
   ObservationPolicySchema,
   parseInboundToolArguments,
   RemoteOperationSchema,
@@ -616,10 +618,7 @@ function responseEvents(
     let responseId: string | undefined;
     let returnedModel: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         responseId,
         model: returnedModel ?? origin.requestedModel,
       });
@@ -920,26 +919,18 @@ const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
         yield* close.pipe(Effect.orDie);
       }),
   );
-  return Stream.fromPull(
-    Effect.succeed(
-      Effect.tryPromise({
-        try: () => iterator.next(),
-        catch: (cause) =>
-          enrich(
-            cause instanceof SyntaxError
-              ? new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model returned malformed stream data.',
-                  cause,
-                })
-              : openaiFailure(cause),
-          ),
-      }).pipe(
-        Effect.flatMap((next) =>
-          next.done ? Cause.done() : Effect.succeed([next.value] as const),
-        ),
+  return pullStream(
+    () => iterator.next(),
+    (cause) =>
+      enrich(
+        cause instanceof SyntaxError
+          ? new ModelError({
+              kind: 'malformed-output',
+              message: 'The model returned malformed stream data.',
+              cause,
+            })
+          : openaiFailure(cause),
       ),
-    ),
   );
 });
 
@@ -1189,10 +1180,7 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
 
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         requestId: error.requestId ?? requestId,
         model: error.model ?? origin.requestedModel,
       });
@@ -1378,10 +1366,7 @@ export function openaiResponsesModel(
       let responseId: string | undefined;
       let returnedModel: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           requestId: error.requestId ?? requestId,
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? config.requestedModel,
@@ -1439,10 +1424,7 @@ export function openaiResponsesModel(
     let returnedModel: string | undefined;
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         operation,
         responseId: operation?.providerResponseId,
         requestId: error.requestId ?? requestId,
@@ -1587,10 +1569,7 @@ export function openaiResponsesModel(
         let returnedModel: string | undefined;
         let requestId: string | undefined;
         const enrich = (error: ModelError) =>
-          new ModelError({
-            ...error,
-            message: error.message,
-            cause: error.cause,
+          enrichModelError(error, {
             operation,
             responseId: operation.providerResponseId,
             requestId: error.requestId ?? requestId,
@@ -1875,10 +1854,7 @@ export function openaiResponsesModel(
     const operation = yield* boundOperation(input);
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      new ModelError({
-        ...error,
-        message: error.message,
-        cause: error.cause,
+      enrichModelError(error, {
         operation,
         responseId: operation.providerResponseId,
         requestId: error.requestId ?? requestId,
@@ -2219,10 +2195,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       let returnedModel: string | undefined;
       let completed = false;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? config.requestedModel,
         });

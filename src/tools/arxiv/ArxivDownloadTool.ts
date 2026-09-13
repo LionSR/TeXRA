@@ -63,7 +63,7 @@ const ArxivDownloadInputSchema = z.strictObject({
   ).describe('Where to extract the source: workspace root or References/.'),
 });
 
-export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
+type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
 const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,
@@ -121,16 +121,13 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   return executed(output, summary);
 });
 
-export class ArxivDownloadTool extends defineTool({
+export const ArxivDownloadTool = defineTool({
   name: 'download_arxiv_source',
   description:
     'Download an arXiv paper source archive into the workspace and list the extracted files. Use "destination" to choose where files are placed: "references" (default) saves to References/{paper_id}, "root" saves directly to the workspace root. If the source was already downloaded, it skips re-downloading and indicates that the source already exists.',
   schema: ArxivDownloadInputSchema,
-}) {
-  protected execute(input: ArxivDownloadInput) {
-    // The owning agent run's cancellation enters here as interruption —
-    // without it, a cancelled run would wait out the download (and its
-    // retries) that only observe the internal deadline.
-    return download(input);
-  }
-}
+  // The owning agent run's cancellation enters here as interruption —
+  // without it, a cancelled run would wait out the download (and its
+  // retries) that only observe the internal deadline.
+  execute: download,
+});

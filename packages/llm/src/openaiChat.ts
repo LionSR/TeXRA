@@ -1,6 +1,5 @@
 // Third-party imports
 import { Cause, Effect, Exit, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import OpenAI from 'openai';
 import { z } from 'zod';
 
@@ -10,7 +9,10 @@ import {
   InputTokenEstimateSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   parseInboundToolArguments,
+  pullStream,
+  sseEvents,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -991,10 +993,7 @@ export function openaiChatModel(
       let requestId: string | undefined;
       let bodyRequestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           requestId: error.requestId ?? requestId,
           model: error.model ?? returnedModel ?? config.requestedModel,
@@ -1078,49 +1077,10 @@ export function openaiChatModel(
             }
           >();
 
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: openaiFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
-          let parsedEvents: Sse.Event[] = [];
-          const parser = Sse.makeParser(
-            (event) => {
-              // Retry is only a reconnect hint; this operation never reconnects.
-              if (event._tag === 'Event') parsedEvents.push(event);
-            },
-            {
-              // Preserve the prior no-added-cap policy, not a bounded-memory claim.
-              maxEventSize: Number.POSITIVE_INFINITY,
-            },
-          );
-          const chunks = bytes.pipe(
-            Stream.decodeText,
-            Stream.mapEffect((text) =>
-              Effect.gen(function* () {
-                parsedEvents = [];
-                const failure = parser.feed(text);
-                if (failure !== undefined) {
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'The model returned malformed server-sent events.',
-                    cause: failure,
-                  });
-                }
-                return parsedEvents;
-              }),
-            ),
-            Stream.flattenIterable,
-            Stream.takeUntil((event) => event.data === '[DONE]'),
+          const bytes = pullStream(() => body.read(), openaiFailure);
+          const chunks = sseEvents(
+            bytes,
+            'The model returned malformed server-sent events.',
           );
 
           const progress = chunks.pipe(

@@ -144,13 +144,10 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   },
 );
 
-export class ExtractBibliographyTool extends defineTool({
+export const ExtractBibliographyTool = defineTool({
   name: 'extract_bib_entries',
   description:
     'Collect BibTeX records for citations referenced in a LaTeX document.',
   schema: ExtractBibliographyInputSchema,
-}) {
-  protected execute(input: ExtractBibliographyInput) {
-    return extractBibliography(input);
-  }
-}
+  execute: extractBibliography,
+});
