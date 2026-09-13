@@ -2,8 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
+import { Effect, FileSystem, Path, type PlatformError } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
@@ -15,8 +14,6 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { StateStore } from '../interfaces';
 
 type JsonRecord = Record<string, unknown>;
-
-const nodeStorageLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {
@@ -178,7 +175,7 @@ export class JsonStore implements StateStore {
     const path = yield* Path.Path;
     const storePath = path.resolve(filePath);
     return new JsonStore(storePath, yield* readJsonRecord(storePath), options);
-  }, Effect.provide(nodeStorageLayer));
+  });
 
   get<T>(key: string, defaultValue?: T): T {
     const value = this.data[key];
@@ -206,15 +203,7 @@ export class JsonStore implements StateStore {
       return withPerKeyLane(
         writeLanes,
         this.filePath,
-      )(
-        flush(
-          this.filePath,
-          this.options.mode,
-          key,
-          value,
-          this.snapshot(),
-        ).pipe(Effect.provide(nodeStorageLayer)),
-      );
+      )(flush(this.filePath, this.options.mode, key, value, this.snapshot()));
     });
   }
 

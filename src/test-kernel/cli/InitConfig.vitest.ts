@@ -19,6 +19,7 @@ import {
   setWorkspaceCliChatAgent,
 } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -95,7 +96,7 @@ describe('setWorkspaceCliChatAgent', () => {
         yield* setWorkspaceCliChatAgent(workspace, undefined);
         const cleared = yield* loadWorkspaceCliConfig(workspace);
         expect(cleared.values.chat).toEqual({ model: 'deepseekT' });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 

@@ -5,7 +5,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 import {
   createAgentResponseTextConnector,
@@ -80,8 +80,14 @@ interface DesktopProjectRegistryOptions {
 }
 
 export interface DesktopProjectRegistry {
-  /** Open a folder as a project, remember it for the next launch, or return the one already open. */
-  open(root: string): Effect.Effect<DesktopProject, Error>;
+  /**
+   * Open a folder as a project, remember it for the next launch, or return
+   * the one already open. Its stores read through the process runtime's
+   * `FileSystem` and `Path`, so it runs where those are provided.
+   */
+  open(
+    root: string,
+  ): Effect.Effect<DesktopProject, Error, FileSystem.FileSystem | Path.Path>;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
   /** The project the window shows: the active folder, else the no-workspace session. */

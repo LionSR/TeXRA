@@ -12,6 +12,7 @@ import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -53,7 +54,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
         workspaceStore,
         files: [globalPath, workspacePath],
       };
-    });
+    }).pipe(Effect.provide(nodePlatformLayer));
   }
 
   it.effect('returns schema defaults without creating empty config files', () =>
@@ -99,7 +100,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
         globalValue: ['dist'],
         workspaceValue: ['node_modules'],
       });
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('stores new config values under the canonical prefixed key', () =>
@@ -127,6 +128,6 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
       expect(provider.isExplicitlySet('files.exclude')).toBe(false);
       expect(workspaceStore.snapshot()).toEqual({});
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

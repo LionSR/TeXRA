@@ -11,6 +11,12 @@
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
  */
+// The two services by their own modules, not the package barrel: a setup
+// file loads before a suite's `vi.mock` registrations, and the barrel would
+// cache `NodeChildProcessSpawner`'s `node:child_process` ahead of a suite
+// that mocks it.
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -191,6 +197,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
     testHttpClientLayer,
+    // The same standard-library filesystem and path services the process
+    // roots provide, over the real temp roots the harness runs on.
+    NodeFileSystem.layer,
+    NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(InquiryRecords, {}),
     Secrets.layer(() => installedHost().secrets),

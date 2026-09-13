@@ -7,6 +7,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 // Local imports
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 /**
  * The secret store the CLI composition root owns. Every load below
@@ -111,6 +112,7 @@ async function loadSupabaseAuth() {
     ManagedRuntime.make(
       Layer.mergeAll(
         testHttpClientLayer,
+        nodePlatformLayer,
         Layer.mock(UpdateCheckRecords, {}),
         inquiryRecordsLayer(() => globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),

@@ -9,6 +9,7 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - test support
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
@@ -72,7 +73,7 @@ describe('shared JsonStore', () => {
       expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
         original,
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect.each([
@@ -89,7 +90,7 @@ describe('shared JsonStore', () => {
       const error = yield* Effect.flip(JsonStore.open(filePath));
       expect(error).toBeInstanceOf(TypeError);
       expect(error.message).toContain('to contain a JSON object');
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -114,7 +115,7 @@ describe('shared JsonStore', () => {
           keep: 1,
           foreign: 2,
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -135,7 +136,7 @@ describe('shared JsonStore', () => {
         expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
           corrupt,
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -155,7 +156,7 @@ describe('shared JsonStore', () => {
           keep: 1,
           added: 2,
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -182,7 +183,7 @@ describe('shared JsonStore', () => {
           fromA: 'a',
           fromB: 'b',
         });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('flushes chained sets in call order, not in wake-up order', () =>
@@ -208,7 +209,7 @@ describe('shared JsonStore', () => {
       expect(yield* Effect.promise(() => readStoredJson(filePath))).toEqual({
         k: 3,
       });
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('keeps the lock function callable in a split ESM bundle', async () => {
@@ -235,9 +236,13 @@ describe('shared JsonStore', () => {
       Effect: typeof Effect;
     };
     const filePath = join(tempDir, 'state.json');
-    const store = await bundledEffect.runPromise(JsonStore.open(filePath));
+    const store = await bundledEffect.runPromise(
+      JsonStore.open(filePath).pipe(Effect.provide(nodePlatformLayer)),
+    );
 
-    await bundledEffect.runPromise(store.set('persisted', true));
+    await bundledEffect.runPromise(
+      store.set('persisted', true).pipe(Effect.provide(nodePlatformLayer)),
+    );
 
     expect(await readStoredJson(filePath)).toEqual({
       persisted: true,
@@ -276,6 +281,6 @@ describe('shared JsonStore', () => {
         } finally {
           yield* Effect.promise(() => chmod(tempDir!, 0o700));
         }
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

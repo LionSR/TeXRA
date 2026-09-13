@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { Effect, FileSystem } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
@@ -14,6 +13,7 @@ import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -77,7 +77,7 @@ describe('desktop composition root and launch environment', () => {
           expect(yield* reopened.read).toEqual(['/first']);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
         }),
-      ).pipe(Effect.provide(NodeFileSystem.layer)),
+      ).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   effectIt.live(
@@ -152,7 +152,7 @@ describe('desktop composition root and launch environment', () => {
           expect(registry.active()).toBe(successor);
           expect(yield* records.read).toEqual([successor.root]);
         }),
-      ).pipe(Effect.provide(NodeFileSystem.layer)),
+      ).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('keeps platform initialization in the Electron composition root', async () => {

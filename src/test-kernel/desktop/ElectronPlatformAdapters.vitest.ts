@@ -12,7 +12,7 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
-import { pathExists } from '@test/support/fsTestUtils';
+import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
@@ -96,7 +96,7 @@ describe('desktop platform adapters', () => {
         expect(store.get('session')).toEqual({ active: true });
         expect(store.get('missing', 'fallback')).toBe('fallback');
         expect(store.snapshot()).toEqual({ session: { active: true } });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -161,7 +161,7 @@ describe('desktop platform adapters', () => {
           yield* Effect.promise(() => secrets.get(testSecretKey)),
         ).toBeUndefined();
         expect(store.snapshot()).toEqual({});
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -181,7 +181,7 @@ describe('desktop platform adapters', () => {
           new Error('Electron safeStorage is unavailable for secret writes.'),
         );
         expect(store.snapshot()).toEqual({});
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -213,7 +213,7 @@ describe('desktop platform adapters', () => {
           LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
         );
         expect(store.snapshot()).toEqual({});
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -237,7 +237,7 @@ describe('desktop platform adapters', () => {
           new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
         expect(store.snapshot()).toEqual({});
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('ignores malformed persisted secret records', () =>
@@ -249,6 +249,6 @@ describe('desktop platform adapters', () => {
       expect(
         yield* Effect.promise(() => secrets.get(testSecretKey)),
       ).toBeUndefined();
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
