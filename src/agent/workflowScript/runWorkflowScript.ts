@@ -757,7 +757,8 @@ export function runWorkflowScript<R = never>(
                   }
                 }
 
-                if (workflowRunState.sealed) return undefined;
+                if (workflowRunState.sealed || call.fiber !== attemptFiber)
+                  return undefined;
 
                 if (call.action === 'retry') {
                   // A retry is an authorized supersession, and the child it

@@ -41,6 +41,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
+import { deriveWorkflowRunModel } from '@shared/session/sessionFold';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -187,7 +188,8 @@ function workflowBoardLines(
   runId: RunId,
 ): Effect.Effect<string[]> {
   return Effect.map(session.readView([runId]), (view) => {
-    const board = view.runs.get(runId)?.transcript.run ?? null;
+    const run = view.runs.get(runId);
+    const board = run?.transcript.run ?? deriveWorkflowRunModel(view, runId);
     return board
       ? ['', 'Workflow:', JSON.stringify(workflowBoardView(board), null, 2)]
       : [];
