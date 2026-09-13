@@ -13,10 +13,16 @@ async function newReviewPane(): Promise<ReviewPane> {
   return createReviewPane();
 }
 
-function reviewPayload(path: string, additions = 1, deletions = 1) {
+function reviewPayload(
+  path: string,
+  additions = 1,
+  deletions = 1,
+  previewId = `preview-${path}`,
+) {
   return {
     command: 'desktop:showDiff' as const,
     session: 'paper-a',
+    previewId,
     title: `Tool edit: ${path}`,
     displayPath: path,
     originalText: 'old\n',
@@ -74,6 +80,19 @@ describe('desktop review pane', () => {
     expect(diff?.hostTheme).toBe(DESKTOP_THEME_KIND.LIGHT);
 
     controller.clear();
+    expect(controller.element.textContent).toContain('No changes to review');
+  });
+
+  it('closes only the diff it holds', async () => {
+    const controller = await newReviewPane();
+    controller.open(reviewPayload('src/main.ts', 1, 1, 'request-a'));
+    controller.open(reviewPayload('src/other.ts', 1, 1, 'request-b'));
+
+    // The older request settles behind the diff that replaced its preview.
+    expect(controller.close('request-a')).toBe(false);
+    expect(fileButtons(controller)).toHaveLength(2);
+
+    expect(controller.close('request-b')).toBe(true);
     expect(controller.element.textContent).toContain('No changes to review');
   });
 });

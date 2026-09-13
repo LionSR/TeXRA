@@ -42,12 +42,27 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
 /** The pair of Review-tab verbs the main process owns. */
 interface DesktopDiffHost extends Pick<DiffViewHost, 'openDiff'> {
   /**
-   * Close the Review workbench the diffs are shown in: the renderer's
-   * `desktop:closeDiff`, the counterpart of the `desktop:showDiff` that
-   * opened them. The Review tab is one surface per window, so this closes
-   * whatever it holds rather than one entry in it.
+   * Show a diff in the Review workbench under `previewId`, the key
+   * {@link DesktopDiffHost.closeDiff} closes it by. A caller with nothing to
+   * close later (the progress view's compare) omits it and the host mints
+   * one, so every diff the renderer holds is named and no close can dismiss
+   * a diff its sender did not open. Omitting it also keeps this assignable
+   * to `DiffViewHost['openDiff']`, which is how the window wires it.
    */
-  closeDiff(): Promise<void>;
+  openDiff(
+    original: DiffSource,
+    proposed: DiffSource,
+    title: string,
+    previewId?: string,
+  ): Promise<void>;
+  /**
+   * Close the Review workbench the diff `previewId` names is shown in: the
+   * renderer's `desktop:closeDiff`, the counterpart of the
+   * `desktop:showDiff` that opened it. The Review tab is one surface per
+   * window, so the renderer closes it only while that diff is the one it
+   * holds; a preview a later diff replaced closes nothing.
+   */
+  closeDiff(previewId: string): Promise<void>;
 }
 
 export function createDesktopDiffHost(
@@ -60,6 +75,7 @@ export function createDesktopDiffHost(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
+    previewId: string = nanoid(),
   ): Promise<void> {
     const [originalContent, proposedContent] = await Promise.all([
       readFile(original.filePath, 'utf8'),
@@ -78,6 +94,7 @@ export function createDesktopDiffHost(
       {
         command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
         session: reviewSession(),
+        previewId,
         title,
         displayPath: title.replace(/^Tool edit:\s*/, ''),
         originalText: originalContent,
@@ -135,7 +152,7 @@ export function createDesktopDiffHost(
    * editor is not a view this host can close, and the directory holding it
    * is removed at quit.
    */
-  async function closeDiff(): Promise<void> {
+  async function closeDiff(previewId: string): Promise<void> {
     tryShowInRenderer(
       {
         ...options,
@@ -145,6 +162,7 @@ export function createDesktopDiffHost(
       {
         command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
         session: reviewSession(),
+        previewId,
       } satisfies DesktopCloseDiffMessage,
     );
   }

@@ -71,7 +71,8 @@ interface DesktopMessageRouteHandlers {
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;
-    clear(session: string): void;
+    /** Clear the pane when it still holds `previewId`; reports whether it did. */
+    close(session: string, previewId: string): boolean;
   };
   disposeReviewTab(session: string): void;
   pdf: { open(message: DesktopShowPdfMessage): void };
@@ -136,8 +137,12 @@ export function createMessageRoutes(
       handlers.review.open(message);
     }),
     messageRoute(DesktopCloseDiffMessageSchema, (message) => {
-      handlers.review.clear(message.session);
-      handlers.disposeReviewTab(message.session);
+      // The Review tab goes with the diff the close names, and only while
+      // the pane still holds it: a preview a later diff replaced must not
+      // take that diff, or a review of its own, down with it.
+      if (handlers.review.close(message.session, message.previewId)) {
+        handlers.disposeReviewTab(message.session);
+      }
     }),
     messageRoute(DesktopShowPdfMessageSchema, (message) =>
       handlers.pdf.open(message),

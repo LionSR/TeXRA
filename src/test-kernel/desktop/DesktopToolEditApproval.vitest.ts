@@ -350,13 +350,17 @@ describe('desktop tool edit approval', () => {
             _original: DiffSource,
             _proposed: DiffSource,
             _title: string,
+            _previewId: string,
           ): Promise<void> => undefined,
         );
-        const closeDiff = vi.fn(async (): Promise<void> => undefined);
+        const closeDiff = vi.fn(
+          async (_previewId: string): Promise<void> => undefined,
+        );
         const { requestApproval, controller, waitForPreviews } =
           yield* createApprovalFixture({
             ui: {
-              ...createStubDesktopAgentRunHost({ openPath, openDiff }),
+              ...createStubDesktopAgentRunHost({ openPath }),
+              openDiff,
               closeDiff,
             },
           });
@@ -384,8 +388,11 @@ describe('desktop tool edit approval', () => {
           vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2)),
         );
         expect(openPath).not.toHaveBeenCalled();
-        const [original, proposed, title] = openDiff.mock.calls[0];
+        const [original, proposed, title, previewId] = openDiff.mock.calls[0];
         expect(title).toBe('Tool edit: main.tex');
+        // The diff is named by the request it previews, so closing it below
+        // can only take this request's diff off the Review workbench.
+        expect(previewId).toBe(request.requestId);
         expect(
           yield* Effect.tryPromise(() => pathExists(original.filePath)),
         ).toBe(true);
@@ -403,7 +410,9 @@ describe('desktop tool edit approval', () => {
         // closed before the staged files it reads are removed.
         yield* Effect.tryPromise(() =>
           vi.waitFor(async () => {
-            expect(closeDiff).toHaveBeenCalledOnce();
+            expect(closeDiff).toHaveBeenCalledExactlyOnceWith(
+              request.requestId,
+            );
             await expect(pathExists(proposed.filePath)).resolves.toBe(false);
           }),
         );

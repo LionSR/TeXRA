@@ -13,6 +13,7 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
+import type { DiffSource } from '@hosts/uiHosts';
 import { effectRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -23,10 +24,25 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 export type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
-  'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
+  'openPath' | 'openBuildDisplay' | 'showErrorMessage'
 > & {
-  /** Close the Review workbench `openDiff` shows the staged diff in. */
-  closeDiff(): Promise<void>;
+  /**
+   * Show the staged diff under `previewId`, the key `closeDiff` below closes
+   * it by. Each request names its own preview, so the Review workbench can
+   * tell one request's diff from another's.
+   */
+  openDiff(
+    original: DiffSource,
+    proposed: DiffSource,
+    title: string,
+    previewId: string,
+  ): Promise<void>;
+  /**
+   * Close the Review workbench the staged diff is shown in, and only while
+   * that diff is the one it holds: settling this request must not dismiss
+   * another request's pending preview or an unrelated review.
+   */
+  closeDiff(previewId: string): Promise<void>;
 };
 
 interface DesktopToolEditApprovalHostOptions {
@@ -114,6 +130,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
       { filePath: this.staged.originalPath },
       { filePath: this.staged.proposedPath },
       `Tool edit: ${this.context.relativePath}`,
+      this.context.requestId,
     );
   }
 
@@ -125,9 +142,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return readFile(this.staged.proposedPath, 'utf8');
   }
 
-  /** Close the view before the files behind it go, in that order. */
+  /**
+   * Close the view before the files behind it go, in that order. The close
+   * names this request's preview, so a request settling behind a newer diff
+   * leaves that diff on screen instead of dismissing it.
+   */
   async dispose(): Promise<void> {
-    await this.ui.closeDiff();
+    await this.ui.closeDiff(this.context.requestId);
     await rm(this.staged.tempDir, { recursive: true, force: true });
   }
 }

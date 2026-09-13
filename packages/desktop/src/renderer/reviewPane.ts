@@ -22,7 +22,14 @@ interface DiffViewElement extends HTMLElement {
 
 interface ReviewPaneController {
   readonly element: HTMLElement;
+  /** Drop every retained review, whatever opened it (the window closing). */
   clear(): void;
+  /**
+   * Clear the pane when `previewId` names the diff it holds, reporting
+   * whether it did. A close for a preview a later diff replaced holds
+   * nothing on screen to close, so it changes nothing.
+   */
+  close(previewId: string): boolean;
   open(payload: DesktopShowDiffMessage): void;
   setTheme(theme: Theme): void;
 }
@@ -37,6 +44,11 @@ export function createReviewPane(): ReviewPaneController {
   const entries = new Map<string, DesktopShowDiffMessage>();
   let selectedPath: string | undefined;
   let filter = '';
+  /**
+   * The diff the pane holds: the last one opened in it. A close names the
+   * diff its sender opened, and only this one is still on screen to close.
+   */
+  let openedPreviewId: string | undefined;
 
   function visibleEntries(): readonly DesktopShowDiffMessage[] {
     const query = filter.trim().toLocaleLowerCase();
@@ -95,6 +107,13 @@ export function createReviewPane(): ReviewPaneController {
         </wa-button>
       `;
     });
+  }
+
+  function clearEntries(): void {
+    entries.clear();
+    selectedPath = undefined;
+    openedPreviewId = undefined;
+    rerender();
   }
 
   function rerender(): void {
@@ -197,13 +216,20 @@ export function createReviewPane(): ReviewPaneController {
 
   return {
     element,
-    clear() {
-      entries.clear();
-      selectedPath = undefined;
-      rerender();
+    clear: clearEntries,
+    close(previewId) {
+      if (openedPreviewId !== previewId) {
+        console.debug(
+          `[desktop] review pane holds ${openedPreviewId ?? 'no diff'}; the close for ${previewId} leaves it open`,
+        );
+        return false;
+      }
+      clearEntries();
+      return true;
     },
     open(payload) {
       entries.set(payload.displayPath, payload);
+      openedPreviewId = payload.previewId;
       select(payload);
     },
     setTheme(nextTheme) {
