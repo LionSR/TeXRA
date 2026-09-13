@@ -21,7 +21,7 @@ import {
   RUNS_STORAGE_DIR,
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
-import { pathExists } from '@test/support/fsTestUtils';
+import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('workspace storage defaults', () => {
@@ -174,6 +174,6 @@ describe('workspace storage defaults', () => {
             pathExists(join(storage.getStoragePath(), 'config.json')),
           ),
         ).toBe(true);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

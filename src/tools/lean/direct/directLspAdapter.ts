@@ -19,11 +19,7 @@
  * which converts with its only caller there.
  */
 
-import {
-  NodeChildProcessSpawner,
-  NodeFileSystem,
-  NodePath,
-} from '@effect/platform-node';
+import { NodeChildProcessSpawner } from '@effect/platform-node';
 import { Cause, Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
 
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -43,16 +39,6 @@ import type {
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-
-/**
- * The library's Node `ChildProcessSpawner`, over the `FileSystem` and `Path`
- * services it validates and resolves a command's `cwd` through. Built here
- * rather than by the process runtime: the Lean lane is its only consumer, so
- * a process-wide spawner is a later lane's call.
- */
-const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
-);
 
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
@@ -98,7 +84,13 @@ export function createDirectLspLeanAdapter(
           idleTimeoutMs > 0
             ? Duration.millis(idleTimeoutMs)
             : Duration.infinity,
-      }).pipe(Layer.provide(spawnerLayer)),
+      }).pipe(
+        // The library's Node `ChildProcessSpawner`, over the `FileSystem`
+        // and `Path` it validates and resolves a command's `cwd` through:
+        // the process runtime provides that pair, so only the spawner is
+        // built here.
+        Layer.provide(NodeChildProcessSpawner.layer),
+      ),
     ).pipe(
       Scope.provide(scope),
       Effect.map((context) => Context.get(context, LeanServerPool)),

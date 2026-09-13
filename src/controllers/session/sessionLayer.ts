@@ -15,6 +15,7 @@
  * an open borrows, `close` settles and releases, and the runtime's disposal
  * releases whatever is still open.
  */
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import {
   Context,
   Deferred,
@@ -846,7 +847,16 @@ export function installProcessRuntime({
     Sessions.layer(release, services).pipe(
       Layer.provideMerge(services),
       Layer.provideMerge(
-        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
+        Layer.mergeAll(
+          effectDiagnosticsLayer,
+          FetchHttpClient.layer,
+          // The standard library's filesystem and path services, provided
+          // once per process here rather than by each program that needs
+          // them: every root reaches this install, so a consumer takes
+          // `FileSystem`/`Path` from context and builds no layer of its own.
+          NodeFileSystem.layer,
+          NodePath.layer,
+        ),
       ),
     ),
   );
