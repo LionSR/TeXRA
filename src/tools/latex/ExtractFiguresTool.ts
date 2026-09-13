@@ -72,13 +72,10 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   };
 });
 
-export class ExtractLatexFiguresTool extends defineTool({
+export const ExtractLatexFiguresTool = defineTool({
   name: 'extract_figures',
   description:
     'Resolve and list figure assets referenced by a LaTeX document, returning attachments when available.',
   schema: ExtractFiguresInputSchema,
-}) {
-  protected execute(input: ExtractFiguresInput) {
-    return extractFigures(input);
-  }
-}
+  execute: extractFigures,
+});

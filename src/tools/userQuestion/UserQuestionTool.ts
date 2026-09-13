@@ -107,7 +107,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   );
 });
 
-export class AskUserQuestionTool extends defineTool({
+export const AskUserQuestionTool = defineTool({
   name: 'ask_user_question',
   requiresApproval: true,
   description: `Ask the user one to three short clarification questions and wait for their answers.
@@ -116,8 +116,5 @@ Use this when the task has several reasonable paths and continuing without the u
 
 The tool returns a JSON object whose keys are the original question texts and whose values are the selected option labels, arrays of labels for multi-select questions, or free-text answers.`,
   schema: AskUserQuestionInputSchema,
-}) {
-  protected execute(input: AskUserQuestionInput) {
-    return askUserQuestion(input);
-  }
-}
+  execute: askUserQuestion,
+});

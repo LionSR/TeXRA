@@ -1,11 +1,12 @@
 // Type imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
-import type { ToolDefinition } from '@shared/schemas';
+import type { ToolDefinition, ToolResult } from '@shared/schemas';
 
 // Local file imports
 import { BaseTool } from './base';
 
 // Third-party type imports
+import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 
 const EXECUTION_FLAGS = [
@@ -26,9 +27,9 @@ interface DefinedToolHosts {
 }
 
 /**
- * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
- * declared execution flags, constructible only through a subclass that
- * implements `execute`.
+ * The abstract class `defineTool` hands back when the definition carries no
+ * `execute`: a `BaseTool<T>` with the declared execution flags, constructible
+ * only through a subclass that implements `execute`.
  *
  * Spelling this out is what keeps `defineTool`'s return type *nameable*.
  * Without it the return type is an anonymous class expression, and every
@@ -42,7 +43,21 @@ export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
   DefinedToolFlags &
   DefinedToolHosts;
 
-export type DefineToolOptions<T> = {
+/**
+ * The concrete counterpart, returned when the definition supplies `execute`:
+ * directly `new`-able, so a tool whose body only forwards to a module-level
+ * function needs no subclass at all.
+ */
+export type ConcreteToolClass<T, R = never> = new () => BaseTool<T, R> &
+  DefinedToolFlags &
+  DefinedToolHosts;
+
+/** The run body a tool definition may carry inline. */
+export type ToolExecute<T, R> = (
+  input: T,
+) => Effect.Effect<ToolResult, unknown, R>;
+
+export type DefineToolOptions<T, R = never> = {
   name: string;
   /** Static description string or function for lazy evaluation */
   description: string | (() => string);
@@ -51,6 +66,12 @@ export type DefineToolOptions<T> = {
   availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** Product hosts this tool definition statically excludes itself from. */
   unavailableHosts?: readonly ToolHost[];
+  /**
+   * The tool's run body. Supply it when the body needs nothing from the
+   * instance; omit it to get an abstract class and implement `execute` in a
+   * subclass (the shape tools that read `this` still need).
+   */
+  execute?: ToolExecute<T, R>;
 } & DefineToolFlags;
 
 /**
@@ -61,7 +82,13 @@ export type DefineToolOptions<T> = {
  * the tool definition is accessed.
  */
 export function defineTool<T, R = never>(
-  def: DefineToolOptions<T>,
+  def: DefineToolOptions<T, R> & { execute: ToolExecute<T, R> },
+): ConcreteToolClass<T, R>;
+export function defineTool<T, R = never>(
+  def: DefineToolOptions<T, R>,
+): DefinedToolClass<T, R>;
+export function defineTool<T, R = never>(
+  def: DefineToolOptions<T, R>,
 ): DefinedToolClass<T, R> {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
@@ -92,5 +119,12 @@ export function defineTool<T, R = never>(
     }
   }
 
-  return GeneratedTool;
+  const run = def.execute;
+  if (!run) return GeneratedTool;
+
+  return class DefinedTool extends GeneratedTool {
+    protected execute(input: T): Effect.Effect<ToolResult, unknown, R> {
+      return run(input);
+    }
+  };
 }

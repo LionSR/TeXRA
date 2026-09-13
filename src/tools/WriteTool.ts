@@ -61,14 +61,11 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   });
 });
 
-export class WriteFileTool extends defineTool({
+export const WriteFileTool = defineTool({
   name: 'write_file',
   requiresApproval: true,
   description:
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
-}) {
-  protected execute(input: WriteInput) {
-    return write(input);
-  }
-}
+  execute: write,
+});

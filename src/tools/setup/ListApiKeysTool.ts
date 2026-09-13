@@ -111,12 +111,9 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
  * The result is categorised as known provider keys, the GitHub token,
  * unrecognised apiKey.* entries, and a redacted count for other secrets.
  */
-export class ListApiKeysTool extends defineTool({
+export const ListApiKeysTool = defineTool({
   name: 'list_api_keys',
   description: `Audit only TeXRA's persisted credential store without reading secret values. Environment-backed provider keys are deliberately excluded and are reported by probe_environment instead. Known persisted provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to detect persisted provider keys and stale API-key entries. Recognised providers can be removed with unset_api_key; other entries must be removed through the current host's credential-management surface.`,
   schema: ListApiKeysInputSchema,
-}) {
-  protected execute(_input: ListApiKeysInput) {
-    return listApiKeys();
-  }
-}
+  execute: (_input: ListApiKeysInput) => listApiKeys(),
+});

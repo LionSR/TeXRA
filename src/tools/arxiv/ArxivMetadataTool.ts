@@ -80,15 +80,10 @@ const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
   );
 });
 
-export class ArxivMetadataTool extends defineTool({
+export const ArxivMetadataTool = defineTool({
   name: 'arxiv_metadata',
   parallelSafe: true,
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,
-}) {
-  protected execute(
-    input: ArxivMetadataInput,
-  ): Effect.Effect<ToolResult, unknown> {
-    return fetchMetadata(input);
-  }
-}
+  execute: fetchMetadata,
+});

@@ -171,16 +171,12 @@ const searchWorks = Effect.fn('CrossrefSearchTool.searchWorks')(function* (
   );
 });
 
-export class CrossrefSearchTool extends defineTool({
+export const CrossrefSearchTool = defineTool({
   name: 'crossref_search',
   parallelSafe: true,
   description:
     'Search Crossref works or look up detailed metadata for a DOI. Use command="search" with query, or command="doi" with doi.',
   schema: CrossrefSearchInputSchema,
-}) {
-  protected execute(
-    input: CrossrefSearchInput,
-  ): Effect.Effect<ToolResult, unknown> {
-    return input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input);
-  }
-}
+  execute: (input: CrossrefSearchInput): Effect.Effect<ToolResult, unknown> =>
+    input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input),
+});
