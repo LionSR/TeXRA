@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -155,7 +155,7 @@ export interface WorkflowScriptStrategyParams {
     ) => void;
   }) => (
     invocation: WorkflowAgentInvocation,
-  ) => Effect.Effect<unknown, Error, AgentRunServices>;
+  ) => Effect.Effect<unknown, Error, AgentRunServices | Scope.Scope>;
 }
 
 /**

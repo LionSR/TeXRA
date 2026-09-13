@@ -1211,11 +1211,13 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
   );
 
-  it.effect('probes from the attempt the parent journaled', () =>
+  it.effect('recovers an older attempt below the mark', () =>
     Effect.gen(function* () {
-      // Attempt 0 was deleted and its tombstone collected, so nothing of it
-      // reads back: without the parent's mark the probe would launch into that
-      // hole and never reach the attempt that answered the call.
+      // This process journaled the mark for attempt 1 and died before
+      // launching it, which freed attempt 0's fence for another host to
+      // resume; that host carried attempt 0 to a completed result. The mark
+      // says only what an absent id means, so the probe still inspects 0 and
+      // recovers the child rather than repeating its work under attempt 1.
       mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(1));
       probeAnswers({
         exists: true,
@@ -1228,7 +1230,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
       expect(mocks.probedRunIds).toEqual([
         deriveRunId({
-          attempt: 1,
+          attempt: 0,
           checkpointId: 'tool-call-7',
           key: '0123456789abcdef',
           parentRunId: runId,

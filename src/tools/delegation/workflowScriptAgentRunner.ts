@@ -321,11 +321,12 @@ function probeJournal<A>(
  * without them a resume can append `run.activate` between the reading and the
  * launch, and the probe starts a second child beside a running one.
  *
- * Both are released with the call's scope, after the attempt they advanced to
- * has run: a superseded attempt stays fenced for as long as its replacement is
- * live. A claim release that fails leaves every fact committed and only the
- * claim behind, so it is logged rather than failing a call whose child already
- * answered.
+ * Both are released with the call's scope, which the engine owns and closes
+ * only once the call's value is journaled: a superseded attempt stays fenced
+ * for as long as its replacement is live, and a recovered one stays fenced
+ * until the result it supplied is durable. A claim release that fails leaves
+ * every fact committed and only the claim behind, so it is logged rather than
+ * failing a call whose child already answered.
  */
 const fenceSupersededRun = (
   session: InBandSubagentLaunchOptions['session'],
@@ -394,17 +395,24 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * before committing it and marks a lost drain on the row it decided, so a
  * COMPLETED row can never outlive facts the child queued.
  *
- * Which ids to probe comes from the parent's journal: the attempt mark it
- * moves before each launch outlives the children, so the probe starts at the
- * attempt that ran rather than at 0. That mark is nullable, and the two
- * answers are read differently: no mark means the call never launched, so the
- * probe starts at 0 and the first absent id is the launch slot; a mark of `n`
- * means attempt `n` launched, so an absent id at or below `n` is one deletion
- * has collected and the probe advances past it, while the first absent id
- * above `n` is the launch slot. An id the user deleted is closed, not
- * free: its tombstone is final, so the probe advances past it, and once
- * deletion collects that tombstone the mark is what still says the call got
- * that far.
+ * The probe starts at attempt 0 always, and every id that exists is inspected
+ * in order: this process can have journaled a mark for `n` and died before
+ * launching it, leaving the dead fence on `n-1` reclaimable, and another host
+ * can have resumed `n-1` to a completed result since. Starting at the mark
+ * would repeat that child's model work and its edits. A call reaches a second
+ * attempt only when the first one closed without answering, so the ids below
+ * the mark are a handful of aggregate reads set against a whole child run.
+ *
+ * The parent's journal answers one question only: what an id that reads back
+ * as *nothing* means. The attempt mark it moves before each launch outlives
+ * the children, and that mark is nullable, so the two answers are read
+ * differently: no mark means the call never launched, so the first absent id
+ * is the launch slot; a mark of `n` means attempt `n` launched, so an absent
+ * id at or below `n` is one deletion has collected and the probe advances past
+ * it, while the first absent id above `n` is the launch slot. An id the user
+ * deleted is closed, not free: its tombstone is final, so the probe advances
+ * past it, and once deletion collects that tombstone the mark is what still
+ * says the call got that far.
  *
  * A run with no `run.end` for the lifecycle in flight, whose lease no live
  * owner still holds, frees the next attempt id in either of two shapes: it
@@ -442,23 +450,18 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       try: () => call.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    // Where the probe starts: the parent's journal, not attempt 0. A deleted
-    // attempt is collected in the end, and an id-by-id probe reads the hole
-    // that leaves as an id that never started — it would launch into it and
-    // never reach the attempt that answered this call after it. The mark is
-    // nullable because attempt 0 is an attempt: `null` is the only answer that
-    // means nothing ever launched, so a journaled 0 whose child is gone is
-    // advanced past rather than run a second time.
+    // The mark does not say where to start; it says what an absent id means. A
+    // deleted attempt is collected in the end, and an id-by-id probe reads the
+    // hole that leaves as an id that never started — it would launch into it
+    // and never reach the attempt that answered this call after it. The mark
+    // is nullable because attempt 0 is an attempt: `null` is the only answer
+    // that means nothing ever launched, so a journaled 0 whose child is gone
+    // is advanced past rather than run a second time.
     const journaled = yield* probeJournal(
       call.key,
       readWorkflowCallAttempt(session, call.checkpointId, call.key),
     );
-    const first = journaled ?? 0;
-    for (
-      let attempt = first;
-      attempt < first + MAX_WORKFLOW_CALL_ATTEMPTS;
-      attempt += 1
-    ) {
+    for (let attempt = 0; attempt < MAX_WORKFLOW_CALL_ATTEMPTS; attempt += 1) {
       const runId = workflowCallRunId({
         parentRunId: call.parentRunId,
         checkpointId: call.checkpointId,
@@ -599,12 +602,19 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       ),
     );
   },
-  // Every fence this probe took over a superseded attempt is released here,
-  // once the attempt that answered the call has run.
-  Effect.scoped,
 );
 
-/** Build the production `agent()` adapter for one workflow-script run. */
+/**
+ * Build the production `agent()` adapter for one workflow-script run.
+ *
+ * The adapter takes its `Scope` from the engine rather than closing one of its
+ * own around the call. The fences it holds over the attempt it recovered or
+ * superseded have to outlive its return: the engine journals the call's value
+ * after the runner answers, and a fence released at the return leaves the
+ * inspected child free for a host to resume — appending `run.activate` and
+ * doing more work — while the parent is still persisting the result read from
+ * it. The engine closes that scope once the journal write has committed.
+ */
 export function createWorkflowScriptAgentRunner(
   parent: DelegationParent,
   defaultAgent: AgentEntry,
@@ -619,13 +629,13 @@ export function createWorkflowScriptAgentRunner(
   },
 ): (
   invocation: WorkflowAgentInvocation,
-) => Effect.Effect<RunEnd, Error, AgentRunServices> {
+) => Effect.Effect<RunEnd, Error, AgentRunServices | Scope.Scope> {
   const { session } = parent.run;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
       invocation: WorkflowAgentInvocation,
-    ): Effect.fn.Return<RunEnd, Error, AgentRunServices> {
+    ): Effect.fn.Return<RunEnd, Error, AgentRunServices | Scope.Scope> {
       const child = yield* recoverOrLaunchWorkflowChild({
         session,
         parentRunId: run.runId,

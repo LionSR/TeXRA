@@ -10,8 +10,8 @@ import {
   FiberSet,
   Queue,
   Result,
+  Scope,
   Semaphore,
-  type Scope,
 } from 'effect';
 import type {
   RunId,
@@ -201,6 +201,12 @@ function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
     reason.kind !== 'settlement-cleanup'
   );
 }
+
+/**
+ * The one outcome of an attempt that is not the call's value: the host asked
+ * for another attempt, so the loop runs again under a fresh scope.
+ */
+const RETRY_ATTEMPT = Symbol('workflowScript.retryAttempt');
 
 class JournalCommitFence {
   #sealed = false;
@@ -827,141 +833,154 @@ export function runWorkflowScript<R = never>(
 
           for (;;) {
             const call: InFlightAgentCall = { index };
-            const launch = permits.withPermit(
+            // The attempt's scope is opened here and closed only after the
+            // journal write below: the runner fences the child it recovered or
+            // superseded into it, and a fence that ended at the runner's
+            // return would leave that child free to be resumed — appending
+            // `run.activate` and working on — while this loop is still
+            // persisting the value read from it. The engine owns the scope
+            // because the engine owns the commit.
+            const attempt = yield* Effect.scopedWith((attemptScope) =>
               Effect.gen(function* () {
-                if (firstFatalFault !== undefined) {
-                  return yield* Effect.fail(firstFatalFault);
+                const launch = permits.withPermit(
+                  Effect.gen(function* () {
+                    if (firstFatalFault !== undefined) {
+                      return yield* Effect.fail(firstFatalFault);
+                    }
+                    liveCallCounter += 1;
+                    if (liveCallCounter > maxAgentCalls) {
+                      const fault = new WorkflowRunAbortError(
+                        `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+                        { kind: 'cap' },
+                      );
+                      // Record the refused call before waking the run-level fatal
+                      // race, which immediately interrupts the guest-call fiber.
+                      failCall(fault);
+                      return yield* Effect.fail(failRun(fault));
+                    }
+                    workflowRunState.beginAttempt(progressId);
+                    yield* refreshDependencyIdentity();
+                    const signal = yield* Effect.abortSignal;
+                    const runnerFiber = yield* Effect.forkChild(
+                      Effect.suspend(() =>
+                        runAgent({
+                          index,
+                          progressId,
+                          key,
+                          prompt,
+                          options: callOptions,
+                          signal,
+                          report: ({ agent, recovered, ...attemptFacts }) => {
+                            if (
+                              attemptFacts.childRunId !== undefined &&
+                              recovered !== true
+                            ) {
+                              inFlightCalls.set(attemptFacts.childRunId, call);
+                            }
+                            if (
+                              Object.values(attemptFacts).some(
+                                (fact) => fact !== undefined,
+                              )
+                            ) {
+                              workflowRunState.reportAttempt(
+                                progressId,
+                                attemptFacts,
+                              );
+                            }
+                            if (agent !== undefined) {
+                              workflowRunState.updateCall(progressId, {
+                                agent,
+                              });
+                            }
+                          },
+                        }).pipe(Scope.provide(attemptScope)),
+                      ),
+                      { startImmediately: true },
+                    );
+                    // The runner has started and owns its scoped AbortSignal;
+                    // give the durable writer a turn while the call remains in
+                    // its running state, even if the runner already completed.
+                    yield* Effect.yieldNow;
+                    return yield* Fiber.join(runnerFiber);
+                  }).pipe(Effect.scoped),
+                );
+                const attemptFiber = yield* Effect.forkChild(launch);
+                call.fiber = attemptFiber;
+                const attemptExit = yield* Fiber.await(attemptFiber);
+
+                for (const [childRunId, inFlight] of inFlightCalls) {
+                  if (inFlight === call) {
+                    inFlightCalls.delete(childRunId);
+                  }
                 }
-                liveCallCounter += 1;
-                if (liveCallCounter > maxAgentCalls) {
-                  const fault = new WorkflowRunAbortError(
-                    `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-                    { kind: 'cap' },
-                  );
-                  // Record the refused call before waking the run-level fatal
-                  // race, which immediately interrupts the guest-call fiber.
-                  failCall(fault);
-                  return yield* Effect.fail(failRun(fault));
+
+                if (!workflowRunState.settleAttempt(progressId)) {
+                  return undefined;
                 }
-                workflowRunState.beginAttempt(progressId);
-                yield* refreshDependencyIdentity();
-                const signal = yield* Effect.abortSignal;
-                const runnerFiber = yield* Effect.forkChild(
-                  Effect.suspend(() =>
-                    runAgent({
-                      index,
-                      progressId,
-                      key,
-                      prompt,
-                      options: callOptions,
-                      signal,
-                      report: ({ agent, recovered, ...attemptFacts }) => {
-                        if (
-                          attemptFacts.childRunId !== undefined &&
-                          recovered !== true
-                        ) {
-                          inFlightCalls.set(attemptFacts.childRunId, call);
-                        }
-                        if (
-                          Object.values(attemptFacts).some(
-                            (fact) => fact !== undefined,
-                          )
-                        ) {
-                          workflowRunState.reportAttempt(
-                            progressId,
-                            attemptFacts,
-                          );
-                        }
-                        if (agent !== undefined) {
-                          workflowRunState.updateCall(progressId, {
-                            agent,
-                          });
-                        }
-                      },
+
+                if (call.action === 'retry') {
+                  workflowRunState.queueCall(progressId, {
+                    model: callOptions.model,
+                  });
+                  return RETRY_ATTEMPT;
+                }
+                if (call.action === 'skip') {
+                  workflowRunState.settleCall(progressId, {
+                    status: WORKFLOW_CALL_STATUS.SKIPPED,
+                  });
+                  return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+                }
+
+                if (Exit.isFailure(attemptExit)) {
+                  const error = Cause.squash(attemptExit.cause);
+                  if (isWorkflowAbort(error)) {
+                    const fatal = failRun(
+                      error instanceof WorkflowRunAbortError
+                        ? error
+                        : new WorkflowRunAbortError(toErrorMessage(error), {
+                            kind: 'runner',
+                            cause: error,
+                          }),
+                    );
+                    failCall(fatal);
+                    return yield* Effect.fail(fatal);
+                  }
+                  failCall(error, WORKFLOW_CALL_STATUS.FAILED);
+                  // Let the writer observe this failed call while its stage is
+                  // still active before guest code can launch the next call.
+                  yield* Effect.yieldNow;
+                  return 'null';
+                }
+
+                const { payload, normalizedResult } = journalValue(
+                  attemptExit.value,
+                  'agent() result',
+                );
+                let callSettled = false;
+                const entry = { index, key, result: normalizedResult };
+                const committed = yield* journalCommitFence.commit(
+                  persistJournalEntry(entry).pipe(
+                    Effect.tap(() =>
+                      Effect.sync(() => {
+                        callSettled = true;
+                        workflowRunState.settleCall(progressId, {
+                          status: WORKFLOW_CALL_STATUS.COMPLETED,
+                        });
+                        onJournalEntryConsumed?.(entry);
+                      }),
+                    ),
+                    Effect.catch((error) => {
+                      if (!callSettled) failCall(error);
+                      return Effect.fail(failRun(error));
                     }),
                   ),
-                  { startImmediately: true },
                 );
-                // The runner has started and owns its scoped AbortSignal;
-                // give the durable writer a turn while the call remains in
-                // its running state, even if the runner already completed.
-                yield* Effect.yieldNow;
-                return yield* Fiber.join(runnerFiber);
-              }).pipe(Effect.scoped),
+                if (!committed) return undefined;
+                return payload;
+              }),
             );
-            const attemptFiber = yield* Effect.forkChild(launch);
-            call.fiber = attemptFiber;
-            const attemptExit = yield* Fiber.await(attemptFiber);
-
-            for (const [childRunId, inFlight] of inFlightCalls) {
-              if (inFlight === call) {
-                inFlightCalls.delete(childRunId);
-              }
-            }
-
-            if (!workflowRunState.settleAttempt(progressId)) {
-              return undefined;
-            }
-
-            if (call.action === 'retry') {
-              workflowRunState.queueCall(progressId, {
-                model: callOptions.model,
-              });
-              continue;
-            }
-            if (call.action === 'skip') {
-              workflowRunState.settleCall(progressId, {
-                status: WORKFLOW_CALL_STATUS.SKIPPED,
-              });
-              return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
-            }
-
-            if (Exit.isFailure(attemptExit)) {
-              const error = Cause.squash(attemptExit.cause);
-              if (isWorkflowAbort(error)) {
-                const fatal = failRun(
-                  error instanceof WorkflowRunAbortError
-                    ? error
-                    : new WorkflowRunAbortError(toErrorMessage(error), {
-                        kind: 'runner',
-                        cause: error,
-                      }),
-                );
-                failCall(fatal);
-                return yield* Effect.fail(fatal);
-              }
-              failCall(error, WORKFLOW_CALL_STATUS.FAILED);
-              // Let the writer observe this failed call while its stage is
-              // still active before guest code can launch the next call.
-              yield* Effect.yieldNow;
-              return 'null';
-            }
-
-            const { payload, normalizedResult } = journalValue(
-              attemptExit.value,
-              'agent() result',
-            );
-            let callSettled = false;
-            const entry = { index, key, result: normalizedResult };
-            const committed = yield* journalCommitFence.commit(
-              persistJournalEntry(entry).pipe(
-                Effect.tap(() =>
-                  Effect.sync(() => {
-                    callSettled = true;
-                    workflowRunState.settleCall(progressId, {
-                      status: WORKFLOW_CALL_STATUS.COMPLETED,
-                    });
-                    onJournalEntryConsumed?.(entry);
-                  }),
-                ),
-                Effect.catch((error) => {
-                  if (!callSettled) failCall(error);
-                  return Effect.fail(failRun(error));
-                }),
-              ),
-            );
-            if (!committed) return undefined;
-            return payload;
+            if (attempt === RETRY_ATTEMPT) continue;
+            return attempt;
           }
         });
 

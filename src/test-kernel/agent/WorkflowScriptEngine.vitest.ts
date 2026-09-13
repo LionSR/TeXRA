@@ -804,6 +804,35 @@ return await parallel([
       }),
   );
 
+  it.live('releases a runner-held fence only after the journal commits', () =>
+    Effect.gen(function* () {
+      // A runner fences the child it recovered or superseded against a resume
+      // for the length of the call's scope. The engine owns that scope: it
+      // closes only once the call's value is durable, since a fence dropped at
+      // the runner's return leaves the inspected child free to be resumed
+      // while the parent is still persisting the result read from it.
+      const order: string[] = [];
+      const run = yield* runWorkflowScript({
+        script: `${META}return await agent('fenced')`,
+        runAgent: () =>
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => order.push('fence released')),
+            );
+            return 'fenced result';
+          }),
+        onJournalEntry: (entry) =>
+          Effect.gen(function* () {
+            yield* sleep(5);
+            order.push(`checkpoint:${entry.index}`);
+          }),
+      });
+
+      expect(run.result).toBe('fenced result');
+      expect(order).toEqual(['checkpoint:0', 'fence released']);
+    }),
+  );
+
   it.live(
     'observes validated cache hits and live results after durable commit',
     () =>
