@@ -2,7 +2,7 @@
 
 Status: proposed — a census of duplicated vocabulary and the order in which to
 retire it. The primary collapse is specified; the eight candidate families in
-Section 4 are superseded by [one run model](2026-09-10-one-run-model.md) and are
+Section 4 are superseded by [one run model](../../implemented/architecture/2026-09-10-one-run-model.md) and are
 kept here only as the census record, with its corrections carried across.
 
 This note examines `main` merged into `claude/collapse-duplicate-concepts-5flo1e`
@@ -48,7 +48,7 @@ Consequently:
   its finder, and none survived an individual refutation pass in this census.
   The refutation those entries were waiting for was run on 2026-09-10 across all
   eight families, and its result is
-  [one run model](2026-09-10-one-run-model.md), which now owns that work. Read
+  [one run model](../../implemented/architecture/2026-09-10-one-run-model.md), which now owns that work. Read
   Section 4 as a record of what was measured, not as leads to confirm.
 - **Section 6 records the two candidates that were verified and refuted.**
 
@@ -58,7 +58,7 @@ confidence score in the set (0.93) belonged to a candidate that did not
 survive contact with the code. The eight families bore that out as well: the
 re-investigation corrected several of them, and one of them named two things
 that had already been deleted. Implement from
-[one run model](2026-09-10-one-run-model.md), never from a Section 4 entry.
+[one run model](../../implemented/architecture/2026-09-10-one-run-model.md), never from a Section 4 entry.
 
 ## 3. Primary collapse: `StreamTabId` into `ExecutionId`
 
@@ -153,7 +153,7 @@ the identity, which the observability-plane note already specifies.
 
 ## 4. Candidate families (superseded)
 
-**Superseded on 2026-09-10 by [one run model](2026-09-10-one-run-model.md).
+**Superseded on 2026-09-10 by [one run model](../../implemented/architecture/2026-09-10-one-run-model.md).
 Nothing in this section is current guidance.** All eight families were
 re-investigated against `main` at `2b4e9ffcba`, the commit after #12189 and
 #12199 landed, and resolved there as one design rather than eight leads. That
@@ -178,7 +178,7 @@ the parent edge already carries. A child's parent edge is persisted in four
 records, and "is a direct child of X" is implemented twice off two of them.
 
 > Verdict: confirmed and specified as one `parent: { id, startCommit } | null`
-> field on `run.start` ([one run model](2026-09-10-one-run-model.md) §3.1, §3.2;
+> field on `run.start` ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §3.1, §3.2;
 > step S1). Corrections: the single site that reads both parent fields guards a
 > state the database forbids, and the field it guards is a legacy-manifest
 > reader that 1.0 retires. `background` is not a launch mode, as the first
@@ -206,7 +206,7 @@ every consumer immediately totals, in four places.
 > Verdict: two of these five entries are already closed and are not work.
 > `StreamTabInfo` was deleted in #12199 and the per-host grouping tables in
 > #12189, both on 2026-09-10, before the one-run note was written. The
-> remaining three are specified in [one run model](2026-09-10-one-run-model.md)
+> remaining three are specified in [one run model](../../implemented/architecture/2026-09-10-one-run-model.md)
 > §3.8 as step S4: `StreamSnapshotStore`, `StreamSnapshotSchema` and
 > `executionMetaFromEvents` are deleted, backend readers take `SessionView` from
 > the service, the resume fold stays because it answers a different question,
@@ -221,7 +221,7 @@ escaped its one frozen boundary. `WORKFLOW_EXECUTION_LIFECYCLE` is
 `StreamPhase` with `running` renamed to `active`. Workflow calls carry two
 nine-value status enums for one concept.
 
-> Verdict: partly amended ([one run model](2026-09-10-one-run-model.md) §3.3;
+> Verdict: partly amended ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §3.3;
 > step S2). `ExecutionStatus` and `HistoryRunStatus` are justified projections
 > of `RunOutcome` with one translator each, not accidental duplicates, and they
 > survive inside the CLI projection. `WORKFLOW_EXECUTION_LIFECYCLE` is not
@@ -241,7 +241,7 @@ are three declarations of one run result (141 references across 38 files), with
 twice and reconciled at read time. A run's description is carried by two
 durable event types that are always published together.
 
-> Verdict: confirmed and specified ([one run model](2026-09-10-one-run-model.md)
+> Verdict: confirmed and specified ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md)
 > §3.3, §3.4; step S2). One `run.end { outcome, error?, usage, output }` row,
 > every in-memory result type a `z.infer` of its payload schema or of a
 > `.pick()`, and cost is `usage.totalCost` and nothing else. The
@@ -257,7 +257,7 @@ duplicated interfaces in `src/agent/trace/events.ts` alone. `goalPaused` and
 same aggregate.
 
 > Verdict: real but cheaper than this entry implies
-> ([one run model](2026-09-10-one-run-model.md) §3.5; step S2). The `AgentEvent`
+> ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §3.5; step S2). The `AgentEvent`
 > interfaces are hand-written mirrors of `TranscriptEventSchemas`, identical in
 > every arm but `usage` and `goalPaused`, not twenty-one divergent
 > declarations. `sessionEvent.ts` becomes the only vocabulary, the trace union
@@ -278,7 +278,7 @@ inquiry is durable across restarts and multi-turn where an approval dies with
 its run — so this family needs its refutation pass most.
 
 > Verdict: the counterargument was answered rather than upheld
-> ([one run model](2026-09-10-one-run-model.md) §3.7; step S3, which lands with
+> ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §3.7; step S3, which lands with
 > the runtime lane's D3). That an inquiry survives a restart and an approval
 > does not is the defect, not the justification: approval facts are durable but
 > the prompt is a promise held in memory, so a restart loses every pending
@@ -297,7 +297,7 @@ inverse, with a silent drop-on-miss. `UsageProvider` is a hand-maintained copy
 of `ModelProvider` bridged by an unchecked cast. Model availability is one fact
 shipped as four wire fields and re-derived per host.
 
-> Verdict: amended ([one run model](2026-09-10-one-run-model.md) §3.9; step S6,
+> Verdict: amended ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §3.9; step S6,
 > independent of everything else and landable in any order).
 > `UsageProviderSchema` is not `ModelProvider` with mistakes: usage is recorded
 > per wire surface, which is why it carries `openai-response` beside `openai`.
@@ -315,7 +315,7 @@ rewritten, no behavior change. Two implementations of "queue a follow-up onto a
 live child run" have already diverged.
 
 > Verdict: both rationales amended
-> ([one run model](2026-09-10-one-run-model.md) section 8). `ChildStreamPort` is
+> ([one run model](../../implemented/architecture/2026-09-10-one-run-model.md) section 8). `ChildStreamPort` is
 > a voluntary layering convention, not a ratchet workaround: the dependency rule
 > does not block the move, so the copy stays or goes on its own merits, outside
 > the one-run note. On the follow-up paths the note states only that they serve
@@ -346,7 +346,7 @@ So: **before PR1 is implemented, and before the Tier-1 manifest is written.**
 The rest of the 1.0 retirement work is independent of it.
 
 The order this census proposed for the Section 4 families is superseded by
-[one run model](2026-09-10-one-run-model.md) §6, which sequences them as steps
+[one run model](../../implemented/architecture/2026-09-10-one-run-model.md) §6, which sequences them as steps
 S0 to S6 against the runtime lane. Of the entries this census called
 self-contained, `StreamTabInfo` was closed by #12199 rather than by any work
 planned here, and `ChildStreamPort` turned out to be a layering preference that

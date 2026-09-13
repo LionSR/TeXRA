@@ -33,13 +33,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@shared/wa/spinner';
-import type {
-  CheckboxChangeDetail,
-  MultipleFilesActionDetail,
-  MultipleFilesTypeActionDetail,
-  RemoveFileDetail,
-  ReorderFilesDetail,
-} from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import {
   FILE_SELECT_CONFIGS,
@@ -68,14 +61,6 @@ import '@webview/frontend/components/OnboardingSetupCard';
 import '@webview/frontend/components/OnboardingWelcomeCard';
 
 registerTeXRAWebAwesomeIcons();
-
-/** A file list's `type`, from the `Surface.launch` field it edits. */
-const FILE_TYPE_BY_LIST = Object.fromEntries(
-  Object.entries(LAUNCH_FILE_LISTS).map(([type, list]) => [list, type]),
-) as Record<
-  (typeof LAUNCH_FILE_LISTS)[keyof typeof LAUNCH_FILE_LISTS],
-  keyof typeof LAUNCH_FILE_LISTS
->;
 
 type OverflowItem =
   | 'popOut'
@@ -407,10 +392,6 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  private patchLaunch(patch: Partial<Surface['launch']>): void {
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
-  }
-
   private handleSearchInput = (event: Event): void => {
     const value = (event.target as HTMLInputElement).value;
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
@@ -444,18 +425,7 @@ export class ProgressApp extends LitElement {
    *  (PRD 12.1); each card action leaves as the `onboarding` host arm. */
   private renderHero(host: HostSnapshot): TemplateResult {
     if (host.onboarding === 'setup') {
-      const onboarding = (
-        action: 'runSetup' | 'openGettingStarted' | 'skipSetup',
-      ) =>
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'onboarding', action }),
-        );
-      return html`<onboarding-setup-card
-        @onboarding-run-setup=${() => onboarding('runSetup')}
-        @onboarding-open-getting-started=${() =>
-          onboarding('openGettingStarted')}
-        @onboarding-skip-setup=${() => onboarding('skipSetup')}
-      ></onboarding-setup-card>`;
+      return html`<onboarding-setup-card></onboarding-setup-card>`;
     }
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">
@@ -477,24 +447,9 @@ export class ProgressApp extends LitElement {
     if (host.onboarding === 'needs-credential') {
       // Without a credential the pickers and files are meaningless: the
       // welcome card replaces the whole New-task state.
-      const onboarding = (
-        action: Extract<
-          Parameters<typeof SessionUiEvents.host>[0],
-          { kind: 'onboarding' }
-        >['action'],
-      ) =>
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'onboarding', action }),
-        );
       return html`
         <div class="empty">
-          <onboarding-welcome-card
-            @welcome-chatgpt=${() => onboarding('signInChatGpt')}
-            @welcome-api-key=${() => onboarding('setApiKey')}
-            @welcome-skip=${() => onboarding('skip')}
-            @onboarding-open-getting-started=${() =>
-              onboarding('openGettingStarted')}
-          ></onboarding-welcome-card>
+          <onboarding-welcome-card></onboarding-welcome-card>
         </div>
       `;
     }
@@ -519,47 +474,7 @@ export class ProgressApp extends LitElement {
                 }</span
               ></span
             >
-            <div
-              class="context-body"
-              @add-opened-files=${({
-                detail,
-              }: CustomEvent<MultipleFilesTypeActionDetail>) => {
-                if (detail.type === 'output') return;
-                this.dispatchEvent(
-                  SessionUiEvents.host({
-                    kind: 'addOpenedFiles',
-                    fileType: detail.type,
-                  }),
-                );
-              }}
-              @select-multiple-files=${({
-                detail,
-              }: CustomEvent<MultipleFilesActionDetail>) => {
-                const fileType = FILE_TYPE_BY_LIST[detail.listId];
-                if (fileType === 'output') return;
-                this.dispatchEvent(
-                  SessionUiEvents.host({ kind: 'pickFiles', fileType }),
-                );
-              }}
-              @empty-files=${({
-                detail,
-              }: CustomEvent<MultipleFilesTypeActionDetail>) =>
-                this.patchLaunch({ [LAUNCH_FILE_LISTS[detail.type]]: [] })}
-              @remove-file=${({ detail }: CustomEvent<RemoveFileDetail>) =>
-                this.patchLaunch({
-                  [detail.listId]: launch[detail.listId].filter(
-                    (file) => file !== detail.file,
-                  ),
-                })}
-              @files-reordered=${({
-                detail,
-              }: CustomEvent<ReorderFilesDetail>) =>
-                this.patchLaunch({ [detail.listId]: detail.files })}
-              @checkbox-change=${({
-                detail,
-              }: CustomEvent<CheckboxChangeDetail>) =>
-                this.patchLaunch({ [detail.id]: detail.checked })}
-            >
+            <div class="context-body">
               ${repeat(
                 FILE_SELECT_CONFIGS,
                 (config) => config.type,

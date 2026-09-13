@@ -723,7 +723,9 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.effect('admits a manual retry through a durable approval', () =>
+  // Live clock: the authorized attempt waits out the session gate's cooldown
+  // the failed attempt opened, which sleeps on the runtime clock.
+  it.live('admits a manual retry through a durable approval', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
@@ -768,7 +770,8 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.effect(
+  // Live clock, as above: the authorized attempt waits out the gate cooldown.
+  it.live(
     'declines the exhausted subscription route for the run, not in settings',
     () =>
       Effect.gen(function* () {
@@ -869,7 +872,7 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.effect('records one operation of attempt and decision diagnostics', () =>
+  it.live('records one operation of attempt and decision diagnostics', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),

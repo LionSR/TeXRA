@@ -273,17 +273,14 @@ export function runPersistedWorkflowScript<R = never>(
               ),
             );
           // The engine's callbacks each carry their session explicitly (the agent
-          // runner frames its own run context; snapshots and journal rows publish
-          // through the handle), so no ambient session frame wraps this call.
+          // runner frames its own run context; journal rows publish through
+          // the handle), so no ambient session frame wraps this call.
           return yield* runWorkflowScript({
             ...runOptions,
             script,
             args,
             files,
             journal: prior?.journal,
-            // `...runOptions` carries the caller's own `onSnapshot`: snapshots
-            // belong to the detached run that owns their writes, while this
-            // checkpoint belongs to its orchestrator.
             onJournalEntry: (entry) =>
               Effect.gen(function* () {
                 // The session's ordered publisher, awaited to durability: a

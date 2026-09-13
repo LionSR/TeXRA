@@ -35,7 +35,6 @@ import {
   type RunId,
   type TodoItem,
   type ToolResult,
-  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import {
@@ -101,7 +100,7 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import { workflowRunView } from './executions/workflowSummaryView';
+import { workflowBoardView } from './executions/workflowSummaryView';
 
 /**
  * Bound on the durable reads one listing page or one children block fans
@@ -176,6 +175,24 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   },
   Effect.scoped,
 );
+
+/**
+ * The board of a workflow-script run (the identity the session fold derives
+ * `transcript.run` for) — the same `workflowRunModel` fold the three boards
+ * paint — folded cold so it is complete whether or not a port holds the run
+ * (`runView`'s transcript tier is complete only while one does).
+ */
+function workflowBoardLines(
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<string[]> {
+  return Effect.map(session.readView([runId]), (view) => {
+    const board = view.runs.get(runId)?.transcript.run ?? null;
+    return board
+      ? ['', 'Workflow:', JSON.stringify(workflowBoardView(board), null, 2)]
+      : [];
+  });
+}
 
 function getRunningTodos(
   session: SessionHandle,
@@ -453,13 +470,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         const records = getRunRecords(context.session, runId);
         const todos = getRunningTodos(session, handle);
         const run = session.runView(runId);
-        const [workflow, children, report] = yield* Effect.all(
-          [
-            records.readWorkflow(),
-            readRunChildren(context.session, runId),
-            records.readReport(),
-          ],
-          { concurrency: 3 },
+        const [children, report] = yield* Effect.all(
+          [readRunChildren(context.session, runId), records.readReport()],
+          { concurrency: 2 },
         );
 
         const info = session.runs.getStatus(handle);
@@ -477,6 +490,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           info,
           run,
         );
+        if (run?.identity.kind === 'multiAgentWorkflow') {
+          lines.push(...(yield* workflowBoardLines(session, runId)));
+        }
 
         yield* this.appendSummaryTail(
           context,
@@ -487,7 +503,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           todos,
           report,
           {
-            workflow: workflow ?? undefined,
             suppressReport: shouldSuppressAutoDeliveredSubagentReport(
               options,
               handle,
@@ -502,9 +517,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Completed run: the view's facts beside the private records.
       const records = getRunRecords(context.session, runId);
       const run = session.runView(runId);
-      const [workflow, record, children, todos, report] = yield* Effect.all(
+      const [record, children, todos, report] = yield* Effect.all(
         [
-          records.readWorkflow(),
           records.readRunRecord(),
           readRunChildren(context.session, runId),
           readCompletedRunTodos(runId, session).pipe(
@@ -512,7 +526,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           ),
           records.readReport(),
         ],
-        { concurrency: 5 },
+        { concurrency: 4 },
       );
 
       if (!run && !record) {
@@ -542,6 +556,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         info,
         run,
       );
+      if (run?.identity.kind === 'multiAgentWorkflow') {
+        lines.push(...(yield* workflowBoardLines(session, runId)));
+      }
 
       yield* this.appendSummaryTail(
         context,
@@ -551,7 +568,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         children,
         todos,
         report,
-        { workflow: workflow ?? undefined },
       );
 
       return executed(lines.join('\n'));
@@ -573,18 +589,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     children: ChildRecord[],
     todos: readonly TodoItem[],
     report: string | null,
-    options: {
-      readonly workflow?: WorkflowRunSnapshot;
-      readonly suppressReport?: boolean;
-    } = {},
+    options: { readonly suppressReport?: boolean } = {},
   ) {
-    if (options.workflow) {
-      lines.push(
-        '',
-        'Workflow:',
-        JSON.stringify(workflowRunView(options.workflow), null, 2),
-      );
-    }
     if (children.length > 0) {
       lines.push('', `Children (${children.length}):`);
       const formatted = yield* this.formatChildren(context, children);

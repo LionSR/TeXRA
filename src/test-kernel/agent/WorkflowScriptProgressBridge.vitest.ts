@@ -1,5 +1,5 @@
 import '@test/support/defaultSessionTestSetup';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
@@ -110,7 +110,7 @@ function runProjected(
   return runPersistedWorkflowScript(projection.options).pipe(
     Effect.onExit((exit) =>
       Effect.sync(() => {
-        projection.settle(Exit.isSuccess(exit));
+        projection.settle(exit);
       }),
     ),
   );
@@ -626,34 +626,28 @@ return await agent('Read', { phase: 'Review' })`;
       const script = `${meta}
 phase('Review')
 return await agent('Read', { id: 'read' })`;
-      const first = yield* runScript(
-        recordingTrace().trace,
-        'twice-resumed',
-        script,
-        {
-          runAgent: () =>
-            Effect.sync(function () {
-              return 'saved';
-            }),
-        },
-      );
+      yield* runScript(recordingTrace().trace, 'twice-resumed', script, {
+        runAgent: () =>
+          Effect.sync(function () {
+            return 'saved';
+          }),
+      });
 
       const runner = vi.fn(() => Effect.fail(new Error('must not run')));
-      const second = yield* runProjected(recordingTrace().trace, {
+      const second = recordingTrace();
+      yield* runProjected(second.trace, {
         checkpointId: 'twice-resumed',
         runAgent: runner,
-        initialSnapshot: first.snapshot,
       });
-      expect(second.snapshot.calls[0]?.status).toBe('cached');
+      expect(workflowCallEvent(second.events, 'Read', 'cached')).toBeDefined();
 
-      // The second resume hydrates an already-cached call. Re-issuing it must
+      // The second resume replays an already-cached call. Re-issuing it must
       // still project a card: a host that starts watching here would otherwise
       // never see the call at all.
       const { trace, events } = recordingTrace();
       yield* runProjected(trace, {
         checkpointId: 'twice-resumed',
         runAgent: runner,
-        initialSnapshot: second.snapshot,
       });
 
       expect(runner).not.toHaveBeenCalled();
@@ -661,90 +655,6 @@ return await agent('Read', { id: 'read' })`;
         type: 'workflow.call',
         stageId: stageId(events, 'Review'),
       });
-    }),
-  );
-
-  it.live(
-    'reissues hydrated calls when hydration and issue share a timestamp',
-    () =>
-      Effect.gen(function* () {
-        vi.useFakeTimers({ toFake: ['Date'] });
-        vi.setSystemTime(new Date('2026-08-15T20:00:00.000Z'));
-        try {
-          const script = `${meta}
-phase('Review')
-return await agent('Retry review', { id: 'retry-review' })`;
-          const failed = yield* runScript(
-            recordingTrace().trace,
-            'failed-hydrated-call',
-            script,
-            {
-              runAgent: vi.fn(() =>
-                Effect.fail(new Error('first attempt failed')),
-              ),
-            },
-          );
-          expect(failed.snapshot.calls[0]?.status).toBe('failed');
-
-          const retry = recordingTrace();
-          // Keep the exact same millisecond for constructor hydration and
-          // issueCall: projection admission must use the explicit issue fact.
-          yield* runScript(retry.trace, 'failed-hydrated-call', script);
-
-          const reviewId = stageId(retry.events, 'Review');
-          expect(
-            workflowCallEvent(retry.events, 'Retry review', 'queued'),
-          ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
-          expect(
-            workflowCallEvent(retry.events, 'Retry review', 'completed'),
-          ).toMatchObject({ stageId: reviewId, call: { phase: 'Review' } });
-        } finally {
-          vi.useRealTimers();
-        }
-      }),
-  );
-
-  it.live('does not project a failed hydrated call omitted by the retry', () =>
-    Effect.gen(function* () {
-      const failed = yield* runScript(
-        recordingTrace().trace,
-        'omitted-hydrated-call',
-        `${meta}
-return await agent('Historical call', { id: 'historical' })`,
-        { runAgent: vi.fn(() => Effect.fail(new Error('failed'))) },
-      );
-      expect(failed.snapshot.calls[0]?.status).toBe('failed');
-
-      const retry = recordingTrace();
-      yield* runScript(
-        retry.trace,
-        'omitted-hydrated-call',
-        `${meta}
-return 'done'`,
-      );
-
-      expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
-        false,
-      );
-
-      // The same omission when the prior snapshot is hydrated too: the dropped
-      // call is reset to `declared`, then the settle sweep terminalizes it to
-      // not-reached. That sweep is bookkeeping for the previous attempt, so it
-      // must stay out of this attempt's cards.
-      const hydrated = recordingTrace();
-      const resumed = yield* runScript(
-        hydrated.trace,
-        'omitted-hydrated-call-resumed',
-        `${meta}
-return 'done'`,
-        { initialSnapshot: failed.snapshot },
-      );
-      expect(
-        resumed.snapshot.calls.map((call) => [call.id, call.status]),
-      ).toEqual([['historical', 'skipped']]);
-      expect(
-        hydrated.events.some((event) => event.type === 'workflow.call'),
-      ).toBe(false);
     }),
   );
 

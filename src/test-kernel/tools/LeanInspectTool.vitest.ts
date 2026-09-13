@@ -4,8 +4,8 @@ import { describe, expect, vi } from 'vitest';
 
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
-  setLeanLanguageServices,
-  type LeanLanguageServices,
+  LeanLanguageServices,
+  type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import { LeanInspectTool } from '@tools/lean/LspTools';
 
@@ -16,8 +16,10 @@ const GOAL_INSPECT_INPUT = {
   column: 3,
 } as const;
 
-function installServices(overrides: Partial<LeanLanguageServices>): void {
-  setLeanLanguageServices({
+function fakeServices(
+  overrides: Partial<LeanLanguageServicesShape>,
+): LeanLanguageServicesShape {
+  return {
     executeFileCommand: vi.fn(),
     getGoalState: vi.fn(),
     getTermGoal: vi.fn(),
@@ -26,13 +28,20 @@ function installServices(overrides: Partial<LeanLanguageServices>): void {
     navigateToFirstError: vi.fn(),
     executeProjectCommand: vi.fn(),
     ...overrides,
-  } as LeanLanguageServices);
+  } as LeanLanguageServicesShape;
 }
 
-function callTool(input: typeof GOAL_INSPECT_INPUT) {
+/** The fake port is provided innermost, ahead of the test host's real one. */
+function callTool(
+  input: typeof GOAL_INSPECT_INPUT,
+  services: Partial<LeanLanguageServicesShape>,
+) {
   return new LeanInspectTool()
     .call(input)
-    .pipe(Effect.provide(nativeToolTestLayer()));
+    .pipe(
+      Effect.provideService(LeanLanguageServices, fakeServices(services)),
+      Effect.provide(nativeToolTestLayer()),
+    );
 }
 
 describe('LeanInspectTool', () => {
@@ -43,13 +52,11 @@ describe('LeanInspectTool', () => {
         // A port failure settles the program's run as a failed Exit, which the
         // execute() boundary folds into a ToolError carrying the summary that
         // names which inspection failed.
-        installServices({
+        const result = yield* callTool(GOAL_INSPECT_INPUT, {
           getGoalState: vi.fn(() =>
             Effect.die(new Error('Lean server not running')),
           ),
         });
-
-        const result = yield* callTool(GOAL_INSPECT_INPUT);
 
         expect(result).toMatchObject({
           status: 'error',
@@ -66,13 +73,11 @@ describe('LeanInspectTool', () => {
       Effect.gen(function* () {
         // A resolved "no data" answer is a normal outcome, not a thrown failure:
         // it must keep its own message instead of being wrapped as a ToolError.
-        installServices({
+        const result = yield* callTool(GOAL_INSPECT_INPUT, {
           getGoalState: vi.fn(() =>
             Effect.succeed({ data: null, error: 'no goal here' }),
           ),
         });
-
-        const result = yield* callTool(GOAL_INSPECT_INPUT);
 
         expect(result).toMatchObject({
           status: 'error',

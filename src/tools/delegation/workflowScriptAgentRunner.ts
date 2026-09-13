@@ -278,7 +278,7 @@ export function createWorkflowScriptAgentRunner(
               },
               onCost: (costUsd) => {
                 hooks?.onCost?.(invocation, costUsd);
-                // Stamp progressive spend onto the live snapshot attempt so a
+                // Stamp progressive spend onto the live attempt so a
                 // failed/cancelled/retried attempt still shows what it consumed
                 // even when run never reaches the success path below.
                 if (costUsd !== undefined) {
@@ -304,8 +304,8 @@ export function createWorkflowScriptAgentRunner(
       // Live physical attempts always charge the terminal result cost (covers
       // failed/cancelled outcomes and empty-output validation throws that
       // never reach a success-only callback). Recovered durable results must
-      // not charge the synthetic resume attempt; the interrupted snapshot may
-      // already hold the same cost on a closed prior attempt.
+      // not charge the synthetic resume attempt; the prior attempt's card
+      // already carried that cost.
       if (!recovered) {
         // `RunEnd.usage` is present once a round recorded usage and absent
         // otherwise (see `RunEndSchema`), so it stays optional and absence is

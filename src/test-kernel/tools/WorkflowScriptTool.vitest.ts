@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => ({
   requestDelegationProposal: vi.fn(),
   createWorkflowScriptStrategy: vi.fn(),
   childLoggerError: vi.fn(),
-  lastStrategyParams: undefined as { initialSnapshot?: unknown } | undefined,
 }));
 
 // Spread the real storage module so every reader stays authentic; only
@@ -95,12 +94,11 @@ vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
     >();
   return {
     ...actual,
-    createWorkflowScriptStrategy: (params: { initialSnapshot?: unknown }) => {
-      mocks.lastStrategyParams = params;
+    createWorkflowScriptStrategy: (
+      params: Parameters<typeof actual.createWorkflowScriptStrategy>[0],
+    ) => {
       mocks.createWorkflowScriptStrategy(params);
-      return actual.createWorkflowScriptStrategy(
-        params as Parameters<typeof actual.createWorkflowScriptStrategy>[0],
-      );
+      return actual.createWorkflowScriptStrategy(params);
     },
   };
 });
@@ -259,7 +257,6 @@ beforeAll(async () => {
 beforeEach(async () => {
   vi.clearAllMocks();
   mocks.recordStores.clear();
-  mocks.lastStrategyParams = undefined;
   await WorkspaceFS.ensureDir('.');
   await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
   await WorkspaceFS.write('references.bib', '@book{example}');
@@ -1019,70 +1016,6 @@ return null`;
 
         expect(first).toBe(runIdFor('tool-test'));
         expect(second).toBe(first);
-      }),
-  );
-
-  it.effect(
-    'hydrates the committed workflow snapshot when reopening a named run',
-    () =>
-      Effect.gen(function* () {
-        const runId = runIdFor('tool-test');
-        const store = getRunRecords(currentSession(), runId);
-        const priorWorkflow = {
-          lifecycle: 'active' as const,
-          stages: [],
-          calls: [
-            {
-              id: 'interrupted',
-              label: 'Interrupted call',
-              kind: 'document' as const,
-              files: { input: [], context: [], media: [] },
-              attempts: [
-                {
-                  number: 1,
-                  id: 'bbbbbb222222' as RunId,
-                  startedAt: '2026-08-01T00:00:00.000Z',
-                },
-              ],
-              status: 'running' as const,
-              costUsd: 1.25,
-              childRunId: 'bbbbbb222222' as RunId,
-              timestamps: {
-                createdAt: '2026-08-01T00:00:00.000Z',
-                updatedAt: '2026-08-01T00:00:01.000Z',
-                startedAt: '2026-08-01T00:00:00.000Z',
-              },
-            },
-          ],
-          timestamps: {
-            createdAt: '2026-08-01T00:00:00.000Z',
-            updatedAt: '2026-08-01T00:00:01.000Z',
-          },
-        };
-        const callOrder: string[] = [];
-        const readStrict = vi
-          .spyOn(store, 'readWorkflow')
-          .mockImplementation(() =>
-            Effect.sync(() => {
-              callOrder.push('readWorkflow');
-              return priorWorkflow;
-            }),
-          );
-        mocks.registerRun.mockImplementation(() =>
-          Effect.sync(() => {
-            callOrder.push('registerRun');
-          }),
-        );
-
-        const result = yield* callTool();
-
-        expect(result.status).toBe('executed');
-        expect(callOrder).toEqual(['readWorkflow', 'registerRun']);
-        // Strategy must receive the pre-register snapshot, not a post-wipe read.
-        expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(
-          priorWorkflow,
-        );
-        readStrict.mockRestore();
       }),
   );
 

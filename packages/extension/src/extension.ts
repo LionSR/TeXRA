@@ -108,7 +108,7 @@ import {
   gitHubTokenRejectedMessage,
 } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
-import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import {
   initProcessSettingHost,
@@ -205,6 +205,10 @@ async function initVscodePlatform(
       acquire: (configuration) =>
         acquireVscodeLanguageModel(context, configuration),
     },
+    // Lean through the Lean 4 extension, not a direct `lake` pool.
+    lean: LeanLanguageServices.layer(
+      createVscodeLeanLanguageServices(context.globalState),
+    ),
   });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
@@ -595,8 +599,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
   // without this call `loadRuntimeSkillCatalog` always sees zero sources and
   // `texra.skills.enabled` has no observable effect (issue #7751 FS5).
-  // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
-  // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
@@ -661,9 +663,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 
-  setLeanLanguageServices(
-    createVscodeLeanLanguageServices(context.globalState),
-  );
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.

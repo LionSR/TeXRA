@@ -6,6 +6,7 @@ import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   ONBOARDING_CARD_TITLE,
@@ -13,8 +14,6 @@ import {
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
-
-import { MainViewEvents } from '../events';
 
 const { openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;
@@ -217,19 +216,30 @@ export class OnboardingWelcomeCard extends LitElement {
   ];
 
   private handleApiKey(): void {
-    this.dispatchEvent(MainViewEvents.welcomeApiKey());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'setApiKey' }),
+    );
   }
 
   private handleChatGpt(): void {
-    this.dispatchEvent(MainViewEvents.welcomeChatGpt());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'signInChatGpt' }),
+    );
   }
 
   private handleSkip(): void {
-    this.dispatchEvent(MainViewEvents.welcomeSkip());
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'skip' }),
+    );
   }
 
   private handleOpenGettingStarted(): void {
-    this.dispatchEvent(MainViewEvents.onboardingOpenGettingStarted());
+    this.dispatchEvent(
+      SessionUiEvents.host({
+        kind: 'onboarding',
+        action: 'openGettingStarted',
+      }),
+    );
   }
 
   override render(): TemplateResult {

@@ -22,7 +22,7 @@ import {
   type LeanFileCommand,
   type LeanProjectCommand,
 } from './leanTypes';
-import { getLeanLanguageServices } from './leanLanguageServices';
+import { LeanLanguageServices } from './leanLanguageServices';
 
 /** `- "name": Description (hint)` — the prose line for one command. */
 function commandLine([name, spec]: [string, LeanCommandSpec]): string {
@@ -165,7 +165,7 @@ Tips:
 }) {
   protected execute(
     input: LeanDiagnosticsInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     const { command, file } = input;
     return this.diagnose(file, command).pipe(
       catchLeanFailure(
@@ -178,7 +178,7 @@ Tips:
   private readonly diagnose = Effect.fn('LeanDiagnosticsTool.execute')(
     function* (file: string, command: 'list' | 'count') {
       const call = yield* ToolCall;
-      const services = getLeanLanguageServices();
+      const services = yield* LeanLanguageServices;
       const absoluteFile = leanFilePath(file, call);
       const result = yield* services.fetchDiagnosticsForFile(
         absoluteFile,
@@ -247,12 +247,13 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> => {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const success = yield* getLeanLanguageServices().executeFileCommand(
+      const services = yield* LeanLanguageServices;
+      const success = yield* services.executeFileCommand(
         command,
         leanFilePath(file, call),
         call.run?.runId,
@@ -283,15 +284,13 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> => {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      yield* getLeanLanguageServices().executeProjectCommand(
-        command,
-        call.run?.runId,
-      );
+      const services = yield* LeanLanguageServices;
+      yield* services.executeProjectCommand(command, call.run?.runId);
 
       if (command === 'build') {
         return executed(
@@ -330,7 +329,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
 }) {
   protected execute(
     input: LeanInspectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     const { type, file, line, column } = input;
     // Convert to 0-indexed for LSP
     const line0 = line - 1;
@@ -340,7 +339,11 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     // Each dispatch composes one program, run once below: a failed
     // language-server request settles as this run's Exit and becomes the
     // ToolError carrying the summary that names which inspection failed.
-    let program: Effect.Effect<ToolResult, unknown, ToolCall>;
+    let program: Effect.Effect<
+      ToolResult,
+      unknown,
+      ToolCall | LeanLanguageServices
+    >;
     switch (type) {
       case 'goal':
         program = this.executeGoal(file, line0, col0, location);
@@ -366,10 +369,11 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const { data, error } = yield* getLeanLanguageServices().getGoalState(
+      const services = yield* LeanLanguageServices;
+      const { data, error } = yield* services.getGoalState(
         leanFilePath(file, call),
         line,
         column,
@@ -404,10 +408,11 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const { data, error } = yield* getLeanLanguageServices().getTermGoal(
+      const services = yield* LeanLanguageServices;
+      const { data, error } = yield* services.getTermGoal(
         leanFilePath(file, call),
         line,
         column,
@@ -432,10 +437,11 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     line: number,
     column: number,
     location: string,
-  ): Effect.Effect<ToolResult, unknown, ToolCall> {
+  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
     return Effect.gen(function* () {
       const call = yield* ToolCall;
-      const { data, error } = yield* getLeanLanguageServices().getHoverInfo(
+      const services = yield* LeanLanguageServices;
+      const { data, error } = yield* services.getHoverInfo(
         leanFilePath(file, call),
         line,
         column,

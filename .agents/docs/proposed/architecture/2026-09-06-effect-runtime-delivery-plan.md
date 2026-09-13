@@ -431,7 +431,7 @@ spike does not establish delivery.
   live host behavior, migration and performance gates remain work
   for the implementation packages above.
 
-[runtime]: ./2026-09-04-agent-runtime-on-effect.md
+[runtime]: ../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md
 [substrate]: ./2026-09-03-persistence-substrate-decision.md
 [sdk]: ./2026-09-05-agent-sdk-architecture.md
 [prd]: ./2026-08-26-effect-4-runtime-migration.md
