@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Queue } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
@@ -700,7 +700,7 @@ describe('NativeSubagentStrategy', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'keeps a second child follow-up available after two resumed WAITING turns',
     () =>
       Effect.gen(function* () {
@@ -709,6 +709,12 @@ describe('NativeSubagentStrategy', () => {
         const childRunId = RunIdSchema.parse('fa110001');
         publishTestRunStart(session, childRunId);
         yield* Effect.promise(() => session.settlePublications());
+        const deliveries = yield* Queue.unbounded<string>();
+        mocks.submitFollowUp.mockImplementation((_runId, followUp) =>
+          Queue.offer(deliveries, followUp.text).pipe(
+            Effect.as({ status: 'sent' as const }),
+          ),
+        );
         const interactions = { emit: vi.fn() } as never;
         const handle = testRunHandle({
           runId: childRunId,
@@ -767,11 +773,8 @@ describe('NativeSubagentStrategy', () => {
           strategy,
         }).pipe(Effect.forkChild);
         try {
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
-            ),
-          );
+          yield* Queue.take(deliveries);
+          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
 
           expect(
             session.followUps.submit(
@@ -784,16 +787,9 @@ describe('NativeSubagentStrategy', () => {
             ),
           ).toEqual({ kind: 'queued' });
 
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1),
-            ),
-          );
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2),
-            ),
-          );
+          yield* Queue.take(deliveries);
+          expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1);
+          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
 
           expect(
             session.followUps.submit(
@@ -806,16 +802,9 @@ describe('NativeSubagentStrategy', () => {
             ),
           ).toEqual({ kind: 'queued' });
 
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2),
-            ),
-          );
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3),
-            ),
-          );
+          yield* Queue.take(deliveries);
+          expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
+          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3);
 
           expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
           expect(
@@ -844,13 +833,8 @@ describe('NativeSubagentStrategy', () => {
             ],
           ]);
           expect(session.followUps.getAll(childRunId)).toEqual([]);
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(session.runView(childRunId)?.status).toBe(
-                RUN_PHASE.WAITING,
-              ),
-            ),
-          );
+          yield* Effect.promise(() => session.settlePublications());
+          expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.WAITING);
           const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
             ([, followUp]) => followUp.text.includes('follow-up response'),
           );
@@ -897,7 +881,7 @@ describe('NativeSubagentStrategy', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'never reaches runTurn for a workflow child — the loop breaks on the first terminal turn',
     () =>
       Effect.gen(function* () {
@@ -940,16 +924,8 @@ describe('NativeSubagentStrategy', () => {
             strategy,
           });
 
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
-            ),
-          );
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(session.followUps.hasLiveOwner(childRunId)).toBe(false),
-            ),
-          );
+          expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+          expect(session.followUps.hasLiveOwner(childRunId)).toBe(false);
 
           expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
           expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
