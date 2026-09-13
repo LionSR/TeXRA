@@ -7,17 +7,15 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowScriptControl,
+  WorkflowScriptEvent,
   WorkflowScriptRunOptions,
   WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
-import {
-  deriveWorkflowCounts,
-  deriveWorkflowStageState,
-  type RunId,
-} from '@shared/schemas';
+import type { RunId, WorkflowCallProgress } from '@shared/schemas';
+import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const META = `export const meta = {
@@ -52,6 +50,32 @@ function runScript(
     runAgent: echoRunner,
     ...overrides,
   });
+}
+
+/**
+ * The engine's event stream as a host sees it: every event in order, every
+ * card in emission order, and the latest card per call id.
+ */
+function recordCalls(): {
+  readonly events: WorkflowScriptEvent[];
+  readonly history: WorkflowCallProgress[];
+  readonly calls: () => WorkflowCallProgress[];
+  readonly onEvent: (event: WorkflowScriptEvent) => void;
+} {
+  const events: WorkflowScriptEvent[] = [];
+  const history: WorkflowCallProgress[] = [];
+  const latest = new Map<string, WorkflowCallProgress>();
+  return {
+    events,
+    history,
+    calls: () => [...latest.values()],
+    onEvent: (event) => {
+      events.push(event);
+      if (event.type !== 'call') return;
+      history.push(event.call);
+      latest.set(event.call.id, event.call);
+    },
+  };
 }
 
 /** Assert on an Effect's typed failure without leaving the test runtime. */
@@ -281,9 +305,9 @@ describe('runWorkflowScript', () => {
     'uses meta.tasks as the single source for task labels and phases',
     () =>
       Effect.gen(function* () {
-        const transitions: WorkflowScriptRunResult['snapshot'][] = [];
+        const recorded = recordCalls();
         const runner = vi.fn(echoRunner);
-        const run = yield* runWorkflowScript({
+        yield* runWorkflowScript({
           script: `export const meta = {
   name: 'planned-run',
   description: 'runs a declared plan',
@@ -292,24 +316,28 @@ describe('runWorkflowScript', () => {
 }
 return await agent('Inspect src', { id: 'core' })`,
           runAgent: runner,
-          onTransition: (snapshot) =>
-            transitions.push(structuredClone(snapshot)),
+          onEvent: recorded.onEvent,
         });
 
         // The declared plan is published before the script issues any call.
-        expect(transitions[0]?.calls).toMatchObject([
-          {
-            id: 'core',
-            label: 'Audit core',
-            status: 'declared',
+        expect(recorded.events[0]).toMatchObject({
+          type: 'plan',
+          plan: {
+            phases: [{ title: 'Audit' }],
+            tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
           },
-        ]);
+        });
+        expect(recorded.history[0]).toMatchObject({
+          id: 'core',
+          label: 'Audit core',
+          status: 'declared',
+        });
         expect(runner.mock.calls[0][0].options).toMatchObject({
           id: 'core',
           label: 'Audit core',
           phase: 'Audit',
         });
-        expect(run.snapshot.calls).toMatchObject([
+        expect(recorded.calls()).toMatchObject([
           {
             id: 'core',
             label: 'Audit core',
@@ -319,16 +347,14 @@ return await agent('Inspect src', { id: 'core' })`,
       }),
   );
 
-  it.effect(
-    'stamps sweep-settled outcomes first-class instead of note-sniffing',
-    () =>
-      Effect.gen(function* () {
-        // One writer of call outcomes: the terminal sweep marks the calls it
-        // settles (not-reached plans, abandoned live calls) with settledBySweep,
-        // and a call that settled through its own path never carries the flag.
-        const transitions: WorkflowScriptRunResult['snapshot'][] = [];
-        const run = runWorkflowScript({
-          script: `export const meta = {
+  it.effect('settles a plan label the run never reached as not-reached', () =>
+    Effect.gen(function* () {
+      // One writer of call outcomes: the terminal sweep skips the plan
+      // labels the run never issued with the not-reached reason, and a call
+      // that settled through its own path carries no reason.
+      const recorded = recordCalls();
+      const run = runWorkflowScript({
+        script: `export const meta = {
   name: 'swept-run',
   description: 'leaves a declared task unreached',
   phases: [{ title: 'Audit' }],
@@ -339,25 +365,19 @@ return await agent('Inspect src', { id: 'core' })`,
 }
 await agent('Inspect src', { id: 'first' })
 throw new Error('script stops before the second task')`,
-          runAgent: echoRunner,
-          onTransition: (snapshot) =>
-            transitions.push(structuredClone(snapshot)),
-        });
+        runAgent: echoRunner,
+        onEvent: recorded.onEvent,
+      });
 
-        yield* expectEffect(run).rejects.toMatchObject({
-          message: expect.stringContaining(
-            'script stops before the second task',
-          ),
-        });
-        expect(transitions.at(-1)?.calls).toMatchObject([
-          { id: 'first', status: 'completed' },
-          { id: 'second', status: 'skipped', settledBySweep: true },
-        ]);
-        expect(transitions.at(-1)?.calls[0]).not.toHaveProperty(
-          'settledBySweep',
-          true,
-        );
-      }),
+      yield* expectEffect(run).rejects.toMatchObject({
+        message: expect.stringContaining('script stops before the second task'),
+      });
+      expect(recorded.calls()).toMatchObject([
+        { id: 'first', status: 'completed' },
+        { id: 'second', status: 'skipped', reason: 'not-reached' },
+      ]);
+      expect(recorded.calls()[0]).not.toHaveProperty('reason');
+    }),
   );
 
   it.effect(
@@ -458,10 +478,13 @@ return await agent('inspect', {
         runEmptyPlan(`return await agent('undeclared')`),
       ).rejects.toThrow(/Every agent\(\) call must reference a task/);
 
-      const result = yield* runEmptyPlan(`return 'done'`);
+      const recorded = recordCalls();
+      const result = yield* runEmptyPlan(`return 'done'`, {
+        onEvent: recorded.onEvent,
+      });
       expect(result.result).toBe('done');
       // An explicitly empty plan owns no calls, and none may be added.
-      expect(result.snapshot.calls).toEqual([]);
+      expect(recorded.calls()).toEqual([]);
     }),
   );
 
@@ -790,12 +813,12 @@ return await parallel([
             }),
           // The checkpoint is awaited before the call is observably completed, and
           // the failed call never reaches a checkpoint at all.
-          onTransition: (snapshot) => {
-            for (const call of snapshot.calls) {
-              if (call.status !== 'completed' || settled.has(call.id)) continue;
-              settled.add(call.id);
-              order.push(`completed:${call.id}`);
-            }
+          onEvent: (event) => {
+            if (event.type !== 'call') return;
+            const { call } = event;
+            if (call.status !== 'completed' || settled.has(call.id)) return;
+            settled.add(call.id);
+            order.push(`completed:${call.id}`);
           },
         });
 
@@ -831,7 +854,9 @@ return [cached, live]`,
           onJournalEntryConsumed: (entry) => {
             order.push(`consumed:${entry.index}`);
           },
-          onEvent: (event) => order.push(event.message),
+          onEvent: (event) => {
+            if (event.type === 'log') order.push(event.message);
+          },
         });
 
         expect(run.result).toEqual(['result:cached', 'result:live']);
@@ -846,30 +871,8 @@ return [cached, live]`,
       }),
   );
 
-  it.effect(
-    'reports a synchronous snapshot-write failure instead of hanging',
-    () =>
-      Effect.gen(function* () {
-        // A synchronous `onSnapshot` throw runs the coalescing writer's drain to
-        // completion (`catch` and `finally` included) inside `publish`, so the
-        // handle `publish` then stores is already settled and nothing clears it
-        // again. A flush that waited on that handle unconditionally never
-        // returned, hanging the run instead of reporting its checkpoint failure.
-        yield* expectEffect(
-          runWorkflowScript({
-            script: `${META}return 'done'`,
-            runAgent: echoRunner,
-            onSnapshot: () =>
-              Effect.sync(() => {
-                throw new Error('snapshot sink offline');
-              }),
-          }),
-        ).rejects.toMatchObject({ name: 'WorkflowRunAbortError' });
-      }),
-  );
-
   it.live(
-    'caps concurrent agent() calls to the p-queue concurrency limit over a large fan-out',
+    'caps concurrent agent() calls to the concurrency limit over a large fan-out',
     () =>
       Effect.gen(function* () {
         let inFlight = 0;
@@ -879,7 +882,7 @@ return [cached, live]`,
           Effect.gen(function* () {
             inFlight += 1;
             maxInFlight = Math.max(maxInFlight, inFlight);
-            // Wide margin over the queue-add loop: the first `concurrency` runners
+            // Wide margin over the dispatch loop: the first `concurrency` runners
             // must all start before any of them settles, so saturation is
             // deterministic even under CI scheduler pressure.
             yield* sleep(10);
@@ -894,7 +897,7 @@ const out = await parallel(items.map((n) => () => agent('call-' + n)))
 return out.length`,
           { runAgent: runner, concurrency: 4 },
         );
-        // The queue saturates the limit without exceeding it.
+        // The semaphore saturates the limit without exceeding it.
         expect(maxInFlight).toBe(4);
         expect(completed).toBe(100);
         expect(run.result).toBe(100);
@@ -952,6 +955,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
           runAgent: echoRunner,
         });
         const cachedRunner = vi.fn(echoRunner);
+        const recorded = recordCalls();
 
         const resumed = yield* runWorkflowScript({
           script: `export const meta = {
@@ -963,16 +967,17 @@ return await agent('Inspect src', { id: 'inspect' })`,
 return await agent('Inspect src', { id: 'inspect' })`,
           runAgent: cachedRunner,
           journal: first.journal,
+          onEvent: recorded.onEvent,
         });
 
         expect(resumed.result).toBe(first.result);
         expect(cachedRunner).not.toHaveBeenCalled();
         // The call replays from cache under the revised presentation.
-        expect(resumed.snapshot.calls).toMatchObject([
+        expect(recorded.calls()).toMatchObject([
           {
             id: 'inspect',
             label: 'Audit implementation',
-            stageId: 'stage-1',
+            phase: 'Audit',
             status: 'cached',
           },
         ]);
@@ -1177,7 +1182,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
           script,
           runAgent: echoRunner,
         });
-        const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+        const recorded = recordCalls();
         const runner = vi.fn(echoRunner);
 
         yield* expectEffect(
@@ -1185,30 +1190,21 @@ return await agent('Inspect src', { id: 'inspect' })`,
             script,
             runAgent: runner,
             journal: [{ ...first.journal[0], result: () => undefined }],
-            onSnapshot: (snapshot) =>
-              Effect.sync(() => {
-                snapshots.push(snapshot);
-              }),
+            onEvent: recorded.onEvent,
           }),
         ).rejects.toThrow(/Cached agent\(\) result must be JSON-serializable/i);
 
         expect(runner).not.toHaveBeenCalled();
         // A cached call that fails validation settles as failed with the real
         // cause; the terminal pass must not reclassify it as never-reached.
-        const terminal = snapshots.at(-1);
-        expect(terminal?.outcome).toBe('failed');
-        expect(terminal?.calls).toMatchObject([
-          {
+        expect(recorded.calls()).toEqual([
+          expect.objectContaining({
             id: 'call-0',
             label: 'cached',
             status: 'failed',
             error: expect.stringMatching(/must be JSON-serializable/i),
-          },
+          }),
         ]);
-        expect(deriveWorkflowCounts(terminal?.calls ?? [])).toMatchObject({
-          failed: 1,
-          skipped: 0,
-        });
       }),
   );
 
@@ -1263,29 +1259,32 @@ return await agent('three:' + a + b)`,
   );
 
   it.effect(
-    'defaults agent phase to the active phase() and records it on the snapshot',
+    'defaults agent phase to the active phase() and records it on the card',
     () =>
       Effect.gen(function* () {
         const invocations: WorkflowAgentInvocation[] = [];
-        const run = yield* runWorkflowScript({
+        const recorded = recordCalls();
+        yield* runWorkflowScript({
           script: `${META}
 phase('Work')
 await agent('inside', { label: 'labelled' })
 return null`,
           runAgent: collectingRunner(invocations),
+          onEvent: recorded.onEvent,
         });
         expect(invocations[0].options.phase).toBe('Work');
-        expect(run.snapshot.stages).toMatchObject([
-          { id: 'stage-1', title: 'Work', order: 0 },
-        ]);
         expect(
-          deriveWorkflowStageState(run.snapshot, run.snapshot.stages[0]!),
-        ).toMatchObject({ outcome: 'completed' });
-        expect(run.snapshot.calls).toMatchObject([
+          recorded.events.filter((event) => event.type !== 'call'),
+        ).toEqual([
+          expect.objectContaining({ type: 'plan' }),
+          { type: 'phase.open', title: 'Work', index: 0, total: 1 },
+          { type: 'phase.close', title: 'Work', outcome: 'completed' },
+        ]);
+        expect(recorded.calls()).toMatchObject([
           {
             id: 'call-0',
             label: 'labelled',
-            stageId: 'stage-1',
+            phase: 'Work',
             status: 'completed',
           },
         ]);
@@ -1297,7 +1296,8 @@ return null`,
     () =>
       Effect.gen(function* () {
         const invocations: WorkflowAgentInvocation[] = [];
-        const run = yield* runWorkflowScript({
+        const recorded = recordCalls();
+        yield* runWorkflowScript({
           script: `export const meta = {
   name: 'trimmed-phase',
   description: 'normalizes phase titles',
@@ -1308,18 +1308,19 @@ phase('  Work  ')
 await early
 return await agent('active', { label: 'Active' })`,
           runAgent: collectingRunner(invocations),
+          onEvent: recorded.onEvent,
         });
 
         expect(
           invocations.map((invocation) => invocation.options.phase),
         ).toEqual(['Work', 'Work']);
         // One normalized stage owns both calls, whichever spelling reached it.
-        expect(run.snapshot.stages).toMatchObject([
-          { id: 'stage-1', title: 'Work', order: 0 },
-        ]);
-        expect(run.snapshot.calls).toMatchObject([
-          { label: 'Early', stageId: 'stage-1' },
-          { label: 'Active', stageId: 'stage-1' },
+        expect(
+          recorded.events.filter((event) => event.type === 'phase.open'),
+        ).toEqual([{ type: 'phase.open', title: 'Work', index: 0, total: 1 }]);
+        expect(recorded.calls()).toMatchObject([
+          { label: 'Early', phase: 'Work' },
+          { label: 'Active', phase: 'Work' },
         ]);
       }),
   );
@@ -1648,9 +1649,10 @@ return 'delivered'`,
   );
 
   it.live(
-    'derives a stage end from its calls, not from the run terminal instant',
+    'closes a stage from its own calls, not from the run terminal instant',
     () =>
       Effect.gen(function* () {
+        const recorded = recordCalls();
         const run = yield* runWorkflowScript({
           script: `export const meta = {
   name: 'sweep-stage',
@@ -1673,47 +1675,37 @@ return 'done'`,
             invocation.prompt === 'settles normally'
               ? Effect.sleep(5).pipe(Effect.as('done'))
               : Effect.never,
+          onEvent: recorded.onEvent,
         });
 
-        expect(run.snapshot.outcome).toBe('completed');
-        expect(run.snapshot.calls).toMatchObject([
+        expect(run.result).toBe('done');
+        expect(recorded.calls()).toMatchObject([
           { id: 'settled', status: 'completed' },
-          { id: 'live', status: 'failed', settledBySweep: true },
-          { id: 'unreached', status: 'skipped', settledBySweep: true },
-          { id: 'bypassed', status: 'skipped', settledBySweep: true },
+          {
+            id: 'live',
+            status: 'failed',
+            error: WORKFLOW_CALL_UNFINISHED_NOTE,
+          },
+          { id: 'unreached', status: 'skipped', reason: 'not-reached' },
+          { id: 'bypassed', status: 'skipped', reason: 'not-reached' },
         ]);
-        expect(run.snapshot.calls[0]).not.toHaveProperty(
-          'settledBySweep',
-          true,
+        const closes = recorded.events.filter(
+          (event) => event.type === 'phase.close',
         );
-        const [settledStage, sweptStage, enteredStage, bypassedStage] =
-          run.snapshot.stages.map((stage) =>
-            deriveWorkflowStageState(run.snapshot, stage),
-          );
-        const terminalAt = run.snapshot.timestamps.completedAt;
-        expect(settledStage).toMatchObject({ outcome: 'completed' });
-        expect(settledStage?.completedAt).toBeDefined();
-        // A stage whose own call the sweep failed reads failed, at the run's
-        // terminal instant rather than an end of its own.
-        expect(sweptStage).toMatchObject({
-          outcome: 'failed',
-          completedAt: terminalAt,
-        });
-        // B was entered and issued nothing before the run ended, so the run's
-        // own outcome is its outcome.
-        expect(enteredStage).toMatchObject({
-          started: true,
-          outcome: 'completed',
-          completedAt: terminalAt,
-        });
-        // C was never entered: a swept plan label is not work it did, so it
-        // has no end and no outcome at all rather than reading completed.
-        expect(bypassedStage).toEqual({
-          current: false,
-          started: false,
-          outcome: undefined,
-          completedAt: undefined,
-        });
+        // Settled closed when the script left it; A, whose own call the sweep
+        // failed, reads failed; B was entered and issued nothing before the
+        // run ended, so the run's own outcome is its outcome; C was never
+        // entered and closes with the run for the not-reached card it owns.
+        expect(closes).toEqual([
+          { type: 'phase.close', title: 'Settled', outcome: 'completed' },
+          { type: 'phase.close', title: 'A', outcome: 'failed' },
+          { type: 'phase.close', title: 'B', outcome: 'completed' },
+          { type: 'phase.close', title: 'C', outcome: 'completed' },
+        ]);
+        const openA = recorded.events.findIndex(
+          (event) => event.type === 'phase.open' && event.title === 'A',
+        );
+        expect(recorded.events.indexOf(closes[0]!)).toBeGreaterThan(openA);
       }),
   );
 
@@ -1955,7 +1947,7 @@ while (true) {}`,
     'rejects non-serializable agent results instead of journaling null',
     () =>
       Effect.gen(function* () {
-        const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+        const recorded = recordCalls();
         yield* expectEffect(
           runWorkflowScript({
             script: `${META}return await agent('function-result')`,
@@ -1964,23 +1956,21 @@ while (true) {}`,
                 invocation.report({ model: 'serialization-model' });
                 return () => undefined;
               }),
-            onSnapshot: (snapshot) =>
-              Effect.sync(() => {
-                snapshots.push(snapshot);
-              }),
+            onEvent: recorded.onEvent,
           }),
         ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
         // The call ran once and settled failed with the serialization cause.
-        expect(snapshots.at(-1)?.calls).toMatchObject([
+        expect(recorded.calls()).toMatchObject([
           {
             id: 'call-0',
             label: 'function-result',
             status: 'failed',
             error: expect.stringMatching(/must be JSON-serializable/i),
             model: 'serialization-model',
-            attempts: [{ number: 1, completedAt: expect.any(String) }],
+            durationMs: expect.any(Number),
           },
         ]);
+        expect(recorded.calls()[0]).not.toHaveProperty('attemptNumber');
       }),
   );
 
@@ -2091,7 +2081,7 @@ return await parallel([function () {
 
   it.effect('stops the workflow when a runner surfaces the run abort', () =>
     Effect.gen(function* () {
-      const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+      const recorded = recordCalls();
       const runner = (invocation: WorkflowAgentInvocation) => {
         invocation.report({ model: 'abort-model' });
         const abortError = new Error('runner observed abort');
@@ -2102,16 +2092,10 @@ return await parallel([function () {
         runScript(
           `
 return await parallel([() => agent('x')])`,
-          {
-            runAgent: runner,
-            onSnapshot: (snapshot) =>
-              Effect.sync(() => {
-                snapshots.push(snapshot);
-              }),
-          },
+          { runAgent: runner, onEvent: recorded.onEvent },
         ),
       ).rejects.toThrow(/runner observed abort/);
-      expect(snapshots.at(-1)?.calls).toMatchObject([
+      expect(recorded.calls()).toMatchObject([
         {
           id: 'call-0',
           label: 'x',
@@ -2171,7 +2155,7 @@ return 'incorrect success'`,
     'reports the timeout, not the queued call the timeout cancelled',
     () =>
       Effect.gen(function* () {
-        const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+        const recorded = recordCalls();
         yield* expectEffect(
           runScript(
             `
@@ -2184,10 +2168,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
                   yield* sleep(200);
                   return invocation.prompt;
                 }),
-              onSnapshot: (snapshot) =>
-                Effect.sync(() => {
-                  snapshots.push(snapshot);
-                }),
+              onEvent: recorded.onEvent,
             },
           ),
         ).rejects.toThrow(/timed out/);
@@ -2195,7 +2176,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         // reason that stopped the run, and that reason does not outrank the
         // sandbox's timeout error.
         expect(
-          snapshots.at(-1)?.calls.find((call) => call.label === 'queued'),
+          recorded.calls().find((call) => call.label === 'queued'),
         ).toMatchObject({
           status: 'failed',
           error: expect.stringContaining('timed out'),
@@ -2253,6 +2234,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
             rejectOnAbort(invocation, reject);
           });
 
+        const recorded = recordCalls();
         const runFiber = yield* runWorkflowScript({
           script: `${META}return await parallel([
   () => agent('a', { id: 'a' }),
@@ -2264,6 +2246,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           onControl: (handle) => {
             control = handle;
           },
+          onEvent: recorded.onEvent,
         }).pipe(Effect.forkChild);
 
         yield* waitFor(() => expect(started.size).toBe(3));
@@ -2281,9 +2264,15 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([
           0, 2,
         ]);
-        expect(run.snapshot.calls).toMatchObject([
+        expect(recorded.calls()).toMatchObject([
           { id: 'a', status: 'completed' },
-          { id: 'b', label: 'b', status: 'skipped', model: 'skip-model' },
+          {
+            id: 'b',
+            label: 'b',
+            status: 'skipped',
+            reason: 'user',
+            model: 'skip-model',
+          },
           { id: 'c', status: 'completed' },
         ]);
       }),
@@ -2441,11 +2430,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
   );
 
   it.effect(
-    'keeps a journaled completed call completed when a transition observer throws',
+    'keeps a journaled completed call completed when an event observer throws',
     () =>
       Effect.gen(function* () {
         const journaled: number[] = [];
-        const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+        const recorded = recordCalls();
         let exploded = false;
         const runFiber = yield* runWorkflowScript({
           script: `${META}return await agent('go')`,
@@ -2454,33 +2443,33 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
             Effect.sync(() => {
               journaled.push(entry.index);
             }),
-          onSnapshot: (snapshot) =>
-            Effect.sync(() => {
-              snapshots.push(snapshot);
-            }),
-          onTransition: (snapshot) => {
-            // The call is already journaled when it first transitions to
-            // COMPLETED; a throwing host observer must not rewrite it.
-            if (exploded || snapshot.calls[0]?.status !== 'completed') return;
+          onEvent: (event) => {
+            recorded.onEvent(event);
+            // The call is already journaled when its card first reads
+            // completed; a throwing host observer must not rewrite it.
+            if (
+              exploded ||
+              event.type !== 'call' ||
+              event.call.status !== 'completed'
+            )
+              return;
             exploded = true;
-            throw new Error('host transition observer exploded');
+            throw new Error('host event observer exploded');
           },
         }).pipe(Effect.forkChild);
 
         yield* expectEffect(Fiber.join(runFiber)).rejects.toThrow(
-          'host transition observer exploded',
+          'host event observer exploded',
         );
         expect(journaled).toEqual([0]);
-        expect(snapshots.at(-1)?.calls[0]).toMatchObject({
-          status: 'completed',
-        });
+        expect(recorded.calls()[0]).toMatchObject({ status: 'completed' });
       }),
   );
 
   it.effect('charges every retry attempt against the live-call cap', () =>
     Effect.gen(function* () {
       let control!: WorkflowScriptControl;
-      const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
+      const recorded = recordCalls();
       let attempts = 0;
       const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
         attempts += 1;
@@ -2499,10 +2488,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         onControl: (handle) => {
           control = handle;
         },
-        onSnapshot: (snapshot) =>
-          Effect.sync(() => {
-            snapshots.push(snapshot);
-          }),
+        onEvent: recorded.onEvent,
       }).pipe(Effect.forkChild);
 
       yield* waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
@@ -2515,18 +2501,17 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       );
       expect(runner).toHaveBeenCalledTimes(2);
       // Both physical attempts were charged, and the third never launched: the
-      // one logical call settles failed with the cap as its cause.
-      expect(snapshots.at(-1)?.calls).toMatchObject([
+      // one logical call settles failed with the cap as its cause, and no
+      // resolved model — the re-queue dropped the refused attempt's.
+      expect(recorded.calls()).toMatchObject([
         {
           id: 'call-0',
           status: 'failed',
           error: expect.stringContaining('agent-call cap'),
-          attempts: [
-            { number: 1, model: 'retry-model' },
-            { number: 2, model: 'retry-model' },
-          ],
+          attemptNumber: 2,
         },
       ]);
+      expect(recorded.calls()[0]).not.toHaveProperty('model');
     }),
   );
 
@@ -2550,12 +2535,19 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
             );
           });
 
+        const recorded = recordCalls();
         const runFiber = yield* runScript(
-          `return await parallel([
+          `phase('Work')
+return await parallel([
   () => agent('a', { id: 'a' }),
   () => agent('b', { id: 'b' }),
 ])`,
-          { runAgent: runner, concurrency: 2, signal: parent.signal },
+          {
+            runAgent: runner,
+            concurrency: 2,
+            signal: parent.signal,
+            onEvent: recorded.onEvent,
+          },
         ).pipe(Effect.forkChild);
 
         yield* waitFor(() => expect(started.size).toBe(2));
@@ -2565,13 +2557,27 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           name: 'AbortError',
         });
         expect(aborted).toEqual(new Set([0, 1]));
+        // The cancel sweep: each in-flight card settles `cancelled` with no
+        // `error` (the abort is the run's fact, not the call's), and the stage
+        // they sat in closes with the cancelled outcome.
+        const cards = recorded.calls();
+        expect(cards).toMatchObject([
+          { id: 'a', status: 'cancelled' },
+          { id: 'b', status: 'cancelled' },
+        ]);
+        for (const card of cards) expect(card).not.toHaveProperty('error');
+        expect(
+          recorded.events.filter((event) => event.type === 'phase.close'),
+        ).toEqual([
+          { type: 'phase.close', title: 'Work', outcome: 'cancelled' },
+        ]);
       }),
   );
 
-  it.effect('owns a terminal canonical snapshot with direct-call counts', () =>
+  it.effect('settles every card with the facts the host reported', () =>
     Effect.gen(function* () {
-      const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
-      const result = yield* runWorkflowScript({
+      const recorded = recordCalls();
+      yield* runWorkflowScript({
         script: `export const meta = {
   name: 'observable',
   description: 'observable workflow',
@@ -2594,39 +2600,38 @@ return 'done'`,
             });
             return 'drafted';
           }),
-        onSnapshot: (snapshot) =>
-          Effect.sync(() => {
-            snapshots.push(snapshot);
-          }),
+        onEvent: recorded.onEvent,
       });
 
-      expect(snapshots.length).toBeGreaterThan(0);
-      expect(result.snapshot).toMatchObject({
-        outcome: 'completed',
-        currentStageId: undefined,
-        calls: [
-          {
-            id: 'draft',
-            status: 'completed',
-            agent: 'writer',
-            model: 'model-a',
-            childRunId: 'abcdef123456',
-            attempts: [{ number: 1, id: 'abcdef123456' }],
-          },
-          { id: 'review', status: 'skipped' },
-        ],
-      });
-      expect(deriveWorkflowCounts(result.snapshot.calls)).toMatchObject({
-        total: result.snapshot.calls.length,
-        completed: 1,
-        skipped: 1,
-      });
+      expect(recorded.calls()).toMatchObject([
+        {
+          id: 'draft',
+          status: 'completed',
+          agent: 'writer',
+          model: 'model-a',
+          childRunId: 'abcdef123456',
+        },
+        { id: 'review', status: 'skipped', reason: 'not-reached' },
+      ]);
+      // One report carrying every fact re-sends the running card exactly once.
+      expect(
+        recorded.history
+          .filter((card) => card.id === 'draft')
+          .map((card) => [card.status, card.childRunId]),
+      ).toEqual([
+        ['declared', undefined],
+        ['queued', undefined],
+        ['running', undefined],
+        ['running', 'abcdef123456'],
+        ['completed', 'abcdef123456'],
+      ]);
     }),
   );
 
   it.effect('uses safe canonical labels for dynamic calls', () =>
     Effect.gen(function* () {
-      const result = yield* runWorkflowScript({
+      const recorded = recordCalls();
+      yield* runWorkflowScript({
         script: `export const meta = {
   name: 'labels',
   description: 'label workflow',
@@ -2637,16 +2642,17 @@ return await agent('secret full instruction', {
 })`,
         fingerprintAgentDependencies: () => Effect.succeed('fingerprint'),
         runAgent: () => Effect.succeed('done'),
+        onEvent: recorded.onEvent,
       });
 
-      expect(result.snapshot.calls[0]).toMatchObject({
+      expect(recorded.calls()[0]).toMatchObject({
         label: 'paper.tex: proofreader',
         files: { input: ['paper.tex'], context: [], media: [] },
       });
-      expect(JSON.stringify(result.snapshot)).not.toContain(
+      expect(JSON.stringify(recorded.events)).not.toContain(
         '/private/host/path',
       );
-      expect(JSON.stringify(result.snapshot)).not.toContain(
+      expect(JSON.stringify(recorded.events)).not.toContain(
         'secret full instruction',
       );
     }),

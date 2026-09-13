@@ -36,7 +36,6 @@ import {
   RunWorkspaceFilesSchema,
   ResultMetaSchema,
 } from './runRecords';
-import { WorkflowRunSnapshotSchema } from './workflowRunSnapshot';
 import { RunIdSchema, type RunId } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
@@ -420,7 +419,6 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
-  durable('run.workflow', { workflow: WorkflowRunSnapshotSchema }),
   /**
    * The stable-subagent protocol's parent-owned facts, on the launching
    * run's aggregate and keyed inside the payload (one run model, section

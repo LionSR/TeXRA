@@ -40,7 +40,6 @@ export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 export * from './workflowCallProgress';
-export * from './workflowRunSnapshot';
 export * from './workflowScriptDelivery';
 
 export {

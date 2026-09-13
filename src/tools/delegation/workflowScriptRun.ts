@@ -1,5 +1,4 @@
-// Third-party imports
-import { Effect, Result } from 'effect';
+import { Cause, Exit } from 'effect';
 
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -10,36 +9,23 @@ import type {
   WorkflowScriptEvent,
 } from '@agent/workflowScript/types';
 import {
-  deriveWorkflowStageState,
   isTerminalWorkflowCallProgress,
-  isTerminalWorkflowCallStatus,
   RUN_OUTCOME,
-  stageTitleFor,
-  WORKFLOW_CALL_STATUS,
   RunEndSchema,
   type RunOutcome,
   type WorkflowCallProgress,
-  type WorkflowCallTerminalProgress,
-  type WorkflowRunCall,
-  type WorkflowRunSnapshot,
 } from '@shared/schemas';
-import {
-  formatWorkflowCallLine,
-  WORKFLOW_CALL_UNFINISHED_NOTE,
-} from '@shared/copy/workflowCall';
+import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { generateShortId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
- * `onEvent` and `onTransition` are omitted deliberately: this projection owns
- * the engine's event and transition slots outright, so a caller cannot pass a
- * handler that would be silently discarded. Callers that need the run's own
- * account of what happened read the canonical run snapshot instead
- * (`onSnapshot` remains open and is composed, not replaced).
+ * `onEvent` is omitted deliberately: this projection owns the engine's event
+ * slot outright, so a caller cannot pass a handler that would be silently
+ * discarded. What the run did is read back off the cards through `board`.
  */
 type WorkflowScriptRunWithProgressOptions<R> = Omit<
   PersistedWorkflowScriptRunOptions<R>,
-  'onEvent' | 'onTransition'
+  'onEvent'
 > & {
   /**
    * Receives every progress line also written to the trace (phases, script
@@ -48,11 +34,6 @@ type WorkflowScriptRunWithProgressOptions<R> = Omit<
    */
   readonly onActivity?: (line: string) => void;
 };
-
-interface PhaseHandleState {
-  readonly handle: StageHandle;
-  failed: boolean;
-}
 
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = RunEndSchema.safeParse(entry.result);
@@ -137,21 +118,28 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
 
 /**
  * The progress projection of one durable workflow-script run onto the parent
- * trace: the run options with the engine's event and transition slots bound,
- * and the settle step the caller runs once the run has ended either way.
+ * trace: the run options with the engine's event slot bound, the settle step
+ * the caller runs once the run has ended either way, and the board the cards
+ * add up to.
  */
 export interface WorkflowScriptProgressProjection<R> {
   readonly options: PersistedWorkflowScriptRunOptions<R>;
-  /** Close every phase the run left open; `completed` names how it ended. */
-  readonly settle: (completed: boolean) => void;
+  /** Close every phase the run left open; `exit` is how the run ended. */
+  readonly settle: (exit: Exit.Exit<unknown, unknown>) => void;
+  /** Every phase the run declared or entered, and the latest card per call —
+   *  the same cards the boards paint, for the delivery tally. */
+  readonly board: () => {
+    readonly phaseCount: number;
+    readonly calls: readonly WorkflowCallProgress[];
+  };
 }
 
 /**
- * Project a durable workflow script's progress onto the parent trace. The
- * caller runs `options` through `runPersistedWorkflowScript` and calls
- * `settle` in a finalizer. Its synchronous projection state remains local;
- * snapshot persistence is composed as an Effect so it shares the caller's
- * runtime and lifecycle.
+ * Project a durable workflow script's progress onto the parent trace: each
+ * engine event becomes the row it is (`workflow.plan`, `stage.start`,
+ * `stage.end`, `workflow.call`), stamped with this attempt's id. The caller
+ * runs `options` through `runPersistedWorkflowScript` and calls `settle` in
+ * a finalizer.
  */
 export function projectWorkflowScriptProgress<R>(
   trace: AgentTrace,
@@ -159,75 +147,48 @@ export function projectWorkflowScriptProgress<R>(
 ): WorkflowScriptProgressProjection<R> {
   const { onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
-  const phases = new Map<string, PhaseHandleState>();
+  const phases = new Map<string, StageHandle>();
+  const phaseTitles = new Set<string>();
   // A deterministic workflow stream appends every relaunch to one transcript.
   // Keep one card identity through this projection's state transitions without
   // colliding with the same logical call in an earlier attempt.
   const projectionId = generateShortId();
-  const projectedCalls = new Map<
-    WorkflowCallProgress['id'],
-    WorkflowCallProgress
-  >();
-  // The engine terminalizes and flushes its snapshot before returning or
-  // rethrowing, so the last one published is its final account of every call —
-  // what the settle sweep below reads instead of re-deciding outcomes here.
-  let lastSnapshot: WorkflowRunSnapshot | undefined;
+  const cards = new Map<WorkflowCallProgress['id'], WorkflowCallProgress>();
   let currentPhase: string | undefined;
-  let closed = false;
-  // Calls that were already terminal when a retry's hydrated state first
-  // emitted (see the fold): historical facts, projected only on change.
-  const hydratedBaseline = new Map<
-    WorkflowCallProgress['id'],
-    {
-      status: WorkflowCallProgress['status'];
-      childRunId: WorkflowCallProgress['childRunId'];
-    }
-  >();
-  let constructionEmissionSeen = false;
-  let planEmitted = false;
-  let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
   const phaseFor = (
     title: string,
     index?: number,
     total?: number,
-  ): PhaseHandleState => {
+  ): StageHandle => {
     const existing = phases.get(title);
     if (existing) return existing;
-    const phase = {
-      handle: trace.openStage(title, {
-        kind: 'phase',
-        parentId: parentStageId,
-        index,
-        total,
-      }),
-      failed: false,
-    };
-    phases.set(title, phase);
-    return phase;
+    const handle = trace.openStage(title, {
+      kind: 'phase',
+      parentId: parentStageId,
+      index,
+      total,
+    });
+    phases.set(title, handle);
+    return handle;
   };
 
   /**
    * Open a phase stage once the run reaches it and answer the stage rows
-   * emitted from there belong to. Callers that only need the phase opened
-   * ignore the return.
+   * emitted from there belong to. A not-reached card still opens the declared
+   * phase it sits under, so its row lands beneath that header.
    */
   const openPhaseHandle = (phase: string | undefined): string | undefined =>
-    phase ? phaseFor(phase).handle.id : parentStageId;
+    phase ? phaseFor(phase).id : parentStageId;
 
-  const recordTerminalActivity = (call: WorkflowCallTerminalProgress): void => {
-    onActivity?.(formatWorkflowCallLine(call));
-  };
   /**
-   * A card's `phase` is the engine's own record: `stageId` is pinned when the
-   * call is issued and a declared task issued elsewhere is a contract fault,
-   * so the phase on the card and the group it is emitted under are one fact.
-   * Cards are emitted only once the fold (or the settle sweep) has opened
-   * their phase, so the group is the stage handle that already exists.
+   * A card's `phase` is the engine's own record: pinned when the call is
+   * issued, and a declared task issued elsewhere is a contract fault, so the
+   * phase on the card and the group it is emitted under are one fact.
    */
   const emitCall = (call: WorkflowCallProgress): void => {
     const card: WorkflowCallProgress = { ...call, attemptId: projectionId };
-    projectedCalls.set(call.id, card);
+    cards.set(call.id, card);
     trace.emit({
       type: 'workflow.call',
       // Stable trace identity for this call within its run stream.
@@ -236,350 +197,77 @@ export function projectWorkflowScriptProgress<R>(
       stageId: openPhaseHandle(card.phase),
     });
   };
-  const markPhaseFailed = (title: string | undefined): void => {
-    if (title) phaseFor(title).failed = true;
-  };
 
-  const projectLog = (event: WorkflowScriptEvent): void => {
-    if (closed) return;
-    trace.info(event.message, { stageId: openPhaseHandle(currentPhase) });
-    onActivity?.(event.message);
-  };
-
-  /** Progress-only terminal metadata, read off the snapshot's own record. */
-  const terminalMetadata = (
-    call: Extract<
-      WorkflowRunCall,
-      { readonly status: 'completed' | 'failed' | 'cancelled' | 'skipped' }
-    >,
-  ) => {
-    const model = call.model ?? call.attempts.at(-1)?.model;
-    const { startedAt, completedAt } = call.timestamps;
-    const durationMs =
-      startedAt !== undefined
-        ? Math.max(0, Date.parse(completedAt) - Date.parse(startedAt))
-        : undefined;
-    return {
-      ...(model !== undefined && { model }),
-      ...(durationMs !== undefined && { durationMs }),
-      costUsd: call.costUsd,
-    };
-  };
-
-  const cardFor = (
-    call: WorkflowRunCall,
-    snapshot: WorkflowRunSnapshot,
-  ): WorkflowCallProgress => {
-    const { status } = call;
-    const phase = stageTitleFor(snapshot, call);
-    // The latest attempt describes this card only once it has begun: a
-    // re-queued call has not pushed its next attempt yet, and a cached or
-    // swept card reflects no attempt of this run.
-    const attemptCounts =
-      call.attempts.length > 1 &&
-      (status === 'running' ||
-        status === 'completed' ||
-        status === 'failed' ||
-        status === 'cancelled' ||
-        (status === 'skipped' && !call.settledBySweep));
-    const hasInvocationFacts =
-      call.kind !== undefined ||
-      call.agent !== undefined ||
-      call.model !== undefined ||
-      call.childRunId !== undefined ||
-      call.attempts.length > 0 ||
-      call.timestamps.startedAt !== undefined;
-    const includeFiles =
-      (status !== WORKFLOW_CALL_STATUS.DECLARED &&
-        status !== WORKFLOW_CALL_STATUS.SKIPPED) ||
-      hasInvocationFacts;
-    const identity = {
-      id: call.id,
-      label: call.label,
-      ...(phase !== undefined ? { phase } : {}),
-      ...(call.childRunId !== undefined ? { childRunId: call.childRunId } : {}),
-      // Project only invocation facts the snapshot owns.
-      ...(call.kind !== undefined && { kind: call.kind }),
-      ...(call.agent !== undefined && { agent: call.agent }),
-      ...(call.model !== undefined && { model: call.model }),
-      ...(includeFiles && { files: call.files }),
-      ...(attemptCounts && { attemptNumber: call.attempts.length }),
-    };
-    switch (call.status) {
-      case WORKFLOW_CALL_STATUS.FAILED: {
-        // A sweep-settled call never reached its own settlement: its card
-        // carries spend but no model/duration, the same shape the settle
-        // sweep emits.
-        const spentOnly =
-          call.costUsd !== undefined ? { costUsd: call.costUsd } : {};
-        return {
-          ...identity,
-          status: 'failed',
-          error: call.error,
-          ...(call.settledBySweep ? spentOnly : terminalMetadata(call)),
-        };
-      }
-      case WORKFLOW_CALL_STATUS.COMPLETED:
-        return { ...identity, status: 'completed', ...terminalMetadata(call) };
-      case WORKFLOW_CALL_STATUS.CANCELLED:
-        return { ...identity, status: 'cancelled', ...terminalMetadata(call) };
-      case WORKFLOW_CALL_STATUS.SKIPPED:
-        // The sweep settles not-reached plans; a user skip settles itself.
-        return call.settledBySweep
-          ? { ...identity, status: 'skipped', reason: 'not-reached' }
-          : {
-              ...identity,
-              status: 'skipped',
-              reason: 'user',
-              ...terminalMetadata(call),
-            };
-      case WORKFLOW_CALL_STATUS.DECLARED:
-      case WORKFLOW_CALL_STATUS.QUEUED:
-      case WORKFLOW_CALL_STATUS.RUNNING:
-      case WORKFLOW_CALL_STATUS.CACHED:
-        return { ...identity, status: call.status };
-    }
-  };
-
-  // Declared stages are the ones present on the first folded snapshot; a
-  // dynamically entered phase appended later carries no declared position.
-  let declaredStageTotal: number | undefined;
-
-  /**
-   * Fold one canonical snapshot into the trace-card projection. The snapshot
-   * is the single owner of every run fact (A7); this fold derives card
-   * transitions by diffing against what it last emitted. Called synchronously
-   * on every state transition with the engine's live snapshot reference —
-   * everything is read here, nothing retained. A projection fault must never
-   * abort the run, so the fold guards itself and reports on the run trace.
-   */
-  const fold = (snapshot: WorkflowRunSnapshot): void => {
-    if (closed) return;
-    // A call carried into the construction emission is hydrated history, not
-    // this attempt's activity. Reusable calls are terminal here; failed or
-    // cancelled calls were reset to planned, but retain an earlier creation
-    // timestamp or attempt record. Record either shape silently, ahead of any
-    // projection work, so a fault below can never promote history to current
-    // work. Emitting a hydrated dynamic call would freeze the identity before
-    // `issueCall` restores its phase, and a call absent from this script
-    // would appear as current-attempt not-reached work.
-    if (!constructionEmissionSeen) {
-      constructionEmissionSeen = true;
-      for (const call of snapshot.calls) {
-        const { status } = call;
-        if (
-          isTerminalWorkflowCallStatus(status) ||
-          call.attempts.length > 0 ||
-          call.timestamps.createdAt !== call.timestamps.updatedAt
-        ) {
-          hydratedBaseline.set(call.id, {
-            status,
-            childRunId: call.childRunId,
-          });
-        }
-      }
-    }
-    const projected = Result.try(() => {
-      declaredStageTotal ??= snapshot.stages.length;
-      if (!planEmitted) {
-        planEmitted = true;
-        // The plan is the snapshot's own stage and call lists, hydrated
-        // history included. Hosts union it with the stages and cards that
-        // follow, and a card always wins over its plan entry, so a resumed
-        // run's plan never doubles what its cards already say.
+  const onEvent = (event: WorkflowScriptEvent): void => {
+    switch (event.type) {
+      case 'log':
+        trace.info(event.message, { stageId: openPhaseHandle(currentPhase) });
+        onActivity?.(event.message);
+        return;
+      case 'plan':
+        for (const phase of event.plan.phases) phaseTitles.add(phase.title);
+        // Hosts union the plan with the stages and cards that follow, and a
+        // card always wins over its plan entry, so nothing is listed twice.
         trace.emit({
           type: 'workflow.plan',
           attemptId: projectionId,
           stageId: parentStageId,
-          phases: snapshot.stages.map((stage) => ({ title: stage.title })),
-          // A resumed run's reusable results (completed or cached) are
-          // history, not plan: they are never re-emitted as cards, so listing
-          // them here would show finished work as declared.
-          tasks: snapshot.calls
-            .filter(
-              (call) =>
-                call.status !== WORKFLOW_CALL_STATUS.COMPLETED &&
-                call.status !== WORKFLOW_CALL_STATUS.CACHED,
-            )
-            .map((call) => {
-              const phase = stageTitleFor(snapshot, call);
-              return {
-                id: call.id,
-                label: call.label,
-                ...(phase !== undefined ? { phase } : {}),
-              };
-            }),
+          phases: event.plan.phases,
+          tasks: event.plan.tasks,
         });
+        return;
+      case 'phase.open': {
+        phaseTitles.add(event.title);
+        const known = phases.has(event.title);
+        phaseFor(event.title, event.index, event.total);
+        if (!known) onActivity?.(`Phase: ${event.title}`);
+        currentPhase = event.title;
+        return;
       }
-      for (const stage of snapshot.stages) {
-        // A phase the run never entered is nothing to announce: no header
-        // line, no `Phase:` line. One that owns declared cards still opens
-        // when the sweep terminalizes them — `emitCall` groups a card under
-        // its own phase — so their not-reached rows never land elsewhere.
-        const state = deriveWorkflowStageState(snapshot, stage);
-        if (!state.started) continue;
-        const known = phases.has(stage.title);
-        const phase = phaseFor(
-          stage.title,
-          stage.order,
-          stage.order < declaredStageTotal ? declaredStageTotal : undefined,
-        );
-        if (!known) onActivity?.(`Phase: ${stage.title}`);
-        if (state.outcome === RUN_OUTCOME.FAILED) phase.failed = true;
-        if (state.current) currentPhase = stage.title;
-      }
-      for (const call of snapshot.calls) {
-        const last = projectedCalls.get(call.id);
-        // A retry re-queues a running call; the card follows it to `queued`
-        // because that wait is real when another call took the freed slot.
-        const { status } = call;
-        const baseline = last ? undefined : hydratedBaseline.get(call.id);
-        if (baseline !== undefined) {
-          // A reset historical call is current only once `issueCall` stamps
-          // this attempt's invocation facts on it, and `kind` is the one
-          // every issued call carries — hydration restores none of them, so
-          // admission cannot collapse when hydration and reissue share a
-          // clock tick. Status alone would not do: the settle sweep
-          // terminalizes a call this script never issued to `skipped`, and
-          // that bookkeeping for the previous attempt stays silent here.
-          if (baseline.status === WORKFLOW_CALL_STATUS.DECLARED) {
-            if (call.kind === undefined) continue;
-          } else if (
-            baseline.status === status &&
-            baseline.childRunId === call.childRunId
-          ) {
-            continue;
-          }
-          hydratedBaseline.delete(call.id);
-        }
-        // A declared card exists only under an open phase: a plan entry
-        // behind a stage the run has never entered waits for its phase to
-        // open (still waiting, or bypassed by a `phase()` jump that flipped
-        // it straight to skipped), and a phase the run never reaches has its
-        // entries swept to not-reached — emitted under the header the stage
-        // loop above opens for them. A card whose group does not exist yet is
-        // thereby unrepresentable.
-        if (
-          status === WORKFLOW_CALL_STATUS.DECLARED &&
-          snapshot.stages.some(
-            (stage) =>
-              stage.id === call.stageId && stage.startedAt === undefined,
-          )
-        ) {
-          continue;
-        }
-        const runChanged =
-          call.childRunId !== undefined && last?.childRunId !== call.childRunId;
-        // The host resolves agent and model after the card first appears;
-        // a live card re-emits so it names what actually runs.
-        const factsChanged =
-          last !== undefined &&
-          (last.agent !== call.agent || last.model !== call.model);
-        if (last && last.status === status && !runChanged && !factsChanged) {
-          continue;
-        }
-        const card = cardFor(call, snapshot);
-        const previousStatus = last?.status;
-        emitCall(card);
-        if (status === previousStatus) continue;
-        if (status === 'running') onActivity?.(`Running: ${call.label}`);
-        if (status === 'cached') {
+      case 'phase.close':
+        phases.get(event.title)?.end(event.outcome);
+        return;
+      case 'call': {
+        const { call } = event;
+        const previous = cards.get(call.id)?.status;
+        emitCall(call);
+        if (call.status === previous) return;
+        if (call.status === 'running') onActivity?.(`Running: ${call.label}`);
+        if (call.status === 'cached') {
           onActivity?.(`Using saved result: ${call.label}`);
         }
-        if (
-          status === 'completed' ||
-          status === 'failed' ||
-          status === 'cancelled' ||
-          status === 'skipped'
-        ) {
-          if (status === 'failed') markPhaseFailed(card.phase);
-          recordTerminalActivity(card as WorkflowCallTerminalProgress);
+        if (isTerminalWorkflowCallProgress(call)) {
+          onActivity?.(formatWorkflowCallLine(call));
         }
+        return;
       }
-      // Close a phase's stage once the run has left it and every call it
-      // owns is terminal, so a finished phase reads finished (icon,
-      // duration) while later phases still run, and a failure in phase 3
-      // cannot retroactively mark phases 1-2. The failed card that flips a
-      // phase is already emitted above. Once the run itself has ended,
-      // `settle` closes whatever is still open, reading the same derived
-      // stage state so the trace and `/executions/{id}` never disagree.
-      if (snapshot.outcome !== undefined) return;
-      for (const stage of snapshot.stages) {
-        const phase = phases.get(stage.title);
-        const outcome = deriveWorkflowStageState(snapshot, stage).outcome;
-        if (!phase || outcome === undefined) continue;
-        phase.handle.end(phase.failed ? RUN_OUTCOME.FAILED : outcome);
-      }
-    });
-    if (Result.isFailure(projected)) {
-      const error = projected.failure;
-      trace.warn(
-        `Workflow progress projection failed for one transition: ${toErrorMessage(error)}`,
-        { data: error },
-      );
+      default:
+        return event satisfies never;
     }
   };
 
-  const settle = (completed: boolean): void => {
-    if (completed) runOutcome = RUN_OUTCOME.COMPLETED;
-    if (lastSnapshot?.outcome === RUN_OUTCOME.CANCELLED) {
-      runOutcome = RUN_OUTCOME.CANCELLED;
+  // The engine's own sweep closes every stage it announced before it returns
+  // or rethrows; this covers a fault that stopped it short of that. The
+  // outcome is read the way the engine's `finalize` reads it: a run stopped
+  // by interruption alone or by its abort signal was cancelled, not failed,
+  // matching the `finish(CANCELLED)` sweep the fault pre-empted.
+  const settle = (exit: Exit.Exit<unknown, unknown>): void => {
+    let outcome: RunOutcome = RUN_OUTCOME.FAILED;
+    if (Exit.isSuccess(exit)) {
+      outcome = RUN_OUTCOME.COMPLETED;
+    } else if (
+      Cause.hasInterruptsOnly(exit.cause) ||
+      runOptions.signal?.aborted === true
+    ) {
+      outcome = RUN_OUTCOME.CANCELLED;
     }
-    // The engine's `finish()` publishes its terminal snapshot synchronously
-    // through the fold, so every card is normally terminal here. Fold the
-    // terminal snapshot the writer landed once more — a no-op unless a
-    // projection fault dropped a transition — then settle whatever is still
-    // live as unfinished. A writer failure leaves `lastSnapshot` stale and
-    // non-terminal; re-folding stale state could move a card backwards, so
-    // only a terminal snapshot is re-folded.
-    if (lastSnapshot?.outcome !== undefined) {
-      fold(lastSnapshot);
-    }
-    closed = true;
-    for (const card of projectedCalls.values()) {
-      if (isTerminalWorkflowCallProgress(card)) continue;
-      // Open the declared phase the run never reached so the settled card
-      // still lands under a header; the loop below then closes it. The card
-      // keeps every issued-call fact it already showed.
-      openPhaseHandle(card.phase);
-      markPhaseFailed(card.phase);
-      const call: WorkflowCallTerminalProgress = {
-        ...card,
-        status: 'failed',
-        error: WORKFLOW_CALL_UNFINISHED_NOTE,
-      };
-      emitCall(call);
-      recordTerminalActivity(call);
-    }
-    for (const [title, phase] of phases) {
-      // One authority for how a phase ended: the same derived stage state
-      // `/executions/{id}` reads. A stage the script threw inside owns no
-      // failed call, so it reads as its own calls left it and the throw stays
-      // the run's fact. The run's outcome closes only what the snapshot has
-      // no stage state for: a phase opened for its not-reached rows alone,
-      // and — when a writer failure left the last snapshot stale — a phase
-      // whose calls this projection had to settle as unfinished itself.
-      const stage = lastSnapshot?.stages.find((entry) => entry.title === title);
-      const derived =
-        lastSnapshot && stage
-          ? deriveWorkflowStageState(lastSnapshot, stage).outcome
-          : undefined;
-      phase.handle.end(
-        phase.failed ? RUN_OUTCOME.FAILED : (derived ?? runOutcome),
-      );
+    for (const handle of phases.values()) {
+      handle.end(outcome);
     }
   };
   return {
-    options: {
-      ...runOptions,
-      onEvent: projectLog,
-      onTransition: fold,
-      onSnapshot: (snapshot) =>
-        Effect.gen(function* () {
-          lastSnapshot = snapshot;
-          if (runOptions.onSnapshot) yield* runOptions.onSnapshot(snapshot);
-        }),
-    },
+    options: { ...runOptions, onEvent },
     settle,
+    board: () => ({ phaseCount: phaseTitles.size, calls: [...cards.values()] }),
   };
 }

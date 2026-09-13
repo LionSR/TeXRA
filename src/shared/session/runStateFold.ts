@@ -247,7 +247,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,
-  'run.workflow': true,
   'run.subagentSequence': true,
   'run.subagentAttempt': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.

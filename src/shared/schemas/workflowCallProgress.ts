@@ -1,13 +1,63 @@
 import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
-import {
-  TERMINAL_WORKFLOW_CALL_STATUSES,
-  WORKFLOW_CALL_KIND,
-  WORKFLOW_CALL_STATUS,
-  WorkflowCallFilesSchema,
-  type WorkflowCallStatus,
-} from './workflowRunSnapshot';
+
+/**
+ * The one status vocabulary of a workflow-script call, as the `workflow.call`
+ * progress card carries it. `declared` is a `meta.tasks` plan label the
+ * script has not issued as a call, whatever stage gate it sits behind; every
+ * other status is an issued call.
+ */
+export const WORKFLOW_CALL_STATUS = {
+  DECLARED: 'declared',
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  SKIPPED: 'skipped',
+  CACHED: 'cached',
+} as const;
+const WorkflowCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
+export type WorkflowCallStatus = z.infer<typeof WorkflowCallStatusSchema>;
+
+const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowCallStatus> =
+  new Set([
+    WORKFLOW_CALL_STATUS.COMPLETED,
+    WORKFLOW_CALL_STATUS.FAILED,
+    WORKFLOW_CALL_STATUS.CANCELLED,
+    WORKFLOW_CALL_STATUS.SKIPPED,
+    WORKFLOW_CALL_STATUS.CACHED,
+  ]);
+
+/**
+ * What an interactive control request does to the workflow-script `agent()`
+ * attempt it targets: `skip` resolves the call without journaling it (its
+ * result is the engine's skipped sentinel), `retry` discards the attempt and
+ * re-runs the call as a fresh one whose result the call resolves with.
+ *
+ * One vocabulary for both sides — the engine that acts on a request and the
+ * host UI that offers it — so a control a host can name is always a control
+ * the engine implements.
+ */
+export const WorkflowControlActionSchema = z.enum(['skip', 'retry']);
+export type WorkflowControlAction = z.infer<typeof WorkflowControlActionSchema>;
+
+export const WORKFLOW_CALL_KIND = {
+  /** Whole-document workflow-agent run: file inputs in, edited files out. */
+  DOCUMENT: 'document',
+  /** Tool-use run that finishes by submitting a schema-validated value. */
+  STRUCTURED: 'structured',
+} as const;
+const WorkflowCallKindSchema = z.enum(WORKFLOW_CALL_KIND);
+export type WorkflowCallKind = z.infer<typeof WorkflowCallKindSchema>;
+
+/** File basenames one issued call was handed, by workflow-agent role. */
+const WorkflowCallFilesSchema = z.strictObject({
+  input: z.array(z.string()),
+  context: z.array(z.string()),
+  media: z.array(z.string()),
+});
 
 export const WorkflowCallIdentitySchema = z.strictObject({
   id: z
@@ -66,15 +116,16 @@ const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
    * the script, then host-resolved), and the file basenames it was handed.
    * A declared plan label carries none of them.
    */
-  kind: z.enum(WORKFLOW_CALL_KIND).optional(),
+  kind: WorkflowCallKindSchema.optional(),
   agent: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   files: WorkflowCallFilesSchema.optional(),
   /**
-   * Physical attempt number of this call across interactive retries and
-   * durable resumes (hydration keeps prior attempts), present from the second
-   * attempt on. Distinct from `attemptId`, the whole-script projection
-   * attempt. The label is never rewritten to say "retry".
+   * Physical attempt number of this call across interactive retries within
+   * one script attempt, present from the second attempt on. A durable resume
+   * is a new script attempt under its own `attemptId` and starts at 1.
+   * Distinct from `attemptId`, the whole-script projection attempt. The label
+   * is never rewritten to say "retry".
    */
   attemptNumber: z.int().min(2).optional(),
   /**
