@@ -28,6 +28,7 @@ import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import {
   createFakePlatform,
@@ -203,6 +204,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(InquiryRecords, {}),
+    // A suite that exercises a Lean tool provides its own port innermost.
+    // The run-end stop is absent, as on a host whose Lean integration owns
+    // server lifetime: the mock's placeholder for it would die on every run.
+    Layer.mock(LeanLanguageServices, { stopSessionsForRun: undefined }),
     Secrets.layer(() => installedHost().secrets),
     AppState.layer(() => installedHost().roots.globalState),
     SetupPlatform.layer(fakeSetupPlatform),

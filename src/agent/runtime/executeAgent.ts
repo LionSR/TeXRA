@@ -30,7 +30,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
-import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -349,7 +349,13 @@ function buildLifecycleOptions(
     workflowPhase: options.workflowPhase,
     onError: options.onRunError,
     onRun: options.onRun,
-    onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
+    // Stop the Lean servers the ended run started; a host whose Lean
+    // integration owns server lifetime (the VS Code bridge) omits the stop.
+    onRunEnd: (runId) =>
+      Effect.flatMap(
+        LeanLanguageServices,
+        (lean) => lean.stopSessionsForRun?.(runId) ?? Effect.void,
+      ),
   };
 }
 

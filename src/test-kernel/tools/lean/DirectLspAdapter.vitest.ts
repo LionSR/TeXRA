@@ -2,8 +2,8 @@
  * The direct LSP lane at its two boundaries: the `LeanServerPool` service
  * (Effect, under `it.effect`'s `TestClock` where idle eviction and the
  * diagnostics quiet window are the subject, under `it.live` where the child
- * process's real exit timing is) and the `LeanLanguageServices` port
- * `createDirectLspLeanAdapter` returns — the pool's programs plus the
+ * process's real exit timing is) and the `LeanLanguageServices` port the
+ * `directLeanLanguageServices` layer provides — the pool's programs plus the
  * interruption fold, which the adapter suites compose directly under
  * `it.live`. Servers are a fake `lake` script (a real child process) or an
  * in-memory child handed to the Node spawner through the mocked `spawn`.
@@ -62,9 +62,10 @@ vi.mock('node:child_process', async (importOriginal) => {
 // Local imports
 import type { RunId } from '@shared/schemas';
 import {
-  createDirectLspLeanAdapter,
+  directLeanLanguageServices,
   type DirectLspLeanAdapterOptions,
 } from '@tools/lean/direct/directLspAdapter';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { LeanServer } from '@tools/lean/direct/leanServer';
 import {
   LeanServerPool,
@@ -153,9 +154,12 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
-/** The same spawner graph `createDirectLspLeanAdapter` builds for the pool. */
+/** The `FileSystem`/`Path` pair the process runtime provides the spawner. */
+const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+
+/** The same spawner graph `directLeanLanguageServices` builds for the pool. */
 const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+  Layer.provide(nodePlatform),
 );
 
 const NO_RUN: RunId | undefined = undefined;
@@ -707,146 +711,147 @@ describe('LeanServerPool', () => {
   );
 });
 
-describe('createDirectLspLeanAdapter', () => {
+describe('directLeanLanguageServices', () => {
   const fakeLakeIt = it.live.skipIf(process.platform === 'win32');
 
   /**
    * The port methods are programs; these tests compose them directly, the
-   * way a tool's execute() does after its one boundary run. The adapter's
-   * disposal rides `acquireUseRelease`, so a failing body still closes the
-   * pool's scope.
+   * way a tool's execute() does after its one boundary run. The layer is
+   * built into a scope of its own, closed by the test scope unless a test
+   * closes it first — the runtime disposal a host performs.
    */
-  const withAdapter = <A>(
-    options: DirectLspLeanAdapterOptions,
-    use: (
-      adapter: ReturnType<typeof createDirectLspLeanAdapter>,
-    ) => Effect.Effect<A, unknown>,
-  ): Effect.Effect<A, unknown> =>
-    Effect.acquireUseRelease(
-      Effect.sync(() => createDirectLspLeanAdapter(options)),
-      use,
-      (adapter) => Effect.promise(() => adapter.dispose()),
-    );
+  const openAdapter = (options: DirectLspLeanAdapterOptions) =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+      const adapter = yield* Layer.build(
+        directLeanLanguageServices(options).pipe(Layer.provide(nodePlatform)),
+      ).pipe(
+        Scope.provide(scope),
+        Effect.map((context) => Context.get(context, LeanLanguageServices)),
+      );
+      return { adapter, dispose: Scope.close(scope, Exit.void) };
+    });
 
   fakeLakeIt(
     'joins concurrent first-touch requests for the same workspace',
     () =>
-      withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
-        Effect.gen(function* () {
-          const [first, second] = yield* Effect.all(
-            [
-              adapter.fetchDiagnosticsForFile(filePath),
-              adapter.fetchDiagnosticsForFile(filePath),
-            ],
-            { concurrency: 'unbounded' },
-          );
+      Effect.gen(function* () {
+        const { adapter } = yield* openAdapter({ lakeCommand: fakeLakePath });
+        const [first, second] = yield* Effect.all(
+          [
+            adapter.fetchDiagnosticsForFile(filePath),
+            adapter.fetchDiagnosticsForFile(filePath),
+          ],
+          { concurrency: 'unbounded' },
+        );
 
-          expect(first).toMatchObject({
-            ok: true,
-            diagnostics: [{ message: 'fake diagnostic' }],
-          });
-          expect(second).toMatchObject({
-            ok: true,
-            diagnostics: [{ message: 'fake diagnostic' }],
-          });
-          expect(yield* starts).toBe(1);
-        }),
-      ),
+        expect(first).toMatchObject({
+          ok: true,
+          diagnostics: [{ message: 'fake diagnostic' }],
+        });
+        expect(second).toMatchObject({
+          ok: true,
+          diagnostics: [{ message: 'fake diagnostic' }],
+        });
+        expect(yield* starts).toBe(1);
+      }),
   );
 
   fakeLakeIt('attributes a request to its explicitly supplied agent run', () =>
-    withAdapter({ lakeCommand: fakeLakePath, idleTimeoutMs: 0 }, (adapter) =>
-      Effect.gen(function* () {
-        yield* adapter.fetchDiagnosticsForFile(filePath, run('e00001'));
-        expect(activeServerRoots()).toEqual([projectRoot]);
+    Effect.gen(function* () {
+      const { adapter } = yield* openAdapter({
+        lakeCommand: fakeLakePath,
+        idleTimeoutMs: 0,
+      });
+      yield* adapter.fetchDiagnosticsForFile(filePath, run('e00001'));
+      expect(activeServerRoots()).toEqual([projectRoot]);
 
-        yield* Effect.promise(async () => {
-          await adapter.stopSessionsForRun?.(run('e00001'));
-        });
+      yield* adapter.stopSessionsForRun?.(run('e00001')) ?? Effect.void;
 
-        expect(activeServerRoots()).toEqual([]);
-      }),
-    ),
+      expect(activeServerRoots()).toEqual([]);
+    }),
   );
 
   it.live(
     'reports a missing lake command as toolchain_unavailable, not "file missing"',
     () =>
-      withAdapter(
-        { lakeCommand: path.join(tempRoot, 'missing-lake') },
-        (adapter) =>
-          Effect.gen(function* () {
-            const result = yield* adapter.fetchDiagnosticsForFile(filePath);
-            expect(result).toMatchObject({
-              ok: false,
-              kind: 'toolchain_unavailable',
-            });
-          }),
-      ),
+      Effect.gen(function* () {
+        const { adapter } = yield* openAdapter({
+          lakeCommand: path.join(tempRoot, 'missing-lake'),
+        });
+        const result = yield* adapter.fetchDiagnosticsForFile(filePath);
+        expect(result).toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+      }),
   );
 
   fakeLakeIt(
     'reports requests a dispose interrupted mid-start as stopped',
     () =>
-      withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
-        Effect.gen(function* () {
-          let spawnCount = 0;
-          // The handshake never answers, so every request below is still
-          // waiting on the server's build when `dispose()` closes the scope
-          // under it. The interruption that follows is not a failure the pool
-          // can fold, so the methods stay total only if the port's own fold
-          // recovers it.
-          spawnOverride.current = () => {
-            spawnCount += 1;
-            return createFakeLeanChild({
-              initializeGate: new Promise<void>(() => {}),
-            });
-          };
-          const diagnostics = yield* Effect.forkChild(
-            adapter.fetchDiagnosticsForFile(filePath),
-          );
-          const fileCommand = yield* Effect.forkChild(
-            adapter.executeFileCommand('restart', filePath),
-          );
-          const hover = yield* Effect.forkChild(
-            adapter.getHoverInfo(filePath, 0, 0),
-          );
-          yield* eventually(() => expect(spawnCount).toBe(1));
-
-          yield* Effect.promise(() => adapter.dispose());
-
-          expect(yield* Fiber.join(diagnostics)).toEqual({
-            ok: false,
-            kind: 'toolchain_unavailable',
-            message: 'Lean adapter was stopped.',
-          });
-          expect(yield* Fiber.join(fileCommand)).toBe(false);
-          expect(yield* Fiber.join(hover)).toEqual({
-            data: null,
-            error: 'Lean adapter was stopped.',
-          });
-        }),
-      ),
-  );
-
-  fakeLakeIt('stops every server when disposed, and disposes twice', () =>
-    withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
       Effect.gen(function* () {
-        yield* adapter.fetchDiagnosticsForFile(filePath);
-        expect(activeServerRoots()).toEqual([projectRoot]);
+        const { adapter, dispose } = yield* openAdapter({
+          lakeCommand: fakeLakePath,
+        });
+        let spawnCount = 0;
+        // The handshake never answers, so every request below is still
+        // waiting on the server's build when the dispose closes the scope
+        // under it. The interruption that follows is not a failure the pool
+        // can fold, so the methods stay total only if the port's own fold
+        // recovers it.
+        spawnOverride.current = () => {
+          spawnCount += 1;
+          return createFakeLeanChild({
+            initializeGate: new Promise<void>(() => {}),
+          });
+        };
+        const diagnostics = yield* Effect.forkChild(
+          adapter.fetchDiagnosticsForFile(filePath),
+        );
+        const fileCommand = yield* Effect.forkChild(
+          adapter.executeFileCommand('restart', filePath),
+        );
+        const hover = yield* Effect.forkChild(
+          adapter.getHoverInfo(filePath, 0, 0),
+        );
+        yield* eventually(() => expect(spawnCount).toBe(1));
 
-        yield* Effect.promise(() => adapter.dispose());
-        expect(activeServerRoots()).toEqual([]);
+        yield* dispose;
 
-        yield* Effect.promise(() => adapter.dispose());
-        const after = yield* adapter.fetchDiagnosticsForFile(filePath);
-        expect(after).toMatchObject({
+        expect(yield* Fiber.join(diagnostics)).toEqual({
           ok: false,
           kind: 'toolchain_unavailable',
           message: 'Lean adapter was stopped.',
         });
+        expect(yield* Fiber.join(fileCommand)).toBe(false);
+        expect(yield* Fiber.join(hover)).toEqual({
+          data: null,
+          error: 'Lean adapter was stopped.',
+        });
       }),
-    ),
+  );
+
+  fakeLakeIt('stops every server when disposed, and disposes twice', () =>
+    Effect.gen(function* () {
+      const { adapter, dispose } = yield* openAdapter({
+        lakeCommand: fakeLakePath,
+      });
+      yield* adapter.fetchDiagnosticsForFile(filePath);
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      yield* dispose;
+      expect(activeServerRoots()).toEqual([]);
+
+      yield* dispose;
+      const after = yield* adapter.fetchDiagnosticsForFile(filePath);
+      expect(after).toMatchObject({
+        ok: false,
+        kind: 'toolchain_unavailable',
+        message: 'Lean adapter was stopped.',
+      });
+    }),
   );
 });
 

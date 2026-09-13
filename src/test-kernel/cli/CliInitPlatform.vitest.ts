@@ -75,7 +75,6 @@ const mocks = vi.hoisted(() => ({
   })),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
-  initNodeAgentRuntime: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
@@ -131,10 +130,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
-vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
-  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
-}));
-
 // The two lifecycle arms are Effects the host runs, so the doubles answer
 // with one rather than `undefined`.
 vi.mock('@telemetry/UsageLogService', async () => {
@@ -188,10 +183,6 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
   getCliSecrets: mocks.getCliSecrets,
-}));
-
-vi.mock('@tools/lean/direct/directLspAdapter', () => ({
-  registerDirectLeanLanguageServices: vi.fn(),
 }));
 
 // Installed so startup never reaches a real auth check.
