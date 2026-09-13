@@ -68,7 +68,10 @@ import {
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
-import { databaseLayer } from '@controllers/session/Database';
+import {
+  DATABASE_FORMAT_VERSION,
+  databaseLayer,
+} from '@controllers/session/Database';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import {
@@ -992,6 +995,58 @@ describe('the C1 event table and the C6 publisher', () => {
     db.exec('PRAGMA foreign_keys = ON');
     return db;
   };
+
+  it.effect('stamps a fresh database with the format version', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      yield* Database;
+      const stamped = yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          return raw.prepare('PRAGMA user_version').get()?.user_version;
+        } finally {
+          raw.close();
+        }
+      });
+      expect(stamped).toBe(DATABASE_FORMAT_VERSION);
+    }).pipe(Effect.provide(substrate(storage)));
+  });
+
+  it.effect('refuses a database from an incompatible dev build', () =>
+    Effect.gen(function* () {
+      // A pre-marker dev build left tables behind with no user_version stamp.
+      const unmarked = workspace();
+      yield* Effect.sync(() => {
+        const raw = reader(unmarked);
+        try {
+          raw.exec('CREATE TABLE event (id INTEGER)');
+        } finally {
+          raw.close();
+        }
+      });
+      // A stamped database whose version this build does not write.
+      const foreign = workspace();
+      yield* Effect.sync(() => {
+        const raw = reader(foreign);
+        try {
+          raw.exec('CREATE TABLE event (id INTEGER)');
+          raw.exec(`PRAGMA user_version = ${DATABASE_FORMAT_VERSION + 1}`);
+        } finally {
+          raw.close();
+        }
+      });
+      for (const storage of [unmarked, foreign]) {
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(storage))),
+        );
+        expect(failure._tag).toBe('DatabaseOpenFailed');
+        expect(String(failure.cause)).toContain('incompatible');
+        expect(String(failure.cause)).toContain('texra.db');
+      }
+      // A fresh database beside them still opens and stamps itself.
+      yield* Database.pipe(Effect.provide(substrate(workspace())));
+    }),
+  );
 
   it.effect('rejects a remote mount before creating the database', () => {
     const storage = workspace();

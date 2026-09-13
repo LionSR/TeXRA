@@ -79,6 +79,18 @@ import { localDatabasePath } from './localDatabasePath';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 /**
+ * The one database format marker (issue #12251, 1.0 plan §6): a fresh
+ * database is stamped with this version in `PRAGMA user_version`, and an open
+ * whose stored version differs — including the unmarked 0 of pre-marker dev
+ * builds — is refused with one `DatabaseOpenFailed`, never a per-row parse
+ * failure and never a silent strip. 1.0 keeps no compatibility with earlier
+ * 1.0-dev builds, so there is deliberately no reader of any other version;
+ * bump this constant in the same PR as any persisted-shape change on main
+ * until 1.0 ships, after which it is the versioning hook the one-fold PRD
+ * anticipates.
+ */
+export const DATABASE_FORMAT_VERSION = 1;
+/**
  * Event history and bounded current application records.
  *
  * `commit` is a SQLite keyword, so the column is quoted at every site; the
@@ -252,7 +264,7 @@ export const databaseLayer = (
         disableWAL: mode === 'ephemeral',
         busyTimeout: '5 seconds',
       }).pipe(mapDatabaseFailure(openFailed));
-      yield* configure(sql, mode).pipe(mapDatabaseFailure(openFailed));
+      yield* configure(sql, mode, path).pipe(mapDatabaseFailure(openFailed));
       const level = yield* SubscriptionRef.make(0);
       const observedCommit = yield* SubscriptionRef.make(0);
       const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
@@ -1291,10 +1303,17 @@ function payloadOf(draft: {
  * Read cursors use sqlite_sequence's committed high-water mark. Wake levels
  * are separate counters, since a claim-only change must wake readers even
  * when the event ordinal does not change.
+ *
+ * One open-time gate sits ahead of the DDL: the `user_version` format marker
+ * (`DATABASE_FORMAT_VERSION`). Any database that already holds tables under a
+ * different version — or under no version, as pre-marker dev builds wrote —
+ * is refused before the schema is touched; only a table-free database is
+ * created and stamped.
  */
 const configure = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
+  path: string,
 ) {
   yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
   yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
@@ -1304,6 +1323,38 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
+  // The format marker is checked before the DDL creates anything, so a
+  // database holding state is never mutated by an open that will refuse it.
+  // A database with no user tables is fresh regardless of its stamp — there
+  // is no state to protect — and is (re)stamped below. The `:memory:` open is
+  // always fresh, so the ephemeral path needs no exemption.
+  const stored = z
+    .int()
+    .parse(
+      (yield* sql.unsafe<Record<string, unknown>>('PRAGMA user_version', []))[0]
+        ?.user_version ?? 0,
+    );
+  const tables = z
+    .int()
+    .nonnegative()
+    .parse(
+      (yield* sql.unsafe<Record<string, unknown>>(
+        `SELECT count(*) AS tables FROM sqlite_master
+       WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
+        [],
+      ))[0]?.tables ?? 0,
+    );
+  const fresh = tables === 0;
+  if (!fresh && stored !== DATABASE_FORMAT_VERSION) {
+    return yield* Effect.fail(
+      new Error(
+        `Refusing to open ${path}: written by an incompatible TeXRA 1.0-dev ` +
+          `build (database format ${String(stored)}, this build expects ` +
+          `${String(DATABASE_FORMAT_VERSION)}). Pre-release state is not ` +
+          `migrated by design; delete this database and start fresh.`,
+      ),
+    );
+  }
   // The official driver prepares one statement at a time. This fixed schema
   // contains only DDL statements, with no semicolons inside SQL literals.
   for (const statement of SCHEMA.split(';')
@@ -1311,6 +1362,12 @@ const configure = Effect.fnUntraced(function* (
     .filter(Boolean)) {
     yield* sql.unsafe(statement, []);
   }
+  // PRAGMA takes no bound parameters; the version is this module's own int.
+  if (fresh)
+    yield* sql.unsafe(
+      `PRAGMA user_version = ${String(DATABASE_FORMAT_VERSION)}`,
+      [],
+    );
 });
 
 const verifyPragma = Effect.fnUntraced(function* (
