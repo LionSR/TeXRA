@@ -269,8 +269,13 @@ generation request. Identity and completion carry `afterSequence: null`, since
 polling supplies no provider stream cursor. No text deltas or phase intervals are
 invented from snapshots. Completed snapshots use the same normalization as
 foreground output, preserving reasoning signatures, original calls and observed
-usage. Background observation does not create a continuation anchor from an
-unavailable input history; callers retain the canonical result for replay.
+usage. Observation takes the admitted turn as an argument: submission records a
+fingerprint of the admitted system text and history on the accepted operation,
+and observation recomputes it from the turn it is handed. When the two match, the
+completed snapshot carries the same continuation anchor a foreground completion
+would; when they differ, the result is still delivered without an anchor and a
+warning names the operation, so the next round replays the canonical history.
+Responses background observation follows the same admitted-turn contract.
 This implements the selected polling route in Google's
 [background execution API](https://ai.google.dev/gemini-api/docs/background-execution?hl=en).
 Streaming reconnection and managed-agent execution remain unsupported.
