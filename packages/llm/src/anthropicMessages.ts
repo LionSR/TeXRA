@@ -12,6 +12,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   ResolvedTurnSchema,
   sameModelOrigin,
   TurnRequestSchema,
@@ -527,10 +528,7 @@ export function anthropicMessagesModel(
       let responseId: string | undefined;
       let returnedModel: string | null = null;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           model: error.model ?? returnedModel ?? origin.requestedModel,
         });

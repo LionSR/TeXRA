@@ -11,6 +11,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -670,10 +671,7 @@ export function openrouterChatModel(
       let returnedModel: string | undefined;
       let requestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId,
           requestId,
           model: returnedModel ?? config.requestedModel,

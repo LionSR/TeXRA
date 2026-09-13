@@ -1566,6 +1566,27 @@ export class ModelError extends Data.TaggedError('ModelError')<
 > {}
 
 /**
+ * Rebuild a `ModelError` with `patch` applied over the fields it already
+ * carries.
+ *
+ * `message` and `cause` live on `Error` as own non-enumerable properties, so
+ * the spread that carries every other field silently drops both. Restating
+ * them is what keeps a re-thrown error's text and origin, and every adapter
+ * that annotates an error with the response/request it belongs to was
+ * restating them by hand.
+ */
+export const enrichModelError = (
+  error: ModelError,
+  patch: Partial<z.infer<typeof ModelErrorFieldsSchema>>,
+): ModelError =>
+  new ModelError({
+    ...error,
+    message: error.message,
+    cause: error.cause,
+    ...patch,
+  });
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a

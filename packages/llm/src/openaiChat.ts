@@ -11,6 +11,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -991,10 +992,7 @@ export function openaiChatModel(
       let requestId: string | undefined;
       let bodyRequestId: string | undefined;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId: error.responseId ?? responseId,
           requestId: error.requestId ?? requestId,
           model: error.model ?? returnedModel ?? config.requestedModel,

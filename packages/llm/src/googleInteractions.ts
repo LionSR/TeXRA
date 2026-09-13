@@ -14,6 +14,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  enrichModelError,
   readerAbortSignal,
   ResolvedTurnSchema,
   sameModelOrigin,
@@ -696,10 +697,7 @@ export function googleInteractionsModel(
       let responseId: string | undefined;
       let returnedModel: string | null = null;
       const enrich = (error: ModelError) =>
-        new ModelError({
-          ...error,
-          message: error.message,
-          cause: error.cause,
+        enrichModelError(error, {
           responseId,
           model: returnedModel ?? config.requestedModel,
         });
