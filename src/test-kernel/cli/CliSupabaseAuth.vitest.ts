@@ -8,6 +8,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
 /**
  * The secret store the CLI composition root owns. Every load below
@@ -114,6 +115,7 @@ async function loadSupabaseAuth() {
         testHttpClientLayer,
         nodePlatformLayer,
         Layer.mock(UpdateCheckRecords, {}),
+        Layer.mock(LeanLanguageServices, {}),
         inquiryRecordsLayer(() => globalStorage).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),

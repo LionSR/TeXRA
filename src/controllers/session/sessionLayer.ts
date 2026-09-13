@@ -33,6 +33,8 @@ import {
   SubscriptionRef,
   Fiber,
   Scope,
+  type FileSystem,
+  type Path,
 } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 
@@ -46,6 +48,7 @@ import { EditorModel } from '@agent/runtime/run/modelBinding';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
@@ -84,6 +87,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
 import { releaseRunResources } from '@tools/approval';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -411,6 +415,9 @@ const sessionHandleLayer = (
         initialListing,
         key.open.transcriptMode,
       ).pipe(Effect.orDie);
+      // The gate's probe fibers and waiting calls end with this scope, after
+      // the handle below has unwound its runs.
+      const modelRetries = yield* ModelRetryGate.make;
       const session = yield* Effect.acquireRelease(
         Effect.sync(
           () =>
@@ -418,6 +425,7 @@ const sessionHandleLayer = (
               ...key.open,
               transcripts,
               graph,
+              modelRetries,
             }),
         ),
         (session) =>
@@ -855,6 +863,17 @@ export interface ProcessRuntimeOptions {
    * one, where binding such a model fails with that fact.
    */
   readonly editorModel?: EditorModel['Service'];
+  /**
+   * The host's Lean language services: the VS Code extension's bridge to the
+   * Lean 4 extension, or the direct `lake env lean --server` pool on a Node
+   * host, over the `FileSystem`/`Path` this install provides. Built with the
+   * runtime and closed when it is disposed.
+   */
+  readonly lean: Layer.Layer<
+    LeanLanguageServices,
+    never,
+    FileSystem.FileSystem | Path.Path
+  >;
 }
 
 /**
@@ -886,6 +905,7 @@ export function installProcessRuntime({
   appState,
   setup,
   editorModel,
+  lean,
 }: ProcessRuntimeOptions): ProcessRuntime {
   const identity =
     processStart instanceof Promise
@@ -914,14 +934,19 @@ export function installProcessRuntime({
   const runtime = ManagedRuntime.make(
     Sessions.layer(release, services).pipe(
       Layer.provideMerge(services),
+      // The Lean port beside `services`, not among them: `services` is also
+      // each session entry's identity layer, rebuilt fresh per root, and the
+      // Lean pool is one per process — its servers are shared across roots.
+      Layer.provideMerge(lean),
       Layer.provideMerge(
         Layer.mergeAll(
           effectDiagnosticsLayer,
           FetchHttpClient.layer,
           // The standard library's filesystem and path services, provided
           // once per process here rather than by each program that needs
-          // them: every root reaches this install, so a consumer takes
-          // `FileSystem`/`Path` from context and builds no layer of its own.
+          // them: every root reaches this install, so a consumer (the Lean
+          // layer included) takes `FileSystem`/`Path` from context and
+          // builds no layer of its own.
           NodeFileSystem.layer,
           NodePath.layer,
         ),

@@ -100,6 +100,7 @@ import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 vi.mock('node:os', async (importOriginal) => ({
@@ -109,6 +110,23 @@ vi.mock('node:os', async (importOriginal) => ({
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof childProcess>();
   return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
+});
+/** Builds of the process runtime's Lean layer, which every root shares. */
+const leanBuilds = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@tools/lean/direct/directLspAdapter', async () => {
+  const { Effect, Layer } = await import('effect');
+  const { LeanLanguageServices } =
+    await import('@tools/lean/leanLanguageServices');
+  return {
+    directLeanLanguageServices: () =>
+      Layer.effect(
+        LeanLanguageServices,
+        Effect.sync(() => {
+          leanBuilds.count += 1;
+          return {} as LeanLanguageServices['Service'];
+        }),
+      ),
+  };
 });
 
 const SELF = '["test-host",4242,"self-start"]';
@@ -705,6 +723,18 @@ describe('Sessions owner', () => {
   };
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
+
+  it.live('builds the process-wide Lean layer once, not per session', () =>
+    Effect.gen(function* () {
+      // Each root's entry is built fresh over the process services; the Lean
+      // pool must stay outside that identity so its servers stay shared.
+      open('/workspace/owner/lean-once-a');
+      open('/workspace/owner/lean-once-b');
+      yield* closeSession('/workspace/owner/lean-once-a');
+      yield* closeSession('/workspace/owner/lean-once-b');
+      expect(leanBuilds.count).toBe(1);
+    }),
+  );
 
   // Real polling loops (`vi.waitFor`) on the process runtime's live work:
   // `it.live`, so nothing the session does waits on a test clock.

@@ -1226,18 +1226,6 @@
       "name": "parseOriginHeadDefaultBranch"
     },
     {
-      "file": "src/tools/lean/direct/directLspAdapter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "createDirectLspLeanAdapter"
-    },
-    {
-      "file": "src/tools/lean/direct/directLspAdapter.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DirectLspLeanAdapterOptions"
-    },
-    {
       "file": "src/tools/lean/direct/leanServerPool.ts",
       "category": "production-dead",
       "kind": "exports",

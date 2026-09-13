@@ -8,7 +8,6 @@ import {
   Exit,
   Fiber,
   FiberSet,
-  Queue,
   Result,
   Scope,
   Semaphore,
@@ -18,7 +17,6 @@ import type {
   RunOutcome,
   WorkflowCallIdentity,
   WorkflowControlAction,
-  WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   RUN_OUTCOME,
@@ -79,7 +77,7 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const LABEL_EXCERPT_LENGTH = 80;
 
-/** The two snapshot statuses a failed attempt can terminalize a call with. */
+/** The two statuses a failed attempt can terminalize a call with. */
 type WorkflowFailedCallStatus =
   typeof WORKFLOW_CALL_STATUS.FAILED | typeof WORKFLOW_CALL_STATUS.CANCELLED;
 
@@ -149,41 +147,20 @@ const ORCHESTRATION_PRELUDE = `
 `;
 
 /**
- * What stopped the run. `settlement-cleanup` is the abort the engine raises
- * itself once the sandbox has settled, and `timeout` mirrors a wall clock the
- * sandbox already reports with a more precise error; both leave the script
- * outcome authoritative. Every other kind is a fault the run must report.
- */
-type WorkflowAbortKind =
-  | 'cap'
-  | 'checkpoint'
-  | 'contract'
-  | 'runner'
-  | 'settlement-cleanup'
-  | 'timeout';
-
-/**
  * Thrown when the whole run must stop, and the reason every run-level abort
  * carries. The realm-side agent() primitive recognizes it by name and rethrows
  * instead of converting it to null; parallel() then propagates that rejected
  * call through Promise.all.
  *
- * `kind` is host-only. The error crosses the sandbox realm boundary as a
- * realm-local copy carrying just name and message, so anything classifying an
- * error that may have crossed uses the name (isWorkflowAbort) and only reads
- * `kind` off a reason this host minted. Errors a host runner mints to surface
- * its own fatal condition take the default `runner` kind.
+ * The first fault a run records is the run's outcome; every later abort is a
+ * consequence of it and keeps the first. The error crosses the sandbox realm
+ * boundary as a realm-local copy carrying just name and message, so anything
+ * classifying an error that may have crossed uses the name (isWorkflowAbort).
  */
 export class WorkflowRunAbortError extends Error {
-  readonly kind: WorkflowAbortKind;
-
-  constructor(
-    message: string,
-    options?: ErrorOptions & { readonly kind?: WorkflowAbortKind },
-  ) {
+  constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'WorkflowRunAbortError';
-    this.kind = options?.kind ?? 'runner';
   }
 }
 
@@ -194,20 +171,6 @@ function isWorkflowAbort(error: unknown): boolean {
     typeof error === 'object' &&
     error !== null &&
     (error as { name?: unknown }).name === 'WorkflowRunAbortError'
-  );
-}
-
-/**
- * Whether an abort reason is the run's own outcome. A parent abort keeps the
- * caller's reason and the sandbox rethrows it, a timeout reaches the caller as
- * the sandbox's timeout error, and a settlement cleanup follows a script that
- * already settled, so those three leave the sandbox outcome in place.
- */
-function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
-  return (
-    reason instanceof WorkflowRunAbortError &&
-    reason.kind !== 'timeout' &&
-    reason.kind !== 'settlement-cleanup'
   );
 }
 
@@ -231,105 +194,6 @@ class JournalCommitFence {
   seal(): void {
     this.#sealed = true;
   }
-}
-
-interface SnapshotPublication {
-  readonly version: number;
-  readonly snapshot: WorkflowRunSnapshot;
-  readonly acknowledged: Deferred.Deferred<void, WorkflowRunAbortError>;
-}
-
-interface CoalescedSnapshotWriter {
-  readonly publish: (snapshot: WorkflowRunSnapshot) => void;
-  readonly flush: Effect.Effect<void, WorkflowRunAbortError>;
-}
-
-function makeSnapshotWriter<R>(
-  write: WorkflowScriptRunOptions<R>['onSnapshot'],
-  onFailure: (failure: WorkflowRunAbortError) => void,
-): Effect.Effect<CoalescedSnapshotWriter, never, Scope.Scope | R> {
-  if (write === undefined) {
-    return Effect.succeed({ publish: () => {}, flush: Effect.void });
-  }
-  return Effect.gen(function* () {
-    const publications = yield* Queue.sliding<SnapshotPublication>(1);
-    const acknowledgements = new Map<
-      number,
-      Deferred.Deferred<void, WorkflowRunAbortError>
-    >();
-    let version = 0;
-    let latest: SnapshotPublication | undefined;
-    let failure: WorkflowRunAbortError | undefined;
-
-    const completeThrough = (completedVersion: number): void => {
-      for (const [candidate, acknowledged] of acknowledgements) {
-        if (candidate > completedVersion) continue;
-        Deferred.doneUnsafe(acknowledged, Effect.void);
-        acknowledgements.delete(candidate);
-      }
-    };
-    const failAll = (cause: unknown): void => {
-      failure ??= new WorkflowRunAbortError(
-        `Failed to persist workflow run snapshot: ${toErrorMessage(cause)}`,
-        { kind: 'checkpoint', cause },
-      );
-      for (const acknowledged of acknowledgements.values()) {
-        Deferred.doneUnsafe(acknowledged, Effect.fail(failure));
-      }
-      acknowledgements.clear();
-      onFailure(failure);
-    };
-
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Queue.take(publications).pipe(
-          Effect.flatMap((publication) =>
-            Effect.try({
-              try: () => structuredClone(publication.snapshot),
-              catch: (cause) => cause,
-            }).pipe(
-              Effect.flatMap(write),
-              Effect.tap(() =>
-                Effect.sync(() => completeThrough(publication.version)),
-              ),
-            ),
-          ),
-        ),
-      ).pipe(
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.failCause(cause);
-          }
-          return Effect.sync(() => failAll(Cause.squash(cause)));
-        }),
-      ),
-      { startImmediately: true },
-    );
-
-    const flush: Effect.Effect<void, WorkflowRunAbortError> = Effect.suspend(
-      () => {
-        if (failure !== undefined) return Effect.fail(failure);
-        const target = latest;
-        if (target === undefined) return Effect.void;
-        return Deferred.await(target.acknowledged).pipe(
-          Effect.andThen(
-            Effect.suspend(() => (latest === target ? Effect.void : flush)),
-          ),
-        );
-      },
-    );
-
-    return {
-      publish(snapshot) {
-        if (failure !== undefined) return;
-        const acknowledged = Deferred.makeUnsafe<void, WorkflowRunAbortError>();
-        latest = { version: ++version, snapshot, acknowledged };
-        acknowledgements.set(version, acknowledged);
-        Queue.offerUnsafe(publications, latest);
-      },
-      flush,
-    };
-  });
 }
 
 /**
@@ -369,27 +233,18 @@ export function runWorkflowScript<R = never>(
       const priorEntries = new Map<string, WorkflowJournalEntry>(
         (options.journal ?? []).map((entry) => [entry.key, entry]),
       );
-      const priorKeysByIndex = new Map<number, Set<string>>();
-      for (const entry of options.journal ?? []) {
-        const keys = priorKeysByIndex.get(entry.index) ?? new Set<string>();
-        keys.add(entry.key);
-        priorKeysByIndex.set(entry.index, keys);
-      }
 
       const journal = new Map<number, WorkflowJournalEntry>();
       const fatalFault = yield* Deferred.make<never, WorkflowRunAbortError>();
       let firstFatalFault: WorkflowRunAbortError | undefined;
       const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
-        if (isRunFatalAbort(fault)) firstFatalFault ??= fault;
-        Deferred.doneUnsafe(fatalFault, Effect.fail(firstFatalFault ?? fault));
-        return firstFatalFault ?? fault;
+        firstFatalFault ??= fault;
+        Deferred.doneUnsafe(fatalFault, Effect.fail(firstFatalFault));
+        return firstFatalFault;
       };
       const contractFault = (error: unknown): WorkflowRunAbortError =>
         failRun(
-          new WorkflowRunAbortError(toErrorMessage(error), {
-            kind: 'contract',
-            cause: error,
-          }),
+          new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
         );
 
       const agentFibers = yield* FiberSet.make<string | undefined, Error>();
@@ -406,20 +261,12 @@ export function runWorkflowScript<R = never>(
         plannedTasks.map((task) => [task.id, task]),
       );
       const journalCommitFence = new JournalCommitFence();
-      const snapshotWriter = yield* makeSnapshotWriter(
-        options.onSnapshot,
-        failRun,
-      );
       const workflowRunState = yield* Effect.try({
         try: () =>
           new WorkflowRunState({
             phases: plannedPhases,
             tasks: plannedTasks,
-            initialSnapshot: options.initialSnapshot,
-            publish: (snapshot) => {
-              options.onTransition?.(snapshot);
-              snapshotWriter.publish(snapshot);
-            },
+            emit: (event) => onEvent?.(event),
           }),
         catch: (cause) => new Error(toErrorMessage(cause), { cause }),
       });
@@ -435,7 +282,7 @@ export function runWorkflowScript<R = never>(
             Effect.gen(function* () {
               // Ordinary agent work stops immediately. An admitted journal
               // commit is uninterruptible, so clear still waits for its
-              // durability point before the terminal snapshot is written.
+              // durability point before the terminal sweep runs.
               yield* FiberSet.clear(agentFibers);
               journalCommitFence.seal();
 
@@ -460,11 +307,10 @@ export function runWorkflowScript<R = never>(
                   ? undefined
                   : toErrorMessage(terminalError),
               );
-              yield* snapshotWriter.flush;
               // A durable callback can discover the first run-level fault
-              // while clear waits for its uninterruptible commit. Persist the
-              // failed terminal snapshot first, then surface that fault even
-              // when this path is running as the scope finalizer.
+              // while clear waits for its uninterruptible commit. Settle the
+              // cards first, then surface that fault even when this path is
+              // running as the scope finalizer.
               if (firstFatalFault !== undefined) {
                 return yield* Effect.fail(firstFatalFault);
               }
@@ -472,7 +318,6 @@ export function runWorkflowScript<R = never>(
           );
         });
       yield* Effect.addFinalizer((exit) => finalize(exit).pipe(Effect.orDie));
-      yield* snapshotWriter.flush;
 
       /** Journal one retry's supersession, uninterruptibly and under the
        *  run's own commit fence, and interrupt the attempt once that write
@@ -534,7 +379,7 @@ export function runWorkflowScript<R = never>(
             return Effect.fail(
               new WorkflowRunAbortError(
                 `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`,
-                { kind: 'checkpoint', cause: error },
+                { cause: error },
               ),
             );
           }),
@@ -574,7 +419,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     'Every agent() call must reference a task from meta.tasks with a non-empty "id" option.',
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -585,7 +429,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     `agent() references undeclared task id "${callOptions.id}".`,
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -600,7 +443,6 @@ export function runWorkflowScript<R = never>(
                 failRun(
                   new WorkflowRunAbortError(
                     `Task "${callOptions.id}" must use the label and phase declared in meta.tasks.`,
-                    { kind: 'contract' },
                   ),
                 ),
               );
@@ -636,7 +478,6 @@ export function runWorkflowScript<R = never>(
               failRun(
                 new WorkflowRunAbortError(
                   'The workflow host must fingerprint agent() file dependencies before they can be resumed safely.',
-                  { kind: 'runner' },
                 ),
               ),
             );
@@ -653,7 +494,6 @@ export function runWorkflowScript<R = never>(
                 Effect.fail(
                   new WorkflowRunAbortError(
                     'The workflow host returned no fingerprint for agent() file dependencies.',
-                    { kind: 'runner' },
                   ),
                 ),
             ).pipe(
@@ -663,7 +503,6 @@ export function runWorkflowScript<R = never>(
                   : Effect.fail(
                       new WorkflowRunAbortError(
                         'The workflow host returned no fingerprint for agent() file dependencies.',
-                        { kind: 'runner' },
                       ),
                     ),
               ),
@@ -678,7 +517,7 @@ export function runWorkflowScript<R = never>(
                       ? error
                       : new WorkflowRunAbortError(
                           `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
-                          { kind: 'runner', cause: error },
+                          { cause: error },
                         ),
                   ),
                 );
@@ -692,27 +531,6 @@ export function runWorkflowScript<R = never>(
           const progressId =
             plannedTask?.id ?? callOptions.id ?? `call-${index}`;
           const prior = priorEntries.get(key);
-          let recoverySource:
-            | { readonly id: string; readonly journalProven: boolean }
-            | {
-                readonly implicitIndex: number;
-                readonly journalProven: true;
-              }
-            | undefined;
-          if (plannedTask !== undefined || callOptions.id !== undefined) {
-            recoverySource = {
-              id: progressId,
-              journalProven: prior !== undefined,
-            };
-          } else if (
-            prior !== undefined &&
-            priorKeysByIndex.get(prior.index)?.size === 1
-          ) {
-            recoverySource = {
-              implicitIndex: prior.index,
-              journalProven: true,
-            };
-          }
 
           yield* Effect.try({
             try: () => {
@@ -722,31 +540,28 @@ export function runWorkflowScript<R = never>(
               ) {
                 workflowRunState.enterStage(callOptions.phase);
               }
-              workflowRunState.issueCall(
-                {
-                  id: progressId,
-                  label,
-                  phase: callOptions.phase,
-                  kind:
-                    callOptions.schema === undefined
-                      ? WORKFLOW_CALL_KIND.DOCUMENT
-                      : WORKFLOW_CALL_KIND.STRUCTURED,
-                  agent: callOptions.agentName,
-                  model: callOptions.model,
-                  files: {
-                    input: (callOptions.inputFiles ?? []).map((file) =>
-                      basename(file),
-                    ),
-                    context: (callOptions.contextFiles ?? []).map((file) =>
-                      basename(file),
-                    ),
-                    media: (callOptions.mediaFiles ?? []).map((file) =>
-                      basename(file),
-                    ),
-                  },
+              workflowRunState.issueCall({
+                id: progressId,
+                label,
+                phase: callOptions.phase,
+                kind:
+                  callOptions.schema === undefined
+                    ? WORKFLOW_CALL_KIND.DOCUMENT
+                    : WORKFLOW_CALL_KIND.STRUCTURED,
+                agent: callOptions.agentName,
+                model: callOptions.model,
+                files: {
+                  input: (callOptions.inputFiles ?? []).map((file) =>
+                    basename(file),
+                  ),
+                  context: (callOptions.contextFiles ?? []).map((file) =>
+                    basename(file),
+                  ),
+                  media: (callOptions.mediaFiles ?? []).map((file) =>
+                    basename(file),
+                  ),
                 },
-                recoverySource,
-              );
+              });
             },
             catch: contractFault,
           });
@@ -756,7 +571,6 @@ export function runWorkflowScript<R = never>(
               failRun(
                 new WorkflowRunAbortError(
                   'Repeated agent() calls with the same prompt and run options require distinct non-empty "id" options for restart-safe identity.',
-                  { kind: 'contract' },
                 ),
               ),
             );
@@ -786,7 +600,6 @@ export function runWorkflowScript<R = never>(
                       failRun(
                         new WorkflowRunAbortError(
                           'A changed agent() file dependency now conflicts with another call identity; rerun the workflow from its saved script.',
-                          { kind: 'contract' },
                         ),
                       ),
                     );
@@ -844,7 +657,6 @@ export function runWorkflowScript<R = never>(
                     error instanceof WorkflowRunAbortError
                       ? error
                       : new WorkflowRunAbortError(toErrorMessage(error), {
-                          kind: 'runner',
                           cause: error,
                         });
                   // Persist the call's real bridge failure before waking the
@@ -874,10 +686,6 @@ export function runWorkflowScript<R = never>(
             return payload;
           }
 
-          workflowRunState.queueCall(progressId, {
-            model: callOptions.model,
-          });
-
           for (;;) {
             const call: InFlightAgentCall = { index, key };
             // The attempt's scope is opened here and closed only after the
@@ -898,7 +706,6 @@ export function runWorkflowScript<R = never>(
                     if (liveCallCounter > maxAgentCalls) {
                       const fault = new WorkflowRunAbortError(
                         `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-                        { kind: 'cap' },
                       );
                       // Record the refused call before waking the run-level fatal
                       // race, which immediately interrupts the guest-call fiber.
@@ -917,28 +724,17 @@ export function runWorkflowScript<R = never>(
                           prompt,
                           options: callOptions,
                           signal,
-                          report: ({ agent, recovered, ...attemptFacts }) => {
+                          report: ({ recovered, ...attemptFacts }) => {
                             if (
                               attemptFacts.childRunId !== undefined &&
                               recovered !== true
                             ) {
                               inFlightCalls.set(attemptFacts.childRunId, call);
                             }
-                            if (
-                              Object.values(attemptFacts).some(
-                                (fact) => fact !== undefined,
-                              )
-                            ) {
-                              workflowRunState.reportAttempt(
-                                progressId,
-                                attemptFacts,
-                              );
-                            }
-                            if (agent !== undefined) {
-                              workflowRunState.updateCall(progressId, {
-                                agent,
-                              });
-                            }
+                            workflowRunState.reportAttempt(
+                              progressId,
+                              attemptFacts,
+                            );
                           },
                         }).pipe(Scope.provide(attemptScope)),
                       ),
@@ -961,9 +757,7 @@ export function runWorkflowScript<R = never>(
                   }
                 }
 
-                if (!workflowRunState.settleAttempt(progressId)) {
-                  return undefined;
-                }
+                if (workflowRunState.sealed) return undefined;
 
                 if (call.action === 'retry') {
                   // A retry is an authorized supersession, and the child it
@@ -982,7 +776,7 @@ export function runWorkflowScript<R = never>(
                     if (failure !== undefined) {
                       const fault = new WorkflowRunAbortError(
                         `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(failure)}`,
-                        { kind: 'checkpoint', cause: failure },
+                        { cause: failure },
                       );
                       failCall(fault);
                       return yield* Effect.fail(failRun(fault));
@@ -1007,7 +801,6 @@ export function runWorkflowScript<R = never>(
                       error instanceof WorkflowRunAbortError
                         ? error
                         : new WorkflowRunAbortError(toErrorMessage(error), {
-                            kind: 'runner',
                             cause: error,
                           }),
                     );
@@ -1051,6 +844,7 @@ export function runWorkflowScript<R = never>(
             if (attempt === RETRY_ATTEMPT) continue;
             return attempt;
           }
+
         });
 
       const argsJson = yield* Effect.try({
@@ -1157,7 +951,6 @@ export function runWorkflowScript<R = never>(
       return {
         result,
         journal: [...journal.values()].toSorted((a, b) => a.index - b.index),
-        snapshot: workflowRunState.snapshot(),
       };
     }),
   );

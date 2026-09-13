@@ -247,7 +247,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,
-  'run.workflow': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
   // Checkpoint-aggregate rows never reach a run fold; total-record members.

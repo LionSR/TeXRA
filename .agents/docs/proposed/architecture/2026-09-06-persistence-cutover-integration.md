@@ -99,7 +99,7 @@ work at this integration, distinguished from foundations already present.
 ### Latest main's joint runtime/LLM gate
 
 Main `fb1ac8a52d` also includes the accepted joint contract in
-[runtime proposal §0.1](2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
+[runtime proposal §0.1](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
 This is part of the remaining D4 work, not a second ledger migration:
 `packages/llm` owns provider protocols and immutable prepared invocations;
 canonical Zod turn/continuation values are persisted directly, with exact

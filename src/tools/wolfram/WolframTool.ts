@@ -108,22 +108,18 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   return yield* Effect.fail(new ToolError(`Wolfram run failed: ${details}`));
 });
 
-export class WolframTool extends defineTool({
+export const WolframTool = defineTool({
   name: 'wolfram',
   requiresApproval: true,
   slow: true,
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
-}) {
-  protected readonly execute = Effect.fn('WolframTool.call')(function* (
-    this: WolframTool,
-    input: WolframInput,
-  ) {
+  execute: Effect.fn('WolframTool.call')(function* (input: WolframInput) {
     const call = yield* ToolCall;
     const ports: WolframPorts = {
       requestApproval: requestBashApproval,
       runTool: (...args) => call.inScope(() => runToolWithCheck(...args)),
     };
     return yield* runWolfram(ports, input);
-  });
-}
+  }),
+});

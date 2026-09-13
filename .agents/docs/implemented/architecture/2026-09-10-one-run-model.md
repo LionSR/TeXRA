@@ -1,7 +1,7 @@
 # One run model for TeXRA 1.0: one log, one fold, one vocabulary
 
-Status: proposed — the target shape the
-[duplicate-concept census](2026-09-10-collapse-duplicate-concepts.md) was
+Status: implemented (S0–S6 landed: #12203/#12206/#12212 docs, #12222 identity, #12246 + #12249 vocabulary, #12329 requests, #12268 views + CLI projection v2, #12338 model identity via #12329; moved from `proposed/` 2026-09-13) — the target shape the
+[duplicate-concept census](../../proposed/architecture/2026-09-10-collapse-duplicate-concepts.md) was
 circling, stated as one design with its deletion ledger and its order against
 the runtime lane. It supersedes the census's Section 4 families: they are
 symptoms of one cause and are resolved here together, not one at a time.
@@ -45,7 +45,7 @@ defect. The one admissible persisted derivation is a checkpoint: a snapshot
 the rows can always rebuild and that loses every conflict with them, kept
 only to bound replay cost. A snapshot that carries a fact no row carries is
 not a checkpoint, it is a second store; PR1's `flow.snapshot` is written to
-"restore what no row carries" ([PR1 §2.6](2026-09-08-pr1-run-ledger-foundation.md)),
+"restore what no row carries" ([PR1 §2.6](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md)),
 and that gap closes by giving those facts rows, not by keeping the snapshot
 authoritative.
 
@@ -109,7 +109,7 @@ model they become the `RunIdentity` of those runs, which is where the census's
 own calibration example said the name already lived. The roughly fifteen
 `logger.warn` sites that read better with a prefix get identity from the
 fiber's log annotations, as the
-[observability plane](2026-09-09-observability-plane.md) §3.1 specifies.
+[observability plane](../../proposed/architecture/2026-09-09-observability-plane.md) §3.1 specifies.
 
 `storageKey` stays only inside the CLI's versioned NDJSON projection
 (section 3.6); internally it is the run id. `runId` is an internal alias with
@@ -123,11 +123,11 @@ came to read different fields for it.
 
 **Aggregates.** Today a run owns two aggregates, `('stream', streamId)` and
 `('execution', executionId)`, with two sequence counters and two ownership
-claims ([execution ownership](2026-09-10-execution-ownership-lane-and-lease.md)
+claims ([execution ownership](../../proposed/architecture/2026-09-10-execution-ownership-lane-and-lease.md)
 §1, row 1). The split was meant to separate display rows from ledger rows.
 That distinction is a property of a row type, not of an aggregate, and the
 PR1 ledger's `foldRunState` already has to read both aggregates in one commit
-order ([PR1 §4.2](2026-09-08-pr1-run-ledger-foundation.md)). The recommended
+order ([PR1 §4.2](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md)). The recommended
 shape is **one aggregate kind, `run`, keyed by the run id**, with row types
 marked display-visible or ledger-private. That deletes the second sequence
 counter, the second claim, the `RunAggregates` two-key signature that PR1
@@ -303,7 +303,7 @@ thread? }` and `request.decided { requestId, decision }`, over all seven
 kinds. Pending is the fold: opened without decided. Hosts read pending from
 the view and send `decide` as a command (R2). The runtime holds nothing: the
 run parks in its scope, which is lane D3 of the
-[ownership note](2026-09-10-execution-ownership-lane-and-lease.md), and after a
+[ownership note](../../proposed/architecture/2026-09-10-execution-ownership-lane-and-lease.md), and after a
 restart the run-state fold sees the open request and parks again. An inquiry
 is a request whose `thread` names an earlier request, which gives it
 multi-turn for free; its record in the global database stays, because
@@ -448,9 +448,9 @@ vocabulary it finds. Landing PR1 first hardens the duplicate; landing this
 first removes a documented deviation from PR1 before it is written.
 
 1. **S0, docs, same day.** Amend the
-   [PR1 note](2026-09-08-pr1-run-ledger-foundation.md) (`RunAggregates` to
+   [PR1 note](../../proposed/architecture/2026-09-08-pr1-run-ledger-foundation.md) (`RunAggregates` to
    the run id; rows land on the `run` aggregate), the
-   [Tier-1 manifest](2026-09-10-agent-sdk-tier-1-manifest.md) (drop
+   [Tier-1 manifest](../../proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md) (drop
    `StreamTabId` and `StreamTabIdSchema` from all three entries), and the
    `CLAUDE.md` `p-queue` bullet the census flagged. Move the census's
    Section 4 to point here.
@@ -471,20 +471,28 @@ first removes a documented deviation from PR1 before it is written.
    update the validation script and the texra-action pin together. After S2.
 7. **S6, model identity.** Independent; any time.
 
-## 7. For the owner to rule
+## 7. Owner rulings — resolved by the merges (recorded 2026-09-13)
+
+The three choices below were open when this note was written; the landed code took the
+recommended option in each case. No separate written ruling exists.
 
 1. **One aggregate per run** (recommended) versus two kinds sharing one
    logical id. The first deletes a counter, a claim, and the PR1 deviation;
    the second keeps a ratified sentence intact and one duplicate with it.
+   **Resolved:** one aggregate per run (#12222).
 2. **The CLI contract is versioned at 1.0.** The rename table is frozen by a
    comment, not by an external consumer this repository can see; texra-action
    is SHA-pinned. If the 0.40 contract must be emitted verbatim by 1.0, S5
    becomes a projection module instead of a deletion, and R3 is violated on
    purpose in one named place.
+   **Resolved:** versioned at 1.0 — the CLI projection v2 envelope landed and
+   the 0.40 contract is not emitted (#12268).
 3. **Inquiry joins the request protocol.** Its cross-project record stays;
    its second protocol does not. If the owner wants inquiry to remain a
    fire-and-forget tool call that never parks the run, that is still one
    `request.opened` row with no waiting, not a separate module.
+   **Resolved:** inquiry joins the request protocol as a non-parking
+   `request.opened` row (#12329).
 
 ## 8. Corrections to the census, so they are not re-derived
 

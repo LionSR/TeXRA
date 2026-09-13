@@ -6,9 +6,9 @@ import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { capitalize } from '@utils/text/stringUtils';
 import { StateVisibleBanner } from './StateVisibleBanner';
-import { MainViewEvents } from '../events';
 
 @customElement('api-key-banner')
 export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
@@ -19,8 +19,13 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
   };
 
   private handleAction(action: 'set' | 'guide'): void {
-    const provider = this.state.provider ?? '';
-    this.dispatchEvent(MainViewEvents.apiKeyAction({ action, provider }));
+    this.dispatchEvent(
+      SessionUiEvents.host({
+        kind: 'apiKeyBanner',
+        action,
+        provider: this.state.provider,
+      }),
+    );
   }
 
   override render(): TemplateResult {

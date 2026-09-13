@@ -393,8 +393,8 @@ export function runPersistedWorkflowScript<R = never>(
               ),
             );
           // The engine's callbacks each carry their session explicitly (the agent
-          // runner frames its own run context; snapshots and journal rows publish
-          // through the handle), so no ambient session frame wraps this call.
+          // runner frames its own run context; journal rows publish through
+          // the handle), so no ambient session frame wraps this call.
           return yield* runWorkflowScript({
             ...runOptions,
             script,

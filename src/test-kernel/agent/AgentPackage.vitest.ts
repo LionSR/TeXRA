@@ -47,7 +47,6 @@ const mocks = vi.hoisted(() => ({
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
-  initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
   /** The process's session owner, as `installProcessRuntime` installs it
@@ -190,10 +189,6 @@ vi.mock('@tools/agentCliSessionStores', () => ({
   ) => {
     mocks.shutdownHooks = hooks;
   },
-}));
-
-vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
-  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -340,8 +335,6 @@ describe('agent package run lifecycle', () => {
 
     expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
     expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 
   it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {

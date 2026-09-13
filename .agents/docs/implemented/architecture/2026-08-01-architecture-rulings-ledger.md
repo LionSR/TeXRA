@@ -157,3 +157,52 @@ sequence, or concept-count claims. Those passages remain historical.
 Future changes to model ownership must be justified against that current
 implementation and test coverage, not by treating the retired gold-standard
 program as normative.
+
+## R-1 / Q1 — the filesystem: Effect's own `FileSystem`/`Path` (ruled 2026-09-13; supersedes the 2026-09-11 deferral)
+
+**Question.** Replace `FileSystemProvider`/`nodeFilesystem` and the `BaseFS` static family
+with Effect's own `FileSystem` + `Path` services (#12073 R-1 candidate B), or Effect-type
+TeXRA's own rooted ports?
+
+**Ruling.** Candidate B. On 2026-09-11 (#12247) the owner had declined the adoption "for
+now" on the measured evidence (7.1–9.7× slower `readDirectory` walks because the service
+returns names only, no `lstat`, `layerNoop` answering `exists` with `false`). On
+2026-09-13 the owner ruled the other way — "adopt Effect's own file system as much as
+possible" — and `Platform` is shrinking onto the Effect-native and TeXRA Context services:
+#12364 (storage and toolAvailability ports retired), #12372 (globalState and secrets
+ports retired), #12373 (the memfs fake deleted; the test harness runs the production
+filesystem on a real temp root), #12374 (`FileSystem` and `Path` are `ProcessServices`
+provided once by `installProcessRuntime`; `jsonStore` and the Lean adapter take them from
+context). Slices 4b onward convert the filesystem consumers onto those services, with
+the fs port last. AGENTS.md "Platform decoupling rules" item 4 records the direction.
+
+**Forbids.** Adding fields to `Platform`; an "own port" Effect surface beside Effect's
+`FileSystem` for the same operation; grafting an Effect surface onto the Promise `BaseFS`
+while its callers stay Promise-shaped (the pass-through the 1.0 plan §5 bars). The
+2026-09-11 evidence still binds the _mechanics_: consumers that need `lstat` type bits
+(the `inspectRunStorageEntry` containment check, `XmlOutputManager`'s pre-write symlink
+guard) and typed directory walks keep thin TeXRA helpers over the service rather than
+losing the property. The `workspaceRoots` `AsyncLocalStorage` (injection carrier 5) and
+the `inScope` re-entry on `AgentRun`/`ToolCall` retire as those slices land.
+
+## No temporary adapters, and the `debtLanes` register is closed (ruled 2026-09-06; register deleted by #12277)
+
+**Question.** May a subsystem convert to Effect behind a Promise-shaped adapter marked for
+later removal, or take a `debtLanes` entry in the effect-migration ratchet so its new
+`Effect.run*` site is admitted?
+
+**Ruling.** No, on both. A converted callee's consumers convert upward to a real R1 boundary
+kind in the same PR. `@adapter-until` markers fail ESLint (`no-warning-comments`). The
+`debtLanes` register recorded debt that already existed when it was written and was never an
+intake; #12277 deleted it. `scripts/check-effect-migration-ratchet.mjs --update` never adds
+a file to a row.
+
+**Evidence.** Five prior conversions each left a `tryPromise` wall or a Promise facade so
+the file would compile mid-migration; the 2026-09-07 promise-boundary audit classified those
+as the debt being retired, not progress. R1's three boundary kinds are the only places a run
+is not debt: `packages/{extension,desktop,cli,agent}/src/**` and (until #12337 retired it)
+the tool `execute()` contract.
+
+**Forbids.** A bridging module that reads a global and exposes it as a `Layer`; a Promise
+method whose body only runs an Effect; a "release-N" compatibility column; a feature flag
+selecting two engines; dual writes.
