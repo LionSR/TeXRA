@@ -8,9 +8,9 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  parseInboundToolArguments,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -1156,23 +1156,7 @@ export function openrouterChatModel(
                     message:
                       'OpenRouter returned incomplete or duplicate local tool calls.',
                   });
-                const args: unknown = yield* Effect.try({
-                  try: () => JSON.parse(call.arguments),
-                  catch: (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter returned malformed tool arguments.',
-                      cause,
-                    }),
-                });
-                const parsedArgs = JsonObjectSchema.safeParse(args);
-                if (!parsedArgs.success)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'OpenRouter tool arguments must be a supported JSON object.',
-                    cause: parsedArgs.error,
-                  });
+                yield* parseInboundToolArguments(call.arguments, 'OpenRouter');
                 ids.add(call.id);
                 content.push({
                   kind: 'local-call',

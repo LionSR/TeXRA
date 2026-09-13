@@ -8,9 +8,9 @@ import { z } from 'zod';
 import { openaiFailure } from './openaiError.js';
 import {
   InputTokenEstimateSchema,
-  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  parseInboundToolArguments,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -1601,18 +1601,7 @@ export function openaiChatModel(
                       'The model returned incomplete tool call identities.',
                   });
                 }
-                yield* Effect.try({
-                  try: () => {
-                    JsonObjectSchema.parse(JSON.parse(call.arguments));
-                  },
-                  catch: (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model returned invalid tool call arguments.',
-                      cause,
-                    }),
-                });
+                yield* parseInboundToolArguments(call.arguments, 'The model');
                 completedContent.push({
                   kind: 'local-call',
                   providerCallId: call.id,
