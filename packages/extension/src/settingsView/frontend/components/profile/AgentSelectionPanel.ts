@@ -25,6 +25,7 @@ import type {
 import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
+  isPackagedAgentSource,
 } from '@shared/schemas';
 import {
   renderLabeledActionButton,
@@ -291,8 +292,7 @@ export class AgentSelectionPanel extends LitElement {
 
   /** Detail-pane actions in render order, each with the condition that shows it. */
   private renderDetailActions(agent: AgentSelectionItem): TemplateResult[] {
-    // Only the two built-in sources lack a decorator row, hence no badge.
-    const builtIn = sourceMeta(agent.source).badge === undefined;
+    const builtIn = isPackagedAgentSource(agent.source);
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const actions: ReadonlyArray<{
       readonly when: boolean;
@@ -302,8 +302,15 @@ export class AgentSelectionPanel extends LitElement {
         when: agent.hasPath,
         button: {
           icon: 'file-lines',
-          text: 'Open YAML',
-          label: 'Open agent YAML definition',
+          // A packaged definition ships inside the app and cannot be edited
+          // in place; Customize is the action that produces an editable copy.
+          text: builtIn ? 'View YAML' : 'Open YAML',
+          label: builtIn
+            ? 'View agent YAML definition'
+            : 'Open agent YAML definition',
+          title: builtIn
+            ? 'View the built-in definition (read-only). Use Customize to edit it.'
+            : 'Open this agent YAML definition for editing',
           className: 'agent-action-btn',
           kind: 'ghost',
           onClick: () =>

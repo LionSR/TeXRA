@@ -50,6 +50,19 @@ export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 
 export type AgentSource = z.infer<typeof AgentSourceSchema>;
 
+/**
+ * True for the two sources whose definitions ship inside the host bundle and
+ * are read in place. Every surface that offers to open one presents it
+ * read-only and points edits at the custom copy; the extension additionally
+ * registers those directories `writable: false` for its file tools.
+ */
+export function isPackagedAgentSource(source: AgentSource): boolean {
+  return (
+    source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
+    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
+  );
+}
+
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
 export const AgentNameSchema = z

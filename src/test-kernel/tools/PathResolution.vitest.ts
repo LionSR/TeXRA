@@ -7,8 +7,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   assertNoParentTraversal,
+  assertWritable,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
+import { registerExternalRoot } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {
   it.each(['../x', 'a/../../x'])('rejects %s', (targetPath) => {
@@ -54,5 +56,33 @@ describe('resolveWorkspaceRelativePath path protection', () => {
       absolute: outsidePath,
       fsPath: outsidePath,
     });
+  });
+
+  // Last in the file on purpose: the registry has no unregister, so the
+  // registration lives until the module registry is torn down with the file.
+  it('keeps a read-only external root that sits inside the workspace non-writable', async () => {
+    await installPlatform({ workspacePath });
+    const packagedAgents = path.join(
+      workspacePath,
+      'packages',
+      'extension',
+      'resources',
+      'agents',
+    );
+    registerExternalRoot(packagedAgents, {
+      kind: 'builtInToolUse',
+      writable: false,
+      label: 'Packaged agents',
+    });
+
+    const targetPath = 'packages/extension/resources/agents/proof.yaml';
+    const resolved = resolveWorkspaceRelativePath(targetPath);
+
+    expect(resolved.external?.writable).toBe(false);
+    expect(() => assertWritable(resolved, targetPath)).toThrowError(
+      new ToolError(
+        `Cannot write ${targetPath}: Packaged agents is read-only.`,
+      ),
+    );
   });
 });
