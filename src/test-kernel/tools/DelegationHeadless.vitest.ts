@@ -1238,7 +1238,9 @@ describe('headless delegation', () => {
           // same ordering a real stop-with-detach produces mid-turn.
           afterRun: (handle) => {
             capturedHandle = handle;
-            defaultSession().runs.detachActiveChildren(PARENT_RUN_ID);
+            Effect.runFork(
+              defaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
+            );
           },
         });
 

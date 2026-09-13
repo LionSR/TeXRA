@@ -131,9 +131,12 @@ structured, cost }`), `null` on failure, or the truthy
   order from there, so a deleted attempt whose tombstone has since been
   collected cannot read as an id that never started. An attempt that never
   reached `run.start` simply launches, and an attempt no live owner holds that
-  can no longer record an outcome frees the next id — a decision taken while
-  holding that attempt's run claim, so a resume starting one instant later is
-  refused instead of running beside the id this frees. A parent execution has one
+  settled no `child.turn` and can no longer record an outcome frees the next
+  id (a settled turn under no outcome is unrepeatable work: the manifest
+  beside it is written for a failed delivery too, so nothing says whether the
+  turn succeeded) — a decision taken while holding that attempt's run claim,
+  so a resume starting one instant later is refused instead of running beside
+  the id this frees. A parent execution has one
   active runtime owner; the execution KV store is durable state, not a
   cross-process lock. Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.

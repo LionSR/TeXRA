@@ -156,7 +156,10 @@ interface TrackedPublication {
 
 /** The run one published batch belongs to, read off the aggregates it
  *  targets; `null` when the batch is not one run's (a session-scoped fact,
- *  or a batch spanning runs, which no run may be failed for alone). */
+ *  or a batch spanning runs, which no run may be failed for alone — an
+ *  author with a batch of that shape whose refusal someone must hear commits
+ *  it through {@link SessionHandle.commit} instead, as the registry's
+ *  `run.detach` batch does). */
 function draftedRun(events: readonly SessionEventDraft[]): RunId | null {
   let runId: RunId | null = null;
   for (const event of events) {
@@ -315,7 +318,7 @@ export class SessionHandle {
     );
     this.runs = new RunRegistry({
       runView: (runId) => this.runView(runId),
-      publish: (events) => this.publish(events),
+      commit: (events) => this.commit(events).pipe(Effect.asVoid),
       approvals,
       finalizeRun: (input) => finalizeRun(this, input),
       acquireRunClaim: (runId) =>

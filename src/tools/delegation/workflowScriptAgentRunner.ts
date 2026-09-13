@@ -416,11 +416,15 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * says the call got that far.
  *
  * A run with no `run.end` for the lifecycle in flight, whose lease no live
- * owner still holds, frees the next attempt id in either of two shapes: it
- * settled no `child.turn`, so it never reached side-effectful work; or it
- * committed its `run.result` manifest and died in the one transaction before
- * `run.end`, so nothing will ever record that outcome. A settled turn without
- * a manifest is the one irreconcilable shape, and a live owner always refuses.
+ * owner still holds, frees the next attempt id in one shape only: it settled
+ * no `child.turn`, so it never reached side-effectful work. A settled turn
+ * under a run with no outcome is the irreconcilable shape, whatever else that
+ * attempt recorded: the child reached model work and file edits, and nothing
+ * left behind says whether the turn succeeded, because the `run.result`
+ * manifest is committed for a failed delivery exactly as for a successful one
+ * and the `run.end` that would have said which was lost. Ambiguous is
+ * non-repeatable, so such an attempt is refused rather than advanced past,
+ * and a live owner always refuses too.
  *
  * One rule covers every id that already exists, whatever it recorded: it is
  * inspected while this call holds the attempt's own run lane and run claim,
@@ -598,21 +602,21 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           readChildTurnState(session, runId),
         );
         if (turns.lastCompleted !== null) {
-          // A settled turn under a `producer: 'subagent'` manifest is the one
-          // transaction between `run.result` and `run.end`: the child got as
-          // far as committing its result and died, and nothing will ever write
-          // that `run.end`, so this attempt is closed like any other terminal
-          // one. Without a manifest the child settled work nothing recorded.
-          const meta = yield* probeChild(runId, records.readResultMeta());
-          if (meta?.producer !== 'subagent') {
-            return yield* Effect.fail(
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it.`,
-              ),
-            );
-          }
+          // The turn's settle path ran, so the child reached model work and
+          // file edits. Whether that turn succeeded is the `run.end` row's
+          // fact alone, and it was lost: a `run.result` manifest is committed
+          // for a failed delivery exactly as for a successful one, so its
+          // presence says a result was written, never that the work counted.
+          // The state is ambiguous either way, and ambiguous work is not
+          // repeated.
+          return yield* Effect.fail(
+            new WorkflowRunAbortError(
+              `Workflow child ${runId} settled a turn but recorded no outcome; refusing to repeat it. That run needs operator attention.`,
+            ),
+          );
         }
-        // Dead owner, and nothing left that could still record an outcome.
+        // Dead owner, no turn ever settled, and nothing left that could still
+        // record an outcome.
         continue;
       }
       if (end.outcome === RUN_OUTCOME.COMPLETED) {

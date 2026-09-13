@@ -735,7 +735,15 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       Effect.all(
         runs.getActiveIds().flatMap((runId) => {
           if (runs.getHandle(runId)?.isChild) return [];
-          return [runs.kill(runId, { detachActiveChildren: false }).settlement];
+          // A settlement fails when a fact the stop owed storage was
+          // refused. `close` answers a `SessionCloseReport` and names no
+          // error, so that travels the same defect channel the flush below
+          // documents, rather than being widened into this close's type.
+          return [
+            runs
+              .kill(runId, { detachActiveChildren: false })
+              .settlement.pipe(Effect.orDie),
+          ];
         }),
         { concurrency: 'unbounded', discard: true },
       ),

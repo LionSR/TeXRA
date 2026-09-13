@@ -600,7 +600,7 @@ describe('childRunLoop E2E fixtures', () => {
 
       turn.resolve({ kind: 'terminal', value: 'done' });
       await formatStarted.promise;
-      session.runs.detachActiveChildren(PARENT_RUN_ID);
+      await Effect.runPromise(session.runs.detachActiveChildren(PARENT_RUN_ID));
       notifyProgress({ kind: 'started' });
       formattedDelivery.resolve('delivered:done');
       await completion;
@@ -609,7 +609,7 @@ describe('childRunLoop E2E fixtures', () => {
       expect(mocks.submitFollowUp).not.toHaveBeenCalled();
     } finally {
       session.followUps.terminalize(PARENT_RUN_ID);
-      session.runs.detachActiveChildren(PARENT_RUN_ID);
+      await Effect.runPromise(session.runs.detachActiveChildren(PARENT_RUN_ID));
       turn.resolve({ kind: 'terminal', value: 'done' });
       formattedDelivery.resolve('delivered:done');
       await completion;

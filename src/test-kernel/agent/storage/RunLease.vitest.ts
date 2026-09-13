@@ -505,7 +505,7 @@ describe('cross-process run leases', () => {
     const runId = 'd8645a' as RunId;
     const registry = new RunRegistry({
       runView: () => undefined,
-      publish: () => {},
+      commit: () => Effect.void,
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       releaseRootRunLease: () => Effect.void,
       finalizeRun: (input) =>

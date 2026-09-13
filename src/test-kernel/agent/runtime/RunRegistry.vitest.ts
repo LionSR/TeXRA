@@ -137,6 +137,9 @@ function createRegistry(
   options: {
     approvals?: ReturnType<typeof createSessionApprovals>;
     releaseRootRunLease?: (runId: RunId) => Effect.Effect<void, Error>;
+    commit?: (
+      drafts: readonly SessionEventDraft[],
+    ) => Effect.Effect<void, Error>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -163,7 +166,10 @@ function createRegistry(
   };
   const registry = new RunRegistry({
     runView: (runId) => views.get(runId),
-    publish: (drafts) => events.published.push(...drafts),
+    commit: (drafts) =>
+      Effect.sync(() => {
+        events.published.push(...drafts);
+      }),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     releaseRootRunLease: () => Effect.void,
     finalizeRun: (input) => finalizeRun(defaultSession(), input),
@@ -283,7 +289,7 @@ describe('runRegistry', () => {
       });
 
       expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
 
       const handle = createHandle(runId, parentRunId);
@@ -1003,6 +1009,38 @@ describe('runRegistry', () => {
     }
   });
 
+  it('fails the stop when the detach batch is refused', async () => {
+    // One batch carries every detached child, so it is no single run's fact
+    // and no run's drain answers for it: the stop that asked for the sever
+    // is the one owner that can hear the refusal. Reporting `done` over it
+    // would leave the children durably parented, and a later delete of the
+    // parent would collect the children the user chose to keep running.
+    const { registry } = createRegistry({
+      commit: () => Effect.fail(new Error('detach batch refused')),
+    });
+    const rootRunId = generateRunId();
+    const childRunId = generateRunId();
+
+    try {
+      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+        agentName: 'test-root',
+      });
+      trackInterruptibleHandle(
+        registry,
+        { runId: childRunId, parent: rootRunId },
+        vi.fn(),
+      );
+
+      await expect(
+        Effect.runPromise(
+          registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+        ),
+      ).rejects.toThrow('detach batch refused');
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {
     const { phases, registry } = createRegistry();
     const rootRunId = generateRunId();
@@ -1305,7 +1343,7 @@ describe('runRegistry', () => {
       registry.track(handle);
       expect(handle.deliveryTarget).toBe(parentRunId);
       const sinceTrack = recordSessionEvents(events);
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       expect(handle.deliveryTarget).toBeUndefined();
 
       expect(sinceTrack.events.map((event) => event.type)).toEqual([
@@ -1337,7 +1375,7 @@ describe('runRegistry', () => {
       approvals.registerRunParent(childRunId, parentRunId);
       registry.track(handle);
 
-      registry.detachActiveChildren(parentRunId);
+      Effect.runSync(registry.detachActiveChildren(parentRunId));
       approvals.toolEdit.bypass.setBypass(parentRunId, false);
 
       expect(approvals.toolEdit.bypass.isBypassed(childRunId)).toBe(true);

@@ -43,7 +43,10 @@ import {
  */
 export interface RunStop {
   readonly accepted: boolean;
-  readonly settlement: Effect.Effect<void>;
+  /** Fails when a durable fact the stop owed storage was refused: the detach
+   *  batch a `detachActiveChildren` stop commits is one such fact, and a
+   *  caller that reported the stop done over it would be lying about it. */
+  readonly settlement: Effect.Effect<void, Error>;
 }
 
 interface RunStopOptions {
@@ -102,9 +105,14 @@ type ManualCompactionRequestResult =
  */
 interface RunRegistryInit {
   readonly runView: (runId: RunId) => RunView | undefined;
-  /** The session's publisher (`SessionHandle.publish`) for the registry's
-   *  own durable fact, a severed parent edge (`run.detach`). */
-  readonly publish: (events: readonly SessionEventDraft[]) => void;
+  /** The session's awaited publisher (`SessionHandle.commit`) for the
+   *  registry's own durable fact, a severed parent edge (`run.detach`). One
+   *  batch carries every child of a detaching parent, so it is no single
+   *  run's fact and no run's drain would ever hear it refused: the caller
+   *  that asked for the sever is the one owner that can. */
+  readonly commit: (
+    events: readonly SessionEventDraft[],
+  ) => Effect.Effect<void, Error>;
   readonly approvals: SessionApprovals;
   /**
    * The session's one exit choreography (`SessionHandle.releaseRunLease`),
@@ -137,7 +145,9 @@ export class RunRegistry {
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
   private readonly runView: (runId: RunId) => RunView | undefined;
-  private readonly publish: (events: readonly SessionEventDraft[]) => void;
+  private readonly commit: (
+    events: readonly SessionEventDraft[],
+  ) => Effect.Effect<void, Error>;
   private readonly childActivityListeners = new Set<
     (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void
   >();
@@ -154,7 +164,7 @@ export class RunRegistry {
   private readonly waitingTermination: WaitingTermination;
 
   constructor(options: RunRegistryInit) {
-    this.publish = options.publish;
+    this.commit = options.commit;
     this.runView = options.runView;
     this.approvals = options.approvals;
     this.releaseRootRunLease = options.releaseRootRunLease;
@@ -442,9 +452,9 @@ export class RunRegistry {
       return { accepted: activation !== undefined, settlement: Effect.void };
     }
     const visited = new Set<string>();
-    const settlements: Effect.Effect<void>[] = [];
+    const settlements: Effect.Effect<void, Error>[] = [];
     if (options.detachActiveChildren === true) {
-      this.detachActiveChildren(handle.runId);
+      settlements.push(this.detachActiveChildren(handle.runId));
     }
     const result = this.terminate(
       handle,
@@ -545,7 +555,7 @@ export class RunRegistry {
     parentRunId: RunId,
     visited: Set<string>,
     cascadeChildren: boolean,
-    settlements: Effect.Effect<void>[],
+    settlements: Effect.Effect<void, Error>[],
   ): void {
     // A loop between turns has no handle to interrupt; a loop inside a turn
     // also gets its turn handle terminated below. The activation is keyed
@@ -569,21 +579,26 @@ export class RunRegistry {
    * follow-up queue. Called when stopping an orchestrator without killing
    * children.
    *
-   * Returns the child runs whose parent edge this call already severed and
-   * published — activations included, which is why a caller must not
-   * re-derive the set from `getActiveChildren` (handles only) and publish
-   * `run.detach` for the difference: a native child between turns would be
-   * published twice.
+   * The local sever is synchronous, as a stop's admission is; the batch that
+   * makes it durable is the returned effect, and the caller must run it
+   * before reporting the stop done. It carries every severed child at once —
+   * activations included, which is why a caller must not re-derive the set
+   * from `getActiveChildren` (handles only) and publish `run.detach` for the
+   * difference: a native child between turns would be published twice — and
+   * a batch spanning run ids belongs to no single run, so no run's own drain
+   * would ever hear it refused. A stop that reported done over a refused
+   * batch would leave the children durably parented, and a later delete of
+   * the parent would collect the children the user chose to keep running.
    */
-  detachActiveChildren(parentRunId: RunId): readonly RunId[] {
+  detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const detachedChildRunIds = this.detachChildren(parentRunId);
-    this.publish(
+    if (detachedChildRunIds.length === 0) return Effect.void;
+    return this.commit(
       detachedChildRunIds.map((childRunId) => ({
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', childRunId),
       })),
     );
-    return detachedChildRunIds;
   }
 
   /** Apply parent removal to local handles and approval ancestry without publishing. */
@@ -650,10 +665,10 @@ export class RunRegistry {
     // Shared across the child sweep and the root cascade so each run in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
-    const settlements: Effect.Effect<void>[] = [];
+    const settlements: Effect.Effect<void, Error>[] = [];
 
     if (options.detachActiveChildren === true) {
-      this.detachActiveChildren(runId);
+      settlements.push(this.detachActiveChildren(runId));
     } else {
       this.interruptActiveChildren(runId, visited, true, settlements);
     }
@@ -769,7 +784,7 @@ export class RunRegistry {
     handle: RunHandle,
     visited: Set<string>,
     cascadeChildren: boolean,
-    settlements: Effect.Effect<void>[],
+    settlements: Effect.Effect<void, Error>[],
   ): boolean {
     if (visited.has(handle.runId)) return false;
     visited.add(handle.runId);
