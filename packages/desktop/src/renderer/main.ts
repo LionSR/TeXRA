@@ -671,7 +671,7 @@ function shellTemplate(): TemplateResult {
       class="task-shell ${shellState().sidebarCollapsed ? 'task-shell-collapsed' : ''}"
       orientation="horizontal"
       primary="start"
-      .positionInPixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
+      position-in-pixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
       ?disabled=${shellState().sidebarCollapsed}
       style=${shellState().sidebarCollapsed ? '--divider-width: 0px' : nothing}
       data-workbench-open=${String(workbenchOpen)}
