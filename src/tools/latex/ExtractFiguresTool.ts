@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -29,7 +29,11 @@ const DEFAULT_MAX_FILES = 20;
 
 const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   texPath,
-}: ExtractFiguresInput): Effect.fn.Return<ToolResult, Error, ToolCall> {
+}: ExtractFiguresInput): Effect.fn.Return<
+  ToolResult,
+  Error,
+  ToolCall | FileSystem.FileSystem
+> {
   const call = yield* ToolCall;
   const { path, display } = yield* resolveLatexFile(texPath);
 

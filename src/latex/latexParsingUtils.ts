@@ -6,10 +6,9 @@
 
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, withLogData } from '@logger/effectLog';
-import { platform } from '@platform/platform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
@@ -77,18 +76,14 @@ const BIB_DIRECTIVE_PATTERN = new RegExp(
 export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
   absolutePath: string,
 ) {
-  const resolved = yield* Effect.tryPromise({
-    try: () => platform().fs.realPath(absolutePath),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logDebug(
-        `realPath failed for ${absolutePath}; falling back to literal dirname`,
-      ).pipe(
-        withLogData(error),
-        withLogChannel(CHANNEL),
-        Effect.as(absolutePath),
-      ),
+  const fs = yield* FileSystem.FileSystem;
+  const resolved = yield* Effect.catch(fs.realPath(absolutePath), (error) =>
+    Effect.logDebug(
+      `realPath failed for ${absolutePath}; falling back to literal dirname`,
+    ).pipe(
+      withLogData(error),
+      withLogChannel(CHANNEL),
+      Effect.as(absolutePath),
     ),
   );
   return path.dirname(resolved);
