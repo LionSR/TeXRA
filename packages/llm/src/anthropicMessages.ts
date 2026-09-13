@@ -13,6 +13,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  pullStream,
   ResolvedTurnSchema,
   sameModelOrigin,
   TurnRequestSchema,
@@ -568,20 +569,7 @@ export function anthropicMessagesModel(
           let stopped = false;
           let stop: z.infer<typeof StopSchema> = {};
           let usage: z.infer<typeof UsageSchema> = {};
-          const chunks = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => iterator.next(),
-                catch: sdkFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const chunks = pullStream(() => iterator.next(), sdkFailure);
           const progress = chunks.pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* (): Effect.fn.Return<

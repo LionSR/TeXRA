@@ -15,6 +15,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  pullStream,
   readerAbortSignal,
   ResolvedTurnSchema,
   sameModelOrigin,
@@ -745,20 +746,7 @@ export function googleInteractionsModel(
             }
           >();
 
-          const events = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: sdkFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          ).pipe(
+          const events = pullStream(() => body.read(), sdkFailure).pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* () {
                 const decoded = WireEventSchema.safeParse(raw);

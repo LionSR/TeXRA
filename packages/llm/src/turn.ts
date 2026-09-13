@@ -1587,6 +1587,46 @@ export const enrichModelError = (
   });
 
 /**
+ * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
+ * iterator — that ends when the source reports `done`.
+ *
+ * Every streaming adapter reaches its provider through one of those two, and
+ * each had spelled out the same `Stream.fromPull` / `tryPromise` / `done`
+ * ladder. Only the source and the failure classifier ever differed, so those
+ * are the parameters.
+ */
+/**
+ * The value a pull source yields while it is not done: the `value` of the
+ * not-done member of a `ReadableStreamReadResult` or `IteratorResult`. Taking
+ * it from that member alone is what keeps the done member's `undefined` out
+ * of the stream's element type.
+ */
+type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
+
+export const pullStream = <
+  R extends { readonly done?: boolean; readonly value?: unknown },
+  E,
+>(
+  pull: () => PromiseLike<R>,
+  onError: (cause: unknown) => E,
+): Stream.Stream<PullValue<R>, E> =>
+  Stream.fromPull(
+    Effect.succeed(
+      Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
+        Effect.flatMap((next) =>
+          next.done
+            ? Cause.done()
+            : // `done` is false here, so the result is the value-carrying
+              // member of the union `PullValue` picked the type from.
+              Effect.succeed([
+                (next as { readonly value: PullValue<R> }).value,
+              ] as const),
+        ),
+      ),
+    ),
+  );
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a

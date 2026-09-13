@@ -12,6 +12,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  pullStream,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -1076,20 +1077,7 @@ export function openaiChatModel(
             }
           >();
 
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: openaiFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const bytes = pullStream(() => body.read(), openaiFailure);
           let parsedEvents: Sse.Event[] = [];
           const parser = Sse.makeParser(
             (event) => {

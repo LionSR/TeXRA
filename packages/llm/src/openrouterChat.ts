@@ -12,6 +12,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  pullStream,
   readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
@@ -760,20 +761,7 @@ export function openrouterChatModel(
           };
           // Reads and classification stay inside the acquired scope: primary failures
           // and distinct cleanup defects are combined by Effect, not reconstructed.
-          const bytes = Stream.fromPull(
-            Effect.succeed(
-              Effect.tryPromise({
-                try: () => body.read(),
-                catch: transportFailure,
-              }).pipe(
-                Effect.flatMap((next) =>
-                  next.done
-                    ? Cause.done()
-                    : Effect.succeed([next.value] as const),
-                ),
-              ),
-            ),
-          );
+          const bytes = pullStream(() => body.read(), transportFailure);
           if (!response.ok)
             return Stream.fromEffect(
               Effect.gen(function* () {

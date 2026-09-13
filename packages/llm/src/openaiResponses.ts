@@ -20,6 +20,7 @@ import {
   ModelConfigurationSchema,
   ModelError,
   enrichModelError,
+  pullStream,
   ObservationPolicySchema,
   RemoteOperationSchema,
   ResolvedTurnSchema,
@@ -928,26 +929,18 @@ const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
         yield* close.pipe(Effect.orDie);
       }),
   );
-  return Stream.fromPull(
-    Effect.succeed(
-      Effect.tryPromise({
-        try: () => iterator.next(),
-        catch: (cause) =>
-          enrich(
-            cause instanceof SyntaxError
-              ? new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model returned malformed stream data.',
-                  cause,
-                })
-              : openaiFailure(cause),
-          ),
-      }).pipe(
-        Effect.flatMap((next) =>
-          next.done ? Cause.done() : Effect.succeed([next.value] as const),
-        ),
+  return pullStream(
+    () => iterator.next(),
+    (cause) =>
+      enrich(
+        cause instanceof SyntaxError
+          ? new ModelError({
+              kind: 'malformed-output',
+              message: 'The model returned malformed stream data.',
+              cause,
+            })
+          : openaiFailure(cause),
       ),
-    ),
   );
 });
 
