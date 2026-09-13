@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -116,7 +116,7 @@ export class QueuedFollowUps extends LitElement {
     // mounted-but-empty host would still consume the parent's flex gap.
     if (this.messages.length === 0) return nothing;
     const messageCount = this.messages.length;
-    const summary = `${messageCount === 1 ? 'Queued message' : 'Queued messages'} (${messageCount})`;
+    const summary = `${pluralize(messageCount, 'Queued message', 'Queued messages')} (${messageCount})`;
     return html`
       <wa-details
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}

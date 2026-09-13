@@ -12,6 +12,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { pluralize } from '@utils/text/stringUtils';
 
 import { ELEMENT_IDS } from '../constants';
 
@@ -109,7 +110,7 @@ export class TodoList extends CollapsiblePanel {
     const activeTodo = this.todos.find(
       (todo) => todo.status === TODO_STATUS.IN_PROGRESS,
     );
-    const progressText = `${completed} of ${total} ${total === 1 ? 'task' : 'tasks'} complete`;
+    const progressText = `${completed} of ${total} ${pluralize(total, 'task', 'tasks')} complete`;
 
     return html`
       <div class="visually-hidden" role="status">
