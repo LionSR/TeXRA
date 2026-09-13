@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { platform } from '@platform/platform';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -131,6 +132,7 @@ async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
     registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
+    config: new FakeConfigProvider(),
     stores: { secrets, globalState },
   });
 }
