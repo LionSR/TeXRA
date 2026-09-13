@@ -74,10 +74,11 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   parentRunId: RunId,
   options: CreateChildRunOptions,
 ): Effect.fn.Return<ChildRun, Error> {
-  yield* Effect.tryPromise({
-    try: () => session.settlePublications(),
-    catch: ensureError,
-  });
+  // No barrier here: registration committed the launch and its activation
+  // awaited (`registerRun`), and every write below is either awaited or this
+  // run's own queued fact, which its own drain answers for. A session-wide
+  // settle would instead report whatever session-scoped publication anyone
+  // else queued and fail an otherwise sound launch over it.
   const residency = yield* session.transcripts.acquireRunResidency(runId);
   const runTrace = createRunTrace(residency);
   const handle = new RunHandle(
@@ -92,7 +93,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   const setup = yield* Effect.exit(
-    Effect.gen(function* () {
+    Effect.sync(() => {
       // Attach the run's canonical event publication before activation.
       detachSessionTrace = session.attachRunTrace(runTrace.trace, runId);
       const disposeTrace = () => {
@@ -102,13 +103,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
 
       // Registration already committed the launch and activation together.
       started = true;
-      // Register local ownership before awaiting the creation commit. The start
-      // batch is already queued, so its first event still precedes handle facts.
       session.runs.track(handle);
-      yield* Effect.tryPromise({
-        try: () => session.settlePublications(),
-        catch: ensureError,
-      });
       runTrace.trace.emit({
         type: 'run.config',
         runId,
@@ -135,7 +130,8 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     // failure must neither mask the original error nor skip later steps. A
     // run that already published its `run.start` exists for every fold,
     // so it ends with its `run.end` row instead of lingering as a
-    // started-but-never-run ghost.
+    // started-but-never-run ghost — written by the one terminal writer, whose
+    // commit is awaited, so no barrier stands behind it.
     const failures: unknown[] = [error];
     const cleanups: Effect.Effect<unknown, Error>[] = [
       Effect.suspend(() =>
@@ -160,10 +156,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
             )
           : Effect.void,
       ),
-      Effect.tryPromise({
-        try: () => session.settlePublications(),
-        catch: ensureError,
-      }),
       Effect.sync(() => {
         session.runs.untrackIfCurrent(handle);
       }),

@@ -156,6 +156,8 @@ const LANE_SESSION = {
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
+    // No parent is detaching this run, so its release waits on nothing.
+    throughDetach: () => Effect.void,
   },
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: mocks.releaseClaims },

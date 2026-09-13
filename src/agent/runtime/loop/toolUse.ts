@@ -807,9 +807,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // the two paths, and the run id is what makes it a barrier: a
       // session-wide settle reports session-scoped failures only, so a
       // rolled-back transcript of this run would return successfully here and
-      // park the run over it.
+      // park the run over it. It observes rather than answers: the failure it
+      // throws ends the run through the loop's failure path, and the terminal
+      // row that path writes is the one that has to carry the
+      // `artifact-drain` marker, which it can only do while the drain that
+      // decides it still finds the lost fact.
       yield* Effect.tryPromise({
-        try: () => session.flushArtifacts(runId),
+        try: () => session.settlePublications(runId, { consume: false }),
         catch: ensureError,
       });
       // The turn boundary: the snapshot precedes the steps in one batch, so

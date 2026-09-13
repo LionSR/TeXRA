@@ -817,7 +817,7 @@ describe('Sessions owner', () => {
   // marker: the failure is kept until the drain that answers for that run
   // reports it, and cleared by the one that does.
   it.live(
-    'a failed publication is reported by the next drain for its run, once',
+    "a failed publication outlives every barrier until its run's drain takes it, once",
     () =>
       Effect.gen(function* () {
         const session = open('/workspace/owner/retained-failure');
@@ -835,6 +835,15 @@ describe('Sessions owner', () => {
           // every publication and answers for the session's own facts, so this
           // run's stays tracked for the drain that marks the row it decides.
           yield* Effect.promise(() => session.settlePublications());
+          // A mid-run barrier (the loop's park) observes without answering:
+          // it reports the run's rollback so the run ends on it, and leaves
+          // the failure for the drain that decides the terminal row, which is
+          // the only place the `artifact-drain` marker can still be stamped.
+          yield* Effect.promise(() =>
+            expect(
+              session.settlePublications(RUN, { consume: false }),
+            ).rejects.toMatchObject({ _tag: 'DatabaseWriteFailed' }),
+          );
           yield* Effect.promise(() =>
             expect(session.settlePublications(RUN)).rejects.toMatchObject({
               _tag: 'DatabaseWriteFailed',

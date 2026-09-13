@@ -28,7 +28,7 @@ import {
 } from '@shared/schemas';
 import { isNonEmptyString, onAbort } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
@@ -90,10 +90,17 @@ type WorkflowFailedCallStatus =
  */
 interface InFlightAgentCall {
   readonly index: number;
+  /** The call's journal key: what a supersession of this attempt is filed
+   *  under, which is why the controller can journal one without the loop. */
+  readonly key: string;
   fiber?: Fiber.Fiber<unknown, Error>;
   action?: WorkflowControlAction;
   /** The live child the gesture named: what a retry supersedes. */
   target?: RunId;
+  /** A retry's journaled authorization, started before the interrupt it
+   *  authorizes and resolving to the failure that write hit, if any: the loop
+   *  reads it where the replacement is asked for. */
+  superseded?: Promise<Error | undefined>;
 }
 
 /**
@@ -467,12 +474,48 @@ export function runWorkflowScript<R = never>(
       yield* Effect.addFinalizer((exit) => finalize(exit).pipe(Effect.orDie));
       yield* snapshotWriter.flush;
 
+      /** Journal one retry's supersession, uninterruptibly and under the
+       *  run's own commit fence, and interrupt the attempt once that write
+       *  has settled. The order is the point: the interrupt is what makes the
+       *  child persist a CANCELLED row over an accepted, unsettled turn, and
+       *  a host that dies between the two must come back to the
+       *  authorization for it — otherwise recovery has a child it may not
+       *  repeat and no record of the replacement anyone asked for. */
+      const authorizeRetry = (
+        call: InFlightAgentCall,
+        childRunId: RunId,
+      ): Promise<Error | undefined> =>
+        runGuestAgent(
+          journalCommitFence
+            .commit(
+              Effect.suspend(
+                () =>
+                  onSupersededAttempt?.({ key: call.key, childRunId }) ??
+                  Effect.void,
+              ),
+            )
+            .pipe(Effect.as(undefined)),
+        ).then(
+          () => undefined,
+          (error: unknown) => ensureError(error),
+        );
+
       const control: WorkflowScriptControl = (childRunId, action) => {
         const call = inFlightCalls.get(childRunId);
         if (!call?.fiber) return false;
         call.action = action;
         call.target = childRunId;
-        call.fiber.interruptUnsafe();
+        if (action !== 'retry') {
+          call.fiber.interruptUnsafe();
+          return true;
+        }
+        // A failed write still interrupts: the loop reads the failure where
+        // the replacement would be asked for and aborts the workflow there,
+        // which is where an unauthorized supersession has always ended.
+        call.superseded = authorizeRetry(call, childRunId).then((failure) => {
+          call.fiber?.interruptUnsafe();
+          return failure;
+        });
         return true;
       };
       onControl?.(control);
@@ -836,7 +879,7 @@ export function runWorkflowScript<R = never>(
           });
 
           for (;;) {
-            const call: InFlightAgentCall = { index };
+            const call: InFlightAgentCall = { index, key };
             // The attempt's scope is opened here and closed only after the
             // journal write below: the runner fences the child it recovered or
             // superseded into it, and a fence that ended at the runner's
@@ -925,29 +968,25 @@ export function runWorkflowScript<R = never>(
                 if (call.action === 'retry') {
                   // A retry is an authorized supersession, and the child it
                   // interrupted may already have accepted a turn — the shape
-                  // every recovery rule refuses to repeat. Journal that
-                  // authorization before asking for the replacement, so the
-                  // runner's probe advances past the superseded child instead
-                  // of aborting the workflow over it, and a host that dies in
-                  // this window resumes on the same fact.
+                  // every recovery rule refuses to repeat. The controller
+                  // journaled that authorization before it interrupted the
+                  // attempt (`authorizeRetry`), so the runner's probe advances
+                  // past the superseded child instead of aborting the workflow
+                  // over it, and a host that died in that window resumes on
+                  // the same fact. Its failure is the workflow's here, where
+                  // the replacement would be asked for.
                   const superseded = call.target;
-                  if (superseded !== undefined) {
-                    yield* Effect.suspend(
-                      () =>
-                        onSupersededAttempt?.({
-                          key,
-                          childRunId: superseded,
-                        }) ?? Effect.void,
-                    ).pipe(
-                      Effect.catch((error) => {
-                        const fault = new WorkflowRunAbortError(
-                          `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(error)}`,
-                          { kind: 'checkpoint', cause: error },
-                        );
-                        failCall(fault);
-                        return Effect.fail(failRun(fault));
-                      }),
-                    );
+                  const authorization = call.superseded;
+                  if (authorization !== undefined) {
+                    const failure = yield* Effect.promise(() => authorization);
+                    if (failure !== undefined) {
+                      const fault = new WorkflowRunAbortError(
+                        `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(failure)}`,
+                        { kind: 'checkpoint', cause: failure },
+                      );
+                      failCall(fault);
+                      return yield* Effect.fail(failRun(fault));
+                    }
                   }
                   workflowRunState.queueCall(progressId, {
                     model: callOptions.model,
