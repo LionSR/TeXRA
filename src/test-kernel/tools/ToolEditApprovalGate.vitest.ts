@@ -16,6 +16,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import {
@@ -50,12 +51,15 @@ let tracker = new FileInteractionState();
 // The previews the host staged; tests override the decision when they need to
 // reject or adjust, and assert on this list otherwise.
 let approvalRequests: ToolEditApprovalRequest[] = [];
+// The previews the runtime released without a decision, by request id.
+let releasedPreviews: string[] = [];
 
 async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
   approvalRequests = [];
+  releasedPreviews = [];
   nextDecision = () => ({ action: 'approve' });
   await installFakePlatform({
     workspacePath: WORKSPACE_PATH,
@@ -66,6 +70,9 @@ async function installPlatform(
   detachHostInteractions = defaultSession().interactions.use({
     presentToolEdit: (request) => {
       approvalRequests.push(request);
+    },
+    releaseToolEdit: (requestId) => {
+      releasedPreviews.push(requestId);
     },
   });
 }
@@ -332,6 +339,39 @@ describe('Tool edit approval gating', () => {
       assert.strictEqual(approvalRequests.length, 0);
       assert.strictEqual(write.mock.lastCall?.[1], 'auto');
       assert.strictEqual(result.output, 'written');
+    }),
+  );
+
+  it.effect('releases the staged preview when its request cannot open', () =>
+    Effect.gen(function* () {
+      // The commit that would list the request is refused, so no
+      // `request.decided` will ever release the preview staged before it.
+      const session = defaultSession();
+      const commit = session.commit.bind(session);
+      vi.spyOn(session, 'commit').mockImplementation((events) =>
+        events.some((event) => event.type === 'request.opened')
+          ? Effect.fail(
+              new DatabaseWriteFailed({
+                path: 'session.db',
+                cause: 'the disk is full',
+              }),
+            )
+          : commit(events),
+      );
+
+      const failure = yield* inRun(
+        requestToolEditApproval({
+          path: 'doc.txt',
+          originalContent: 'old content',
+          proposedContent: 'new content',
+          sourceTool: 'write_file',
+        }),
+      ).pipe(Effect.flip);
+
+      assert.ok(failure instanceof DatabaseWriteFailed);
+      assert.deepStrictEqual(releasedPreviews, [
+        approvalRequests[0]?.permission.requestId,
+      ]);
     }),
   );
 

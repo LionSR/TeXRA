@@ -337,7 +337,12 @@ export class ToolEditApprovalController {
     );
   }
 
-  private async release(requestId: string): Promise<void> {
+  /**
+   * Drop the preview staged for one request. The `request.decided` route
+   * above is how a decided request releases; a host calls this directly for
+   * a request whose `request.opened` was refused, which no decision follows.
+   */
+  async release(requestId: string): Promise<void> {
     const entry = this.requests.get(requestId);
     if (!entry) return;
     this.requests.delete(requestId);

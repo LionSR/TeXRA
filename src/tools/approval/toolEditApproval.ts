@@ -263,6 +263,17 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
                 preparedRequest,
               );
             }),
+            // A refused commit (the run lost its claim, the database write
+            // failed) wrote no `request.opened`, so no `request.decided`
+            // will ever release what was just staged. Release it here and
+            // fail as before.
+            Effect.tapError(() =>
+              Effect.sync(() => {
+                call.inScope(() =>
+                  session.interactions.releaseToolEdit(permission.requestId),
+                );
+              }),
+            ),
           );
       }),
       bypassed: Effect.sync(acceptProposedAsIs),

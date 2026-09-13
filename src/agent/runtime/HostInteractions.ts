@@ -96,6 +96,13 @@ export interface HostInteractions {
    * request answerable from its payload alone.
    */
   presentToolEdit?(request: ToolEditApprovalRequest): void;
+  /**
+   * Release the preview staged for a request whose `request.opened` never
+   * committed: no row was written, so the `request.decided` that releases
+   * every other staged preview will never arrive. A host that stages nothing
+   * has nothing to release.
+   */
+  releaseToolEdit?(requestId: string): void;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
   dispose?(): void;
 }
@@ -199,6 +206,10 @@ export class SessionHostInteractions implements HostInteractions {
       return;
     }
     active.interactions.presentToolEdit(request);
+  }
+
+  releaseToolEdit(requestId: string): void {
+    this.activeAttachment?.interactions.releaseToolEdit?.(requestId);
   }
 
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {

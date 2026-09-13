@@ -311,6 +311,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
         );
       },
+      // A refused `request.opened` leaves the staged preview with no
+      // decision to release it; this is that release.
+      releaseToolEdit: (requestId) => {
+        void this.toolEditApprovals.release(requestId);
+      },
     });
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching
