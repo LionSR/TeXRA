@@ -17,6 +17,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -91,7 +92,7 @@ export function createTestLaunchContext({
     toolPolicy: {},
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelConfig: buildTestModelConfig(),

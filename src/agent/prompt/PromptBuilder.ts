@@ -69,16 +69,18 @@ The /memories directory is shared with the orchestrator and other subagents. Che
  *
  * @param systemPrompt Base system prompt template
  * @param userVars Variables for template rendering
+ * @param workspace The run's workspace root, whose `.texrarules` applies
  * @returns Full system prompt string
  */
 export async function getSystemPromptWithRules(
   systemPrompt: string,
   userVars: TemplateVars,
+  workspace: string | undefined,
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
   const parts = [basePrompt];
 
-  const rules = await loadTexraRules();
+  const rules = await loadTexraRules(workspace);
   if (rules) parts.push(rules);
 
   // Append attached memories (read-only context from orchestrator)
@@ -107,7 +109,7 @@ export interface InitialPrompts {
  *
  * @example
  * ```ts
- * const builder = new PromptBuilder(prompt, vars, logger);
+ * const builder = new PromptBuilder(prompt, vars, workspace, logger);
  * const initial = await builder.buildInitialPrompts();
  * const firstRoundRequest = await builder.buildUserRequest(1);
  * ```
@@ -116,6 +118,8 @@ export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
     private readonly userVars: TemplateVars,
+    /** The run's workspace root, whose `.texrarules` the system prompt gets. */
+    private readonly workspace: string | undefined,
     private readonly logger?: AgentTrace,
   ) {}
 
@@ -124,7 +128,11 @@ export class PromptBuilder {
    */
   public async buildInitialPrompts(): Promise<InitialPrompts> {
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
+      getSystemPromptWithRules(
+        this.agentPrompt.systemPrompt,
+        this.userVars,
+        this.workspace,
+      ),
       this.buildUserRequest(0),
       renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
@@ -178,30 +186,37 @@ export class PromptBuilder {
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: TemplateVars,
-  logger?: AgentTrace,
-  options?: {
+  logger: AgentTrace | undefined,
+  options: {
+    /** The run's workspace root: its `.texrarules` and `<workspace_info>`. */
+    workspace: string | undefined;
     resolvedToolNames?: readonly string[];
     hasDelegationTools?: boolean;
     isChild?: boolean;
   },
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
-  const builder = new PromptBuilder(agentPrompt, userVars, logger);
+  const builder = new PromptBuilder(
+    agentPrompt,
+    userVars,
+    options.workspace,
+    logger,
+  );
   const initial = await builder.buildInitialPrompts();
 
-  const memoryEnabled = options?.resolvedToolNames?.includes('memory') ?? false;
+  const memoryEnabled = options.resolvedToolNames?.includes('memory') ?? false;
 
   // Build instruction suffix: always include tool-use instructions,
   // optionally append memory instructions and workspace info
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
   if (memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
-    if (options?.hasDelegationTools) {
+    if (options.hasDelegationTools) {
       suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-    } else if (options?.isChild) {
+    } else if (options.isChild) {
       suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
     }
   }
-  suffixParts.push(await buildWorkspaceInfoBlock());
+  suffixParts.push(await buildWorkspaceInfoBlock(options.workspace));
 
   return {
     ...initial,

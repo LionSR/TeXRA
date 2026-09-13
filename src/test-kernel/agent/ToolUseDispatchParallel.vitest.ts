@@ -61,6 +61,7 @@ import {
   type ModelOrigin,
   type TurnResult,
 } from '@llm/turn';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -266,7 +267,7 @@ function agentRun(
     pendingModelSwitch: { value: null },
     inScope: (operation) => operation(),
     usageMonitor: new UsageMonitor(
-      { logger, runId, runStageId: undefined },
+      { logger, runId, runStageId: undefined, config: workspaceRoots().config },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },

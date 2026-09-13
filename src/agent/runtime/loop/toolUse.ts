@@ -325,13 +325,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     };
     const prompts = yield* Effect.tryPromise({
       try: () =>
-        run.inScope(() =>
-          buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
-            resolvedToolNames,
-            hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isChild,
-          }),
-        ),
+        buildInitialToolUsePrompts(run.prompt, promptVars, logger, {
+          workspace: session.roots.workspace,
+          resolvedToolNames,
+          hasDelegationTools: hasDelegationTool(resolvedToolNames),
+          isChild,
+        }),
       catch: ensureError,
     });
     systemPrompt = prompts.systemPrompt
@@ -652,11 +651,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const served = yield* SynchronizedRef.get(run.model);
         yield* Effect.tryPromise({
           try: () =>
-            run.inScope(() =>
-              run.usageMonitor.recordUsage(
-                usageSnapshot(state, outcome.usage),
-                served,
-              ),
+            run.usageMonitor.recordUsage(
+              usageSnapshot(state, outcome.usage),
+              served,
             ),
           catch: ensureError,
         });

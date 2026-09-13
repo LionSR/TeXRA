@@ -11,9 +11,9 @@ export function nativeToolTestLayer(options: Partial<ToolCallShape> = {}) {
   return Layer.merge(
     Layer.effectContext(effectRuntime().contextEffect),
     Layer.sync(ToolCall, () => ({
-      config: options.inScope
-        ? options.inScope(() => workspaceRoots().config)
-        : workspaceRoots().config,
+      roots: options.inScope
+        ? options.inScope(() => workspaceRoots())
+        : workspaceRoots(),
       tracker: new FileInteractionState(),
       run: undefined,
       inScope: (operation) => operation(),
