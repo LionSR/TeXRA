@@ -11,6 +11,53 @@ const MediaFieldsSchema = z.strictObject({
   // Encoding validity is distinct from a provider accepting the captured bytes.
   base64: z.base64(),
 });
+/**
+ * Every wire surface the package speaks. Usage is billed per surface, so a
+ * usage record's provider is the protocol of the turn that produced it.
+ */
+export const TurnProtocolSchema = z.enum([
+  'openai-chat',
+  'google-interactions',
+  'openai-responses',
+  'anthropic-messages',
+  'deepseek-chat',
+  'kimi-chat',
+  'glm-chat',
+  'xai-chat',
+  'dashscope-chat',
+  'minimax-chat',
+  'openrouter-chat',
+  'vscode-lm',
+]);
+
+/**
+ * A file the provider already holds, named by the receipt its own upload
+ * returned. A receipt is scoped to the surface that issued it — an
+ * `anthropic-messages` file id means nothing to the Responses API — so the
+ * protocol travels with the id and every arm refuses a foreign one rather
+ * than sending an id the provider cannot resolve.
+ */
+const FileReferenceSchema = z
+  .strictObject({
+    kind: z.literal('file'),
+    protocol: TurnProtocolSchema,
+    fileId: z.string().min(1),
+    mimeType: z.string().min(1),
+    filename: z.string().min(1),
+  })
+  .readonly();
+export type FileReference = z.infer<typeof FileReferenceSchema>;
+
+/** The bytes an upload takes, before the provider issues a receipt. */
+export const FileUploadSchema = z
+  .strictObject({
+    mimeType: z.string().min(1),
+    filename: z.string().min(1),
+    base64: z.base64(),
+  })
+  .readonly();
+export type FileUpload = z.infer<typeof FileUploadSchema>;
+
 const InputPartSchema = z.discriminatedUnion('kind', [
   TextPartSchema,
   MediaFieldsSchema.extend({
@@ -20,6 +67,7 @@ const InputPartSchema = z.discriminatedUnion('kind', [
   MediaFieldsSchema.extend({
     kind: z.enum(['audio', 'video', 'document']),
   }).readonly(),
+  FileReferenceSchema,
 ]);
 /**
  * Scheme, host and path only. The origin is written into durable rows that
@@ -42,24 +90,6 @@ const BindingSchema = z.strictObject({
     })
     .readonly(),
 });
-/**
- * Every wire surface the package speaks. Usage is billed per surface, so a
- * usage record's provider is the protocol of the turn that produced it.
- */
-export const TurnProtocolSchema = z.enum([
-  'openai-chat',
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-  'deepseek-chat',
-  'kimi-chat',
-  'glm-chat',
-  'xai-chat',
-  'dashscope-chat',
-  'minimax-chat',
-  'openrouter-chat',
-  'vscode-lm',
-]);
 
 const OriginSchema = BindingSchema.extend({
   protocol: TurnProtocolSchema.exclude(['vscode-lm']),
@@ -1548,6 +1578,12 @@ const ModelErrorFieldsSchema = z.strictObject({
   responseId: z.string().optional(),
   model: z.string().optional(),
   status: z.int().optional(),
+  /**
+   * The provider's own "come back in" delay, in milliseconds, as its
+   * response stated it. The retry gate reads this instead of guessing a
+   * backoff, so a rate limit waits exactly as long as it was told to.
+   */
+  retryAfterMs: z.int().nonnegative().optional(),
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
     .discriminatedUnion('kind', [
@@ -1635,6 +1671,37 @@ export const parseJsonOrModelError = (
 /** True when a parsed provider payload embeds an `{ error }` field. */
 export const hasErrorField = (value: unknown): value is { error: unknown } =>
   typeof value === 'object' && value !== null && 'error' in value;
+
+/**
+ * The delay one response asks the caller to wait, in milliseconds:
+ * `retry-after-ms` where the provider sends it, else `retry-after` as
+ * seconds or as an HTTP date. Undefined when the response says nothing —
+ * the caller's own backoff then owns the wait.
+ */
+export function retryAfterMsOf(
+  headers: Headers | undefined,
+): number | undefined {
+  // `Number('')` and `Number(null)` are both 0, so an absent header has to be
+  // recognised as absent before it is read as a delay of zero.
+  const read = (name: string): string | undefined => {
+    const value = headers?.get(name);
+    return value === null || value === undefined || value.trim() === ''
+      ? undefined
+      : value.trim();
+  };
+  const explicit = read('retry-after-ms');
+  if (explicit !== undefined) {
+    const ms = Number(explicit);
+    if (Number.isFinite(ms) && ms >= 0) return Math.round(ms);
+  }
+  const retryAfter = read('retry-after');
+  if (retryAfter === undefined) return undefined;
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.round(seconds * 1000);
+  const date = Date.parse(retryAfter);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+}
 
 /**
  * The server-sent events carried by a byte stream, ending at the `[DONE]`
@@ -1818,6 +1885,12 @@ export interface Model {
   generateTurn(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
+  /**
+   * Hand the provider one file and take back the receipt that names it, so a
+   * document reaches the model by reference instead of as base64 on every
+   * round. Present only on the surfaces that serve a files endpoint.
+   */
+  uploadFile?(file: FileUpload): Effect.Effect<FileReference, ModelError>;
   /** Estimate supported prepared input and report the counted scope. */
   estimateInputTokens?(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,

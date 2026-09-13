@@ -356,9 +356,11 @@ describe('native OpenAI Responses protocol', () => {
                     role: 'user' as const,
                     content: [
                       {
-                        kind: 'image' as const,
-                        mimeType: 'image/png',
-                        base64: '',
+                        kind: 'file' as const,
+                        protocol: 'anthropic-messages' as const,
+                        fileId: 'file_issued_elsewhere',
+                        mimeType: 'application/pdf',
+                        filename: 'paper.pdf',
                       },
                     ],
                   },
@@ -1161,6 +1163,84 @@ describe('native OpenAI Responses protocol', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       for (const log of logs) expect(log).not.toHaveBeenCalled();
     },
+  );
+
+  it.effect(
+    'uploads a settlement document and sends its receipt beside the result text',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async (url) => {
+            const target = String(url);
+            if (target.startsWith('data:')) return new Response('%PDF-1.7');
+            if (target.endsWith('/files'))
+              return new Response(JSON.stringify({ id: 'file_uploaded' }), {
+                headers: { 'content-type': 'application/json' },
+              });
+            return response(events([MESSAGE]));
+          });
+        const model = modelWith(fetch);
+        assert(model.uploadFile);
+        const receipt = yield* model.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: Buffer.from('%PDF-1.7').toString('base64'),
+        });
+        expect(receipt).toStrictEqual({
+          kind: 'file',
+          protocol: 'openai-responses',
+          fileId: 'file_uploaded',
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+        });
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: OPERATION.origin,
+              content: [
+                {
+                  kind: 'local-call',
+                  providerCallId: 'call_1',
+                  name: 'read_file',
+                  argumentsText: '{}',
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              results: [
+                {
+                  callOrdinal: 0,
+                  status: 'success',
+                  content: [
+                    { kind: 'text', text: 'Downloaded paper.pdf' },
+                    receipt,
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        assert(turn.mode === 'foreground');
+        yield* model.generateTurn(turn);
+        const request = fetch.mock.calls.find(([url]) =>
+          String(url).endsWith('/responses'),
+        );
+        assert(request);
+        const body = JSON.parse(String(request[1]?.body));
+        expect(body.input.at(-1)).toStrictEqual({
+          type: 'function_call_output',
+          call_id: 'call_1',
+          output: [
+            { type: 'input_text', text: 'Downloaded paper.pdf' },
+            { type: 'input_file', file_id: 'file_uploaded' },
+          ],
+        });
+      }),
   );
 
   it.effect(

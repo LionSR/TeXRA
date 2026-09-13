@@ -136,6 +136,14 @@ const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   if (part.kind === 'text') {
     return { type: 'text', text: part.text } satisfies Interactions.TextContent;
   }
+  if (part.kind === 'file') {
+    // Interactions carries media inline; this surface issues no file receipts
+    // and cannot resolve another provider's.
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'Google Interactions takes inline media, not a file receipt.',
+    });
+  }
   const mimeType = part.mimeType.split(';', 1)[0].trim().toLowerCase();
   if (part.kind !== 'document' && !mimeType.startsWith(`${part.kind}/`)) {
     return yield* new ModelError({

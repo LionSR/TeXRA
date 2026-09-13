@@ -1,4 +1,5 @@
 // Node imports
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -26,6 +27,7 @@ import {
   parseJsonOrModelError,
   RemoteOperationSchema,
   ResolvedTurnSchema,
+  FileUploadSchema,
   TurnRequestSchema,
   TurnResultSchema,
   sameModelOrigin,
@@ -38,6 +40,7 @@ import {
   type BackgroundEvent,
   type BackgroundSubmission,
   type Continuation,
+  type FileReference,
   type RemoteOperation,
   completedTurn,
 } from './turn.js';
@@ -328,6 +331,56 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
   },
 );
 
+/**
+ * One canonical input part as Responses content. Inline bytes travel as a
+ * data URL; a file receipt this surface issued travels as its id, and a
+ * receipt from another API is refused rather than sent as an id OpenAI
+ * would resolve to someone else's file.
+ */
+const responsesContent = Effect.fn('llm.responses.content')(function* (
+  part: Extract<
+    ResolvedTurn['messages'][number],
+    { role: 'user' }
+  >['content'][number],
+): Effect.fn.Return<OpenAI.Responses.ResponseInputContent, ModelError> {
+  switch (part.kind) {
+    case 'text':
+      return { type: 'input_text', text: part.text };
+    case 'image':
+      return {
+        type: 'input_image',
+        detail: part.detail === 'low' ? 'low' : 'high',
+        image_url: `data:${part.mimeType};base64,${part.base64}`,
+      };
+    case 'document':
+      return {
+        type: 'input_file',
+        // OpenAI reads the type off the name when the bytes are inline, and
+        // the canonical document part carries no name of its own.
+        filename: `document.${part.mimeType.split('/').pop() ?? 'bin'}`,
+        file_data: `data:${part.mimeType};base64,${part.base64}`,
+      };
+    case 'file':
+      if (part.protocol !== 'openai-responses') {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Responses cannot read a file receipt issued by another API.',
+        });
+      }
+      return part.mimeType.startsWith('image/')
+        ? { type: 'input_image', detail: 'high', file_id: part.fileId }
+        : { type: 'input_file', file_id: part.fileId };
+    case 'audio':
+    case 'video':
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message:
+          'Responses takes text, images and documents, not audio or video.',
+      });
+  }
+});
+
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
 ) {
@@ -336,41 +389,37 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   for (const message of turn.messages) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        const text: string[] = [];
-        for (const part of result.content) {
-          if (part.kind !== 'text') {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'This Responses implementation requires text tool results.',
-            });
-          }
-          text.push(part.text);
-        }
+        const text = result.content
+          .filter((part) => part.kind === 'text')
+          .map((part) => part.text)
+          .join('');
+        const body = result.status === 'error' ? `Error: ${text}` : text;
+        // A settlement that carries only text keeps the plain string output
+        // the API has always taken; an attachment turns the output into the
+        // content list that can carry it beside that same text.
+        const attachments = result.content.filter(
+          (part) => part.kind !== 'text',
+        );
         input.push({
           type: 'function_call_output',
           call_id: callIds[result.callOrdinal],
           output:
-            result.status === 'error'
-              ? `Error: ${text.join('')}`
-              : text.join(''),
+            attachments.length === 0
+              ? body
+              : [
+                  { type: 'input_text' as const, text: body },
+                  ...(yield* Effect.forEach(attachments, responsesContent)),
+                ],
         });
       }
       continue;
     }
     callIds = [];
     if (message.role === 'user') {
-      const content: OpenAI.Responses.ResponseInputText[] = [];
-      for (const part of message.content) {
-        if (part.kind !== 'text') {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'This Responses implementation requires text user input.',
-          });
-        }
-        content.push({ type: 'input_text', text: part.text });
-      }
-      input.push({ role: 'user', content });
+      input.push({
+        role: 'user',
+        content: yield* Effect.forEach(message.content, responsesContent),
+      });
       continue;
     }
     for (const part of message.content) {
@@ -2004,10 +2053,56 @@ export function openaiResponsesModel(
     );
   });
 
+  /**
+   * One file into OpenAI's Files API, in exchange for the id an `input_file`
+   * or `input_image` content part names. The receipt carries this surface's
+   * protocol, so a later turn on another provider refuses it instead of
+   * sending an id that API cannot resolve. The WebSocket transport keeps no
+   * files endpoint of its own and sends its attachments inline.
+   */
+  const uploadFile: NonNullable<Model['uploadFile']> = Effect.fn(
+    'llm.responses.uploadFile',
+  )(function* (file): Effect.fn.Return<FileReference, ModelError> {
+    const parsed = FileUploadSchema.safeParse(file);
+    if (!parsed.success)
+      return yield* new ModelError({
+        kind: 'invalid-request',
+        message: 'The file to upload is invalid.',
+        cause: parsed.error,
+      });
+    const upload = parsed.data;
+    const uploaded = yield* Effect.tryPromise({
+      try: async (signal) =>
+        client.files.create(
+          {
+            file: await OpenAI.toFile(
+              Buffer.from(upload.base64, 'base64'),
+              upload.filename,
+              { type: upload.mimeType },
+            ),
+            purpose: 'user_data',
+          },
+          { signal },
+        ),
+      catch: (cause) =>
+        enrichModelError(openaiFailure(cause), {
+          model: origin.requestedModel,
+        }),
+    });
+    return {
+      kind: 'file',
+      protocol: 'openai-responses',
+      fileId: uploaded.id,
+      mimeType: upload.mimeType,
+      filename: upload.filename,
+    };
+  });
+
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
+    uploadFile,
     ...(config.supportsInputTokenEstimation
       ? {
           estimateInputTokens: (

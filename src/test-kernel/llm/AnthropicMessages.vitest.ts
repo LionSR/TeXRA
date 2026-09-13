@@ -199,6 +199,66 @@ describe('canonical Anthropic Messages protocol', () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
+  it.effect(
+    'uploads a document and sends the receipt as a file source, refusing a foreign one',
+    () =>
+      Effect.gen(function* () {
+        fetchModel.mockImplementation(async (url) =>
+          String(url).endsWith('/v1/files')
+            ? Response.json({ id: 'file_uploaded' })
+            : response(signedEvents()),
+        );
+        const configured = model();
+        assert(configured.uploadFile);
+        const receipt = yield* configured.uploadFile({
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+          base64: 'AA==',
+        });
+        expect(receipt).toStrictEqual({
+          kind: 'file',
+          protocol: 'anthropic-messages',
+          fileId: 'file_uploaded',
+          mimeType: 'application/pdf',
+          filename: 'paper.pdf',
+        });
+        const turn = yield* configured.prepareTurn({
+          messages: [{ role: 'user', content: [receipt] }],
+        });
+        assert(turn.mode === 'foreground');
+        yield* configured.generateTurn(turn);
+        const sent = JSON.parse(
+          fetchModel.mock.calls.at(-1)![1]!.body as string,
+        );
+        expect(sent.messages).toStrictEqual([
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                title: 'paper.pdf',
+                source: { type: 'file', file_id: 'file_uploaded' },
+              },
+            ],
+          },
+        ]);
+        // A receipt from another API is refused at admission, before a
+        // request that would resolve the id to someone else's file.
+        expect(
+          yield* Effect.flip(
+            configured.prepareTurn({
+              messages: [
+                {
+                  role: 'user',
+                  content: [{ ...receipt, protocol: 'openai-responses' }],
+                },
+              ],
+            }),
+          ),
+        ).toMatchObject({ kind: 'unsupported' });
+      }),
+  );
+
   it.effect.each([
     [undefined, '1h'],
     ['', '1h'],

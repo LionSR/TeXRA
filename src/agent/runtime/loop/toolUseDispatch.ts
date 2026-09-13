@@ -47,7 +47,7 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, isNonEmptyString } from '@utils/core';
+import { generateShortId, getBasename, isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -67,6 +67,7 @@ import {
   type Message,
 } from './rows';
 import type { Runs } from '../runRegistry';
+import type { BoundModel } from '../run/modelBinding';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -177,24 +178,27 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 });
 
 /**
- * The model-visible content of one settlement: text, then inline media.
+ * The model-visible content of one settlement: text, then its attachments.
  *
- * An attachment the binding cannot carry inline (a PDF on a route without
- * native PDF support, an image on a text-only route, any other type) reaches
- * the model as the text mention only, and says so in the transcript rather
- * than degrading silently. Carrying those bytes by reference instead is
- * blocked on the package: `InputPartSchema` (`@llm/turn`) admits inline
- * base64 only and no `Model` exposes an upload, so the provider Files API
- * paths (`anthropicDocumentHandling`, `openAIResponseFileUploads`) have no
- * lowering to reach through and stay on the handlers that still call them.
- * The system design lists that gap as package work that gates the handler
- * retirement (2026-09-10-effect-native-runtime-system-design.md §5.4, slice 0).
+ * A document goes by reference where the bound model serves a files
+ * endpoint (`Model.uploadFile`): the upload happens here, before the
+ * delivering append, so the receipt — not the bytes — is what the ledger row
+ * holds and what every later round replays. An upload that fails keeps the
+ * inline bytes and says so; the bytes are already in hand, so only the
+ * request size is lost. Bindings with no upload (the OpenAI Responses
+ * WebSocket transport, every Chat protocol, Google Interactions) carry the
+ * bytes inline as before.
+ *
+ * An attachment the binding cannot carry at all — a PDF on a route without
+ * native PDF support, an image on a text-only route, any other type — still
+ * reaches the model as the text mention only, and says so in the transcript
+ * rather than degrading silently.
  */
-function settlementContent(
+const settlementContent = Effect.fn('toolUse.settlementContent')(function* (
   settlement: Settlement,
-  capabilities: Parameters<typeof inlineMediaPart>[2],
+  bound: BoundModel,
   logger: AgentTrace,
-): readonly InputPart[] {
+): Effect.fn.Return<readonly InputPart[]> {
   const attachments: ToolFileAttachment[] = settlement.attachments.map(
     (attachment) => ({
       path: attachment.path,
@@ -209,28 +213,51 @@ function settlementContent(
     attachments,
     true,
   );
-  const media = settlement.attachments.flatMap((attachment) => {
+  const media: InputPart[] = [];
+  for (const attachment of settlement.attachments) {
     if (attachment.content.kind !== 'base64') {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
       );
-      return [];
+      continue;
     }
-    const part = inlineMediaPart(
+    const inline = inlineMediaPart(
       attachment.mimeType,
       attachment.content.data,
-      capabilities,
+      bound,
     );
-    if (part === null) {
+    if (inline === null) {
       logger.warn(
         `The model receives "${attachment.path}" as a mention only: the bound model carries no ${attachment.mimeType} attachment inline.`,
       );
-      return [];
+      continue;
     }
-    return [part];
-  });
+    // Documents only, as the two retired upload paths did: an image is small
+    // enough to inline and every route that takes one takes it that way.
+    const upload = bound.model.uploadFile;
+    if (upload === undefined || inline.kind !== 'document') {
+      media.push(inline);
+      continue;
+    }
+    media.push(
+      yield* upload({
+        mimeType: inline.mimeType,
+        filename: getBasename(attachment.path) || 'attachment',
+        base64: inline.base64,
+      }).pipe(
+        Effect.catchTag('ModelError', (error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Sending "${attachment.path}" inline: the provider did not accept it as an upload (${error.message}).`,
+            );
+            return inline;
+          }),
+        ),
+      ),
+    );
+  }
   return [{ kind: 'text', text }, ...media];
-}
+});
 
 /** Dispatch every unsettled call of the pending response, then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
@@ -844,24 +871,28 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const bound = yield* SynchronizedRef.get(run.model);
-  const results = settledPending.calls.map((fact, ordinal) => {
-    const settlement = settledPending.settled[fact.callId];
-    if (settlement === undefined) {
-      throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
-    }
-    return {
-      callOrdinal: ordinal,
-      status:
-        settlement.result.status === 'executed'
-          ? ('success' as const)
-          : ('error' as const),
-      content: settlementContent(
-        { ...settlement, stateMutation: [] },
-        bound,
-        logger,
-      ),
-    };
-  });
+  const results = yield* Effect.forEach(settledPending.calls, (fact, ordinal) =>
+    Effect.gen(function* () {
+      const settlement = settledPending.settled[fact.callId];
+      if (settlement === undefined) {
+        return yield* Effect.die(
+          new Error(`Call ${fact.callId} is unsettled at delivery.`),
+        );
+      }
+      return {
+        callOrdinal: ordinal,
+        status:
+          settlement.result.status === 'executed'
+            ? ('success' as const)
+            : ('error' as const),
+        content: yield* settlementContent(
+          { ...settlement, stateMutation: [] },
+          bound,
+          logger,
+        ),
+      };
+    }),
+  );
   const group: Message = { role: 'tool', results };
   const flow = toolUseFlowState(settledState);
   if (flow === null) {

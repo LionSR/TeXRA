@@ -1,8 +1,12 @@
+// Node imports
+import { Buffer } from 'node:buffer';
+
 // Third-party imports
 import Anthropic, {
   APIError,
   APIConnectionError,
   APIUserAbortError,
+  toFile,
 } from '@anthropic-ai/sdk';
 import { Cause, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
@@ -18,10 +22,13 @@ import {
   parseOutboundToolArguments,
   pullStream,
   ResolvedTurnSchema,
+  retryAfterMsOf,
   sameModelOrigin,
   TurnRequestSchema,
   TurnResultSchema,
+  FileUploadSchema,
   type AnthropicMessagesConfiguration,
+  type FileReference,
   type Model,
   type ModelOrigin,
   type ResolvedTurn,
@@ -155,6 +162,8 @@ const EventSchema = z.discriminatedUnion('type', [
 ]);
 
 function sdkFailure(cause: unknown): ModelError {
+  const retryAfterMs =
+    cause instanceof APIError ? retryAfterMsOf(cause.headers) : undefined;
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'malformed-output';
   else if (
@@ -172,6 +181,7 @@ function sdkFailure(cause: unknown): ModelError {
     ...(cause instanceof APIError
       ? { status: cause.status, requestId: cause.requestID ?? undefined }
       : {}),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     cause,
   });
 }
@@ -202,6 +212,29 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
         data: part.base64,
       },
     } as const;
+  }
+  if (part.kind === 'file') {
+    // A receipt from another surface names nothing here, so it is refused
+    // rather than sent as an id this API would resolve to someone else's file.
+    if (part.protocol !== 'anthropic-messages') {
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message: 'Anthropic cannot read a file receipt issued by another API.',
+      });
+    }
+    const image = z
+      .enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+      .safeParse(part.mimeType);
+    return image.success
+      ? ({
+          type: 'image',
+          source: { type: 'file', file_id: part.fileId },
+        } as const)
+      : ({
+          type: 'document',
+          title: part.filename,
+          source: { type: 'file', file_id: part.fileId },
+        } as const);
   }
   return yield* new ModelError({
     kind: 'unsupported',
@@ -1037,10 +1070,51 @@ export function anthropicMessagesModel(
         coverage: 'anthropic-message-input' as const,
       });
     });
+  /**
+   * One file into Anthropic's Files API, in exchange for the id a `document`
+   * or `image` source names. The receipt carries this surface's protocol, so
+   * a later turn on another provider refuses it instead of sending an id
+   * that API cannot resolve.
+   */
+  const uploadFile: NonNullable<Model['uploadFile']> = Effect.fn(
+    'llm.anthropic.uploadFile',
+  )(function* (file): Effect.fn.Return<FileReference, ModelError> {
+    const parsed = FileUploadSchema.safeParse(file);
+    if (!parsed.success)
+      return yield* new ModelError({
+        kind: 'invalid-request',
+        message: 'The file to upload is invalid.',
+        cause: parsed.error,
+      });
+    const upload = parsed.data;
+    const uploaded = yield* Effect.tryPromise({
+      try: async (signal) =>
+        client.files.upload(
+          {
+            file: await toFile(
+              Buffer.from(upload.base64, 'base64'),
+              upload.filename,
+              { type: upload.mimeType },
+            ),
+          },
+          { signal },
+        ),
+      catch: (cause) =>
+        enrichModelError(sdkFailure(cause), { model: origin.requestedModel }),
+    });
+    return {
+      kind: 'file',
+      protocol: 'anthropic-messages',
+      fileId: uploaded.id,
+      mimeType: upload.mimeType,
+      filename: upload.filename,
+    };
+  });
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
+    uploadFile,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }
