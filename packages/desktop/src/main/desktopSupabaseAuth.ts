@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
 import { Cause, Deferred, Effect, Exit, Option } from 'effect';
-import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
@@ -11,6 +10,11 @@ import {
   getAuthCallbackUri,
   type OAuthProvider,
 } from '@auth/config';
+import {
+  isPendingOAuthStateFresh,
+  PendingOAuthStateSchema,
+  type PendingOAuthState,
+} from '@auth/pendingOAuthState';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
   requireOAuthRedirectUrl,
@@ -42,12 +46,6 @@ const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 const AUTH_PERSIST_LANE = 'persist';
 const AUTH_COMMIT_LANE = 'commit';
 const AUTH_CALLBACK_LANE = 'callback';
-
-const DesktopPendingOAuthStateSchema = z.object({
-  createdAt: z.number(),
-  nonce: z.string(),
-});
-type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
 interface DesktopSupabaseAuth {
   signIn(provider?: OAuthProvider): Promise<void>;
@@ -174,7 +172,7 @@ export function createDesktopAuthCallbackState(
   // One exclusive persist lane, so an expired-state clear cannot be
   // reordered after a newer attempt's persist.
   const persistLanes = new Map<string, PerKeyLane>();
-  const persistEffect = (state: DesktopPendingOAuthState | null) =>
+  const persistEffect = (state: PendingOAuthState | null) =>
     withPerKeyLane(
       persistLanes,
       AUTH_PERSIST_LANE,
@@ -188,7 +186,7 @@ export function createDesktopAuthCallbackState(
     );
 
   const persistPendingState = async (
-    state: DesktopPendingOAuthState | null,
+    state: PendingOAuthState | null,
   ): Promise<void> => {
     if (!store) return;
     await runSettled(persistEffect(state));
@@ -213,7 +211,7 @@ export function createDesktopAuthCallbackState(
     );
   };
 
-  if (pendingState && isPendingOAuthStateExpired(pendingState)) {
+  if (pendingState && !isPendingOAuthStateFresh(pendingState)) {
     forgetExpiredPendingState();
   }
 
@@ -221,7 +219,7 @@ export function createDesktopAuthCallbackState(
   // best-effort persists the reset once the stored attempt has expired.
   const hasValidPendingState = (): boolean => {
     if (!pendingState) return false;
-    if (isPendingOAuthStateExpired(pendingState)) {
+    if (!isPendingOAuthStateFresh(pendingState)) {
       forgetExpiredPendingState();
       return false;
     }
@@ -248,14 +246,10 @@ export function createDesktopAuthCallbackState(
 
 function readPendingOAuthState(
   store: Pick<StateStore, 'get' | 'update'> | undefined,
-): DesktopPendingOAuthState | null {
+): PendingOAuthState | null {
   const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
-  const parsed = DesktopPendingOAuthStateSchema.safeParse(persisted);
+  const parsed = PendingOAuthStateSchema.safeParse(persisted);
   return parsed.success ? parsed.data : null;
-}
-
-function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
-  return Date.now() - state.createdAt > AUTH_CALLBACK_TIMEOUT_MS;
 }
 
 /**

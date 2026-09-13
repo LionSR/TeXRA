@@ -11,7 +11,10 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { resumeRunWithRefusalNotice } from '@controllers/session/resumeRunPresentation';
+import {
+  resumeCancellationLatch,
+  resumeRunWithRefusalNotice,
+} from '@controllers/session/resumeRunPresentation';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
@@ -69,13 +72,11 @@ export class DesktopProcessResumeOwner {
     session: SessionHandle,
     recovery: RecoveryContinuation | undefined,
   ): Promise<boolean> {
-    let transcriptMissing = false;
-    const isCancellationRequested = (): boolean => {
-      if (!transcriptMissing && !session.transcripts.has(runId)) {
-        transcriptMissing = true;
-      }
-      return this.shuttingDown || transcriptMissing || !this.isOpen(session);
-    };
+    const isCancellationRequested = resumeCancellationLatch(
+      session,
+      runId,
+      () => this.shuttingDown || !this.isOpen(session),
+    );
     // The resident transcript index is a cache of this process; the run may
     // have been deleted from the durable transcript store by another process
     // since it was loaded. Read the store before resuming: neither the lease

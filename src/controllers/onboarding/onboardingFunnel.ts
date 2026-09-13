@@ -13,9 +13,25 @@
  * (extension, CLI, desktop) computes `hasCredential` with its own credential
  * sources and reads the flags from `@shared/state/onboardingState` using its
  * `platform().globalState`.
+ *
+ * The derivation is the planner below; the in-session loop around it — probe,
+ * plan, publish, clear a stale skip, serialized against itself — is
+ * `OnboardingFunnelRefresher`, which the webview hosts own one of each.
  */
 
+import { Effect, Semaphore } from 'effect';
+
+import { hostPort } from '@common/hostPort';
+import { createLog } from '@logger/logUtils';
+import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
+import {
+  readOnboardingFlags,
+  setOnboardingDeclined,
+} from '@shared/state/onboardingState';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('OnboardingFunnel');
 
 export interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -71,4 +87,102 @@ export function planOnboardingFunnelTransition(
     selectSetupAgent: state === 'setup' && previous !== 'setup',
     clearDeclined: inputs.declined && inputs.hasCredential,
   };
+}
+
+/** What one host contributes to a funnel refresh. */
+export interface OnboardingFunnelHost {
+  /**
+   * This host's usable-credential check (a subscription or any provider API
+   * key). A failure is warned and read as "no credential": the funnel must
+   * still paint, but never silently — that answer blanks a user who has keys
+   * back down to the first-run welcome card.
+   */
+  readonly hasCredential: () => boolean | PromiseLike<boolean>;
+  /** The user-scoped flag store; onboarding is a fact about the user. */
+  readonly flags: StateStore;
+  /**
+   * Paint the derived state and take the arms this host answers — the
+   * extension selects the setup agent on its launcher, which the desktop and
+   * the CLI deliberately discard. Synchronous, so no other refresh can
+   * observe a half-applied transition.
+   */
+  readonly apply: (
+    transition: OnboardingFunnelTransition & {
+      /** This refresh moved the funnel state; the first one always does. */
+      readonly changed: boolean;
+    },
+  ) => void;
+}
+
+/**
+ * The in-session funnel loop, owned once beside its planner: probe the host's
+ * credentials, plan the transition against the state this refresher last
+ * derived, hand it to the host, and clear a stale skip.
+ *
+ * Refreshes are serialized because the probe awaits and the previous state is
+ * shared: without a lane the last caller to finish could publish a state
+ * planned from a stale previous one. One permit — a refresh holds it while it
+ * runs, callers that arrive meanwhile wait in order and are collapsed into the
+ * single rerun they asked for, and each returns once that rerun has landed.
+ * The latch and the program it reruns are one pair, so a caller's `run` can
+ * only ever be answered by this refresh; the request is latched when the
+ * program starts, not when it is built, so an unrun `run` leaves no rerun owed
+ * to nobody.
+ */
+export class OnboardingFunnelRefresher {
+  private readonly lane = Semaphore.makeUnsafe(1);
+  private rerunRequested = false;
+  private current: OnboardingFunnelState | undefined;
+
+  constructor(private readonly host: OnboardingFunnelHost) {}
+
+  /** The state this refresher last derived, `undefined` before the first
+   *  refresh. Session-scoped by design. */
+  get state(): OnboardingFunnelState | undefined {
+    return this.current;
+  }
+
+  private readonly refresh = Effect.fn('OnboardingFunnelRefresher.refresh')(
+    function* (this: OnboardingFunnelRefresher) {
+      const hasCredential = yield* hostPort(() =>
+        this.host.hasCredential(),
+      ).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
+            );
+            return false;
+          }),
+        ),
+      );
+      const transition = planOnboardingFunnelTransition(this.current, {
+        hasCredential,
+        ...readOnboardingFlags(this.host.flags),
+      });
+      const changed = this.current !== transition.state;
+      this.current = transition.state;
+      this.host.apply({ ...transition, changed });
+      if (transition.clearDeclined) {
+        yield* hostPort(() => setOnboardingDeclined(this.host.flags, false));
+      }
+    },
+  );
+
+  private readonly drain = Effect.fn('OnboardingFunnelRefresher.run')(
+    function* (this: OnboardingFunnelRefresher) {
+      while (this.rerunRequested) {
+        this.rerunRequested = false;
+        yield* this.refresh();
+      }
+    },
+  );
+
+  /** Ask for a refresh. A refresh that fails keeps the host's own error. */
+  run(): Effect.Effect<void, unknown> {
+    return Effect.suspend(() => {
+      this.rerunRequested = true;
+      return this.lane.withPermit(this.drain());
+    });
+  }
 }
