@@ -929,11 +929,13 @@ export class SessionHandle {
    *  until the drain that answers for it takes it out.
    *
    *  Every publication settles whoever asks, but a run id narrows whose
-   *  rollback the caller hears: its own facts and the session's, never a
-   *  sibling run's — a run's terminal outcome is decided by this settle, and
-   *  another run's lost fact is that run's outcome, not this one's. The
-   *  failures this call reports are the ones it clears, so a run hears each of
-   *  its lost facts exactly once and a sibling's stays for that sibling. */
+   *  rollback the caller hears: that run's own facts only — never a sibling
+   *  run's, and never a session-scoped fact (an inquiry thread update, say),
+   *  which no run's terminal outcome may absorb. A run's terminal outcome is
+   *  decided by this settle, and another owner's lost fact is that owner's
+   *  outcome, not this one's. Session-scoped failures are heard by a
+   *  session-wide settle (no run id). The failures this call reports are the
+   *  ones it clears, so each lost fact is heard exactly once by its owner. */
   async settlePublications(runId?: RunId): Promise<void> {
     await effectRuntime().runPromise(this.graph.settle);
     const settled = await Promise.all(
@@ -944,9 +946,7 @@ export class SessionHandle {
     );
     const reported = settled.flatMap(({ publication, exit }) =>
       Exit.isFailure(exit) &&
-      (runId === undefined ||
-        publication.runId === null ||
-        publication.runId === runId)
+      (runId === undefined || publication.runId === runId)
         ? [{ publication, error: Cause.squash(exit.cause) }]
         : [],
     );
