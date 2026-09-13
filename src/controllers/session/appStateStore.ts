@@ -91,22 +91,25 @@ class SqliteStateStore implements StateStore {
   }
 
   /**
-   * Apply the mutation to this instance's view first, then append it on the
-   * key's lane, so a `get` after a `set` reads the new value and concurrent
-   * writes land in call order. A failed append fails the caller.
+   * Append the mutation on the key's lane, then apply it to this instance's
+   * view, so the snapshot only ever holds values the database accepted and
+   * concurrent writes land in call order. A failed append fails the caller
+   * and leaves the view on the last committed value.
    */
   set(key: string, value: unknown): Effect.Effect<void, Error> {
     return Effect.flatMap(encode(key, value), (encoded) =>
-      Effect.suspend(() => {
-        if (encoded.kind === 'undefined') {
-          this.values.delete(key);
-        } else {
-          this.values.set(key, encoded.value);
-        }
-        return this.write(key, encoded).pipe(
-          withPerKeyLane(writeLanes, `${this.storage}\u0000${key}`),
-        );
-      }),
+      this.write(key, encoded).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            if (encoded.kind === 'undefined') {
+              this.values.delete(key);
+            } else {
+              this.values.set(key, encoded.value);
+            }
+          }),
+        ),
+        withPerKeyLane(writeLanes, `${this.storage}\u0000${key}`),
+      ),
     );
   }
 
