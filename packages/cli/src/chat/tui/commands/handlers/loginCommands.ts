@@ -31,7 +31,7 @@ import {
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { effectRuntime } from '@platform/processRuntime';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import {
   ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
@@ -205,7 +205,7 @@ export function loginFromChat(
 const logoutLines = (
   target: CliLogoutTarget,
   secrets: PlatformSecrets,
-): Effect.Effect<readonly string[]> =>
+): Effect.Effect<readonly string[], never, Secrets> =>
   Effect.gen(function* () {
     const lines: string[] = [];
 
@@ -229,7 +229,7 @@ const logoutLines = (
     const signOutSubscription = (
       providerId: SubscriptionProviderId,
       label: string,
-    ): Effect.Effect<void> =>
+    ): Effect.Effect<void, never, Secrets> =>
       signOutCliSubscription(providerId).pipe(
         Effect.match({
           onFailure: (error) => {

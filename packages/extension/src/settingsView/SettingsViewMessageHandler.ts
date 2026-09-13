@@ -178,18 +178,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       'chatgpt',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        status: await getChatGptAuthStatus(),
+        status: await getChatGptAuthStatus(secrets),
       }),
       ctx,
+      secrets,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
       async () => ({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        status: await getGrokAuthStatus(),
+        status: await getGrokAuthStatus(secrets),
       }),
       ctx,
+      secrets,
       () => this.refreshAfterSubscriptionAuthChange(),
     );
     this.handlerRegistry = this.createHandlerRegistry(context);

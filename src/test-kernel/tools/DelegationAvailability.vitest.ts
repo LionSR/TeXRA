@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { platform } from '@platform/platform';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
@@ -125,7 +125,7 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 }
 
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
-  const { secrets, globalState } = platform();
+  const { secrets, globalState } = hostStores();
   return resolveAgentTools({
     tools,
     registry: delegationRegistry(tools),

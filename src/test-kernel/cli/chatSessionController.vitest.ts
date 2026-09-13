@@ -1177,7 +1177,10 @@ describe('createChatSessionController', () => {
 
     const resumeStarted = ctrl.resume('aaaaaa' as RunId);
     await vi.waitFor(() =>
-      expect(mocks.setCliHelperModel).toHaveBeenCalledWith('demo-model'),
+      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
+        expect.anything(),
+        'demo-model',
+      ),
     );
 
     ctrl.stop();
@@ -1588,7 +1591,10 @@ describe('createChatSessionController', () => {
 
     const resumed = ctrl.tryResumeRun('a11111' as RunId);
     await vi.waitFor(() =>
-      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(config.model),
+      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
+        expect.anything(),
+        config.model,
+      ),
     );
     ctrl.stop();
     helperModel.resolve(undefined);

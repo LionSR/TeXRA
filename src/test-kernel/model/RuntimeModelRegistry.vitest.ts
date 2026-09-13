@@ -183,7 +183,7 @@ describe('runtime model registry', () => {
     );
 
     await refreshRuntimeModelRegistry();
-    const { globalState } = installedHost().platform;
+    const { globalState } = installedHost().roots;
     expect(
       copilotRouteUnavailableReason('gemini31p', globalState),
     ).toBeUndefined();

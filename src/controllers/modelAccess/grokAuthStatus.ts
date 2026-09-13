@@ -4,11 +4,14 @@
  */
 import { getXaiStatus } from '@auth/xai';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { GrokAuthStatus } from '@shared/schemas';
 
-export async function getGrokAuthStatus(): Promise<GrokAuthStatus> {
+export async function getGrokAuthStatus(
+  secrets: PlatformSecrets,
+): Promise<GrokAuthStatus> {
   return {
-    ...(await getXaiStatus()),
+    ...(await getXaiStatus(secrets)),
     preferSubscription: isPreferXaiSubscription(),
   };
 }

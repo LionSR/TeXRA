@@ -37,6 +37,7 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
       globalStorage: process.globalStorage,
       config: process.config,
       workspaceState: process.workspaceState,
+      globalState: process.globalState,
     },
     transcriptMode: init.transcriptMode ?? {
       kind: 'ephemeral',

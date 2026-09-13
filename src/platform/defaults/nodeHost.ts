@@ -39,7 +39,6 @@ import type {
 } from '../interfaces';
 import type { LanguageModelPort } from '../languageModel';
 import type { Platform } from '../platform';
-import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
@@ -48,8 +47,6 @@ import type { PlatformSecrets } from '../secrets';
  * {@link createNodeWorkspaceRoots}.
  */
 export interface NodePlatformServices {
-  readonly globalState: StateStore;
-  readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
@@ -74,6 +71,8 @@ export interface NodeWorkspaceRootsInit {
    */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly workspaceState: StateStore;
+  /** The process's application state store (`WorkspaceRoots.globalState`). */
+  readonly globalState: StateStore;
 }
 
 /**
@@ -97,6 +96,7 @@ export function createNodeWorkspaceRoots(
         ? new JsonConfigProvider(init.config)
         : init.config,
     workspaceState: init.workspaceState,
+    globalState: init.globalState,
   };
 }
 
@@ -115,9 +115,7 @@ export interface NodeRuntimeSkillOptions {
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
-    globalState: services.globalState,
     fs: nodeFilesystem,
-    secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,

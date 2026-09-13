@@ -64,14 +64,7 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
       globalStorage: () => storage.getGlobalStoragePath(),
       updateCheckStorage: () => storage.getGlobalStoragePath(),
       secrets: () => getCliSecrets(storageRoot),
-      appState: () => {
-        if (!globalState) {
-          throw new Error(
-            'CLI global state is not open: initCliPlatform() has not bound its store to the process runtime yet.',
-          );
-        }
-        return globalState;
-      },
+      appState: () => cliGlobalState(),
       setup: cliSetupPlatform,
     });
   })().finally(() => {
@@ -96,4 +89,18 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
  */
 export function bindCliGlobalState(store: StateStore): void {
   globalState = store;
+}
+
+/**
+ * The store {@link bindCliGlobalState} bound, for the composition root's own
+ * services bag and for the `AppState` thunk above. A read before the bind
+ * throws rather than reading a default.
+ */
+export function cliGlobalState(): StateStore {
+  if (!globalState) {
+    throw new Error(
+      'CLI global state is not open: initCliPlatform() has not bound its store to the process runtime yet.',
+    );
+  }
+  return globalState;
 }

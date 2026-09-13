@@ -43,6 +43,14 @@ export interface WorkspaceRoots {
   readonly config: ConfigProvider;
   /** Workspace-scoped key-value state. */
   readonly workspaceState: StateStore;
+  /**
+   * Process-wide application state: the third of the three slots the settings
+   * catalog resolves a row against (`config`, `workspaceState`, `globalState`).
+   * Process-wide by construction like {@link globalStorage}, and carried here
+   * rather than on `platform()` so a caller that has resolved its roots holds
+   * every slot. Inside Effect the owner is the `AppState` service.
+   */
+  readonly globalState: StateStore;
 }
 
 let processRoots: WorkspaceRoots | null = null;
@@ -92,6 +100,9 @@ const PROCESS_ROOTS_VIEW: WorkspaceRoots = Object.freeze({
   },
   get workspaceState() {
     return requireProcessRoots().workspaceState;
+  },
+  get globalState() {
+    return requireProcessRoots().globalState;
   },
 });
 

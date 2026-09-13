@@ -6,7 +6,6 @@
  * dance.
  */
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -34,20 +33,19 @@ export function secretBackedSessionStorage(
 }
 
 /**
- * Lazily-built process-wide coordinator backed by a platform secret. `get`
- * throws before platform init; `reset` drops the cached instance (test seam).
+ * Lazily-built process-wide coordinator over one key of the secret store its
+ * caller holds. The store is process-wide, so the first `get` fixes the
+ * instance; `reset` drops it (test seam).
  */
 export function createSecretBackedCoordinator<C>(init: {
   secretKey: string;
   makeCoordinator: (storage: SubscriptionSessionStorage) => C;
-}): { get(): C; reset(): void } {
+}): { get(secrets: SessionSecretStore): C; reset(): void } {
   let singleton: C | null = null;
   return {
-    get() {
-      if (singleton) return singleton;
-      const activePlatform = platform();
-      singleton = init.makeCoordinator(
-        secretBackedSessionStorage(activePlatform.secrets, init.secretKey),
+    get(secrets) {
+      singleton ??= init.makeCoordinator(
+        secretBackedSessionStorage(secrets, init.secretKey),
       );
       return singleton;
     },
@@ -63,16 +61,14 @@ export interface SessionAccessCoordinator {
 }
 
 /**
- * Read signed-in status without throwing after platform initialization.
+ * Read signed-in status without throwing: a store the caller could not open
+ * reports signed-out, with the cause logged.
  */
 export async function getSubscriptionSessionStatus(
   getCoordinator: () => SessionAccessCoordinator,
   channel: string,
   displayName: string,
 ): Promise<SubscriptionSessionStatus> {
-  // Preserve the post-init contract even for an injected coordinator that
-  // does not itself read platform secrets.
-  void platform();
   try {
     return await getCoordinator().getStatus();
   } catch (error) {

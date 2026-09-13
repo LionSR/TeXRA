@@ -128,7 +128,7 @@ function createHandlers(): AgentHandlers {
       postMessageToActiveWebview: vi.fn(),
     },
     mocks.refreshAfterAgentMutation,
-    installedHost().platform.globalState,
+    installedHost().roots.globalState,
   );
 }
 

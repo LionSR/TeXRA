@@ -10,11 +10,14 @@
  */
 import { getCodexStatus } from '@auth/codex';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ChatGptAuthStatus } from '@shared/schemas';
 
-export async function getChatGptAuthStatus(): Promise<ChatGptAuthStatus> {
+export async function getChatGptAuthStatus(
+  secrets: PlatformSecrets,
+): Promise<ChatGptAuthStatus> {
   return {
-    ...(await getCodexStatus()),
+    ...(await getCodexStatus(secrets)),
     preferSubscription: isPreferCodexSubscription(),
   };
 }

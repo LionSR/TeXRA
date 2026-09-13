@@ -532,14 +532,18 @@ export interface FakePlatformOptions {
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<Platform> &
-  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>> & {
+  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
+    /** The store the host's `Secrets` service reads, as a root's own local. */
+    readonly secrets?: PlatformSecrets;
     readonly setup?: SetupPlatformShape;
   };
 
 /** The workspace roots a fake host installs beside its platform. */
 export function createFakeWorkspaceRoots(
   options: FakePlatformOptions = {},
-  overrides: Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>> = {},
+  overrides: Partial<
+    Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>
+  > = {},
 ): WorkspaceRoots {
   return {
     workspace: Object.hasOwn(options, 'workspacePath')
@@ -550,6 +554,8 @@ export function createFakeWorkspaceRoots(
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
+    globalState:
+      overrides.globalState ?? new FakeStateStore(options.globalState),
   };
 }
 
@@ -564,9 +570,7 @@ export function createFakePlatform(
   overrides: Partial<Platform> = {},
 ): Platform {
   return {
-    globalState: new FakeStateStore(options.globalState),
     fs: new FakeFileSystemProvider(options.files),
-    secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeRun: async () => false },
     agentDirectories: FAKE_AGENT_DIRECTORIES,

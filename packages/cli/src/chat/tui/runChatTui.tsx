@@ -226,7 +226,7 @@ export async function runChat(
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
     });
-    await setCliHelperModel(modelSelection.model);
+    await setCliHelperModel(services.globalState, modelSelection.model);
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
     return { exitCode: CliExitCode.Usage };

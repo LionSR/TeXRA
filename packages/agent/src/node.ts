@@ -47,14 +47,14 @@ const environmentSecrets: PlatformSecrets = {
  */
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = options.workspaceDir ?? process.cwd();
+  const globalState = new MemoryStateStore();
   const storage = createNodeStorageProvider({
     storageRoot: options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT,
     workspacePath: workspaceDir,
   });
   return {
+    secrets: environmentSecrets,
     ...createNodePlatform({
-      globalState: new MemoryStateStore(),
-      secrets: environmentSecrets,
       lifecycle: createLifecycleHost(),
       agentResume: {
         tryResumeRun: async () => false,
@@ -73,6 +73,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),
       workspaceState: new MemoryStateStore(),
+      globalState,
     }),
   };
 }

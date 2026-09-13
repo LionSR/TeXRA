@@ -8,10 +8,10 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   fakeProcessServices,
+  hostStores,
   setupPlatform,
 } from '@test/support/setupPlatform';
 import {
@@ -40,7 +40,7 @@ describe('shared setup capabilities', () => {
     Effect.gen(function* () {
       expect(
         yield* Effect.promise(() =>
-          hasUsableSetupCredential(platform().secrets, () => {}),
+          hasUsableSetupCredential(hostStores().secrets, () => {}),
         ),
       ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({
@@ -65,7 +65,7 @@ describe('shared setup capabilities', () => {
         expect(status).not.toHaveProperty('account');
         expect(JSON.stringify(status)).not.toContain('researcher@example.com');
         expect(JSON.stringify(status)).not.toContain('account-private-id');
-      }),
+      }).pipe(Effect.provide(fakeProcessServices())),
   );
 
   it.effect(
@@ -85,6 +85,6 @@ describe('shared setup capabilities', () => {
           signedIn: true,
           enabled: false,
         });
-      }),
+      }).pipe(Effect.provide(fakeProcessServices())),
   );
 });

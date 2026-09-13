@@ -290,9 +290,7 @@ describe('completedRunArchive facade', () => {
         promptForApiKey: async () => undefined,
         showInfo: vi.fn(),
         showWarning: vi.fn(),
-      }).pipe(
-        Effect.provide(Secrets.layer(() => installedHost().platform.secrets)),
-      ),
+      }).pipe(Effect.provide(Secrets.layer(() => installedHost().secrets))),
     );
     await Effect.runPromise(actions.runNew(runId));
     expect(runAgentRequest).toHaveBeenCalledWith({ config });
@@ -300,7 +298,8 @@ describe('completedRunArchive facade', () => {
     expect(trace.status).toBe('ok');
     if (trace.status !== 'ok') throw new Error('Expected trace export');
     const exportInput = await loadChatExportInput(runId);
-    const { secrets, globalState } = installedHost().platform;
+    const { secrets, roots } = installedHost();
+    const { globalState } = roots;
     const details = await readCliHistoryDetails(
       { secrets, globalState },
       runId,

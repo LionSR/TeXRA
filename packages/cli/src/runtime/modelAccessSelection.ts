@@ -36,8 +36,8 @@ export async function readCliModelAccessStatus(
   secrets: PlatformSecrets,
 ): Promise<CliModelAccessStatus> {
   const [chatGpt, grok, codingPlanEntries] = await Promise.all([
-    subscriptionProvider('chatgpt').getStatus(),
-    subscriptionProvider('grok').getStatus(),
+    subscriptionProvider('chatgpt').getStatus(secrets),
+    subscriptionProvider('grok').getStatus(secrets),
     Promise.all(
       codingPlanSubscriptionRuntimes.map(
         async (runtime) =>
@@ -101,6 +101,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   options: CliSubscriptionLoginOptions,
 ) {
   const provider = subscriptionProvider(providerId);
+  const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
     const update = yield* hostPort(() => provider.setPreferSubscription(false));
@@ -111,7 +112,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* hostPort(() => provider.getStatus());
+  const status = yield* hostPort(() => provider.getStatus(secrets));
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };

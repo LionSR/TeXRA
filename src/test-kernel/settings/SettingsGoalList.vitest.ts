@@ -35,7 +35,8 @@ const RUN_ID = 'a5e77105' as RunId;
  * exactly as the extension root passes it.
  */
 function createHandler(): SettingsViewMessageHandler {
-  const { globalState, secrets } = installedHost().platform;
+  const { secrets, roots } = installedHost();
+  const { globalState } = roots;
   return new SettingsViewMessageHandler(
     {
       subscriptions: [],

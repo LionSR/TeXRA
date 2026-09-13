@@ -89,11 +89,26 @@ async function initNodeBackedPlatform(options: {
     },
     { fs: nodeFilesystem },
   );
+  await bindFakeCliGlobalState();
 }
 
 async function initDefaultFakePlatform(): Promise<void> {
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
+  await bindFakeCliGlobalState();
+}
+
+/**
+ * The CLI composition root latches the store it opens; these suites install a
+ * fake host instead of running that root, so the latch is bound to the fake
+ * host's store here.
+ */
+async function bindFakeCliGlobalState(): Promise<void> {
+  const [{ bindCliGlobalState }, { installedHost }] = await Promise.all([
+    import('@cli/runtime/cliProcessRuntime'),
+    import('@test/support/setupPlatform'),
+  ]);
+  bindCliGlobalState(installedHost().roots.globalState);
 }
 
 async function withExternalDirs(

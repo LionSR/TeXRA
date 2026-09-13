@@ -23,6 +23,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 }));
 
 import {
+  FakeSecrets,
   createFakePlatform,
   createFakeWorkspaceRoots,
 } from '@test/support/FakePlatform';
@@ -98,6 +99,8 @@ describe('provider-key onboarding flow', () => {
         const platform = {
           ...createFakePlatform(),
           globalStorage: createFakeWorkspaceRoots().globalStorage,
+          globalState: createFakeWorkspaceRoots().globalState,
+          secrets: new FakeSecrets(),
         };
         const result = yield* Effect.forkChild(
           runCliOnboarding(platform, false),
