@@ -880,6 +880,15 @@ function createWindow(options: {
       dispose() {
         workspace.disposeRendererResources();
         workspace.dispose();
+        // The port before the bridge, as the extension's `dispose` does.
+        // The port's release (its map entry, its transcript set,
+        // `onPortClosed`) is synchronous by construction and runs inside
+        // this fork before it returns, so `hostRequests.dispose()` below
+        // still follows it as it did under `bridge.dispose()`; only the
+        // framer's interruption and the drain of a request in flight (in
+        // the bridge scope, uninterruptible) finish later, and neither
+        // reaches a disposed host: the answer of a gone port is dropped.
+        runtime.runFork(port.close);
         runtime.runFork(Scope.close(bridgeScope, Exit.void));
         hostRequests.dispose();
         run.dispose();
