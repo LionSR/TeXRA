@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -10,7 +10,8 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
-import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -54,6 +55,11 @@ vi.mock('@cli/runtime/executeCli', () => ({
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
+  // The spy records the call the command made — continuation included, so the
+  // suite can still pin what was handed to it — and answers with the inputs to
+  // expand to. Running that continuation is left to this fiber rather than to
+  // the spy, so the rest of the program stays inside the test's runtime
+  // instead of re-entering a fresh one through `Effect.runPromise`.
   withExpandedRunInputs: (
     ...args: Parameters<
       typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
@@ -63,16 +69,12 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
       >
     >
   ) =>
-    Effect.tryPromise({
-      try: () =>
-        mocks.withExpandedRunInputs(
-          ...args.slice(0, 4),
-          (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(
-              Effect.provide(args[4](inputs), fakeProcessServices()),
-            ),
-        ),
-      catch: ensureError,
+    Effect.gen(function* () {
+      const inputs = yield* Effect.tryPromise({
+        try: () => mocks.withExpandedRunInputs(...args),
+        catch: ensureError,
+      });
+      return yield* args[4](inputs as Parameters<(typeof args)[4]>[0]);
     }),
   hasMixedStdinWorkflowInputSpecs: vi.fn(() => false),
   WORKFLOW_INPUT_REQUIRED_MESSAGE:
@@ -82,8 +84,24 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 // Hoisted out of each test body — a dynamic import()'s result is cached, so
 // one call here serves every test below.
 const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
+
+/** The run command's program, over the installed fake host's services. */
 const runToolUseAgent = (...args: Parameters<typeof nativeRun>) =>
-  Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
+  Effect.provide(nativeRun(...args), fakeProcessServices());
+
+/**
+ * The usage error a refused run carries. `runHeadlessAgent` reports one by
+ * throwing `CliUsageError` from its `Effect.fn` body, which Effect surfaces as
+ * a defect rather than a typed failure — `Effect.flip` does not succeed on it,
+ * so the assertion reads the cause.
+ */
+function usageErrorFrom(exit: Exit.Exit<number, Error>): Error {
+  if (!Exit.isFailure(exit)) throw new Error('The run was expected to fail.');
+  const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
+  if (!(defect instanceof Error))
+    throw new Error(`The run failed without a usage error: ${exit.cause}`);
+  return defect;
+}
 
 describe('CLI run command, tool-use agents', () => {
   beforeEach(() => {
@@ -93,18 +111,10 @@ describe('CLI run command, tool-use agents', () => {
     const { platform } = installedHost();
     cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
     cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
-    mocks.withExpandedRunInputs.mockImplementation(
-      async (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-        }) => Promise<unknown>,
-      ) => run({ inputFiles: ['problem.md'], contextFiles: ['notes.md'] }),
-    );
+    mocks.withExpandedRunInputs.mockResolvedValue({
+      inputFiles: ['problem.md'],
+      contextFiles: ['notes.md'],
+    });
     mocks.resolveCliRunAgent.mockResolvedValue({
       name: 'chat',
       category: AgentCategory.ToolUse,
@@ -132,183 +142,192 @@ describe('CLI run command, tool-use agents', () => {
     });
   });
 
-  it('anchors headless tool-use runs on provided files without polluting display text', async () => {
-    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['problem.md'],
-      contextFiles: ['notes.md'],
-      model: 'gpt54',
-      instruction: 'Assess the proof concisely.',
-    });
+  it.effect(
+    'anchors headless tool-use runs on provided files without polluting display text',
+    () =>
+      Effect.gen(function* () {
+        const exitCode = yield* runToolUseAgent(createRunCommandCliContext(), {
+          agent: 'chat',
+          inputFiles: ['problem.md'],
+          contextFiles: ['notes.md'],
+          model: 'gpt54',
+          instruction: 'Assess the proof concisely.',
+        });
 
-    expect(exitCode).toBe(0);
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: '/tmp/project' }),
-    );
-    expect(
-      cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
-    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('chat');
-    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-      ['problem.md'],
-      ['notes.md'],
-      '/tmp/project',
-      {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-        readStdinText: expect.any(Function),
-      },
-      expect.any(Function),
-    );
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.inputFiles).toEqual(['problem.md']);
-    expect(config?.contextFiles).toEqual(['notes.md']);
-    expect(config?.displayInstruction).toBe('Assess the proof concisely.');
-    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      recoveryInputIsDurable: true,
-    });
-    expect(config?.instruction).toContain('Primary user input files:');
-    expect(config?.instruction).toContain('- "problem.md"');
-    expect(config?.instruction).toContain('Read-only context files:');
-    expect(config?.instruction).toContain('- "notes.md"');
-    expect(config?.instruction).toContain('Additional user instruction:');
-    expect(config?.instruction).toContain('Assess the proof concisely.');
-    const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
-    expect(emission?.json).toEqual({
-      runId: 'run-1',
-      outcome: RUN_OUTCOME.COMPLETED,
-      output: {
-        category: AgentCategory.ToolUse,
-        response: 'Correct.',
-        files: [],
-      },
-      workingDirectory: '/tmp/project',
-    });
-    // `outcome` is the only terminal fact the headless JSON publishes, what the
-    // run produced rides `output`, and the run id is `runId`: the result is
-    // the run's result, not a renamed copy of it.
-    expect(Object.keys(emission?.json ?? {})).toEqual([
-      'runId',
-      'outcome',
-      'output',
-      'workingDirectory',
-    ]);
-    expect(emission?.ndjson).toEqual({
-      kind: 'agent-result',
-      result: emission.json,
-    });
-    expect(emission?.text).toBe('Correct.');
-  });
+        expect(exitCode).toBe(0);
+        expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
+          expect.objectContaining({ cwd: '/tmp/project' }),
+        );
+        expect(
+          cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
+        ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('chat');
+        expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+          ['problem.md'],
+          ['notes.md'],
+          '/tmp/project',
+          {
+            allowEmptyInput: true,
+            requireWorkspaceFiles: true,
+            readStdinText: expect.any(Function),
+          },
+          expect.any(Function),
+        );
+        const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+        expect(config?.inputFiles).toEqual(['problem.md']);
+        expect(config?.contextFiles).toEqual(['notes.md']);
+        expect(config?.displayInstruction).toBe('Assess the proof concisely.');
+        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+          recoveryInputIsDurable: true,
+        });
+        expect(config?.instruction).toContain('Primary user input files:');
+        expect(config?.instruction).toContain('- "problem.md"');
+        expect(config?.instruction).toContain('Read-only context files:');
+        expect(config?.instruction).toContain('- "notes.md"');
+        expect(config?.instruction).toContain('Additional user instruction:');
+        expect(config?.instruction).toContain('Assess the proof concisely.');
+        const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
+        expect(emission?.json).toEqual({
+          runId: 'run-1',
+          outcome: RUN_OUTCOME.COMPLETED,
+          output: {
+            category: AgentCategory.ToolUse,
+            response: 'Correct.',
+            files: [],
+          },
+          workingDirectory: '/tmp/project',
+        });
+        // `outcome` is the only terminal fact the headless JSON publishes, what
+        // the run produced rides `output`, and the run id is `runId`: the result
+        // is the run's result, not a renamed copy of it.
+        expect(Object.keys(emission?.json ?? {})).toEqual([
+          'runId',
+          'outcome',
+          'output',
+          'workingDirectory',
+        ]);
+        expect(emission?.ndjson).toEqual({
+          kind: 'agent-result',
+          result: emission.json,
+        });
+        expect(emission?.text).toBe('Correct.');
+      }),
+  );
 
-  it('marks materialized stdin as unavailable for recovery advertising', async () => {
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-          readonly stdinInputPath?: string;
-        }) => Promise<unknown>,
-      ) =>
-        run({
+  it.effect(
+    'marks materialized stdin as unavailable for recovery advertising',
+    () =>
+      Effect.gen(function* () {
+        mocks.withExpandedRunInputs.mockResolvedValueOnce({
           inputFiles: ['.texra-tmp/stdin.tex'],
           contextFiles: [],
           stdinInputPath: '.texra-tmp/stdin.tex',
-        }),
-    );
-    await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['-'],
-      contextFiles: [],
-      model: 'gpt54',
-      instruction: 'Assess the proof.',
-    });
+        });
+        yield* runToolUseAgent(createRunCommandCliContext(), {
+          agent: 'chat',
+          inputFiles: ['-'],
+          contextFiles: [],
+          model: 'gpt54',
+          instruction: 'Assess the proof.',
+        });
 
-    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      recoveryInputIsDurable: false,
-    });
-  });
+        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+          recoveryInputIsDurable: false,
+        });
+      }),
+  );
 
-  it('publishes the canonical outcome for a shutdown cancellation', async () => {
-    mocks.executeCliToolUseConfig.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        runId: 'run-interrupted',
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: { category: AgentCategory.ToolUse, response: '', files: [] },
-        workingDirectory: '/tmp/project',
-      },
-      exitCode: CliExitCode.Interrupted,
-    });
-    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['problem.md'],
-      contextFiles: [],
-      instruction: 'Assess the proof.',
-    });
-
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-  });
-
-  it('reports missing instruction before resolving the model', async () => {
-    await expect(
-      runToolUseAgent(createRunCommandCliContext(), {
+  it.effect('publishes the canonical outcome for a shutdown cancellation', () =>
+    Effect.gen(function* () {
+      mocks.executeCliToolUseConfig.mockResolvedValueOnce({
+        ok: true,
+        result: {
+          runId: 'run-interrupted',
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: { category: AgentCategory.ToolUse, response: '', files: [] },
+          workingDirectory: '/tmp/project',
+        },
+        exitCode: CliExitCode.Interrupted,
+      });
+      const exitCode = yield* runToolUseAgent(createRunCommandCliContext(), {
         agent: 'chat',
         inputFiles: ['problem.md'],
         contextFiles: [],
-        model: 'gpt54',
-        instruction: '',
-      }),
-    ).rejects.toThrow('Provide --instruction or --instruction-file.');
+        instruction: 'Assess the proof.',
+      });
 
-    expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-    expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-  });
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject(
+        { outcome: RUN_OUTCOME.CANCELLED },
+      );
+    }),
+  );
 
-  // Neither category can run an invocation with no instruction and no input,
-  // so it is refused before the platform init and the agent-catalog fetch a
-  // signed-in session would otherwise pay for on a plain usage error.
-  it('refuses an invocation no category can run without resolving the agent', async () => {
-    await expect(
-      runToolUseAgent(createRunCommandCliContext(), {
-        agent: 'chat',
-        inputFiles: [],
-        contextFiles: ['notes.md'],
-        instruction: '',
-      }),
-    ).rejects.toThrow(
-      'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
-    );
-
-    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
-  });
-
-  // The one headless `run` command carries both categories' flags, so the
-  // workflow-only destinations have to be refused once the agent is known.
-  it.each(['output', 'outputDir'] as const)(
-    'refuses the workflow-only --%s destination for a tool-use agent',
-    async (flag) => {
-      await expect(
+  it.effect('reports missing instruction before resolving the model', () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
         runToolUseAgent(createRunCommandCliContext(), {
           agent: 'chat',
           inputFiles: ['problem.md'],
           contextFiles: [],
-          instruction: 'Assess the proof.',
-          [flag]: 'out.tex',
+          model: 'gpt54',
+          instruction: '',
         }),
-      ).rejects.toThrow(
-        `${flag === 'output' ? '--output' : '--output-dir'} is only available for workflow agents; "chat" is a toolUse agent.`,
       );
 
+      expect(usageErrorFrom(exit).message).toBe(
+        'Provide --instruction or --instruction-file.',
+      );
       expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-      expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-    },
+      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
+    }),
+  );
+
+  // Neither category can run an invocation with no instruction and no input,
+  // so it is refused before the platform init and the agent-catalog fetch a
+  // signed-in session would otherwise pay for on a plain usage error.
+  it.effect(
+    'refuses an invocation no category can run without resolving the agent',
+    () =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          runToolUseAgent(createRunCommandCliContext(), {
+            agent: 'chat',
+            inputFiles: [],
+            contextFiles: ['notes.md'],
+            instruction: '',
+          }),
+        );
+
+        expect(usageErrorFrom(exit).message).toBe(
+          'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
+        );
+        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  // The one headless `run` command carries both categories' flags, so the
+  // workflow-only destinations have to be refused once the agent is known.
+  it.effect.each(['output', 'outputDir'] as const)(
+    'refuses the workflow-only --%s destination for a tool-use agent',
+    (flag) =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          runToolUseAgent(createRunCommandCliContext(), {
+            agent: 'chat',
+            inputFiles: ['problem.md'],
+            contextFiles: [],
+            instruction: 'Assess the proof.',
+            [flag]: 'out.tex',
+          }),
+        );
+
+        expect(usageErrorFrom(exit).message).toBe(
+          `${flag === 'output' ? '--output' : '--output-dir'} is only available for workflow agents; "chat" is a toolUse agent.`,
+        );
+        expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
+        expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
+      }),
   );
 });
