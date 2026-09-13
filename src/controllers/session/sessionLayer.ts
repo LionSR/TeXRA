@@ -733,6 +733,10 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     if (held === undefined) return NOTHING_TO_CLOSE;
     const { key, session } = held;
     const { runs } = session;
+    const flushArtifacts = Effect.promise(
+      () =>
+        runInSession(session, () => session.flushArtifacts()) as Promise<void>,
+    );
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
@@ -779,14 +783,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
         // still observe the failed close instead of a false success report.
         Effect.forkDetach(
           untilSettled(runs).pipe(
-            Effect.andThen(
-              Effect.promise(
-                () =>
-                  runInSession(session, () =>
-                    session.flushArtifacts(),
-                  ) as Promise<void>,
-              ),
-            ),
+            Effect.andThen(flushArtifacts),
             Effect.ensuring(sessions.invalidate(key)),
           ),
           { startImmediately: true },
@@ -822,12 +819,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // exactly that. Widening it into a typed failure is a contract change,
     // not a conversion.
     yield* Effect.race(
-      Effect.promise(
-        () =>
-          runInSession(session, () =>
-            session.flushArtifacts(),
-          ) as Promise<void>,
-      ),
+      flushArtifacts,
       Fiber.join(budget).pipe(
         Effect.andThen(
           Effect.sync(() =>
