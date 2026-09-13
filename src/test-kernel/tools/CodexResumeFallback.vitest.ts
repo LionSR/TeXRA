@@ -1,12 +1,11 @@
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
 // enqueue through the ordinary follow-up path. The detached-rejection case is
 // also the only place the fresh `startThread` launch branch is exercised.
 
-import pDefer from 'p-defer';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
@@ -146,9 +145,12 @@ describe('codex tool - atomic resume fallback', () => {
     () =>
       Effect.gen(function* () {
         const childRun = createFakeAgentCliChildRun(childRunId);
+        const logged = yield* Deferred.make<void>();
         const error = vi
           .spyOn(childRun.logger, 'error')
-          .mockImplementation(() => {});
+          .mockImplementation(() => {
+            Deferred.doneUnsafe(logged, Effect.void);
+          });
         const lateFailure = new Error('late Codex finalization failed');
         mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
         mocks.startChildRunLoop.mockReturnValue(
@@ -171,15 +173,14 @@ describe('codex tool - atomic resume fallback', () => {
             sandbox_mode: 'workspace-write',
           }),
         ).toMatchObject({ status: 'executed' });
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(error).toHaveBeenCalledWith(
-              'Codex run loop failed after launch',
-              {
-                data: lateFailure,
-              },
-            );
-          }),
+        // The detached loop fiber writes this log on the same runtime, so the
+        // spy itself is the wake; nothing is polled.
+        yield* Deferred.await(logged);
+        expect(error).toHaveBeenCalledWith(
+          'Codex run loop failed after launch',
+          {
+            data: lateFailure,
+          },
         );
       }).pipe(
         Effect.provide(
@@ -213,8 +214,9 @@ describe('codex tool - atomic resume fallback', () => {
     'launches one fallback loop when concurrent calls use the same stale thread_id',
     () =>
       Effect.gen(function* () {
-        const sdkImportStarted = pDefer<void>();
-        const sdkReady = pDefer<any>();
+        const sdkImportStarted = yield* Deferred.make<void>();
+        const sdkReady = yield* Deferred.make<unknown>();
+        const secondDispatching = yield* Deferred.make<void>();
         const thread = {
           id: 'stale-thread',
           runStreamed: vi.fn(),
@@ -224,10 +226,25 @@ describe('codex tool - atomic resume fallback', () => {
         } as any;
         const getLaunch = captureRunLoopLaunch();
 
-        mocks.importCodexClass.mockImplementation(() => {
-          sdkImportStarted.resolve(undefined);
-          return sdkReady.promise;
-        });
+        // importCodexClass is a Promise-shaped collaborator, so the gate is an
+        // Effect run at that edge rather than a hand-rolled deferred promise.
+        mocks.importCodexClass.mockImplementation(() =>
+          Effect.runPromise(
+            Deferred.succeed(sdkImportStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(sdkReady)),
+            ),
+          ),
+        );
+        // The second call's approval is the last step before it claims the id,
+        // so completing the gate there proves it reached the fallback wait
+        // rather than asserting on a fiber that has not started yet.
+        mocks.requestBashApproval
+          .mockReturnValueOnce(Effect.succeed({ action: 'approve' }))
+          .mockImplementationOnce(() =>
+            Deferred.succeed(secondDispatching, undefined).pipe(
+              Effect.as({ action: 'approve' }),
+            ),
+          );
 
         const tool = new CodexTool();
         const first = yield* Effect.forkChild(
@@ -237,7 +254,7 @@ describe('codex tool - atomic resume fallback', () => {
             thread_id: 'stale-thread',
           }),
         );
-        yield* Effect.promise(() => sdkImportStarted.promise);
+        yield* Deferred.await(sdkImportStarted);
 
         const second = yield* Effect.forkChild(
           tool.call({
@@ -246,12 +263,13 @@ describe('codex tool - atomic resume fallback', () => {
             thread_id: 'stale-thread',
           }),
         );
-        yield* Effect.promise(() => Promise.resolve());
+        yield* Deferred.await(secondDispatching);
 
         expect(mocks.importCodexClass).toHaveBeenCalledTimes(1);
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
 
-        sdkReady.resolve(
+        yield* Deferred.succeed(
+          sdkReady,
           class MockCodex {
             resumeThread(threadId: string): typeof thread {
               mocks.resumeThread(threadId);
