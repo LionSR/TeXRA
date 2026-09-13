@@ -662,7 +662,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   );
   // The turn settled whatever the delivery persistence did: its settle path
   // ran, which is the fact a recovering caller's re-execution gate reads (a
-  // settled `child.turn` under a run with no outcome refuses repetition), so
+  // settled `child.turn` under a run with no outcome and no result manifest
+  // refuses repetition), so
   // the row lands before that failure is raised.
   yield* commitChildTurn(params.session, runId, turnKey, 'settled');
 
