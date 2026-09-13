@@ -835,7 +835,7 @@ describe('Sessions owner', () => {
         } finally {
           detachResult();
           handleStatus.mockRestore();
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );
@@ -883,7 +883,7 @@ describe('Sessions owner', () => {
           // does not fail a run whose remaining facts are whole.
           yield* Effect.promise(() => session.settlePublications(RUN));
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );
@@ -939,7 +939,7 @@ describe('Sessions owner', () => {
           expect(onResult).not.toHaveBeenCalled();
         } finally {
           detachResult();
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );

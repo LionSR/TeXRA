@@ -69,7 +69,7 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
 });
 
 describe('session isolation', () => {
-  it('currentSession() resolves the active run context session, default otherwise', () => {
+  it('currentSession() resolves the active run context session, default otherwise', async () => {
     const sessionB = createTestSession();
     try {
       expect(currentSession()).toBe(defaultSession());
@@ -82,7 +82,7 @@ describe('session isolation', () => {
       // Resolution falls back to the default session outside any run.
       expect(currentSession()).toBe(defaultSession());
     } finally {
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -119,8 +119,8 @@ describe('session isolation', () => {
         fakePath('workspace/.texra/storage'),
       );
     } finally {
-      sessionA.dispose();
-      sessionB.dispose();
+      await Effect.runPromise(sessionA.dispose());
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -190,8 +190,8 @@ describe('session isolation', () => {
         expect(runInSession(session, () => ownsRunLease(runId))).toBe(false);
       }
     } finally {
-      sessionA.dispose();
-      sessionB.dispose();
+      await Effect.runPromise(sessionA.dispose());
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -213,7 +213,7 @@ describe('session isolation', () => {
       expect(interrupt).toHaveBeenCalledOnce();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -251,7 +251,7 @@ describe('session isolation', () => {
       expect(sessionB.runs.getHandle(runId)).toBeUndefined();
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
-      sessionB.dispose();
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 });

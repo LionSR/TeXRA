@@ -92,7 +92,7 @@ describe('the goal row is the goal', () => {
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session).map((goal) => goal.runId)).toEqual([RUN_B]);
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -110,7 +110,7 @@ describe('the goal row is the goal', () => {
         status: 'active',
       });
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -132,7 +132,7 @@ describe('the goal row is the goal', () => {
         status: 'active',
       });
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -145,7 +145,7 @@ describe('the goal row is the goal', () => {
         mutate(startGoal(session, RUN_A, 'objective two')),
       ).rejects.toThrow('A goal is already in progress for this run');
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 
@@ -166,7 +166,7 @@ describe('the goal row is the goal', () => {
       expect(goalOf(session, RUN_A)).toBeNull();
       expect(goalList(session)).toEqual([]);
     } finally {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
   });
 });
@@ -212,8 +212,8 @@ describe('goalStateChanges', () => {
       expect(seen).toEqual([{ runId: SAME_SESSION_RUN }]);
     } finally {
       detach();
-      sessionA.dispose();
-      sessionB.dispose();
+      await Effect.runPromise(sessionA.dispose());
+      await Effect.runPromise(sessionB.dispose());
     }
   });
 
@@ -245,8 +245,8 @@ describe('goalStateChanges', () => {
       run.detach();
       other.detach();
       fallback.detach();
-      runSession.dispose();
-      otherSession.dispose();
+      await Effect.runPromise(runSession.dispose());
+      await Effect.runPromise(otherSession.dispose());
     }
   });
 });

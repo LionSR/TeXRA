@@ -252,9 +252,11 @@ describe('NativeSubagentStrategy', () => {
     mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreAgentEngine();
-    for (const session of ownedSessions) session.dispose();
+    for (const session of ownedSessions) {
+      await Effect.runPromise(session.dispose());
+    }
     ownedSessions.clear();
   });
 

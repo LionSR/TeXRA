@@ -51,8 +51,8 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
 
-beforeEach(() => {
-  teardownDefaultSession();
+beforeEach(async () => {
+  await Effect.runPromise(teardownDefaultSession());
   initializeDefaultSession({});
 });
 

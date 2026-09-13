@@ -445,7 +445,7 @@ describe('tool-use dispatch', () => {
       const saved = yield* kit.session.ledger.load(kit.runId);
       expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -479,7 +479,7 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -517,7 +517,7 @@ describe('tool-use dispatch', () => {
 
       expect(observedInstruction).toBe('Do not use files or external tools.');
       expect(observedTrace).toBe(noopTrace);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -545,7 +545,7 @@ describe('tool-use dispatch', () => {
       expect(deliveredResults(state)[0]?.text).toContain(
         'grep:{"pattern":"a"}',
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -575,7 +575,7 @@ describe('tool-use dispatch', () => {
         'start read_file:{"n":3}',
         'end read_file:{"n":3}',
       ]);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -608,7 +608,7 @@ describe('tool-use dispatch', () => {
       expect(delivered[1]?.text).toContain(
         'an earlier tool call ended the turn',
       );
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -632,7 +632,7 @@ describe('tool-use dispatch', () => {
         const delivered = deliveredResults(state);
         expect(delivered[1]?.status).toBe('success');
         expect(delivered[1]?.text).toBe(delivered[0]?.text);
-        kit.session.dispose();
+        yield* kit.session.dispose();
       }),
   );
 
@@ -708,7 +708,7 @@ describe('tool-use dispatch', () => {
       );
       expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
       expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -762,7 +762,7 @@ describe('tool-use dispatch', () => {
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -788,7 +788,7 @@ describe('tool-use dispatch', () => {
       // model stale contents.
       expect(countStarts(probe, 'read_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -813,7 +813,7 @@ describe('tool-use dispatch', () => {
       // plausible restore — it must execute, not be swallowed as a glitch.
       expect(countStarts(probe, 'write_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 
@@ -836,7 +836,7 @@ describe('tool-use dispatch', () => {
       // Accidental re-emissions get the primary's result, not an error.
       expect(delivered[1]?.status).toBe('success');
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
-      kit.session.dispose();
+      yield* kit.session.dispose();
     }),
   );
 });

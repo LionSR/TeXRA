@@ -70,7 +70,7 @@ import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { initPlatform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
+import { effectRuntime, tryProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -252,7 +252,9 @@ function shutdownExtension(): Promise<void> {
       await host?.runShutdown();
     } finally {
       if (lifecycleHost === host) lifecycleHost = undefined;
-      teardownDefaultSession();
+      // No runtime, no session was ever opened: an activation that failed
+      // before installing one has nothing to tear down here.
+      await tryProcessRuntime()?.runPromise(teardownDefaultSession());
       // After the session: its graph releases on the runtime it runs on.
       await disposeProcessRuntime();
     }
@@ -643,9 +645,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ? context.extension.packageJSON.version
       : undefined;
   try {
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       UsageLogService.initialize(
-        effectRuntime().scope,
+        runtime.scope,
         {},
         extensionVersion,
         vscode.env.appName || undefined,

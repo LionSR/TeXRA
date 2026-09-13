@@ -71,7 +71,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
     ]);
     await session.settlePublications();
     const result = await Effect.runPromise(assembleTrace(runId, session));
-    session.dispose();
+    await Effect.runPromise(session.dispose());
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
 

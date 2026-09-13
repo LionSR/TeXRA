@@ -24,7 +24,6 @@ import {
   type ResponseTextProcessing,
 } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
@@ -51,7 +50,8 @@ export interface DesktopProject {
   readonly root: string | undefined;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
-  dispose(): void;
+  /** Release the session from its owner; settles once its entry has unwound. */
+  dispose(): Effect.Effect<void>;
 }
 
 interface DesktopProjectRegistryOptions {
@@ -107,8 +107,9 @@ export interface DesktopProjectRegistry {
   /** Fires after a project opens or closes, or the active project changes. */
   onChange(listener: () => void): () => void;
   flushArtifacts(): Promise<void>;
-  /** Dispose every session, the most recently opened first. */
-  dispose(): void;
+  /** Dispose every session, the most recently opened first, then the
+   *  no-workspace session. */
+  dispose(): Effect.Effect<void>;
 }
 
 export interface RememberedDesktopProjects {
@@ -211,11 +212,11 @@ function openProjectSession(
             root,
             roots,
             session,
-            dispose: () => runInSession(session, () => session.dispose()),
+            dispose: () => session.dispose(),
           };
         }),
       catch: ensureError,
-    }).pipe(Effect.onError(() => Effect.sync(() => session.dispose())));
+    }).pipe(Effect.onError(() => session.dispose()));
   });
 }
 
@@ -334,7 +335,7 @@ export function openDesktopProjectRegistry(
                 projects.delete(root);
                 if (activeRoot === root) activeRoot = next;
                 notify();
-                project.dispose();
+                yield* project.dispose();
               }).pipe(withPerKeyLane(lanes, selection));
             }),
           );
@@ -378,14 +379,15 @@ export function openDesktopProjectRegistry(
             `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
           );
       },
-      dispose() {
-        const store = new DisposableStore();
-        store.add(() => fallback.dispose());
-        for (const project of projects.values())
-          store.add(() => project.dispose());
-        projects.clear();
-        store.dispose();
-      },
+      dispose: () =>
+        Effect.forEach(
+          [...projects.values()].toReversed(),
+          (project) => project.dispose(),
+          { discard: true },
+        ).pipe(
+          Effect.ensuring(fallback.dispose()),
+          Effect.ensuring(Effect.sync(() => projects.clear())),
+        ),
     } satisfies DesktopProjectRegistry;
   }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
 }

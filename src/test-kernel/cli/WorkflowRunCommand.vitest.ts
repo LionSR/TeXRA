@@ -674,7 +674,7 @@ describe('CLI run command, workflow agents', () => {
         );
         const session = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (owned) => Effect.sync(() => owned.dispose()),
+          (owned) => owned.dispose(),
         );
         const runId = 'abc123abc123' as RunId;
         const { runInSession } = yield* Effect.promise(

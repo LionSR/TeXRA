@@ -44,7 +44,7 @@ describe('tool-use follow-up progress events', () => {
   }> = [];
   const sessions = new Set<SessionHandle>();
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
       unsubscribe();
     }
@@ -52,7 +52,7 @@ describe('tool-use follow-up progress events', () => {
       session.runs.untrack(runId);
     }
     for (const session of sessions) {
-      session.dispose();
+      await Effect.runPromise(session.dispose());
     }
     sessions.clear();
   });

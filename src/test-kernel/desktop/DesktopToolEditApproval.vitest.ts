@@ -136,7 +136,7 @@ function createApprovalFixture(
       loadApprovalModules(options.workspacePath),
     );
     const session = createTestSession();
-    yield* Effect.addFinalizer(() => Effect.sync(() => session.dispose()));
+    yield* Effect.addFinalizer(() => session.dispose());
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
       ui: {
         ...createStubDesktopAgentRunHost(),

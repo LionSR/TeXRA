@@ -127,9 +127,7 @@ describe('desktop composition root and launch environment', () => {
             },
             warn: vi.fn(),
           });
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => registry.dispose()),
-          );
+          yield* Effect.addFinalizer(() => registry.dispose());
           const successorRoot = join(profile, 'successor');
           yield* fs.makeDirectory(successorRoot);
           const successor = yield* registry.open(successorRoot);

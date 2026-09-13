@@ -550,7 +550,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(refresh({ includeRemote: false }));
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
-    teardownDefaultSession();
+    await Effect.runPromise(teardownDefaultSession());
     session = initializeDefaultSession({});
     publishTestRunStart(session, OUTER_RUN_ID);
     await session.settlePublications();
@@ -563,7 +563,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedRunLease(PARENT_RUN_ID);
-    teardownDefaultSession();
+    await Effect.runPromise(teardownDefaultSession());
     vi.restoreAllMocks();
   });
 

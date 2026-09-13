@@ -193,7 +193,7 @@ describe('desktop preview host', () => {
       } finally {
         handler.dispose();
         detachPresentation();
-        session.dispose();
+        await Effect.runPromise(session.dispose());
       }
     },
   );

@@ -1177,19 +1177,21 @@ export class SessionHandle {
 
   /**
    * Unwind this session ({@link unwind}) and release it from its owner,
-   * which frees the root's graph after it. A teardown failure surfaces to
-   * the caller and still releases the session. Settles nothing: a host that
+   * which frees the root's graph after it: the returned Effect settles once
+   * the root's entry has unwound. A teardown failure surfaces to the caller
+   * as a defect and still releases the session. Settles no runs: a host that
    * needs the session's live runs ended first closes through
    * `closeSession`, which ends here. Idempotent, so a handle released once
    * never reaches the session its owner built over the same root later.
    */
-  dispose(): void {
-    if (this.disposed) return;
-    try {
-      this.unwind();
-    } finally {
-      this.graph.close();
-    }
+  dispose(): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : Effect.sync(() => this.unwind()).pipe(
+            Effect.ensuring(this.graph.close()),
+          ),
+    );
   }
 
   /**
@@ -1403,9 +1405,10 @@ export function tryDefaultSession(): SessionHandle | undefined {
   return defaultRootSession();
 }
 
-/** Dispose the process-default session during host teardown. */
-export function teardownDefaultSession(): void {
-  defaultRootSession()?.dispose();
+/** Dispose the process-default session during host teardown; nothing to
+ *  do when none is open. */
+export function teardownDefaultSession(): Effect.Effect<void> {
+  return Effect.suspend(() => defaultRootSession()?.dispose() ?? Effect.void);
 }
 
 /**

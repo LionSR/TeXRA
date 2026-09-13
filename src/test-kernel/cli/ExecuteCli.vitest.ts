@@ -57,7 +57,7 @@ async function installFreshDefaultSession(): Promise<void> {
   await import('@test/support/sessionGraphTestSetup');
   const { initializeDefaultSession, teardownDefaultSession } =
     await import('@agent/runtime/SessionHandle');
-  teardownDefaultSession();
+  await Effect.runPromise(teardownDefaultSession());
   initializeDefaultSession({});
 }
 

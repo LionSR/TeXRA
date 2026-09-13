@@ -80,7 +80,7 @@ describe('default session lifecycle', () => {
       const disposedSession = createTestSession({
         transcriptMode: { kind: 'ephemeral', reason: 'disposed non-default' },
       });
-      disposedSession.dispose();
+      await Effect.runPromise(disposedSession.dispose());
       expect(defaultSession()).toBe(processDefault);
       expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
@@ -94,10 +94,10 @@ describe('default session lifecycle', () => {
           'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
         );
       } finally {
-        liveSession.dispose();
+        await Effect.runPromise(liveSession.dispose());
       }
     } finally {
-      teardownDefaultSession();
+      await Effect.runPromise(teardownDefaultSession());
     }
   });
 
@@ -121,7 +121,7 @@ describe('default session lifecycle', () => {
         'already been initialized',
       );
     } finally {
-      teardownDefaultSession();
+      await Effect.runPromise(teardownDefaultSession());
     }
   });
 
@@ -229,7 +229,7 @@ describe('default session lifecycle', () => {
 
       const disposeSpy = vi.spyOn(first, 'dispose');
 
-      teardownDefaultSession();
+      yield* teardownDefaultSession();
 
       expect(disposeSpy).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
@@ -251,7 +251,7 @@ describe('default session lifecycle', () => {
         yield* closeSession(processWorkspaceRoots().storage);
         expect(tryDefaultSession()).toBeUndefined();
       } finally {
-        teardownDefaultSession();
+        yield* teardownDefaultSession();
       }
     }),
   );

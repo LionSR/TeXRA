@@ -132,8 +132,9 @@ export interface SessionGraph {
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
   /** Release the session from its owner: the owner unwinds the session and
-   *  frees the root's graph after it. */
-  readonly close: () => void;
+   *  frees the root's graph after it. Settles once the root's entry has
+   *  unwound, on the caller's own fiber. */
+  readonly close: () => Effect.Effect<void>;
 }
 
 /** What opening a session supplies, with its roots resolved. */
@@ -153,7 +154,8 @@ export interface SessionOwner {
    *  with the owner before this Effect's first yield, so a close issued
    *  after it finds the session and waits for its build. */
   open(open: SessionOpen): Effect.Effect<SessionHandle>;
-  /** The session open on a storage root, if one is; never builds one. */
+  /** The session open on a storage root, if one is; never builds one, and
+   *  does not see an entry still building or already releasing. */
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;

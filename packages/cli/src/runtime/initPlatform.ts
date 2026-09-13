@@ -381,9 +381,7 @@ export async function initCliPlatform(
     // Seed first-install defaults (e.g. disabled tools). No-ops for anyone
     // whose DISABLED_TOOLS list already exists, so upgrading users keep the
     // tools they enabled.
-    await effectRuntime().runPromise(
-      seedDisabledToolDefaults(stateStores.globalState),
-    );
+    await runtime.runPromise(seedDisabledToolDefaults(stateStores.globalState));
 
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
@@ -396,15 +394,15 @@ export async function initCliPlatform(
     // below so the kills (all synchronous) land first, matching the other
     // hosts' ordering.
     registerRuntimeShutdownHandlers(lifecycle, {
-      runSettlement: (settlement) => effectRuntime().runPromise(settlement),
+      runSettlement: (settlement) => runtime.runPromise(settlement),
       // The default session is installed later by whichever entry point opens
       // transcripts, so its shutdown lookup remains lazy.
       flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
       afterFlushArtifacts: [
-        () => effectRuntime().runPromise(UsageLogService.dispose()),
+        () => runtime.runPromise(UsageLogService.dispose()),
       ],
       afterRunSettlement: [
-        () => teardownDefaultSession(),
+        () => runtime.runPromise(teardownDefaultSession()),
         () => flushNdjsonStdout(),
         () => disposeProcessRuntime(),
       ],
@@ -415,13 +413,8 @@ export async function initCliPlatform(
     // dispose() flushes any queued entries; it
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
-    await effectRuntime().runPromise(
-      UsageLogService.initialize(
-        effectRuntime().scope,
-        {},
-        context.version,
-        'cli',
-      ),
+    await runtime.runPromise(
+      UsageLogService.initialize(runtime.scope, {}, context.version, 'cli'),
     );
   }
 

@@ -1,5 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 
+import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { openSession } from '@agent/runtime/sessionGraph';
 import {
@@ -57,7 +58,7 @@ export function createProcessSession(
 ): SessionHandle {
   const roots = processWorkspaceRoots();
   forEachLiveSession((live) => {
-    if (live.roots.storage === roots.storage) live.dispose();
+    if (live.roots.storage === roots.storage) Effect.runFork(live.dispose());
   });
   return openSession({
     ...init,

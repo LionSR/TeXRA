@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
@@ -57,8 +58,8 @@ describe('maybeBuildGoalContinuation', () => {
     publishTestRunStart(session, RUN_ID);
   });
 
-  afterEach(() => {
-    session.dispose();
+  afterEach(async () => {
+    await Effect.runPromise(session.dispose());
   });
 
   /** Commit the goal row, which lands its fold, before the read. */

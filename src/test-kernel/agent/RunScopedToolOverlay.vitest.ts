@@ -132,7 +132,7 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Run-scoped tool "bash" shadows an existing tool.',
         );
-        session.dispose();
+        yield* session.dispose();
       }),
   );
 

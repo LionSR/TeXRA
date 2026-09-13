@@ -249,9 +249,7 @@ function delegateWithProposalDecision(
       const session = createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
-        decider
-          .stop()
-          .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+        decider.stop().pipe(Effect.ensuring(session.dispose())),
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
@@ -616,7 +614,7 @@ describe('headless delegation', () => {
     session.followUps.terminalize(CHILD_RUN_ID);
     await waitForChildren(session);
     restoreAgentEngine();
-    inBandSession.dispose();
+    await Effect.runPromise(inBandSession.dispose());
   });
 
   it.effect('awaits child delegation during one-shot tool-use runs', () =>
@@ -1150,9 +1148,7 @@ describe('headless delegation', () => {
           const session = createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
-            decider
-              .stop()
-              .pipe(Effect.ensuring(Effect.sync(() => session.dispose()))),
+            decider.stop().pipe(Effect.ensuring(session.dispose())),
           );
           const result = yield* callDelegateReview(
             parentRunContext({ session, approvalPromptsUnavailable: true }),

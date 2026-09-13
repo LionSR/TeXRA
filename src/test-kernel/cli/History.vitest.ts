@@ -276,7 +276,7 @@ describe('CLI history runtime', () => {
   beforeEach(async () => {
     const { initializeDefaultSession, teardownDefaultSession } =
       await import('@agent/runtime/SessionHandle');
-    teardownDefaultSession();
+    await Effect.runPromise(teardownDefaultSession());
     initializeDefaultSession({});
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
@@ -917,7 +917,7 @@ describe('CLI history runtime', () => {
             });
             expect(mocks.listRuns).not.toHaveBeenCalled();
           }),
-        (session) => Effect.sync(() => session.dispose()),
+        (session) => session.dispose(),
       ),
   );
 

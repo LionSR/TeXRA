@@ -41,8 +41,8 @@ let session: SessionHandle;
 beforeEach(() => {
   session = createTestSession();
 });
-afterEach(() => {
-  session.dispose();
+afterEach(async () => {
+  await Effect.runPromise(session.dispose());
 });
 
 /**

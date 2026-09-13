@@ -36,7 +36,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     fn,
-    (session) => Effect.sync(() => session.dispose()),
+    (session) => session.dispose(),
   );
 }
 

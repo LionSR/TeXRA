@@ -125,7 +125,7 @@ describe('AgentLaunchContext', () => {
             '__missing_agent_for_launch_context_test__',
           );
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
 
         expect(explicit.events).toEqual([
@@ -163,7 +163,7 @@ describe('AgentLaunchContext', () => {
             (event) => event.event === 'requestShowError',
           ),
         ).toHaveLength(0);
-        session.dispose();
+        yield* session.dispose();
       }),
   );
 
@@ -188,7 +188,7 @@ describe('AgentLaunchContext', () => {
         try {
           yield* launchWithMissingAgent(session);
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
 
         expect(
@@ -219,7 +219,7 @@ describe('AgentLaunchContext', () => {
         expect(
           events.filter((event) => event === 'requestShowError'),
         ).toHaveLength(1);
-        session.dispose();
+        yield* session.dispose();
       }),
   );
 
@@ -251,7 +251,7 @@ describe('AgentLaunchContext', () => {
           );
           expect(error.message).toContain('is not registered');
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
 
         // Only the targeted instruction should fire; the generic `requestShowError`
@@ -315,7 +315,7 @@ describe('AgentLaunchContext', () => {
           ).toHaveLength(1);
         } finally {
           detachToast();
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );
@@ -422,7 +422,7 @@ describe('AgentLaunchContext', () => {
             context.disposeTrace();
           }
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );
@@ -503,7 +503,7 @@ describe('AgentLaunchContext', () => {
           // Terminal compensation is committed before the trace is detached.
           expect(order).toEqual(['stage', 'detach', 'raw-trace']);
         } finally {
-          session.dispose();
+          yield* session.dispose();
         }
       }),
   );
