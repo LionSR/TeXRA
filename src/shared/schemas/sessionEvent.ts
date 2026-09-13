@@ -484,12 +484,21 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
    * its rows outright, and an id-by-id probe reads that hole as "never
    * launched" and relaunches into it — so the parent's own journal, which
    * outlives every child, keeps the count. Folded as the highest per `key`.
+   *
+   * `supersededRunId` is the one authorization that closes a child which
+   * already started work: a user retrying that child through the workflow's
+   * control surface. The engine writes this row for the next attempt before
+   * it asks for the replacement, naming the child the retry superseded, so
+   * the recovery probe advances past an attempt it would otherwise refuse to
+   * repeat. Absent on every mark a launch writes for itself, which is what
+   * keeps restart recovery fail-closed for a child nobody retried.
    */
   durable(
     'workflow.attempt',
     {
       key: z.string().regex(/^[a-f0-9]{16}$/),
       attempt: z.int().nonnegative(),
+      supersededRunId: RunIdSchema.nullish(),
     },
     'workflow-checkpoint',
   ),

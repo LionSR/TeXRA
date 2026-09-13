@@ -366,7 +366,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
     // No attempt journaled yet — absence, not attempt 0: the probe starts at 0
     // and may launch there, unless a case says the parent already launched.
-    mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(null));
+    mocks.readWorkflowCallAttempt.mockReturnValue(
+      Effect.succeed({ attempt: null, superseded: [] }),
+    );
     // No turn ever settled unless a case says so: the settle is what separates
     // an ordinary failed child from one that lost its bookkeeping.
     mocks.readChildTurnState.mockReturnValue(
@@ -1391,7 +1393,9 @@ describe('createWorkflowScriptAgentRunner', () => {
         // back. The mark is the only fact that it ran: a mark folded to 0 would
         // be indistinguishable from no mark, and the probe would repeat the work
         // attempt 0 already did.
-        mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(0));
+        mocks.readWorkflowCallAttempt.mockReturnValue(
+          Effect.succeed({ attempt: 0, superseded: [] }),
+        );
         probeAnswers({ exists: false }, { exists: false });
         const report = reportSpy();
 
@@ -1418,7 +1422,9 @@ describe('createWorkflowScriptAgentRunner', () => {
       // still reads back as the single completed lifecycle that answered this
       // call. So the probe inspects 0 and recovers it rather than repeating
       // its work under attempt 1.
-      mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(1));
+      mocks.readWorkflowCallAttempt.mockReturnValue(
+        Effect.succeed({ attempt: 1, superseded: [] }),
+      );
       probeAnswers({
         exists: true,
         runEnd: result,

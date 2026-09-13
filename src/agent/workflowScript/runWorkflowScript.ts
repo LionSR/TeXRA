@@ -92,6 +92,8 @@ interface InFlightAgentCall {
   readonly index: number;
   fiber?: Fiber.Fiber<unknown, Error>;
   action?: WorkflowControlAction;
+  /** The live child the gesture named: what a retry supersedes. */
+  target?: RunId;
 }
 
 /**
@@ -344,6 +346,7 @@ export function runWorkflowScript<R = never>(
         fingerprintAgentDependencies,
         onEvent,
         onJournalEntry,
+        onSupersededAttempt,
         onJournalEntryConsumed,
         onControl,
       } = options;
@@ -468,6 +471,7 @@ export function runWorkflowScript<R = never>(
         const call = inFlightCalls.get(childRunId);
         if (!call?.fiber) return false;
         call.action = action;
+        call.target = childRunId;
         call.fiber.interruptUnsafe();
         return true;
       };
@@ -919,6 +923,32 @@ export function runWorkflowScript<R = never>(
                 }
 
                 if (call.action === 'retry') {
+                  // A retry is an authorized supersession, and the child it
+                  // interrupted may already have accepted a turn — the shape
+                  // every recovery rule refuses to repeat. Journal that
+                  // authorization before asking for the replacement, so the
+                  // runner's probe advances past the superseded child instead
+                  // of aborting the workflow over it, and a host that dies in
+                  // this window resumes on the same fact.
+                  const superseded = call.target;
+                  if (superseded !== undefined) {
+                    yield* Effect.suspend(
+                      () =>
+                        onSupersededAttempt?.({
+                          key,
+                          childRunId: superseded,
+                        }) ?? Effect.void,
+                    ).pipe(
+                      Effect.catch((error) => {
+                        const fault = new WorkflowRunAbortError(
+                          `Failed to journal the retry of workflow child ${superseded}: ${toErrorMessage(error)}`,
+                          { kind: 'checkpoint', cause: error },
+                        );
+                        failCall(fault);
+                        return Effect.fail(failRun(fault));
+                      }),
+                    );
+                  }
                   workflowRunState.queueCall(progressId, {
                     model: callOptions.model,
                   });

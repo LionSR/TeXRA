@@ -154,7 +154,8 @@ export class RunRegistry {
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
   /** The runs whose stop has begun ({@link beginStop}): each admits no new
-   *  child until a new generation of it is tracked. */
+   *  child until that stop settles ({@link throughStop}) or a new generation
+   *  of it takes the lane ({@link launchRun}). */
   private readonly stopping = new Set<RunId>();
   private readonly runView: (runId: RunId) => RunView | undefined;
   private readonly commit: (
@@ -296,6 +297,14 @@ export class RunRegistry {
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
+      // A generation admitted through the lane is this run starting again:
+      // whatever stop the run was marked for belongs to the generation it
+      // ended, and the one taking the lane admits children of its own. The
+      // lane is what makes this a separate admission rather than the same
+      // stop's own bookkeeping ({@link beginStop}) — a turn handle the
+      // stopping generation replaces takes no lane, so it no longer reopens
+      // a window the stop is still closing.
+      this.stopping.delete(runId);
       return this.lanes.launch(runId, operation);
     });
   }
@@ -305,10 +314,6 @@ export class RunRegistry {
     this.assertActive();
     if (handle.parent !== null)
       this.assertAdmitsChild(handle.parent, handle.runId);
-    // A generation tracked for a run whose stop had begun is that run
-    // starting again: the stop it was marked for is over, and the new
-    // generation admits children of its own.
-    this.stopping.delete(handle.runId);
     const previous = this.handles.get(handle.runId);
     const activation = this.childActivations.get(handle.runId);
     if (activation?.isDetached()) handle.detach();
@@ -372,14 +377,37 @@ export class RunRegistry {
    * parent — deliberately without cascading. A child admitted while that
    * commit is in flight would be in neither the durable nor the local sever
    * and would still resolve the just-stopped parent as its delivery target.
-   * The mark closes that window at its start: from here until a new
-   * generation of this run is tracked, no new child is admitted under it
-   * ({@link assertAdmitsChild}). A cascading stop takes the same mark for the
-   * same reason — it interrupts the children it can see at admission, and one
-   * admitted after that would outlive the parent that owns it.
+   * The mark closes that window at its start: from here until the stop
+   * settles, no new child is admitted under it ({@link assertAdmitsChild}).
+   * A cascading stop takes the same mark for the same reason — it interrupts
+   * the children it can see at admission, and one admitted after that would
+   * outlive the parent that owns it.
+   *
+   * The mark is the stop's, so {@link throughStop} owns its whole life: a
+   * multi-turn parent tracking its next turn's handle mid-detach is not the
+   * stop ending, and a run whose next generation takes the lane
+   * ({@link launchRun}) has left the stop behind whether or not that stop
+   * ever settled.
    */
   private beginStop(runId: RunId): void {
     this.stopping.add(runId);
+  }
+
+  /** End the stop's admission gate when its settlement does, succeeded or
+   *  failed: a refused `run.detach` commit never reaches the interrupt, so
+   *  the parent generation it marked is still running and still owns the
+   *  children it launches next. */
+  private throughStop(
+    runId: RunId,
+    settlement: Effect.Effect<void, Error>,
+  ): Effect.Effect<void, Error> {
+    return settlement.pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          this.stopping.delete(runId);
+        }),
+      ),
+    );
   }
 
   /** Remove a run handle and notify waiters. */
@@ -508,7 +536,10 @@ export class RunRegistry {
       activation?.interrupt();
       this.notifyWaiters(runId);
       const reached = activation !== undefined;
-      return { accepted: () => reached, settlement: Effect.void };
+      return {
+        accepted: () => reached,
+        settlement: this.throughStop(runId, Effect.void),
+      };
     }
     const visited = new Set<string>();
     const settlements: Effect.Effect<void, Error>[] = [];
@@ -530,7 +561,8 @@ export class RunRegistry {
     };
     return {
       accepted: () => reached,
-      settlement:
+      settlement: this.throughStop(
+        runId,
         options.detachActiveChildren === true
           ? // The children leave the parent before the parent is interrupted:
             // the sever the commit applies is what stops a child completing in
@@ -540,6 +572,7 @@ export class RunRegistry {
               Effect.andThen(Effect.suspend(stopRoot)),
             )
           : stopRoot(),
+      ),
     };
   }
 
@@ -664,20 +697,42 @@ export class RunRegistry {
    * The set taken here stays the parent's whole child roster while the batch
    * commits: the stop marked the parent before reading it ({@link beginStop}),
    * so no child is admitted under it in the window this covers.
+   *
+   * Each row lands on its own child's aggregate, which takes an append only
+   * from its claim holder, and freezing admission does not stop a child from
+   * finishing: one that ends while this batch waits releases its claim, and
+   * the batch is then refused as a whole with nothing severed. So every
+   * snapshotted child is held under the same fenced claim an ownerless stop
+   * takes ({@link stopAgentRun}) until the commit and the local sever are
+   * done — a child this process still owns re-claims nothing and releases
+   * nothing, and one that just ended leaves a claim reclaimable under this
+   * owner.
    */
   detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const detachedChildRunIds = this.childRunIds(parentRunId);
     if (detachedChildRunIds.length === 0) return Effect.void;
-    return this.commit(
-      detachedChildRunIds.map((childRunId) => ({
-        type: 'run.detach',
-        aggregateId: qualifyAggregateId('run', childRunId),
-      })),
-    ).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          this.detachChildren(parentRunId, detachedChildRunIds);
-        }),
+    return Effect.scoped(
+      Effect.forEach(
+        detachedChildRunIds,
+        (childRunId) =>
+          Effect.acquireRelease(this.acquireRunClaim(childRunId), (release) =>
+            release.pipe(Effect.orDie),
+          ),
+        { discard: true },
+      ).pipe(
+        Effect.andThen(
+          this.commit(
+            detachedChildRunIds.map((childRunId) => ({
+              type: 'run.detach',
+              aggregateId: qualifyAggregateId('run', childRunId),
+            })),
+          ),
+        ),
+        Effect.andThen(
+          Effect.sync(() => {
+            this.detachChildren(parentRunId, detachedChildRunIds);
+          }),
+        ),
       ),
     );
   }
@@ -762,36 +817,39 @@ export class RunRegistry {
       options.detachActiveChildren === true
         ? this.detachActiveChildren(runId)
         : Effect.void;
-    return detached.pipe(
-      Effect.andThen(
-        Effect.suspend(() => {
-          const rootHandle = this.handles.get(runId);
-          // Shared across the child sweep and the root cascade so each run in
-          // the chain is interrupted exactly once.
-          const visited = new Set<string>();
-          const settlements: Effect.Effect<void, Error>[] = [];
+    return this.throughStop(
+      runId,
+      detached.pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            const rootHandle = this.handles.get(runId);
+            // Shared across the child sweep and the root cascade so each run in
+            // the chain is interrupted exactly once.
+            const visited = new Set<string>();
+            const settlements: Effect.Effect<void, Error>[] = [];
 
-          if (options.detachActiveChildren !== true) {
-            this.interruptActiveChildren(runId, visited, true, settlements);
-          }
+            if (options.detachActiveChildren !== true) {
+              this.interruptActiveChildren(runId, visited, true, settlements);
+            }
 
-          const stopped = rootHandle
-            ? this.terminate(
-                rootHandle,
-                visited,
-                options.detachActiveChildren !== true,
-                settlements,
-              )
-            : false;
-          // `terminate()` already finalizes a run it owned; an ownerless (or
-          // already-untracked) run still needs the `run.end` row, which is the
-          // run's terminal fact: without the finalize below the fold, history
-          // and every other host would keep the stopped run in flight.
-          const all: Effect.Effect<void, Error>[] = stopped
-            ? settlements
-            : [...settlements, this.finalizeOwnerlessStop(runId)];
-          return Effect.all(all, { concurrency: 'unbounded', discard: true });
-        }),
+            const stopped = rootHandle
+              ? this.terminate(
+                  rootHandle,
+                  visited,
+                  options.detachActiveChildren !== true,
+                  settlements,
+                )
+              : false;
+            // `terminate()` already finalizes a run it owned; an ownerless (or
+            // already-untracked) run still needs the `run.end` row, which is the
+            // run's terminal fact: without the finalize below the fold, history
+            // and every other host would keep the stopped run in flight.
+            const all: Effect.Effect<void, Error>[] = stopped
+              ? settlements
+              : [...settlements, this.finalizeOwnerlessStop(runId)];
+            return Effect.all(all, { concurrency: 'unbounded', discard: true });
+          }),
+        ),
       ),
     );
   }

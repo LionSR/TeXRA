@@ -400,6 +400,17 @@ export interface WorkflowScriptRunOptions<R = never> {
     entry: WorkflowJournalEntry,
   ) => Effect.Effect<void, Error, R>;
   /**
+   * Durable checkpoint hook for an interactive retry: the child the user
+   * superseded, awaited before the engine asks the runner for its
+   * replacement. A retried child can already have started work, which every
+   * recovery rule otherwise refuses to repeat, so the authorization has to
+   * outlive this process for the runner's probe to advance past it.
+   */
+  onSupersededAttempt?: (superseded: {
+    readonly key: string;
+    readonly childRunId: RunId;
+  }) => Effect.Effect<void, Error, R>;
+  /**
    * Synchronous observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal
    * cached/completed status and before the result becomes visible to the

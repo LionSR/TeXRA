@@ -91,7 +91,7 @@ import type {
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
 import { throwAggregated } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getRunContextSession,
   runInSession,
@@ -411,38 +411,52 @@ export class SessionHandle {
    * {@link RunArtifactDrainError} so a caller can tell rolled-back facts from
    * a release that failed with everything already committed; the release's is
    * logged. This is the one exit choreography every run driver calls.
+   *
+   * The post-drain step runs whether or not the drain rejected, and hears
+   * which it was: it is where the run's terminal row is written, and a run
+   * whose ownership ends with no terminal row at all reads back as merely
+   * interrupted — the one classification a shutdown must not leave behind. A
+   * failed drain is what the row it writes carries (the `artifact-drain`
+   * marker `finalizeRunTerminal` stamps on the same fact), and the drain's
+   * own failure is still the error this call reports once that row has
+   * landed.
    */
   releaseRunLease(
     runId: RunId,
-    afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
+    afterArtifactsDrained: (
+      drainFailure: Error | undefined,
+    ) => Effect.Effect<void, Error> = () => Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const drained = yield* Effect.exit(
-        Effect.gen({ self: this }, function* () {
-          yield* Effect.tryPromise({
-            try: () =>
-              runInSession(this, async () => {
-                await validateOwnedRunLease(runId);
-                await this.flushArtifacts(runId);
-              }),
-            // The drain is the ordered publisher's settle, so anything that
-            // fails here left facts this run had queued uncommitted. The one
-            // exception is a lost lease, which keeps its own identity: it
-            // says this process no longer owns the run, and the callers that
-            // treat shutdown contention as expected read that type.
-            catch: (cause) =>
-              cause instanceof RunLeaseLostError
-                ? cause
-                : new RunArtifactDrainError(runId, cause),
-          });
-          yield* afterArtifactsDrained;
+        Effect.tryPromise({
+          try: () =>
+            runInSession(this, async () => {
+              await validateOwnedRunLease(runId);
+              await this.flushArtifacts(runId);
+            }),
+          // The drain is the ordered publisher's settle, so anything that
+          // fails here left facts this run had queued uncommitted. The one
+          // exception is a lost lease, which keeps its own identity: it
+          // says this process no longer owns the run, and the callers that
+          // treat shutdown contention as expected read that type.
+          catch: (cause) =>
+            cause instanceof RunLeaseLostError
+              ? cause
+              : new RunArtifactDrainError(runId, cause),
         }),
       );
-      // Settle whatever the drain did. When the drain rejected
-      // (including in `validateOwnedExecutionLease`), the post-drain step
-      // never ran, and this settle still stops claim release from overtaking
-      // facts the owner already queued. On success it also covers the facts
-      // `afterArtifactsDrained` published.
+      const finalized = yield* Effect.exit(
+        afterArtifactsDrained(
+          Exit.isFailure(drained)
+            ? ensureError(Cause.squash(drained.cause))
+            : undefined,
+        ),
+      );
+      // Settle whatever the drain and the post-drain step did. When the drain
+      // rejected (including in `validateOwnedExecutionLease`), this settle
+      // still stops claim release from overtaking facts the owner already
+      // queued, and it covers the facts `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
         Effect.tryPromise({
           try: () => this.settlePublications(runId),
@@ -458,8 +472,14 @@ export class SessionHandle {
           catch: ensureError,
         }),
       );
-      const failures = [drained, published, claimRelease, fileRelease].flatMap(
-        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
+      const failures = [
+        drained,
+        finalized,
+        published,
+        claimRelease,
+        fileRelease,
+      ].flatMap((exit) =>
+        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
       );
       const primary = failures.shift();
       for (const error of failures)
@@ -1189,13 +1209,26 @@ export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
             return tracked ? yield* session.transcripts.readEntries(runId) : [];
           }),
         );
-        yield* session.releaseRunLease(
-          runId,
+        yield* session.releaseRunLease(runId, (drainFailure) =>
           Effect.gen(function* () {
+            // A drain that rejected rolled back facts this run had queued, and
+            // the row written here is what every later reader has: the same
+            // `artifact-drain` marker `finalizeRunTerminal` stamps says the
+            // run's queued facts are gone rather than that it was merely
+            // interrupted. The drain's own failure is reported by the release
+            // once this row has landed.
             const finalization = yield* finalizeRun(session, {
               runId,
               outcome: RUN_OUTCOME.CANCELLED,
               keepExistingOutcome: true,
+              ...(drainFailure === undefined
+                ? {}
+                : {
+                    error: {
+                      kind: 'artifact-drain' as const,
+                      message: toErrorMessage(drainFailure),
+                    },
+                  }),
             });
             if (!finalization.ok) {
               throw new Error(

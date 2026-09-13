@@ -2356,6 +2356,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       Effect.gen(function* () {
         const attemptByIndex = new Map<number, number>();
         const releases: Array<() => void> = [];
+        const superseded: RunId[] = [];
         let control!: WorkflowScriptControl;
         const runner = (invocation: WorkflowAgentInvocation) =>
           controlledEffect<string>((resolve, reject) => {
@@ -2371,6 +2372,10 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const runFiber = yield* runWorkflowScript({
           script: `${META}return await agent('go')`,
           runAgent: runner,
+          onSupersededAttempt: ({ childRunId }) =>
+            Effect.sync(() => {
+              superseded.push(childRunId);
+            }),
           onControl: (handle) => {
             control = handle;
           },
@@ -2380,6 +2385,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         control(childRunIdFor(0, 1), 'retry');
         // The aborted first attempt is discarded; a fresh attempt starts.
         yield* waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
+        // The retry is journaled as an authorized supersession before the
+        // replacement is asked for: that mark is the only fact letting the
+        // runner's probe advance past a child which may already have accepted
+        // a turn, rather than refusing to repeat it.
+        expect(superseded).toEqual([childRunIdFor(0, 1)]);
         releases.at(-1)?.();
 
         const run = yield* Fiber.join(runFiber);

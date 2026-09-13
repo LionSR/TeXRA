@@ -83,7 +83,7 @@ export interface WorkflowScriptCheckpoint {
 
 export interface PersistedWorkflowScriptRunOptions<R = never> extends Omit<
   WorkflowScriptRunOptions<R>,
-  'script' | 'journal' | 'onJournalEntry'
+  'script' | 'journal' | 'onJournalEntry' | 'onSupersededAttempt'
 > {
   /** The session whose event table holds the checkpoint aggregate. */
   session: SessionHandle;
@@ -183,30 +183,49 @@ export function readWorkflowCallAttempt(
   session: SessionHandle,
   checkpointId: string,
   key: string,
-): Effect.Effect<number | null, Error> {
+): Effect.Effect<WorkflowCallAttemptMark, Error> {
   return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
     Effect.map((rows) =>
-      rows.reduce<number | null>(
-        (highest, row) =>
+      rows.reduce<WorkflowCallAttemptMark>(
+        (mark, row) =>
           row.type === 'workflow.attempt' && row.key === key
-            ? // A first mark is itself the highest; `null` is absence, never a
-              // number to maximize against.
-              Math.max(highest ?? row.attempt, row.attempt)
-            : highest,
-        null,
+            ? {
+                // A first mark is itself the highest; `null` is absence, never
+                // a number to maximize against.
+                attempt: Math.max(mark.attempt ?? row.attempt, row.attempt),
+                superseded:
+                  row.supersededRunId == null
+                    ? mark.superseded
+                    : [...mark.superseded, row.supersededRunId],
+              }
+            : mark,
+        { attempt: null, superseded: [] },
       ),
     ),
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );
 }
 
+/** What one call's `workflow.attempt` rows fold to. */
+export interface WorkflowCallAttemptMark {
+  /** The highest attempt the parent journaled a launch for; `null` when it
+   *  journaled none. */
+  readonly attempt: number | null;
+  /** The children a user's retry superseded: attempts the probe advances
+   *  past however far into their work they got. */
+  readonly superseded: readonly RunId[];
+}
+
 /** Move that mark before the attempt launches, so a crash between this row
- *  and the child's own `run.start` still resumes at the attempt that ran. */
+ *  and the child's own `run.start` still resumes at the attempt that ran.
+ *  `supersededRunId` names the child a user's retry authorized this attempt
+ *  to replace; a launch's own mark carries none. */
 export function recordWorkflowCallAttempt(
   session: SessionHandle,
   checkpointId: string,
   key: string,
   attempt: number,
+  supersededRunId?: RunId,
 ): Effect.Effect<void, Error> {
   return session
     .commit([
@@ -215,6 +234,7 @@ export function recordWorkflowCallAttempt(
         aggregateId: checkpointAggregate(checkpointId),
         key,
         attempt,
+        ...(supersededRunId === undefined ? {} : { supersededRunId }),
       },
     ])
     .pipe(
@@ -227,6 +247,34 @@ export function recordWorkflowCallAttempt(
           ),
       ),
     );
+}
+
+/**
+ * Journal a user's retry of a live child: the mark for the attempt that
+ * replaces it, naming the child it supersedes. The mark the retried child's
+ * own launch wrote is the attempt it ran as, so the replacement is the next
+ * one. Written before the engine asks for that replacement, so the recovery
+ * probe advances past a child that had already accepted a turn — the one
+ * thing no other fact may do — and a host that dies in between resumes on the
+ * same authorization rather than stranding the call.
+ */
+function recordWorkflowCallSupersession(
+  session: SessionHandle,
+  checkpointId: string,
+  key: string,
+  supersededRunId: RunId,
+): Effect.Effect<void, Error> {
+  return readWorkflowCallAttempt(session, checkpointId, key).pipe(
+    Effect.flatMap((mark) =>
+      recordWorkflowCallAttempt(
+        session,
+        checkpointId,
+        key,
+        (mark.attempt ?? 0) + 1,
+        supersededRunId,
+      ),
+    ),
+  );
 }
 
 /**
@@ -356,13 +404,26 @@ export function runPersistedWorkflowScript<R = never>(
             // `...runOptions` carries the caller's own `onSnapshot`: snapshots
             // belong to the detached run that owns their writes, while this
             // checkpoint belongs to its orchestrator.
+            // The session's ordered publisher, awaited to durability: a refused
+            // or failed append rejects here and the engine fails the run with a
+            // checkpoint fault rather than exposing the result to the script.
+            // The commit answers for itself, which is the whole of what this
+            // write needs: a session-wide barrier would also report every
+            // session-scoped publication anyone else queued — an inquiry thread
+            // update, say — and abort a workflow over a fact it does not own.
+            // An interactive retry supersedes the child it interrupted: the
+            // authorization is journaled here, on the same aggregate and
+            // before the replacement is asked for.
+            onSupersededAttempt: ({ key, childRunId }) =>
+              recordWorkflowCallSupersession(
+                session,
+                checkpointId,
+                key,
+                childRunId,
+              ),
             onJournalEntry: (entry) =>
-              Effect.gen(function* () {
-                // The session's ordered publisher, awaited to durability: a
-                // refused or failed append rejects here and the engine fails the
-                // run with a checkpoint fault rather than exposing the result to
-                // the script.
-                session.publish([
+              session
+                .commit([
                   {
                     type: 'workflow.journal',
                     aggregateId: target,
@@ -370,12 +431,17 @@ export function runPersistedWorkflowScript<R = never>(
                     index: entry.index,
                     result: encodeJsonValue(entry.result),
                   },
-                ]);
-                yield* Effect.tryPromise({
-                  try: () => session.settlePublications(),
-                  catch: ensureError,
-                });
-              }),
+                ])
+                .pipe(
+                  Effect.asVoid,
+                  Effect.mapError(
+                    (cause) =>
+                      new Error(
+                        `Workflow checkpoint ${checkpointId} could not journal call ${entry.key}.`,
+                        { cause },
+                      ),
+                  ),
+                ),
           });
         }),
       // A release that fails leaves the claim standing: the next process reads

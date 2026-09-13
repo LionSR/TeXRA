@@ -421,6 +421,14 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * past it, and once deletion collects that tombstone the mark is what still
  * says the call got that far.
  *
+ * The journal answers one question about an id that *does* read back, and only
+ * one: whether a user superseded it. A retry through the workflow's control
+ * surface interrupts a child that may already have accepted a turn and asks
+ * for its replacement, so the engine journals the next attempt's mark naming
+ * that child before this call is invoked again. That mark is an authorization,
+ * not a reading of the child, and it is the only fact that advances past an
+ * attempt which started work.
+ *
  * What an existing attempt did is the child's own bookkeeping to say, and the
  * terminal row beside it says only what that came to. `childRunLoop` commits
  * a turn's acceptance row immediately before the turn dispatches, so an
@@ -432,7 +440,7 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * - An active turn refuses. Its tools may already have edited files and
  *   nothing recorded what they did — the shape a stop leaves, a CANCELLED row
  *   with no manifest — so no attempt with one advances, with an outcome or
- *   without one.
+ *   without one, unless a user's retry superseded it above.
  * - A settled turn with no manifest refuses, whether or not the run recorded
  *   an outcome. The delivery can roll back after the model and the tools have
  *   finished: the turn still settles, the loop still records a FAILED — or, a
@@ -514,7 +522,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // launch for and deletion has since collected outright: nothing of it
         // reads back, but it ran, so the probe advances past it exactly as it
         // does past a tombstone. Only an id above the mark is a free slot.
-        if (journaled !== null && attempt <= journaled) continue;
+        if (journaled.attempt !== null && attempt <= journaled.attempt)
+          continue;
         // `exists()` is false for an id that never started AND for one the
         // user deleted, and a tombstone is final: launching a deleted id is
         // refused by its own sequence, and the attempt that answered this call
@@ -602,6 +611,14 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // every decision below has to hold against a resume that starts one
       // instant later, here or in another process.
       yield* fenceSupersededRun(session, runId);
+      // A user's retry of this child is the one authorization that closes an
+      // attempt which already started work: the engine journals the next
+      // attempt's mark naming this id before it asks for the replacement, so
+      // what this child began — an accepted turn included — is exactly what
+      // the retry asked to replace. Nothing else advances past a started
+      // attempt, and the mark exists only where someone authorized this
+      // supersession, so every attempt nobody retried keeps the rules below.
+      if (journaled.superseded.includes(runId)) continue;
       // One read order, terminal row last: a child commits `run.end` before it
       // releases its claim, so a free claim makes that row final, while the
       // copy read before the claim was observed can predate a child that ended
