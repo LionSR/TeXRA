@@ -33,6 +33,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 import ts from 'typescript';
 
@@ -1101,22 +1102,10 @@ function sites(entries) {
   return Object.values(entries).reduce((sum, count) => sum + count, 0);
 }
 
-function parseArgs(argv) {
-  const options = { update: false };
-  for (const arg of argv) {
-    if (arg === '--update') {
-      options.update = true;
-    } else {
-      throw new Error(
-        `Unknown argument ${JSON.stringify(arg)}; expected --update or nothing`,
-      );
-    }
-  }
-  return options;
-}
-
 function main() {
-  const options = parseArgs(process.argv.slice(2));
+  const { values: options } = parseArgs({
+    options: { update: { type: 'boolean', default: false } },
+  });
   selfTestSurvey();
   selfTestBoundary();
   const files = productionFiles();
