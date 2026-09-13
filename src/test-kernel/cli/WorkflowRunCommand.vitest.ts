@@ -2,7 +2,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -11,7 +11,7 @@ import '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
-import { it as effectIt } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
@@ -33,7 +33,6 @@ import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import {
   fakeProcessServices,
-  type FakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
 import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
@@ -100,34 +99,16 @@ vi.mock('@cli/runtime/transcriptSession', () => ({
 }));
 
 vi.mock('@cli/runtime/executeCli', () => ({
-  executeCliConfig: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.executeCliConfig(...args),
-      catch: ensureError,
-    }),
+  // A pass-through, so the mocked seam has the real module's Effect-returning
+  // shape and every stub below returns the program the command yields.
+  executeCliConfig: (...args: unknown[]) => mocks.executeCliConfig(...args),
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  withExpandedRunInputs: (
-    ...args: Parameters<
-      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
-        unknown,
-        unknown,
-        FakeProcessServices
-      >
-    >
-  ) =>
-    Effect.tryPromise({
-      try: () =>
-        mocks.withExpandedRunInputs(
-          ...args.slice(0, 4),
-          (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(
-              Effect.provide(args[4](inputs), fakeProcessServices()),
-            ),
-        ),
-      catch: ensureError,
-    }),
+  // A pass-through: the real helper yields `run(inputs)` in-fiber, so the stub
+  // hands the command back that same Effect instead of detaching it.
+  withExpandedRunInputs: (...args: unknown[]) =>
+    mocks.withExpandedRunInputs(...args),
   hasMixedStdinWorkflowInputSpecs: vi.fn((inputFiles: readonly string[]) => {
     const specs = new Set(
       inputFiles.map((spec) => spec.trim()).filter(Boolean),
@@ -237,28 +218,28 @@ function workflowRun(
 }
 
 function mockWorkflowRun(result: WorkflowExecuteResult, once = false): void {
-  const implementation = async (
+  const implementation = (
     _config: unknown,
     _context: unknown,
     options: {
       readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
     },
-  ) => {
-    if (result.ok) {
-      const outputOutcome = options.openWorkflowOutput
-        ? await Effect.runPromise(
-            options.openWorkflowOutput(result.result, () => true),
-          )
-        : undefined;
-      if (outputOutcome !== undefined) {
-        return {
-          ...result,
-          result: { ...result.result, outcome: outputOutcome },
-        };
+  ) =>
+    Effect.gen(function* () {
+      if (result.ok && options.openWorkflowOutput) {
+        const outputOutcome = yield* options.openWorkflowOutput(
+          result.result,
+          () => true,
+        );
+        if (outputOutcome !== undefined) {
+          return {
+            ...result,
+            result: { ...result.result, outcome: outputOutcome },
+          };
+        }
       }
-    }
-    return result;
-  };
+      return result;
+    });
   if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
   else mocks.executeCliConfig.mockImplementation(implementation);
 }
@@ -270,25 +251,27 @@ function mockCancellationDuringOutputFinalization(
 ): void {
   if (!provisional.ok) throw new Error('Expected a workflow result.');
   mocks.executeCliConfig.mockImplementationOnce(
-    async (
+    (
       _config: unknown,
       _context: unknown,
       options: {
         readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
       },
-    ) => {
-      if (options.openWorkflowOutput)
-        await Effect.runPromise(
-          options.openWorkflowOutput(provisional.result, tryCommitPublication),
-        );
-      return {
-        ...provisional,
-        result: {
-          ...provisional.result,
-          outcome: RUN_OUTCOME.CANCELLED,
-        },
-      };
-    },
+    ) =>
+      Effect.gen(function* () {
+        if (options.openWorkflowOutput)
+          yield* options.openWorkflowOutput(
+            provisional.result,
+            tryCommitPublication,
+          );
+        return {
+          ...provisional,
+          result: {
+            ...provisional.result,
+            outcome: RUN_OUTCOME.CANCELLED,
+          },
+        };
+      }),
   );
 }
 
@@ -413,7 +396,7 @@ describe('CLI run command, workflow agents', () => {
       snapshot: reflectionSnapshot(),
     });
     mocks.withExpandedRunInputs.mockImplementation(
-      async (
+      (
         _inputSpecs: readonly string[],
         _contextSpecs: readonly string[],
         _cwd: string,
@@ -422,38 +405,66 @@ describe('CLI run command, workflow agents', () => {
           readonly inputFiles: string[];
           readonly contextFiles: string[];
           readonly stdinInputPath?: string;
-        }) => Promise<unknown>,
+        }) => Effect.Effect<unknown, unknown, never>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
     mockWorkflowRun(workflowRun('exec-1'));
   });
 
-  it('reports conflicting output targets before platform or model lookup', async () => {
-    await expect(
-      runWorkflow({ output: 'out.tex', outputDir: 'out' }),
-    ).rejects.toThrow('Use either --output or --output-dir, not both.');
+  it.effect(
+    'reports conflicting output targets before platform or model lookup',
+    () =>
+      Effect.gen(function* () {
+        // The usage error is raised by a bare `throw` inside the command's
+        // generator, so it arrives as a defect, not a typed failure.
+        const exit = yield* Effect.exit(
+          workflowProgram({ output: 'out.tex', outputDir: 'out' }),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        const defect = Exit.isFailure(exit)
+          ? Cause.squash(exit.cause)
+          : undefined;
+        expect(defect).toBeInstanceOf(Error);
+        expect((defect as Error).message).toContain(
+          'Use either --output or --output-dir, not both.',
+        );
 
-    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
-    expectNoModelOrInputWork();
-  });
+        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
+        expectNoModelOrInputWork();
+      }),
+  );
 
-  it('reports single-output mixed stdin usage before resolving the model', async () => {
-    await expect(
-      runWorkflow({ inputFiles: ['-', 'paper.tex'], output: 'out.tex' }),
-    ).rejects.toThrow(
-      'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
-    );
+  it.effect(
+    'reports single-output mixed stdin usage before resolving the model',
+    () =>
+      Effect.gen(function* () {
+        // Same bare `throw` as above: a defect, not a typed failure.
+        const exit = yield* Effect.exit(
+          workflowProgram({
+            inputFiles: ['-', 'paper.tex'],
+            output: 'out.tex',
+          }),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        const defect = Exit.isFailure(exit)
+          ? Cause.squash(exit.cause)
+          : undefined;
+        expect(defect).toBeInstanceOf(Error);
+        expect((defect as Error).message).toContain(
+          'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
+        );
 
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
-    expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
-    expectNoModelOrInputWork();
-  });
+        expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalled();
+        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith('polish');
+        expectNoModelOrInputWork();
+      }),
+  );
 
   // The output probes `mkdir -p` their destination, so a run that can never
   // start has to be refused before them — otherwise an invalid command leaves
   // directories behind.
-  effectIt.effect(
+  it.effect(
     'refuses a workflow run with no input before creating the output directory',
     () =>
       withTempDirEffect('texra-workflow-', (root) =>
@@ -642,118 +653,126 @@ describe('CLI run command, workflow agents', () => {
     });
   });
 
-  effectIt.live(
-    'persists workflow metadata before the run claim is released',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const { createTestSession } = yield* Effect.promise(
-            () => import('@test/support/sessionTestUtils'),
-          );
-          const { aggregateId } = yield* Effect.promise(
-            () => import('@shared/schemas'),
-          );
-          const storage = yield* Effect.promise(() =>
-            vi.importActual<typeof import('@agent/storage')>('@agent/storage'),
-          );
-          const mockedStorage = yield* Effect.promise(
-            () => import('@agent/storage'),
-          );
-          const { initializeCliTranscriptSession } = yield* Effect.promise(
-            () => import('@cli/runtime/transcriptSession'),
-          );
-          const session = yield* Effect.acquireRelease(
-            Effect.sync(() => createTestSession()),
-            (owned) => Effect.sync(() => owned.dispose()),
-          );
-          const runId = 'abc123abc123' as RunId;
-          const { runInSession } = yield* Effect.promise(
-            () => import('@agent/runtime/RunContext'),
-          );
-          const { acquireFreshRunLease } = yield* Effect.promise(
-            () => import('@agent/storage/runLease'),
-          );
-          yield* Effect.promise(() =>
-            runInSession(session, () => acquireFreshRunLease(runId)),
-          );
-          const run = workflowRun(runId);
-          if (!run.ok) throw new Error('Expected workflow result.');
-          vi.mocked(initializeCliTranscriptSession).mockResolvedValueOnce(
-            session,
-          );
-          const records = storage.getRunRecords(session, runId);
-          vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
-          yield* session.commit([
-            {
-              type: 'run.start',
-              aggregateId: aggregateId('run', run.result.runId),
-              identity: { kind: 'agent', agent: 'polish' },
-              category: AgentCategory.Workflow,
-              userFollowUpSupport: 'unsupported',
-              isRemote: false,
-              parent: null,
-            },
-          ]);
-          // The existing executeCliConfig stub is a Promise port. Its run owns
-          // output finalization and releases the real claim before returning.
-          mocks.executeCliConfig.mockImplementationOnce(
-            (_config, _context, options) =>
-              Effect.runPromise(
-                options
-                  .openWorkflowOutput(run.result, () => true)
-                  .pipe(
-                    Effect.as(run),
-                    Effect.ensuring(
-                      session.releaseRunLease(runId).pipe(Effect.orDie),
-                    ),
-                  ),
+  // it.live: the body drives a real session through the process runtime.
+  it.live('persists workflow metadata before the run claim is released', () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { createTestSession } = yield* Effect.promise(
+          () => import('@test/support/sessionTestUtils'),
+        );
+        const { aggregateId } = yield* Effect.promise(
+          () => import('@shared/schemas'),
+        );
+        const storage = yield* Effect.promise(() =>
+          vi.importActual<typeof import('@agent/storage')>('@agent/storage'),
+        );
+        const mockedStorage = yield* Effect.promise(
+          () => import('@agent/storage'),
+        );
+        const { initializeCliTranscriptSession } = yield* Effect.promise(
+          () => import('@cli/runtime/transcriptSession'),
+        );
+        const session = yield* Effect.acquireRelease(
+          Effect.sync(() => createTestSession()),
+          (owned) => Effect.sync(() => owned.dispose()),
+        );
+        const runId = 'abc123abc123' as RunId;
+        const { runInSession } = yield* Effect.promise(
+          () => import('@agent/runtime/RunContext'),
+        );
+        const { acquireFreshRunLease } = yield* Effect.promise(
+          () => import('@agent/storage/runLease'),
+        );
+        yield* Effect.promise(() =>
+          runInSession(session, () => acquireFreshRunLease(runId)),
+        );
+        const run = workflowRun(runId);
+        if (!run.ok) throw new Error('Expected workflow result.');
+        vi.mocked(initializeCliTranscriptSession).mockResolvedValueOnce(
+          session,
+        );
+        const records = storage.getRunRecords(session, runId);
+        vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
+        yield* session.commit([
+          {
+            type: 'run.start',
+            aggregateId: aggregateId('run', run.result.runId),
+            identity: { kind: 'agent', agent: 'polish' },
+            category: AgentCategory.Workflow,
+            userFollowUpSupport: 'unsupported',
+            isRemote: false,
+            parent: null,
+          },
+        ]);
+        // The executeCliConfig stub is an Effect port. Its run owns output
+        // finalization and releases the real claim before returning.
+        mocks.executeCliConfig.mockImplementationOnce(
+          (_config, _context, options) =>
+            options
+              .openWorkflowOutput(run.result, () => true)
+              .pipe(
+                Effect.as(run),
+                Effect.ensuring(
+                  session.releaseRunLease(runId).pipe(Effect.orDie),
+                ),
               ),
+        );
+        expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
+          0,
+        );
+        expect(yield* records.readResultMeta()).toMatchObject({
+          producer: 'cliWorkflow',
+          output: { category: 'workflow' },
+        });
+        const afterRelease = yield* Effect.result(
+          records.writeResultMeta(
+            storage.buildCliWorkflowResultMeta(run.result),
+          ),
+        );
+        expect(Result.isFailure(afterRelease)).toBe(true);
+      }),
+    ),
+  );
+
+  it.effect(
+    'reports failure when completed workflow metadata cannot be persisted',
+    () =>
+      withTempDirEffect('texra-workflow-', (root) =>
+        Effect.gen(function* () {
+          const generated = yield* Effect.promise(() =>
+            writeGeneratedOutput(root),
           );
+          mockWorkflowRun(
+            workflowRun('exec-output-meta-fail', {
+              outputs: [
+                runOutputSummary(generated, path.join(root, 'paper.tex')),
+              ],
+            }),
+            true,
+          );
+          mocks.writeResultMeta.mockRejectedValueOnce(
+            new Error('metadata disk full'),
+          );
+
+          // The record store's write failure is carried out on the typed Error
+          // channel, unlike the usage errors above.
+          const error = yield* Effect.flip(
+            workflowProgram(
+              { outputDir: 'out' },
+              createRunCommandCliContext({ cwd: root }),
+            ),
+          );
+          expect(error.message).toContain('metadata disk full');
+
           expect(
             yield* Effect.promise(() =>
-              runWorkflow({}, createRunCommandCliContext()),
+              fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
             ),
-          ).toBe(0);
-          expect(yield* records.readResultMeta()).toMatchObject({
-            producer: 'cliWorkflow',
-            output: { category: 'workflow' },
-          });
-          const afterRelease = yield* Effect.result(
-            records.writeResultMeta(
-              storage.buildCliWorkflowResultMeta(run.result),
-            ),
-          );
-          expect(Result.isFailure(afterRelease)).toBe(true);
+          ).toBe('polished');
+          expect(mocks.emitCliResult).not.toHaveBeenCalled();
         }),
       ),
   );
-
-  it('reports failure when completed workflow metadata cannot be persisted', async () => {
-    await withTempDir('texra-workflow-', async (root) => {
-      const generated = await writeGeneratedOutput(root);
-      mockWorkflowRun(
-        workflowRun('exec-output-meta-fail', {
-          outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
-        }),
-        true,
-      );
-      mocks.writeResultMeta.mockRejectedValueOnce(
-        new Error('metadata disk full'),
-      );
-
-      await expect(
-        runWorkflow(
-          { outputDir: 'out' },
-          createRunCommandCliContext({ cwd: root }),
-        ),
-      ).rejects.toThrow('metadata disk full');
-
-      await expect(
-        fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
-      ).resolves.toBe('polished');
-      expect(mocks.emitCliResult).not.toHaveBeenCalled();
-    });
-  });
 
   it('persists a failed runtime envelope when copying the requested output fails', async () => {
     const outputSummary = runOutputSummary(
@@ -1075,7 +1094,7 @@ describe('CLI run command, workflow agents', () => {
     const root = path.join(path.sep, 'tmp', 'workspace');
     const stdinPath = path.join(root, 'texra-stdin-123-abc123', 'stdin.tex');
     mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (_inputs, _contexts, _cwd, _options, run) =>
+      (_inputs, _contexts, _cwd, _options, run) =>
         run({
           inputFiles: [stdinPath],
           contextFiles: [],
@@ -1112,7 +1131,7 @@ describe('CLI run command, workflow agents', () => {
       'stdin.tex',
     );
     mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (_inputs, _contexts, _cwd, _options, run) =>
+      (_inputs, _contexts, _cwd, _options, run) =>
         run({ inputFiles: [lookalike], contextFiles: [] }),
     );
     mockWorkflowRun(
@@ -1178,15 +1197,14 @@ describe('CLI run command, workflow agents', () => {
       outcome: RUN_OUTCOME.CANCELLED,
     });
     mocks.executeCliConfig.mockImplementationOnce(
-      async (_config, _context, options) => {
-        if (!run.ok) return run;
-        if (options.openWorkflowOutput)
-          await Effect.runPromise(
-            options.openWorkflowOutput(run.result, () => true),
-          );
-        options.onInterruptedRunFinalized?.('exec-signal');
-        return run;
-      },
+      (_config, _context, options) =>
+        Effect.gen(function* () {
+          if (!run.ok) return run;
+          if (options.openWorkflowOutput)
+            yield* options.openWorkflowOutput(run.result, () => true);
+          options.onInterruptedRunFinalized?.('exec-signal');
+          return run;
+        }),
     );
     const resumeInvocation = path.join(path.sep, 'tmp', 'resume-invocation');
     const persistedWorkspace = path.join(
@@ -1318,13 +1336,22 @@ describe('CLI run command, workflow agents', () => {
     expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
   });
 
-  it('reports missing instruction files before starting platform or input work', async () => {
-    await expect(
-      runWorkflow({ instructionFile: 'missing-prompt.md' }),
-    ).rejects.toThrow(/--instruction-file: file not found: missing-prompt\.md/);
+  it.effect(
+    'reports missing instruction files before starting platform or input work',
+    () =>
+      Effect.gen(function* () {
+        // `readInstructionFile` throws inside an async function the command wraps
+        // in `Effect.tryPromise`, so this one lands on the typed Error channel.
+        const error = yield* Effect.flip(
+          workflowProgram({ instructionFile: 'missing-prompt.md' }),
+        );
+        expect(error.message).toMatch(
+          /--instruction-file: file not found: missing-prompt\.md/,
+        );
 
-    expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
-    expectNoModelOrInputWork();
-  });
+        expect(cliInitPlatformMock.initLocalCliPlatform).not.toHaveBeenCalled();
+        expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
+        expectNoModelOrInputWork();
+      }),
+  );
 });
