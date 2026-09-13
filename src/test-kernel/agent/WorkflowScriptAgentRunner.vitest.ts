@@ -334,9 +334,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     // Nothing holds a probed run's claim unless a case says so: the fence
     // hands back the release the call's scope runs.
     mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
-    // No attempt journaled yet: the probe starts at 0 unless a case says the
-    // parent already launched further.
-    mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(0));
+    // No attempt journaled yet — absence, not attempt 0: the probe starts at 0
+    // and may launch there, unless a case says the parent already launched.
+    mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(null));
     mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
     mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
       name,
@@ -1180,6 +1180,35 @@ describe('createWorkflowScriptAgentRunner', () => {
         mocks.executeSubagentInBand.mock.invocationCallOrder[0] ?? 0,
       );
     }),
+  );
+
+  it.effect(
+    'advances past a journaled attempt 0 whose child was collected',
+    () =>
+      Effect.gen(function* () {
+        // The parent journaled attempt 0 and died before journaling its result,
+        // and deletion has since collected that child, so nothing of it reads
+        // back. The mark is the only fact that it ran: a mark folded to 0 would
+        // be indistinguishable from no mark, and the probe would repeat the work
+        // attempt 0 already did.
+        mocks.readWorkflowCallAttempt.mockReturnValue(Effect.succeed(0));
+        probeAnswers({ exists: false }, { exists: false });
+        const report = reportSpy();
+
+        expect(yield* defaultRunner()({ ...invocation(), report })).toBe(
+          result,
+        );
+
+        expect(mocks.probedRunIds).toHaveLength(2);
+        expect(mocks.executeSubagentInBand).toHaveBeenCalledTimes(1);
+        expect(reported(report, 'childRunId')).toEqual([mocks.probedRunIds[1]]);
+        expect(mocks.recordWorkflowCallAttempt).toHaveBeenCalledWith(
+          expect.anything(),
+          'tool-call-7',
+          '0123456789abcdef',
+          1,
+        );
+      }),
   );
 
   it.effect('probes from the attempt the parent journaled', () =>

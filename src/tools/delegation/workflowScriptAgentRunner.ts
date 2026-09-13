@@ -396,7 +396,12 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  *
  * Which ids to probe comes from the parent's journal: the attempt mark it
  * moves before each launch outlives the children, so the probe starts at the
- * attempt that ran rather than at 0. An id the user deleted is closed, not
+ * attempt that ran rather than at 0. That mark is nullable, and the two
+ * answers are read differently: no mark means the call never launched, so the
+ * probe starts at 0 and the first absent id is the launch slot; a mark of `n`
+ * means attempt `n` launched, so an absent id at or below `n` is one deletion
+ * has collected and the probe advances past it, while the first absent id
+ * above `n` is the launch slot. An id the user deleted is closed, not
  * free: its tombstone is final, so the probe advances past it, and once
  * deletion collects that tombstone the mark is what still says the call got
  * that far.
@@ -440,14 +445,18 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
     // Where the probe starts: the parent's journal, not attempt 0. A deleted
     // attempt is collected in the end, and an id-by-id probe reads the hole
     // that leaves as an id that never started — it would launch into it and
-    // never reach the attempt that answered this call after it.
-    const launched = yield* probeJournal(
+    // never reach the attempt that answered this call after it. The mark is
+    // nullable because attempt 0 is an attempt: `null` is the only answer that
+    // means nothing ever launched, so a journaled 0 whose child is gone is
+    // advanced past rather than run a second time.
+    const journaled = yield* probeJournal(
       call.key,
       readWorkflowCallAttempt(session, call.checkpointId, call.key),
     );
+    const first = journaled ?? 0;
     for (
-      let attempt = launched;
-      attempt < launched + MAX_WORKFLOW_CALL_ATTEMPTS;
+      let attempt = first;
+      attempt < first + MAX_WORKFLOW_CALL_ATTEMPTS;
       attempt += 1
     ) {
       const runId = workflowCallRunId({
@@ -458,6 +467,11 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       });
       const records = getRunRecords(session, runId);
       if (!(yield* probeChild(runId, records.exists()))) {
+        // An absent id at or below the mark is one the parent journaled a
+        // launch for and deletion has since collected outright: nothing of it
+        // reads back, but it ran, so the probe advances past it exactly as it
+        // does past a tombstone. Only an id above the mark is a free slot.
+        if (journaled !== null && attempt <= journaled) continue;
         // `exists()` is false for an id that never started AND for one the
         // user deleted, and a tombstone is final: launching a deleted id is
         // refused by its own sequence, and the attempt that answered this call

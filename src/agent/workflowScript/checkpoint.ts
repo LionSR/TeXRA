@@ -5,7 +5,8 @@
  * replays against; one `workflow.journal` row per completed `agent()` call
  * carries its result, folded latest per key; one `workflow.attempt` row per
  * launched attempt carries the attempt high-water mark that call's recovery
- * probe starts from, folded highest per key. A named checkpoint outlives one
+ * probe starts from, folded highest per key and absent when the call never
+ * launched. A named checkpoint outlives one
  * tool call: a retry after a timeout or an interruption resumes the same
  * aggregate through `run.start.checkpointId`, never through the run's id.
  */
@@ -160,8 +161,17 @@ export function readWorkflowScriptCheckpoint(
 }
 
 /**
- * The attempt this call's probe starts at: the highest physical attempt the
- * parent ever launched for one `agent()` call key, 0 when it launched none.
+ * The mark one `agent()` call's recovery probe starts from: the highest
+ * physical attempt the parent ever journaled a launch for, and `null` when it
+ * journaled none.
+ *
+ * Absence is a distinct answer from attempt 0, not the same number: attempt 0
+ * is a real attempt, so folding "no mark" to 0 would read a parent that
+ * launched attempt 0 and died before journaling its result as a parent that
+ * launched nothing — and once deletion collects that child, relaunch the work
+ * it already did. Callers read `null` as "never launched" and `n` as
+ * "attempt n launched", which is what makes an absent child id at or below
+ * `n` mean collected rather than free.
  *
  * The attempt number cannot be discovered from the child aggregates alone.
  * Deleting a run eventually collects its rows outright, and an id-by-id probe
@@ -173,15 +183,17 @@ export function readWorkflowCallAttempt(
   session: SessionHandle,
   checkpointId: string,
   key: string,
-): Effect.Effect<number, Error> {
+): Effect.Effect<number | null, Error> {
   return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
     Effect.map((rows) =>
-      rows.reduce(
+      rows.reduce<number | null>(
         (highest, row) =>
           row.type === 'workflow.attempt' && row.key === key
-            ? Math.max(highest, row.attempt)
+            ? // A first mark is itself the highest; `null` is absence, never a
+              // number to maximize against.
+              Math.max(highest ?? row.attempt, row.attempt)
             : highest,
-        0,
+        null,
       ),
     ),
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
