@@ -1437,6 +1437,13 @@ const ResponsesOperationSchema = z
      * not a transcript: the handle still carries no history.
      */
     admittedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    /**
+     * The storage mode the turn was admitted under. An observation re-prepares
+     * with this rather than the current setting: a temporary background
+     * response leaves nothing to chain on, so re-preparing it as stored would
+     * mint an anchor for a response the provider never kept.
+     */
+    store: z.boolean(),
   })
   .readonly();
 export const RemoteOperationSchema = z.union([

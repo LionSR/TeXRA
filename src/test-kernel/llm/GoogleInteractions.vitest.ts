@@ -63,6 +63,7 @@ function backgroundFixture() {
       providerResponseId: 'int_1',
       afterSequence: null,
       admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+      store: turn.controls.store,
     });
     return { configured, turn, background: configured.background, operation };
   });

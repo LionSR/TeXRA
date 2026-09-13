@@ -1187,6 +1187,7 @@ export function googleInteractionsModel(
         providerResponseId: identity.data.id,
         afterSequence: null,
         admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
+        store: turn.controls.store,
       });
       const interaction = yield* snapshot(raw, operation);
       if (

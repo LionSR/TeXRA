@@ -103,6 +103,7 @@ const OPERATION: RemoteOperation = {
   // observes takes the operation `backgroundTurn` derives from its own
   // admitted turn.
   admittedFingerprint: 'f'.repeat(64),
+  store: false,
 };
 const REASONING = {
   type: 'reasoning',
@@ -201,6 +202,7 @@ function backgroundTurn(model: ReturnType<typeof modelWith>) {
         operation: {
           ...OPERATION,
           admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          store: turn.controls.store,
         },
       };
     },
@@ -1274,6 +1276,9 @@ describe('native OpenAI Responses protocol', () => {
           // Recorded at admission, so the resumed observation below can tell
           // that this turn is still the one the provider answered.
           admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          // The storage mode the provider admitted, which a resumed
+          // observation re-prepares with instead of the current setting.
+          store: true,
         });
         // observe subtracts Clock.currentTimeMillis, which TestClock starts at 0.
         const policy = { deadlineAtMs: 60_000 };
@@ -1756,10 +1761,14 @@ describe('native OpenAI Responses protocol', () => {
       const seen = await Effect.runPromise(Stream.runCollect(stream));
       const completed = seen.at(-1);
       expect(seen.some((event) => event.kind === 'phase')).toBe(false);
+      assert(completed?.kind === 'completed');
       expect(completed).toMatchObject({
         kind: 'completed',
         result: { providerResponseId: 'resp_1', finishReason: 'stop' },
       });
+      // Admitted unstored, either way: a temporary response is not there for
+      // a next round to chain on, so neither completion leaves an anchor.
+      expect(completed.result).not.toHaveProperty('continuation');
       if (mode === 'observation')
         expect(completed).toHaveProperty('afterSequence', 0);
       expect(cancelBody).toHaveBeenCalledTimes(1);

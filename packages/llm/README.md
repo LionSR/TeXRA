@@ -271,7 +271,9 @@ invented from snapshots. Completed snapshots use the same normalization as
 foreground output, preserving reasoning signatures, original calls and observed
 usage. Observation takes the admitted turn as an argument: submission records a
 fingerprint of the admitted system text and history on the accepted operation,
-and observation recomputes it from the turn it is handed. When the two match, the
+together with the storage mode it was admitted under, which a resumed
+observation re-prepares with rather than the storage setting current at resume,
+and observation recomputes the fingerprint from the turn it is handed. When the two match, the
 completed snapshot carries the same continuation anchor a foreground completion
 would; when they differ, the result is still delivered without an anchor and a
 warning names the operation, so the next round replays the canonical history.

@@ -1523,6 +1523,7 @@ export function openaiResponsesModel(
           providerResponseId: response.id,
           afterSequence: sequence_number,
           admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+          store: turn.controls.store,
         });
         if (
           (type === 'response.completed' && response.status === 'completed') ||
