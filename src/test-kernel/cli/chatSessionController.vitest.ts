@@ -663,6 +663,11 @@ describe('createChatSessionController', () => {
             });
           },
         });
+        // A launch states both runs in the plane before it tracks them: the
+        // stop publishes `run.detach` on the child's own aggregate, and a run
+        // aggregate opens with its `run.start` and nothing else.
+        publishTestRunStart(runtimeSession, runId);
+        publishTestRunStart(runtimeSession, childRun, { parent: runId });
         runs.track(rootHandle);
         runs.track(childHandle);
         options.onRunResolved?.(runId);
@@ -689,9 +694,8 @@ describe('createChatSessionController', () => {
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
-    // The detached child's own aggregate, so its request opens on a run the
-    // plane holds.
-    publishTestRunStart(runtimeSession, childRun);
+    // The request opens on the child's own aggregate, which the launch
+    // already stated in the plane.
     const requestId = 'bash-detached-child';
     const approval = Effect.runPromise(
       runtimeSession.openRequest(childRun, {
