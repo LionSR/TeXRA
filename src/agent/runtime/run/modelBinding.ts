@@ -330,7 +330,7 @@ function configurationFor(
   const thinkingMode = capabilities.supportsReasoning ? 'enabled' : 'disabled';
   // The user's parallel-tool-calls choice, honored on every arm whose llm
   // controls carry the field. That is narrower than the retired OpenAI
-  // handler base, whose reasoning descendants (DeepSeek, Kimi, GLM, MiniMax)
+  // handler base, whose reasoning descendants (DeepSeek, Kimi, GLM)
   // also sent parallel_tool_calls: those protocols have no such control on
   // the llm Model today, and adding one is llm-package schema work, not a
   // read this function can route. The Anthropic arm never read the setting

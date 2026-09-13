@@ -796,10 +796,14 @@ export const modelInvokerLayer: Layer.Layer<
             bound,
           );
         }
+        // An accepted background operation was admitted stored; the
+        // reconstruction keeps that fact even if the storage setting has
+        // changed since, so the provider can still observe the running job.
         const prepared = yield* Effect.exit(
-          bound.model.prepareTurn(
-            turnRequestFor(initial, request, bound, 'background'),
-          ),
+          bound.model.prepareTurn({
+            ...turnRequestFor(initial, request, bound, 'background'),
+            store: true,
+          }),
         );
         if (Exit.isFailure(prepared)) {
           if (Cause.hasInterrupts(prepared.cause))
