@@ -311,6 +311,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
         );
       },
+      // An open that never committed leaves the staged preview with no
+      // decision to release it; this is that release, and the promise it
+      // returns is what the session waits on: closing the diff view and
+      // deleting the temp files behind it is asynchronous.
+      releaseToolEdit: (requestId) => this.toolEditApprovals.release(requestId),
     });
     // Terminal-error toasts come from the run's `result` event: this
     // re-emits `requestShow*` through the session's interactions, reaching

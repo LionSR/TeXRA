@@ -1020,7 +1020,8 @@ const MESSAGE_ROUTES = createMessageRoutes({
       project?.reviewPane.open(message);
       project?.workbench.openKind('review');
     },
-    clear: (session) => projectWorkbenches.get(session)?.reviewPane.clear(),
+    close: (session, previewId) =>
+      projectWorkbenches.get(session)?.reviewPane.close(previewId) ?? false,
   },
   disposeReviewTab: (session) =>
     projectWorkbenches

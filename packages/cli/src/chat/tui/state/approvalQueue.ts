@@ -332,6 +332,21 @@ export function stagePresentation(payload: ApprovalPayload): void {
 }
 
 /**
+ * Drop what one request staged, by id. {@link forgetSettledRequests} reads
+ * the fold, so it never drops a presentation whose request the fold never
+ * listed; a request whose `request.opened` did not commit is released
+ * through here instead.
+ */
+export function dropPresentation(requestId: string): void {
+  const staged = stagedPresentations.get();
+  if (!staged.has(requestId)) return;
+  const remaining = new Map(staged);
+  remaining.delete(requestId);
+  stagedPresentations.set(remaining);
+  stagedSeenListed.delete(requestId);
+}
+
+/**
  * Issue the runtime requests one decision names, in order; a refusal reads
  * in the conversation and puts `requestId` back on this surface, since the
  * durable request it answered is still pending and nobody else will re-ask.

@@ -131,6 +131,9 @@ describe('createDesktopDiffHost', () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       command: 'desktop:showDiff',
+      // Minted by the host: a compare has no request to name its diff, and
+      // the renderer needs every diff it holds named to close one by name.
+      previewId: expect.stringMatching(/.+/),
       title: 'Compare doc.tex',
       displayPath: 'Compare doc.tex',
       originalText: 'hello\nold\n',

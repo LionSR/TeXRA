@@ -16,6 +16,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RequestDecision, RunId } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import {
@@ -50,12 +51,15 @@ let tracker = new FileInteractionState();
 // The previews the host staged; tests override the decision when they need to
 // reject or adjust, and assert on this list otherwise.
 let approvalRequests: ToolEditApprovalRequest[] = [];
+// The previews the runtime released without a decision, by request id.
+let releasedPreviews: string[] = [];
 
 async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
   approvalRequests = [];
+  releasedPreviews = [];
   nextDecision = () => ({ action: 'approve' });
   await installFakePlatform({
     workspacePath: WORKSPACE_PATH,
@@ -66,6 +70,9 @@ async function installPlatform(
   detachHostInteractions = defaultSession().interactions.use({
     presentToolEdit: (request) => {
       approvalRequests.push(request);
+    },
+    releaseToolEdit: (requestId) => {
+      releasedPreviews.push(requestId);
     },
   });
 }
@@ -333,6 +340,122 @@ describe('Tool edit approval gating', () => {
       assert.strictEqual(write.mock.lastCall?.[1], 'auto');
       assert.strictEqual(result.output, 'written');
     }),
+  );
+
+  it.effect('releases the staged preview when its request cannot open', () =>
+    Effect.gen(function* () {
+      // The commit that would list the request is refused, so no
+      // `request.decided` will ever release the preview staged before it:
+      // `openRequest`, the one call that knows the row never landed, runs
+      // the release the staging handed it.
+      const session = defaultSession();
+      const commit = session.commit.bind(session);
+      vi.spyOn(session, 'commit').mockImplementation((events) =>
+        events.some((event) => event.type === 'request.opened')
+          ? Effect.fail(
+              new DatabaseWriteFailed({
+                path: 'session.db',
+                cause: 'the disk is full',
+              }),
+            )
+          : commit(events),
+      );
+
+      const failure = yield* inRun(
+        requestToolEditApproval({
+          path: 'doc.txt',
+          originalContent: 'old content',
+          proposedContent: 'new content',
+          sourceTool: 'write_file',
+        }),
+      ).pipe(Effect.flip);
+
+      assert.ok(failure instanceof DatabaseWriteFailed);
+      assert.deepStrictEqual(releasedPreviews, [
+        approvalRequests[0]?.permission.requestId,
+      ]);
+    }),
+  );
+
+  it.live(
+    'releases the staged preview when the open is interrupted mid-commit',
+    () =>
+      Effect.gen(function* () {
+        // The `request.opened` commit never settles, so the interrupt lands
+        // with no row written: the cancellation finds nothing open, writes
+        // no decision, and releases what the open never listed.
+        const session = defaultSession();
+        const commit = session.commit.bind(session);
+        vi.spyOn(session, 'commit').mockImplementation((events) =>
+          events.some((event) => event.type === 'request.opened')
+            ? Effect.never
+            : commit(events),
+        );
+
+        const request = yield* Effect.forkChild(
+          inRun(
+            requestToolEditApproval({
+              path: 'doc.txt',
+              originalContent: 'old content',
+              proposedContent: 'new content',
+              sourceTool: 'write_file',
+            }),
+          ),
+        );
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => approvalRequests.length === 1, {
+            timeoutMessage: 'Timed out waiting for the edit to be staged',
+          }),
+        );
+
+        yield* Fiber.interrupt(request);
+
+        // The cancellation is a job of the session's publisher, so the
+        // release it finds necessary lands with it, not with the interrupt.
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => releasedPreviews.length === 1, {
+            timeoutMessage: 'Timed out waiting for the preview to be released',
+          }),
+        );
+        assert.deepStrictEqual(releasedPreviews, [
+          approvalRequests[0]?.permission.requestId,
+        ]);
+      }),
+  );
+
+  it.live(
+    'leaves a committed request its decision when the open is interrupted',
+    () =>
+      Effect.gen(function* () {
+        // The row landed, so the interrupt's cancellation is a decision like
+        // any other and every host releases on that. Releasing here too
+        // would strand the request the fold still lists whenever that
+        // cancellation is itself refused: nothing left to render, nothing
+        // left to answer.
+        nextDecision = () => null;
+        const session = defaultSession();
+
+        const request = yield* Effect.forkChild(
+          inRun(
+            requestToolEditApproval({
+              path: 'doc.txt',
+              originalContent: 'old content',
+              proposedContent: 'new content',
+              sourceTool: 'write_file',
+            }),
+          ),
+        );
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => decisions?.opened.length === 1, {
+            timeoutMessage: 'Timed out waiting for the request to open',
+          }),
+        );
+
+        yield* Fiber.interrupt(request);
+        yield* Effect.promise(() => session.settlePublications());
+
+        assert.deepStrictEqual(releasedPreviews, []);
+      }),
   );
 
   it.live('rechecks session bypass between concurrent approval requests', () =>

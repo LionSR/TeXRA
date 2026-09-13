@@ -175,6 +175,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
 test('desktop:showDiff opens the in-app Review workbench', async () => {
   const payload = {
     command: 'desktop:showDiff',
+    previewId: 'trajectory-review',
     title: 'Compare paper.tex',
     displayPath: 'paper.tex',
     originalText: '\\documentclass{article}\nold body\n',
@@ -228,11 +229,29 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   expect(diffViewProps?.proposedText).toContain('new body');
   expect(diffViewProps?.language).toBe('latex');
 
-  // Close via desktop:closeDiff — the Review tab should close.
+  // A close for a diff the pane no longer holds leaves the tab standing.
   await launched.page.evaluate(() => {
     window.postMessage(
       {
         command: 'desktop:closeDiff',
+        previewId: 'a-superseded-preview',
+        session:
+          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+      },
+      '*',
+    );
+  });
+  await expect(
+    launched.page.locator('.task-workbench-tab[data-kind="review"]'),
+  ).toHaveCount(1);
+
+  // Close via desktop:closeDiff naming the diff it opened — the Review tab
+  // should close.
+  await launched.page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:closeDiff',
+        previewId: 'trajectory-review',
         session:
           document.querySelector<HTMLElement>('progress-app')?.dataset.session,
       },

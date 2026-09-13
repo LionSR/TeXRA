@@ -13,6 +13,7 @@
 
 // Local imports
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { createLog } from '@logger/logUtils';
 import type {
   RequestDecision,
   SessionEvent,
@@ -28,6 +29,8 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+
+const log = createLog('ToolEditApproval');
 
 /** The host view of one staged request, live until the request is decided. */
 export interface ToolEditPreview {
@@ -85,18 +88,39 @@ interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
 }
 
+/** What both phases of one request name, whichever phase a release finds. */
+interface TrackedToolEditApproval {
+  /**
+   * The {@link ToolEditApprovalController.present} call in flight for this
+   * request, or an already-resolved promise when none is: everything that
+   * call is awaiting, from `stagePreview` through either the disposal of a
+   * preview whose entry was gone by the time it finished or the promotion to
+   * a staged entry and the opening of the host's view on it. Both phases name
+   * the same one, and {@link ToolEditApprovalController.release} awaits it, so
+   * a release that lands mid-staging or while the view is opening still
+   * returns with nothing left staged and nothing still opening.
+   *
+   * It resolves to whatever ended that call in failure, or `undefined`,
+   * rather than rejecting: `present` propagates that failure to its own
+   * caller, and a rejection here would be a second one with nobody left to
+   * handle it.
+   */
+  inFlight: Promise<unknown>;
+}
+
 /**
  * A request with no preview: staging is still running, or it failed and none
  * will open. Either way the request is open in the fold with its panel on
  * screen, so a decision on it is answered from the payload it carries.
  */
-interface InitializingToolEditApproval {
+interface InitializingToolEditApproval extends TrackedToolEditApproval {
   readonly phase: 'initializing';
   readonly request: ToolEditApprovalRequest;
 }
 
 /** A staged request awaiting the user. Membership in the map is what "unsettled" means. */
-interface PendingToolEditApproval extends LatexPreviewEntry {
+interface PendingToolEditApproval
+  extends LatexPreviewEntry, TrackedToolEditApproval {
   readonly phase: 'pending';
   readonly requestId: string;
   readonly request: ToolEditApprovalRequest;
@@ -116,6 +140,17 @@ export class ToolEditApprovalController {
    * decision never reached the runtime.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
+  /**
+   * The cleanup in flight for a request whose entry is already gone, until
+   * that cleanup settles. {@link release} drops the entry before it awaits
+   * anything, so a second release for the same request would otherwise find
+   * nothing and resolve while the first was still disposing: {@link dispose}
+   * starts one release per request without awaiting it, and the host's
+   * release for a `request.opened` the runtime refused lands right behind it.
+   * Joining what is already running is what makes every release mean the same
+   * thing, that nothing is left staged.
+   */
+  private readonly releasing = new Map<string, Promise<void>>();
   private disposed = false;
 
   constructor(private readonly options: ToolEditApprovalControllerOptions) {}
@@ -142,6 +177,9 @@ export class ToolEditApprovalController {
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,
+      // Replaced below by the operation this call is about to start, before
+      // any await can let a release read the entry.
+      inFlight: Promise.resolve(undefined),
     };
     this.requests.set(requestId, initialization);
 
@@ -149,46 +187,66 @@ export class ToolEditApprovalController {
     // in the fold with its panel on screen, and an approve or reject on it
     // decides from the payload. The failure itself propagates to the caller,
     // which is where each host reports it.
-    const preview = await this.options.host.stagePreview(request, {
-      requestId,
-      relativePath,
-      isSettled: () => this.isSettled(requestId),
-      discard: () => this.discard(requestId),
-    });
+    //
+    // Staging, promotion and presentation are one operation, so a release
+    // observes only its two ends: it lands before the settled check below,
+    // where this call disposes the preview it staged and never opens a view
+    // on it, or after the entry is staged, where it waits here for the view
+    // to be open before closing it and deleting what it reads.
+    const operation = (async (): Promise<void> => {
+      const preview = await this.options.host.stagePreview(request, {
+        requestId,
+        relativePath,
+        isSettled: () => this.isSettled(requestId),
+        discard: () => this.discard(requestId),
+      });
 
-    // The entry this call installed is gone when the request was decided or
-    // the controller disposed while the host was staging: an entry with no
-    // preview holds nothing to release, so the preview that just finished
-    // staging is this call's to clean up. Promoting it would open a diff view
-    // for a settled request and leave the staged files behind.
-    if (this.requests.get(requestId) !== initialization) {
-      await preview.dispose();
-      return;
-    }
+      // The entry this call installed is gone when the request was decided,
+      // released, or the controller disposed while the host was staging: an
+      // entry with no preview holds nothing to release, so the preview that
+      // just finished staging is this call's to clean up. Promoting it would
+      // open a diff view for a settled request and leave the staged files
+      // behind. That disposal is inside the operation the entry named, which
+      // is how a release taken while this was in flight waited for it.
+      if (this.requests.get(requestId) !== initialization) {
+        await preview.dispose();
+        return;
+      }
 
-    const entry: PendingToolEditApproval = {
-      phase: 'pending',
-      requestId,
-      request,
-      relativePath,
-      preview,
-      originalUri: { fsPath: preview.originalPath },
-      proposedUri: { fsPath: preview.proposedPath },
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-      isSettled: () => this.requests.get(requestId) !== entry,
-      workspaceTempCleanup: [],
-      latexOperationInProgress: false,
-      onError: (message) => this.options.host.reportError(message),
-    };
-    this.requests.set(requestId, entry);
+      const staged: PendingToolEditApproval = {
+        phase: 'pending',
+        requestId,
+        request,
+        relativePath,
+        preview,
+        originalUri: { fsPath: preview.originalPath },
+        proposedUri: { fsPath: preview.proposedPath },
+        originalContent: request.originalContent,
+        proposedContent: request.proposedContent,
+        isSettled: () => this.requests.get(requestId) !== staged,
+        workspaceTempCleanup: [],
+        latexOperationInProgress: false,
+        onError: (message) => this.options.host.reportError(message),
+        // This operation: it was assigned to `initialization` right after it
+        // started, so before the `await` above could resolve. The staged
+        // entry names the same one, so a release finds it in either phase.
+        inFlight: initialization.inFlight,
+      };
+      this.requests.set(requestId, staged);
 
-    await preview.present();
-    if (!entry.isSettled()) {
-      void this.runAction(entry, () =>
-        this.options.host.revealApprovalSurface(),
-      );
-    }
+      await staged.preview.present();
+      if (!staged.isSettled()) {
+        void this.runAction(staged, () =>
+          this.options.host.revealApprovalSurface(),
+        );
+      }
+    })();
+    initialization.inFlight = operation.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    await operation;
   }
 
   handleAction(payload: {
@@ -202,12 +260,12 @@ export class ToolEditApprovalController {
       // No preview to read the edited file back from or to open, so the
       // proposal the request carries is the whole answer.
       if (payload.action === 'approve') {
-        this.decideFromPayload(entry.request, {
+        this.decideFromPayload(entry, {
           action: 'approve',
           content: entry.request.proposedContent,
         });
       } else if (payload.action === 'reject') {
-        this.decideFromPayload(entry.request, {
+        this.decideFromPayload(entry, {
           action: 'reject',
           feedback: payload.feedback?.trim() || null,
         });
@@ -252,7 +310,7 @@ export class ToolEditApprovalController {
     for (const state of this.requests.values()) {
       if (state.request.runId !== runId) continue;
       if (state.phase === 'initializing') {
-        this.decideFromPayload(state.request, {
+        this.decideFromPayload(state, {
           action: 'approve',
           content: state.request.proposedContent,
         });
@@ -281,7 +339,7 @@ export class ToolEditApprovalController {
   private discard(requestId: string): void {
     const state = this.requests.get(requestId);
     if (state?.phase === 'initializing') {
-      this.decideFromPayload(state.request, { action: 'reject' });
+      this.decideFromPayload(state, { action: 'reject' });
       return;
     }
     if (state?.phase === 'pending') {
@@ -302,17 +360,24 @@ export class ToolEditApprovalController {
    * next Approve or Reject has to find something to act on. It is a fresh
    * entry, not the one {@link present} installed: a staging call still in
    * flight must still find its own gone and dispose the preview it staged,
-   * rather than open a diff view on the strength of a failed decision.
+   * rather than open a diff view on the strength of a failed decision. It
+   * names that same operation, so a release on the replacement waits for the
+   * disposal the original will do.
    */
   private decideFromPayload(
-    request: ToolEditApprovalRequest,
+    entry: InitializingToolEditApproval,
     decision: RequestDecision,
   ): void {
+    const { request } = entry;
     const { requestId } = request.permission;
     this.requests.delete(requestId);
     void this.send(request, decision).then(undefined, (error: unknown) => {
       if (!this.disposed && !this.requests.has(requestId)) {
-        this.requests.set(requestId, { phase: 'initializing', request });
+        this.requests.set(requestId, {
+          phase: 'initializing',
+          request,
+          inFlight: entry.inFlight,
+        });
       }
       this.options.host.reportError(toErrorMessage(error));
     });
@@ -337,17 +402,61 @@ export class ToolEditApprovalController {
     );
   }
 
-  private async release(requestId: string): Promise<void> {
+  /**
+   * Drop the preview staged for one request, and resolve once it is gone.
+   * The `request.decided` route above is how a decided request releases; a
+   * host calls this directly for a request whose `request.opened` was
+   * refused, which no decision follows, and awaits it before reporting the
+   * refusal. A {@link present} call still in flight is the reason that await
+   * has to reach inside it: dropping the entry alone would return while the
+   * host was still writing temp files it would then delete on its own time,
+   * or still opening a diff view onto files this call is about to delete.
+   * Repeated releases for one request, which {@link dispose} and that host
+   * call produce together, all resolve on the one cleanup in flight.
+   */
+  async release(requestId: string): Promise<void> {
+    // A release already in flight for this request is doing exactly this
+    // work, on the entry it has already dropped: join it, rather than read
+    // an empty map and report the preview gone while it is still going.
+    const inFlight = this.releasing.get(requestId);
+    if (inFlight) return inFlight;
+
     const entry = this.requests.get(requestId);
     if (!entry) return;
     this.requests.delete(requestId);
-    if (entry.phase !== 'pending') return;
-    try {
-      await entry.preview.dispose();
-      await Promise.all(entry.workspaceTempCleanup.map((cleanup) => cleanup()));
-    } catch (error) {
-      this.options.host.reportError(toErrorMessage(error));
-    }
+
+    // Removing the entry is what tells a `present` call still in flight that
+    // its request is settled; waiting for that call is what makes a returned
+    // release mean nothing is left staged and nothing is still opening. It
+    // covers the staging of a preview this call never sees (that call
+    // disposes it), and the view a just-staged request is in the middle of
+    // opening, which has to be open before it can be closed below.
+    //
+    // The whole of that is one promise this release publishes before its
+    // first await and withdraws once it settles, so every release taken
+    // meanwhile returns with it and none returns before it.
+    const cleanup = (async (): Promise<void> => {
+      const failure = await entry.inFlight;
+      if (failure !== undefined) {
+        log.warn(
+          `The tool-edit preview for request ${requestId} failed while its release waited for it`,
+          { data: failure },
+        );
+      }
+      if (entry.phase !== 'pending') return;
+      try {
+        await entry.preview.dispose();
+        await Promise.all(
+          entry.workspaceTempCleanup.map((removeTemp) => removeTemp()),
+        );
+      } catch (error) {
+        this.options.host.reportError(toErrorMessage(error));
+      }
+    })().finally(() => {
+      this.releasing.delete(requestId);
+    });
+    this.releasing.set(requestId, cleanup);
+    await cleanup;
   }
 
   private async runAction(

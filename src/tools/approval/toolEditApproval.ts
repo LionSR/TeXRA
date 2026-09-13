@@ -242,12 +242,24 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // The preview is staged before the request opens, and stays staged
       // until that request's `request.decided` releases it on every host:
       // a surface reading the committed row must never find the request
-      // listed with nothing to show for it. An interrupted open closes the
-      // request as cancelled, which is the release.
+      // listed with nothing to show for it. Staging hands back the release
+      // for what it staged, bound to the host it staged on; the one case no
+      // decision ever reaches is an open that never committed, which
+      // `openRequest` owns and runs this for.
       prompt: Effect.suspend(() => {
-        call.inScope(() => session.interactions.presentToolEdit(staged));
+        const releaseStaged = call.inScope(() =>
+          session.interactions.presentToolEdit(staged),
+        );
         return session
-          .openRequest(runId, { kind: 'toolEdit', data: permission })
+          .openRequest(
+            runId,
+            { kind: 'toolEdit', data: permission },
+            {
+              onNeverCommitted: Effect.promise(() =>
+                call.inScope(releaseStaged),
+              ),
+            },
+          )
           .pipe(
             Effect.map((decided): ToolEditApprovalResult => {
               if (decided.action !== 'approve') {

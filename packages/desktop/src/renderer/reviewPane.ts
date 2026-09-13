@@ -22,7 +22,15 @@ interface DiffViewElement extends HTMLElement {
 
 interface ReviewPaneController {
   readonly element: HTMLElement;
+  /** Drop every retained review, whatever opened it (the window closing). */
   clear(): void;
+  /**
+   * Drop the retained reviews `previewId` opened and no others, re-selecting
+   * one the pane still holds if the closed diff was the one on screen.
+   * Reports whether the pane is now empty, which is when the Review tab has
+   * nothing left to show.
+   */
+  close(previewId: string): boolean;
   open(payload: DesktopShowDiffMessage): void;
   setTheme(theme: Theme): void;
 }
@@ -34,6 +42,8 @@ export function createReviewPane(): ReviewPaneController {
   diffView.className = 'desktop-review-diff';
   diffView.fill = true;
 
+  // Keyed by displayPath, one retained review per path; each entry carries
+  // the `previewId` of the diff that opened it, which is what a close names.
   const entries = new Map<string, DesktopShowDiffMessage>();
   let selectedPath: string | undefined;
   let filter = '';
@@ -95,6 +105,12 @@ export function createReviewPane(): ReviewPaneController {
         </wa-button>
       `;
     });
+  }
+
+  function clearEntries(): void {
+    entries.clear();
+    selectedPath = undefined;
+    rerender();
   }
 
   function rerender(): void {
@@ -197,10 +213,20 @@ export function createReviewPane(): ReviewPaneController {
 
   return {
     element,
-    clear() {
-      entries.clear();
-      selectedPath = undefined;
+    clear: clearEntries,
+    close(previewId) {
+      for (const [path, entry] of entries) {
+        if (entry.previewId === previewId) entries.delete(path);
+      }
+      const remaining = [...entries.values()];
+      if (selectedPath !== undefined && !entries.has(selectedPath)) {
+        // The diff on screen went with the close. Show one the pane still
+        // holds rather than blanking a review nobody dismissed.
+        selectedPath = undefined;
+        if (remaining[0]) select(remaining[0]);
+      }
       rerender();
+      return remaining.length === 0;
     },
     open(payload) {
       entries.set(payload.displayPath, payload);

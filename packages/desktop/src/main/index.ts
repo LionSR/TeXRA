@@ -826,6 +826,7 @@ function createWindow(options: {
         openPath: requestPreviewHost.openPath,
         openBuildDisplay: requestPreviewHost.openBuildDisplay,
         openDiff: requestDiffHost.openDiff,
+        closeDiff: requestDiffHost.closeDiff,
       },
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
