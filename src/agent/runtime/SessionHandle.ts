@@ -107,13 +107,13 @@ import {
   openSession,
   type SessionGraph,
 } from './sessionGraph';
-import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
   type SessionApprovals,
 } from './runApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import type { ModelRetryGate } from './ModelRetryGate';
 
 const logger = createLog('sessionHandle');
 
@@ -213,7 +213,11 @@ export class SessionHandle {
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
   private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
-  /** Coordinates recovery probes for model routes shared by parallel runs. */
+  /**
+   * Coordinates recovery probes for model routes shared by parallel runs.
+   * Built by the session owner in the session's scope, so its probe fibers
+   * and waiting calls end with the session rather than through this store.
+   */
   readonly modelRetries: ModelRetryGate;
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
@@ -234,7 +238,7 @@ export class SessionHandle {
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'transcripts'> & {
+      Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
         readonly roots: WorkspaceRoots;
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
@@ -273,7 +277,7 @@ export class SessionHandle {
 
     this.interactions = interactions;
     this.approvals = approvals;
-    this.modelRetries = new ModelRetryGate();
+    this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
@@ -293,7 +297,6 @@ export class SessionHandle {
     });
     this.teardown.add(() => this.resultListeners.clear());
     this.teardown.add(() => this.interactions.dispose());
-    this.teardown.add(() => this.modelRetries.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.runs.dispose());

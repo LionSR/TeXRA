@@ -169,7 +169,6 @@
     },
     "import:p-defer": {
       "src/agent/followUp/FollowUpQueue.ts": 1,
-      "src/agent/runtime/ModelRetryGate.ts": 1,
       "src/agent/storage/runLease.ts": 1
     },
     "import:async-mutex": {
