@@ -21,7 +21,6 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import type { UsageRoute } from '@shared/schemas';
 import {
   TELEMETRY_ENABLED_DEFAULT,
@@ -112,11 +111,9 @@ function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
  * test) can hold the service off regardless of user settings.
  *
  * `config` is the workspace's configuration the consent is read from: the
- * calling context's by default, or the one captured with a queued entry.
+ * recording run's session roots, or the one captured with a queued entry.
  */
-function isTelemetryEnabledBySetting(
-  config: ConfigProvider = workspaceRoots().config,
-): boolean {
+function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   // Checked before the config read so the kill switch also holds on a host that
   // has not initialized its platform yet.
   if (isTelemetryDisabledByEnv()) return false;
@@ -157,12 +154,12 @@ export type UsageLoggingOptOut =
  * doing (`texra doctor`). Derived from the same gate the send path uses, so a
  * report of "off" cannot drift from the behaviour.
  */
-export function usageLoggingOptOut(): UsageLoggingOptOut {
+export function usageLoggingOptOut(config: ConfigProvider): UsageLoggingOptOut {
   const envVar = TELEMETRY_OPT_OUT_ENV_VARS.find((name) =>
     isEnvFlagEnabled(name),
   );
   if (envVar) return { source: 'environment', envVar };
-  return isTelemetryEnabledBySetting() ? null : { source: 'setting' };
+  return isTelemetryEnabledBySetting(config) ? null : { source: 'setting' };
 }
 
 /**
@@ -283,12 +280,14 @@ class UsageLogServiceImpl {
     );
   });
 
+  /** Queue one entry; `config` is the configuration of the workspace that
+   *  recorded it (the run's session roots), read for consent now and again
+   *  at flush. */
   log(
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
+    config: ConfigProvider,
   ): void {
     if (!this.config.enabled) return;
-    // The originating workspace: a run's session roots when called from a run.
-    const { config } = workspaceRoots();
     if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting(config)) {
       return;
     }

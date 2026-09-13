@@ -1,4 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
+import type { ConfigProvider } from '@platform/interfaces';
 import type {
   AgentRunStateSnapshot,
   RunId,
@@ -66,6 +67,8 @@ interface UsageMonitorContext {
   logger: AgentTrace;
   runId: RunId;
   runStageId: string | undefined;
+  /** The run's workspace configuration, which usage logging reads consent from. */
+  config: ConfigProvider;
 }
 
 /** Label for the run flavor named in this monitor's diagnostics. */
@@ -251,26 +254,29 @@ export class UsageMonitor {
     try {
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
 
-      UsageLogService.log({
-        model: model.fullName,
-        provider,
-        agentName: this.metadata.agentName,
-        agentCategory: this.metadata.agentCategory,
-        inputTokens: usage.cacheMissInputTokens,
-        outputTokens: usage.outputTokens,
-        cost: roundTo(usage.cost, 6),
-        responseTimeMs: Math.round(totalResponseTimeMs),
-        cachedInputTokens,
-        reasoningTokens: usage.reasoningTokens ?? 0,
-        usageRoute: usage.usageRoute,
-        // An external wire key of the usage-log edge function, the same
-        // class as the CLI's NDJSON projection keys: the relay's request
-        // column is still named `streamId`, so the key stays until that
-        // column is renamed to `run_id` (a server-side change, not part of
-        // this release). It carries the run id and no stream vocabulary
-        // survives behind it.
-        streamId: this.context.runId,
-      });
+      UsageLogService.log(
+        {
+          model: model.fullName,
+          provider,
+          agentName: this.metadata.agentName,
+          agentCategory: this.metadata.agentCategory,
+          inputTokens: usage.cacheMissInputTokens,
+          outputTokens: usage.outputTokens,
+          cost: roundTo(usage.cost, 6),
+          responseTimeMs: Math.round(totalResponseTimeMs),
+          cachedInputTokens,
+          reasoningTokens: usage.reasoningTokens ?? 0,
+          usageRoute: usage.usageRoute,
+          // An external wire key of the usage-log edge function, the same
+          // class as the CLI's NDJSON projection keys: the relay's request
+          // column is still named `streamId`, so the key stays until that
+          // column is renamed to `run_id` (a server-side change, not part of
+          // this release). It carries the run id and no stream vocabulary
+          // survives behind it.
+          streamId: this.context.runId,
+        },
+        this.context.config,
+      );
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {
         data: error,

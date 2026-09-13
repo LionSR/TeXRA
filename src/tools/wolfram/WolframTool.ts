@@ -3,9 +3,9 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { hostPort } from '@common/hostPort';
 import { ToolResult, ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
@@ -63,6 +63,10 @@ type WolframInput = z.infer<typeof WolframInputSchema>;
 interface WolframPorts {
   readonly requestApproval: typeof requestBashApproval;
   readonly runTool: typeof runToolWithCheck;
+  /** The run's workspace root, passed as the command's cwd: `executeCommand`
+   *  otherwise falls back to the ambient roots, which on the desktop are the
+   *  process roots with no workspace. */
+  readonly cwd: string | undefined;
 }
 
 const runWolfram = Effect.fn('WolframTool.execute')(function* (
@@ -78,6 +82,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   const result = yield* hostPort(() =>
     ports.runTool('wolframscript', ['-code', input.code], {
+      cwd: ports.cwd,
       showError: false,
       truncate: false,
       timeout: effectiveTimeout,
@@ -118,7 +123,8 @@ export const WolframTool = defineTool({
     const call = yield* ToolCall;
     const ports: WolframPorts = {
       requestApproval: requestBashApproval,
-      runTool: (...args) => call.inScope(() => runToolWithCheck(...args)),
+      runTool: runToolWithCheck,
+      cwd: call.roots.workspace,
     };
     return yield* runWolfram(ports, input);
   }),

@@ -21,6 +21,7 @@ import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -160,6 +161,7 @@ describe('run-scoped tool resolution', () => {
       runtimeUnavailableTools: ['inquiry'],
       // No conditional injections: this pins the declared-tool gates alone.
       toolInjections: new ToolInjectionRegistry(),
+      config: new FakeConfigProvider(),
       stores: hostStores(),
     });
 

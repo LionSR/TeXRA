@@ -17,7 +17,7 @@ import { executed } from '@tools/core/result';
 import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { getConfig } from '@utils/config/configUtils';
+import { readConfig } from '@utils/config/configUtils';
 import {
   emptyExtractionResult,
   resolveLatexFile,
@@ -60,7 +60,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || call.inScope(() => getConfig<string>('texra.bib.defaultPath'));
+      bibPath || readConfig<string>(call.roots.config, 'texra.bib.defaultPath');
 
     if (effectiveBibPath) {
       const { path: resolved } = call.inScope(() =>

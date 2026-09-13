@@ -93,7 +93,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       return {
         ok: true,
         preset,
-        resolution: call.inScope(() => resolveTeamRoster(state, preset)),
+        resolution: resolveTeamRoster(state, preset),
       };
     },
     commitPreset: (preset) =>
