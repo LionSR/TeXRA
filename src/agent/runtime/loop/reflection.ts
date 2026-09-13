@@ -28,7 +28,7 @@
  * family, and the reflection run's tool registry is empty by construction.
  */
 import { dirname } from 'node:path';
-import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Ref, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
@@ -175,7 +175,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 ): Effect.fn.Return<
   ReflectionResult,
   Error,
-  AgentRun | RunLedger | ModelInvoker
+  AgentRun | RunLedger | ModelInvoker | FileSystem.FileSystem
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -414,7 +414,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** The round prompt, its media and TeX count, committed with `round.begin`. */
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RunState, Error> {
+  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem> {
     const round = flow.currentRound;
     const bound = yield* SynchronizedRef.get(run.model);
     contextWindowRecoveryAttempted = false;
@@ -992,7 +992,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     initial: RunState,
-  ): Effect.fn.Return<RoundExit, Error> {
+  ): Effect.fn.Return<RoundExit, Error, FileSystem.FileSystem> {
     const round = flow.currentRound;
     // The stage closes with the round's own verdict; an exit that never set
     // one is a stop (interrupt) or a defect.

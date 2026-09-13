@@ -54,6 +54,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   attachTestTranscriptFold,
@@ -461,6 +462,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(nodePlatformLayer),
       ),
     ),
   );
