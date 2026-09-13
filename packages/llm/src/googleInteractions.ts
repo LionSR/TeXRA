@@ -1243,9 +1243,12 @@ export function googleInteractionsModel(
         // a drifted rebuild still gets its result but must leave no anchor:
         // the next round then resends the transcript instead of chaining on
         // instructions the answer never saw.
+        // The admitted storage mode is part of what makes an anchor safe: a
+        // turn re-derived stored for a temporary operation must not chain.
         const chains =
+          turn.controls.store === operation.store &&
           googleInteractionsAdmittedFingerprint(turn) ===
-          operation.admittedFingerprint;
+            operation.admittedFingerprint;
         if (!chains) {
           yield* Effect.logWarning(
             `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
