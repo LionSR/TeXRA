@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -12,7 +13,8 @@ import {
 } from '@agent/implementations/flows/reflection/output/outputState';
 
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
-import type { FileLocation, RunId } from '@shared/schemas';
+import { workspaceRoots } from '@platform/workspaceRoots';
+import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -78,25 +80,34 @@ function createXmlManager(
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
     logger,
-    new TaskRunFileService(RUN_ID),
+    new TaskRunFileService(RUN_ID, workspaceRoots()),
     options.outputState ?? createOutputState(),
+    (operation) => operation(),
   );
 }
 
+/**
+ * Write a response and unpack it. The extraction pipeline is an Effect
+ * program; this suite pins the pure extraction tiers over ordinary Vitest
+ * cases, so the fiber is run here at the suite's own boundary rather than in
+ * each of the cases below.
+ */
 async function writeAndSplitDocuments(
   output: string | readonly string[],
   inputFiles: string[] = ['paper.tex'],
   options: XmlManagerOptions = {},
-): ReturnType<XmlOutputManager['splitScratchpadMultipleOutputXml']> {
+): Promise<OutputFileInfo[]> {
   await AbsoluteFS.write(
     fakePath('tmp/run/output.xml'),
     typeof output === 'string' ? output : output.join('\n'),
   );
-  return createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
-    createExternalLocation(fakePath('tmp/run/output.xml')),
-    0,
-    options.baseFiles?.map((name) =>
-      createExternalLocation(fakePath('tmp/run', name)),
+  return Effect.runPromise(
+    createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
+      createExternalLocation(fakePath('tmp/run/output.xml')),
+      0,
+      options.baseFiles?.map((name) =>
+        createExternalLocation(fakePath('tmp/run', name)),
+      ),
     ),
   );
 }
@@ -831,16 +842,18 @@ describe('XmlOutputManager', () => {
   it('writes extracted full-document outputs with one final newline', async () => {
     const manager = createXmlManager();
 
-    await manager.processMultipleLatexDocuments(
-      [
-        {
-          name: 'paper.tex',
-          content:
-            '\n\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n\n',
-        },
-      ],
-      createExternalLocation(fakePath('tmp/run/output.xml')),
-      0,
+    await Effect.runPromise(
+      manager.processMultipleLatexDocuments(
+        [
+          {
+            name: 'paper.tex',
+            content:
+              '\n\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n\n',
+          },
+        ],
+        createExternalLocation(fakePath('tmp/run/output.xml')),
+        0,
+      ),
     );
 
     await expectWritten(
@@ -852,15 +865,17 @@ describe('XmlOutputManager', () => {
   it('keeps legacy trailing end-document removal and adds one final newline', async () => {
     const manager = createXmlManager();
 
-    await manager.processMultipleLatexDocuments(
-      [
-        {
-          name: 'fragment.tex',
-          content: '\nBody only.\n\\end{document}\n\n',
-        },
-      ],
-      createExternalLocation(fakePath('tmp/run/output.xml')),
-      0,
+    await Effect.runPromise(
+      manager.processMultipleLatexDocuments(
+        [
+          {
+            name: 'fragment.tex',
+            content: '\nBody only.\n\\end{document}\n\n',
+          },
+        ],
+        createExternalLocation(fakePath('tmp/run/output.xml')),
+        0,
+      ),
     );
 
     await expectWritten('fragment.tex', 'Body only.\n');
@@ -869,10 +884,12 @@ describe('XmlOutputManager', () => {
   it('creates parent directories for extracted document names with subdirectories', async () => {
     const manager = createXmlManager();
 
-    await manager.processMultipleLatexDocuments(
-      [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
-      createExternalLocation(fakePath('tmp/run/output.xml')),
-      0,
+    await Effect.runPromise(
+      manager.processMultipleLatexDocuments(
+        [{ name: 'sections/main.tex', content: 'Nested section.\n' }],
+        createExternalLocation(fakePath('tmp/run/output.xml')),
+        0,
+      ),
     );
 
     await expectWritten('sections/main.tex', 'Nested section.\n');
@@ -925,12 +942,14 @@ Appendix.
     );
     const manager = createXmlManager();
     const state = createOutputState();
-    await extractFilesFromXml(
-      state,
-      processorDeps({ logger: spiedTrace() }),
-      manager,
-      createExternalLocation(fakePath('tmp/run/output.xml')),
-      0,
+    await Effect.runPromise(
+      extractFilesFromXml(
+        state,
+        processorDeps({ logger: spiedTrace() }),
+        manager,
+        createExternalLocation(fakePath('tmp/run/output.xml')),
+        0,
+      ),
     );
 
     const roundOutputs = state.rounds.get(0)?.outputs ?? [];
@@ -1384,18 +1403,20 @@ Appendix.
         diff: null,
       },
     ];
-    await extractFilesFromXml(
-      state,
-      processorDeps({
-        logger: spiedTrace(),
-        baseFiles: [
-          createExternalLocation(fakePath('tmp/run/appendices.tex')),
-          createExternalLocation(fakePath('tmp/run/cost_section.tex')),
-        ],
-      }),
-      manager,
-      createExternalLocation(fakePath('tmp/run/r1/output.xml')),
-      1,
+    await Effect.runPromise(
+      extractFilesFromXml(
+        state,
+        processorDeps({
+          logger: spiedTrace(),
+          baseFiles: [
+            createExternalLocation(fakePath('tmp/run/appendices.tex')),
+            createExternalLocation(fakePath('tmp/run/cost_section.tex')),
+          ],
+        }),
+        manager,
+        createExternalLocation(fakePath('tmp/run/r1/output.xml')),
+        1,
+      ),
     );
 
     const roundOutputs = state.rounds.get(1)?.outputs ?? [];
@@ -1599,16 +1620,18 @@ describe('extractFilesFromXml', () => {
         outputState: state,
       });
       const split = vi.spyOn(manager, 'splitScratchpadMultipleOutputXml');
-      if (failure) split.mockRejectedValueOnce(failure);
-      else split.mockResolvedValueOnce([]);
+      if (failure) split.mockReturnValueOnce(Effect.fail(failure));
+      else split.mockReturnValueOnce(Effect.succeed([]));
       await AbsoluteFS.write(fakePath('tmp/run/empty-output.xml'), '');
 
-      await extractFilesFromXml(
-        state,
-        processorDeps({ logger }),
-        manager,
-        createExternalLocation(fakePath('tmp/run/empty-output.xml')),
-        round,
+      await Effect.runPromise(
+        extractFilesFromXml(
+          state,
+          processorDeps({ logger }),
+          manager,
+          createExternalLocation(fakePath('tmp/run/empty-output.xml')),
+          round,
+        ),
       );
 
       expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
@@ -1625,20 +1648,22 @@ describe('extractFilesFromXml', () => {
     const logger = new TraceEmitter();
     const warn = vi.spyOn(logger, 'warn');
     const manager = createXmlManager(['paper.tex'], { logger });
-    vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockResolvedValueOnce(
-      [],
+    vi.spyOn(manager, 'splitScratchpadMultipleOutputXml').mockReturnValueOnce(
+      Effect.succeed([]),
     );
     await AbsoluteFS.write(
       fakePath('tmp/run/untagged-output.xml'),
       '% chunk.tex\n\\section{Untagged content}\n',
     );
 
-    await extractFilesFromXml(
-      createOutputState(),
-      processorDeps({ logger }),
-      manager,
-      createExternalLocation(fakePath('tmp/run/untagged-output.xml')),
-      5,
+    await Effect.runPromise(
+      extractFilesFromXml(
+        createOutputState(),
+        processorDeps({ logger }),
+        manager,
+        createExternalLocation(fakePath('tmp/run/untagged-output.xml')),
+        5,
+      ),
     );
 
     expect(warn).toHaveBeenCalledExactlyOnceWith(

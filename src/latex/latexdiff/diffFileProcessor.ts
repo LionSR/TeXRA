@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -53,6 +54,10 @@ const THEBIBLIOGRAPHY_BLOCK =
 const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 
 export class DiffFileProcessor {
+  /** `config`: the workspace configuration held as data, when the caller has
+   *  one; otherwise the replacement rules read the calling context's. */
+  constructor(private readonly config?: ConfigProvider) {}
+
   // Intentionally does not swallow failures: a read/transform/write error here
   // means the diff output is missing or corrupt, so it must stay in the error
   // channel for the caller (LaTeXdiffService.runDiff*/) to turn into a
@@ -78,7 +83,10 @@ export class DiffFileProcessor {
       );
       processedContent = this.processStarEnvironments(processedContent);
       processedContent = this.processLineByLine(processedContent);
-      processedContent = replacementEngine.applyAll(processedContent);
+      processedContent = replacementEngine.applyAll(
+        processedContent,
+        this.config,
+      );
       for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
         processedContent = processedContent.replace(pattern, replacement);
       }

@@ -10,6 +10,7 @@ import {
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { workspaceRoots } from '@platform/workspaceRoots';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -73,7 +74,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(draftAbsolute, workspaceOriginal);
 
     const runId = RunIdSchema.parse('a1a1a1a1a1a1');
-    const fileService = new TaskRunFileService(runId);
+    const fileService = new TaskRunFileService(runId, workspaceRoots());
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
@@ -127,7 +128,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
     const runId = RunIdSchema.parse('b2b2b2b2b2b2');
-    const fileService = new TaskRunFileService(runId);
+    const fileService = new TaskRunFileService(runId, workspaceRoots());
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(stylePath, 'macros.sty'),

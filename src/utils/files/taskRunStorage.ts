@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -13,21 +14,21 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
-  pathToLocation,
+  pathToLocationIn,
 } from './fileLocation';
 import {
   CHANNEL,
   createSymlink,
   ensureParentDir,
-  ensureRunDir,
-  getRunDir,
-  getOriginalSnapshotPath,
-  getRunStorageAbsolutePath,
-  runStorageLocationFromAnyAbsolutePath,
+  ensureRunDirUnder,
+  originalSnapshotPathUnder,
+  runDirUnder,
+  runStorageAbsolutePathUnder,
+  runStorageLocationUnder,
   shouldSkipRelocation,
   snapshotExists,
 } from './runStorageFs';
-import { WorkspaceFS } from './workspaceFS';
+import { locateInWorkspace } from './workspaceFS';
 
 const log = createLog(CHANNEL);
 
@@ -36,8 +37,16 @@ export class TaskRunFileService {
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(public readonly runId: RunId) {
-    this.runDirectory = getRunDir(runId);
+  constructor(
+    public readonly runId: RunId,
+    /**
+     * The run's session roots. Every workspace and storage path this service
+     * resolves reads them here rather than from the calling context's roots
+     * scope, which a run's Effect fiber is not guaranteed to sit inside.
+     */
+    private readonly roots: WorkspaceRoots,
+  ) {
+    this.runDirectory = runDirUnder(roots.storage, runId);
   }
 
   /**
@@ -59,7 +68,7 @@ export class TaskRunFileService {
   ): Promise<void> {
     if (this.hasPreparedSnapshot) return;
 
-    await ensureRunDir(this.runId);
+    await ensureRunDirUnder(this.roots.storage, this.runId);
 
     const linkTargets = new Map<string, FileLocation>();
     for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
@@ -99,7 +108,8 @@ export class TaskRunFileService {
       const stats = await fs.stat(target.absolutePath);
       if (!stats.isFile()) return;
 
-      const snapshotAbsolute = getOriginalSnapshotPath(
+      const snapshotAbsolute = originalSnapshotPathUnder(
+        this.roots.storage,
         this.runId,
         target.relativePath,
       );
@@ -119,16 +129,20 @@ export class TaskRunFileService {
 
   /** Create a FileLocation for a workflow output file. */
   public createLocation(inputPath: string): FileLocation {
-    const runStorageLocation = runStorageLocationFromAnyAbsolutePath(inputPath);
+    const runStorageLocation = runStorageLocationUnder(
+      this.roots.storage,
+      inputPath,
+    );
     if (runStorageLocation) return runStorageLocation;
 
-    const resolved = WorkspaceFS.locatePath(inputPath);
+    const resolved = locateInWorkspace(this.roots.workspace, inputPath);
 
     if (resolved.kind === 'external') {
       return createExternalLocation(resolved.absolutePath);
     }
 
-    const runAbsolute = getRunStorageAbsolutePath(
+    const runAbsolute = runStorageAbsolutePathUnder(
+      this.roots.storage,
       this.runId,
       resolved.relativePath,
     );
@@ -142,8 +156,8 @@ export class TaskRunFileService {
   /** Preserve the storage provenance of an existing input or comparison base. */
   public locateSource(inputPath: string): FileLocation {
     return (
-      runStorageLocationFromAnyAbsolutePath(inputPath) ??
-      pathToLocation(inputPath)
+      runStorageLocationUnder(this.roots.storage, inputPath) ??
+      pathToLocationIn(this.roots.workspace, inputPath)
     );
   }
 
@@ -166,8 +180,9 @@ export class TaskRunFileService {
       return location;
     }
 
-    await ensureRunDir(this.runId);
-    const runAbsolute = getRunStorageAbsolutePath(
+    await ensureRunDirUnder(this.roots.storage, this.runId);
+    const runAbsolute = runStorageAbsolutePathUnder(
+      this.roots.storage,
       this.runId,
       location.relativePath,
     );
@@ -254,11 +269,13 @@ export class TaskRunFileService {
         // (cls/sty/bib/figures) have no snapshot and fall through to the
         // workspace mirror at `runDir/<rel>`, which is correct — those
         // are never written to.
-        const snapshotAbsolute = getOriginalSnapshotPath(
+        const snapshotAbsolute = originalSnapshotPathUnder(
+          this.roots.storage,
           this.runId,
           relativePath,
         );
-        const workspaceMirrorAbsolute = getRunStorageAbsolutePath(
+        const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
+          this.roots.storage,
           this.runId,
           relativePath,
         );
@@ -273,7 +290,8 @@ export class TaskRunFileService {
             );
           }
         }
-        const destinationAbsolute = getRunStorageAbsolutePath(
+        const destinationAbsolute = runStorageAbsolutePathUnder(
+          this.roots.storage,
           this.runId,
           path.join(relativeDirectory, relativePath),
         );

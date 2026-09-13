@@ -12,6 +12,7 @@ import {
   type MediaWorkspaceState,
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
@@ -232,7 +233,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         const workspaceState = AgentWorkspaceState.create();
         const manager = new LatexMediaManager(
           logger,
-          new TaskRunFileService(runId),
+          new TaskRunFileService(runId, workspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(
           [createWorkspaceLocation(texPath, 'main.tex')],

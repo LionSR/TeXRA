@@ -3,11 +3,15 @@ import { Effect } from 'effect';
 
 // Internal imports
 import { withLogChannel } from '@logger/effectLog';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import {
+  platformSettingsStores,
+  readSettingFrom,
+} from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
@@ -56,7 +60,15 @@ interface DiffExecutionOptions {
 type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
 
 export class DiffCommandExecutor {
-  constructor(private readonly channel: string) {}
+  constructor(
+    private readonly channel: string,
+    /** Session roots held as data; absent, settings read the calling context's. */
+    private readonly roots?: WorkspaceRoots,
+  ) {}
+
+  private setting<T>(key: string): T {
+    return readSettingFrom<T>(this.roots ?? platformSettingsStores(), key);
+  }
 
   executeDiff(
     inputFile: string,
@@ -163,7 +175,7 @@ export class DiffCommandExecutor {
       // diff also matters because `LaTeXdiffService` is constructed at module
       // scope (before `initPlatform()` runs); a value captured at construction
       // would permanently freeze at whatever the default was at activation-zero.
-      const timeoutMs = readPlatformSetting<number>(
+      const timeoutMs = this.setting<number>(
         WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
       );
       const execOptions: CommandExecOptions = {
@@ -264,16 +276,14 @@ export class DiffCommandExecutor {
     pictureEnvs: string;
     subtype?: string;
   } {
-    const changesOnly = readPlatformSetting<boolean>(
+    const changesOnly = this.setting<boolean>(
       WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
     );
 
     return {
       mathMarkup:
         options?.mathMarkup ??
-        readPlatformSetting<MathMarkupOption>(
-          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-        ),
+        this.setting<MathMarkupOption>(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP),
       pictureEnvs: LATEXDIFF_PICTURE_ENVIRONMENTS,
       subtype: resolveLatexdiffSubtype({
         subtype: options?.subtype,

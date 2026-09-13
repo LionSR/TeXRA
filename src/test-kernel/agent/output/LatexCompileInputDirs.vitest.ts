@@ -2,7 +2,9 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, type FileSystem } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -15,9 +17,12 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId, FileLocation } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
-import { fakePath } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
   createExternalLocation,
@@ -42,7 +47,9 @@ const mocks = vi.hoisted(() => ({
     async (): Promise<{ ok: boolean; logTail?: string }> => ({ ok: true }),
   ),
   hasLatexCompiler: vi.fn(async () => true),
-  publishCompiledPdfArtifact: vi.fn(async () => null),
+  publishCompiledPdfArtifact: vi.fn((): Effect.Effect<null, Error> =>
+    Effect.succeed(null),
+  ),
 }));
 
 vi.mock('@latex/texTools', () => ({
@@ -66,7 +73,9 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
     () => ({}),
     logger,
     runId,
-    new TaskRunFileService(runId),
+    new TaskRunFileService(runId, processWorkspaceRoots()),
+    processWorkspaceRoots(),
+    (operation) => operation(),
   );
 
   return manager as unknown as {
@@ -81,18 +90,18 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
       round: number,
       sourceLocation: FileLocation,
       pdfStemSuffix: string,
-    ): Promise<unknown>;
+    ): Effect.Effect<unknown, Error, FileSystem.FileSystem>;
   };
 }
 
 /** Compiles a successful main-diff.tex for `round` and returns the result. */
-async function compileDiff(
+function compileDiff(
   runId: RunId,
   referenceLocation: FileLocation,
   round: number,
   sourceLocation: FileLocation,
   trace: AgentTrace = spiedTrace(),
-): Promise<unknown> {
+): Effect.Effect<unknown, Error, FileSystem.FileSystem> {
   const diffAbsoluteDir = path.join(runDir(runId), 'diff', `r${round}`);
   return createDiffCompiler(runId, trace).compileDiffIfSuccessful(
     { success: true, diffPath: path.join(diffAbsoluteDir, 'main-diff.tex') },
@@ -112,47 +121,28 @@ describe('workflow LaTeX compile input directories', () => {
   beforeEach(() => {
     mocks.compileLatex2Pdf.mockClear();
     mocks.hasLatexCompiler.mockClear();
-    mocks.publishCompiledPdfArtifact.mockReset().mockResolvedValue(null);
+    mocks.publishCompiledPdfArtifact
+      .mockReset()
+      .mockReturnValue(Effect.succeed(null));
   });
 
-  it('derives compile-check input dirs from outputFile.source', async () => {
-    const runId = 'compile-source-dir' as RunId;
-    const texPath = path.join(runDir(runId), 'r1', 'main.tex');
-    await initLatexPlatform({
-      [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-    });
-
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 1).outputs = [
-      outputFile(runId, path.join('r1', 'main.tex'), 'Draft/main.tex', 1),
-    ];
-
-    await runCompileCheck(compileContext(runId, outputState), 1);
-
-    expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
-      expect.objectContaining({ absolutePath: texPath }),
-      expect.objectContaining({
-        extraInputDirs: [path.join(workspacePath, 'Draft')],
-      }),
-    );
-  });
-
-  it.each(['', fakePath('external/source/main.tex')])(
-    'falls back to the output location for source %j',
-    async (source) => {
-      const runId =
-        `compile-output-dir-${source ? 'external' : 'empty'}` as RunId;
-      const texPath = path.join(runDir(runId), 'r2', 'Draft', 'main.tex');
-      await initLatexPlatform({
-        [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
-      });
+  it.effect('derives compile-check input dirs from outputFile.source', () =>
+    Effect.gen(function* () {
+      const runId = 'compile-source-dir' as RunId;
+      const texPath = path.join(runDir(runId), 'r1', 'main.tex');
+      yield* Effect.promise(() =>
+        initLatexPlatform({
+          [texPath]:
+            '\\documentclass{article}\\begin{document}Hi\\end{document}',
+        }),
+      );
 
       const outputState = createOutputState();
-      ensureRoundData(outputState, 2).outputs = [
-        outputFile(runId, path.join('r2', 'Draft', 'main.tex'), source, 2),
+      ensureRoundData(outputState, 1).outputs = [
+        outputFile(runId, path.join('r1', 'main.tex'), 'Draft/main.tex', 1),
       ];
 
-      await runCompileCheck(compileContext(runId, outputState), 2);
+      yield* runCompileCheck(compileContext(runId, outputState), 1);
 
       expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
         expect.objectContaining({ absolutePath: texPath }),
@@ -160,8 +150,91 @@ describe('workflow LaTeX compile input directories', () => {
           extraInputDirs: [path.join(workspacePath, 'Draft')],
         }),
       );
-    },
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
+
+  // The desktop's process roots carry no workspace; each open paper's session
+  // does. The check runs on the run's fiber, outside any roots scope, so the
+  // setting and the source directory must come from the session roots it is
+  // handed, not from the process fallback.
+  it.effect(
+    'reads the compile setting and source dir from the session roots, not the process roots',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'compile-session-roots' as RunId;
+        const texPath = path.join(runDir(runId), 'r1', 'main.tex');
+        yield* Effect.promise(() =>
+          installPlatform({
+            files: {
+              [texPath]:
+                '\\documentclass{article}\\begin{document}Hi\\end{document}',
+            },
+            storagePath,
+            workspacePath: undefined,
+            workspaceState: {
+              [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
+            },
+          }),
+        );
+        const sessionRoots = createFakeWorkspaceRoots({
+          storagePath,
+          workspacePath,
+          workspaceState: {
+            [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
+            [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+          },
+        });
+
+        const outputState = createOutputState();
+        ensureRoundData(outputState, 1).outputs = [
+          outputFile(runId, path.join('r1', 'main.tex'), 'Draft/main.tex', 1),
+        ];
+
+        yield* runCompileCheck(
+          { ...compileContext(runId, outputState), roots: sessionRoots },
+          1,
+        );
+
+        expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+          expect.objectContaining({ absolutePath: texPath }),
+          expect.objectContaining({
+            extraInputDirs: [path.join(workspacePath, 'Draft')],
+          }),
+        );
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
+  for (const source of ['', fakePath('external/source/main.tex')]) {
+    it.effect(
+      `falls back to the output location for source ${JSON.stringify(source)}`,
+      () =>
+        Effect.gen(function* () {
+          const runId =
+            `compile-output-dir-${source ? 'external' : 'empty'}` as RunId;
+          const texPath = path.join(runDir(runId), 'r2', 'Draft', 'main.tex');
+          yield* Effect.promise(() =>
+            initLatexPlatform({
+              [texPath]:
+                '\\documentclass{article}\\begin{document}Hi\\end{document}',
+            }),
+          );
+
+          const outputState = createOutputState();
+          ensureRoundData(outputState, 2).outputs = [
+            outputFile(runId, path.join('r2', 'Draft', 'main.tex'), source, 2),
+          ];
+
+          yield* runCompileCheck(compileContext(runId, outputState), 2);
+
+          expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+            expect.objectContaining({ absolutePath: texPath }),
+            expect.objectContaining({
+              extraInputDirs: [path.join(workspacePath, 'Draft')],
+            }),
+          );
+        }).pipe(Effect.provide(nodePlatformLayer)),
+    );
+  }
 
   it('resolves workspace and round-storage paths through one owner', async () => {
     const runId = 'shared-source-resolver' as RunId;
@@ -169,6 +242,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'Draft', 'main.tex'),
           path.join('Draft', 'main.tex'),
@@ -177,11 +251,13 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBe(path.join(workspacePath, 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         runStorageFile(runId, path.join('r3', 'Draft', 'main.tex')),
       ),
     ).toBe(path.join(workspacePath, 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         createRunStorageLocation(
           path.join(runDir(runId), 'original', 'r3', 'Draft', 'main.tex'),
           path.join('r3', 'Draft', 'main.tex'),
@@ -191,6 +267,7 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBe(path.join(workspacePath, 'r3', 'Draft'));
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'r3', 'Draft', 'main.tex'),
           path.join('r3', 'Draft', 'main.tex'),
@@ -204,6 +281,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         createExternalLocation(fakePath('external/project/main.tex')),
       ),
     ).toBeUndefined();
@@ -214,6 +292,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(
       resolveWorkspaceSourceDir(
+        processWorkspaceRoots(),
         createWorkspaceLocation(
           path.join(workspacePath, 'Draft', 'main.tex'),
           path.join('Draft', 'main.tex'),
@@ -222,100 +301,120 @@ describe('workflow LaTeX compile input directories', () => {
     ).toBeUndefined();
   });
 
-  it('compiles diffs with revised round inputs before workspace fallbacks', async () => {
-    const runId = 'latexdiff-input-dir' as RunId;
-    await initLatexPlatform({});
+  it.effect(
+    'compiles diffs with revised round inputs before workspace fallbacks',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'latexdiff-input-dir' as RunId;
+        yield* Effect.promise(() => initLatexPlatform({}));
 
-    await compileDiff(
-      runId,
-      runStorageFile(runId, path.join('r1', 'Draft', 'main.tex')),
-      2,
-      runStorageFile(runId, path.join('r2', 'Draft', 'main.tex')),
-    );
+        yield* compileDiff(
+          runId,
+          runStorageFile(runId, path.join('r1', 'Draft', 'main.tex')),
+          2,
+          runStorageFile(runId, path.join('r2', 'Draft', 'main.tex')),
+        );
 
-    expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
-      expect.objectContaining({
-        absolutePath: path.join(runDir(runId), 'diff', 'r2', 'main-diff.tex'),
-      }),
-      expect.objectContaining({
-        extraInputDirs: [
-          path.join(runDir(runId), 'r2', 'Draft'),
-          path.join(workspacePath, 'Draft'),
-        ],
-      }),
-    );
-  });
+        expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+          expect.objectContaining({
+            absolutePath: path.join(
+              runDir(runId),
+              'diff',
+              'r2',
+              'main-diff.tex',
+            ),
+          }),
+          expect.objectContaining({
+            extraInputDirs: [
+              path.join(runDir(runId), 'r2', 'Draft'),
+              path.join(workspacePath, 'Draft'),
+            ],
+          }),
+        );
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
-  it('keeps an external latexdiff reference in its own directory', async () => {
-    const runId = 'latexdiff-external-input-dir' as RunId;
-    await initLatexPlatform({});
+  it.effect('keeps an external latexdiff reference in its own directory', () =>
+    Effect.gen(function* () {
+      const runId = 'latexdiff-external-input-dir' as RunId;
+      yield* Effect.promise(() => initLatexPlatform({}));
 
-    await compileDiff(
-      runId,
-      createExternalLocation(fakePath('external/project/main.tex')),
-      1,
-      createWorkspaceLocation(
-        path.join(workspacePath, 'Draft', 'main.tex'),
-        path.join('Draft', 'main.tex'),
-      ),
-    );
+      yield* compileDiff(
+        runId,
+        createExternalLocation(fakePath('external/project/main.tex')),
+        1,
+        createWorkspaceLocation(
+          path.join(workspacePath, 'Draft', 'main.tex'),
+          path.join('Draft', 'main.tex'),
+        ),
+      );
 
-    expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        extraInputDirs: [fakePath('external/project')],
-      }),
-    );
-  });
+      expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          extraInputDirs: [fakePath('external/project')],
+        }),
+      );
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
-  it('keeps a successful diff when publishing its PDF fails', async () => {
-    const runId = 'latexdiff-publish-failure' as RunId;
-    await initLatexPlatform({});
-    const trace = spiedTrace();
-    const publishError = new Error('artifact storage unavailable');
-    mocks.publishCompiledPdfArtifact.mockRejectedValueOnce(publishError);
+  it.effect('keeps a successful diff when publishing its PDF fails', () =>
+    Effect.gen(function* () {
+      const runId = 'latexdiff-publish-failure' as RunId;
+      yield* Effect.promise(() => initLatexPlatform({}));
+      const trace = spiedTrace();
+      const publishError = new Error('artifact storage unavailable');
+      mocks.publishCompiledPdfArtifact.mockReturnValueOnce(
+        Effect.fail(publishError),
+      );
 
-    const result = await compileDiff(
-      runId,
-      runStorageFile(runId, path.join('r1', 'main.tex')),
-      2,
-      runStorageFile(runId, path.join('r2', 'main.tex')),
-      trace,
-    );
+      const result = yield* compileDiff(
+        runId,
+        runStorageFile(runId, path.join('r1', 'main.tex')),
+        2,
+        runStorageFile(runId, path.join('r2', 'main.tex')),
+        trace,
+      );
 
-    expect(result).toEqual(expect.objectContaining({ artifact: null }));
-    expect(trace.warn).toHaveBeenCalledWith(
-      'Failed to publish latexdiff PDF: artifact storage unavailable',
-      expect.objectContaining({
-        data: expect.objectContaining({ error: publishError }),
-      }),
-    );
-  });
+      expect(result).toEqual(expect.objectContaining({ artifact: null }));
+      expect(trace.warn).toHaveBeenCalledWith(
+        'Failed to publish latexdiff PDF: artifact storage unavailable',
+        expect.objectContaining({
+          data: expect.objectContaining({ error: publishError }),
+        }),
+      );
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
-  it('keeps a failed latexdiff compiler transcript out of the warning message', async () => {
-    const runId = 'latexdiff-compile-failure' as RunId;
-    await initLatexPlatform({});
-    const trace = spiedTrace();
-    const logTail = 'LaTeX compiler transcript that should remain diagnostic';
-    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false, logTail });
+  it.effect(
+    'keeps a failed latexdiff compiler transcript out of the warning message',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'latexdiff-compile-failure' as RunId;
+        yield* Effect.promise(() => initLatexPlatform({}));
+        const trace = spiedTrace();
+        const logTail =
+          'LaTeX compiler transcript that should remain diagnostic';
+        mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false, logTail });
 
-    await compileDiff(
-      runId,
-      runStorageFile(runId, path.join('r1', 'main.tex')),
-      2,
-      runStorageFile(runId, path.join('r2', 'main.tex')),
-      trace,
-    );
+        yield* compileDiff(
+          runId,
+          runStorageFile(runId, path.join('r1', 'main.tex')),
+          2,
+          runStorageFile(runId, path.join('r2', 'main.tex')),
+          trace,
+        );
 
-    expect(trace.warn).toHaveBeenCalledWith(
-      'Failed to compile latexdiff PDF: main-diff.tex',
-      expect.objectContaining({
-        data: expect.objectContaining({ logTail }),
-      }),
-    );
-    expect(trace.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining(logTail),
-      expect.anything(),
-    );
-  });
+        expect(trace.warn).toHaveBeenCalledWith(
+          'Failed to compile latexdiff PDF: main-diff.tex',
+          expect.objectContaining({
+            data: expect.objectContaining({ logTail }),
+          }),
+        );
+        expect(trace.warn).not.toHaveBeenCalledWith(
+          expect.stringContaining(logTail),
+          expect.anything(),
+        );
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 });

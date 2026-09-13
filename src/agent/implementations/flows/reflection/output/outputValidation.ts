@@ -5,76 +5,67 @@
  * reporting missing files for user notification.
  */
 
-import { debugInternal, type StageHandle } from '@agent/trace';
+import { Effect } from 'effect';
+
+import { debugInternal } from '@agent/trace';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
+import { fsCall } from './outputOperations';
 import {
   publishMissingOutputs,
   reportMissingOutputs,
-  withOutputStage,
   type OutputDependencies,
   type OutputState,
 } from './outputState';
 
 /** Checks that expected output files exist. */
-export async function checkExpectedOutputs(
+export const checkExpectedOutputs = Effect.fn(
+  'reflection.checkExpectedOutputs',
+)(function* (
   state: OutputState,
   deps: OutputDependencies,
   outputLocation: FileLocation,
   currRound: number,
-  stage?: StageHandle,
-): Promise<{ missing: string[] }> {
-  return withOutputStage(
-    deps,
-    `Validate expected r${currRound}`,
-    stage,
-    async (): Promise<{ missing: string[] }> => {
-      const expected = deps.config.outputFiles;
-      let missing: string[] = [];
+) {
+  const expected = deps.config.outputFiles;
+  let missing: string[] = [];
 
-      if (expected?.length) {
-        const results = await Promise.all(
-          expected.map(async (file) => ({
-            file,
-            exists: await AbsoluteFS.exists(
-              deps.fileService.createLocation(file).absolutePath,
-            ),
-          })),
-        );
-        missing = results.filter((r) => !r.exists).map((r) => r.file);
+  if (expected?.length) {
+    const results = yield* Effect.forEach(
+      expected,
+      (file) =>
+        fsCall(() =>
+          AbsoluteFS.exists(deps.fileService.createLocation(file).absolutePath),
+        ).pipe(Effect.map((exists) => ({ file, exists }))),
+      { concurrency: 'unbounded' },
+    );
+    missing = results.filter((r) => !r.exists).map((r) => r.file);
 
-        if (missing.length > 0) {
-          const xmlExists = await AbsoluteFS.exists(
-            outputLocation.absolutePath,
-          );
-          reportMissingOutputs(state, deps.logger, {
-            round: currRound,
-            missing,
-            xmlFile: xmlExists ? outputLocation.absolutePath : null,
-          });
-          deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
-            data: missing,
-          });
-        } else {
-          deps.logger.debug(
-            `All expected outputs exist after round ${currRound}`,
-          );
-        }
-      } else {
-        debugInternal(
-          deps.logger,
-          `No expected outputs for round ${currRound}`,
-        );
-      }
+    if (missing.length > 0) {
+      const xmlExists = yield* fsCall(() =>
+        AbsoluteFS.exists(outputLocation.absolutePath),
+      );
+      reportMissingOutputs(state, deps.logger, {
+        round: currRound,
+        missing,
+        xmlFile: xmlExists ? outputLocation.absolutePath : null,
+      });
+      deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
+        data: missing,
+      });
+    } else {
+      deps.logger.debug(`All expected outputs exist after round ${currRound}`);
+    }
+  } else {
+    debugInternal(deps.logger, `No expected outputs for round ${currRound}`);
+  }
 
-      // A round with nothing missing reports an empty set so consumers can
-      // distinguish "checked, all present" from "never reported".
-      if (missing.length === 0) {
-        publishMissingOutputs(state, deps.logger, currRound, []);
-      }
+  // A round with nothing missing reports an empty set so consumers can
+  // distinguish "checked, all present" from "never reported".
+  if (missing.length === 0) {
+    publishMissingOutputs(state, deps.logger, currRound, []);
+  }
 
-      return { missing };
-    },
-  );
-}
+  return { missing };
+});

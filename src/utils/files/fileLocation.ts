@@ -9,7 +9,7 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { WorkspaceFS } from './workspaceFS';
+import { locateInWorkspace, WorkspaceFS } from './workspaceFS';
 
 export function createWorkspaceLocation(
   absolutePath: string,
@@ -66,7 +66,18 @@ export function getFileDirectory(location: FileLocation): string {
  * @returns FileLocation (workspace or external, never runStorage)
  */
 export function pathToLocation(target: string): FileLocation {
-  const resolved = WorkspaceFS.locatePath(target);
+  return pathToLocationIn(WorkspaceFS.getPath(), target);
+}
+
+/**
+ * {@link pathToLocation} against an explicit workspace root, for code that
+ * holds a session's roots as data.
+ */
+export function pathToLocationIn(
+  workspaceRoot: string | undefined,
+  target: string,
+): FileLocation {
+  const resolved = locateInWorkspace(workspaceRoot, target);
 
   if (resolved.kind === 'external') {
     if (!target) {

@@ -11,10 +11,11 @@
  * each round is persisted.
  */
 
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   type CompileFailure,
   type FileLocation,
@@ -37,6 +38,9 @@ export interface OutputDependencies {
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;
   readonly fileService: TaskRunFileService;
+  /** The run's session roots, held as data: the pipeline runs on the run's
+   *  fiber, which is not guaranteed to sit inside the session's roots scope. */
+  readonly roots: WorkspaceRoots;
 }
 
 export function createOutputState(
@@ -72,19 +76,6 @@ export function roundsToPersisted(state: OutputState): RoundOutput[] {
     result[round] = data;
   }
   return result;
-}
-
-export async function withOutputStage<T>(
-  deps: OutputDependencies,
-  label: string,
-  parentStage: StageHandle | undefined,
-  fn: (stage: StageHandle) => Promise<T>,
-): Promise<T> {
-  const stage = deps.logger.openStage(`Output: ${label}`, {
-    parent: parentStage,
-    skip: true,
-  });
-  return stage.run(() => fn(stage));
 }
 
 export function ensureRoundData(

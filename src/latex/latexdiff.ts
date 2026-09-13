@@ -4,10 +4,11 @@ import { Effect } from 'effect';
 
 import { formatError, isFileNotFoundError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocation, pathToLocationIn } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
 import {
   buildBetweenRoundDiffSuffix,
@@ -54,9 +55,17 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  constructor(private readonly channel: string) {
-    this.fileProcessor = new DiffFileProcessor();
-    this.commandExecutor = new DiffCommandExecutor(channel);
+  /**
+   * @param roots The session roots a run holds as data. Given, the diff's
+   * settings, replacement rules and output location read them; absent, they
+   * read the calling context's roots.
+   */
+  constructor(
+    private readonly channel: string,
+    private readonly roots?: WorkspaceRoots,
+  ) {
+    this.fileProcessor = new DiffFileProcessor(roots?.config);
+    this.commandExecutor = new DiffCommandExecutor(channel, roots);
   }
 
   /**
@@ -150,7 +159,9 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      const outputLocation = pathToLocation(outputPath);
+      const outputLocation = this.roots
+        ? pathToLocationIn(this.roots.workspace, outputPath)
+        : pathToLocation(outputPath);
       yield* Effect.tryPromise({
         try: async () => {
           await AbsoluteFS.ensureDir(outputDirectory);

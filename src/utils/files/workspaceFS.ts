@@ -37,11 +37,7 @@ export class WorkspaceFS extends RelativeFS {
    * with no workspace open) comes back as the caller's own path, normalized.
    */
   public static relativePath(filePath: string): string {
-    const root = this.getPath();
-    if (!root) {
-      return filePath;
-    }
-    return normalizeFilePath(relativeToRoot(root, filePath) ?? filePath);
+    return workspaceRelativePath(this.getPath(), filePath);
   }
 
   /** Absolute path from relative. Already-absolute paths pass through. */
@@ -54,26 +50,47 @@ export class WorkspaceFS extends RelativeFS {
    * Returns 'workspace' or 'external' — callers apply their own policy.
    */
   public static locatePath(inputPath: string): ResolvedPath {
-    const root = this.getPath();
-
-    if (!root) {
-      if (!inputPath) return { kind: 'external', absolutePath: '' };
-      return annotateExternal({
-        kind: 'external',
-        absolutePath: path.resolve(inputPath),
-      });
-    }
-
-    // Absolute paths: platform's asRelativePath for symlink handling
-    if (path.isAbsolute(inputPath)) {
-      const relativePath = this.relativePath(inputPath);
-      if (!path.isAbsolute(relativePath) && !relativePath.startsWith('..')) {
-        return { kind: 'workspace', absolutePath: inputPath, relativePath };
-      }
-      return annotateExternal({ kind: 'external', absolutePath: inputPath });
-    }
-
-    // Empty + relative paths: pure path logic
-    return locatePathInRoot(root, inputPath);
+    return locateInWorkspace(this.getPath(), inputPath);
   }
+}
+
+/** {@link WorkspaceFS.relativePath} against an explicit workspace root. */
+function workspaceRelativePath(
+  root: string | undefined,
+  filePath: string,
+): string {
+  if (!root) {
+    return filePath;
+  }
+  return normalizeFilePath(relativeToRoot(root, filePath) ?? filePath);
+}
+
+/**
+ * {@link WorkspaceFS.locatePath} against an explicit workspace root — the
+ * form for code that holds a run's session roots as data rather than reading
+ * the calling context's roots scope.
+ */
+export function locateInWorkspace(
+  root: string | undefined,
+  inputPath: string,
+): ResolvedPath {
+  if (!root) {
+    if (!inputPath) return { kind: 'external', absolutePath: '' };
+    return annotateExternal({
+      kind: 'external',
+      absolutePath: path.resolve(inputPath),
+    });
+  }
+
+  // Absolute paths: platform's asRelativePath for symlink handling
+  if (path.isAbsolute(inputPath)) {
+    const relativePath = workspaceRelativePath(root, inputPath);
+    if (!path.isAbsolute(relativePath) && !relativePath.startsWith('..')) {
+      return { kind: 'workspace', absolutePath: inputPath, relativePath };
+    }
+    return annotateExternal({ kind: 'external', absolutePath: inputPath });
+  }
+
+  // Empty + relative paths: pure path logic
+  return locatePathInRoot(root, inputPath);
 }

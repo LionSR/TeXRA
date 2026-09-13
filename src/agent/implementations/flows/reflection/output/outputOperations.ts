@@ -1,51 +1,59 @@
+import { Effect } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES, type MessageType } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn' | 'debug';
 
-interface TryOperationOptions<T> {
+interface RecoverOptions<T, R> {
   /** Trace used for the internal failure line. */
   logger: AgentTrace;
   /** Trace level for the failure line (mirrors each call site's prior level). */
   level: OutputLogLevel;
   /**
    * Prefix for the failure line. The resolved error message is appended as
-   * `${label}: ${toErrorMessage(err)}`, matching the previous hand-written
-   * `catch` blocks.
+   * `${label}: ${toErrorMessage(err)}`.
    */
   label: string;
   /** Message category for the failure line. Defaults to INTERNAL. */
   messageType?: MessageType;
   /** Produces the fallback value (and any side effects) after logging. */
-  recover: (error: unknown) => T | Promise<T>;
+  recover: (error: unknown) => Effect.Effect<T, never, R>;
 }
 
 /**
- * Shared `try → log internal → recover` wrapper for the output operation
- * managers. Runs `operation`; on failure it logs
- * `${label}: ${toErrorMessage(err)}` at `level` with the INTERNAL message
- * type, then returns the caller-supplied recovery value. This centralizes the
- * identical error-recovery boilerplate that `LatexDiffManager`,
- * `extractFilesFromXml`, and friends each repeated.
+ * Run a filesystem promise as a typed failure. The output pipeline still
+ * reads and writes through `AbsoluteFS`, whose errors are Node errors the
+ * recovery sites below inspect by `code`; wrapping preserves that identity
+ * rather than re-normalizing it into a `PlatformError`.
  */
-export async function tryOperation<T>(
-  operation: () => Promise<T>,
-  {
-    logger,
-    level,
-    label,
-    messageType = MESSAGE_TYPES.INTERNAL,
-    recover,
-  }: TryOperationOptions<T>,
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    logger[level](`${label}: ${toErrorMessage(error)}`, {
-      messageType,
-    });
-    return recover(error);
-  }
-}
+export const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
+  Effect.tryPromise({ try: thunk, catch: ensureError });
+
+/**
+ * Shared `run → log internal → recover` combinator for the output pipeline.
+ * A **typed** failure of `effect` is logged as `${label}: ${message}` at
+ * `level` with the INTERNAL message type, then replaced by the caller's
+ * fallback — the fallback is loud by construction, never silent.
+ *
+ * Defects and interruption deliberately pass straight through: a bug in this
+ * pipeline is not a recoverable output failure, and a cancelled run is not a
+ * skipped step. The one broad recovery left is the reflection loop's own
+ * `fallbackOutput`, which owns what a failed output round reports.
+ */
+export const recoverOutputFailure =
+  <T, R2 = never>(options: RecoverOptions<T, R2>) =>
+  <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A | T, never, R | R2> =>
+    Effect.catch(effect, (error: E) =>
+      Effect.suspend(() => {
+        options.logger[options.level](
+          `${options.label}: ${toErrorMessage(error)}`,
+          { messageType: options.messageType ?? MESSAGE_TYPES.INTERNAL },
+        );
+        return options.recover(error);
+      }),
+    );

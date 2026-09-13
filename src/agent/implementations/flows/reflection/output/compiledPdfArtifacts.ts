@@ -1,9 +1,11 @@
 // Node imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect, FileSystem, type PlatformError } from 'effect';
+
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { platform } from '@platform/platform';
 import {
   fileLocationDisplayPath,
   type RunId,
@@ -12,7 +14,6 @@ import {
 } from '@shared/schemas';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
 interface PublishCompiledPdfOptions {
@@ -58,29 +59,51 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
   return normalizePdfRelativePath(path.join(parsed.dir, `${pdfStem}.pdf`));
 }
 
-async function copyArtifactFile(
-  source: string,
-  destination: string,
-): Promise<void> {
-  const fs = platform().fs;
-  await fs.createDirectory(path.dirname(destination));
-  await fs.delete(destination, { recursive: true }).catch((error) => {
-    if (!isFileNotFoundError(error)) throw error;
-  });
-  await fs.copy(source, destination, { overwrite: true });
+/**
+ * Whether a platform failure means "the path is not there". The standard
+ * filesystem service normalizes the host error into a `SystemError` reason,
+ * so match that tag first and fall back to the original error's `code` for a
+ * backend that only carries the cause.
+ */
+function isMissingPath(error: PlatformError.PlatformError): boolean {
+  return (
+    error.reason._tag === 'NotFound' || isFileNotFoundError(error.reason.cause)
+  );
 }
 
-export async function publishCompiledPdfArtifact(
-  options: PublishCompiledPdfOptions,
-): Promise<RunStorageFileLocation | null> {
-  let stats;
-  try {
-    stats = await platform().fs.stat(options.compiledPdfPath);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return null;
-    throw error;
+/**
+ * Copy `source` over `destination`, creating the destination's directory and
+ * clearing whatever was there first. A destination that is already gone is
+ * the one removal failure this step tolerates; everything else (a permission
+ * denial, a busy path) is the caller's to report.
+ */
+const copyArtifactFile = Effect.fn('publishCompiledPdfArtifact.copy')(
+  function* (source: string, destination: string) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
+    yield* fs
+      .remove(destination, { recursive: true })
+      .pipe(Effect.catchIf(isMissingPath, () => Effect.void));
+    yield* fs.copy(source, destination, { overwrite: true });
+  },
+);
+
+/**
+ * Publish a compiled PDF under the run's `output/r<round>/` and
+ * `output/latest/` directories. A compile that wrote no PDF — or wrote
+ * something that is not a file — publishes nothing and reports `null`; every
+ * other filesystem failure is the caller's to report.
+ */
+export const publishCompiledPdfArtifact = Effect.fn(
+  'publishCompiledPdfArtifact',
+)(function* (options: PublishCompiledPdfOptions) {
+  const fs = yield* FileSystem.FileSystem;
+  const stats = yield* fs
+    .stat(options.compiledPdfPath)
+    .pipe(Effect.catchIf(isMissingPath, () => Effect.succeed(undefined)));
+  if (stats === undefined || stats.type !== 'File') {
+    return null as RunStorageFileLocation | null;
   }
-  if (!isFile(stats.type)) return null;
 
   const pdfRelativePath = toPdfRelativePath(options);
   const roundRelativePath = path.posix.join(
@@ -99,12 +122,12 @@ export async function publishCompiledPdfArtifact(
     latestRelativePath,
   );
 
-  await copyArtifactFile(options.compiledPdfPath, roundAbsolutePath);
-  await copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
+  yield* copyArtifactFile(options.compiledPdfPath, roundAbsolutePath);
+  yield* copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
 
   return createRunStorageLocation(
     latestAbsolutePath,
     latestRelativePath,
     options.runId,
   );
-}
+});

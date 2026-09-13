@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { getCoreSettingDefault } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -36,6 +38,14 @@ vi.mock('@utils/system/execUtils', () => ({
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: <T>(key: string, fallback?: T) =>
     (getCoreSettingDefault(key) as T | undefined) ?? (fallback as T),
+  readConfig: <T>(
+    config: { get<V>(key: string): V | undefined },
+    key: string,
+    fallback?: T,
+  ) =>
+    config.get<T>(key) ??
+    (getCoreSettingDefault(key) as T | undefined) ??
+    (fallback as T),
 }));
 
 describe('LaTeXdiffService shadow output', () => {
@@ -139,6 +149,53 @@ describe('LaTeXdiffService shadow output', () => {
             ),
           ),
         ).toBe('ENOENT');
+      }),
+  );
+
+  // A run holds its session roots as data: on the desktop they differ from
+  // the process roots, and the run's fiber can leave the session's roots
+  // scope (#12433), so a round diff must read the session's settings.
+  it.effect(
+    'reads latexdiff settings from the session roots it is handed, not the process roots',
+    () =>
+      Effect.gen(function* () {
+        const { sourceDir, shadowDir } = yield* Effect.promise(() =>
+          prepareDiffWorkspace(
+            'texra-latexdiff-session-',
+            '\\documentclass{article}\n\\begin{document}\nold\n\\end{document}\n',
+            '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
+          ),
+        );
+        const sessionRoots = {
+          ...workspaceRoots(),
+          workspaceState: new MemoryStateStore(),
+        };
+        yield* Effect.promise(async () => {
+          await workspaceRoots().workspaceState.update(
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            'coarse',
+          );
+          await sessionRoots.workspaceState.update(
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            'off',
+          );
+        });
+        const { LaTeXdiffService } = yield* Effect.promise(
+          () => import('@latex/latexdiff'),
+        );
+
+        yield* new LaTeXdiffService('test', sessionRoots).runDiffForRound(
+          createExternalLocation(path.join(sourceDir, 'base.tex')),
+          createExternalLocation(path.join(sourceDir, 'revised.tex')),
+          1,
+          undefined,
+          { outputDirectory: shadowDir },
+        );
+
+        expect(mocks.executeCommand).toHaveBeenCalledWith(
+          expect.arrayContaining(['--math-markup=off']),
+          expect.anything(),
+        );
       }),
   );
 
@@ -360,7 +417,7 @@ describe('LaTeXdiffService shadow output', () => {
     await installNodeBackedPlatform(workspaceDir, storageRoot);
 
     const runId = 'run-1' as RunId;
-    const fileService = new TaskRunFileService(runId);
+    const fileService = new TaskRunFileService(runId, workspaceRoots());
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
     );

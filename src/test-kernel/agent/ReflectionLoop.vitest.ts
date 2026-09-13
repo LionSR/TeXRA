@@ -108,10 +108,12 @@ vi.mock(
     ...(await importOriginal<
       typeof import('@agent/implementations/flows/reflection/output/compileCheck')
     >()),
-    runCompileCheck: vi.fn(async (_context: unknown, round: number) => ({
-      compileResult: scripted.compileResults.get(round),
-      artifacts: [],
-    })),
+    runCompileCheck: vi.fn((_context: unknown, round: number) =>
+      Effect.sync(() => ({
+        compileResult: scripted.compileResults.get(round),
+        artifacts: [],
+      })),
+    ),
   }),
 );
 
@@ -128,27 +130,28 @@ vi.mock(
         typeof import('@agent/implementations/flows/reflection/output/outputFileExtraction')
       >()),
       extractFilesFromXml: vi.fn(
-        async (
+        (
           outputState: OutputState,
           _deps: unknown,
           _xml: unknown,
           _location: unknown,
           round: number,
-        ) => {
-          ensureRoundData(outputState, round).outputs = [
-            {
-              source: 'main.tex',
-              round,
-              location: locate(
-                `/storage/executions/${scripted.runId}/r${round}/main.tex`,
-                `r${round}/main.tex`,
-                scripted.runId as RunId,
-              ),
-              lineage: null,
-              diff: null,
-            },
-          ];
-        },
+        ) =>
+          Effect.sync(() => {
+            ensureRoundData(outputState, round).outputs = [
+              {
+                source: 'main.tex',
+                round,
+                location: locate(
+                  `/storage/executions/${scripted.runId}/r${round}/main.tex`,
+                  `r${round}/main.tex`,
+                  scripted.runId as RunId,
+                ),
+                lineage: null,
+                diff: null,
+              },
+            ];
+          }),
       ),
     };
   },
@@ -163,7 +166,7 @@ vi.mock(
   '@agent/implementations/flows/reflection/output/LatexDiffManager',
   () => ({
     LatexDiffManager: class {
-      handleLatexdiffOfOutput = async () => [];
+      handleLatexdiffOfOutput = () => Effect.succeed([]);
     },
   }),
 );
@@ -172,7 +175,7 @@ vi.mock(
   '@agent/implementations/flows/reflection/output/XmlOutputManager',
   () => ({
     XmlOutputManager: class {
-      ensureCorrectXmlStructure = async () => undefined;
+      ensureCorrectXmlStructure = () => Effect.void;
     },
   }),
 );
@@ -185,20 +188,21 @@ vi.mock(
     type OutputState = Parameters<typeof ensureRoundData>[0];
     return {
       summarizeRound: vi.fn(
-        async (
+        (
           outputState: OutputState,
           _deps: unknown,
           _location: unknown,
           round: number,
-        ) => {
-          const outputs = ensureRoundData(outputState, round).outputs;
-          return {
-            fileInfos: outputs,
-            filesToOpen: scripted.openFiles
-              ? outputs.map((output) => output.location)
-              : [],
-          };
-        },
+        ) =>
+          Effect.sync(() => {
+            const outputs = ensureRoundData(outputState, round).outputs;
+            return {
+              fileInfos: outputs,
+              filesToOpen: scripted.openFiles
+                ? outputs.map((output) => output.location)
+                : [],
+            };
+          }),
       ),
     };
   },
@@ -206,12 +210,14 @@ vi.mock(
 
 vi.mock(
   '@agent/implementations/flows/reflection/output/outputValidation',
-  () => ({ checkExpectedOutputs: vi.fn(async () => ({ missing: [] })) }),
+  () => ({
+    checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
+  }),
 );
 
 vi.mock(
   '@agent/implementations/flows/reflection/output/snapshotResolution',
-  () => ({ resolveBaseFilesForDiff: vi.fn(async () => []) }),
+  () => ({ resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])) }),
 );
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
@@ -435,7 +441,7 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: false },
         userVarChannels: {},
         initialUserMessageForTranscript: 'Write the document.',
-        fileService: new TaskRunFileService(init.runId),
+        fileService: new TaskRunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: null,
         structured: { value: undefined },
