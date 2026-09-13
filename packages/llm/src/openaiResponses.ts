@@ -497,6 +497,30 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
+const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
+
+/**
+ * The digest a submission records on its accepted operation: origin, system
+ * text and admitted history, hashed with the function a continuation's prefix
+ * fingerprint uses. It covers the input half of that prefix, which is the half
+ * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
+ */
+export function openaiResponsesAdmittedFingerprint(
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+): string {
+  return prefixFingerprint(
+    RESPONSES_PREFIX_DOMAIN,
+    {
+      protocol: turn.protocol,
+      codecVersion: turn.codecVersion,
+      requestedModel: turn.requestedModel,
+      deployment: turn.deployment,
+    },
+    turn.system,
+    turn.messages,
+  );
+}
+
 /** Builds only a stored anchor, using the same selected configuration as admission. */
 export const openaiResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
@@ -550,7 +574,7 @@ export const openaiResponsesContinuation = Effect.fn(
     origin: result.requestedOrigin,
     coveredMessages: prefix.length,
     prefixFingerprint: prefixFingerprint(
-      'texra-openai-responses-prefix-v1',
+      RESPONSES_PREFIX_DOMAIN,
       result.requestedOrigin,
       turn.system,
       prefix,
@@ -577,7 +601,7 @@ const responseInput = Effect.fn('llm.responses.input')(function* (
     continuation.anchor.coveredItems !== encodedPrefix.length ||
     continuation.prefixFingerprint !==
       prefixFingerprint(
-        'texra-openai-responses-prefix-v1',
+        RESPONSES_PREFIX_DOMAIN,
         continuation.origin,
         turn.system,
         prefix,
@@ -1498,6 +1522,7 @@ export function openaiResponsesModel(
           origin,
           providerResponseId: response.id,
           afterSequence: sequence_number,
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
         });
         if (
           (type === 'response.completed' && response.status === 'completed') ||
@@ -1563,6 +1588,19 @@ export function openaiResponsesModel(
             message: 'The admitted turn belongs to another model binding.',
           });
         const turn = parsedTurn.data;
+        // The operation records what the provider was actually given. A
+        // resume rebuilds the turn from the caller's current system text, so
+        // a drifted rebuild still gets its result but must leave no anchor:
+        // the next round then resends the transcript instead of chaining on
+        // instructions the answer never saw.
+        const chains =
+          openaiResponsesAdmittedFingerprint(turn) ===
+          operation.admittedFingerprint;
+        if (!chains) {
+          yield* Effect.logWarning(
+            `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
+          );
+        }
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1847,11 +1885,13 @@ export function openaiResponsesModel(
                     });
                   // The same anchor the foreground completion builds: an
                   // observed turn chains on `previous_response_id` too.
-                  const continuation = yield* openaiResponsesContinuation(
-                    config,
-                    turn,
-                    terminal.result,
-                  );
+                  const continuation = chains
+                    ? yield* openaiResponsesContinuation(
+                        config,
+                        turn,
+                        terminal.result,
+                      )
+                    : undefined;
                   return {
                     kind: 'completed',
                     afterSequence: terminal.afterSequence,

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ContinuationSchema, RemoteOperationSchema } from '@llm/turn';
 import {
+  openaiResponsesAdmittedFingerprint,
   openaiResponsesContinuation,
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
@@ -98,6 +99,10 @@ const OPERATION: RemoteOperation = {
   },
   providerResponseId: 'resp_1',
   afterSequence: null,
+  // A handle only: cancellation never reads the digest, and every case that
+  // observes takes the operation `backgroundTurn` derives from its own
+  // admitted turn.
+  admittedFingerprint: 'f'.repeat(64),
 };
 const REASONING = {
   type: 'reasoning',
@@ -181,14 +186,23 @@ function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
   });
 }
 
-/** The admitted turn an observation anchors to. Unstored by default, so it
- *  leaves no continuation unless a case asks for one. */
+/** The admitted turn an observation anchors to, with the handle a submission
+ *  of it would leave: the operation records the digest of what it admitted.
+ *  Unstored by default, so it leaves no continuation unless a case asks. */
 function backgroundTurn(model: ReturnType<typeof modelWith>) {
   return Effect.map(
     model.prepareTurn({ ...REQUEST, mode: 'background' }),
     (turn) => {
-      assert(turn.mode === 'background');
-      return turn;
+      assert(
+        turn.mode === 'background' && turn.protocol === 'openai-responses',
+      );
+      return {
+        admitted: turn,
+        operation: {
+          ...OPERATION,
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
+        },
+      };
     },
   );
 }
@@ -1257,6 +1271,9 @@ describe('native OpenAI Responses protocol', () => {
           },
           providerResponseId: 'resp_1',
           afterSequence: 0,
+          // Recorded at admission, so the resumed observation below can tell
+          // that this turn is still the one the provider answered.
+          admittedFingerprint: openaiResponsesAdmittedFingerprint(turn),
         });
         // observe subtracts Clock.currentTimeMillis, which TestClock starts at 0.
         const policy = { deadlineAtMs: 60_000 };
@@ -1589,12 +1606,14 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
-      const admitted = await Effect.runPromise(backgroundTurn(model));
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const observed: BackgroundEvent[] = [];
       const failure = await Effect.runPromise(
         Effect.flip(
           Stream.runForEach(
-            model.background.observe(admitted, OPERATION, {
+            model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1606,7 +1625,7 @@ describe('native OpenAI Responses protocol', () => {
       );
       expect(failure).toMatchObject({
         kind: outcome === 'missing' ? 'malformed-output' : 'provider-rejection',
-        operation: OPERATION,
+        operation,
         responseId: 'resp_1',
       });
       if (outcome === 'failed')
@@ -1651,12 +1670,14 @@ describe('native OpenAI Responses protocol', () => {
       );
       const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
       assert(model.background);
-      const admitted = await Effect.runPromise(backgroundTurn(model));
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const seen: BackgroundEvent[] = [];
       const exit = await Effect.runPromise(
         Effect.exit(
           Stream.runForEach(
-            model.background.observe(admitted, OPERATION, {
+            model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             }),
             (event) =>
@@ -1723,11 +1744,13 @@ describe('native OpenAI Responses protocol', () => {
       assert(model.background);
       const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(turn.mode === 'foreground');
-      const admitted = await Effect.runPromise(backgroundTurn(model));
+      const { admitted, operation } = await Effect.runPromise(
+        backgroundTurn(model),
+      );
       const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
         mode === 'foreground'
           ? model.streamTurn(turn)
-          : model.background.observe(admitted, OPERATION, {
+          : model.background.observe(admitted, operation, {
               deadlineAtMs: Date.now() + 60_000,
             });
       const seen = await Effect.runPromise(Stream.runCollect(stream));
@@ -1780,9 +1803,9 @@ describe('native OpenAI Responses protocol', () => {
         const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
         assert(model.background);
         const background = model.background;
-        const admitted = yield* backgroundTurn(model);
+        const { admitted, operation } = yield* backgroundTurn(model);
         const observation = Stream.runDrain(
-          background.observe(admitted, OPERATION, { deadlineAtMs: 100 }),
+          background.observe(admitted, operation, { deadlineAtMs: 100 }),
         );
         const fiber = yield* Effect.forkChild(Effect.flip(observation));
         yield* Deferred.await(started);

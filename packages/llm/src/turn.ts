@@ -1428,6 +1428,15 @@ const ResponsesOperationSchema = z
     }).readonly(),
     providerResponseId: z.string().min(1),
     afterSequence: z.int().nonnegative().nullable(),
+    /**
+     * The inputs the provider was given, hashed by the same function a
+     * continuation's prefix fingerprint uses: origin, system text and the
+     * admitted history. A resume rebuilds the turn from the caller's current
+     * system text, so an observation compares this digest before it lets the
+     * completion leave an anchor the next round would chain on. A digest is
+     * not a transcript: the handle still carries no history.
+     */
+    admittedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .readonly();
 export const RemoteOperationSchema = z.union([
@@ -1786,6 +1795,9 @@ export interface Model {
      * accepted operation is a handle, and the ledger keeps no second
      * transcript. The caller owns that history and re-derives the same
      * admitted turn when a resume observes an operation it did not submit.
+     * Re-derivation can drift: when the turn no longer fingerprints as the
+     * one the operation admitted, the result is still delivered and the
+     * completion simply leaves no continuation.
      */
     observe(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,

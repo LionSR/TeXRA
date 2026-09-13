@@ -6,7 +6,10 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { googleInteractionsModel } from '@llm/googleInteractions';
+import {
+  googleInteractionsAdmittedFingerprint,
+  googleInteractionsModel,
+} from '@llm/googleInteractions';
 import { RemoteOperationSchema } from '@llm/turn';
 import type { ModelError, TurnRequest, TurnResult } from '@llm/turn';
 
@@ -59,6 +62,7 @@ function backgroundFixture() {
       },
       providerResponseId: 'int_1',
       afterSequence: null,
+      admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
     });
     return { configured, turn, background: configured.background, operation };
   });
@@ -426,6 +430,50 @@ describe('canonical Google Interactions protocol', () => {
             ),
         ).toBe(true);
         expect(fetchModel).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  it.effect(
+    'delivers an observation the admitted system text no longer matches, without an anchor',
+    () =>
+      Effect.gen(function* () {
+        const { configured, background, operation } =
+          yield* backgroundFixture();
+        // What a resume rebuilds after the agent prompt changed under it.
+        const rebuilt = yield* configured.prepareTurn({
+          ...request(),
+          system: 'Use neither tool.',
+          mode: 'background',
+        });
+        assert(rebuilt.mode === 'background');
+        fetchModel.mockImplementationOnce(async () =>
+          Response.json({
+            id: 'int_1',
+            status: 'completed',
+            model: 'gemini-returned',
+            steps: [
+              { type: 'model_output', content: [{ type: 'text', text: 'ok' }] },
+            ],
+            usage: {
+              total_input_tokens: 3,
+              total_output_tokens: 1,
+              total_tokens: 4,
+            },
+          }),
+        );
+        const observation = yield* Stream.runCollect(
+          background.observe(rebuilt, operation, { deadlineAtMs: 10_000 }),
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust('5 seconds');
+        const completed = (yield* Fiber.join(observation)).at(-1);
+        assert(completed?.kind === 'completed');
+        // The answer is delivered; the next round resends its transcript
+        // rather than chaining on instructions the answer never saw.
+        expect(completed.result).toMatchObject({
+          providerResponseId: 'int_1',
+          finishReason: 'stop',
+        });
+        expect(completed.result.continuation).toBeUndefined();
       }),
   );
 

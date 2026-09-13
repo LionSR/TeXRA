@@ -33,6 +33,8 @@ import {
   completedTurn,
 } from './turn.js';
 
+const GOOGLE_PREFIX_DOMAIN = 'texra-google-interactions-prefix-v1';
+
 // SDK stream parsing does not validate the JSON values it returns.
 const WireTextSchema = z.strictObject({
   type: z.literal('text'),
@@ -409,12 +411,7 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
     !sameModelOrigin(continuation.origin, origin) ||
     continuation.coveredMessages > turn.messages.length ||
     continuation.prefixFingerprint !==
-      prefixFingerprint(
-        'texra-google-interactions-prefix-v1',
-        origin,
-        turn.system,
-        prefix,
-      ) ||
+      prefixFingerprint(GOOGLE_PREFIX_DOMAIN, origin, turn.system, prefix) ||
     continuation.anchor.coveredSteps !== prefixSteps.length ||
     turn.messages
       .slice(continuation.coveredMessages)
@@ -477,6 +474,28 @@ type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
 };
 
 /**
+ * The digest a submission records on its accepted operation: origin, system
+ * text and admitted history, hashed with the function a continuation's prefix
+ * fingerprint uses. It covers the input half of that prefix, which is the half
+ * a resume rebuilds and can therefore get wrong; the reply does not exist yet.
+ */
+export function googleInteractionsAdmittedFingerprint(
+  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
+): string {
+  return prefixFingerprint(
+    GOOGLE_PREFIX_DOMAIN,
+    {
+      protocol: turn.protocol,
+      codecVersion: turn.codecVersion,
+      requestedModel: turn.requestedModel,
+      deployment: turn.deployment,
+    },
+    turn.system,
+    turn.messages,
+  );
+}
+
+/**
  * Builds only the stored anchor a completed turn leaves for its next round.
  * Foreground completion and background observation share it, so an observed
  * turn chains on `previous_interaction_id` exactly as a streamed one does.
@@ -497,7 +516,7 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     origin,
     coveredMessages: prefix.length,
     prefixFingerprint: prefixFingerprint(
-      'texra-google-interactions-prefix-v1',
+      GOOGLE_PREFIX_DOMAIN,
       origin,
       turn.system,
       prefix,
@@ -1167,6 +1186,7 @@ export function googleInteractionsModel(
         origin,
         providerResponseId: identity.data.id,
         afterSequence: null,
+        admittedFingerprint: googleInteractionsAdmittedFingerprint(turn),
       });
       const interaction = yield* snapshot(raw, operation);
       if (
@@ -1217,6 +1237,19 @@ export function googleInteractionsModel(
           });
         }
         const turn = parsedTurn.data;
+        // The operation records what the provider was actually given. A
+        // resume rebuilds the turn from the caller's current system text, so
+        // a drifted rebuild still gets its result but must leave no anchor:
+        // the next round then resends the transcript instead of chaining on
+        // instructions the answer never saw.
+        const chains =
+          googleInteractionsAdmittedFingerprint(turn) ===
+          operation.admittedFingerprint;
+        if (!chains) {
+          yield* Effect.logWarning(
+            `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
+          );
+        }
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1273,11 +1306,9 @@ export function googleInteractionsModel(
                 ...interaction,
                 model: returnedModel,
               });
-              const continuation = yield* googleContinuation(
-                turn,
-                result,
-                origin,
-              );
+              const continuation = chains
+                ? yield* googleContinuation(turn, result, origin)
+                : undefined;
               return BackgroundEventSchema.parse({
                 kind: 'completed',
                 afterSequence: null,
