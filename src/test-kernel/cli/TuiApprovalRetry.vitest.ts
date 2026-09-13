@@ -131,13 +131,10 @@ function tui(
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   // The suite's own fake stores, mocked above: the credential work takes them
   // directly, and the key-check expectations name exactly these objects.
-  const { secrets, globalState } = platform();
+  const { secrets } = platform();
   detachHost();
   detachHost = defaultSession().interactions.use(
-    createTuiHostInteractions(presentationHost, cliContext, {
-      secrets,
-      state: globalState,
-    }),
+    createTuiHostInteractions(presentationHost, cliContext, { secrets }),
   );
   return {
     presentationHost,
