@@ -1091,4 +1091,30 @@ describe('finalizeRunTerminal', () => {
     );
     expect(channelTraceMocks.warn).not.toHaveBeenCalled();
   });
+
+  it('keeps the drain marker on the row a stop resolved as cancelled', async () => {
+    const { runId, session, handle, flushArtifacts } = finalizeFixture();
+    flushArtifacts.mockRejectedValueOnce(new Error('artifact flush failed'));
+
+    handle.interrupt();
+
+    const finalized = await Effect.runPromise(
+      finalizeRunTerminal({ session, handle, outcome: RUN_OUTCOME.COMPLETED }),
+    );
+
+    // The stop still owns the outcome, but a lost drain is not a fact about
+    // how the run ended: the queued facts are gone either way, so the marker
+    // rides the cancelled row and keeps the attempt non-repeatable for the
+    // in-band caller and the workflow attempt probe alike.
+    expect(finalized?.event.outcome).toBe(RUN_OUTCOME.CANCELLED);
+    expect(finalized?.event.error?.kind).toBe('artifact-drain');
+    expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: expect.objectContaining({ kind: 'artifact-drain' }),
+      }),
+    );
+  });
 });

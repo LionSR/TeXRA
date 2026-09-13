@@ -1293,6 +1293,36 @@ describe('createWorkflowScriptAgentRunner', () => {
   );
 
   it.effect(
+    'refuses a completed child whose claim a concurrent resume holds',
+    () =>
+      Effect.gen(function* () {
+        // A completed row is resumable too: a snapshot outlives it, so a
+        // resume can be replaying this child right now and the recorded
+        // result is stale. Recovering it takes the same claim as advancing
+        // past a failed attempt, and an acquire the resume refuses stops the
+        // parent journaling a result beside a child still running.
+        probeAnswers({
+          exists: true,
+          runEnd: result,
+          resultMeta: { producer: 'subagent', output: result.output },
+        });
+        mocks.acquireClaims.mockReturnValueOnce(
+          Effect.fail(new Error('held by owner-2 (alive)')),
+        );
+
+        const error = yield* Effect.flip(defaultRunner()(invocation()));
+
+        expect(error).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(
+            'could not be claimed against a concurrent resume',
+          ),
+        });
+        expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
     'refuses an interrupted child whose lane a same-session resume holds',
     () =>
       Effect.gen(function* () {

@@ -129,8 +129,9 @@ interface FinalizeRunTerminalResult {
  * (`finalizeChildRun`): the transcript stage end, the artifact drain, the
  * `run.end` row (through `finalizeRun`, its one writer), the delivery hook,
  * then registry untrack + terminal run phase — in that order. The row is the
- * post-drain fact: a run whose queued facts rolled back ends FAILED carrying
- * that cause, so a reader that can read the terminal row can trust everything
+ * post-drain fact: a run whose queued facts rolled back carries that cause on
+ * its row — as a FAILED outcome, or beside the CANCELLED one a stop outranks
+ * it with — so a reader that can read the terminal row can trust everything
  * behind it — which is why the stage closes first, as the last fact the run
  * queues, inside the drain that attests it. Exactly-once
  * per handle: the claim below flips synchronously in the same tick as the
@@ -214,8 +215,15 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // run no stop reached.
   const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
   // Error facts the run classified for an outcome that did not happen are not
-  // facts about this run.
-  const error = outcome === reported ? reportedError : undefined;
+  // facts about this run. A lost drain is the exception, because it is not a
+  // fact about how the run ended at all: the queued facts are gone whichever
+  // outcome the row carries, so the marker rides a cancelled row too and every
+  // reader of it — the in-band caller and the workflow attempt probe — still
+  // sees an attempt nothing may repeat.
+  const error =
+    drainFailure !== undefined || outcome === reported
+      ? reportedError
+      : undefined;
   const output = params.output ?? emptyRunEndOutput(handle.category);
   // Write the terminal row BEFORE untrack so the registry's terminal listener
   // event never precedes it. The row carries the classified error `kind`
