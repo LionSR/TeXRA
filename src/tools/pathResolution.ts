@@ -2,10 +2,6 @@
 import * as path from 'node:path';
 
 // Local imports
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -47,23 +43,6 @@ export function parseWorkingDirectory(
     );
   }
   return trimmed;
-}
-
-/**
- * Validated working-directory override for the current tool call.
- *
- * Reads `workingDirectory` from the active RunContext and runs it through
- * `parseWorkingDirectory`. Returns undefined when no run context is active
- * or when no override was set on the launch — callers then fall back to the
- * workspace root via `WorkspaceFS.locatePath`.
- *
- * Centralizes the active-context working-directory lookup and validation
- * pattern that every workspace-touching tool needs.
- */
-export function currentToolRoot(): string | undefined {
-  return parseWorkingDirectory(
-    getRunContextWorkingDirectory(tryUseRunContext()),
-  );
 }
 
 /** Throw when a raw tool path contains a parent-directory segment. */

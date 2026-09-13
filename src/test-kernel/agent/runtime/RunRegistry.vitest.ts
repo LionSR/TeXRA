@@ -1,8 +1,8 @@
 import '@test/support/defaultSessionTestSetup';
 // Third-party imports
-import { it as effectIt } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -33,7 +33,6 @@ import {
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
@@ -233,6 +232,8 @@ function trackSuspendedWaitingHandle(
     runId: RunId;
     parent?: RunId | null;
     cleanup?: () => void | Promise<void>;
+    /** The parked teardown itself; when given it wins and `cleanup` is ignored. */
+    teardown?: Effect.Effect<void, Error>;
     overrides?: HandleOverrides;
   },
 ): RunHandle {
@@ -243,22 +244,20 @@ function trackSuspendedWaitingHandle(
   );
   registry.track(handle);
   handle.suspend(
-    Effect.tryPromise({
-      try: async () => {
-        await options.cleanup?.();
-      },
-      catch: ensureError,
-    }),
+    options.teardown ??
+      Effect.tryPromise({
+        try: async () => {
+          await options.cleanup?.();
+        },
+        catch: ensureError,
+      }),
   );
   phases.set(options.runId, RUN_PHASE.WAITING);
   return handle;
 }
 
 /** Run a stop's native settlement at the test boundary and report whether a
- *  live target took it. The fork runs the settlement's synchronous part
- *  before this returns, so a detaching stop — which interrupts only once its
- *  detach batch has committed and severed — has answered by the time it is
- *  asked, exactly as a cascading stop answered at admission. */
+ * live target took it. */
 function killRegistry(
   registry: RunRegistry,
   ...args: Parameters<RunRegistry['kill']>
@@ -305,36 +304,39 @@ describe('runRegistry', () => {
     }
   });
 
-  it('lets exactly one stop claim a suspended run and reports its teardown', async () => {
-    const handle = createHandle(generateRunId());
-    const cleanupFinished = createDeferred();
-    handle.suspend(Effect.promise(() => cleanupFinished.promise));
+  it.effect(
+    'lets exactly one stop claim a suspended run and reports its teardown',
+    () =>
+      Effect.gen(function* () {
+        const handle = createHandle(generateRunId());
+        const cleanupFinished = yield* Deferred.make<void>();
+        handle.suspend(Deferred.await(cleanupFinished));
 
-    const teardown = handle.beginSuspendedTermination();
-    expect(teardown).toBeDefined();
-    expect(handle.suspendedTerminationStarted).toBe(true);
-    // A second stop of the same suspended run finds the claim taken, so it
-    // cannot start a second teardown or publish a second terminal outcome.
-    expect(handle.beginSuspendedTermination()).toBeUndefined();
-    let observedCompletion = false;
-    const observation =
-      teardown &&
-      Effect.runPromise(
-        teardown.pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              observedCompletion = true;
-            }),
+        const teardown = handle.beginSuspendedTermination();
+        expect(teardown).toBeDefined();
+        expect(handle.suspendedTerminationStarted).toBe(true);
+        // A second stop of the same suspended run finds the claim taken, so it
+        // cannot start a second teardown or publish a second terminal outcome.
+        expect(handle.beginSuspendedTermination()).toBeUndefined();
+        let observedCompletion = false;
+        const observation = yield* Effect.forkChild(
+          (teardown ?? Effect.void).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                observedCompletion = true;
+              }),
+            ),
           ),
-        ),
-      );
-    await Promise.resolve();
-    expect(observedCompletion).toBe(false);
+        );
+        // The teardown parks on the Deferred below, so the flag can only flip
+        // after it is completed and the negative assertion needs no hop.
+        expect(observedCompletion).toBe(false);
 
-    cleanupFinished.resolve();
-    await observation;
-    expect(observedCompletion).toBe(true);
-  });
+        yield* Deferred.succeed(cleanupFinished, undefined);
+        yield* Fiber.join(observation);
+        expect(observedCompletion).toBe(true);
+      }),
+  );
 
   it('drains a background-bash RunHandle on shutdown without disturbing a resumable agent run (issue #8155)', () => {
     // A background `bash` run is registered as an RunHandle (see
@@ -409,272 +411,263 @@ describe('runRegistry', () => {
     }
   });
 
-  it('falls back to the parked teardown when a suspended handle has no live interrupt (issue #7287)', async () => {
-    // A native subagent suspended at WAITING has already had its live
-    // interrupt context detached (runToolUseFlow's finally), while the handle
-    // stays tracked for resume. With no interrupt target left, terminate()
-    // must fall back to the parked teardown rather than no-op and strand the
-    // handle registered forever.
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const cleanup = vi.fn();
+  it.effect(
+    'falls back to the parked teardown when a suspended handle has no live interrupt (issue #7287)',
+    () =>
+      Effect.gen(function* () {
+        // A native subagent suspended at WAITING has already had its live
+        // interrupt context detached (runToolUseFlow's finally), while the handle
+        // stays tracked for resume. With no interrupt target left, terminate()
+        // must fall back to the parked teardown rather than no-op and strand the
+        // handle registered forever.
+        const { phases, registry } = createRegistry();
+        const parentRunId = generateRunId();
+        const runId = generateRunId();
+        const cleanup = vi.fn();
 
-    try {
-      // No handle interrupt target: mirrors a suspended subagent whose live
-      // tool-use session has already been disposed. The run phase follows
-      // the same suspension, as it does in production.
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: parentRunId,
-        cleanup,
-      });
+        try {
+          // No handle interrupt target: mirrors a suspended subagent whose live
+          // tool-use session has already been disposed. The run phase follows
+          // the same suspension, as it does in production.
+          trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: parentRunId,
+            cleanup,
+          });
 
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
 
-      expect(cleanup).toHaveBeenCalledOnce();
-      expect(registry.getHandle(runId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('writes the cancelled `run.end` row when killing a suspended WAITING handle', async () => {
-    // terminateWaitingHandle bypasses runFlowWithLifecycle (the flow never
-    // resumes), so it writes the terminal row itself — otherwise session
-    // subscribers silently miss a user-initiated stop of a suspended native
-    // subagent. The turn's own trace is already torn down by the time a kill
-    // runs, so the row, not an emit, is what reaches them.
-    storageMocks.finalizeRun.mockClear();
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: parentRunId,
-      });
-
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
-
-      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-        defaultSession(),
-        {
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          output: EMPTY_TOOL_USE_OUTPUT,
-        },
-      );
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('publishes a waiting cancellation after its transcript cleanup settles', async () => {
-    const order: string[] = [];
-    storageMocks.finalizeRun.mockClear();
-    storageMocks.finalizeRun.mockImplementationOnce(() => {
-      order.push('finalize');
-      return Effect.succeed({ ok: true, outcomePersisted: true });
-    });
-    const { phases, registry } = createRegistry();
-    const runId = generateRunId();
-    let finishCleanup = (): void => undefined;
-    const cleanupGate = new Promise<void>((resolve) => {
-      finishCleanup = resolve;
-    });
-
-    try {
-      const handle = trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: generateRunId(),
-        cleanup: async () => {
-          await cleanupGate;
-          order.push('cleanup');
-        },
-      });
-
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      const settled = Effect.runPromise(stop.settlement);
-      await Promise.resolve();
-      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-      expect(registry.getHandle(runId)).toBe(handle);
-
-      finishCleanup();
-      await settled;
-      expect(order).toEqual(['cleanup', 'finalize']);
-      expect(registry.getHandle(runId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('hands a waiting stop to a successor tracked during cleanup', async () => {
-    storageMocks.finalizeRun.mockClear();
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    let finishCleanup = (): void => undefined;
-    const cleanupGate = new Promise<void>((resolve) => {
-      finishCleanup = resolve;
-    });
-
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: parentRunId,
-        cleanup: () => cleanupGate,
-      });
-
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      const settled = Effect.runPromise(stop.settlement);
-
-      const successorInterrupt = vi.fn();
-      const successor = trackInterruptibleHandle(
-        registry,
-        { runId, parent: parentRunId },
-        successorInterrupt,
-      );
-
-      expect(successorInterrupt).toHaveBeenCalledOnce();
-      finishCleanup();
-      await settled;
-
-      expect(registry.getHandle(runId)).toBe(successor);
-      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('settles waiting termination when the terminal row write throws', async () => {
-    storageMocks.finalizeRun.mockImplementationOnce(() => {
-      throw new Error('terminal row write failed');
-    });
-    const { phases, registry } = createRegistry();
-    const runId = generateRunId();
-
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: generateRunId(),
-      });
-
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
-      expect(registry.getHandle(runId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('settles and untracks a waiting handle when terminal metadata persistence fails', async () => {
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeRun.mockReturnValueOnce(
-      Effect.succeed({
-        ok: false,
-        outcomePersisted: false,
-        error: durabilityError,
+          expect(cleanup).toHaveBeenCalledOnce();
+          expect(registry.getHandle(runId)).toBeUndefined();
+        } finally {
+          registry.dispose();
+        }
       }),
-    );
-    channelTraceMocks.warn.mockClear();
+  );
 
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: parentRunId,
-      });
+  it.effect(
+    'writes the cancelled `run.end` row when killing a suspended WAITING handle',
+    () =>
+      Effect.gen(function* () {
+        // terminateWaitingHandle bypasses runFlowWithLifecycle (the flow never
+        // resumes), so it writes the terminal row itself — otherwise session
+        // subscribers silently miss a user-initiated stop of a suspended native
+        // subagent. The turn's own trace is already torn down by the time a kill
+        // runs, so the row, not an emit, is what reaches them.
+        storageMocks.finalizeRun.mockClear();
+        const { phases, registry } = createRegistry();
+        const parentRunId = generateRunId();
+        const runId = generateRunId();
 
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
+        try {
+          trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: parentRunId,
+          });
 
-      expect(registry.getHandle(runId)).toBeUndefined();
-      await vi.waitFor(() => {
-        expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-          'Failed to finalize stopped waiting run',
-          {
-            data: {
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
+
+          expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+            defaultSession(),
+            {
               runId,
-              outcomePersisted: false,
-              error: durabilityError,
+              outcome: RUN_OUTCOME.CANCELLED,
+              output: EMPTY_TOOL_USE_OUTPUT,
             },
-          },
-        );
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('persists a waiting stop after transcript cleanup fails', async () => {
-    const { phases, registry } = createRegistry();
-    const runId = generateRunId();
-    const cleanupError = new Error('transcript reload failed');
-    storageMocks.finalizeRun.mockReturnValueOnce(Effect.succeed({ ok: true }));
-    channelTraceMocks.warn.mockClear();
-
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: generateRunId(),
-        cleanup: () => Promise.reject(cleanupError),
-      });
-
-      expect(killRegistry(registry, runId)).toBe(true);
-
-      await vi.waitFor(() => {
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          defaultSession(),
-          {
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: EMPTY_TOOL_USE_OUTPUT,
-          },
-        );
-      });
-      expect(channelTraceMocks.warn).toHaveBeenCalledWith(
-        'Waiting-run cleanup failed; continuing terminal persistence',
-        { data: { runId, error: cleanupError } },
-      );
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('persists a waiting stop when only flow-record retention fails', async () => {
-    const { phases, registry } = createRegistry();
-    const runId = generateRunId();
-    const cleanupError = new Error('flow retention failed');
-    storageMocks.finalizeRun.mockReturnValueOnce(
-      Effect.succeed({
-        ok: false,
-        outcomePersisted: true,
-        error: cleanupError,
+          );
+        } finally {
+          registry.dispose();
+        }
       }),
-    );
-    channelTraceMocks.warn.mockClear();
+  );
 
-    try {
-      trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: generateRunId(),
-      });
+  it.effect(
+    'publishes a waiting cancellation after its transcript cleanup settles',
+    () =>
+      Effect.gen(function* () {
+        const order: string[] = [];
+        storageMocks.finalizeRun.mockClear();
+        storageMocks.finalizeRun.mockImplementationOnce(() => {
+          order.push('finalize');
+          return Effect.succeed({ ok: true, outcomePersisted: true });
+        });
+        const { phases, registry } = createRegistry();
+        const runId = generateRunId();
+        const cleanupEntered = yield* Deferred.make<void>();
+        const cleanupGate = yield* Deferred.make<void>();
 
-      expect(killRegistry(registry, runId)).toBe(true);
+        try {
+          const handle = trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: generateRunId(),
+            teardown: Deferred.succeed(cleanupEntered, undefined).pipe(
+              Effect.andThen(Deferred.await(cleanupGate)),
+              Effect.andThen(
+                Effect.sync(() => {
+                  order.push('cleanup');
+                }),
+              ),
+            ),
+          });
 
-      await vi.waitFor(() => {
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          const settled = yield* Effect.forkChild(stop.settlement);
+          // Awaiting the gate the teardown itself opens proves the settlement is
+          // parked inside cleanup, so both assertions below are facts.
+          yield* Deferred.await(cleanupEntered);
+          expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+          expect(registry.getHandle(runId)).toBe(handle);
+
+          yield* Deferred.succeed(cleanupGate, undefined);
+          yield* Fiber.join(settled);
+          expect(order).toEqual(['cleanup', 'finalize']);
+          expect(registry.getHandle(runId)).toBeUndefined();
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
+
+  it.effect('hands a waiting stop to a successor tracked during cleanup', () =>
+    Effect.gen(function* () {
+      storageMocks.finalizeRun.mockClear();
+      const { phases, registry } = createRegistry();
+      const parentRunId = generateRunId();
+      const runId = generateRunId();
+      const cleanupEntered = yield* Deferred.make<void>();
+      const cleanupGate = yield* Deferred.make<void>();
+
+      try {
+        trackSuspendedWaitingHandle(registry, phases, {
+          runId,
+          parent: parentRunId,
+          teardown: Deferred.succeed(cleanupEntered, undefined).pipe(
+            Effect.andThen(Deferred.await(cleanupGate)),
+          ),
+        });
+
+        const stop = registry.kill(runId);
+        expect(stop.accepted()).toBe(true);
+        const settled = yield* Effect.forkChild(stop.settlement);
+        // The successor is tracked while the teardown is still running, which
+        // the gate the teardown opens makes a fact rather than a hope.
+        yield* Deferred.await(cleanupEntered);
+
+        const successorInterrupt = vi.fn();
+        const successor = trackInterruptibleHandle(
+          registry,
+          { runId, parent: parentRunId },
+          successorInterrupt,
+        );
+
+        expect(successorInterrupt).toHaveBeenCalledOnce();
+        yield* Deferred.succeed(cleanupGate, undefined);
+        yield* Fiber.join(settled);
+
+        expect(registry.getHandle(runId)).toBe(successor);
+        expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
+
+  it.effect(
+    'settles waiting termination when the terminal row write throws',
+    () =>
+      Effect.gen(function* () {
+        storageMocks.finalizeRun.mockImplementationOnce(() => {
+          throw new Error('terminal row write failed');
+        });
+        const { phases, registry } = createRegistry();
+        const runId = generateRunId();
+
+        try {
+          trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: generateRunId(),
+          });
+
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
+          expect(registry.getHandle(runId)).toBeUndefined();
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
+
+  it.effect(
+    'settles and untracks a waiting handle when terminal metadata persistence fails',
+    () =>
+      Effect.gen(function* () {
+        const { phases, registry } = createRegistry();
+        const parentRunId = generateRunId();
+        const runId = generateRunId();
+        const durabilityError = new Error('metadata disk write failed');
+        storageMocks.finalizeRun.mockReturnValueOnce(
+          Effect.succeed({
+            ok: false,
+            outcomePersisted: false,
+            error: durabilityError,
+          }),
+        );
+        channelTraceMocks.warn.mockClear();
+
+        try {
+          trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: parentRunId,
+          });
+
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
+
+          expect(registry.getHandle(runId)).toBeUndefined();
+          expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+            'Failed to finalize stopped waiting run',
+            {
+              data: {
+                runId,
+                outcomePersisted: false,
+                error: durabilityError,
+              },
+            },
+          );
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
+
+  it.effect('persists a waiting stop after transcript cleanup fails', () =>
+    Effect.gen(function* () {
+      const { phases, registry } = createRegistry();
+      const runId = generateRunId();
+      const cleanupError = new Error('transcript reload failed');
+      storageMocks.finalizeRun.mockReturnValueOnce(
+        Effect.succeed({ ok: true }),
+      );
+      channelTraceMocks.warn.mockClear();
+
+      try {
+        trackSuspendedWaitingHandle(registry, phases, {
+          runId,
+          parent: generateRunId(),
+          cleanup: () => Promise.reject(cleanupError),
+        });
+
+        const stop = registry.kill(runId);
+        expect(stop.accepted()).toBe(true);
+        yield* stop.settlement;
+
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
           defaultSession(),
           {
@@ -683,21 +676,65 @@ describe('runRegistry', () => {
             output: EMPTY_TOOL_USE_OUTPUT,
           },
         );
-      });
-      expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-        'Failed to finalize stopped waiting run',
-        {
-          data: {
-            runId,
+        expect(channelTraceMocks.warn).toHaveBeenCalledWith(
+          'Waiting-run cleanup failed; continuing terminal persistence',
+          { data: { runId, error: cleanupError } },
+        );
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
+
+  it.effect(
+    'persists a waiting stop when only flow-record retention fails',
+    () =>
+      Effect.gen(function* () {
+        const { phases, registry } = createRegistry();
+        const runId = generateRunId();
+        const cleanupError = new Error('flow retention failed');
+        storageMocks.finalizeRun.mockReturnValueOnce(
+          Effect.succeed({
+            ok: false,
             outcomePersisted: true,
             error: cleanupError,
-          },
-        },
-      );
-    } finally {
-      registry.dispose();
-    }
-  });
+          }),
+        );
+        channelTraceMocks.warn.mockClear();
+
+        try {
+          trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: generateRunId(),
+          });
+
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
+
+          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+            defaultSession(),
+            {
+              runId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              output: EMPTY_TOOL_USE_OUTPUT,
+            },
+          );
+          expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
+            'Failed to finalize stopped waiting run',
+            {
+              data: {
+                runId,
+                outcomePersisted: true,
+                error: cleanupError,
+              },
+            },
+          );
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
 
   it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
     // Guards the fallback above: a handle that never parked must still no-op,
@@ -742,122 +779,128 @@ describe('runRegistry', () => {
     }
   });
 
-  it('refuses a waiting stop once a terminal finalize has claimed the run', async () => {
-    // Both terminal writers claim the same gate, so a kill landing while
-    // `finalizeRunTerminal` is parked at its persist await cannot run the
-    // suspended teardown, publish a second `result`, or persist a second
-    // terminal status over the finalizer's outcome.
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const teardown = vi.fn();
-    storageMocks.finalizeRun.mockClear();
-    let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeRun.mockImplementationOnce(() =>
-      Effect.promise(
-        () =>
-          new Promise((resolve) => {
-            releasePersist = () => resolve({ ok: true });
-          }),
-      ),
-    );
+  it.effect(
+    'refuses a waiting stop once a terminal finalize has claimed the run',
+    () =>
+      Effect.gen(function* () {
+        // Both terminal writers claim the same gate, so a kill landing while
+        // `finalizeRunTerminal` is parked at its persist await cannot run the
+        // suspended teardown, publish a second `result`, or persist a second
+        // terminal status over the finalizer's outcome.
+        const { phases, registry } = createRegistry();
+        const parentRunId = generateRunId();
+        const runId = generateRunId();
+        const teardown = vi.fn();
+        storageMocks.finalizeRun.mockClear();
+        const parked = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        storageMocks.finalizeRun.mockImplementationOnce(() =>
+          Deferred.succeed(parked, undefined).pipe(
+            Effect.andThen(Deferred.await(release)),
+            Effect.as({ ok: true, outcome: RUN_OUTCOME.COMPLETED }),
+          ),
+        );
 
-    try {
-      const handle = trackSuspendedWaitingHandle(registry, phases, {
-        runId,
-        parent: parentRunId,
-        cleanup: teardown,
-      });
+        try {
+          const handle = trackSuspendedWaitingHandle(registry, phases, {
+            runId,
+            parent: parentRunId,
+            cleanup: teardown,
+          });
 
-      const session = {
-        runs: registry,
-        flushArtifacts: async () => {},
-      } as unknown as SessionHandle;
-      const finalized = Effect.runPromise(
-        finalizeRunTerminal({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-        }),
-      );
-      await vi.waitFor(() => expect(releasePersist).toBeDefined());
+          const session = {
+            runs: registry,
+            flushArtifacts: async () => {},
+          } as unknown as SessionHandle;
+          const finalized = yield* Effect.forkChild(
+            finalizeRunTerminal({
+              session,
+              handle,
+              outcome: RUN_OUTCOME.COMPLETED,
+            }),
+          );
+          // The finalizer claims the run before it reaches its persist, so a
+          // settlement parked at the persist proves the claim already landed.
+          yield* Deferred.await(parked);
+          expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
-      expect(killRegistry(registry, runId)).toBe(false);
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(false);
+          yield* stop.settlement;
 
-      releasePersist?.();
-      await finalized;
-      expect(teardown).not.toHaveBeenCalled();
-      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-        session,
-        expect.objectContaining({
-          runId,
-          outcome: RUN_OUTCOME.COMPLETED,
-        }),
-      );
-      expect(registry.getHandle(runId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.join(finalized);
+          expect(teardown).not.toHaveBeenCalled();
+          expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+            session,
+            expect.objectContaining({
+              runId,
+              outcome: RUN_OUTCOME.COMPLETED,
+            }),
+          );
+          expect(registry.getHandle(runId)).toBeUndefined();
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
 
-  it('tears down and aligns a suspended handle killed during RESUMING', async () => {
-    // Regression: `resumeQueuedToolUseFromResumeData` flips `runStatus` to
-    // RUNNING with a RESUMING substate *before* the resumed run installs its
-    // own interrupt context. The handle it is resuming is still parked from
-    // the earlier genuine WAITING suspension, so a kill landing in that window
-    // tears it down off that fact alone — no phase or substate is consulted.
-    const { phases, registry } = createRegistry();
-    const runId = 'eec-abcdef' as RunId;
-    const parentRunId = generateRunId();
-    const cleanup = vi.fn();
-    const store = getRunRecords(defaultSession(), runId);
+  it.effect(
+    'tears down and aligns a suspended handle killed during RESUMING',
+    () =>
+      Effect.gen(function* () {
+        // Regression: `resumeQueuedToolUseFromResumeData` flips `runStatus` to
+        // RUNNING with a RESUMING substate *before* the resumed run installs its
+        // own interrupt context. The handle it is resuming is still parked from
+        // the earlier genuine WAITING suspension, so a kill landing in that window
+        // tears it down off that fact alone — no phase or substate is consulted.
+        const { phases, registry } = createRegistry();
+        const runId = 'eec-abcdef' as RunId;
+        const parentRunId = generateRunId();
+        const cleanup = vi.fn();
+        const store = getRunRecords(defaultSession(), runId);
 
-    try {
-      publishTestRunStart(defaultSession(), runId);
-      await defaultSession().settlePublications();
-      await Effect.runPromise(
-        store.writeResultMeta({
-          producer: 'subagent',
-          agentName: 'test-subagent',
-          wallTimeMs: 1,
-          output: {
-            category: 'toolUse',
-            response: 'interim response',
-            files: [],
-          },
-        }),
-      );
-      const handle = createHandle(runId, parentRunId);
-      registry.track(handle);
-      handle.suspend(Effect.sync(cleanup));
-      // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
-      // the resumed run's own context — RUNNING phase, RESUMING substate.
-      phases.set(runId, RUN_PHASE.RUNNING, {
-        substate: RUN_SUBSTATE.RESUMING,
-      });
+        try {
+          publishTestRunStart(defaultSession(), runId);
+          yield* Effect.promise(() => defaultSession().settlePublications());
+          yield* store.writeResultMeta({
+            producer: 'subagent',
+            agentName: 'test-subagent',
+            wallTimeMs: 1,
+            output: {
+              category: 'toolUse',
+              response: 'interim response',
+              files: [],
+            },
+          });
+          const handle = createHandle(runId, parentRunId);
+          registry.track(handle);
+          handle.suspend(Effect.sync(cleanup));
+          // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
+          // the resumed run's own context — RUNNING phase, RESUMING substate.
+          phases.set(runId, RUN_PHASE.RUNNING, {
+            substate: RUN_SUBSTATE.RESUMING,
+          });
 
-      const stop = registry.kill(runId);
-      expect(stop.accepted()).toBe(true);
-      await Effect.runPromise(stop.settlement);
+          const stop = registry.kill(runId);
+          expect(stop.accepted()).toBe(true);
+          yield* stop.settlement;
 
-      expect(cleanup).toHaveBeenCalledOnce();
-      expect(registry.getHandle(runId)).toBeUndefined();
-      await vi.waitFor(async () => {
-        await expect(
-          Effect.runPromise(store.readRunEnd()),
-        ).resolves.toMatchObject({
-          outcome: RUN_OUTCOME.CANCELLED,
-        });
-        await expect(
-          Effect.runPromise(store.readResultMeta()),
-        ).resolves.toMatchObject({
-          output: { response: 'interim response' },
-        });
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
+          expect(cleanup).toHaveBeenCalledOnce();
+          expect(registry.getHandle(runId)).toBeUndefined();
+          // Both reads fold committed rows, which the settlement wrote before it
+          // resolved; a null here would be a durability finding, not a race.
+          expect(yield* store.readRunEnd()).toMatchObject({
+            outcome: RUN_OUTCOME.CANCELLED,
+          });
+          expect(yield* store.readResultMeta()).toMatchObject({
+            output: { response: 'interim response' },
+          });
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
 
   it('owns visible run stop policy for root and children', () => {
     const { events, phases, registry } = createRegistry();
@@ -1013,144 +1056,133 @@ describe('runRegistry', () => {
     }
   });
 
-  it('fails the stop when the detach batch is refused', async () => {
-    // One batch carries every detached child, so it is no single run's fact
-    // and no run's drain answers for it: the stop that asked for the sever
-    // is the one owner that can hear the refusal. Reporting `done` over it
-    // would leave the children durably parented, and a later delete of the
-    // parent would collect the children the user chose to keep running.
-    const { registry } = createRegistry({
-      commit: () => Effect.fail(new Error('detach batch refused')),
-    });
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-
-    try {
-      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
-        agentName: 'test-root',
+  it.effect('fails the stop when the detach batch is refused', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry({
+        commit: () => Effect.fail(new Error('detach batch refused')),
       });
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        vi.fn(),
-      );
+      const rootRunId = generateRunId();
+      const childRunId = generateRunId();
 
-      await expect(
-        Effect.runPromise(
+      try {
+        trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+          agentName: 'test-root',
+        });
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          vi.fn(),
+        );
+
+        const error = yield* Effect.flip(
           registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
-        ),
-      ).rejects.toThrow('detach batch refused');
-      // The local sever follows the commit, so a refused batch leaves the
-      // child parented here exactly as it stays parented in storage, and the
-      // retry still finds a child to detach.
-      expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
-    } finally {
-      registry.dispose();
-    }
-  });
+        );
+        expect(error.message).toBe('detach batch refused');
+        expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
-  it('interrupts the parent only once the detach has committed and severed', async () => {
-    // The interrupt is the last step of a detaching stop. A child completing
-    // between it and the sever would still resolve the just-stopped parent as
-    // its delivery target, and the sever that arrives afterwards cannot take
-    // that routing back.
-    const commit = createDeferred<void>();
-    let committing = false;
-    const { registry } = createRegistry({
-      commit: () =>
-        Effect.suspend(() => {
-          committing = true;
-          return Effect.promise(() => commit.promise);
-        }),
-    });
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const rootInterrupt = vi.fn();
+  it.effect(
+    'interrupts the parent only once the detach has committed and severed',
+    () =>
+      Effect.gen(function* () {
+        const commitStarted = yield* Deferred.make<void>();
+        const allowCommit = yield* Deferred.make<void>();
+        const { registry } = createRegistry({
+          commit: () =>
+            Deferred.succeed(commitStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(allowCommit)),
+            ),
+        });
+        const rootRunId = generateRunId();
+        const childRunId = generateRunId();
+        const rootInterrupt = vi.fn();
 
-    try {
-      trackInterruptibleHandle(registry, { runId: rootRunId }, rootInterrupt, {
-        agentName: 'test-root',
+        try {
+          trackInterruptibleHandle(
+            registry,
+            { runId: rootRunId },
+            rootInterrupt,
+            { agentName: 'test-root' },
+          );
+          trackInterruptibleHandle(
+            registry,
+            { runId: childRunId, parent: rootRunId },
+            vi.fn(),
+          );
+
+          const stopped = yield* Effect.forkChild(
+            registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+          );
+          yield* Deferred.await(commitStarted);
+          expect(rootInterrupt).not.toHaveBeenCalled();
+
+          yield* Deferred.succeed(allowCommit, undefined);
+          yield* Fiber.join(stopped);
+
+          expect(registry.getHandle(childRunId)?.parent).toBeNull();
+          expect(rootInterrupt).toHaveBeenCalledOnce();
+        } finally {
+          registry.dispose();
+        }
+      }),
+  );
+
+  it.effect('refuses a child launched while the parent is stopping', () =>
+    Effect.gen(function* () {
+      const commitStarted = yield* Deferred.make<void>();
+      const allowCommit = yield* Deferred.make<void>();
+      const { registry } = createRegistry({
+        commit: () =>
+          Deferred.succeed(commitStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(allowCommit)),
+          ),
       });
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        vi.fn(),
-      );
+      const rootRunId = generateRunId();
+      const childRunId = generateRunId();
+      const lateChildRunId = generateRunId();
 
-      const stopped = Effect.runPromise(
-        registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
-      );
-      await vi.waitFor(() => expect(committing).toBe(true));
-      expect(rootInterrupt).not.toHaveBeenCalled();
+      try {
+        trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
+          agentName: 'test-root',
+        });
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          vi.fn(),
+        );
 
-      commit.resolve();
-      await stopped;
+        const stopped = yield* Effect.forkChild(
+          registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+        );
+        yield* Deferred.await(commitStarted);
 
-      expect(registry.getHandle(childRunId)?.parent).toBeNull();
-      expect(rootInterrupt).toHaveBeenCalledOnce();
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(() =>
+          registry.track(createHandle(lateChildRunId, rootRunId)),
+        ).toThrow(/while that run is stopping/);
+        expect(() =>
+          registry.reserveChildActivation({
+            runId: lateChildRunId,
+            parentRunId: rootRunId,
+            interrupt: vi.fn(),
+            detach: vi.fn(),
+            isDetached: () => false,
+          }),
+        ).toThrow(/while that run is stopping/);
 
-  it('refuses a child launched while the parent is stopping', async () => {
-    // The detach snapshots the parent's children before its batch commits,
-    // and the root is interrupted without cascading, so a child admitted
-    // inside that window would be in neither sever and would still route its
-    // delivery to the stopped parent. The stop marks the parent at admission,
-    // and that mark is what refuses the child.
-    const commit = createDeferred<void>();
-    let committing = false;
-    const { registry } = createRegistry({
-      commit: () =>
-        Effect.suspend(() => {
-          committing = true;
-          return Effect.promise(() => commit.promise);
-        }),
-    });
-    const rootRunId = generateRunId();
-    const childRunId = generateRunId();
-    const lateChildRunId = generateRunId();
+        yield* Deferred.succeed(allowCommit, undefined);
+        yield* Fiber.join(stopped);
 
-    try {
-      trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
-        agentName: 'test-root',
-      });
-      trackInterruptibleHandle(
-        registry,
-        { runId: childRunId, parent: rootRunId },
-        vi.fn(),
-      );
-
-      const stopped = Effect.runPromise(
-        registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
-      );
-      await vi.waitFor(() => expect(committing).toBe(true));
-
-      expect(() =>
-        registry.track(createHandle(lateChildRunId, rootRunId)),
-      ).toThrow(/while that run is stopping/);
-      expect(() =>
-        registry.reserveChildActivation({
-          runId: lateChildRunId,
-          parentRunId: rootRunId,
-          interrupt: vi.fn(),
-          detach: vi.fn(),
-          isDetached: () => false,
-        }),
-      ).toThrow(/while that run is stopping/);
-
-      commit.resolve();
-      await stopped;
-
-      // Neither admission took, so the stopped parent is left owning nothing
-      // the detach batch did not carry.
-      expect(registry.getHandle(lateChildRunId)).toBeUndefined();
-      expect(registry.hasActiveChildren(rootRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
+        expect(registry.getHandle(lateChildRunId)).toBeUndefined();
+        expect(registry.hasActiveChildren(rootRunId)).toBe(false);
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {
     const { phases, registry } = createRegistry();
@@ -1202,29 +1234,34 @@ describe('runRegistry', () => {
     }
   });
 
-  it('cancels an ownerless run', async () => {
-    storageMocks.finalizeRun.mockClear();
-    const { registry } = createRegistry();
-    const runId = generateRunId();
+  it.effect('cancels an ownerless run', () =>
+    Effect.gen(function* () {
+      storageMocks.finalizeRun.mockClear();
+      const { registry } = createRegistry();
+      const runId = generateRunId();
 
-    try {
-      stopRegistry(registry, runId);
+      try {
+        // The start row is what lets the stop's typed failure be yielded here:
+        // `finalizeOwnerlessStop` fails for a run that has none, and today the
+        // registry's own runFork drops that failure.
+        publishTestRunStart(defaultSession(), runId);
+        yield* Effect.promise(() => defaultSession().settlePublications());
+        yield* registry.stopAgentRun(runId);
 
-      // `run.end` is the run's whole terminal fact (one run model, 3.3), so
-      // a stop that reached no live handle still writes it.
-      await vi.waitFor(() =>
+        // `run.end` is the run's whole terminal fact (one run model, 3.3), so
+        // a stop that reached no live handle still writes it.
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
           defaultSession(),
           expect.objectContaining({
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
           }),
-        ),
-      );
-    } finally {
-      registry.dispose();
-    }
-  });
+        );
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
 
   it('reports agent status from its run-status owner', () => {
     const { phases, registry } = createRegistry();
@@ -1513,21 +1550,20 @@ describe('runRegistry', () => {
   });
 });
 
-effectIt.effect(
+it.effect(
   'refuses owned runs and reserves an idle deletion before a competing launch',
   () =>
     Effect.gen(function* () {
       const { registry } = createRegistry();
       const runId = 'abcd12' as RunId;
-      const started = createDeferred<void>();
-      const finish = createDeferred<void>();
+      const started = yield* Deferred.make<void>();
+      const finish = yield* Deferred.make<void>();
       const generation = yield* Effect.forkChild(
         registry.launchRun(
           runId,
-          Effect.promise(async () => {
-            started.resolve();
-            await finish.promise;
-          }),
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Deferred.await(finish)),
+          ),
         ),
         { startImmediately: true },
       );
@@ -1536,11 +1572,11 @@ effectIt.effect(
       try {
         // Admission before the launch callback begins must already see its slot.
         expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
-        yield* Effect.promise(() => started.promise);
+        yield* Deferred.await(started);
         expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
         expect(remove).not.toHaveBeenCalled();
       } finally {
-        finish.resolve();
+        yield* Deferred.succeed(finish, undefined);
       }
       yield* Fiber.join(generation);
       yield* Effect.yieldNow;

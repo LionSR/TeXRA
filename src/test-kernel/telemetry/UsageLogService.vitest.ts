@@ -106,10 +106,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'));
+    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'));
+    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     releaseFirstFetch();
@@ -131,10 +131,10 @@ describe('UsageLogService', () => {
       if (callCount === 2) await secondFetchReleased;
     });
 
-    UsageLogService.log(usageEntry('first'));
+    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'));
+    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
     const disposal = effectRuntime().runPromise(UsageLogService.dispose());
 
     releaseFirstFetch();
@@ -186,7 +186,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('timer'));
+    UsageLogService.log(usageEntry('timer'), workspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
 
@@ -204,7 +204,7 @@ describe('UsageLogService', () => {
     await expect(disposal).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['timer']]);
-    UsageLogService.log(usageEntry('after-close'));
+    UsageLogService.log(usageEntry('after-close'), workspaceRoots().config);
     await vi.advanceTimersByTimeAsync(100);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -239,7 +239,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('slow'));
+    UsageLogService.log(usageEntry('slow'), workspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const disposal = effectRuntime().runPromise(UsageLogService.dispose());
@@ -273,7 +273,7 @@ describe('UsageLogService', () => {
 
     const { batches, fetchMock } = stubBatchFetch();
 
-    UsageLogService.log(usageEntry('first'));
+    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -301,7 +301,7 @@ describe('UsageLogService', () => {
       return jsonResponse(firstFailure);
     });
 
-    UsageLogService.log(usageEntry('first'));
+    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -328,10 +328,10 @@ describe('UsageLogService', () => {
       });
     });
 
-    UsageLogService.log(usageEntry('invalid'));
+    UsageLogService.log(usageEntry('invalid'), workspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('valid'));
+    UsageLogService.log(usageEntry('valid'), workspaceRoots().config);
     releaseRejection();
 
     await vi.advanceTimersByTimeAsync(0);
@@ -357,10 +357,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'));
+    UsageLogService.log(usageEntry('first'), workspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
-    UsageLogService.log(usageEntry('second'));
+    UsageLogService.log(usageEntry('second'), workspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -384,7 +384,7 @@ describe('UsageLogService', () => {
     async function expectNoOptionalUsageSent(): Promise<void> {
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'));
+      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
@@ -442,7 +442,10 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('before-opt-out'));
+      UsageLogService.log(
+        usageEntry('before-opt-out'),
+        workspaceRoots().config,
+      );
       await workspaceRoots().config.update(
         TELEMETRY_ENABLED_KEY,
         false,
@@ -465,7 +468,7 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('dropped'));
+      UsageLogService.log(usageEntry('dropped'), workspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock).not.toHaveBeenCalled();
 
@@ -474,7 +477,7 @@ describe('UsageLogService', () => {
         true,
         'global',
       );
-      UsageLogService.log(usageEntry('sent'));
+      UsageLogService.log(usageEntry('sent'), workspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -501,7 +504,10 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log({ ...usageEntry('hosted'), usageRoute });
+        UsageLogService.log(
+          { ...usageEntry('hosted'), usageRoute },
+          workspaceRoots().config,
+        );
         await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -520,11 +526,14 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log({ ...usageEntry('byok'), usageRoute: 'api-key' });
-      UsageLogService.log({
-        ...usageEntry('hosted'),
-        usageRoute: 'chatgpt-subscription',
-      });
+      UsageLogService.log(
+        { ...usageEntry('byok'), usageRoute: 'api-key' },
+        workspaceRoots().config,
+      );
+      UsageLogService.log(
+        { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
+        workspaceRoots().config,
+      );
       await workspaceRoots().config.update(
         TELEMETRY_ENABLED_KEY,
         false,
@@ -551,7 +560,7 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'));
+      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
 
       await workspaceRoots().config.update(
         TELEMETRY_ENABLED_KEY,
@@ -597,7 +606,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(usageEntry('optional'));
+        UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
         await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -613,10 +622,10 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log({
-        ...usageEntry('hosted'),
-        usageRoute: 'chatgpt-subscription',
-      });
+      UsageLogService.log(
+        { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
+        workspaceRoots().config,
+      );
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -637,7 +646,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(usageEntry('optional'));
+        UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
         await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).not.toHaveBeenCalled();
@@ -660,7 +669,7 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'));
+      UsageLogService.log(usageEntry('optional'), workspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();

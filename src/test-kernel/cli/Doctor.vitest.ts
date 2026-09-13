@@ -101,6 +101,7 @@ function buildReport(
     latexToolchain: async () => latexProbe,
     pathStat: async () => directory,
     pathAccess: async () => undefined,
+    usageLoggingOptOut: () => null,
     ...probes,
   });
 }

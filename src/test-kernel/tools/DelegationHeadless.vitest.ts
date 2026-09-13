@@ -2,9 +2,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { Effect, Fiber, Stream } from 'effect';
-import { it as effectIt } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -29,15 +29,6 @@ import {
 } from '@tools/delegation/inBandSubagentRun';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-/** Drive the native operation at the test entry point. */
-function executeSubagentInBand(
-  options: Parameters<typeof executeSubagentInBandEffect>[0],
-) {
-  return Effect.runPromise(
-    Effect.provide(executeSubagentInBandEffect(options), fakeProcessServices()),
-  );
-}
 
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
@@ -291,7 +282,7 @@ const IN_BAND_RUN_ID = 'aaaaaa111111' as RunId;
 let inBandSession: SessionHandle;
 
 type PreparedInBandSubagentOptions = Effect.Success<
-  ReturnType<Parameters<typeof executeSubagentInBand>[0]['prepare']>
+  ReturnType<Parameters<typeof executeSubagentInBandEffect>[0]['prepare']>
 >;
 type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
   signal?: AbortSignal;
@@ -320,13 +311,13 @@ function runInBand(
   runId: RunId = IN_BAND_RUN_ID,
 ) {
   const { signal, ...prepared } = options;
-  return executeSubagentInBand({
+  return executeSubagentInBandEffect({
     runId,
     parentRunId: prepared.parentRunId,
     session: prepared.session,
     signal,
     prepare: () => Effect.succeed(prepared),
-  });
+  }).pipe(Effect.provide(fakeProcessServices()));
 }
 
 /**
@@ -347,17 +338,6 @@ function mockExecuteAgentErrorOnce(
     };
     await options.onRunError?.(new Error('review model failed'), failed);
     return failed;
-  });
-}
-
-/** The shared rejection shape when the child failed AND its manifest write failed. */
-async function expectDurabilityErrorPreservingChildFailure(
-  run: Promise<unknown>,
-): Promise<void> {
-  await expect(run).rejects.toMatchObject({
-    name: 'SubagentDurabilityError',
-    message: expect.stringContaining('review model failed'),
-    cause: expect.objectContaining({ name: 'AggregateError' }),
   });
 }
 
@@ -566,7 +546,7 @@ describe('headless delegation', () => {
     });
   });
 
-  effectIt.effect(
+  it.effect(
     'validates workflow inputs against its once-loaded definition before registration',
     () =>
       Effect.gen(function* () {
@@ -639,7 +619,7 @@ describe('headless delegation', () => {
     inBandSession.dispose();
   });
 
-  effectIt.effect('awaits child delegation during one-shot tool-use runs', () =>
+  it.effect('awaits child delegation during one-shot tool-use runs', () =>
     Effect.gen(function* () {
       const result = yield* callDelegateReview(
         parentRunContext({ stopAfterCycle: true }),
@@ -669,289 +649,342 @@ describe('headless delegation', () => {
     }),
   );
 
-  it('composes durable workflow calls through the native launch primitive', async () => {
-    const result = await runInBand(
-      delegationOptions({ workflowPhase: 'proof-review' }),
-    );
+  it.effect(
+    'composes durable workflow calls through the native launch primitive',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runInBand(
+          delegationOptions({ workflowPhase: 'proof-review' }),
+        );
 
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({ agent: 'review' }),
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: expect.objectContaining({ agent: 'review' }),
+          }),
+          result.runId,
+          expect.objectContaining({
+            stopAfterCycle: true,
+            workflowPhase: 'proof-review',
+          }),
+        );
+        expect(result.result).toEqual({
+          outcome: 'completed',
+          output: {
+            category: 'toolUse',
+            response: 'The proof is correct.',
+            files: [],
+          },
+        });
+        expect(mocks.writeReport).toHaveBeenCalled();
+        expect(mocks.registerRun).toHaveBeenCalledWith(
+          inBandSession,
+          result.runId,
+          expect.objectContaining({ agent: 'review' }),
+          'review',
+          expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
+        );
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            agentName: 'review',
+            wallTimeMs: expect.any(Number),
+            output: result.result.output,
+          }),
+        );
+        expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
+          mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
+        );
       }),
-      result.runId,
-      expect.objectContaining({
-        stopAfterCycle: true,
-        workflowPhase: 'proof-review',
+  );
+
+  it.effect(
+    'returns the committed result when the final lease release fails',
+    () =>
+      Effect.gen(function* () {
+        mocks.releaseOwnedRunLease.mockRejectedValueOnce(
+          new Error('lease deletion failed'),
+        );
+
+        const result = yield* runInBand(delegationOptions());
+
+        expect(result.result.outcome).toBe('completed');
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       }),
-    );
-    expect(result.result).toEqual({
-      outcome: 'completed',
-      output: {
-        category: 'toolUse',
-        response: 'The proof is correct.',
-        files: [],
-      },
-    });
-    // The single driver persists the report alongside the manifest for every
-    // child — a scripted grandchild is debuggable through the same artifacts
-    // as any detached child (this closed item 10's report gap).
-    expect(mocks.writeReport).toHaveBeenCalled();
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      inBandSession,
-      result.runId,
-      expect.objectContaining({ agent: 'review' }),
-      'review',
-      expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
-    );
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        agentName: 'review',
-        wallTimeMs: expect.any(Number),
-        output: result.result.output,
+  );
+
+  it.effect(
+    'does not return a typed result when the final artifact drain fails',
+    () =>
+      Effect.gen(function* () {
+        const drainFailure = new Error('artifact flush failed');
+        const drain = vi
+          .spyOn(inBandSession, 'flushArtifacts')
+          .mockRejectedValue(drainFailure);
+
+        try {
+          expect(
+            yield* Effect.flip(runInBand(delegationOptions())),
+          ).toMatchObject({
+            name: 'SubagentDurabilityError',
+            message: expect.stringContaining(
+              'failed to commit its final artifacts',
+            ),
+            cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
+          });
+        } finally {
+          drain.mockRestore();
+        }
       }),
-    );
-    expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.releaseOwnedRunLease.mock.invocationCallOrder[0],
-    );
-  });
+  );
 
-  it('returns the committed result when the final lease release fails', async () => {
-    mocks.releaseOwnedRunLease.mockRejectedValueOnce(
-      new Error('lease deletion failed'),
-    );
+  it.effect(
+    'does not return a typed result when only the pre-terminal drain fails',
+    () =>
+      Effect.gen(function* () {
+        const drain = vi
+          .spyOn(inBandSession, 'flushArtifacts')
+          .mockRejectedValueOnce(new Error('queued publication failed'));
 
-    const result = await runInBand(delegationOptions());
+        try {
+          expect(
+            yield* Effect.flip(runInBand(delegationOptions())),
+          ).toMatchObject({
+            name: 'SubagentDurabilityError',
+            message: expect.stringContaining(
+              'failed to commit its final artifacts',
+            ),
+          });
+          expect(drain).toHaveBeenCalledTimes(2);
+        } finally {
+          drain.mockRestore();
+        }
+      }),
+  );
 
-    // The child's rows are the fact: they were committed inside its own lease
-    // boundary, so a cleanup failure afterwards cannot rewrite the outcome, and
-    // the manifest this asserts is what a later attempt would recover from.
-    expect(result.result.outcome).toBe('completed');
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-  });
-
-  it('does not return a typed result when the final artifact drain fails', async () => {
-    const drainFailure = new Error('artifact flush failed');
-    const drain = vi
-      .spyOn(inBandSession, 'flushArtifacts')
-      .mockRejectedValue(drainFailure);
-
-    try {
-      // The drain is the ordered publisher's settle, so its failure rolled
-      // back facts the child had queued: unlike the lease unlink above, the
-      // call is not durably answered and the caller must not journal it.
-      await expect(runInBand(delegationOptions())).rejects.toMatchObject({
-        name: 'SubagentDurabilityError',
-        message: expect.stringContaining(
-          'failed to commit its final artifacts',
-        ),
-        cause: expect.objectContaining({ name: 'RunArtifactDrainError' }),
+  it.effect('records a failed child cost once for durable in-band run', () =>
+    Effect.gen(function* () {
+      const onCost = vi.fn();
+      mockExecuteAgentErrorOnce(0.61, {
+        runId: IN_BAND_RUN_ID,
+        output: {
+          category: 'toolUse',
+          response: 'Partial review.',
+          files: [],
+        },
       });
-    } finally {
-      drain.mockRestore();
-    }
-  });
 
-  it('does not return a typed result when only the pre-terminal drain fails', async () => {
-    const drain = vi
-      .spyOn(inBandSession, 'flushArtifacts')
-      .mockRejectedValueOnce(new Error('queued publication failed'));
-
-    try {
-      // One publication fails, and it is the run's own pre-terminal drain that
-      // loses it: that settled entry is gone, so the lease-release drain
-      // afterwards succeeds and this caller sees no drain error at all. The
-      // `artifact-drain` kind the lifecycle marked on the terminal row is the
-      // only remaining fact that the child's queued rows rolled back, and it
-      // must still refuse the call rather than read as an ordinary failed
-      // child the workflow can consume as null.
-      await expect(runInBand(delegationOptions())).rejects.toMatchObject({
-        name: 'SubagentDurabilityError',
-        message: expect.stringContaining(
-          'failed to commit its final artifacts',
-        ),
-      });
-      expect(drain).toHaveBeenCalledTimes(2);
-    } finally {
-      drain.mockRestore();
-    }
-  });
-
-  it('records a failed child cost once for durable in-band run', async () => {
-    const onCost = vi.fn();
-    mockExecuteAgentErrorOnce(0.61, {
-      runId: IN_BAND_RUN_ID,
-      output: {
-        category: 'toolUse',
-        response: 'Partial review.',
-        files: [],
-      },
-    });
-
-    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      'review model failed',
-    );
-
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledWith(0.61);
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        output: expect.objectContaining({ response: 'Partial review.' }),
-      }),
-    );
-  });
-
-  it('persists a cost-bearing WAITING result as a durable single-cycle failure', async () => {
-    const onCost = vi.fn();
-    mocks.executeAgent.mockResolvedValueOnce({
-      outcome: RUN_PHASE.WAITING,
-      runId: IN_BAND_RUN_ID,
-      output: {
-        category: 'toolUse',
-        response: 'Waiting for clarification.',
-        files: [],
-      },
-      usage: { totalCost: 0.73 },
-    });
-
-    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      `Single-cycle subagent ${IN_BAND_RUN_ID} unexpectedly suspended.`,
-    );
-
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.any(Object),
-      IN_BAND_RUN_ID,
-      expect.objectContaining({
-        parentRunId: IN_BAND_PARENT_RUN_ID,
-        stopAfterCycle: true,
-      }),
-    );
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledWith(0.73);
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        output: expect.objectContaining({
-          response: 'Waiting for clarification.',
-        }),
-      }),
-    );
-  });
-
-  it('does not return a typed result when its durable manifest cannot be written', async () => {
-    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-
-    await expect(runInBand(delegationOptions())).rejects.toBeInstanceOf(
-      SubagentDurabilityError,
-    );
-    // The single driver persists the report independently of the manifest;
-    // the manifest read-back is what gates the typed return.
-    expect(mocks.writeReport).toHaveBeenCalled();
-  });
-
-  it('preserves the child failure when final lease cleanup also fails', async () => {
-    const childFailure = new Error('review model failed');
-    mocks.executeAgent.mockRejectedValueOnce(childFailure);
-    mocks.releaseOwnedRunLease.mockRejectedValueOnce(
-      new Error('artifact flush failed'),
-    );
-
-    await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
-  });
-
-  it('preserves the child failure when its failure manifest cannot be written', async () => {
-    mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
-    mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-
-    await expectDurabilityErrorPreservingChildFailure(
-      runInBand(delegationOptions()),
-    );
-  });
-
-  it('interrupts the live child when the in-band caller aborts', async () => {
-    const controller = new AbortController();
-    const onCost = vi.fn();
-    let childReady!: () => void;
-    let childInterrupted!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      childReady = resolve;
-    });
-    const interrupted = new Promise<void>((resolve) => {
-      childInterrupted = resolve;
-    });
-    const interrupt = vi.fn(() => {
-      childInterrupted();
-      return true;
-    });
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      await options.onRun?.({ interrupt } as never);
-      childReady();
-      await interrupted;
-      return {
-        outcome: 'cancelled',
-        runId: CHILD_RUN_ID,
-        output: { category: 'toolUse', response: '', files: [] },
-      };
-    });
-
-    const run = runInBand(
-      delegationOptions({ signal: controller.signal, onCost }),
-    );
-    await ready;
-    controller.abort(new Error('Workflow stopped.'));
-
-    await expect(run).rejects.toThrow('Workflow stopped.');
-    expect(interrupt).toHaveBeenCalledOnce();
-    expect(onCost).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        output: expect.objectContaining({ response: '' }),
-      }),
-    );
-  });
-
-  it('keeps the completed child result when cancellation arrives during persistence', async () => {
-    const controller = new AbortController();
-    let finishPersistence!: () => void;
-    const persistencePending = new Promise<void>((resolve) => {
-      finishPersistence = resolve;
-    });
-    mocks.writeResultMeta.mockReturnValueOnce(persistencePending);
-
-    const run = runInBand(delegationOptions({ signal: controller.signal }));
-    await vi.waitFor(() => {
+      const error = yield* Effect.flip(
+        runInBand(delegationOptions({ onCost })),
+      );
+      expect(error.message).toContain('review model failed');
+      expect(onCost).toHaveBeenCalledOnce();
+      expect(onCost).toHaveBeenCalledWith(0.61);
       expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    });
-    controller.abort(new Error('Workflow stopped after child completion.'));
-    finishPersistence();
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          output: expect.objectContaining({ response: 'Partial review.' }),
+        }),
+      );
+    }),
+  );
 
-    await expect(run).rejects.toThrow(
-      'Workflow stopped after child completion.',
-    );
-    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        producer: 'subagent',
-        output: expect.objectContaining({ response: 'The proof is correct.' }),
+  it.effect(
+    'persists a cost-bearing WAITING result as a durable single-cycle failure',
+    () =>
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        mocks.executeAgent.mockResolvedValueOnce({
+          outcome: RUN_PHASE.WAITING,
+          runId: IN_BAND_RUN_ID,
+          output: {
+            category: 'toolUse',
+            response: 'Waiting for clarification.',
+            files: [],
+          },
+          usage: { totalCost: 0.73 },
+        });
+
+        const error = yield* Effect.flip(
+          runInBand(delegationOptions({ onCost })),
+        );
+        expect(error.message).toContain(
+          `Single-cycle subagent ${IN_BAND_RUN_ID} unexpectedly suspended.`,
+        );
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.any(Object),
+          IN_BAND_RUN_ID,
+          expect.objectContaining({
+            parentRunId: IN_BAND_PARENT_RUN_ID,
+            stopAfterCycle: true,
+          }),
+        );
+        expect(onCost).toHaveBeenCalledOnce();
+        expect(onCost).toHaveBeenCalledWith(0.73);
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            output: expect.objectContaining({
+              response: 'Waiting for clarification.',
+            }),
+          }),
+        );
       }),
-    );
-  });
+  );
 
-  it('does not register a child when the in-band caller is already aborted', async () => {
-    const controller = new AbortController();
-    controller.abort(new Error('Workflow already stopped.'));
+  it.effect(
+    'does not return a typed result when its durable manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        mocks.writeResultMeta.mockRejectedValueOnce(
+          new Error('storage offline'),
+        );
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toBeInstanceOf(SubagentDurabilityError);
+        expect(mocks.writeReport).toHaveBeenCalled();
+      }),
+  );
 
-    await expect(
-      runInBand(delegationOptions({ signal: controller.signal })),
-    ).rejects.toThrow('Workflow already stopped.');
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
+  it.effect(
+    'preserves the child failure when final lease cleanup also fails',
+    () =>
+      Effect.gen(function* () {
+        const childFailure = new Error('review model failed');
+        mocks.executeAgent.mockRejectedValueOnce(childFailure);
+        mocks.releaseOwnedRunLease.mockRejectedValueOnce(
+          new Error('artifact flush failed'),
+        );
+        expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
+          childFailure,
+        );
+      }),
+  );
 
-  effectIt.effect(
+  it.effect(
+    'preserves the child failure when its failure manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        mocks.executeAgent.mockRejectedValueOnce(
+          new Error('review model failed'),
+        );
+        mocks.writeResultMeta.mockRejectedValueOnce(
+          new Error('storage offline'),
+        );
+        expect(
+          yield* Effect.flip(runInBand(delegationOptions())),
+        ).toMatchObject({
+          name: 'SubagentDurabilityError',
+          message: expect.stringContaining('review model failed'),
+          cause: expect.objectContaining({ name: 'AggregateError' }),
+        });
+      }),
+  );
+
+  it.effect('interrupts the live child when the in-band caller aborts', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const onCost = vi.fn();
+      const ready = yield* Deferred.make<void>();
+      let childInterrupted!: () => void;
+      const interrupted = new Promise<void>((resolve) => {
+        childInterrupted = resolve;
+      });
+      const interrupt = vi.fn(() => {
+        childInterrupted();
+        return true;
+      });
+      mocks.executeAgent.mockImplementationOnce(
+        async (_config, _id, options) => {
+          await options.onRun?.({ interrupt } as never);
+          Deferred.doneUnsafe(ready, Effect.void);
+          await interrupted;
+          return {
+            outcome: 'cancelled',
+            runId: CHILD_RUN_ID,
+            output: { category: 'toolUse', response: '', files: [] },
+          };
+        },
+      );
+
+      const running = yield* Effect.forkChild(
+        Effect.flip(
+          runInBand(delegationOptions({ signal: controller.signal, onCost })),
+        ),
+      );
+      yield* Deferred.await(ready);
+      controller.abort(new Error('Workflow stopped.'));
+
+      const error = yield* Fiber.join(running);
+      expect(error.message).toContain('Workflow stopped.');
+      expect(interrupt).toHaveBeenCalledOnce();
+      expect(onCost).toHaveBeenCalledOnce();
+      expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+      expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          producer: 'subagent',
+          output: expect.objectContaining({ response: '' }),
+        }),
+      );
+    }),
+  );
+
+  it.effect(
+    'keeps the completed child result when cancellation arrives during persistence',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        const persisting = yield* Deferred.make<void>();
+        let finishPersistence!: () => void;
+        const persistencePending = new Promise<void>((resolve) => {
+          finishPersistence = resolve;
+        });
+        mocks.writeResultMeta.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(persisting, Effect.void);
+          return persistencePending;
+        });
+
+        const running = yield* Effect.forkChild(
+          Effect.flip(
+            runInBand(delegationOptions({ signal: controller.signal })),
+          ),
+        );
+        yield* Deferred.await(persisting);
+        controller.abort(new Error('Workflow stopped after child completion.'));
+        finishPersistence();
+
+        const error = yield* Fiber.join(running);
+        expect(error.message).toContain(
+          'Workflow stopped after child completion.',
+        );
+        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            output: expect.objectContaining({
+              response: 'The proof is correct.',
+            }),
+          }),
+        );
+      }),
+  );
+
+  it.effect(
+    'does not register a child when the in-band caller is already aborted',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        controller.abort(new Error('Workflow already stopped.'));
+
+        const error = yield* Effect.flip(
+          runInBand(delegationOptions({ signal: controller.signal })),
+        );
+        expect(error.message).toContain('Workflow already stopped.');
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
     'carries the validated agent source to executeAgent for source-pinned launch',
     () =>
       Effect.gen(function* () {
@@ -973,24 +1006,22 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'extends the bare instruction with injected handoff guidance',
-    () =>
-      Effect.gen(function* () {
-        // Regression pin for #5864: delegation must inject handoff guidance rather
-        // than hand the caller's instruction through verbatim. Deliberately
-        // wording-free — the injected copy churns (#9568) without behavior changing.
-        yield* callDelegateReview();
-        yield* waitForChildrenEffect(defaultSession());
+  it.effect('extends the bare instruction with injected handoff guidance', () =>
+    Effect.gen(function* () {
+      // Regression pin for #5864: delegation must inject handoff guidance rather
+      // than hand the caller's instruction through verbatim. Deliberately
+      // wording-free — the injected copy churns (#9568) without behavior changing.
+      yield* callDelegateReview();
+      yield* waitForChildrenEffect(defaultSession());
 
-        const instruction =
-          mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
-        expect(instruction).toContain('Check the proof.');
-        expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
-      }),
+      const instruction =
+        mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
+      expect(instruction).toContain('Check the proof.');
+      expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'carries the current parent instruction into the subagent constraint context',
     () =>
       Effect.gen(function* () {
@@ -1016,62 +1047,58 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'formats returned child error results as subagent errors',
-    () =>
-      Effect.gen(function* () {
-        const recordSubagentCost = vi.fn();
-        mockExecuteAgentErrorOnce(0.42);
+  it.effect('formats returned child error results as subagent errors', () =>
+    Effect.gen(function* () {
+      const recordSubagentCost = vi.fn();
+      mockExecuteAgentErrorOnce(0.42);
 
-        const result = yield* callDelegateReview(
-          parentRunContext({
-            stopAfterCycle: true,
-            hooks: { recordSubagentCost },
-          }),
-        );
+      const result = yield* callDelegateReview(
+        parentRunContext({
+          stopAfterCycle: true,
+          hooks: { recordSubagentCost },
+        }),
+      );
 
-        expect(result.summary).toBe("Subagent 'review' failed");
-        expect(result.status).toBe('error');
-        expect(result.error).toBe('review model failed');
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining('<subagent-error'),
-        );
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining('review model failed'),
-        );
-        expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-        expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            agentName: 'review',
-          }),
-        );
-      }),
+      expect(result.summary).toBe("Subagent 'review' failed");
+      expect(result.status).toBe('error');
+      expect(result.error).toBe('review model failed');
+      expect(mocks.writeReport).toHaveBeenCalledWith(
+        expect.stringContaining('<subagent-error'),
+      );
+      expect(mocks.writeReport).toHaveBeenCalledWith(
+        expect.stringContaining('review model failed'),
+      );
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+      expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
+      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          producer: 'subagent',
+          agentName: 'review',
+        }),
+      );
+    }),
   );
 
-  effectIt.effect(
-    'rolls up failed async subagent cost from the error callback',
-    () =>
-      Effect.gen(function* () {
-        const recordSubagentCost = vi.fn();
-        mockExecuteAgentErrorOnce(0.31);
+  it.effect('rolls up failed async subagent cost from the error callback', () =>
+    Effect.gen(function* () {
+      const recordSubagentCost = vi.fn();
+      mockExecuteAgentErrorOnce(0.31);
 
-        const result = yield* callDelegateReview(
-          parentRunContext({ hooks: { recordSubagentCost } }),
-        );
+      const result = yield* callDelegateReview(
+        parentRunContext({ hooks: { recordSubagentCost } }),
+      );
 
-        expect(result.summary).toBe("Launched 'review' (async)");
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-          }),
-        );
-        expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
-      }),
+      expect(result.summary).toBe("Launched 'review' (async)");
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+        }),
+      );
+      expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'composes interactive delegation through the same native launch primitive',
     () =>
       Effect.gen(function* () {
@@ -1096,7 +1123,7 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect('does not attribute proposal cancellation to the user', () =>
+  it.effect('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
       const result = yield* delegateWithProposalDecision({
         action: 'cancel',
@@ -1110,7 +1137,7 @@ describe('headless delegation', () => {
     }),
   );
 
-  effectIt.effect(
+  it.effect(
     'proceeds without a proposal when the run cannot present approval prompts',
     () =>
       Effect.scoped(
@@ -1146,7 +1173,7 @@ describe('headless delegation', () => {
       ),
   );
 
-  effectIt.effect(
+  it.effect(
     'rejects an approved model override unavailable in the active API mode',
     () =>
       Effect.gen(function* () {
@@ -1166,41 +1193,39 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
-    'launches with an approved model override that is available',
-    () =>
-      Effect.gen(function* () {
-        mocks.computeModelOptionsData.mockResolvedValue([
-          {
-            value: 'deepseekT',
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          },
-          {
-            value: 'gpt5',
-            label: 'GPT-5',
-            availability: 'provider-key',
-          },
-        ]);
+  it.effect('launches with an approved model override that is available', () =>
+    Effect.gen(function* () {
+      mocks.computeModelOptionsData.mockResolvedValue([
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        },
+        {
+          value: 'gpt5',
+          label: 'GPT-5',
+          availability: 'provider-key',
+        },
+      ]);
 
-        const result = yield* delegateWithProposalDecision(
-          { action: 'approve', model: 'gpt5' },
-          { expectLaunch: true },
-        );
+      const result = yield* delegateWithProposalDecision(
+        { action: 'approve', model: 'gpt5' },
+        { expectLaunch: true },
+      );
 
-        expect(result.status).toBe('executed');
-        expect(result.summary).toBe("Launched 'review' (async)");
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            config: expect.objectContaining({ model: 'gpt5' }),
-          }),
-          expect.any(String),
-          expect.anything(),
-        );
-      }),
+      expect(result.status).toBe('executed');
+      expect(result.summary).toBe("Launched 'review' (async)");
+      expect(mocks.executeAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({ model: 'gpt5' }),
+        }),
+        expect.any(String),
+        expect.anything(),
+      );
+    }),
   );
 
-  effectIt.effect(
+  it.effect(
     'includes memory misses in interactive early-delivered reports',
     () =>
       Effect.gen(function* () {
@@ -1226,7 +1251,7 @@ describe('headless delegation', () => {
       }),
   );
 
-  effectIt.effect(
+  it.effect(
     'does not deliver detached subagent results back to the released parent',
     () =>
       Effect.gen(function* () {

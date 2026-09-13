@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as os from 'node:os';
 
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { finalizeRun } from '@agent/storage';
 import {
@@ -219,6 +220,11 @@ async function writeOrphanedLease(
   await writeLeaseFixture(runId, await deadOwner(), ownerToken);
 }
 
+/** Let a forked generation reach the run lane before the negative check. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
+
 const ownedRunIds = new Set<RunId>();
 
 /** Give the run a directory of its own on disk, the way its artifacts do. */
@@ -349,7 +355,6 @@ describe('cross-process run leases', () => {
     const record = await owner();
     await writeRun(runId);
     await writeForeignLease(runId, undefined, record);
-
     await expect(inspectRunLease(runId)).resolves.toEqual({
       status: 'held',
       owner: record,
@@ -501,65 +506,74 @@ describe('cross-process run leases', () => {
     );
   });
 
-  it('starts a resume only after the previous generation has released its lease', async () => {
-    const runId = 'd8645a' as RunId;
-    const registry = new RunRegistry({
-      runView: () => undefined,
-      commit: () => Effect.void,
-      approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-      releaseRootRunLease: () => Effect.void,
-      finalizeRun: (input) =>
-        Effect.succeed({ ok: true, outcome: input.outcome }),
-      acquireRunClaim: () => Effect.succeed(Effect.void),
-    });
-    const readToken = async (): Promise<string> => {
-      const [record, ...rest] = await readLeaseRecords(runId);
-      expect(rest).toEqual([]);
-      return record!.ownerToken;
-    };
-    const disposing = createDeferred();
-    let resumeStarted = false;
+  // Real lease files on the storage filesystem and the registry's own lane
+  // hand-off; no Effect clock is involved.
+  it.live(
+    'starts a resume only after the previous generation has released its lease',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'd8645a' as RunId;
+        const registry = new RunRegistry({
+          runView: () => undefined,
+          commit: () => Effect.void,
+          approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+          releaseRootRunLease: () => Effect.void,
+          finalizeRun: (input) =>
+            Effect.succeed({ ok: true, outcome: input.outcome }),
+          acquireRunClaim: () => Effect.succeed(Effect.void),
+        });
+        const readToken = async (): Promise<string> => {
+          const [record, ...rest] = await readLeaseRecords(runId);
+          expect(rest).toEqual([]);
+          return record!.ownerToken;
+        };
+        const acquired = yield* Deferred.make<void>();
+        const disposing = yield* Deferred.make<void>();
+        const resumeStarted = yield* Deferred.make<void>();
 
-    try {
-      const first = Effect.runPromise(
-        registry.launchRun(
-          runId,
-          Effect.promise(async () => {
-            await acquireFreshRunLease(runId);
-            await disposing.promise;
-            await releaseOwnedRunLease(runId);
-          }),
-        ),
-      );
-      await vi.waitFor(() => expect(ownsRunLease(runId)).toBe(true));
-      const firstToken = await readToken();
+        yield* Effect.gen(function* () {
+          const first = yield* Effect.forkChild(
+            registry.launchRun(
+              runId,
+              Effect.gen(function* () {
+                yield* Effect.promise(() => acquireFreshRunLease(runId));
+                yield* Deferred.succeed(acquired, undefined);
+                yield* Deferred.await(disposing);
+                yield* Effect.promise(() => releaseOwnedRunLease(runId));
+              }),
+            ),
+          );
+          yield* Deferred.await(acquired);
+          expect(ownsRunLease(runId)).toBe(true);
+          const firstToken = yield* Effect.promise(readToken);
 
-      const second = Effect.runPromise(
-        registry.launchRun(
-          runId,
-          Effect.promise(async () => {
-            resumeStarted = true;
-            return acquireResumedRunLease(runId);
-          }),
-        ),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+          const second = yield* Effect.forkChild(
+            registry.launchRun(
+              runId,
+              Effect.gen(function* () {
+                yield* Deferred.succeed(resumeStarted, undefined);
+                return yield* Effect.promise(() =>
+                  acquireResumedRunLease(runId),
+                );
+              }),
+            ),
+          );
+          yield* settle;
 
-      // The first generation is still disposing: the resume waits and the
-      // record on disk is still the first generation's, so no second lease
-      // was minted under it.
-      expect(resumeStarted).toBe(false);
-      await expect(readToken()).resolves.toBe(firstToken);
+          // The first generation is still disposing: the resume waits and the
+          // record on disk is still the first generation's, so no second lease
+          // was minted under it.
+          expect(yield* Deferred.isDone(resumeStarted)).toBe(false);
+          expect(yield* Effect.promise(readToken)).toBe(firstToken);
 
-      disposing.resolve();
-      await first;
-      await expect(second).resolves.toBe('acquired');
-      ownedRunIds.add(runId);
-      await expect(readToken()).resolves.not.toBe(firstToken);
-    } finally {
-      registry.dispose();
-    }
-  });
+          yield* Deferred.succeed(disposing, undefined);
+          yield* Fiber.join(first);
+          expect(yield* Fiber.join(second)).toBe('acquired');
+          ownedRunIds.add(runId);
+          expect(yield* Effect.promise(readToken)).not.toBe(firstToken);
+        }).pipe(Effect.ensuring(Effect.sync(() => registry.dispose())));
+      }),
+  );
 
   it('surfaces a transient resume validation failure without dropping ownership', async () => {
     const runId = 'd86451' as RunId;
@@ -669,4 +683,5 @@ describe('cross-process run leases', () => {
     await release;
     ownedRunIds.delete(runId);
   });
+
 });

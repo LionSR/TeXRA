@@ -36,6 +36,10 @@ function stubBashApprovalDisabled(): void {
     <T>(key: string, defaultValue?: T): T =>
       key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
   );
+  vi.spyOn(agentConfig, 'readConfig').mockImplementation(
+    <T>(_config: unknown, key: string, defaultValue?: T): T =>
+      key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
+  );
 }
 
 /** Lower a tool result the way a settled call reaches the model, and return

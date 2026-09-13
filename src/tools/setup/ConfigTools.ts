@@ -79,7 +79,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   execute: (input: ReadConfigInput) =>
     Effect.gen(function* () {
       const call = yield* ToolCall;
-      const value = call.config.get(input.key);
+      const value = call.roots.config.get(input.key);
       const json = JSON.stringify(value, null, 2) ?? 'undefined';
       const description = settingByKey(input.key)?.description;
       return executed(
@@ -125,7 +125,7 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   }
 
   const call = yield* ToolCall;
-  const config = call.config;
+  const config = call.roots.config;
   const previous = config.get(input.key);
   yield* hostPort(() =>
     config.update(

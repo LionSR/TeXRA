@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import pDefer from 'p-defer';
 import { expect, vi } from 'vitest';
 
@@ -94,6 +94,10 @@ it.effect(
       expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
       expect(snapshot).toHaveBeenLastCalledWith(null);
 
+      const killed = yield* Deferred.make<void>();
+      audio.killActiveRecording.mockImplementation(() =>
+        Deferred.doneUnsafe(killed, Effect.void),
+      );
       const nextStartup = pDefer<{ success: boolean }>();
       audio.startRecording.mockReturnValueOnce(nextStartup.promise);
       const nextTake = yield* Effect.forkChild(
@@ -116,11 +120,9 @@ it.effect(
       nextStartup.resolve({ success: true });
       const cancelled = yield* Effect.flip(Fiber.join(nextTake));
       expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(audio.killActiveRecording).toHaveBeenCalledTimes(1),
-        ),
-      );
+      // The cancelled take's kill runs on the detached take fiber.
+      yield* Deferred.await(killed);
+      expect(audio.killActiveRecording).toHaveBeenCalledTimes(1);
       expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
       expect(snapshot).toHaveBeenLastCalledWith(null);
       unsubscribe();

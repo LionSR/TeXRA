@@ -14,7 +14,7 @@ import { Effect, Fiber } from 'effect';
 
 import { FileInteractionState, ToolCall } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 import type { ToolResult } from '@shared/schemas';
@@ -49,7 +49,7 @@ function toResultText(result: ToolResult): string {
 export function registerLanguageModelTools(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
-  config: ConfigProvider,
+  roots: WorkspaceRoots,
 ): void {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
@@ -103,7 +103,7 @@ export function registerLanguageModelTools(
               if (token.isCancellationRequested) return yield* Effect.interrupt;
               return yield* tool.call(input).pipe(
                 Effect.provideService(ToolCall, {
-                  config,
+                  roots,
                   tracker: new FileInteractionState(),
                   run: undefined,
                   inScope: (operation) => operation(),

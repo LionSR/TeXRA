@@ -31,6 +31,7 @@ import {
   computeModelOptionsData,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -61,6 +62,8 @@ interface ResolveAgentToolsInput {
    * service, or a caller-owned list for a flow that injects its own.
    */
   toolInjections: ToolInjections['Service'];
+  /** The run's workspace configuration, which the injections' predicates read. */
+  config: ConfigProvider;
   /**
    * The process secret store and global state (`Secrets` / `AppState`): the
    * user's disabled-tool set, and the provider keys behind the delegation
@@ -114,6 +117,7 @@ export async function resolveAgentTools({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections,
+  config,
   stores,
 }: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
@@ -155,7 +159,7 @@ export async function resolveAgentTools({
     resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
-    if (!injection.shouldInject()) continue;
+    if (!injection.shouldInject(config)) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);

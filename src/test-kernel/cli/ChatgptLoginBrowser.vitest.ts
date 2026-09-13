@@ -1,6 +1,9 @@
-import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { effectRuntime } from '@platform/processRuntime';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
+import { Secrets } from '@platform/secrets';
+import { FakeSecrets } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({
   codexCoordinator: vi.fn(() => ({})),
@@ -23,15 +26,23 @@ vi.mock('@cli/runtime/browser', () => ({
 const { signInCliSubscription } =
   await import('@cli/runtime/subscriptionLogin');
 
-/** Run the program as the login command does: once, with the host's signal. */
+// Lets the forked sign-in reach the transport it suspends in.
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
+// What the host root provides the flow.
+const signInServices = Layer.mergeAll(
+  Secrets.layer(() => new FakeSecrets()),
+  testHttpClientLayer,
+);
+/** Run the program as the login command does, on the test's own fiber. */
 const signInCliChatGpt = (
   init: { device: boolean; noBrowser: boolean },
   options: { writeProgress: (message: string) => void },
-  signal?: AbortSignal,
 ) =>
-  effectRuntime().runPromise(signInCliSubscription('chatgpt', init, options), {
-    signal,
-  });
+  signInCliSubscription('chatgpt', init, options).pipe(
+    Effect.provide(signInServices),
+  );
 
 function loopbackSession() {
   return {
@@ -51,103 +62,137 @@ function publishLoopbackUrl(url: string): void {
   );
 }
 
-async function runSignIn(url: string, noBrowser = false): Promise<string[]> {
-  publishLoopbackUrl(url);
-  const progress: string[] = [];
-  await signInCliChatGpt(
-    { device: false, noBrowser },
-    { writeProgress: (message) => progress.push(message) },
-  );
-  return progress;
-}
+const runSignIn = (url: string, noBrowser = false) =>
+  Effect.gen(function* () {
+    publishLoopbackUrl(url);
+    const progress: string[] = [];
+    yield* signInCliChatGpt(
+      { device: false, noBrowser },
+      { writeProgress: (message) => progress.push(message) },
+    );
+    return progress;
+  });
 
 describe('signInCliSubscription (ChatGPT) browser choice', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('prints the sign-in link once, then browser status without repeating the URL', async () => {
-    mocks.tryOpenBrowser.mockResolvedValue(true);
+  it.effect(
+    'prints the sign-in link once, then browser status without repeating the URL',
+    () =>
+      Effect.gen(function* () {
+        mocks.tryOpenBrowser.mockResolvedValue(true);
 
-    const progress = await runSignIn('https://auth.openai.com/authorize?x=1');
+        const progress = yield* runSignIn(
+          'https://auth.openai.com/authorize?x=1',
+        );
 
-    expect(progress).toEqual([
-      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
-      'Browser launch in progress...',
-      'Browser opened; the same URL works in another browser.',
-    ]);
-  });
-
-  it('prints the URL once when the browser fails to launch', async () => {
-    mocks.tryOpenBrowser.mockResolvedValue(false);
-
-    const progress = await runSignIn('https://auth.openai.com/authorize?x=2');
-
-    expect(progress).toEqual([
-      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
-      'Browser launch in progress...',
-      'Automatic browser launch failed; open the sign-in URL above.',
-    ]);
-  });
-
-  it('skips the launch attempt and prints the URL with --no-browser', async () => {
-    const progress = await runSignIn(
-      'https://auth.openai.com/authorize?x=3',
-      true,
-    );
-
-    expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
-    expect(progress).toEqual([
-      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
-    ]);
-  });
-
-  it('publishes the URL before a slow browser launcher returns', async () => {
-    let finishLaunch: ((result: boolean) => void) | undefined;
-    mocks.tryOpenBrowser.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        finishLaunch = resolve;
+        expect(progress).toEqual([
+          'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
+          'Browser launch in progress...',
+          'Browser opened; the same URL works in another browser.',
+        ]);
       }),
-    );
-    publishLoopbackUrl('https://auth.openai.com/authorize?x=slow');
-    const progress: string[] = [];
+  );
 
-    const signIn = signInCliChatGpt(
-      { device: false, noBrowser: false },
-      { writeProgress: (message) => progress.push(message) },
-    );
+  it.effect('prints the URL once when the browser fails to launch', () =>
+    Effect.gen(function* () {
+      mocks.tryOpenBrowser.mockResolvedValue(false);
 
-    await vi.waitFor(() => {
-      expect(progress[0]).toContain('https://auth.openai.com/authorize?x=slow');
-    });
-    finishLaunch?.(true);
-    await signIn;
-  });
+      const progress = yield* runSignIn(
+        'https://auth.openai.com/authorize?x=2',
+      );
 
-  it('forwards interactive cancellation to both ChatGPT transports', async () => {
-    const interrupted: string[] = [];
-    const pending = (transport: string) =>
-      Effect.never.pipe(
-        Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            interrupted.push(transport);
-          }),
+      expect(progress).toEqual([
+        'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
+        'Browser launch in progress...',
+        'Automatic browser launch failed; open the sign-in URL above.',
+      ]);
+    }),
+  );
+
+  it.effect(
+    'skips the launch attempt and prints the URL with --no-browser',
+    () =>
+      Effect.gen(function* () {
+        const progress = yield* runSignIn(
+          'https://auth.openai.com/authorize?x=3',
+          true,
+        );
+
+        expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
+        expect(progress).toEqual([
+          'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
+        ]);
+      }),
+  );
+
+  it.effect('publishes the URL before a slow browser launcher returns', () =>
+    Effect.gen(function* () {
+      let finishLaunch: ((result: boolean) => void) | undefined;
+      mocks.tryOpenBrowser.mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          finishLaunch = resolve;
+        }),
+      );
+      publishLoopbackUrl('https://auth.openai.com/authorize?x=slow');
+      const progress: string[] = [];
+
+      const published = yield* Deferred.make<string>();
+      const signIn = yield* Effect.forkChild(
+        signInCliChatGpt(
+          { device: false, noBrowser: false },
+          {
+            writeProgress: (message) => {
+              progress.push(message);
+              if (progress.length === 1) {
+                Deferred.doneUnsafe(published, Effect.succeed(message));
+              }
+            },
+          },
         ),
       );
-    mocks.loginWithLoopback.mockReturnValue(pending('loopback'));
-    mocks.loginWithDeviceCode.mockReturnValue(pending('device'));
-    const options = { writeProgress: vi.fn() };
 
-    for (const init of [
-      { device: false, noBrowser: true },
-      { device: true, noBrowser: false },
-    ]) {
-      const controller = new AbortController();
-      const completion = signInCliChatGpt(init, options, controller.signal);
-      controller.abort();
-      await expect(completion).rejects.toThrow(/interrupted/);
-    }
+      expect(yield* Deferred.await(published)).toContain(
+        'https://auth.openai.com/authorize?x=slow',
+      );
+      finishLaunch?.(true);
+      yield* Fiber.join(signIn);
+    }),
+  );
 
-    expect(interrupted).toEqual(['loopback', 'device']);
-  });
+  it.effect(
+    'forwards interactive cancellation to both ChatGPT transports',
+    () =>
+      Effect.gen(function* () {
+        const interrupted: string[] = [];
+        const pending = (transport: string) =>
+          Effect.never.pipe(
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                interrupted.push(transport);
+              }),
+            ),
+          );
+        mocks.loginWithLoopback.mockReturnValue(pending('loopback'));
+        mocks.loginWithDeviceCode.mockReturnValue(pending('device'));
+        const options = { writeProgress: vi.fn() };
+
+        for (const init of [
+          { device: false, noBrowser: true },
+          { device: true, noBrowser: false },
+        ]) {
+          const fiber = yield* Effect.forkChild(
+            signInCliChatGpt(init, options),
+          );
+          yield* settle;
+          yield* Fiber.interrupt(fiber);
+          const exit = yield* Fiber.await(fiber);
+          expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+        }
+
+        expect(interrupted).toEqual(['loopback', 'device']);
+      }),
+  );
 });

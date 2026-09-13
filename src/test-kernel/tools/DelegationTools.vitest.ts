@@ -1,10 +1,10 @@
 import * as assert from 'node:assert';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 // Node imports
 
 // Third-party imports
-import { it as effectIt } from '@effect/vitest';
-import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
@@ -107,18 +107,21 @@ describe('DelegateAgentTool resume ownership', () => {
     vi.clearAllMocks();
   });
 
-  effectIt.effect('reports a merged recovery failure to the parent', () => {
-    mocks.submitFollowUp.mockReturnValue(
-      Effect.succeed({
-        status: 'queued',
-        wake: 'failed',
-      }),
-    );
+  it.effect('reports a merged recovery failure to the parent', () =>
+    Effect.gen(function* () {
+      const reported = yield* Deferred.make<void>();
+      const queued = { status: 'queued', wake: 'failed' };
+      mocks.submitFollowUp
+        .mockReturnValueOnce(Effect.succeed(queued))
+        .mockImplementationOnce(() =>
+          Deferred.succeed(reported, undefined).pipe(Effect.as(queued)),
+        )
+        .mockReturnValue(Effect.succeed(queued));
 
-    const session = {
-      runs: { getHandle: () => makeHandle() },
-    } as never;
-    return Effect.gen(function* () {
+      const session = {
+        runs: { getHandle: () => makeHandle() },
+      } as never;
+
       yield* new DelegateAgentTool()
         .call({
           execution_id: runId,
@@ -133,16 +136,15 @@ describe('DelegateAgentTool resume ownership', () => {
           ),
         );
 
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 2),
-        ),
-      );
+      // The wake-failure delivery is forked detached inside the tool; the mock
+      // completes this deferred when that fiber makes the second call.
+      yield* Deferred.await(reported);
+      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
       expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
         parentRunId,
         expect.objectContaining({ origin: 'subagent_result' }),
         expect.anything(),
       );
-    });
-  });
+    }),
+  );
 });

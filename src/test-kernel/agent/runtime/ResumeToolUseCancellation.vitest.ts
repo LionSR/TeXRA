@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
@@ -180,11 +181,9 @@ function resumeToolUseFromResumeData(
   resume: Parameters<typeof resumeOnLane>[0],
   options: ResumeToolUseFromResumeDataOptions = {},
 ) {
-  return Effect.runPromise(
-    Effect.provide(
-      resumeOnLane(resume, { session: LANE_SESSION, ...options }),
-      fakeProcessServices(),
-    ),
+  return Effect.provide(
+    resumeOnLane(resume, { session: LANE_SESSION, ...options }),
+    fakeProcessServices(),
   );
 }
 
@@ -247,213 +246,245 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
   });
 
-  it('resolves run lineage before activating the resume stream', async () => {
-    const storageError = new Error('run lineage unavailable');
-    const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
-    mocks.readView.mockRejectedValueOnce(storageError);
+  it.effect('resolves run lineage before activating the resume stream', () =>
+    Effect.gen(function* () {
+      const storageError = new Error('run lineage unavailable');
+      const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
+      mocks.readView.mockRejectedValueOnce(storageError);
 
-    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
-      storageError,
-    );
+      expect(yield* Effect.flip(resumeToolUseFromResumeData(snapshot))).toBe(
+        storageError,
+      );
 
-    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(snapshot.runId);
-    expect(mocks.releaseClaims).toHaveBeenCalledWith(
-      qualifyAggregateId('run', snapshot.runId),
-    );
-    expect(mocks.releaseClaims).toHaveBeenCalledTimes(1);
-  });
+      expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(snapshot.runId);
+      expect(mocks.releaseClaims).toHaveBeenCalledWith(
+        qualifyAggregateId('run', snapshot.runId),
+      );
+      expect(mocks.releaseClaims).toHaveBeenCalledTimes(1);
+    }),
+  );
 
-  it('reports a reloaded session that is no longer resumable distinctly', async () => {
-    const snapshot = createToolUseResumeData({ runId: 'e80482' as RunId });
-    mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
+  it.effect(
+    'reports a reloaded session that is no longer resumable distinctly',
+    () =>
+      Effect.gen(function* () {
+        const snapshot = createToolUseResumeData({ runId: 'e80482' as RunId });
+        mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
 
-    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBeInstanceOf(
-      ResumeSessionUnavailableError,
-    );
-    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-  });
-
-  it('rejects a resumed launch that is not a tool-use agent', async () => {
-    const resume = createToolUseResumeData({ runId: 'e80483' as RunId });
-    // The guard runs inside the lifecycle so its failure ends the started
-    // stream; the mocked lifecycle only has to run the body.
-    mocks.runFlowWithLifecycle.mockImplementationOnce(
-      (_context: unknown, runner: (...args: unknown[]) => unknown) =>
-        runner({}),
-    );
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce({
-      setting: { agentCategory: AgentCategory.Workflow },
-      runScope: {
-        runId: resume.runId,
-        session: {
-          flushArtifacts: vi.fn(),
-          releaseRunLease: vi.fn(async () => {}),
-        },
-      },
-    } as unknown as AgentLaunchContext);
-
-    await expect(resumeToolUseFromResumeData(resume)).rejects.toThrow(
-      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-    );
-  });
-
-  it('interrupts at flow attachment before substantive work starts', async () => {
-    const runId = 'e80491' as RunId;
-    const context = buildResumeContext(runId);
-    const order: string[] = [];
-    const tools = [
-      {
-        definition: { name: 'run_scoped' },
-        call: vi.fn(),
-      },
-    ] as unknown as readonly ITool[];
-    let attachedContext: TestFlowContext | undefined;
-    const handle = {
-      attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-        order.push('attach');
-        attachedContext = flowContext;
+        expect(
+          yield* Effect.flip(resumeToolUseFromResumeData(snapshot)),
+        ).toBeInstanceOf(ResumeSessionUnavailableError);
+        expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
       }),
-      detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-        order.push('detach');
-        if (attachedContext === flowContext) attachedContext = undefined;
-      }),
-    };
+  );
 
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-    mocks.runFlowWithLifecycle.mockImplementationOnce(
-      (
-        _context: unknown,
-        run: (liveHandle: typeof handle) => Effect.Effect<unknown, unknown>,
-      ) => run(handle),
-    );
-    mocks.runToolUse.mockImplementationOnce((start: InterruptibleLoopStart) =>
-      Effect.sync(() => {
-        let interrupted = false;
-        const flowContext: TestFlowContext = {
-          interrupt: () => {
-            order.push('interrupt');
-            interrupted = true;
+  it.effect('rejects a resumed launch that is not a tool-use agent', () =>
+    Effect.gen(function* () {
+      const resume = createToolUseResumeData({ runId: 'e80483' as RunId });
+      // The guard runs inside the lifecycle so its failure ends the started
+      // stream; the mocked lifecycle only has to run the body.
+      mocks.runFlowWithLifecycle.mockImplementationOnce(
+        (_context: unknown, runner: (...args: unknown[]) => unknown) =>
+          runner({}),
+      );
+      mocks.buildAgentLaunchContext.mockResolvedValueOnce({
+        setting: { agentCategory: AgentCategory.Workflow },
+        runScope: {
+          runId: resume.runId,
+          session: {
+            flushArtifacts: vi.fn(),
+            releaseRunLease: vi.fn(async () => {}),
           },
+        },
+      } as unknown as AgentLaunchContext);
+
+      const error = yield* Effect.flip(resumeToolUseFromResumeData(resume));
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain(
+        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+      );
+    }),
+  );
+
+  it.effect(
+    'interrupts at flow attachment before substantive work starts',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'e80491' as RunId;
+        const context = buildResumeContext(runId);
+        const order: string[] = [];
+        const tools = [
+          {
+            definition: { name: 'run_scoped' },
+            call: vi.fn(),
+          },
+        ] as unknown as readonly ITool[];
+        let attachedContext: TestFlowContext | undefined;
+        const handle = {
+          attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
+            order.push('attach');
+            attachedContext = flowContext;
+          }),
+          detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
+            order.push('detach');
+            if (attachedContext === flowContext) attachedContext = undefined;
+          }),
         };
-        start.attachment.attach(flowContext);
-        start.takePendingFollowUps?.();
-        if (!interrupted) mocks.invokeModelOrTool();
-        start.attachment.detach(flowContext);
-        return {
-          outcome: interrupted ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.COMPLETED,
-          response: '',
-          files: [],
-          usage: NO_USAGE,
-          structured: undefined,
-        };
+
+        mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
+        mocks.runFlowWithLifecycle.mockImplementationOnce(
+          (
+            _context: unknown,
+            run: (liveHandle: typeof handle) => Effect.Effect<unknown, unknown>,
+          ) => run(handle),
+        );
+        mocks.runToolUse.mockImplementationOnce(
+          (start: InterruptibleLoopStart) =>
+            Effect.sync(() => {
+              let interrupted = false;
+              const flowContext: TestFlowContext = {
+                interrupt: () => {
+                  order.push('interrupt');
+                  interrupted = true;
+                },
+              };
+              start.attachment.attach(flowContext);
+              start.takePendingFollowUps?.();
+              if (!interrupted) mocks.invokeModelOrTool();
+              start.attachment.detach(flowContext);
+              return {
+                outcome: interrupted
+                  ? RUN_OUTCOME.CANCELLED
+                  : RUN_OUTCOME.COMPLETED,
+                response: '',
+                files: [],
+                usage: NO_USAGE,
+                structured: undefined,
+              };
+            }),
+        );
+
+        const snapshot = createToolUseResumeData({ runId });
+
+        const result = yield* resumeToolUseFromResumeData(snapshot, {
+          tools,
+          takePendingFollowUps: () => {
+            order.push('take');
+            return [];
+          },
+          isCancellationRequested: () => {
+            order.push('query');
+            expect(attachedContext).toBeDefined();
+            return true;
+          },
+          onCancellationAtFlowAttachment: () => order.push('cancel'),
+        });
+
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        // The run-scoped tools reach the loop through the run's own layer.
+        expect(mocks.agentRunLayer).toHaveBeenCalledWith(
+          context,
+          expect.objectContaining({ tools }),
+        );
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(runId);
+        expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
+        expect(order).toEqual([
+          'attach',
+          'query',
+          'cancel',
+          'interrupt',
+          'take',
+          'detach',
+        ]);
       }),
-    );
+  );
 
-    const snapshot = createToolUseResumeData({ runId });
+  it.effect(
+    'surfaces a teardown failure after an otherwise successful turn',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'e80501' as RunId;
+        const teardownFailure = new Error(
+          'final artifacts could not be flushed',
+        );
+        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+          buildResumeContext(runId),
+        );
+        mocks.runToolUse.mockImplementationOnce(() =>
+          Effect.succeed(completedTurn()),
+        );
+        flushArtifacts.mockRejectedValueOnce(teardownFailure);
 
-    const result = await resumeToolUseFromResumeData(snapshot, {
-      tools,
-      takePendingFollowUps: () => {
-        order.push('take');
-        return [];
-      },
-      isCancellationRequested: () => {
-        order.push('query');
-        expect(attachedContext).toBeDefined();
-        return true;
-      },
-      onCancellationAtFlowAttachment: () => order.push('cancel'),
-    });
-
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    // The run-scoped tools reach the loop through the run's own layer.
-    expect(mocks.agentRunLayer).toHaveBeenCalledWith(
-      context,
-      expect.objectContaining({ tools }),
-    );
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(runId);
-    expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-    expect(order).toEqual([
-      'attach',
-      'query',
-      'cancel',
-      'interrupt',
-      'take',
-      'detach',
-    ]);
-  });
-
-  it('surfaces a teardown failure after an otherwise successful turn', async () => {
-    const runId = 'e80501' as RunId;
-    const teardownFailure = new Error('final artifacts could not be flushed');
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(runId),
-    );
-    mocks.runToolUse.mockImplementationOnce(() =>
-      Effect.succeed(completedTurn()),
-    );
-    flushArtifacts.mockRejectedValueOnce(teardownFailure);
-
-    // A failed drain rolled back facts the run had queued, so it reaches the
-    // caller typed, carrying what threw.
-    await expect(
-      resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
-    ).rejects.toMatchObject({
-      name: 'RunArtifactDrainError',
-      cause: teardownFailure,
-    });
-  });
-
-  it('reports the turn failure and the teardown failure together', async () => {
-    // The run's own failure is not replaced by the teardown's: both reach
-    // the caller, the run's first.
-    const runId = 'e80511' as RunId;
-    const turnFailure = new Error('turn failed');
-    const teardownFailure = new Error('final artifacts could not be flushed');
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(runId),
-    );
-    mocks.runToolUse.mockImplementationOnce(() => Effect.fail(turnFailure));
-    flushArtifacts.mockRejectedValueOnce(teardownFailure);
-
-    await expect(
-      resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
-    ).rejects.toSatisfy(
-      (error: unknown) =>
-        error instanceof AggregateError &&
-        error.message.includes('could not be persisted') &&
-        error.errors[0] === turnFailure &&
-        error.errors[1] instanceof RunArtifactDrainError &&
-        error.errors[1].cause === teardownFailure,
-    );
-  });
-
-  it('mirrors a mid-run model switch onto the persisted config only', async () => {
-    const runId = 'e9421d0de1' as RunId;
-    const ctx = buildResumeContext(runId);
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-    mocks.runToolUse.mockImplementationOnce(() =>
-      Effect.sync(() => {
-        const callbacks = mocks.agentRunLayer.mock.calls[0]?.[1]
-          .callbacks as CapturedRunCallbacks;
-        callbacks.onModelChanged('next-model');
-        return {
-          outcome: RUN_OUTCOME.COMPLETED,
-          response: '',
-          files: [],
-          usage: NO_USAGE,
-          structured: undefined,
-        };
+        // A failed drain rolled back facts the run had queued, so it reaches
+        // the caller typed, carrying what threw.
+        expect(
+          yield* Effect.flip(
+            resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
+          ),
+        ).toMatchObject({
+          name: 'RunArtifactDrainError',
+          cause: teardownFailure,
+        });
       }),
-    );
+  );
 
-    await resumeToolUseFromResumeData(createToolUseResumeData({ runId }));
+  it.effect('reports the turn failure and the teardown failure together', () =>
+    Effect.gen(function* () {
+      // The run's own failure is not replaced by the teardown's: both reach
+      // the caller, the run's first.
+      const runId = 'e80511' as RunId;
+      const turnFailure = new Error('turn failed');
+      const teardownFailure = new Error('final artifacts could not be flushed');
+      mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+        buildResumeContext(runId),
+      );
+      mocks.runToolUse.mockImplementationOnce(() => Effect.fail(turnFailure));
+      flushArtifacts.mockRejectedValueOnce(teardownFailure);
 
-    // The cell is the live model: usage accounting and the prompt-side MODEL
-    // variable read it directly, so the only remaining mirror is the
-    // persisted AgentConfig schema field; the seeded transient stays as-is.
-    expect(ctx.config.model).toBe('next-model');
-    expect(ctx.userVarChannels.MODEL).toBe('test-model');
-  });
+      const error = yield* Effect.flip(
+        resumeToolUseFromResumeData(createToolUseResumeData({ runId })),
+      );
+      expect(error).toSatisfy(
+        (value: unknown) =>
+          value instanceof AggregateError &&
+          value.message.includes('could not be persisted') &&
+          value.errors[0] === turnFailure &&
+          value.errors[1] instanceof RunArtifactDrainError &&
+          value.errors[1].cause === teardownFailure,
+      );
+    }),
+  );
+
+  it.effect(
+    'mirrors a mid-run model switch onto the persisted config only',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'e9421d0de1' as RunId;
+        const ctx = buildResumeContext(runId);
+        mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
+        mocks.runToolUse.mockImplementationOnce(() =>
+          Effect.sync(() => {
+            const callbacks = mocks.agentRunLayer.mock.calls[0]?.[1]
+              .callbacks as CapturedRunCallbacks;
+            callbacks.onModelChanged('next-model');
+            return {
+              outcome: RUN_OUTCOME.COMPLETED,
+              response: '',
+              files: [],
+              usage: NO_USAGE,
+              structured: undefined,
+            };
+          }),
+        );
+
+        yield* resumeToolUseFromResumeData(createToolUseResumeData({ runId }));
+
+        // The cell is the live model: usage accounting and the prompt-side MODEL
+        // variable read it directly, so the only remaining mirror is the
+        // persisted AgentConfig schema field; the seeded transient stays as-is.
+        expect(ctx.config.model).toBe('next-model');
+        expect(ctx.userVarChannels.MODEL).toBe('test-model');
+      }),
+  );
 });

@@ -1,5 +1,6 @@
 import { Context, Layer } from 'effect';
 
+import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
@@ -19,7 +20,9 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  */
 export interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
-  shouldInject(): boolean;
+  /** Whether the run resolving its tools, in the workspace `config` is the
+   *  configuration of, gets this tool. */
+  shouldInject(config: ConfigProvider): boolean;
 }
 
 /**
@@ -45,8 +48,10 @@ export class ToolInjectionRegistry {
 
 /**
  * The fixed injections every host ships. Each predicate reads its setting
- * when a run resolves its tools, so `initPlatform()` and the process
- * workspace roots must be initialized by then.
+ * when a run resolves its tools: the goal flag from the run's workspace
+ * configuration it is handed, the memory setting through the catalog reader
+ * (so `initPlatform()` and the process workspace roots must be initialized
+ * by then).
  */
 export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   {
@@ -64,7 +69,7 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
   // is no idle-continuation registry — goal was its only consumer.
   {
     toolName: 'plan',
-    shouldInject: () => isGoalEnabled(),
+    shouldInject: (config) => isGoalEnabled(config),
   },
 ];
 

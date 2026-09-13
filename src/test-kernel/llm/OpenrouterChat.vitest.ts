@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import {
   ModelError,
@@ -163,6 +163,10 @@ function run(model: Model, request: TurnRequest = REQUEST) {
     return yield* model.generateTurn(turn);
   });
 }
+/** Let the forked turn reach its fetch, or its interrupt reach the reader. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
 function errors(exit: Exit.Exit<unknown, ModelError>) {
   assert(Exit.isFailure(exit));
   return exit.cause.reasons
@@ -783,91 +787,100 @@ describe('native OpenRouter Chat', () => {
       }),
   );
 
-  it.each(['headers', 'body', 'body with distinct cleanup'] as const)(
+  it.effect.each(['headers', 'body', 'body with distinct cleanup'] as const)(
     'joins cancellation during pending %s',
-    async (stage) => {
-      let signal: AbortSignal | undefined;
-      let release: (() => void) | undefined;
-      let body: ReadableStream<Uint8Array> | undefined;
-      let cancelled = false;
-      let readableProgress = false;
-      const cleanup = new Error('Distinct cleanup');
-      const fetch = vi.fn<typeof globalThis.fetch>((_url, init) => {
-        signal = init?.signal ?? undefined;
-        assert(signal);
-        if (stage === 'headers')
-          return new Promise((_resolve, reject) =>
-            signal!.addEventListener('abort', () => reject(signal!.reason), {
-              once: true,
-            }),
-          );
-        body = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(
-              new TextEncoder().encode(
-                `data: ${JSON.stringify(frame({ content: 'partial' }))}\n\n`,
-              ),
+    (stage) =>
+      Effect.gen(function* () {
+        let signal: AbortSignal | undefined;
+        let release: (() => void) | undefined;
+        let body: ReadableStream<Uint8Array> | undefined;
+        let cancelled = false;
+        const progressed = yield* Deferred.make<void>();
+        const cleanup = new Error('Distinct cleanup');
+        const fetch = vi.fn<typeof globalThis.fetch>((_url, init) => {
+          signal = init?.signal ?? undefined;
+          assert(signal);
+          if (stage === 'headers')
+            return new Promise((_resolve, reject) =>
+              signal!.addEventListener('abort', () => reject(signal!.reason), {
+                once: true,
+              }),
             );
-          },
-          async cancel() {
-            expect(signal!.aborted).toBe(true);
-            await new Promise<void>((resolve) => {
-              release = resolve;
-            });
-            cancelled = true;
-            if (stage === 'body with distinct cleanup') throw cleanup;
-          },
+          body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `data: ${JSON.stringify(frame({ content: 'partial' }))}\n\n`,
+                ),
+              );
+            },
+            async cancel() {
+              expect(signal!.aborted).toBe(true);
+              await new Promise<void>((resolve) => {
+                release = resolve;
+              });
+              cancelled = true;
+              if (stage === 'body with distinct cleanup') throw cleanup;
+            },
+          });
+          return Promise.resolve(response(body));
         });
-        return Promise.resolve(response(body));
-      });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-      const fiber = Effect.runFork(
-        Effect.gen(function* () {
-          const turn = yield* model.prepareTurn(REQUEST);
-          assert.equal(turn.mode, 'foreground');
-          yield* Stream.runDrain(
-            model.streamTurn(turn).pipe(
-              Stream.tap((event) =>
-                Effect.sync(() => {
-                  if (event.kind === 'delta') readableProgress = true;
-                }),
-              ),
-            ),
-          );
-        }),
-      );
-      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-      if (stage !== 'headers')
-        await vi.waitFor(() => {
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const fiber = yield* Effect.forkChild(
+          Effect.gen(function* () {
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert.equal(turn.mode, 'foreground');
+            yield* Stream.runDrain(
+              model
+                .streamTurn(turn)
+                .pipe(
+                  Stream.tap((event) =>
+                    event.kind === 'delta'
+                      ? Deferred.succeed(progressed, undefined)
+                      : Effect.void,
+                  ),
+                ),
+            );
+          }),
+        );
+        yield* settle;
+        expect(fetch).toHaveBeenCalledTimes(1);
+        if (stage !== 'headers') {
+          // A delta can only follow getReader(), so it implies the body lock.
+          yield* Deferred.await(progressed);
           expect(body?.locked).toBe(true);
-          expect(readableProgress).toBe(true);
-        });
-      let joined = false;
-      const interrupted = Effect.runPromise(Fiber.interrupt(fiber)).then(() => {
-        joined = true;
-        return Effect.runPromise(Fiber.await(fiber));
-      });
-      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
-      if (stage !== 'headers') {
-        await vi.waitFor(() => expect(release).toBeDefined());
-        expect(joined).toBe(false);
-        release!();
-      }
-      const exit = await interrupted;
-      assert(Exit.isFailure(exit));
-      expect(exit.cause.reasons.some(Cause.isInterruptReason)).toBe(true);
-      if (stage === 'body with distinct cleanup')
-        expect(
-          exit.cause.reasons.some(
-            (reason) => Cause.isDieReason(reason) && reason.defect === cleanup,
+        }
+        const joined = yield* Deferred.make<void>();
+        const interrupting = yield* Effect.forkChild(
+          Fiber.interrupt(fiber).pipe(
+            Effect.andThen(Deferred.succeed(joined, undefined)),
           ),
-        ).toBe(true);
-      if (stage !== 'headers') {
-        expect(cancelled).toBe(true);
-        expect(body?.locked).toBe(false);
-      }
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+        );
+        yield* settle;
+        expect(signal?.aborted).toBe(true);
+        if (stage !== 'headers') {
+          expect(release).toBeDefined();
+          expect(yield* Deferred.isDone(joined)).toBe(false);
+          release!();
+        }
+        yield* Fiber.join(interrupting);
+        const exit = yield* Fiber.await(fiber);
+        assert(Exit.isFailure(exit));
+        expect(exit.cause.reasons.some(Cause.isInterruptReason)).toBe(true);
+        expect(Exit.hasInterrupts(exit)).toBe(true);
+        if (stage === 'body with distinct cleanup')
+          expect(
+            exit.cause.reasons.some(
+              (reason) =>
+                Cause.isDieReason(reason) && reason.defect === cleanup,
+            ),
+          ).toBe(true);
+        if (stage !== 'headers') {
+          expect(cancelled).toBe(true);
+          expect(body?.locked).toBe(false);
+        }
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.effect(

@@ -210,7 +210,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     runId,
     fileService,
   );
-  const promptBuilder = new PromptBuilder(prompt, run.userVarChannels, logger);
+  const promptBuilder = new PromptBuilder(
+    prompt,
+    run.userVarChannels,
+    run.session.roots.workspace,
+    logger,
+  );
   const latexMediaManager = new LatexMediaManager(logger, fileService);
   const totalRounds = Math.max(
     setting.rounds ?? 2,
@@ -444,7 +449,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let requestText: string;
     if (round === 0) {
       const initialPrompts = yield* Effect.tryPromise({
-        try: () => run.inScope(() => promptBuilder.buildInitialPrompts()),
+        try: () => promptBuilder.buildInitialPrompts(),
         catch: ensureError,
       });
       if (initialPrompts.userPrefix.trim()) {
@@ -453,7 +458,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       requestText = initialPrompts.userRequest.trim();
     } else {
       const request = yield* Effect.tryPromise({
-        try: () => run.inScope(() => promptBuilder.buildUserRequest(round)),
+        try: () => promptBuilder.buildUserRequest(round),
         catch: ensureError,
       });
       requestText = appendCompileFailureRoundContext(
@@ -1032,11 +1037,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           if (!unprocessed) {
             const system = yield* Effect.tryPromise({
               try: () =>
-                run.inScope(() =>
-                  getSystemPromptWithRules(
-                    prompt.systemPrompt,
-                    run.userVarChannels,
-                  ),
+                getSystemPromptWithRules(
+                  prompt.systemPrompt,
+                  run.userVarChannels,
+                  run.session.roots.workspace,
                 ),
               catch: ensureError,
             });
@@ -1089,11 +1093,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             const served = yield* SynchronizedRef.get(run.model);
             yield* Effect.tryPromise({
               try: () =>
-                run.inScope(() =>
-                  run.usageMonitor.recordUsage(
-                    usageSnapshot(state, outcome.usage),
-                    served,
-                  ),
+                run.usageMonitor.recordUsage(
+                  usageSnapshot(state, outcome.usage),
+                  served,
                 ),
               catch: ensureError,
             });

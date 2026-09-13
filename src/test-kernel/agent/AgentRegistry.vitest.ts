@@ -1,10 +1,9 @@
 // Node imports
 import { resolve } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -173,73 +172,97 @@ describe('agent registry', () => {
     expect(workflow?.category).toBe(AgentCategory.Workflow);
   });
 
-  it('keeps the current cache visible while a refresh is pending', async () => {
-    expect(getAgent('assistant')?.name).toBe('assistant');
+  it.effect(
+    'keeps the current cache visible while a refresh is pending',
+    () => {
+      const builtInToolUseDir = createDeferred<void>();
+      return Effect.gen(function* () {
+        expect(getAgent('assistant')?.name).toBe('assistant');
 
-    const builtInToolUseDir = createDeferred<void>();
-    useAgentDirectories({
-      builtInToolUse: async () => {
-        await builtInToolUseDir.promise;
-        return BUILTIN_TOOL_USE_AGENTS_DIR;
-      },
-    });
+        useAgentDirectories({
+          builtInToolUse: async () => {
+            await builtInToolUseDir.promise;
+            return BUILTIN_TOOL_USE_AGENTS_DIR;
+          },
+        });
 
-    try {
-      const pendingRefresh = Effect.runPromise(
-        refresh({ includeRemote: false }),
+        // startImmediately: the refresh claims the load lane and parks on the
+        // gated directory read before the next assertion runs.
+        const pendingRefresh = yield* Effect.forkChild(
+          refresh({ includeRemote: false }),
+          { startImmediately: true },
+        );
+
+        expect(getAgent('assistant')?.name).toBe('assistant');
+
+        builtInToolUseDir.resolve();
+        yield* Fiber.join(pendingRefresh);
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            builtInToolUseDir.resolve();
+            useAgentDirectories();
+          }),
+        ),
       );
-      await delay(0);
+    },
+  );
 
-      expect(getAgent('assistant')?.name).toBe('assistant');
+  it.effect(
+    'forces a new remote fetch after an older initialization settles',
+    () => {
+      const staleLoadGate = Deferred.makeUnsafe<void>();
+      const remoteStarted = Deferred.makeUnsafe<void>();
+      return Effect.gen(function* () {
+        useAgentDirectories();
+        yield* refresh({ includeRemote: false });
 
-      builtInToolUseDir.resolve();
-      await pendingRefresh;
-    } finally {
-      builtInToolUseDir.resolve();
-      useAgentDirectories();
-    }
-  });
+        let remoteCall = 0;
+        listRemoteAgents.mockImplementation(() =>
+          Effect.gen(function* () {
+            remoteCall += 1;
+            if (remoteCall === 1) {
+              yield* Deferred.succeed(remoteStarted, undefined);
+              yield* Deferred.await(staleLoadGate);
+              return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
+            }
+            return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
+          }),
+        );
 
-  it('forces a new remote fetch after an older initialization settles', async () => {
-    useAgentDirectories();
-    await Effect.runPromise(refresh({ includeRemote: false }));
+        const staleInitialization = yield* Effect.forkChild(
+          loadAgents({ includeRemote: true }),
+        );
+        yield* Deferred.await(remoteStarted);
+        expect(listRemoteAgents).toHaveBeenCalledOnce();
+        // startImmediately: the refresh bumps the epoch and takes the lane tail
+        // before the stale load is released.
+        const forcedRefresh = yield* Effect.forkChild(
+          refresh({ includeRemote: true }),
+          { startImmediately: true },
+        );
 
-    const staleLoadGate = createDeferred<void>();
-    let remoteCall = 0;
-    listRemoteAgents.mockImplementation(() =>
-      Effect.promise(async () => {
-        remoteCall += 1;
-        if (remoteCall === 1) {
-          await staleLoadGate.promise;
-          return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
-        }
-        return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
-      }),
-    );
+        yield* Deferred.succeed(staleLoadGate, undefined);
+        yield* Fiber.join(staleInitialization);
+        yield* Fiber.join(forcedRefresh);
 
-    try {
-      const staleInitialization = Effect.runPromise(
-        loadAgents({ includeRemote: true }),
+        expect(listRemoteAgents).toHaveBeenCalledTimes(2);
+        expect(getAgent('freshAgent')?.source).toBe('remote');
+        expect(getAgent('staleAgent')).toBeUndefined();
+      }).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            yield* Deferred.succeed(staleLoadGate, undefined);
+            listRemoteAgents.mockReset();
+            listRemoteAgents.mockImplementation(() =>
+              Effect.succeed([ORCHESTRATOR_AGENT]),
+            );
+            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+          }),
+        ),
       );
-      await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
-      const forcedRefresh = Effect.runPromise(refresh({ includeRemote: true }));
-
-      staleLoadGate.resolve();
-      await staleInitialization;
-      await forcedRefresh;
-
-      expect(listRemoteAgents).toHaveBeenCalledTimes(2);
-      expect(getAgent('freshAgent')?.source).toBe('remote');
-      expect(getAgent('staleAgent')).toBeUndefined();
-    } finally {
-      staleLoadGate.resolve();
-      listRemoteAgents.mockReset();
-      listRemoteAgents.mockImplementation(() =>
-        Effect.succeed([ORCHESTRATOR_AGENT]),
-      );
-      await Effect.runPromise(refresh({ includeRemote: false }));
-    }
-  });
+    },
+  );
 
   it.effect('reloads local-only definitions after sign-out invalidation', () =>
     Effect.gen(function* () {
@@ -255,79 +278,104 @@ describe('agent registry', () => {
     }),
   );
 
-  it('removes remote definitions even when the local rebuild fails', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    useAgentDirectories();
-    await Effect.runPromise(refresh({ includeRemote: true }));
-    expect(isRemoteAgent('orchestrator')).toBe(true);
-    useAgentDirectories({
-      builtIn: async () => {
-        throw new Error('local catalog unavailable');
-      },
-    });
+  it.effect(
+    'removes remote definitions even when the local rebuild fails',
+    () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      return Effect.gen(function* () {
+        useAgentDirectories();
+        yield* refresh({ includeRemote: true });
+        expect(isRemoteAgent('orchestrator')).toBe(true);
+        useAgentDirectories({
+          builtIn: async () => {
+            throw new Error('local catalog unavailable');
+          },
+        });
 
-    try {
-      const invalidation = Effect.runPromise(
-        invalidateRemoteAgentsAfterSignOut(),
-      );
-      expect(isRemoteAgent('orchestrator')).toBe(false);
-      await expect(invalidation).resolves.toBeUndefined();
-      expect(isRemoteAgent('orchestrator')).toBe(false);
-      expect(warn).toHaveBeenCalledWith(
-        'agentRegistry',
-        expect.stringContaining(
-          'Local agent catalog rebuild failed after sign-out',
+        // startImmediately: removeRemoteEntries runs in the invalidation's
+        // synchronous prefix, which the next assertion reads.
+        const invalidation = yield* Effect.forkChild(
+          invalidateRemoteAgentsAfterSignOut(),
+          { startImmediately: true },
+        );
+        expect(isRemoteAgent('orchestrator')).toBe(false);
+        expect(yield* Fiber.join(invalidation)).toBeUndefined();
+        expect(isRemoteAgent('orchestrator')).toBe(false);
+        expect(warn).toHaveBeenCalledWith(
+          'agentRegistry',
+          expect.stringContaining(
+            'Local agent catalog rebuild failed after sign-out',
+          ),
+        );
+      }).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            useAgentDirectories();
+            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+            warn.mockRestore();
+          }),
         ),
       );
-    } finally {
-      useAgentDirectories();
-      await Effect.runPromise(refresh({ includeRemote: false }));
-      warn.mockRestore();
-    }
-  });
+    },
+  );
 
-  it('fences an in-flight remote load before rebuilding locally', async () => {
-    useAgentDirectories();
-    await Effect.runPromise(refresh({ includeRemote: false }));
-    const remoteLoad = createDeferred<void>();
+  it.effect('fences an in-flight remote load before rebuilding locally', () => {
+    const remoteLoad = Deferred.makeUnsafe<void>();
     const localRebuild = createDeferred<void>();
-    let builtInCalls = 0;
-    useAgentDirectories({
-      builtIn: async () => {
-        builtInCalls += 1;
-        if (builtInCalls === 2) await localRebuild.promise;
-        return BUILTIN_AGENTS_DIR;
-      },
-    });
-    listRemoteAgents.mockImplementationOnce(() =>
-      Effect.promise(async () => {
-        await remoteLoad.promise;
-        return [
-          remoteAgentFixture('late-remote', 'lateRemote', 'Late remote result'),
-        ];
-      }),
-    );
-
-    const staleLoad = Effect.runPromise(loadAgents({ includeRemote: true }));
-    await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalled());
-
-    try {
-      const invalidation = Effect.runPromise(
-        invalidateRemoteAgentsAfterSignOut(),
+    const remoteStarted = Deferred.makeUnsafe<void>();
+    return Effect.gen(function* () {
+      useAgentDirectories();
+      yield* refresh({ includeRemote: false });
+      let builtInCalls = 0;
+      useAgentDirectories({
+        builtIn: async () => {
+          builtInCalls += 1;
+          if (builtInCalls === 2) await localRebuild.promise;
+          return BUILTIN_AGENTS_DIR;
+        },
+      });
+      listRemoteAgents.mockImplementationOnce(() =>
+        Deferred.succeed(remoteStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(remoteLoad)),
+          Effect.as([
+            remoteAgentFixture(
+              'late-remote',
+              'lateRemote',
+              'Late remote result',
+            ),
+          ]),
+        ),
       );
-      remoteLoad.resolve();
-      await staleLoad;
+
+      const staleLoad = yield* Effect.forkChild(
+        loadAgents({ includeRemote: true }),
+      );
+      yield* Deferred.await(remoteStarted);
+      expect(listRemoteAgents).toHaveBeenCalled();
+
+      // startImmediately: the invalidation strips remote entries and takes the
+      // lane tail behind the stale load before that load is released.
+      const invalidation = yield* Effect.forkChild(
+        invalidateRemoteAgentsAfterSignOut(),
+        { startImmediately: true },
+      );
+      yield* Deferred.succeed(remoteLoad, undefined);
+      yield* Fiber.join(staleLoad);
 
       expect(getAgent('lateRemote')).toBeUndefined();
       expect(isRemoteAgent('orchestrator')).toBe(false);
 
       localRebuild.resolve();
-      await invalidation;
-    } finally {
-      remoteLoad.resolve();
-      localRebuild.resolve();
-      useAgentDirectories();
-    }
+      yield* Fiber.join(invalidation);
+    }).pipe(
+      Effect.ensuring(
+        Effect.gen(function* () {
+          yield* Deferred.succeed(remoteLoad, undefined);
+          localRebuild.resolve();
+          useAgentDirectories();
+        }),
+      ),
+    );
   });
 
   it.effect('keeps the registry serving when a later refresh fails', () =>
@@ -370,34 +418,44 @@ describe('agent registry', () => {
       ),
   );
 
-  it('includes remote agents in launcher options after pending local-only startup load', async () => {
-    const builtInToolUseDir = createDeferred<void>();
+  it.effect(
+    'includes remote agents in launcher options after pending local-only startup load',
+    () => {
+      const builtInToolUseDir = createDeferred<void>();
+      return Effect.gen(function* () {
+        useAgentDirectories({
+          builtInToolUse: async () => {
+            await builtInToolUseDir.promise;
+            return BUILTIN_TOOL_USE_AGENTS_DIR;
+          },
+        });
 
-    try {
-      useAgentDirectories({
-        builtInToolUse: async () => {
-          await builtInToolUseDir.promise;
-          return BUILTIN_TOOL_USE_AGENTS_DIR;
-        },
-      });
+        // startImmediately on both: the refresh claims the load lane and the
+        // options read queues behind it, both before the gate opens.
+        const pendingRefresh = yield* Effect.forkChild(
+          refresh({ includeRemote: false }),
+          { startImmediately: true },
+        );
+        const options = yield* Effect.forkChild(computeAgentOptionsData(), {
+          startImmediately: true,
+        });
 
-      const pendingRefresh = Effect.runPromise(
-        refresh({ includeRemote: false }),
+        builtInToolUseDir.resolve();
+        yield* Fiber.join(pendingRefresh);
+        const result = yield* Fiber.join(options);
+
+        expect(result.toolUse.map((option) => option.label)).toContain(
+          'orchestrator',
+        );
+      }).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            builtInToolUseDir.resolve();
+            useAgentDirectories();
+            yield* refresh({ includeRemote: false }).pipe(Effect.orDie);
+          }),
+        ),
       );
-      await delay(0);
-      const optionsPromise = Effect.runPromise(computeAgentOptionsData());
-
-      builtInToolUseDir.resolve();
-      await pendingRefresh;
-      const options = await optionsPromise;
-
-      expect(options.toolUse.map((option) => option.label)).toContain(
-        'orchestrator',
-      );
-    } finally {
-      builtInToolUseDir.resolve();
-      useAgentDirectories();
-      await Effect.runPromise(refresh({ includeRemote: false }));
-    }
-  });
+    },
+  );
 });

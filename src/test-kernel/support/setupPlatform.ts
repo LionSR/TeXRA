@@ -60,18 +60,30 @@ type HostBuilder = () => FakeHost | Promise<FakeHost>;
 
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
   executeFileCommand: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   getGoalState: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   getTermGoal: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   getHoverInfo: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   fetchDiagnosticsForFile: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   navigateToFirstError: () => Effect.void,
   executeProjectCommand: () =>
-    Effect.fail(new Error('LeanLanguageServices is not configured in this test')),
+    Effect.die(
+      new Error('LeanLanguageServices is not configured in this test'),
+    ),
   stopSessionsForRun: () => Effect.void,
 };
 

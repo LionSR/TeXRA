@@ -756,9 +756,8 @@ describe('Sessions owner', () => {
               aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(session.now()).toBe(3)),
-          );
+          yield* Effect.promise(() => session.settlePublications());
+          expect(session.now()).toBe(3);
           session.publish([
             {
               type: 'flow.step',
@@ -1020,17 +1019,18 @@ describe('Sessions owner', () => {
           agent: 'chat',
         });
         const release = yield* Deferred.make<void>();
+        const untracked = yield* Deferred.make<void>();
         handle.suspend(
           Effect.gen(function* () {
             session.runs.untrack(handle.runId);
+            yield* Deferred.succeed(untracked, undefined);
             yield* Deferred.await(release);
           }),
         );
         session.runs.track(handle);
         const closing = yield* Effect.forkChild(closeSession(root));
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(session.runs.getActiveIds()).toEqual([])),
-        );
+        yield* Deferred.await(untracked);
+        expect(session.runs.getActiveIds()).toEqual([]);
         yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
         expect(yield* Fiber.join(closing)).toEqual({
           settled: false,
@@ -1038,6 +1038,8 @@ describe('Sessions owner', () => {
         });
         expect(isLive(session)).toBe(true);
         yield* Deferred.succeed(release, undefined);
+        // The release runs detached on the session owner (RcMap.invalidate):
+        // no settle covers it.
         yield* Effect.promise(() =>
           vi.waitFor(() => expect(isLive(session)).toBe(false)),
         );
@@ -1067,6 +1069,8 @@ describe('Sessions owner', () => {
         });
         expect(isLive(session)).toBe(true);
         session.runs.untrack(slow);
+        // The release runs detached on the session owner (RcMap.invalidate):
+        // no settle covers it.
         yield* Effect.promise(() =>
           vi.waitFor(() => expect(isLive(session)).toBe(false)),
         );

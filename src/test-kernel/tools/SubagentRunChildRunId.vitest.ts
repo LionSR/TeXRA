@@ -3,12 +3,12 @@
 // a detached run-loop rejection through the `childRunLoop` channel log.
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunId } from '@shared/schemas';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
 
@@ -83,7 +83,7 @@ describe('executeSubagent child run launch', () => {
   } as never;
 
   const parent: DelegationParent = {
-    config: new FakeConfigProvider(),
+    roots: createFakeWorkspaceRoots(),
     model: 'gpt5',
     tracker: new FileInteractionState(),
     run: {
@@ -124,16 +124,19 @@ describe('executeSubagent child run launch', () => {
           Effect.forkDetach(Effect.fail(lateFailure)),
         );
 
+        const logged = yield* Deferred.make<void>();
+        mocks.childLoopError.mockImplementation(() => {
+          Deferred.doneUnsafe(logged, Effect.void);
+        });
+
         expect(yield* runDefaultSubagent()).toMatchObject({
           status: 'executed',
         });
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.childLoopError).toHaveBeenCalledWith(
-              "Subagent 'proof-checker' run loop failed after launch",
-              { data: lateFailure },
-            );
-          }),
+
+        yield* Deferred.await(logged);
+        expect(mocks.childLoopError).toHaveBeenCalledWith(
+          "Subagent 'proof-checker' run loop failed after launch",
+          { data: lateFailure },
         );
       }),
   );
